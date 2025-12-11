@@ -13,6 +13,7 @@ use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class MarketLocationResource extends Resource
 {
@@ -24,6 +25,8 @@ class MarketLocationResource extends Resource
 
     public static function form(Form $form): Form
     {
+        $user = Filament::auth()->user();
+
         return $form
             ->schema([
                 Forms\Components\Select::make('market_id')
@@ -32,7 +35,10 @@ class MarketLocationResource extends Resource
                     ->required()
                     ->searchable()
                     ->preload()
-                    ->reactive(),
+                    ->reactive()
+                    ->default($user?->market_id)
+                    ->disabled(fn () => $user && ! $user->isSuperAdmin())
+                    ->dehydrated(true),
                 Forms\Components\TextInput::make('name')
                     ->label('Название')
                     ->required()
@@ -121,31 +127,75 @@ class MarketLocationResource extends Resource
         ];
     }
 
+    protected static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        if ($user->market_id) {
+            return $query->where('market_id', $user->market_id);
+        }
+
+        return $query->whereRaw('1 = 0');
+    }
+
     public static function canViewAny(): bool
     {
         $user = Filament::auth()->user();
 
-        return $user?->hasAnyRole(['super-admin', 'market-admin']) ?? false;
+        if (! $user) {
+            return false;
+        }
+
+        return $user->isSuperAdmin() || (bool) $user->market_id;
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return $user?->hasAnyRole(['super-admin', 'market-admin']) ?? false;
+        if (! $user) {
+            return false;
+        }
+
+        return $user->isSuperAdmin() || (bool) $user->market_id;
     }
 
     public static function canEdit($record): bool
     {
         $user = Filament::auth()->user();
 
-        return $user?->hasAnyRole(['super-admin', 'market-admin']) ?? false;
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->market_id && $record->market_id === $user->market_id;
     }
 
     public static function canDelete($record): bool
     {
         $user = Filament::auth()->user();
 
-        return $user?->hasAnyRole(['super-admin', 'market-admin']) ?? false;
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->market_id && $record->market_id === $user->market_id;
     }
 }
