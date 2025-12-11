@@ -10,10 +10,18 @@ class EditMarketLocation extends EditRecord
 {
     protected static string $resource = MarketLocationResource::class;
 
+    protected static ?string $title = 'Редактирование локации';
+
+    public function getBreadcrumb(): ?string
+    {
+        return 'Редактирование локации';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->label('Удалить локацию'),
         ];
     }
 }

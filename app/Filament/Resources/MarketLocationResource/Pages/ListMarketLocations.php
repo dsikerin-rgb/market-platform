@@ -10,10 +10,18 @@ class ListMarketLocations extends ListRecords
 {
     protected static string $resource = MarketLocationResource::class;
 
+    protected static ?string $title = 'Локации рынка';
+
+    public function getBreadcrumb(): ?string
+    {
+        return 'Локации рынка';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->label('Создать локацию'),
         ];
     }
 }

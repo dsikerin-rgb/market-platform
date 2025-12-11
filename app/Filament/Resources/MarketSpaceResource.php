@@ -20,6 +20,12 @@ class MarketSpaceResource extends Resource
 {
     protected static ?string $model = MarketSpace::class;
 
+    protected static ?string $modelLabel = 'Торговое место';
+
+    protected static ?string $pluralModelLabel = 'Торговые места';
+
+    protected static ?string $navigationLabel = 'Торговые места';
+
     protected static ?string $navigationGroup = 'Рынки';
 
     protected static ?string $navigationIcon = 'heroicon-o-home-modern';
@@ -50,32 +56,36 @@ class MarketSpaceResource extends Resource
                     ->disabled(fn (Get $get) => blank($get('market_id')))
                     ->nullable(),
                 Forms\Components\TextInput::make('number')
-                    ->label('Номер')
+                    ->label('Номер места')
                     ->maxLength(255),
                 Forms\Components\TextInput::make('code')
-                    ->label('Код')
+                    ->label('Код места')
                     ->maxLength(255),
                 Forms\Components\TextInput::make('area_sqm')
                     ->label('Площадь, м²')
                     ->numeric()
                     ->inputMode('decimal'),
-                Forms\Components\TextInput::make('type')
+                Forms\Components\Select::make('type')
                     ->label('Тип')
-                    ->maxLength(255),
+                    ->options([
+                        'retail' => 'Торговое место',
+                        'storage' => 'Склад',
+                        'office' => 'Офис',
+                    ]),
                 Forms\Components\Select::make('status')
                     ->label('Статус')
                     ->options([
-                        'free' => 'free',
-                        'occupied' => 'occupied',
-                        'reserved' => 'reserved',
-                        'maintenance' => 'maintenance',
+                        'free' => 'Свободно',
+                        'occupied' => 'Занято',
+                        'reserved' => 'Зарезервировано',
+                        'maintenance' => 'На обслуживании',
                     ])
                     ->default('free'),
                 Forms\Components\Toggle::make('is_active')
-                    ->label('Активен')
+                    ->label('Активно')
                     ->default(true),
                 Forms\Components\Textarea::make('notes')
-                    ->label('Заметки')
+                    ->label('Примечания')
                     ->columnSpanFull(),
             ]);
     }
@@ -98,9 +108,22 @@ class MarketSpaceResource extends Resource
                     ->searchable(),
                 TextColumn::make('type')
                     ->label('Тип')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'retail' => 'Торговое место',
+                        'storage' => 'Склад',
+                        'office' => 'Офис',
+                        default => $state,
+                    })
                     ->sortable(),
                 TextColumn::make('status')
                     ->label('Статус')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'free' => 'Свободно',
+                        'occupied' => 'Занято',
+                        'reserved' => 'Зарезервировано',
+                        'maintenance' => 'На обслуживании',
+                        default => $state,
+                    })
                     ->sortable(),
                 TextColumn::make('area_sqm')
                     ->label('Площадь, м²')

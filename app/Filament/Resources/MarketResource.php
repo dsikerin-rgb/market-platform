@@ -18,6 +18,12 @@ class MarketResource extends Resource
 {
     protected static ?string $model = Market::class;
 
+    protected static ?string $modelLabel = 'Рынок';
+
+    protected static ?string $pluralModelLabel = 'Рынки';
+
+    protected static ?string $navigationLabel = 'Рынки';
+
     protected static ?string $navigationGroup = 'Рынки';
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
@@ -31,7 +37,7 @@ class MarketResource extends Resource
                     ->required()
                     ->maxLength(255),
                 Forms\Components\TextInput::make('slug')
-                    ->label('Slug')
+                    ->label('Слаг')
                     ->maxLength(255),
                 Forms\Components\TextInput::make('code')
                     ->label('Код')
