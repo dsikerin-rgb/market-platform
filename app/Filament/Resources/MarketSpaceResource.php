@@ -27,9 +27,9 @@ class MarketSpaceResource extends Resource
 
     protected static ?string $navigationLabel = 'Торговые места';
 
-    protected static ?string $navigationGroup = 'Рынки';
+    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
 
-    protected static ?string $navigationIcon = 'heroicon-o-home-modern';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-home-modern';
 
     public static function form(Form $form): Form
     {
@@ -184,7 +184,7 @@ class MarketSpaceResource extends Resource
         ];
     }
 
-    protected static function getEloquentQuery(): Builder
+    public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
