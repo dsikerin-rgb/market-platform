@@ -5,9 +5,9 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketResource\Pages;
 use App\Models\Market;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
@@ -28,10 +28,10 @@ class MarketResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-building-storefront';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Forms\Components\TextInput::make('name')
                     ->label('Название')
                     ->required()

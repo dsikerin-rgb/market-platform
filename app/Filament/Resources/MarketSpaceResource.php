@@ -7,10 +7,9 @@ use App\Models\MarketLocation;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use Filament\Forms;
-use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -31,12 +30,12 @@ class MarketSpaceResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-home-modern';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
 
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 Forms\Components\Select::make('market_id')
                     ->label('Рынок')
                     ->relationship('market', 'name')
@@ -49,12 +48,12 @@ class MarketSpaceResource extends Resource
                     ->dehydrated(true),
                 Forms\Components\Select::make('location_id')
                     ->label('Локация')
-                    ->options(fn (Get $get) => MarketLocation::query()
+                    ->options(fn ($get) => MarketLocation::query()
                         ->where('market_id', $get('market_id'))
                         ->pluck('name', 'id'))
                     ->searchable()
                     ->preload()
-                    ->disabled(fn (Get $get) => blank($get('market_id')))
+                    ->disabled(fn ($get) => blank($get('market_id')))
                     ->nullable(),
                 Forms\Components\Select::make('tenant_id')
                     ->label('Арендатор')
