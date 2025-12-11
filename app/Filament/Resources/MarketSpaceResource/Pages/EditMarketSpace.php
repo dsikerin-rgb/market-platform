@@ -10,10 +10,18 @@ class EditMarketSpace extends EditRecord
 {
     protected static string $resource = MarketSpaceResource::class;
 
+    protected static ?string $title = 'Редактирование торгового места';
+
+    public function getBreadcrumb(): ?string
+    {
+        return 'Редактирование торгового места';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->label('Удалить торговое место'),
         ];
     }
 }
