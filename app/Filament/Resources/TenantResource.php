@@ -24,9 +24,9 @@ class TenantResource extends Resource
 
     protected static ?string $navigationLabel = 'Арендаторы';
 
-    protected static ?string $navigationGroup = 'Рынки';
+    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
 
-    protected static ?string $navigationIcon = 'heroicon-o-users';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-users';
 
     public static function form(Schema $schema): Schema
     {
