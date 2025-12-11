@@ -19,6 +19,12 @@ class MarketLocationResource extends Resource
 {
     protected static ?string $model = MarketLocation::class;
 
+    protected static ?string $modelLabel = 'Локация';
+
+    protected static ?string $pluralModelLabel = 'Локации рынка';
+
+    protected static ?string $navigationLabel = 'Локации рынка';
+
     protected static ?string $navigationGroup = 'Рынки';
 
     protected static ?string $navigationIcon = 'heroicon-o-map-pin';
@@ -49,13 +55,13 @@ class MarketLocationResource extends Resource
                 Forms\Components\Select::make('type')
                     ->label('Тип')
                     ->options([
-                        'building' => 'building',
-                        'floor' => 'floor',
-                        'row' => 'row',
-                        'zone' => 'zone',
+                        'building' => 'Здание',
+                        'floor' => 'Этаж',
+                        'row' => 'Ряд',
+                        'zone' => 'Зона',
                     ]),
                 Forms\Components\Select::make('parent_id')
-                    ->label('Родитель')
+                    ->label('Родительская локация')
                     ->options(fn (Get $get) => MarketLocation::query()
                         ->where('market_id', $get('market_id'))
                         ->pluck('name', 'id'))
@@ -64,7 +70,7 @@ class MarketLocationResource extends Resource
                     ->disabled(fn (Get $get) => blank($get('market_id')))
                     ->nullable(),
                 Forms\Components\TextInput::make('sort_order')
-                    ->label('Порядок')
+                    ->label('Порядок отображения')
                     ->numeric()
                     ->default(0),
                 Forms\Components\Toggle::make('is_active')
@@ -87,9 +93,16 @@ class MarketLocationResource extends Resource
                     ->searchable(),
                 TextColumn::make('type')
                     ->label('Тип')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'building' => 'Здание',
+                        'floor' => 'Этаж',
+                        'row' => 'Ряд',
+                        'zone' => 'Зона',
+                        default => $state,
+                    })
                     ->sortable(),
                 TextColumn::make('parent.name')
-                    ->label('Родитель')
+                    ->label('Родительская локация')
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('sort_order')

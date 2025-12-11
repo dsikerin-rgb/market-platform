@@ -10,10 +10,18 @@ class ListMarketSpaces extends ListRecords
 {
     protected static string $resource = MarketSpaceResource::class;
 
+    protected static ?string $title = 'Торговые места';
+
+    public function getBreadcrumb(): ?string
+    {
+        return 'Торговые места';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->label('Создать торговое место'),
         ];
     }
 }

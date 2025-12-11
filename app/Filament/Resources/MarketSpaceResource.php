@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\Tenant;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -19,6 +20,12 @@ use Illuminate\Database\Eloquent\Builder;
 class MarketSpaceResource extends Resource
 {
     protected static ?string $model = MarketSpace::class;
+
+    protected static ?string $modelLabel = 'Торговое место';
+
+    protected static ?string $pluralModelLabel = 'Торговые места';
+
+    protected static ?string $navigationLabel = 'Торговые места';
 
     protected static ?string $navigationGroup = 'Рынки';
 
@@ -49,33 +56,55 @@ class MarketSpaceResource extends Resource
                     ->preload()
                     ->disabled(fn (Get $get) => blank($get('market_id')))
                     ->nullable(),
+                Forms\Components\Select::make('tenant_id')
+                    ->label('Арендатор')
+                    ->options(function ($get, ?MarketSpace $record) {
+                        $marketId = $get('market_id') ?? $record?->market_id;
+
+                        if (! $marketId) {
+                            return [];
+                        }
+
+                        return Tenant::query()
+                            ->where('market_id', $marketId)
+                            ->orderBy('name')
+                            ->pluck('name', 'id');
+                    })
+                    ->searchable()
+                    ->preload()
+                    ->disabled(fn ($get) => blank($get('market_id')))
+                    ->nullable(),
                 Forms\Components\TextInput::make('number')
-                    ->label('Номер')
+                    ->label('Номер места')
                     ->maxLength(255),
                 Forms\Components\TextInput::make('code')
-                    ->label('Код')
+                    ->label('Код места')
                     ->maxLength(255),
                 Forms\Components\TextInput::make('area_sqm')
                     ->label('Площадь, м²')
                     ->numeric()
                     ->inputMode('decimal'),
-                Forms\Components\TextInput::make('type')
+                Forms\Components\Select::make('type')
                     ->label('Тип')
-                    ->maxLength(255),
+                    ->options([
+                        'retail' => 'Торговое место',
+                        'storage' => 'Склад',
+                        'office' => 'Офис',
+                    ]),
                 Forms\Components\Select::make('status')
                     ->label('Статус')
                     ->options([
-                        'free' => 'free',
-                        'occupied' => 'occupied',
-                        'reserved' => 'reserved',
-                        'maintenance' => 'maintenance',
+                        'free' => 'Свободно',
+                        'occupied' => 'Занято',
+                        'reserved' => 'Зарезервировано',
+                        'maintenance' => 'На обслуживании',
                     ])
                     ->default('free'),
                 Forms\Components\Toggle::make('is_active')
-                    ->label('Активен')
+                    ->label('Активно')
                     ->default(true),
                 Forms\Components\Textarea::make('notes')
-                    ->label('Заметки')
+                    ->label('Примечания')
                     ->columnSpanFull(),
             ]);
     }
@@ -92,15 +121,32 @@ class MarketSpaceResource extends Resource
                     ->label('Локация')
                     ->sortable()
                     ->searchable(),
+                TextColumn::make('tenant.name')
+                    ->label('Арендатор')
+                    ->sortable()
+                    ->searchable(),
                 TextColumn::make('number')
                     ->label('Номер')
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('type')
                     ->label('Тип')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'retail' => 'Торговое место',
+                        'storage' => 'Склад',
+                        'office' => 'Офис',
+                        default => $state,
+                    })
                     ->sortable(),
                 TextColumn::make('status')
                     ->label('Статус')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'free' => 'Свободно',
+                        'occupied' => 'Занято',
+                        'reserved' => 'Зарезервировано',
+                        'maintenance' => 'На обслуживании',
+                        default => $state,
+                    })
                     ->sortable(),
                 TextColumn::make('area_sqm')
                     ->label('Площадь, м²')

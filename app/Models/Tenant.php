@@ -5,8 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class MarketSpace extends Model
+class Tenant extends Model
 {
     use HasFactory;
 
@@ -15,19 +16,20 @@ class MarketSpace extends Model
      */
     protected $fillable = [
         'market_id',
-        'location_id',
-        'tenant_id',
-        'number',
-        'code',
-        'area_sqm',
+        'name',
+        'short_name',
         'type',
+        'inn',
+        'ogrn',
+        'phone',
+        'email',
+        'contact_person',
         'status',
         'is_active',
         'notes',
     ];
 
     protected $casts = [
-        'area_sqm' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
@@ -36,13 +38,8 @@ class MarketSpace extends Model
         return $this->belongsTo(Market::class);
     }
 
-    public function location(): BelongsTo
+    public function spaces(): HasMany
     {
-        return $this->belongsTo(MarketLocation::class, 'location_id');
-    }
-
-    public function tenant(): BelongsTo
-    {
-        return $this->belongsTo(Tenant::class);
+        return $this->hasMany(MarketSpace::class, 'tenant_id');
     }
 }
