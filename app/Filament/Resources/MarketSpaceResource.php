@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\Tenant;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -55,6 +56,24 @@ class MarketSpaceResource extends Resource
                     ->preload()
                     ->disabled(fn (Get $get) => blank($get('market_id')))
                     ->nullable(),
+                Forms\Components\Select::make('tenant_id')
+                    ->label('Арендатор')
+                    ->options(function ($get, ?MarketSpace $record) {
+                        $marketId = $get('market_id') ?? $record?->market_id;
+
+                        if (! $marketId) {
+                            return [];
+                        }
+
+                        return Tenant::query()
+                            ->where('market_id', $marketId)
+                            ->orderBy('name')
+                            ->pluck('name', 'id');
+                    })
+                    ->searchable()
+                    ->preload()
+                    ->disabled(fn ($get) => blank($get('market_id')))
+                    ->nullable(),
                 Forms\Components\TextInput::make('number')
                     ->label('Номер места')
                     ->maxLength(255),
@@ -100,6 +119,10 @@ class MarketSpaceResource extends Resource
                     ->searchable(),
                 TextColumn::make('location.name')
                     ->label('Локация')
+                    ->sortable()
+                    ->searchable(),
+                TextColumn::make('tenant.name')
+                    ->label('Арендатор')
                     ->sortable()
                     ->searchable(),
                 TextColumn::make('number')
