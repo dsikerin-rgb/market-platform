@@ -37,4 +37,9 @@ class Market extends Model
     {
         return $this->hasMany(MarketSpace::class);
     }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
 }

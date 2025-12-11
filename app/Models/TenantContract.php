@@ -5,9 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Tenant extends Model
+class TenantContract extends Model
 {
     use HasFactory;
 
@@ -16,20 +15,24 @@ class Tenant extends Model
      */
     protected $fillable = [
         'market_id',
-        'name',
-        'short_name',
-        'type',
-        'inn',
-        'ogrn',
-        'phone',
-        'email',
-        'contact_person',
+        'tenant_id',
+        'market_space_id',
+        'number',
         'status',
+        'starts_at',
+        'ends_at',
+        'signed_at',
+        'monthly_rent',
+        'currency',
         'is_active',
         'notes',
     ];
 
     protected $casts = [
+        'starts_at' => 'date',
+        'ends_at' => 'date',
+        'signed_at' => 'date',
+        'monthly_rent' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
@@ -38,18 +41,13 @@ class Tenant extends Model
         return $this->belongsTo(Market::class);
     }
 
-    public function spaces(): HasMany
+    public function tenant(): BelongsTo
     {
-        return $this->hasMany(MarketSpace::class, 'tenant_id');
+        return $this->belongsTo(Tenant::class);
     }
 
-    public function contracts(): HasMany
+    public function marketSpace(): BelongsTo
     {
-        return $this->hasMany(TenantContract::class);
-    }
-
-    public function requests(): HasMany
-    {
-        return $this->hasMany(TenantRequest::class);
+        return $this->belongsTo(MarketSpace::class);
     }
 }
