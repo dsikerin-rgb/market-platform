@@ -12,7 +12,7 @@ class ListMarkets extends ListRecords
 
     protected static ?string $title = 'Рынки';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Рынки';
     }

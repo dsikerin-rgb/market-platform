@@ -66,6 +66,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasRole('super-admin');
     }
 
+    public function isMarketAdmin(): bool
+    {
+        return $this->hasRole('market-admin');
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         // Локально пускаем всех, чтобы не мешать разработке
@@ -75,7 +80,12 @@ class User extends Authenticatable implements FilamentUser
 
         // Для admin-панели в бою — только роли управления рынком
         if ($panel->getId() === 'admin') {
-            return $this->hasAnyRole(['super-admin', 'market-admin']);
+            return $this->hasAnyRole([
+                'super-admin',
+                'market-admin',
+                'market-manager',
+                'market-operator',
+            ]);
         }
 
         return false;

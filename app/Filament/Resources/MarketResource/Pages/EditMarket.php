@@ -12,7 +12,7 @@ class EditMarket extends EditRecord
 
     protected static ?string $title = 'Редактирование рынка';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Редактирование рынка';
     }

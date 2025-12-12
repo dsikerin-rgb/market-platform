@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
-    protected static ?string $heading = 'Статусы торговых мест';
+    protected ?string $heading = 'Статусы торговых мест';
 
     protected function getType(): string
     {
@@ -23,11 +23,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         if (! $user) {
             return [
                 'labels' => ['Свободно', 'Занято', 'Зарезервировано', 'На обслуживании'],
-                'datasets' => [
-                    [
-                        'data' => [0, 0, 0, 0],
-                    ],
-                ],
+                'datasets' => [['data' => [0, 0, 0, 0]]],
             ];
         }
 
@@ -37,11 +33,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             if (! $user->market_id) {
                 return [
                     'labels' => ['Свободно', 'Занято', 'Зарезервировано', 'На обслуживании'],
-                    'datasets' => [
-                        [
-                            'data' => [0, 0, 0, 0],
-                        ],
-                    ],
+                    'datasets' => [['data' => [0, 0, 0, 0]]],
                 ];
             }
 
@@ -57,11 +49,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
 
         return [
             'labels' => ['Свободно', 'Занято', 'Зарезервировано', 'На обслуживании'],
-            'datasets' => [
-                [
-                    'data' => $ordered->values()->toArray(),
-                ],
-            ],
+            'datasets' => [['data' => $ordered->values()->toArray()]],
         ];
     }
 
@@ -72,8 +60,6 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             'occupied' => 0,
             'reserved' => 0,
             'maintenance' => 0,
-        ])->map(function (int $default, string $status) use ($counts): int {
-            return (int) ($counts[$status] ?? 0);
-        });
+        ])->map(fn (int $default, string $status): int => (int) ($counts[$status] ?? 0));
     }
 }

@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class MarketRegistrationController
@@ -24,12 +26,14 @@ class MarketRegistrationController
 
     public function store(Request $request): RedirectResponse
     {
+        $timezones = timezone_identifiers_list();
+
         $data = $request->validate(
             [
                 'market_name' => ['required', 'string', 'max:255'],
-                'market_code' => ['nullable', 'string', 'max:255'],
                 'market_address' => ['nullable', 'string', 'max:255'],
-                'market_timezone' => ['required', 'string'],
+                'market_timezone' => ['required', 'string', Rule::in($timezones)],
+
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'email', 'max:255', 'unique:users,email'],
                 'password' => ['required', 'string', 'min:8', 'confirmed'],
@@ -37,6 +41,7 @@ class MarketRegistrationController
             [
                 'market_name.required' => 'Название рынка обязательно для заполнения.',
                 'market_timezone.required' => 'Выберите часовой пояс рынка.',
+                'market_timezone.in' => 'Выбран некорректный часовой пояс.',
                 'name.required' => 'Укажите имя пользователя.',
                 'email.required' => 'Укажите email.',
                 'email.email' => 'Введите корректный email.',
@@ -48,9 +53,12 @@ class MarketRegistrationController
         );
 
         $user = DB::transaction(function () use ($data) {
+            $identifier = $this->generateUniqueIdentifier($data['market_name']);
+
             $market = Market::create([
                 'name' => $data['market_name'],
-                'code' => $data['market_code'] ?? null,
+                'code' => $identifier,
+                'slug' => $identifier,
                 'address' => $data['market_address'] ?? null,
                 'timezone' => $data['market_timezone'],
                 'is_active' => true,
@@ -71,5 +79,25 @@ class MarketRegistrationController
         Auth::login($user);
 
         return redirect('/admin');
+    }
+
+    private function generateUniqueIdentifier(string $marketName): string
+    {
+        $base = Str::slug($marketName, '-');
+        $base = Str::lower($base);
+
+        if ($base === '') {
+            $base = 'market';
+        }
+
+        $candidate = $base;
+        $i = 1;
+
+        while (Market::query()->where('code', $candidate)->exists()) {
+            $i++;
+            $candidate = $base.'-'.$i;
+        }
+
+        return $candidate;
     }
 }

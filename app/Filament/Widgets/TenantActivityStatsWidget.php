@@ -6,28 +6,22 @@ use App\Models\TenantContract;
 use App\Models\TenantRequest;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget;
-use Filament\Widgets\StatsOverviewWidget\Card;
+use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Carbon;
 
 class TenantActivityStatsWidget extends StatsOverviewWidget
 {
-    protected static ?string $heading = 'Активность арендаторов';
+    protected ?string $heading = 'Активность арендаторов';
 
     /**
-     * @return array<int, Card>
+     * @return array<int, Stat>
      */
-    protected function getCards(): array
+    protected function getStats(): array
     {
         $user = Filament::auth()->user();
 
         if (! $user) {
-            return [
-                Card::make('Новых обращений за 7 дней', 0),
-                Card::make('Открытых обращений', 0),
-                Card::make('Решённых обращений за 7 дней', 0),
-                Card::make('Новых договоров за 30 дней', 0),
-                Card::make('Завершённых договоров за 30 дней', 0),
-            ];
+            return [];
         }
 
         $requestQuery = TenantRequest::query();
@@ -35,13 +29,7 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
 
         if (! $user->isSuperAdmin()) {
             if (! $user->market_id) {
-                return [
-                    Card::make('Новых обращений за 7 дней', 0),
-                    Card::make('Открытых обращений', 0),
-                    Card::make('Решённых обращений за 7 дней', 0),
-                    Card::make('Новых договоров за 30 дней', 0),
-                    Card::make('Завершённых договоров за 30 дней', 0),
-                ];
+                return [];
             }
 
             $requestQuery->where('market_id', $user->market_id);
@@ -71,11 +59,11 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
             ->count();
 
         return [
-            Card::make('Новых обращений за 7 дней', $requestsLastWeek),
-            Card::make('Открытых обращений', $openRequests),
-            Card::make('Решённых обращений за 7 дней', $resolvedLastWeek),
-            Card::make('Новых договоров за 30 дней', $contractsLastMonth),
-            Card::make('Завершённых договоров за 30 дней', $contractsFinished),
+            Stat::make('Новых обращений за 7 дней', $requestsLastWeek),
+            Stat::make('Открытых обращений', $openRequests),
+            Stat::make('Решённых обращений за 7 дней', $resolvedLastWeek),
+            Stat::make('Новых договоров за 30 дней', $contractsLastMonth),
+            Stat::make('Завершённых договоров за 30 дней', $contractsFinished),
         ];
     }
 }

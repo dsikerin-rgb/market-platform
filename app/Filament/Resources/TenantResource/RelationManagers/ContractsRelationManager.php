@@ -21,15 +21,17 @@ class ContractsRelationManager extends RelationManager
 
     protected static ?string $recordTitleAttribute = 'number';
 
-    public static function form(Schema $schema): Schema
+    public function form(Schema $schema): Schema
     {
         return $schema->components([
             Forms\Components\Hidden::make('market_id')
                 ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->market_id)
                 ->dehydrated(true),
+
             Forms\Components\Hidden::make('tenant_id')
                 ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->id)
                 ->dehydrated(true),
+
             Forms\Components\Select::make('market_space_id')
                 ->label('Торговое место')
                 ->options(function (RelationManager $livewire) {
@@ -42,10 +44,12 @@ class ContractsRelationManager extends RelationManager
                 ->searchable()
                 ->preload()
                 ->nullable(),
+
             Forms\Components\TextInput::make('number')
                 ->label('Номер договора')
                 ->required()
                 ->maxLength(50),
+
             Forms\Components\Select::make('status')
                 ->label('Статус')
                 ->options([
@@ -56,20 +60,25 @@ class ContractsRelationManager extends RelationManager
                     'archived' => 'Архив',
                 ])
                 ->default('draft'),
+
             Forms\Components\DatePicker::make('starts_at')
                 ->label('Дата начала')
                 ->required(),
+
             Forms\Components\DatePicker::make('ends_at')
                 ->label('Дата окончания')
                 ->nullable(),
+
             Forms\Components\DatePicker::make('signed_at')
                 ->label('Дата подписания')
                 ->nullable(),
+
             Forms\Components\TextInput::make('monthly_rent')
                 ->label('Арендная ставка в месяц')
                 ->numeric()
                 ->step('0.01')
                 ->nullable(),
+
             Forms\Components\Select::make('currency')
                 ->label('Валюта')
                 ->options([
@@ -78,9 +87,11 @@ class ContractsRelationManager extends RelationManager
                     'EUR' => '€',
                 ])
                 ->nullable(),
+
             Forms\Components\Toggle::make('is_active')
                 ->label('Активен')
                 ->default(true),
+
             Forms\Components\Textarea::make('notes')
                 ->label('Примечания')
                 ->columnSpanFull()
@@ -88,20 +99,23 @@ class ContractsRelationManager extends RelationManager
         ]);
     }
 
-    public static function table(Table $table): Table
+    public function table(Table $table): Table
     {
         return $table
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок'),
+
                 TextColumn::make('number')
                     ->label('Номер договора')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('marketSpace.number')
                     ->label('Торговое место')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('status')
                     ->label('Статус')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -112,15 +126,19 @@ class ContractsRelationManager extends RelationManager
                         'archived' => 'Архив',
                         default => $state,
                     }),
+
                 TextColumn::make('starts_at')
                     ->label('Начало')
                     ->date(),
+
                 TextColumn::make('ends_at')
                     ->label('Окончание')
                     ->date(),
+
                 TextColumn::make('monthly_rent')
                     ->label('Аренда в месяц')
                     ->numeric(decimalPlaces: 2),
+
                 IconColumn::make('is_active')
                     ->label('Активен')
                     ->boolean(),
@@ -128,6 +146,7 @@ class ContractsRelationManager extends RelationManager
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->label('Редактировать'),
+
                 Tables\Actions\DeleteAction::make()
                     ->label('Удалить'),
             ])

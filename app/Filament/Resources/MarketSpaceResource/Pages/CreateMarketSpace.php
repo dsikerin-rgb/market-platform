@@ -11,7 +11,7 @@ class CreateMarketSpace extends CreateRecord
 
     protected static ?string $title = 'Создать торговое место';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Создать торговое место';
     }
