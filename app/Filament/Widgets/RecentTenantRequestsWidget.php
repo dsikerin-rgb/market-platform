@@ -12,6 +12,8 @@ class RecentTenantRequestsWidget extends BaseTableWidget
 {
     protected static ?string $heading = 'Последние обращения арендаторов';
 
+    protected int|string|array $columnSpan = 'full';
+
     protected int $recordsPerPage = 10;
 
     protected function getTableQuery(): Builder
@@ -24,31 +26,34 @@ class RecentTenantRequestsWidget extends BaseTableWidget
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->isSuperAdmin()) {
-            return $query;
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        $marketId = $isSuperAdmin
+            ? session('dashboard_market_id')
+            : $user->market_id;
+
+        if ($marketId) {
+            $query->where('market_id', $marketId);
+        } elseif (! $isSuperAdmin) {
+            return $query->whereRaw('1 = 0');
         }
 
-        if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
-        }
-
-        return $query->whereRaw('1 = 0');
+        return $query;
     }
 
     protected function getTableColumns(): array
     {
         return [
-            TextColumn::make('market.name')
-                ->label('Рынок')
-                ->sortable(),
             TextColumn::make('tenant.name')
                 ->label('Арендатор')
                 ->sortable()
                 ->searchable(),
+
             TextColumn::make('subject')
                 ->label('Тема')
                 ->sortable()
                 ->searchable(),
+
             TextColumn::make('status')
                 ->label('Статус обращения')
                 ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -58,6 +63,7 @@ class RecentTenantRequestsWidget extends BaseTableWidget
                     'closed' => 'Закрыто',
                     default => $state,
                 }),
+
             TextColumn::make('priority')
                 ->label('Приоритет')
                 ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -67,13 +73,16 @@ class RecentTenantRequestsWidget extends BaseTableWidget
                     'urgent' => 'Критичный',
                     default => $state,
                 }),
+
             TextColumn::make('created_at')
                 ->label('Создано')
                 ->dateTime()
                 ->sortable(),
+
             TextColumn::make('resolved_at')
                 ->label('Решено')
                 ->dateTime(),
+
             TextColumn::make('closed_at')
                 ->label('Закрыто')
                 ->dateTime(),

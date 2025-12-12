@@ -6,11 +6,10 @@ use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
-use Filament\Forms;
 use Filament\Facades\Filament;
+use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -21,9 +20,7 @@ class MarketSpaceResource extends Resource
     protected static ?string $model = MarketSpace::class;
 
     protected static ?string $modelLabel = 'Торговое место';
-
     protected static ?string $pluralModelLabel = 'Торговые места';
-
     protected static ?string $navigationLabel = 'Торговые места';
 
     protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
@@ -33,101 +30,194 @@ class MarketSpaceResource extends Resource
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
+        $selectedMarketId = session('filament.admin.selected_market_id');
 
-        return $schema
-            ->components([
-                Forms\Components\Select::make('market_id')
-                    ->label('Рынок')
-                    ->relationship('market', 'name')
-                    ->required()
-                    ->searchable()
-                    ->preload()
-                    ->reactive()
-                    ->default($user?->market_id)
-                    ->disabled(fn () => $user && ! $user->isSuperAdmin())
-                    ->dehydrated(true),
-                Forms\Components\Select::make('location_id')
-                    ->label('Локация')
-                    ->options(fn ($get) => MarketLocation::query()
-                        ->where('market_id', $get('market_id'))
-                        ->pluck('name', 'id'))
-                    ->searchable()
-                    ->preload()
-                    ->disabled(fn ($get) => blank($get('market_id')))
-                    ->nullable(),
-                Forms\Components\Select::make('tenant_id')
-                    ->label('Арендатор')
-                    ->options(function ($get, ?MarketSpace $record) {
-                        $marketId = $get('market_id') ?? $record?->market_id;
+        // Показываем выбор рынка super-admin только если не выбран рынок через переключатель
+        $marketSelect = Forms\Components\Select::make('market_id')
+            ->label('Рынок')
+            ->relationship('market', 'name')
+            ->required()
+            ->searchable()
+            ->preload()
+            ->reactive()
+            ->visible(fn () => (bool) $user && $user->isSuperAdmin() && blank($selectedMarketId))
+            ->dehydrated(true);
 
-                        if (! $marketId) {
-                            return [];
-                        }
+        // Если рынок выбран переключателем — фиксируем его скрыто
+        $marketHiddenForSuperAdmin = Forms\Components\Hidden::make('market_id')
+            ->default(fn () => filled($selectedMarketId) ? (int) $selectedMarketId : null)
+            ->visible(fn () => (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId))
+            ->dehydrated(true);
 
-                        return Tenant::query()
-                            ->where('market_id', $marketId)
-                            ->orderBy('name')
-                            ->pluck('name', 'id');
-                    })
-                    ->searchable()
-                    ->preload()
-                    ->disabled(fn ($get) => blank($get('market_id')))
-                    ->nullable(),
-                Forms\Components\TextInput::make('number')
-                    ->label('Номер места')
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('code')
-                    ->label('Код места')
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('area_sqm')
-                    ->label('Площадь, м²')
-                    ->numeric()
-                    ->inputMode('decimal'),
-                Forms\Components\Select::make('type')
-                    ->label('Тип')
-                    ->options([
-                        'retail' => 'Торговое место',
-                        'storage' => 'Склад',
-                        'office' => 'Офис',
-                    ]),
-                Forms\Components\Select::make('status')
-                    ->label('Статус')
-                    ->options([
-                        'free' => 'Свободно',
-                        'occupied' => 'Занято',
-                        'reserved' => 'Зарезервировано',
-                        'maintenance' => 'На обслуживании',
-                    ])
-                    ->default('free'),
-                Forms\Components\Toggle::make('is_active')
-                    ->label('Активно')
-                    ->default(true),
-                Forms\Components\Textarea::make('notes')
-                    ->label('Примечания')
-                    ->columnSpanFull(),
-            ]);
+        // Для рыночных ролей рынок всегда один — скрыто
+        $marketHiddenForMarketUser = Forms\Components\Hidden::make('market_id')
+            ->default(fn () => $user?->market_id)
+            ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
+            ->dehydrated(true);
+
+        $typeOptions = [
+            'retail' => 'Торговое место',
+            'storage' => 'Склад',
+            'office' => 'Офис',
+            '__custom' => 'Другое (ввести вручную)',
+        ];
+
+        $typeSelect = Forms\Components\Select::make('type')
+            ->label('Тип')
+            ->options($typeOptions)
+            ->searchable()
+            ->preload()
+            ->reactive()
+            ->helperText('Если стандартных типов не хватает — выбери “Другое” и введи свой вариант.')
+            ->dehydrateStateUsing(fn ($state, $get) => $state === '__custom'
+                ? trim((string) $get('type_custom'))
+                : $state);
+
+        $typeCustom = Forms\Components\TextInput::make('type_custom')
+            ->label('Тип (вручную)')
+            ->placeholder('Например: холодильная камера, остров, витрина…')
+            ->maxLength(255)
+            ->visible(fn ($get) => $get('type') === '__custom')
+            ->required(fn ($get) => $get('type') === '__custom')
+            ->dehydrated(false);
+
+        return $schema->components([
+            $marketSelect,
+            $marketHiddenForSuperAdmin,
+            $marketHiddenForMarketUser,
+
+            Forms\Components\Select::make('location_id')
+                ->label('Локация')
+                ->options(function ($get) use ($user, $selectedMarketId) {
+                    $marketId = $get('market_id');
+
+                    if (blank($marketId) && (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId)) {
+                        $marketId = (int) $selectedMarketId;
+                    }
+
+                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                        $marketId = $user->market_id;
+                    }
+
+                    if (blank($marketId)) {
+                        return [];
+                    }
+
+                    return MarketLocation::query()
+                        ->where('market_id', $marketId)
+                        ->orderBy('name')
+                        ->pluck('name', 'id');
+                })
+                ->searchable()
+                ->preload()
+                ->disabled(function ($get) use ($user, $selectedMarketId) {
+                    if (! ((bool) $user && $user->isSuperAdmin())) {
+                        return false;
+                    }
+
+                    $marketId = $get('market_id') ?? $selectedMarketId;
+
+                    return blank($marketId);
+                })
+                ->nullable(),
+
+            Forms\Components\Select::make('tenant_id')
+                ->label('Арендатор')
+                ->options(function ($get, ?MarketSpace $record) use ($user, $selectedMarketId) {
+                    $marketId = $get('market_id') ?? $record?->market_id;
+
+                    if (blank($marketId) && (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId)) {
+                        $marketId = (int) $selectedMarketId;
+                    }
+
+                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                        $marketId = $user->market_id;
+                    }
+
+                    if (blank($marketId)) {
+                        return [];
+                    }
+
+                    return Tenant::query()
+                        ->where('market_id', $marketId)
+                        ->orderBy('name')
+                        ->pluck('name', 'id');
+                })
+                ->searchable()
+                ->preload()
+                ->disabled(function ($get) use ($user, $selectedMarketId) {
+                    if (! ((bool) $user && $user->isSuperAdmin())) {
+                        return false;
+                    }
+
+                    $marketId = $get('market_id') ?? $selectedMarketId;
+
+                    return blank($marketId);
+                })
+                ->nullable(),
+
+            Forms\Components\TextInput::make('number')
+                ->label('Номер места')
+                ->maxLength(255)
+                ->helperText('Например: A-101. Внутренний код места формируется автоматически.'),
+
+            // code убран из формы — будет автогенерация на уровне модели
+
+            Forms\Components\TextInput::make('area_sqm')
+                ->label('Площадь, м²')
+                ->numeric()
+                ->inputMode('decimal'),
+
+            $typeSelect,
+            $typeCustom,
+
+            Forms\Components\Select::make('status')
+                ->label('Статус')
+                ->options([
+                    'free' => 'Свободно',
+                    'occupied' => 'Занято',
+                    'reserved' => 'Зарезервировано',
+                    'maintenance' => 'На обслуживании',
+                ])
+                ->default('free'),
+
+            Forms\Components\Toggle::make('is_active')
+                ->label('Активно')
+                ->default(true),
+
+            Forms\Components\Textarea::make('notes')
+                ->label('Примечания')
+                ->columnSpanFull(),
+        ]);
     }
 
     public static function table(Table $table): Table
     {
-        return $table
+        $user = Filament::auth()->user();
+
+        $table = $table
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
+
                 TextColumn::make('location.name')
                     ->label('Локация')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('tenant.name')
                     ->label('Арендатор')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('number')
                     ->label('Номер')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('type')
                     ->label('Тип')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -137,6 +227,7 @@ class MarketSpaceResource extends Resource
                         default => $state,
                     })
                     ->sortable(),
+
                 TextColumn::make('status')
                     ->label('Статус')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -147,26 +238,38 @@ class MarketSpaceResource extends Resource
                         default => $state,
                     })
                     ->sortable(),
+
                 TextColumn::make('area_sqm')
                     ->label('Площадь, м²')
                     ->numeric(decimalPlaces: 2)
                     ->sortable(),
+
                 IconColumn::make('is_active')
                     ->label('Активен')
                     ->boolean(),
             ])
-            ->filters([
-                //
-            ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->recordUrl(fn (MarketSpace $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null);
+
+        $actions = [];
+        if (class_exists(\Filament\Actions\EditAction::class)) {
+            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+        } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
+            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+        }
+
+        if (class_exists(\Filament\Actions\DeleteAction::class)) {
+            $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
+        } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
+            $actions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
+        }
+
+        if (! empty($actions)) {
+            $table = $table->actions($actions);
+        }
+
+        return $table;
     }
 
     public static function getRelations(): array
@@ -193,7 +296,11 @@ class MarketSpaceResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            return $query;
+            $selectedMarketId = session('filament.admin.selected_market_id');
+
+            return filled($selectedMarketId)
+                ? $query->where('market_id', (int) $selectedMarketId)
+                : $query;
         }
 
         if ($user->market_id) {
@@ -207,22 +314,14 @@ class MarketSpaceResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
-            return false;
-        }
-
-        return $user->isSuperAdmin() || (bool) $user->market_id;
+        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
-            return false;
-        }
-
-        return $user->isSuperAdmin() || (bool) $user->market_id;
+        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
     }
 
     public static function canEdit($record): bool

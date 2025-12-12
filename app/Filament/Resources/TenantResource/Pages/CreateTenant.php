@@ -11,7 +11,7 @@ class CreateTenant extends CreateRecord
 
     protected static ?string $title = 'Создать арендатора';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Создать арендатора';
     }

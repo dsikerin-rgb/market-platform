@@ -12,7 +12,7 @@ class ListTenants extends ListRecords
 
     protected static ?string $title = 'Арендаторы';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Арендаторы';
     }

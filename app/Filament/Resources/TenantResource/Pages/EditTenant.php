@@ -12,7 +12,7 @@ class EditTenant extends EditRecord
 
     protected static ?string $title = 'Редактирование арендатора';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Редактирование арендатора';
     }

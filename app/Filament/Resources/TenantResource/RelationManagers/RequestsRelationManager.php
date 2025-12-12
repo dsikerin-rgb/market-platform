@@ -22,25 +22,30 @@ class RequestsRelationManager extends RelationManager
 
     protected static ?string $recordTitleAttribute = 'subject';
 
-    public static function form(Schema $schema): Schema
+    public function form(Schema $schema): Schema
     {
         return $schema->components([
             Forms\Components\Hidden::make('market_id')
                 ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->market_id)
                 ->dehydrated(true),
+
             Forms\Components\Hidden::make('tenant_id')
                 ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->id)
                 ->dehydrated(true),
+
             Forms\Components\Hidden::make('created_by_user_id')
                 ->default(fn () => Filament::auth()->id())
                 ->dehydrated(true),
+
             Forms\Components\TextInput::make('subject')
                 ->label('Тема')
                 ->required()
                 ->maxLength(255),
+
             Forms\Components\Textarea::make('description')
                 ->label('Описание обращения')
                 ->required(),
+
             Forms\Components\Select::make('category')
                 ->label('Категория')
                 ->options([
@@ -51,6 +56,7 @@ class RequestsRelationManager extends RelationManager
                     'other' => 'Другое',
                 ])
                 ->default('other'),
+
             Forms\Components\Select::make('priority')
                 ->label('Приоритет')
                 ->options([
@@ -60,6 +66,7 @@ class RequestsRelationManager extends RelationManager
                     'urgent' => 'Критичный',
                 ])
                 ->default('normal'),
+
             Forms\Components\Select::make('status')
                 ->label('Статус')
                 ->options([
@@ -69,6 +76,7 @@ class RequestsRelationManager extends RelationManager
                     'closed' => 'Закрыто',
                 ])
                 ->default('new'),
+
             Forms\Components\Select::make('market_space_id')
                 ->label('Торговое место')
                 ->options(function (RelationManager $livewire) {
@@ -81,6 +89,7 @@ class RequestsRelationManager extends RelationManager
                 ->searchable()
                 ->preload()
                 ->nullable(),
+
             Forms\Components\Select::make('tenant_contract_id')
                 ->label('Договор')
                 ->options(function (RelationManager $livewire) {
@@ -94,17 +103,19 @@ class RequestsRelationManager extends RelationManager
                 ->searchable()
                 ->preload()
                 ->nullable(),
+
             Forms\Components\Textarea::make('internal_notes')
                 ->label('Внутренние комментарии')
                 ->columnSpanFull()
                 ->nullable(),
+
             Forms\Components\Toggle::make('is_active')
                 ->label('Активно')
                 ->default(true),
         ]);
     }
 
-    public static function table(Table $table): Table
+    public function table(Table $table): Table
     {
         return $table
             ->columns([
@@ -112,6 +123,7 @@ class RequestsRelationManager extends RelationManager
                     ->label('Тема')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('category')
                     ->label('Категория')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -122,6 +134,7 @@ class RequestsRelationManager extends RelationManager
                         'other' => 'Другое',
                         default => $state,
                     }),
+
                 TextColumn::make('priority')
                     ->label('Приоритет')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -131,6 +144,7 @@ class RequestsRelationManager extends RelationManager
                         'urgent' => 'Критичный',
                         default => $state,
                     }),
+
                 TextColumn::make('status')
                     ->label('Статус')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -140,20 +154,25 @@ class RequestsRelationManager extends RelationManager
                         'closed' => 'Закрыто',
                         default => $state,
                     }),
+
                 TextColumn::make('marketSpace.number')
                     ->label('Место')
                     ->sortable()
                     ->searchable(),
+
                 TextColumn::make('created_at')
                     ->label('Создано')
                     ->dateTime()
                     ->sortable(),
+
                 TextColumn::make('resolved_at')
                     ->label('Решено')
                     ->dateTime(),
+
                 TextColumn::make('closed_at')
                     ->label('Закрыто')
                     ->dateTime(),
+
                 IconColumn::make('is_active')
                     ->label('Активно')
                     ->boolean(),
@@ -161,6 +180,7 @@ class RequestsRelationManager extends RelationManager
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->label('Редактировать'),
+
                 Tables\Actions\DeleteAction::make()
                     ->label('Удалить'),
             ])

@@ -11,7 +11,7 @@ class CreateMarket extends CreateRecord
 
     protected static ?string $title = 'Создать рынок';
 
-    public function getBreadcrumb(): ?string
+    public function getBreadcrumb(): string
     {
         return 'Создать рынок';
     }
