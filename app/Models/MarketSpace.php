@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
+use App\Models\MarketSpaceType;
 
 class MarketSpace extends Model
 {
@@ -100,5 +101,11 @@ class MarketSpace extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function spaceType(): BelongsTo
+    {
+        return $this->belongsTo(MarketSpaceType::class, 'type', 'code')
+            ->whereColumn('market_space_types.market_id', 'market_spaces.market_id');
     }
 }
