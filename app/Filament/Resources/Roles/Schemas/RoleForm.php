@@ -53,13 +53,28 @@ class RoleForm
             ->default('web')
             ->dehydrated(true);
 
+        $labelField = Forms\Components\TextInput::make('label_ru')
+            ->label('Название (RU)')
+            ->maxLength(255)
+            ->helperText('Отображается в таблицах и списках навигации.');
+
+        $permissionsField = Forms\Components\Select::make('permissions')
+            ->label('Права роли')
+            ->multiple()
+            ->preload()
+            ->searchable()
+            ->relationship('permissions', 'name')
+            ->helperText('Добавьте права, которые должна предоставлять роль.');
+
         // Если есть Grid — делаем аккуратную раскладку как в UI (в одну строку/блок)
         if (class_exists(\Filament\Forms\Components\Grid::class)) {
             return $schema->components([
                 \Filament\Forms\Components\Grid::make(2)->schema([
                     $nameField,
                     $customNameField,
+                    $labelField,
                 ]),
+                $permissionsField,
                 $guardField,
             ]);
         }
@@ -67,6 +82,8 @@ class RoleForm
         return $schema->components([
             $nameField,
             $customNameField,
+            $labelField,
+            $permissionsField,
             $guardField,
         ]);
     }
