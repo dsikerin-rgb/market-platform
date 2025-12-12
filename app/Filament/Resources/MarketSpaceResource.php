@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -54,32 +55,6 @@ class MarketSpaceResource extends Resource
             ->default(fn () => $user?->market_id)
             ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
             ->dehydrated(true);
-
-        $typeOptions = [
-            'retail' => 'Торговое место',
-            'storage' => 'Склад',
-            'office' => 'Офис',
-            '__custom' => 'Другое (ввести вручную)',
-        ];
-
-        $typeSelect = Forms\Components\Select::make('type')
-            ->label('Тип')
-            ->options($typeOptions)
-            ->searchable()
-            ->preload()
-            ->reactive()
-            ->helperText('Если стандартных типов не хватает — выбери “Другое” и введи свой вариант.')
-            ->dehydrateStateUsing(fn ($state, $get) => $state === '__custom'
-                ? trim((string) $get('type_custom'))
-                : $state);
-
-        $typeCustom = Forms\Components\TextInput::make('type_custom')
-            ->label('Тип (вручную)')
-            ->placeholder('Например: холодильная камера, остров, витрина…')
-            ->maxLength(255)
-            ->visible(fn ($get) => $get('type') === '__custom')
-            ->required(fn ($get) => $get('type') === '__custom')
-            ->dehydrated(false);
 
         return $schema->components([
             $marketSelect,
@@ -168,8 +143,34 @@ class MarketSpaceResource extends Resource
                 ->numeric()
                 ->inputMode('decimal'),
 
-            $typeSelect,
-            $typeCustom,
+            Forms\Components\Select::make('type')
+                ->label('Тип')
+                ->options(function ($get, ?MarketSpace $record) use ($user, $selectedMarketId) {
+                    $marketId = $get('market_id') ?? $record?->market_id;
+
+                    if (blank($marketId) && (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId)) {
+                        $marketId = (int) $selectedMarketId;
+                    }
+
+                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                        $marketId = $user->market_id;
+                    }
+
+                    if (blank($marketId)) {
+                        return [];
+                    }
+
+                    return MarketSpaceType::query()
+                        ->where('market_id', $marketId)
+                        ->where('is_active', true)
+                        ->orderBy('name_ru')
+                        ->pluck('name_ru', 'code');
+                })
+                ->searchable()
+                ->preload()
+                ->reactive()
+                ->required()
+                ->helperText('Типы и тарифы берутся из справочника “Типы мест”.'),
 
             Forms\Components\Select::make('status')
                 ->label('Статус')
@@ -218,15 +219,10 @@ class MarketSpaceResource extends Resource
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('type')
+                TextColumn::make('spaceType.name_ru')
                     ->label('Тип')
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'retail' => 'Торговое место',
-                        'storage' => 'Склад',
-                        'office' => 'Офис',
-                        default => $state,
-                    })
-                    ->sortable(),
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('status')
                     ->label('Статус')

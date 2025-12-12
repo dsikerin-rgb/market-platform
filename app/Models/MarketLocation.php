@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use App\Models\MarketLocationType;
 
 class MarketLocation extends Model
 {
@@ -95,6 +96,12 @@ class MarketLocation extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function locationType(): BelongsTo
+    {
+        return $this->belongsTo(MarketLocationType::class, 'type', 'code')
+            ->whereColumn('market_location_types.market_id', 'market_locations.market_id');
     }
 
     public function children(): HasMany
