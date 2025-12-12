@@ -22,6 +22,5 @@ yarn-error.log
 /.vscode
 /.zed
 
-# Windows reserved device-name artifact
+# ignore accidental Windows reserved filename
 NUL
-
