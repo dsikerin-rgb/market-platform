@@ -21,11 +21,13 @@ class Market extends Model
         'timezone',
         'is_active',
         'settings',
+        'features',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'settings' => 'array',
+        'features' => 'array',
     ];
 
     public function locations(): HasMany
@@ -33,9 +35,19 @@ class Market extends Model
         return $this->hasMany(MarketLocation::class);
     }
 
+    public function locationTypes(): HasMany
+    {
+        return $this->hasMany(MarketLocationType::class);
+    }
+
     public function spaces(): HasMany
     {
         return $this->hasMany(MarketSpace::class);
+    }
+
+    public function spaceTypes(): HasMany
+    {
+        return $this->hasMany(MarketSpaceType::class);
     }
 
     public function users(): HasMany
