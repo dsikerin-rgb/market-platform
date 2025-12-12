@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketLocationResource\Pages;
 use App\Models\MarketLocation;
+use App\Models\MarketLocationType;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -57,14 +58,6 @@ class MarketLocationResource extends Resource
                 ->dehydrated(true);
         }
 
-        $typeOptions = [
-            'building' => 'Здание',
-            'floor' => 'Этаж',
-            'row' => 'Ряд',
-            'zone' => 'Зона',
-            '__custom' => 'Другое (ввести вручную)',
-        ];
-
         return $schema->components([
             ...$components,
 
@@ -78,23 +71,29 @@ class MarketLocationResource extends Resource
 
             Forms\Components\Select::make('type')
                 ->label('Тип')
-                ->options($typeOptions)
+                ->options(function ($get, ?MarketLocation $record) use ($user) {
+                    $marketId = $get('market_id') ?? $record?->market_id;
+
+                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                        $marketId = $user->market_id;
+                    }
+
+                    if (blank($marketId)) {
+                        return [];
+                    }
+
+                    return MarketLocationType::query()
+                        ->where('market_id', $marketId)
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->orderBy('name_ru')
+                        ->pluck('name_ru', 'code');
+                })
                 ->searchable()
                 ->preload()
                 ->reactive()
                 ->required()
-                ->helperText('Тип нужен для структуры (например: Здание → Этаж → Зона). Если стандартных не хватает — выбери “Другое”.')
-                ->dehydrateStateUsing(fn ($state, $get) => $state === '__custom'
-                    ? trim((string) $get('type_custom'))
-                    : $state),
-
-            Forms\Components\TextInput::make('type_custom')
-                ->label('Тип (вручную)')
-                ->placeholder('Например: павильон, сектор, линия…')
-                ->maxLength(255)
-                ->visible(fn ($get) => $get('type') === '__custom')
-                ->required(fn ($get) => $get('type') === '__custom')
-                ->dehydrated(false),
+                ->helperText('Типы берутся из справочника рынка. Добавьте новые в разделе “Типы локаций”.'),
 
             Forms\Components\Select::make('parent_id')
                 ->label('Родительская локация')
@@ -146,16 +145,10 @@ class MarketLocationResource extends Resource
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('type')
+                TextColumn::make('locationType.name_ru')
                     ->label('Тип')
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'building' => 'Здание',
-                        'floor' => 'Этаж',
-                        'row' => 'Ряд',
-                        'zone' => 'Зона',
-                        default => $state,
-                    })
-                    ->sortable(),
+                    ->sortable()
+                    ->searchable(),
 
                 TextColumn::make('parent.name')
                     ->label('Родительская локация')
