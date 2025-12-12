@@ -40,15 +40,27 @@ class RolesTable
 
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Роль')
-                    ->formatStateUsing(fn (?string $state) => $labels[$state] ?? $state)
+                Tables\Columns\TextColumn::make('label_ru')
+                    ->label('Название')
+                    ->formatStateUsing(fn ($state, $record) => $state ?: ($labels[$record->name] ?? $record->name))
                     ->searchable()
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Код роли')
+                    ->formatStateUsing(fn (?string $state) => $labels[$state] ?? $state)
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('guard_name')
                     ->label('Guard')
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                Tables\Columns\TextColumn::make('permissions.name')
+                    ->label('Права')
+                    ->badge()
+                    ->separator(', '),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Создана')
