@@ -39,8 +39,8 @@ class DatabaseSeeder extends Seeder
          * чтобы НЕ хранить пароль в репозитории.
          *
          * В .env добавь (локально / на сервере перед сидом):
-         * SEED_SUPER_ADMIN_EMAIL=321_123@bk.ru
-         * SEED_SUPER_ADMIN_PASSWORD=March620452
+         * SEED_SUPER_ADMIN_EMAIL=super-admin@example.com
+         * SEED_SUPER_ADMIN_PASSWORD=change_me
          * SEED_SUPER_ADMIN_NAME="Super Admin"
          */
         $adminEmail = env('SEED_SUPER_ADMIN_EMAIL');
