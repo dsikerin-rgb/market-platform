@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class MarketRegistrationController
 {
@@ -53,6 +55,17 @@ class MarketRegistrationController
         );
 
         $user = DB::transaction(function () use ($data) {
+            // На всякий случай сбрасываем кеш прав/ролей
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+            $guard = config('auth.defaults.guard', 'web');
+
+            // Гарантируем, что роль существует (и с нужным guard)
+            $marketAdminRole = Role::firstOrCreate([
+                'name' => 'market-admin',
+                'guard_name' => $guard,
+            ]);
+
             $identifier = $this->generateUniqueIdentifier($data['market_name']);
 
             $market = Market::create([
@@ -71,7 +84,8 @@ class MarketRegistrationController
                 'market_id' => $market->id,
             ]);
 
-            $user->assignRole('market-admin');
+            // Роль объектом — чтобы не словить RoleDoesNotExist
+            $user->assignRole($marketAdminRole);
 
             return $user;
         });
@@ -95,7 +109,7 @@ class MarketRegistrationController
 
         while (Market::query()->where('code', $candidate)->exists()) {
             $i++;
-            $candidate = $base.'-'.$i;
+            $candidate = $base . '-' . $i;
         }
 
         return $candidate;

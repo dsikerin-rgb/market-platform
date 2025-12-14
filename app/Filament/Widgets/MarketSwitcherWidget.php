@@ -20,7 +20,7 @@ class MarketSwitcherWidget extends Widget
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && $user->isSuperAdmin();
+        return (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 
     public function mount(): void
@@ -34,7 +34,7 @@ class MarketSwitcherWidget extends Widget
 
         session([$this->sessionKey() => $value]);
 
-        // проще и надежнее: перезагрузка страницы, чтобы все виджеты перечитали session
+        // Перезагрузка, чтобы все ресурсы/виджеты перечитали session и перестроили запросы
         $this->redirect(request()->fullUrl(), navigate: true);
     }
 
@@ -52,6 +52,8 @@ class MarketSwitcherWidget extends Widget
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
-        return "filament_{$panelId}_market_id";
+        // ВАЖНО: совпадает с тем, что используется в ресурсах:
+        // session('filament.admin.selected_market_id')
+        return "filament.{$panelId}.selected_market_id";
     }
 }

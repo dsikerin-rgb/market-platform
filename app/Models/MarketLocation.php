@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
-use App\Models\MarketLocationType;
 
 class MarketLocation extends Model
 {
@@ -37,12 +36,13 @@ class MarketLocation extends Model
         });
 
         static::updating(function (self $location): void {
-            // Если меняли market_id или code — обязаны перепроверить уникальность.
+            // Если меняли market_id / name / code — обязаны перепроверить уникальность.
             // Если code пустой — восстановим.
             if (
                 blank($location->code)
                 || $location->isDirty('code')
                 || $location->isDirty('market_id')
+                || $location->isDirty('name')
             ) {
                 $location->ensureCode();
             }
@@ -100,8 +100,9 @@ class MarketLocation extends Model
 
     public function locationType(): BelongsTo
     {
-        return $this->belongsTo(MarketLocationType::class, 'type', 'code')
-            ->whereColumn('market_location_types.market_id', 'market_locations.market_id');
+        // Важно: нельзя whereColumn на таблицу родителя при eager-loading (SQLite падает).
+        // Фильтрацию по рынку делаем в UI/запросах типов, не в relation.
+        return $this->belongsTo(MarketLocationType::class, 'type', 'code');
     }
 
     public function children(): HasMany
@@ -111,6 +112,6 @@ class MarketLocation extends Model
 
     public function spaces(): HasMany
     {
-        return $this->hasMany(MarketSpace::class);
+        return $this->hasMany(MarketSpace::class, 'location_id');
     }
 }

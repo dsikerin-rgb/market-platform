@@ -2,119 +2,70 @@
 
 namespace Database\Seeders;
 
-use App\Models\Market;
-use App\Models\MarketLocation;
-use App\Models\MarketSpace;
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // Базовые роли системы
-        $superAdminRole = Role::firstOrCreate(['name' => 'super-admin']);
-        $marketAdminRole = Role::firstOrCreate(['name' => 'market-admin']);
+        // 1) Сбрасываем кеш Spatie, чтобы роли/права корректно подхватывались
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // Роли сотрудников рынка (минимальный набор)
-        $marketManagerRole = Role::firstOrCreate(['name' => 'market-manager']);
-        $marketOperatorRole = Role::firstOrCreate(['name' => 'market-operator']);
+        // 2) Guard берём из конфига (обычно "web")
+        $guard = config('auth.defaults.guard', 'web');
 
-        // Роль арендатора (если используете её для пользователей)
-        $merchantRole = Role::firstOrCreate(['name' => 'merchant']);
+        // 3) Базовые роли системы (создаём всегда, в любых окружениях)
+        $roles = [
+            'super-admin',
+            'market-admin',
+            'market-manager',
+            'market-operator',
+            'merchant',
+        ];
 
-        // Тестовые пользователи и данные — только в local/testing
-        if (! app()->environment(['local', 'testing'])) {
-            return;
+        foreach ($roles as $roleName) {
+            Role::firstOrCreate([
+                'name' => $roleName,
+                'guard_name' => $guard,
+            ]);
         }
 
-        // Первый супер-админ для входа в панель
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@example.com'],
-            [
-                'name' => 'Super Admin',
-                'password' => Hash::make('admin12345'),
-            ],
-        );
+        /**
+         * 4) Опционально создаём супер-админа через .env,
+         * чтобы НЕ хранить пароль в репозитории.
+         *
+         * В .env добавь (локально / на сервере перед сидом):
+         * SEED_SUPER_ADMIN_EMAIL=321_123@bk.ru
+         * SEED_SUPER_ADMIN_PASSWORD=March620452
+         * SEED_SUPER_ADMIN_NAME="Super Admin"
+         */
+        $adminEmail = env('SEED_SUPER_ADMIN_EMAIL');
+        $adminPassword = env('SEED_SUPER_ADMIN_PASSWORD');
 
-        if (! $admin->hasRole($superAdminRole)) {
-            $admin->assignRole($superAdminRole);
+        if (filled($adminEmail) && filled($adminPassword)) {
+            $adminName = env('SEED_SUPER_ADMIN_NAME', 'Super Admin');
+
+            $admin = User::updateOrCreate(
+                ['email' => $adminEmail],
+                [
+                    'name' => $adminName,
+                    'password' => Hash::make($adminPassword),
+                    'email_verified_at' => now(),
+                    'market_id' => null,
+                ]
+            );
+
+            $superAdminRole = Role::where('name', 'super-admin')
+                ->where('guard_name', $guard)
+                ->first();
+
+            if ($superAdminRole) {
+                $admin->syncRoles([$superAdminRole]);
+            }
         }
-
-        // Тестовый рынок и маркет-админ
-        $market = Market::firstOrCreate(
-            ['code' => 'test-market'],
-            [
-                'name' => 'Тестовый рынок',
-                'slug' => 'test-market',
-                'address' => 'г. Москва, ул. Пример, д. 1',
-                'timezone' => 'Europe/Moscow',
-                'is_active' => true,
-            ],
-        );
-
-        $marketAdmin = User::firstOrCreate(
-            ['email' => 'market-admin@example.com'],
-            [
-                'name' => 'Маркет-админ',
-                'password' => Hash::make('market12345'),
-                'market_id' => $market->id,
-            ],
-        );
-
-        if (! $marketAdmin->hasRole($marketAdminRole)) {
-            $marketAdmin->assignRole($marketAdminRole);
-        }
-
-        // Пример: сотрудник-менеджер
-        $manager = User::firstOrCreate(
-            ['email' => 'manager@example.com'],
-            [
-                'name' => 'Менеджер рынка',
-                'password' => Hash::make('market12345'),
-                'market_id' => $market->id,
-            ],
-        );
-
-        if (! $manager->hasRole($marketManagerRole)) {
-            $manager->assignRole($marketManagerRole);
-        }
-
-        // Простейшие данные для проверки фильтрации внутри рынка
-        $location = MarketLocation::firstOrCreate(
-            [
-                'market_id' => $market->id,
-                'code' => 'loc-1',
-            ],
-            [
-                'name' => 'Основная локация',
-                'type' => 'zone',
-                'is_active' => true,
-            ],
-        );
-
-        MarketSpace::firstOrCreate(
-            [
-                'market_id' => $market->id,
-                'number' => 'A-101',
-            ],
-            [
-                'location_id' => $location->id,
-                'code' => 'space-101',
-                'area_sqm' => 10.5,
-                'type' => 'retail',
-                'status' => 'free',
-                'is_active' => true,
-            ],
-        );
-
-        // При необходимости потом добавим фабрики тестовых пользователей
-        // User::factory(10)->create();
     }
 }

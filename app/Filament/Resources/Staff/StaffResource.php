@@ -24,17 +24,50 @@ class StaffResource extends Resource
     protected static ?string $pluralModelLabel = 'Сотрудники';
     protected static ?string $navigationLabel = 'Сотрудники';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
+    /**
+     * Группа динамическая:
+     * super-admin -> "Рынки"
+     * остальные -> "Рынок"
+     */
+    public static function getNavigationGroup(): ?string
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            ? 'Рынки'
+            : 'Рынок';
+    }
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
+
+    /**
+     * Пункт меню видят: super-admin и market-admin
+     */
     public static function shouldRegisterNavigation(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin'));
+        return (bool) $user
+            && (
+                (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+                || (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
+            );
     }
 
     public static function form(Schema $schema): Schema
@@ -49,9 +82,7 @@ class StaffResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
@@ -72,8 +103,8 @@ class StaffResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
@@ -81,24 +112,35 @@ class StaffResource extends Resource
         }
 
         if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
+            return $query->where('market_id', (int) $user->market_id);
         }
 
         return $query->whereRaw('1 = 0');
     }
 
+    /**
+     * Доступ к ресурсу: super-admin и market-admin
+     */
     public static function canViewAny(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin'));
+        return (bool) $user
+            && (
+                (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+                || $user->hasRole('market-admin')
+            );
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin'));
+        return (bool) $user
+            && (
+                (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+                || $user->hasRole('market-admin')
+            );
     }
 
     public static function canEdit($record): bool
@@ -109,12 +151,15 @@ class StaffResource extends Resource
             return false;
         }
 
-        // никто кроме super-admin не редактирует super-admin
-        if (! $user->isSuperAdmin() && method_exists($record, 'hasRole') && $record->hasRole('super-admin')) {
+        if (
+            ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            && method_exists($record, 'hasRole')
+            && $record->hasRole('super-admin')
+        ) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
 
@@ -129,11 +174,14 @@ class StaffResource extends Resource
             return false;
         }
 
-        // никто кроме super-admin не удаляет super-admin
-        if (! $user->isSuperAdmin() && method_exists($record, 'hasRole') && $record->hasRole('super-admin')) {
+        if (
+            ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            && method_exists($record, 'hasRole')
+            && $record->hasRole('super-admin')
+        ) {
             return false;
         }
 
-        return $user->isSuperAdmin();
+        return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 }

@@ -24,51 +24,76 @@ class MarketSpaceResource extends Resource
     protected static ?string $pluralModelLabel = 'Торговые места';
     protected static ?string $navigationLabel = 'Торговые места';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-home-modern';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок';
+    }
+
+    public static function getNavigationSort(): int
+    {
+        return 30;
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
 
-        // Показываем выбор рынка super-admin только если не выбран рынок через переключатель
-        $marketSelect = Forms\Components\Select::make('market_id')
-            ->label('Рынок')
-            ->relationship('market', 'name')
-            ->required()
-            ->searchable()
-            ->preload()
-            ->reactive()
-            ->visible(fn () => (bool) $user && $user->isSuperAdmin() && blank($selectedMarketId))
-            ->dehydrated(true);
+        // ВАЖНО: в форме должен быть РОВНО ОДИН market_id.
+        $components = [];
 
-        // Если рынок выбран переключателем — фиксируем его скрыто
-        $marketHiddenForSuperAdmin = Forms\Components\Hidden::make('market_id')
-            ->default(fn () => filled($selectedMarketId) ? (int) $selectedMarketId : null)
-            ->visible(fn () => (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId))
-            ->dehydrated(true);
+        if ((bool) $user && $user->isSuperAdmin()) {
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
-        // Для рыночных ролей рынок всегда один — скрыто
-        $marketHiddenForMarketUser = Forms\Components\Hidden::make('market_id')
-            ->default(fn () => $user?->market_id)
-            ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
-            ->dehydrated(true);
+            if (filled($selectedMarketId)) {
+                $components[] = Forms\Components\Hidden::make('market_id')
+                    ->default(fn () => (int) $selectedMarketId)
+                    ->dehydrated(true);
+            } else {
+                $components[] = Forms\Components\Select::make('market_id')
+                    ->label('Рынок')
+                    ->relationship('market', 'name')
+                    ->required()
+                    ->searchable()
+                    ->preload()
+                    ->reactive()
+                    ->dehydrated(true);
+            }
+        } else {
+            $components[] = Forms\Components\Hidden::make('market_id')
+                ->default(fn () => $user?->market_id)
+                ->dehydrated(true);
+        }
 
         return $schema->components([
-            $marketSelect,
-            $marketHiddenForSuperAdmin,
-            $marketHiddenForMarketUser,
+            ...$components,
 
             Forms\Components\Select::make('location_id')
                 ->label('Локация')
-                ->options(function ($get) use ($user, $selectedMarketId) {
-                    $marketId = $get('market_id');
-
-                    if (blank($marketId) && (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId)) {
-                        $marketId = (int) $selectedMarketId;
-                    }
+                ->options(function ($get, ?MarketSpace $record) use ($user) {
+                    $marketId = $get('market_id') ?? $record?->market_id;
 
                     if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
                         $marketId = $user->market_id;
@@ -79,18 +104,19 @@ class MarketSpaceResource extends Resource
                     }
 
                     return MarketLocation::query()
-                        ->where('market_id', $marketId)
+                        ->where('market_id', (int) $marketId)
                         ->orderBy('name')
-                        ->pluck('name', 'id');
+                        ->pluck('name', 'id')
+                        ->all();
                 })
                 ->searchable()
                 ->preload()
-                ->disabled(function ($get) use ($user, $selectedMarketId) {
+                ->disabled(function ($get, ?MarketSpace $record) use ($user) {
                     if (! ((bool) $user && $user->isSuperAdmin())) {
                         return false;
                     }
 
-                    $marketId = $get('market_id') ?? $selectedMarketId;
+                    $marketId = $get('market_id') ?? $record?->market_id;
 
                     return blank($marketId);
                 })
@@ -98,12 +124,8 @@ class MarketSpaceResource extends Resource
 
             Forms\Components\Select::make('tenant_id')
                 ->label('Арендатор')
-                ->options(function ($get, ?MarketSpace $record) use ($user, $selectedMarketId) {
+                ->options(function ($get, ?MarketSpace $record) use ($user) {
                     $marketId = $get('market_id') ?? $record?->market_id;
-
-                    if (blank($marketId) && (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId)) {
-                        $marketId = (int) $selectedMarketId;
-                    }
 
                     if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
                         $marketId = $user->market_id;
@@ -114,18 +136,19 @@ class MarketSpaceResource extends Resource
                     }
 
                     return Tenant::query()
-                        ->where('market_id', $marketId)
+                        ->where('market_id', (int) $marketId)
                         ->orderBy('name')
-                        ->pluck('name', 'id');
+                        ->pluck('name', 'id')
+                        ->all();
                 })
                 ->searchable()
                 ->preload()
-                ->disabled(function ($get) use ($user, $selectedMarketId) {
+                ->disabled(function ($get, ?MarketSpace $record) use ($user) {
                     if (! ((bool) $user && $user->isSuperAdmin())) {
                         return false;
                     }
 
-                    $marketId = $get('market_id') ?? $selectedMarketId;
+                    $marketId = $get('market_id') ?? $record?->market_id;
 
                     return blank($marketId);
                 })
@@ -136,8 +159,6 @@ class MarketSpaceResource extends Resource
                 ->maxLength(255)
                 ->helperText('Например: A-101. Внутренний код места формируется автоматически.'),
 
-            // code убран из формы — будет автогенерация на уровне модели
-
             Forms\Components\TextInput::make('area_sqm')
                 ->label('Площадь, м²')
                 ->numeric()
@@ -145,12 +166,8 @@ class MarketSpaceResource extends Resource
 
             Forms\Components\Select::make('type')
                 ->label('Тип')
-                ->options(function ($get, ?MarketSpace $record) use ($user, $selectedMarketId) {
+                ->options(function ($get, ?MarketSpace $record) use ($user) {
                     $marketId = $get('market_id') ?? $record?->market_id;
-
-                    if (blank($marketId) && (bool) $user && $user->isSuperAdmin() && filled($selectedMarketId)) {
-                        $marketId = (int) $selectedMarketId;
-                    }
 
                     if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
                         $marketId = $user->market_id;
@@ -161,10 +178,11 @@ class MarketSpaceResource extends Resource
                     }
 
                     return MarketSpaceType::query()
-                        ->where('market_id', $marketId)
+                        ->where('market_id', (int) $marketId)
                         ->where('is_active', true)
                         ->orderBy('name_ru')
-                        ->pluck('name_ru', 'code');
+                        ->pluck('name_ru', 'code')
+                        ->all();
                 })
                 ->searchable()
                 ->preload()
@@ -249,6 +267,7 @@ class MarketSpaceResource extends Resource
                 : null);
 
         $actions = [];
+
         if (class_exists(\Filament\Actions\EditAction::class)) {
             $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
@@ -292,7 +311,7 @@ class MarketSpaceResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)

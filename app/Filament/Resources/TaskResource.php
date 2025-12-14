@@ -22,7 +22,8 @@ class TaskResource extends Resource
 
     protected static ?string $navigationLabel = 'Задачи';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Задачи';
+    // Задачи + Обращения в одной группе
+    protected static \UnitEnum|string|null $navigationGroup = 'Оперативная работа';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 

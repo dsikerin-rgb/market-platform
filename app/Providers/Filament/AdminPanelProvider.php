@@ -3,11 +3,14 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\MarketSettings;
+use App\Filament\Pages\Requests;
 use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -34,20 +37,48 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->passwordReset()
             ->profile()
-            ->brandName('Управление рынком')
+
+            // ВАЖНО: динамически, на каждый запрос.
+            // super-admin -> "Управление рынком"
+            // остальные -> название рынка пользователя
+            ->brandName(function (): string {
+                $user = Filament::auth()->user();
+
+                if (! $user) {
+                    return 'Управление рынком';
+                }
+
+                if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+                    return 'Управление рынком';
+                }
+
+                // Если связь market не определена/не подгружена — просто fallback
+                return $user->market?->name
+                    ?? (string) ($user->market_name ?? null)
+                    ?? 'Рынок';
+            })
+
             ->colors([
                 'primary' => Color::Amber,
             ])
 
-            ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
-            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
-            ->pages([
-                Dashboard::class,
+            // Порядок групп (у Dashboard/MarketSettings нет группы — они будут сверху автоматически)
+            ->navigationGroups([
+                'Рынки',
+                'Рынок',
+                'Оперативная работа', // Задачи + Обращения
             ])
 
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
+            ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
 
-            // Эти классы будут использоваться на Dashboard::getWidgets()
+            // Страницы регистрируем явно
+            ->pages([
+                Dashboard::class,
+                MarketSettings::class,
+                Requests::class,
+            ])
+
+            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 MarketOverviewStatsWidget::class,
                 TenantActivityStatsWidget::class,

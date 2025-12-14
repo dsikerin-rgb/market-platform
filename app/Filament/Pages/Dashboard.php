@@ -8,10 +8,20 @@ use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
+use Filament\Facades\Filament;
 use Filament\Pages\Dashboard as BaseDashboard;
 
 class Dashboard extends BaseDashboard
 {
+    protected static ?string $navigationLabel = 'Панель управления';
+    protected static ?string $title = 'Панель управления';
+
+    // УБИРАЕМ группу, чтобы не было отдельного заголовка "Панель управления" в меню
+    protected static \UnitEnum|string|null $navigationGroup = null;
+    protected static ?int $navigationSort = 1;
+
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-home';
+
     public function getHeading(): string
     {
         return '';
@@ -29,15 +39,22 @@ class Dashboard extends BaseDashboard
 
     public function getWidgets(): array
     {
+        $user = Filament::auth()->user();
+
+        $widgets = [];
+
+        // Переключатель рынка — только для super-admin
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $widgets[] = MarketSwitcherWidget::class;
+        }
+
         return [
-            // только для super-admin, фильтр по рынку (не в правом верхнем углу)
-            MarketSwitcherWidget::class,
+            ...$widgets,
 
             MarketOverviewStatsWidget::class,
             TenantActivityStatsWidget::class,
             MarketSpacesStatusChartWidget::class,
 
-            // таблицы: без колонки "Рынок"
             ExpiringContractsWidget::class,
             RecentTenantRequestsWidget::class,
         ];

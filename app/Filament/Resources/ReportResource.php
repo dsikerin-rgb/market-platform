@@ -12,26 +12,40 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 
 class ReportResource extends Resource
 {
     protected static ?string $model = Report::class;
 
     protected static ?string $modelLabel = 'Отчёт';
-
     protected static ?string $pluralModelLabel = 'Отчёты';
 
-    protected static ?string $navigationLabel = 'Отчёты';
+    /**
+     * Главное: скрываем из левого меню.
+     * Функционал остаётся доступным по URL и через ссылки/RelationManager.
+     */
+    protected static bool $shouldRegisterNavigation = false;
 
+    // На всякий случай оставляем (на меню не влияет, пока $shouldRegisterNavigation=false)
+    protected static ?string $navigationLabel = 'Шаблоны отчётов';
     protected static \UnitEnum|string|null $navigationGroup = 'Отчёты';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
+    protected static ?int $navigationSort = 10;
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $components = [];
 
@@ -66,7 +80,7 @@ class ReportResource extends Resource
                 ->label('Параметры (JSON)')
                 ->rows(3)
                 ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? json_decode($state, true) ?? [] : []),
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
 
             Forms\Components\TextInput::make('schedule_rule')
                 ->label('Правило расписания')
@@ -76,7 +90,7 @@ class ReportResource extends Resource
                 ->label('Получатели (JSON)')
                 ->rows(3)
                 ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? json_decode($state, true) ?? [] : []),
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
 
             Forms\Components\Toggle::make('is_active')
                 ->label('Активен')
@@ -182,10 +196,10 @@ class ReportResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
-                ? $query->where('market_id', (int) $selectedMarketId)
+                ? $query->where('market_id', $selectedMarketId)
                 : $query;
         }
 

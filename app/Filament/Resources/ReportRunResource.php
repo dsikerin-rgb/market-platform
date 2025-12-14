@@ -18,30 +18,42 @@ class ReportRunResource extends Resource
     protected static ?string $model = ReportRun::class;
 
     protected static ?string $modelLabel = 'Запуск отчёта';
-
     protected static ?string $pluralModelLabel = 'Запуски отчётов';
 
+    /**
+     * Главное: скрываем из левого меню.
+     * Доступ остаётся по URL и через ReportsHub.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationLabel = 'Запуски отчётов';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Отчёты';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-play';
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $formFields = [
             Forms\Components\Select::make('report_id')
                 ->label('Отчёт')
-                ->relationship('report', 'type', function (Builder $query) use ($user) {
+                ->relationship('report', 'type', function (Builder $query) use ($user, $selectedMarketId) {
                     if (! $user) {
                         return $query->whereRaw('1 = 0');
                     }
 
                     if ($user->isSuperAdmin()) {
-                        $selectedMarketId = session('filament.admin.selected_market_id');
-
                         return filled($selectedMarketId)
                             ? $query->where('market_id', (int) $selectedMarketId)
                             : $query;
@@ -169,10 +181,10 @@ class ReportRunResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereHas('report', function (Builder $query) use ($user) {
-            if ($user->isSuperAdmin()) {
-                $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
+        return $query->whereHas('report', function (Builder $query) use ($user, $selectedMarketId) {
+            if ($user->isSuperAdmin()) {
                 return filled($selectedMarketId)
                     ? $query->where('market_id', (int) $selectedMarketId)
                     : $query;

@@ -19,21 +19,20 @@ class RoleResource extends Resource
 
     protected static ?string $modelLabel = 'Роль';
     protected static ?string $pluralModelLabel = 'Роли';
+
+    /**
+     * ВАЖНО: убираем из левого меню.
+     * Роли должны открываться со страницы-хаба "Настройки рынка".
+     * Сам ресурс остаётся доступным по URL, доступ контролируется canViewAny/canCreate/etc.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Роли';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
-
-    // максимально совместимо
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-shield-check';
 
     protected static ?string $recordTitleAttribute = 'name';
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-    }
 
     public static function form(Schema $schema): Schema
     {

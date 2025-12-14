@@ -20,30 +20,64 @@ class TenantResource extends Resource
     protected static ?string $model = Tenant::class;
 
     protected static ?string $modelLabel = 'Арендатор';
-
     protected static ?string $pluralModelLabel = 'Арендаторы';
 
     protected static ?string $navigationLabel = 'Арендаторы';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
+    /**
+     * Группа динамическая:
+     * - super-admin видит "Рынки"
+     * - market-admin и остальные сотрудники не видят "Рынки", но могут открыть через "Настройки рынка"
+     */
+    public static function getNavigationGroup(): ?string
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок'; // Динамическое название группы
+    }
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-users';
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
 
         return $schema->components([
+
+            // Рынок только для super-admin, для других заполняется автоматически из сессии
             Forms\Components\Select::make('market_id')
                 ->label('Рынок')
                 ->relationship('market', 'name')
                 ->required()
                 ->searchable()
                 ->preload()
-                ->default(fn () => $user?->isSuperAdmin()
-                    ? session('filament.admin.selected_market_id')
-                    : $user?->market_id)
-                ->disabled(fn () => $user && ! $user->isSuperAdmin())
+                ->default(function () use ($user) {
+                    if (! $user) {
+                        return null;
+                    }
+
+                    if ($user->isSuperAdmin()) {
+                        // Если фильтр "Все рынки", то не подставляем null — пусть выберет рынок явно
+                        return static::selectedMarketIdFromSession() ?: null;
+                    }
+
+                    return $user->market_id;
+                })
+                ->disabled(fn () => (bool) $user && ! $user->isSuperAdmin())
                 ->dehydrated(true),
 
             Forms\Components\TextInput::make('name')
@@ -151,10 +185,7 @@ class TenantResource extends Resource
                     ->dateTime()
                     ->sortable(),
             ])
-            ->recordUrl(fn (Tenant $record) => static::getUrl('edit', ['record' => $record]))
-            ->filters([
-                //
-            ]);
+            ->recordUrl(fn (Tenant $record): string => static::getUrl('edit', ['record' => $record]));
     }
 
     public static function getRelations(): array
@@ -184,7 +215,7 @@ class TenantResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)

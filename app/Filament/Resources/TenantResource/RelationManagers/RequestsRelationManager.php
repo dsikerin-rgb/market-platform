@@ -82,9 +82,11 @@ class RequestsRelationManager extends RelationManager
                 ->options(function (RelationManager $livewire) {
                     $marketId = $livewire->getOwnerRecord()->market_id;
 
-                    return MarketSpace::where('market_id', $marketId)
+                    return MarketSpace::query()
+                        ->where('market_id', $marketId)
                         ->orderBy('number')
-                        ->pluck('number', 'id');
+                        ->pluck('number', 'id')
+                        ->toArray();
                 })
                 ->searchable()
                 ->preload()
@@ -95,10 +97,12 @@ class RequestsRelationManager extends RelationManager
                 ->options(function (RelationManager $livewire) {
                     $owner = $livewire->getOwnerRecord();
 
-                    return TenantContract::where('tenant_id', $owner->id)
+                    return TenantContract::query()
+                        ->where('tenant_id', $owner->id)
                         ->where('market_id', $owner->market_id)
                         ->orderBy('number')
-                        ->pluck('number', 'id');
+                        ->pluck('number', 'id')
+                        ->toArray();
                 })
                 ->searchable()
                 ->preload()
@@ -117,7 +121,51 @@ class RequestsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-        return $table
+        // Header Create (чтобы была кнопка добавления)
+        $headerActions = [];
+
+        if (class_exists(\Filament\Actions\CreateAction::class)) {
+            $headerActions[] = \Filament\Actions\CreateAction::make()->label('Добавить обращение');
+        } elseif (class_exists(\Filament\Tables\Actions\CreateAction::class)) {
+            $headerActions[] = \Filament\Tables\Actions\CreateAction::make()->label('Добавить обращение');
+        }
+
+        // Row actions (совместимо с твоей версией, где Tables\Actions\EditAction нет)
+        $rowActions = [];
+
+        if (class_exists(\Filament\Actions\EditAction::class)) {
+            $rowActions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+        } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
+            $rowActions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+        }
+
+        if (class_exists(\Filament\Actions\DeleteAction::class)) {
+            $rowActions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
+        } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
+            $rowActions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
+        }
+
+        // Bulk delete
+        $bulkActions = [];
+        $deleteBulk = null;
+
+        if (class_exists(\Filament\Tables\Actions\DeleteBulkAction::class)) {
+            $deleteBulk = \Filament\Tables\Actions\DeleteBulkAction::make()->label('Удалить выбранные');
+        } elseif (class_exists(\Filament\Actions\DeleteBulkAction::class)) {
+            $deleteBulk = \Filament\Actions\DeleteBulkAction::make()->label('Удалить выбранные');
+        }
+
+        if ($deleteBulk) {
+            if (class_exists(\Filament\Tables\Actions\BulkActionGroup::class)) {
+                $bulkActions[] = \Filament\Tables\Actions\BulkActionGroup::make([$deleteBulk]);
+            } else {
+                $bulkActions[] = $deleteBulk;
+            }
+        }
+
+        $user = Filament::auth()->user();
+
+        $table = $table
             ->columns([
                 TextColumn::make('subject')
                     ->label('Тема')
@@ -177,31 +225,36 @@ class RequestsRelationManager extends RelationManager
                     ->label('Активно')
                     ->boolean(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make()
-                    ->label('Редактировать'),
+            ->headerActions($headerActions)
+            ->emptyStateActions($headerActions);
 
-                Tables\Actions\DeleteAction::make()
-                    ->label('Удалить'),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()
-                        ->label('Удалить выбранные'),
-                ]),
-            ]);
+        if (! empty($rowActions)) {
+            $table = $table->actions($rowActions);
+        }
+
+        if (! empty($bulkActions)) {
+            $table = $table->bulkActions($bulkActions);
+        }
+
+        return $table;
     }
 
+    /**
+     * В твоей версии parent::getTableQuery() может вернуть null,
+     * поэтому берём query из relationship.
+     */
     public function getTableQuery(): Builder
     {
-        $query = parent::getTableQuery();
         $user = Filament::auth()->user();
+
+        /** @var Builder $query */
+        $query = $this->getRelationship()->getQuery();
 
         if (! $user) {
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->isSuperAdmin()) {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return $query;
         }
 

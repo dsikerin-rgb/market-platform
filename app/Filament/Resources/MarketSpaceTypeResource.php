@@ -18,23 +18,43 @@ class MarketSpaceTypeResource extends Resource
     protected static ?string $model = MarketSpaceType::class;
 
     protected static ?string $modelLabel = 'Тип торгового места';
-
     protected static ?string $pluralModelLabel = 'Типы торговых мест';
 
+    /**
+     * ВАЖНО: убираем из левого меню.
+     * Доступ остаётся по URL и со страницы "Настройки рынка" (хаб) позже.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Типы мест';
-
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
-
+    protected static \UnitEnum|string|null $navigationGroup = 'Настройки рынка';
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $components = [];
 
-        if ((bool) $user && $user->isSuperAdmin()) {
+        // ВАЖНО: в форме всегда должен быть РОВНО ОДИН market_id.
+        if ((bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             if (filled($selectedMarketId)) {
                 $components[] = Forms\Components\Hidden::make('market_id')
                     ->default(fn () => (int) $selectedMarketId)
@@ -114,7 +134,7 @@ class MarketSpaceTypeResource extends Resource
                     ->label('Рынок')
                     ->sortable()
                     ->searchable()
-                    ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
+                    ->visible(fn () => (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
 
                 TextColumn::make('name_ru')
                     ->label('Название')
@@ -194,8 +214,8 @@ class MarketSpaceTypeResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
@@ -213,14 +233,20 @@ class MarketSpaceTypeResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return (bool) $user && (
+            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            || (bool) $user->market_id
+        );
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return (bool) $user && (
+            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            || (bool) $user->market_id
+        );
     }
 
     public static function canEdit($record): bool
@@ -231,7 +257,7 @@ class MarketSpaceTypeResource extends Resource
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
 
@@ -246,7 +272,7 @@ class MarketSpaceTypeResource extends Resource
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
 

@@ -21,12 +21,12 @@
 @endphp
 
 <div class="flex flex-col items-end mr-2 leading-tight">
-    <div class="text-sm font-semibold">
+    <div class="text-xs font-bold text-gray-900">
         {{ $user->name }}
     </div>
 
     @if ($roleLabel)
-        <div class="text-xs text-gray-500 font-normal">
+        <div class="text-[11px] text-gray-500 font-normal">
             {{ $roleLabel }}
         </div>
     @endif

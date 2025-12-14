@@ -16,20 +16,23 @@ class PermissionResource extends Resource
     protected static ?string $model = \Spatie\Permission\Models\Permission::class;
 
     protected static ?string $modelLabel = 'Право';
-
     protected static ?string $pluralModelLabel = 'Права';
 
+    /**
+     * ВАЖНО: убираем из левого меню.
+     * Права должны открываться со страницы-хаба "Настройки рынка".
+     * Сам ресурс остаётся доступным по URL, доступ контролируется canViewAny/canCreate/etc.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Права';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-key';
 
     public static function shouldRegisterNavigation(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        return false;
     }
 
     public static function form(Schema $schema): Schema

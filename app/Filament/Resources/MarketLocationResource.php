@@ -22,8 +22,38 @@ class MarketLocationResource extends Resource
     protected static ?string $pluralModelLabel = 'Локации рынка';
     protected static ?string $navigationLabel = 'Локации рынка';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-map-pin';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок';
+    }
+
+    public static function getNavigationSort(): int
+    {
+        return 20;
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -33,15 +63,13 @@ class MarketLocationResource extends Resource
         $components = [];
 
         if ((bool) $user && $user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             if (filled($selectedMarketId)) {
-                // Рынок выбран через переключатель — фиксируем скрыто
                 $components[] = Forms\Components\Hidden::make('market_id')
-                    ->default(fn () => (int) session('filament.admin.selected_market_id'))
+                    ->default(fn () => (int) $selectedMarketId)
                     ->dehydrated(true);
             } else {
-                // Иначе super-admin выбирает рынок вручную
                 $components[] = Forms\Components\Select::make('market_id')
                     ->label('Рынок')
                     ->relationship('market', 'name')
@@ -52,7 +80,6 @@ class MarketLocationResource extends Resource
                     ->dehydrated(true);
             }
         } else {
-            // Рыночные роли: рынок всегда один — скрыто
             $components[] = Forms\Components\Hidden::make('market_id')
                 ->default(fn () => $user?->market_id)
                 ->dehydrated(true);
@@ -66,8 +93,6 @@ class MarketLocationResource extends Resource
                 ->required()
                 ->maxLength(255)
                 ->helperText('Например: Здание 1, Этаж 2, Сектор А.'),
-
-            // code убран из формы — генерируется на уровне модели
 
             Forms\Components\Select::make('type')
                 ->label('Тип')
@@ -83,11 +108,12 @@ class MarketLocationResource extends Resource
                     }
 
                     return MarketLocationType::query()
-                        ->where('market_id', $marketId)
+                        ->where('market_id', (int) $marketId)
                         ->where('is_active', true)
                         ->orderBy('sort_order')
                         ->orderBy('name_ru')
-                        ->pluck('name_ru', 'code');
+                        ->pluck('name_ru', 'code')
+                        ->all();
                 })
                 ->searchable()
                 ->preload()
@@ -97,22 +123,35 @@ class MarketLocationResource extends Resource
 
             Forms\Components\Select::make('parent_id')
                 ->label('Родительская локация')
-                ->options(function ($get, ?MarketLocation $record) {
-                    $marketId = $get('market_id');
+                ->options(function ($get, ?MarketLocation $record) use ($user) {
+                    $marketId = $get('market_id') ?? $record?->market_id;
+
+                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                        $marketId = $user->market_id;
+                    }
 
                     if (blank($marketId)) {
                         return [];
                     }
 
                     return MarketLocation::query()
-                        ->where('market_id', $marketId)
+                        ->where('market_id', (int) $marketId)
                         ->when($record?->id, fn ($q) => $q->whereKeyNot($record->id))
                         ->orderBy('name')
-                        ->pluck('name', 'id');
+                        ->pluck('name', 'id')
+                        ->all();
                 })
                 ->searchable()
                 ->preload()
-                ->disabled(fn ($get) => blank($get('market_id')))
+                ->disabled(function ($get, ?MarketLocation $record) use ($user) {
+                    $marketId = $get('market_id') ?? $record?->market_id;
+
+                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                        $marketId = $user->market_id;
+                    }
+
+                    return blank($marketId);
+                })
                 ->nullable()
                 ->helperText('Если это “этаж” — выбери “здание” как родителя. Если это “зона/ряд” — выбери “этаж/здание”.'),
 
@@ -163,13 +202,7 @@ class MarketLocationResource extends Resource
                     ->label('Активен')
                     ->boolean(),
             ])
-            ->recordUrl(fn (MarketLocation $record): string => static::getUrl('edit', ['record' => $record]))
-            ->filters([
-                //
-            ])
-            ->bulkActions([
-                //
-            ]);
+            ->recordUrl(fn (MarketLocation $record): string => static::getUrl('edit', ['record' => $record]));
     }
 
     public static function getRelations(): array
@@ -196,7 +229,7 @@ class MarketLocationResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
@@ -236,7 +269,9 @@ class MarketLocationResource extends Resource
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return (bool) $user->market_id
+            && (bool) $record?->market_id
+            && (int) $record->market_id === (int) $user->market_id;
     }
 
     public static function canDelete($record): bool
@@ -251,6 +286,8 @@ class MarketLocationResource extends Resource
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return (bool) $user->market_id
+            && (bool) $record?->market_id
+            && (int) $record->market_id === (int) $user->market_id;
     }
 }

@@ -17,14 +17,29 @@ class TaskCommentResource extends Resource
     protected static ?string $model = TaskComment::class;
 
     protected static ?string $modelLabel = 'Комментарий задачи';
-
     protected static ?string $pluralModelLabel = 'Комментарии задач';
 
+    /**
+     * ВАЖНО: убираем из левого меню.
+     * Комментарии должны жить внутри задачи (RelationManager), а не отдельным пунктом навигации.
+     * Доступ к ресурсу остаётся по URL.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    // Оставляем метаданные (не влияют на меню при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Комментарии задач';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Задачи';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-chat-bubble-left-ellipsis';
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -39,10 +54,10 @@ class TaskCommentResource extends Resource
                     }
 
                     if ($user->isSuperAdmin()) {
-                        $selectedMarketId = session('filament.admin.selected_market_id');
+                        $selectedMarketId = static::selectedMarketIdFromSession();
 
                         return filled($selectedMarketId)
-                            ? $query->where('market_id', (int) $selectedMarketId)
+                            ? $query->where('market_id', $selectedMarketId)
                             : $query;
                     }
 
@@ -64,10 +79,10 @@ class TaskCommentResource extends Resource
                     }
 
                     if ($user->isSuperAdmin()) {
-                        $selectedMarketId = session('filament.admin.selected_market_id');
+                        $selectedMarketId = static::selectedMarketIdFromSession();
 
                         return filled($selectedMarketId)
-                            ? $query->where('market_id', (int) $selectedMarketId)
+                            ? $query->where('market_id', $selectedMarketId)
                             : $query;
                     }
 
@@ -177,10 +192,10 @@ class TaskCommentResource extends Resource
 
         return $query->whereHas('task', function (Builder $query) use ($user) {
             if ($user->isSuperAdmin()) {
-                $selectedMarketId = session('filament.admin.selected_market_id');
+                $selectedMarketId = static::selectedMarketIdFromSession();
 
                 return filled($selectedMarketId)
-                    ? $query->where('market_id', (int) $selectedMarketId)
+                    ? $query->where('market_id', $selectedMarketId)
                     : $query;
             }
 

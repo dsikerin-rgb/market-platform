@@ -18,19 +18,32 @@ class MarketLocationTypeResource extends Resource
     protected static ?string $model = MarketLocationType::class;
 
     protected static ?string $modelLabel = 'Тип локации';
-
     protected static ?string $pluralModelLabel = 'Типы локаций';
 
+    /**
+     * ВАЖНО: убираем из левого меню.
+     * Открывается со страницы-хаба "Настройки рынка".
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Типы локаций';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-rectangle-group';
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $components = [];
 
@@ -170,7 +183,7 @@ class MarketLocationTypeResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)

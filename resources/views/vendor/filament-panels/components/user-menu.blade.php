@@ -62,8 +62,13 @@
                         x-show="$store.sidebar.isOpen"
                     @endif
                     class="fi-user-menu-trigger-text"
+                    style="font-weight: bold; font-size: 1rem; color: black;"  <!-- Имя жирным и черным -->
                 >
                     {{ filament()->getUserName($user) }}
+                </span>
+
+                <span style="font-size: 0.875rem; color: gray;">  <!-- Роль серым цветом и обычным шрифтом -->
+                    {{ filament()->getUserRole($user) }}
                 </span>
 
                 {{

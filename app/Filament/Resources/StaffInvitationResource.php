@@ -18,23 +18,51 @@ class StaffInvitationResource extends Resource
     protected static ?string $model = StaffInvitation::class;
 
     protected static ?string $modelLabel = 'Приглашение';
-
     protected static ?string $pluralModelLabel = 'Приглашения';
 
+    /**
+     * ВАЖНО: убираем из левого меню.
+     * Открываем со страницы "Сотрудники" (кнопка), ресурс доступен по URL.
+     */
+    protected static bool $shouldRegisterNavigation = false;
+
+    // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Приглашения';
-
     protected static \UnitEnum|string|null $navigationGroup = 'Сотрудники';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-envelope-open';
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
+
+    protected static function canManage(): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+
+        return $isSuperAdmin || $isMarketAdmin;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $components = [];
 
-        if ((bool) $user && $user->isSuperAdmin()) {
+        if ((bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             if (filled($selectedMarketId)) {
                 $components[] = Forms\Components\Hidden::make('market_id')
                     ->default(fn () => (int) $selectedMarketId)
@@ -66,7 +94,7 @@ class StaffInvitationResource extends Resource
                 ->label('Роли (JSON)')
                 ->rows(3)
                 ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? json_decode($state, true) ?? [] : []),
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
 
             Forms\Components\TextInput::make('token_hash')
                 ->label('Хэш токена')
@@ -82,8 +110,8 @@ class StaffInvitationResource extends Resource
                         return $query->whereRaw('1 = 0');
                     }
 
-                    if ($user->isSuperAdmin()) {
-                        $selectedMarketId = session('filament.admin.selected_market_id');
+                    if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+                        $selectedMarketId = static::selectedMarketIdFromSession();
 
                         return filled($selectedMarketId)
                             ? $query->where('market_id', (int) $selectedMarketId)
@@ -91,7 +119,7 @@ class StaffInvitationResource extends Resource
                     }
 
                     if ($user->market_id) {
-                        return $query->where('market_id', $user->market_id);
+                        return $query->where('market_id', (int) $user->market_id);
                     }
 
                     return $query->whereRaw('1 = 0');
@@ -128,7 +156,7 @@ class StaffInvitationResource extends Resource
                     ->label('Рынок')
                     ->sortable()
                     ->searchable()
-                    ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
+                    ->visible(fn () => (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
 
                 TextColumn::make('email')
                     ->label('Email')
@@ -192,12 +220,12 @@ class StaffInvitationResource extends Resource
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! $user || ! static::canManage()) {
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
@@ -205,7 +233,7 @@ class StaffInvitationResource extends Resource
         }
 
         if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
+            return $query->where('market_id', (int) $user->market_id);
         }
 
         return $query->whereRaw('1 = 0');
@@ -213,45 +241,41 @@ class StaffInvitationResource extends Resource
 
     public static function canViewAny(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return static::canManage();
     }
 
     public static function canCreate(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return static::canManage();
     }
 
     public static function canEdit($record): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! $user || ! static::canManage()) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return (bool) $user->market_id && (int) $record->market_id === (int) $user->market_id;
     }
 
     public static function canDelete($record): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! $user || ! static::canManage()) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return (bool) $user->market_id && (int) $record->market_id === (int) $user->market_id;
     }
 }

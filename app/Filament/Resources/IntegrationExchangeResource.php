@@ -18,19 +18,33 @@ class IntegrationExchangeResource extends Resource
     protected static ?string $model = IntegrationExchange::class;
 
     protected static ?string $modelLabel = 'Обмен интеграции';
-
     protected static ?string $pluralModelLabel = 'Обмены интеграций';
 
-    protected static ?string $navigationLabel = 'Обмены интеграций';
+    /**
+     * УБИРАЕМ из левого меню.
+     * Это служебный журнал — доступ остаётся по URL / по ссылке из страницы "Настройки рынка".
+     */
+    protected static bool $shouldRegisterNavigation = false;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Интеграции';
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-arrows-right-left';
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $components = [];
 
@@ -76,7 +90,7 @@ class IntegrationExchangeResource extends Resource
                 ->label('Данные (JSON)')
                 ->rows(3)
                 ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? json_decode($state, true) ?? [] : []),
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
 
             Forms\Components\Textarea::make('error')
                 ->label('Ошибка')
@@ -112,7 +126,7 @@ class IntegrationExchangeResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        $table = $table
+        return $table
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок')
@@ -151,26 +165,6 @@ class IntegrationExchangeResource extends Resource
             ->recordUrl(fn (IntegrationExchange $record): ?string => static::canEdit($record)
                 ? static::getUrl('edit', ['record' => $record])
                 : null);
-
-        $actions = [];
-
-        if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
-        } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
-        }
-
-        if (class_exists(\Filament\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
-        } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
-        }
-
-        if (! empty($actions)) {
-            $table = $table->actions($actions);
-        }
-
-        return $table;
     }
 
     public static function getRelations(): array
@@ -197,7 +191,7 @@ class IntegrationExchangeResource extends Resource
         }
 
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
