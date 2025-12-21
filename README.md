@@ -1,66 +1,107 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Market Platform — цифровая система управления рынком
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Платформа для управляющей компании и арендаторов: договоры, начисления/оплаты, документы, заявки на ТО, уведомления и дальнейшие интеграции.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Цели
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Свести ключевые процессы рынка в одну систему (вместо “табличек и чатов”).
+- Снизить ручной труд и повысить прозрачность расчётов.
+- Подготовить фундамент под интеграции и внешние клиенты.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## Основной функционал MVP
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+**Управляющая компания**
+- Арендаторы, торговые места, договоры, сроки.
+- Начисления → счета → оплаты → задолженности.
+- Документы (хранение, статусы, сроки).
+- Заявки/обращения (ТО/аварии) и контроль исполнения.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+**Арендатор**
+- Доступ к своим договорам, счетам, оплатам, документам.
+- Подача заявок/обращений.
+- Уведомления по событиям (по готовности).
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## Окружения и релизы
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Мы работаем по схеме:
 
-### Premium Partners
+- **Local**: разработка и быстрые проверки.
+- **Staging**: автодеплой при merge в `main`, проверка “как на сервере”.
+- **Production**: деплой **только по тегу релиза** после проверки на staging.
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+> Важно: staging должен быть закрыт от публичного доступа (BasicAuth/IP allowlist).
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Важное про Redis (на одной ВМ несколько проектов)
 
-## Code of Conduct
+Redis на сервере общий для проектов, поэтому **обязательное правило**:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- каждому проекту и каждому окружению задаём свой `REDIS_PREFIX`.
 
-## Security Vulnerabilities
+Пример:
+- `otelpro_prod:`
+- `servicedesk_prod:`
+- `market_staging:`
+- `market_prod:`
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Это предотвращает пересечения ключей кеша/очередей между проектами.
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Дорожная карта
+
+### Этап 0. Процесс разработки и контуры окружений
+- GitHub: feature-ветки → PR → merge в `main`.
+- Staging: автодеплой от `main`.
+- Prod: деплой по тегу релиза после проверки staging.
+- На одной ВМ: раздельные контуры (домен/папка/`.env`/БД).
+
+### Этап 1. MVP “управление рынком”
+- Модели и справочники (арендаторы, места, договоры).
+- Финансовый контур (начисления → счета → оплаты → задолженности).
+- Заявки/обращения (ТО/аварии) и контроль исполнения.
+- Документы и сроки.
+
+### Этап 2. Автоматизация тяжёлых операций
+- Импорт данных (Excel/CSV).
+- Генерация PDF (счета/акты).
+- Рассылки/уведомления.
+
+### Этап 3. Очереди и наблюдаемость (позже)
+- Redis для фоновых задач (импорт/PDF/рассылки/интеграции/webhooks).
+- **Laravel Horizon** для мониторинга очередей (staging/prod).
+- **Laravel Telescope**: только local/staging, закрытый доступ, авто-очистка.
+
+### Этап 4. Внешнее API и документация
+- Публичные эндпоинты для приложений/интеграций.
+- OpenAPI-спецификация.
+- Публикация документации (Stoplight/Swagger UI) с ограничением доступа.
+
+### Этап 5. Дополнительные возможности
+- Интеграция с 1С.
+- Контроль доступа (СКУД).
+- Видеонаблюдение (события/ссылки/архив).
+- Акции/маркетинг/рассылки.
+- Приложение для покупателей + доставка.
+- Внутренний “магазин расходников” для арендаторов.
+
+---
+
+## Рабочий процесс (коротко)
+
+- Одна задача → одна короткая ветка → PR → merge в `main`.
+- Не пушим в `main` напрямую.
+- Миграции: не правим уже попавшие в `main`, только новые.
+
+---
+
+## Лицензия
+
+MIT (если не определено иначе внутри репозитория).
