@@ -15,6 +15,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -24,6 +25,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -37,6 +39,22 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->passwordReset()
             ->profile()
+
+            ->userMenuItems([
+                'horizon' => MenuItem::make()
+                    ->label('Horizon (очереди)')
+                    ->url(fn (): string => route('horizon.index', ['view' => 'dashboard']))
+                    ->openUrlInNewTab()
+                    ->visible(function (): bool {
+                        $user = Filament::auth()->user();
+
+                        if (! ($user?->isSuperAdmin() ?? false)) {
+                            return false;
+                        }
+
+                        return Route::has('horizon.index');
+                    }),
+            ])
 
             // ВАЖНО: динамически, на каждый запрос.
             // super-admin -> "Управление рынком"
@@ -67,6 +85,7 @@ class AdminPanelProvider extends PanelProvider
                 'Рынки',
                 'Рынок',
                 'Оперативная работа', // Задачи + Обращения
+                'Ops', // Только для super-admin (оставлено под будущие ops-пункты)
             ])
 
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
