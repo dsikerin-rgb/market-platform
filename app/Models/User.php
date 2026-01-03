@@ -3,7 +3,6 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Models\Market;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,6 +19,11 @@ class User extends Authenticatable implements FilamentUser
     use HasFactory;
     use Notifiable;
     use HasRoles;
+
+    /**
+     * Spatie Permission guard.
+     */
+    protected string $guard_name = 'web';
 
     /**
      * The attributes that are mass assignable.
@@ -71,6 +75,14 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasRole('market-admin');
     }
 
+    /**
+     * Access to Ops tooling (Horizon, etc.).
+     */
+    public function canAccessHorizon(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
         // Локально пускаем всех, чтобы не мешать разработке
@@ -78,7 +90,7 @@ class User extends Authenticatable implements FilamentUser
             return true;
         }
 
-        // Для admin-панели в бою — только роли управления рынком
+        // Для admin-панели — роли управления рынком (super-admin всегда проходит)
         if ($panel->getId() === 'admin') {
             return $this->hasAnyRole([
                 'super-admin',

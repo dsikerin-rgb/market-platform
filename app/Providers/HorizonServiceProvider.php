@@ -16,13 +16,20 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
     {
         parent::boot();
 
-        /**
-         * IMPORTANT:
-         * По умолчанию Horizon разрешает доступ в local-окружении.
-         * Нам нужно единое правило для всех окружений: только через gate viewHorizon.
-         */
+        // Регистрируем gate во всех окружениях (включая local),
+        // чтобы поведение доступа было одинаковым.
+        $this->gate();
+
+        // Единая авторизация Horizon UI для всех окружений:
+        // доступ только тем, кто проходит Gate::viewHorizon (у нас это super-admin).
         Horizon::auth(function ($request): bool {
-            return Gate::check('viewHorizon', [$request->user()]);
+            $user = $request->user();
+
+            if (! $user) {
+                return false;
+            }
+
+            return Gate::forUser($user)->check('viewHorizon');
         });
 
         // Horizon::routeSmsNotificationsTo('15556667777');
@@ -44,7 +51,7 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
 
             // Prefer central policy on the User model (single source of truth).
             if ($user instanceof User && method_exists($user, 'canAccessHorizon')) {
-                return $user->canAccessHorizon();
+                return (bool) $user->canAccessHorizon();
             }
 
             // Fallbacks (defensive) for edge cases / legacy users.
