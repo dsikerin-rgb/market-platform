@@ -54,6 +54,26 @@ class AdminPanelProvider extends PanelProvider
 
                         return Route::has('horizon.index');
                     }),
+
+                'telescope' => MenuItem::make()
+                    ->label('Telescope (диагностика)')
+                    ->url(function (): string {
+                        $path = (string) config('telescope.path', 'telescope');
+                        $path = '/' . ltrim($path, '/');
+
+                        return url($path);
+                    })
+                    ->openUrlInNewTab()
+                    ->visible(function (): bool {
+                        $user = Filament::auth()->user();
+
+                        if (! ($user?->isSuperAdmin() ?? false)) {
+                            return false;
+                        }
+
+                        // Если пакет не установлен (например, прод с --no-dev), пункт не показываем.
+                        return class_exists(\Laravel\Telescope\Telescope::class);
+                    }),
             ])
 
             // ВАЖНО: динамически, на каждый запрос.
