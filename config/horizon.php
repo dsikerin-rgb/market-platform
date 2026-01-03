@@ -26,17 +26,24 @@ return [
     |--------------------------------------------------------------------------
     | Horizon Path
     |--------------------------------------------------------------------------
+    |
+    | Размещаем под /admin, чтобы было логично для super-admin инструментов.
+    | Пример: /admin/horizon
+    |
     */
 
-    'path' => env('HORIZON_PATH', 'horizon'),
+    'path' => env('HORIZON_PATH', 'admin/horizon'),
 
     /*
     |--------------------------------------------------------------------------
     | Horizon Redis Connection
     |--------------------------------------------------------------------------
+    |
+    | Имя Redis connection из config/database.php (обычно "default").
+    |
     */
 
-    'use' => 'default',
+    'use' => env('HORIZON_REDIS_CONNECTION', 'default'),
 
     /*
     |--------------------------------------------------------------------------
@@ -44,8 +51,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Важно: если на одном Redis несколько проектов/окружений, префиксы должны
-    | быть изолированы. По умолчанию Horizon берёт APP_NAME, но в нашем проекте
-    | уже принят REDIS_PREFIX как обязательное правило.
+    | быть изолированы. В проекте принято правило REDIS_PREFIX.
     |
     */
 
@@ -60,9 +66,12 @@ return [
     |--------------------------------------------------------------------------
     | Horizon Route Middleware
     |--------------------------------------------------------------------------
+    |
+    | "auth" добавляем, чтобы без логина не было просто 403, а шёл редирект на логин.
+    |
     */
 
-    'middleware' => ['web'],
+    'middleware' => ['web', 'auth'],
 
     /*
     |--------------------------------------------------------------------------
@@ -107,11 +116,6 @@ return [
     |--------------------------------------------------------------------------
     | Metrics
     |--------------------------------------------------------------------------
-    |
-    | Here you can configure how many snapshots should be kept to display in
-    | the metrics graph. This will get used in combination with Horizon's
-    | `horizon:snapshot` schedule to define how long to retain metrics.
-    |
     */
 
     'metrics' => [
@@ -159,10 +163,19 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Environment Specific Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Ключи должны совпадать с APP_ENV (staging/production/local).
+    |
+    */
+
     'environments' => [
         'production' => [
             'supervisor-1' => [
-                'maxProcesses' => 10,
+                'maxProcesses' => 3,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
@@ -170,7 +183,7 @@ return [
 
         'staging' => [
             'supervisor-1' => [
-                'maxProcesses' => 3,
+                'maxProcesses' => 2,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
