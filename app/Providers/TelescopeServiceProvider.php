@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Gate;
 use Laravel\Telescope\IncomingEntry;
 use Laravel\Telescope\Telescope;
 use Laravel\Telescope\TelescopeApplicationServiceProvider;
+use Throwable;
 
 class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 {
@@ -30,36 +31,28 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
      */
     public function register(): void
     {
-        // Telescope::night();
-
         $this->hideSensitiveRequestDetails();
 
         $isLocal = $this->app->environment('local');
-        $opsEnabled = $isLocal || $this->isTemporarilyEnabled();
 
-        /**
-         * Important:
-         * - In local: always record.
-         * - In non-local: record only when explicitly enabled (TTL in cache).
-         *
-         * This keeps Telescope installed and accessible to super-admins,
-         * while preventing background recording overhead on production by default.
-         */
+        // Важно: во время некоторых artisan/composer стадий контейнер может ещё не иметь биндинга cache.
+        // Поэтому флаг читаем только если cache уже доступен.
+        $opsEnabled = $isLocal || $this->isTemporarilyEnabledSafe();
+
         if ($opsEnabled) {
             Telescope::startRecording();
         } else {
             Telescope::stopRecording();
         }
 
-        // In non-local environments, when enabled, record everything (for diagnosis).
-        // When disabled, keep the filter narrow (defensive; recording is stopped anyway).
+        // В non-local окружениях:
+        // - когда включено (TTL) — записываем всё (для диагностики);
+        // - когда выключено — оставляем только “сигнальные” события (defensive; запись всё равно остановлена).
         Telescope::filter(function (IncomingEntry $entry) use ($isLocal, $opsEnabled) {
             if ($isLocal || $opsEnabled) {
                 return true;
             }
 
-            // В non-local окружениях (когда Telescope "выключен") логируем только «сигнальные» события,
-            // чтобы не раздувать БД (особенно при SQLite).
             return $entry->isReportableException()
                 || $entry->isFailedRequest()
                 || $entry->isFailedJob()
@@ -69,27 +62,34 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
     }
 
     /**
-     * Returns the time until which Telescope recording is enabled (non-local), or null if disabled.
+     * Returns the time until which Telescope recording is enabled (non-local), or null if disabled/unavailable.
      */
     public static function enabledUntil(): ?Carbon
     {
-        $ts = Cache::get(self::CACHE_KEY_ENABLED_UNTIL);
+        if (! app()->bound('cache')) {
+            return null;
+        }
 
-        return $ts ? Carbon::createFromTimestamp((int) $ts) : null;
+        try {
+            $ts = Cache::get(self::CACHE_KEY_ENABLED_UNTIL);
+
+            return $ts ? Carbon::createFromTimestamp((int) $ts) : null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**
      * Enable Telescope recording for a limited time window.
-     * Intended to be called from ops UI action (with confirmation).
      */
     public static function enableForMinutes(int $minutes = self::DEFAULT_ENABLE_MINUTES): Carbon
     {
         $minutes = max(1, min(24 * 60, $minutes)); // 1 minute .. 24 hours
-
         $until = now()->addMinutes($minutes);
 
-        // Store "until" timestamp with TTL that expires at the same moment.
-        Cache::put(self::CACHE_KEY_ENABLED_UNTIL, $until->getTimestamp(), $until);
+        if (app()->bound('cache')) {
+            Cache::put(self::CACHE_KEY_ENABLED_UNTIL, $until->getTimestamp(), $until);
+        }
 
         return $until;
     }
@@ -99,17 +99,30 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
      */
     public static function disable(): void
     {
+        if (! app()->bound('cache')) {
+            return;
+        }
+
         Cache::forget(self::CACHE_KEY_ENABLED_UNTIL);
     }
 
     /**
      * Determine whether Telescope is temporarily enabled (non-local).
+     * Safe for early bootstrap (returns false if cache is unavailable).
      */
-    protected function isTemporarilyEnabled(): bool
+    protected function isTemporarilyEnabledSafe(): bool
     {
-        $until = self::enabledUntil();
+        if (! $this->app->bound('cache')) {
+            return false;
+        }
 
-        return $until !== null && $until->isFuture();
+        try {
+            $until = self::enabledUntil();
+
+            return $until !== null && $until->isFuture();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
