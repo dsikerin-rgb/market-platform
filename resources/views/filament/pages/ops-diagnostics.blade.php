@@ -218,11 +218,20 @@
                         <div class="ops-kv-row">
                             <div class="ops-kv-key">Коммит</div>
                             <div class="ops-kv-val">
-                                <x-filament::badge color="gray">
-                                    {{ $gitCommitShort ?: '—' }}
-                                </x-filament::badge>
+                                <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
+                                    <x-filament::badge color="gray">
+                                        {{ $gitCommitShort ?: '—' }}
+                                    </x-filament::badge>
+
+                                    @if (! empty($gitVersionLabel))
+                                        <x-filament::badge color="gray">
+                                            PR {{ $gitVersionLabel }}
+                                        </x-filament::badge>
+                                    @endif
+                                </div>
+
                                 <div class="ops-muted" style="font-size: .75rem; margin-top: .25rem;">
-                                    Это “номер последнего обновления” (короткий хеш git).
+                                    “PR #…” берётся из сообщения последнего коммита (merge/squash), чтобы проще сравнивать, что новее.
                                 </div>
                             </div>
                         </div>

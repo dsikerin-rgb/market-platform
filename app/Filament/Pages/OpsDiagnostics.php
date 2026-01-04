@@ -10,8 +10,11 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Laravel\Telescope\Contracts\EntriesRepository;
 use Throwable;
 use UnitEnum;
@@ -48,7 +51,7 @@ class OpsDiagnostics extends Page
     {
         $telescopeInstalled = class_exists(\Laravel\Telescope\Telescope::class);
         $telescopeEnabled = $telescopeInstalled
-            ? (bool) config('telescope.enabled', true) // типичный default в telescope.php
+            ? (bool) config('telescope.enabled', true)
             : false;
 
         $git = $this->getGitInfo();
@@ -57,9 +60,10 @@ class OpsDiagnostics extends Page
             'appEnv' => (string) config('app.env'),
             'appPath' => base_path(),
 
-            // Версия/обновление (для вывода на странице)
             'gitCommitShort' => $git['commitShort'],
             'gitBranch' => $git['branch'],
+            'gitPrNumber' => $git['prNumber'],
+            'gitVersionLabel' => $git['versionLabel'],
 
             'telescopeInstalled' => $telescopeInstalled,
             'telescopeEnabled' => $telescopeEnabled,
@@ -88,17 +92,11 @@ class OpsDiagnostics extends Page
         }
     }
 
-    /**
-     * Совместимость: если где-то (или ранее) blade вызывал pruneTelescope48h — оставляем метод.
-     */
     public function pruneTelescope48h(): void
     {
         $this->pruneTelescope(hoursToKeep: 48);
     }
 
-    /**
-     * Основной метод под текущий blade (wire:click="pruneTelescope").
-     */
     public function pruneTelescope(int $hoursToKeep = 48): void
     {
         $this->ensureSuperAdmin();
@@ -125,19 +123,15 @@ class OpsDiagnostics extends Page
         try {
             $before = now()->subHours($hoursToKeep);
 
-            // Предпочтительно: чистка через репозиторий Telescope (не через artisan-команду в HTTP).
             if (app()->bound(EntriesRepository::class)) {
                 $repo = app(EntriesRepository::class);
 
                 try {
-                    // На большинстве версий это рабочая сигнатура.
                     $repo->prune($before);
                 } catch (Throwable) {
-                    // На некоторых версиях есть второй параметр (например keepExceptions).
                     $repo->prune($before, false);
                 }
             } else {
-                // Fallback: прямое удаление из таблиц (если биндинг репозитория недоступен).
                 $this->pruneTelescopeByDb($before);
             }
 
@@ -165,7 +159,6 @@ class OpsDiagnostics extends Page
             ->where('created_at', '<', $before)
             ->orderBy('uuid')
             ->chunk(500, function ($rows) use ($connection) {
-                // $rows обычно Collection из stdClass.
                 $uuids = $rows->pluck('uuid')->filter()->values()->all();
 
                 if ($uuids === []) {
@@ -192,47 +185,42 @@ class OpsDiagnostics extends Page
     }
 
     /**
-     * Информация о версии из .git без запуска внешних процессов.
-     * Если деплой не через git или .git отсутствует — вернёт null.
-     *
-     * @return array{commitShort:?string, branch:?string}
+     * @return array{commitShort:?string, branch:?string, prNumber:?int, versionLabel:?string}
      */
     private function getGitInfo(): array
     {
         $gitDir = base_path('.git');
 
         if (! is_dir($gitDir)) {
-            return ['commitShort' => null, 'branch' => null];
+            return ['commitShort' => null, 'branch' => null, 'prNumber' => null, 'versionLabel' => null];
         }
 
         $headFile = $gitDir . DIRECTORY_SEPARATOR . 'HEAD';
+        $head = $this->safeReadFile($headFile);
 
-        if (! is_file($headFile)) {
-            return ['commitShort' => null, 'branch' => null];
+        if ($head === null) {
+            return ['commitShort' => null, 'branch' => null, 'prNumber' => null, 'versionLabel' => null];
         }
 
-        $head = trim((string) File::get($headFile));
-
+        $head = trim($head);
         if ($head === '') {
-            return ['commitShort' => null, 'branch' => null];
+            return ['commitShort' => null, 'branch' => null, 'prNumber' => null, 'versionLabel' => null];
         }
 
-        $commit = null;
+        $commitFull = null;
         $branch = null;
 
-        // HEAD может быть либо хешом, либо ссылкой ref: refs/heads/main
         if (str_starts_with($head, 'ref:')) {
             $ref = trim(substr($head, 4));
+
             $branch = str_starts_with($ref, 'refs/heads/')
                 ? substr($ref, strlen('refs/heads/'))
                 : $ref;
 
             $refFile = $gitDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $ref);
+            $commitFull = $this->safeReadFile($refFile);
 
-            if (is_file($refFile)) {
-                $commit = trim((string) File::get($refFile));
-            } else {
-                // refs могут быть упакованы в packed-refs
+            if ($commitFull === null) {
                 $packedRefs = $gitDir . DIRECTORY_SEPARATOR . 'packed-refs';
 
                 if (is_file($packedRefs)) {
@@ -251,7 +239,7 @@ class OpsDiagnostics extends Page
                         [$hash, $refName] = $parts;
 
                         if ($refName === $ref) {
-                            $commit = $hash;
+                            $commitFull = $hash;
                             break;
                         }
                     }
@@ -259,14 +247,214 @@ class OpsDiagnostics extends Page
             }
         } else {
             // detached HEAD
-            $commit = $head;
+            $commitFull = $head;
         }
 
-        $commit = $commit ? trim($commit) : null;
+        $commitFull = $commitFull ? trim((string) $commitFull) : null;
+        $commitShort = $commitFull ? substr($commitFull, 0, 7) : null;
+
+        $prNumber = null;
+
+        // 1) Быстро: пытаемся вытащить PR из сообщения последнего коммита.
+        $prNumber = $this->tryExtractPrNumberFromLastCommitMessage();
+
+        // 2) Fallback: если в сообщении нет #NN (fast-forward/rebase), пробуем GitHub API по SHA.
+        if ($prNumber === null && $commitFull !== null) {
+            $prNumber = $this->tryLookupPrNumberByCommitFromGitHub($commitFull);
+        }
+
+        $versionLabel = $prNumber ? ('#' . $prNumber) : null;
 
         return [
-            'commitShort' => $commit ? substr($commit, 0, 7) : null,
+            'commitShort' => $commitShort,
             'branch' => $branch,
+            'prNumber' => $prNumber,
+            'versionLabel' => $versionLabel,
         ];
+    }
+
+    private function safeReadFile(string $path): ?string
+    {
+        if (! is_file($path)) {
+            return null;
+        }
+
+        try {
+            return (string) File::get($path);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function tryExtractPrNumberFromLastCommitMessage(): ?int
+    {
+        try {
+            $result = Process::timeout(2)
+                ->path(base_path())
+                ->run(['git', 'log', '-1', '--pretty=%B']);
+
+            if (! $result->successful()) {
+                return null;
+            }
+
+            $message = trim((string) $result->output());
+
+            if (preg_match('/Merge pull request #(\d+)/', $message, $m)) {
+                return (int) $m[1];
+            }
+
+            if (preg_match('/\(#(\d+)\)\s*$/m', $message, $m)) {
+                return (int) $m[1];
+            }
+        } catch (Throwable) {
+            // git/Process может быть недоступен — молча пропускаем.
+        }
+
+        return null;
+    }
+
+    /**
+     * Ищет PR для конкретного commit SHA через GitHub API.
+     * Работает даже если merge был fast-forward/rebase и в commit message нет " (#NN)".
+     *
+     * Важно: это best-effort. Если repo private — нужен токен в .env (GITHUB_TOKEN / GITHUB_API_TOKEN).
+     */
+    private function tryLookupPrNumberByCommitFromGitHub(string $commitSha): ?int
+    {
+        $cacheKey = 'ops:git:pr:' . $commitSha;
+
+        $cached = Cache::get($cacheKey);
+        if ($cached !== null) {
+            return $cached === 0 ? null : (int) $cached;
+        }
+
+        $value = 0; // 0 = "не найдено/ошибка", чтобы тоже кэшировать
+
+        try {
+            $originUrl = $this->readOriginUrlFromGitConfig();
+            if ($originUrl === null) {
+                Cache::put($cacheKey, $value, now()->addHours(6));
+                return null;
+            }
+
+            $repo = $this->parseGitHubOwnerRepo($originUrl);
+            if ($repo === null) {
+                Cache::put($cacheKey, $value, now()->addHours(6));
+                return null;
+            }
+
+            [$owner, $name] = $repo;
+
+            $token = (string) (config('services.github.token')
+                ?? env('GITHUB_TOKEN')
+                ?? env('GITHUB_API_TOKEN')
+                ?? '');
+
+            $url = "https://api.github.com/repos/{$owner}/{$name}/commits/{$commitSha}/pulls";
+
+            $req = Http::timeout(2)
+                ->withHeaders([
+                    'Accept' => 'application/vnd.github+json',
+                    'User-Agent' => 'market-platform-ops-diagnostics',
+                    'X-GitHub-Api-Version' => '2022-11-28',
+                ]);
+
+            if ($token !== '') {
+                $req = $req->withToken($token);
+            }
+
+            $res = $req->get($url);
+
+            if (! $res->successful()) {
+                Cache::put($cacheKey, $value, now()->addHours(6));
+                return null;
+            }
+
+            $data = $res->json();
+
+            if (! is_array($data) || $data === []) {
+                Cache::put($cacheKey, $value, now()->addHours(6));
+                return null;
+            }
+
+            $numbers = [];
+            foreach ($data as $pr) {
+                if (is_array($pr) && isset($pr['number']) && is_numeric($pr['number'])) {
+                    $numbers[] = (int) $pr['number'];
+                }
+            }
+
+            if ($numbers !== []) {
+                $value = max($numbers);
+            }
+        } catch (Throwable) {
+            // ничего
+        }
+
+        Cache::put($cacheKey, $value, now()->addHours(6));
+
+        return $value === 0 ? null : $value;
+    }
+
+    private function readOriginUrlFromGitConfig(): ?string
+    {
+        $cfg = $this->safeReadFile(base_path('.git/config'));
+        if ($cfg === null || trim($cfg) === '') {
+            return null;
+        }
+
+        // Вырезаем секцию [remote "origin"] ... до следующей секции
+        $hay = $cfg . "\n[";
+        if (! preg_match('/\[remote "origin"\](.*?)\n\[/s', $hay, $m)) {
+            return null;
+        }
+
+        $section = "\n" . $m[1] . "\n";
+        if (! preg_match('/\n\s*url\s*=\s*(.+)\s*\n/', $section, $u)) {
+            return null;
+        }
+
+        return trim($u[1]);
+    }
+
+    /**
+     * @return array{0:string,1:string}|null
+     */
+    private function parseGitHubOwnerRepo(string $originUrl): ?array
+    {
+        $originUrl = trim($originUrl);
+
+        // git@github.com:owner/repo.git
+        if (str_starts_with($originUrl, 'git@github.com:')) {
+            $path = substr($originUrl, strlen('git@github.com:'));
+            $path = preg_replace('/\.git$/', '', $path) ?? $path;
+
+            $parts = explode('/', trim($path, '/'));
+            if (count($parts) >= 2) {
+                return [$parts[0], $parts[1]];
+            }
+
+            return null;
+        }
+
+        // https://github.com/owner/repo.git
+        $parsed = @parse_url($originUrl);
+        if (! is_array($parsed) || empty($parsed['host']) || empty($parsed['path'])) {
+            return null;
+        }
+
+        if ($parsed['host'] !== 'github.com') {
+            return null;
+        }
+
+        $path = trim((string) $parsed['path'], '/');
+        $path = preg_replace('/\.git$/', '', $path) ?? $path;
+
+        $parts = explode('/', $path);
+        if (count($parts) >= 2) {
+            return [$parts[0], $parts[1]];
+        }
+
+        return null;
     }
 }
