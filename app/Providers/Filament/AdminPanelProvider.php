@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Dashboard;
@@ -37,6 +39,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+
             // Важно: не подключаем тему через Vite, чтобы Filament не тянул resources/css/filament/admin/theme.css
             // и не поднимал Vite/PostCSS overlay при проблемах сборки.
             ->login()
@@ -76,12 +79,10 @@ class AdminPanelProvider extends PanelProvider
                             return false;
                         }
 
-                        // Если пакет не установлен (например, окружение без Telescope) — пункт не показываем.
                         if (! class_exists(\Laravel\Telescope\Telescope::class)) {
                             return false;
                         }
 
-                        // Если Telescope выключен через конфиг/.env — пункт не показываем.
                         return (bool) config('telescope.enabled', true);
                     }),
             ])
@@ -136,9 +137,11 @@ class AdminPanelProvider extends PanelProvider
                 RecentTenantRequestsWidget::class,
             ])
 
+            // Блок с именем/ролью рядом с аватаром (после global search).
+            // Возвращаем View (без ->render()), Filament сам корректно отрендерит.
             ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_AFTER,
-                fn () => view('filament.components.topbar-user-info')->render(),
+                fn () => view('filament.components.topbar-user-info'),
             )
 
             ->middleware([
