@@ -22,6 +22,14 @@ use UnitEnum;
 class OpsDiagnostics extends Page
 {
     /**
+     * Cache key that controls whether Telescope recording is enabled (non-local) with TTL.
+     * Value: UNIX timestamp (int) until which recording is enabled.
+     */
+    private const TELESCOPE_ENABLED_UNTIL_CACHE_KEY = 'ops:telescope:enabled_until';
+
+    private const TELESCOPE_DEFAULT_ENABLE_MINUTES = 30;
+
+    /**
      * В вашей версии Filament view у Page задан как НЕ static.
      */
     protected string $view = 'filament.pages.ops-diagnostics';
@@ -50,9 +58,18 @@ class OpsDiagnostics extends Page
     protected function getViewData(): array
     {
         $telescopeInstalled = class_exists(\Laravel\Telescope\Telescope::class);
-        $telescopeEnabled = $telescopeInstalled
+
+        // Важно: config('telescope.enabled') влияет на то, доступны ли маршруты/UI Telescope.
+        // Наш "ops-toggle" управляет именно записью (recording) и делает это через cache TTL.
+        $telescopeConfigEnabled = $telescopeInstalled
             ? (bool) config('telescope.enabled', true)
             : false;
+
+        $telescopeEnabledUntil = $telescopeInstalled ? $this->getTelescopeEnabledUntil() : null;
+
+        $telescopeRecordingEnabled = $telescopeInstalled
+            && $telescopeEnabledUntil !== null
+            && $telescopeEnabledUntil->isFuture();
 
         $git = $this->getGitInfo();
 
@@ -66,7 +83,16 @@ class OpsDiagnostics extends Page
             'gitVersionLabel' => $git['versionLabel'],
 
             'telescopeInstalled' => $telescopeInstalled,
-            'telescopeEnabled' => $telescopeEnabled,
+
+            // Backward-compatible flag used by the Blade view in older iterations.
+            // Now means "recording enabled by ops-toggle (TTL)".
+            'telescopeEnabled' => $telescopeRecordingEnabled,
+
+            // New, explicit flags for UI rendering.
+            'telescopeConfigEnabled' => $telescopeConfigEnabled,
+            'telescopeRecordingEnabled' => $telescopeRecordingEnabled,
+            'telescopeEnabledUntil' => $telescopeEnabledUntil?->toDateTimeString(),
+            'telescopeEnabledUntilHuman' => $telescopeEnabledUntil?->diffForHumans(),
         ];
     }
 
@@ -92,12 +118,16 @@ class OpsDiagnostics extends Page
         }
     }
 
-    public function pruneTelescope48h(): void
+    /**
+     * Enable Telescope recording temporarily (with auto-disable via TTL).
+     * Intended to be wired to a button on ops-diagnostics page.
+     */
+    public function enableTelescope30m(): void
     {
-        $this->pruneTelescope(hoursToKeep: 48);
+        $this->enableTelescope(self::TELESCOPE_DEFAULT_ENABLE_MINUTES);
     }
 
-    public function pruneTelescope(int $hoursToKeep = 48): void
+    public function enableTelescope(int $minutes = self::TELESCOPE_DEFAULT_ENABLE_MINUTES): void
     {
         $this->ensureSuperAdmin();
 
@@ -110,10 +140,54 @@ class OpsDiagnostics extends Page
             return;
         }
 
+        $minutes = max(1, min(24 * 60, $minutes));
+
+        $until = now()->addMinutes($minutes);
+
+        // Store "until" timestamp with TTL that expires at the same moment.
+        Cache::put(self::TELESCOPE_ENABLED_UNTIL_CACHE_KEY, $until->getTimestamp(), $until);
+
+        $body = "Автоматически выключится: {$until->toDateTimeString()} ({$until->diffForHumans()}).";
+
         if (! (bool) config('telescope.enabled', true)) {
+            $body .= ' Внимание: telescope.enabled=false — UI/маршруты Telescope могут быть недоступны, даже если запись включена.';
+        }
+
+        Notification::make()
+            ->title("Telescope включён на {$minutes} мин.")
+            ->body($body)
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
+    }
+
+    public function disableTelescope(): void
+    {
+        $this->ensureSuperAdmin();
+
+        Cache::forget(self::TELESCOPE_ENABLED_UNTIL_CACHE_KEY);
+
+        Notification::make()
+            ->title('Telescope выключен')
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
+    }
+
+    public function pruneTelescope48h(): void
+    {
+        $this->pruneTelescope(hoursToKeep: 48);
+    }
+
+    public function pruneTelescope(int $hoursToKeep = 48): void
+    {
+        $this->ensureSuperAdmin();
+
+        if (! class_exists(\Laravel\Telescope\Telescope::class)) {
             Notification::make()
-                ->title('Telescope выключен')
-                ->body('Включите telescope.enabled, затем повторите.')
+                ->title('Telescope не установлен')
                 ->warning()
                 ->send();
 
@@ -175,6 +249,13 @@ class OpsDiagnostics extends Page
                     ->whereIn('uuid', $uuids)
                     ->delete();
             });
+    }
+
+    private function getTelescopeEnabledUntil(): ?Carbon
+    {
+        $ts = Cache::get(self::TELESCOPE_ENABLED_UNTIL_CACHE_KEY);
+
+        return $ts ? Carbon::createFromTimestamp((int) $ts) : null;
     }
 
     private function ensureSuperAdmin(): void

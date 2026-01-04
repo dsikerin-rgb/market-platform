@@ -146,6 +146,17 @@
         }
     </style>
 
+    @php
+        // Backward compatibility:
+        // - ранее существовал только $telescopeEnabled (по config).
+        // - теперь (в новой версии OpsDiagnostics) есть $telescopeRecordingEnabled и $telescopeEnabledUntil/*.
+        $telescopeConfigEnabledLocal = $telescopeConfigEnabled ?? ($telescopeInstalled ? (bool) config('telescope.enabled', true) : false);
+        $telescopeRecordingEnabledLocal = $telescopeRecordingEnabled ?? ($telescopeEnabled ?? false);
+
+        $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
+        $telescopeEnabledUntilHumanLocal = $telescopeEnabledUntilHuman ?? null;
+    @endphp
+
     <div class="ops-page-grid">
         {{-- Левая колонка: Состояние + Действия --}}
         <div class="ops-main" style="display: grid; gap: 2rem;">
@@ -181,11 +192,31 @@
                                     </x-filament::badge>
 
                                     @if ($telescopeInstalled)
-                                        <x-filament::badge :color="$telescopeEnabled ? 'success' : 'warning'">
-                                            {{ $telescopeEnabled ? 'Включён' : 'Выключен' }}
+                                        {{-- Маршруты/UI (config) --}}
+                                        <x-filament::badge :color="$telescopeConfigEnabledLocal ? 'success' : 'warning'">
+                                            {{ $telescopeConfigEnabledLocal ? 'UI доступен' : 'UI выключен (config)' }}
+                                        </x-filament::badge>
+
+                                        {{-- Запись (recording) --}}
+                                        <x-filament::badge :color="$telescopeRecordingEnabledLocal ? 'success' : 'warning'">
+                                            {{ $telescopeRecordingEnabledLocal ? 'Запись включена' : 'Запись выключена' }}
                                         </x-filament::badge>
                                     @endif
                                 </div>
+
+                                @if ($telescopeInstalled)
+                                    <div class="ops-muted" style="font-size: .75rem; margin-top: .35rem;">
+                                        @if ($telescopeRecordingEnabledLocal)
+                                            Авто-выключение:
+                                            <span class="ops-inline-code">{{ $telescopeEnabledUntilLocal ?? '—' }}</span>
+                                            @if (! empty($telescopeEnabledUntilHumanLocal))
+                                                ({{ $telescopeEnabledUntilHumanLocal }})
+                                            @endif
+                                        @else
+                                            Запись по умолчанию выключена на non-local окружениях. Можно включить временно на 30 минут.
+                                        @endif
+                                    </div>
+                                @endif
                             </div>
                         </div>
 
@@ -252,6 +283,38 @@
                         Очистить кэши
                     </x-filament::button>
 
+                    {{-- Telescope controls (TTL) --}}
+                    <x-filament::button
+                        color="success"
+                        icon="heroicon-m-play"
+                        wire:click="enableTelescope30m"
+                        :disabled="! $telescopeInstalled || $telescopeRecordingEnabledLocal"
+                    >
+                        Включить Telescope (30 мин)
+                    </x-filament::button>
+
+                    <x-filament::button
+                        color="gray"
+                        icon="heroicon-m-stop"
+                        wire:click="disableTelescope"
+                        :disabled="! $telescopeInstalled || ! $telescopeRecordingEnabledLocal"
+                    >
+                        Выключить Telescope
+                    </x-filament::button>
+
+                    @if ($telescopeInstalled && $telescopeConfigEnabledLocal)
+                        <x-filament::button
+                            color="gray"
+                            icon="heroicon-m-arrow-top-right-on-square"
+                            tag="a"
+                            href="{{ url('/telescope') }}"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            Открыть Telescope
+                        </x-filament::button>
+                    @endif
+
                     <x-filament::button
                         color="warning"
                         icon="heroicon-m-trash"
@@ -275,8 +338,14 @@
                         </p>
 
                         <p>
+                            <span style="font-weight:600;">Включить Telescope</span> включает <span style="font-weight:600;">запись</span>
+                            на 30 минут и автоматически выключает её по TTL.
+                            Доступ к UI ограничен ролью <span class="ops-inline-code">super-admin</span>.
+                        </p>
+
+                        <p>
                             <span style="font-weight:600;">Очистить Telescope</span> удаляет записи старше 48 часов
-                            (если Telescope установлен и включён).
+                            (если Telescope установлен и таблицы доступны).
                         </p>
                     </div>
                 </x-filament::section>
