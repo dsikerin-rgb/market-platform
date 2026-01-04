@@ -4,6 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MarketSettings;
+use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Pages\Requests;
 use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
@@ -36,6 +37,8 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            // Важно: не подключаем тему через Vite, чтобы Filament не тянул resources/css/filament/admin/theme.css
+            // и не поднимал Vite/PostCSS overlay при проблемах сборки.
             ->login()
             ->passwordReset()
             ->profile()
@@ -43,7 +46,9 @@ class AdminPanelProvider extends PanelProvider
             ->userMenuItems([
                 'horizon' => MenuItem::make()
                     ->label('Horizon (очереди)')
-                    ->url(fn (): string => route('horizon.index', ['view' => 'dashboard']))
+                    ->url(fn (): string => Route::has('horizon.index')
+                        ? route('horizon.index', ['view' => 'dashboard'])
+                        : '#')
                     ->openUrlInNewTab()
                     ->visible(function (): bool {
                         $user = Filament::auth()->user();
@@ -58,10 +63,10 @@ class AdminPanelProvider extends PanelProvider
                 'telescope' => MenuItem::make()
                     ->label('Telescope (диагностика)')
                     ->url(function (): string {
-                        $path = (string) config('telescope.path', 'telescope');
-                        $path = '/' . ltrim($path, '/');
+                        $path = trim((string) config('telescope.path', 'telescope'), '/');
 
-                        return url($path);
+                        // Наиболее полезный стартовый экран.
+                        return url('/' . $path . '/requests');
                     })
                     ->openUrlInNewTab()
                     ->visible(function (): bool {
@@ -71,8 +76,13 @@ class AdminPanelProvider extends PanelProvider
                             return false;
                         }
 
-                        // Если пакет не установлен (например, прод с --no-dev), пункт не показываем.
-                        return class_exists(\Laravel\Telescope\Telescope::class);
+                        // Если пакет не установлен (например, окружение без Telescope) — пункт не показываем.
+                        if (! class_exists(\Laravel\Telescope\Telescope::class)) {
+                            return false;
+                        }
+
+                        // Если Telescope выключен через конфиг/.env — пункт не показываем.
+                        return (bool) config('telescope.enabled', true);
                     }),
             ])
 
@@ -90,7 +100,6 @@ class AdminPanelProvider extends PanelProvider
                     return 'Управление рынком';
                 }
 
-                // Если связь market не определена/не подгружена — просто fallback
                 return $user->market?->name
                     ?? (string) ($user->market_name ?? null)
                     ?? 'Рынок';
@@ -100,21 +109,22 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Amber,
             ])
 
-            // Порядок групп (у Dashboard/MarketSettings нет группы — они будут сверху автоматически)
             ->navigationGroups([
                 'Рынки',
                 'Рынок',
-                'Оперативная работа', // Задачи + Обращения
-                'Ops', // Только для super-admin (оставлено под будущие ops-пункты)
+                'Оперативная работа',
+                'Ops',
             ])
 
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
 
-            // Страницы регистрируем явно
             ->pages([
                 Dashboard::class,
                 MarketSettings::class,
                 Requests::class,
+
+                // Ops-инструменты
+                OpsDiagnostics::class,
             ])
 
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
