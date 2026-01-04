@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Pages;
 
 use BackedEnum;
@@ -9,6 +11,7 @@ use Filament\Pages\Page;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Laravel\Telescope\Contracts\EntriesRepository;
 use Throwable;
 use UnitEnum;
@@ -43,14 +46,23 @@ class OpsDiagnostics extends Page
 
     protected function getViewData(): array
     {
-        $installed = class_exists(\Laravel\Telescope\Telescope::class);
+        $telescopeInstalled = class_exists(\Laravel\Telescope\Telescope::class);
+        $telescopeEnabled = $telescopeInstalled
+            ? (bool) config('telescope.enabled', true) // типичный default в telescope.php
+            : false;
+
+        $git = $this->getGitInfo();
 
         return [
             'appEnv' => (string) config('app.env'),
-            'telescopeInstalled' => $installed,
-            // Если Telescope не установлен — считаем выключенным.
-            // Если установлен — по умолчанию true (типичная конфигурация telescope.php использует env с default=true).
-            'telescopeEnabled' => $installed ? (bool) config('telescope.enabled', true) : false,
+            'appPath' => base_path(),
+
+            // Версия/обновление (для вывода на странице)
+            'gitCommitShort' => $git['commitShort'],
+            'gitBranch' => $git['branch'],
+
+            'telescopeInstalled' => $telescopeInstalled,
+            'telescopeEnabled' => $telescopeEnabled,
         ];
     }
 
@@ -100,6 +112,16 @@ class OpsDiagnostics extends Page
             return;
         }
 
+        if (! (bool) config('telescope.enabled', true)) {
+            Notification::make()
+                ->title('Telescope выключен')
+                ->body('Включите telescope.enabled, затем повторите.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         try {
             $before = now()->subHours($hoursToKeep);
 
@@ -143,7 +165,7 @@ class OpsDiagnostics extends Page
             ->where('created_at', '<', $before)
             ->orderBy('uuid')
             ->chunk(500, function ($rows) use ($connection) {
-                // $rows — это Collection, pluck доступен напрямую.
+                // $rows обычно Collection из stdClass.
                 $uuids = $rows->pluck('uuid')->filter()->values()->all();
 
                 if ($uuids === []) {
@@ -167,5 +189,84 @@ class OpsDiagnostics extends Page
         if (! static::canAccess()) {
             abort(403);
         }
+    }
+
+    /**
+     * Информация о версии из .git без запуска внешних процессов.
+     * Если деплой не через git или .git отсутствует — вернёт null.
+     *
+     * @return array{commitShort:?string, branch:?string}
+     */
+    private function getGitInfo(): array
+    {
+        $gitDir = base_path('.git');
+
+        if (! is_dir($gitDir)) {
+            return ['commitShort' => null, 'branch' => null];
+        }
+
+        $headFile = $gitDir . DIRECTORY_SEPARATOR . 'HEAD';
+
+        if (! is_file($headFile)) {
+            return ['commitShort' => null, 'branch' => null];
+        }
+
+        $head = trim((string) File::get($headFile));
+
+        if ($head === '') {
+            return ['commitShort' => null, 'branch' => null];
+        }
+
+        $commit = null;
+        $branch = null;
+
+        // HEAD может быть либо хешом, либо ссылкой ref: refs/heads/main
+        if (str_starts_with($head, 'ref:')) {
+            $ref = trim(substr($head, 4));
+            $branch = str_starts_with($ref, 'refs/heads/')
+                ? substr($ref, strlen('refs/heads/'))
+                : $ref;
+
+            $refFile = $gitDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $ref);
+
+            if (is_file($refFile)) {
+                $commit = trim((string) File::get($refFile));
+            } else {
+                // refs могут быть упакованы в packed-refs
+                $packedRefs = $gitDir . DIRECTORY_SEPARATOR . 'packed-refs';
+
+                if (is_file($packedRefs)) {
+                    $lines = file($packedRefs, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+
+                    foreach ($lines as $line) {
+                        if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, '^')) {
+                            continue;
+                        }
+
+                        $parts = preg_split('/\s+/', trim($line), 2);
+                        if (! is_array($parts) || count($parts) !== 2) {
+                            continue;
+                        }
+
+                        [$hash, $refName] = $parts;
+
+                        if ($refName === $ref) {
+                            $commit = $hash;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            // detached HEAD
+            $commit = $head;
+        }
+
+        $commit = $commit ? trim($commit) : null;
+
+        return [
+            'commitShort' => $commit ? substr($commit, 0, 7) : null,
+            'branch' => $branch,
+        ];
     }
 }
