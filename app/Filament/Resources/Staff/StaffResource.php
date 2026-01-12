@@ -24,6 +24,10 @@ class StaffResource extends Resource
     protected static ?string $pluralModelLabel = 'Сотрудники';
     protected static ?string $navigationLabel = 'Сотрудники';
 
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static ?string $recordTitleAttribute = 'name';
+
     /**
      * Группа динамическая:
      * super-admin -> "Рынки"
@@ -42,10 +46,6 @@ class StaffResource extends Resource
             : 'Рынок';
     }
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
-
-    protected static ?string $recordTitleAttribute = 'name';
-
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
@@ -57,17 +57,13 @@ class StaffResource extends Resource
     }
 
     /**
-     * Пункт меню видят: super-admin и market-admin
+     * Пункт меню видят те, у кого есть staff.viewAny
      */
     public static function shouldRegisterNavigation(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user
-            && (
-                (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-                || (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
-            );
+        return (bool) $user && $user->can('staff.viewAny');
     }
 
     public static function form(Schema $schema): Schema
@@ -94,6 +90,10 @@ class StaffResource extends Resource
         ];
     }
 
+    /**
+     * Мультитенант-фильтр: super-admin может смотреть по выбранному рынку,
+     * остальные — только в рамках своего market_id.
+     */
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
@@ -119,38 +119,36 @@ class StaffResource extends Resource
     }
 
     /**
-     * Доступ к ресурсу: super-admin и market-admin
+     * Доступ к ресурсу: строго по permissions
      */
     public static function canViewAny(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user
-            && (
-                (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-                || $user->hasRole('market-admin')
-            );
+        return (bool) $user && $user->can('staff.viewAny');
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user
-            && (
-                (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-                || $user->hasRole('market-admin')
-            );
+        return (bool) $user && $user->can('staff.create');
     }
 
     public static function canEdit($record): bool
     {
+        /** @var \App\Models\User|null $user */
         $user = Filament::auth()->user();
 
         if (! $user) {
             return false;
         }
 
+        if (! $user->can('staff.update')) {
+            return false;
+        }
+
+        // Никто кроме super-admin не должен редактировать super-admin
         if (
             ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             && method_exists($record, 'hasRole')
@@ -159,21 +157,38 @@ class StaffResource extends Resource
             return false;
         }
 
+        // super-admin — можно (EloquentQuery уже режет по выбранному рынку, если выбран)
         if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
         }
 
-        return (bool) $user->market_id && (int) $record->market_id === (int) $user->market_id;
+        // market-admin и прочие — только в рамках своего рынка
+        if (! $user->market_id) {
+            return false;
+        }
+
+        return (int) $record->market_id === (int) $user->market_id;
     }
 
     public static function canDelete($record): bool
     {
+        /** @var \App\Models\User|null $user */
         $user = Filament::auth()->user();
 
         if (! $user) {
             return false;
         }
 
+        if (! $user->can('staff.delete')) {
+            return false;
+        }
+
+        // Запрет на удаление самого себя
+        if (isset($record->id) && (int) $record->id === (int) $user->id) {
+            return false;
+        }
+
+        // Никто кроме super-admin не должен удалять super-admin
         if (
             ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             && method_exists($record, 'hasRole')
@@ -182,6 +197,16 @@ class StaffResource extends Resource
             return false;
         }
 
-        return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        // super-admin — можно
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        // остальные — только в рамках своего рынка
+        if (! $user->market_id) {
+            return false;
+        }
+
+        return (int) $record->market_id === (int) $user->market_id;
     }
 }

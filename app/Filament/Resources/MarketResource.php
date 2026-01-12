@@ -21,7 +21,7 @@ class MarketResource extends Resource
     protected static ?string $modelLabel = 'Рынок';
     protected static ?string $pluralModelLabel = 'Рынки';
 
-    // В меню видно только super-admin
+    // В меню видно только тем, у кого есть markets.viewAny (обычно super-admin)
     protected static ?string $navigationLabel = 'Рынки';
     protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-building-storefront';
@@ -31,16 +31,17 @@ class MarketResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user
-            && method_exists($user, 'isSuperAdmin')
-            && $user->isSuperAdmin();
+        return (bool) $user && $user->can('markets.viewAny');
     }
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $isSuperAdmin = (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = (bool) $user && method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+
+        // Системные поля (slug/code/is_active) — только super-admin (не через permissions).
+        $isSuperAdmin = (bool) $user
+            && method_exists($user, 'isSuperAdmin')
+            && $user->isSuperAdmin();
 
         return $schema->components([
             Forms\Components\TextInput::make('name')
@@ -67,7 +68,7 @@ class MarketResource extends Resource
                 ->searchable()
                 ->required(),
 
-            // Ниже — только super-admin (чтобы market-admin не менял лишнее)
+            // Ниже — только super-admin (чтобы market-admin не менял системные атрибуты)
             Forms\Components\TextInput::make('slug')
                 ->label('Слаг')
                 ->maxLength(255)
@@ -88,7 +89,7 @@ class MarketResource extends Resource
 
     public static function table(Table $table): Table
     {
-        // таблица по сути только для super-admin (market-admin не имеет ViewAny)
+        // Таблица по сути только для тех, у кого markets.viewAny
         return $table
             ->columns([
                 TextColumn::make('name')
@@ -146,15 +147,16 @@ class MarketResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
-
-        if ($isSuperAdmin) {
+        // Полный список — только markets.viewAny
+        if ($user->can('markets.viewAny')) {
             return $query;
         }
 
-        // market-admin: только свой рынок
-        if ($isMarketAdmin && (int) $user->market_id > 0) {
+        // Если когда-нибудь дадим роль/право "видеть/редактировать свой рынок" через MarketResource:
+        if (
+            ($user->can('markets.view') || $user->can('markets.update'))
+            && (int) ($user->market_id ?? 0) > 0
+        ) {
             return $query->whereKey((int) $user->market_id);
         }
 
@@ -165,23 +167,10 @@ class MarketResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        // список рынков — только super-admin
-        return (bool) $user
-            && method_exists($user, 'isSuperAdmin')
-            && $user->isSuperAdmin();
+        return (bool) $user && $user->can('markets.viewAny');
     }
 
-    public static function canCreate(): bool
-    {
-        $user = Filament::auth()->user();
-
-        // создавать рынки — только super-admin
-        return (bool) $user
-            && method_exists($user, 'isSuperAdmin')
-            && $user->isSuperAdmin();
-    }
-
-    public static function canEdit($record): bool
+    public static function canView($record): bool
     {
         $user = Filament::auth()->user();
 
@@ -189,16 +178,37 @@ class MarketResource extends Resource
             return false;
         }
 
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        if ($isSuperAdmin) {
+        if ($user->can('markets.viewAny')) {
             return true;
         }
 
-        // market-admin может редактировать только свой рынок
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        return $user->can('markets.view')
+            && (int) ($user->market_id ?? 0) > 0
+            && (int) $record->id === (int) $user->market_id;
+    }
 
-        return $isMarketAdmin
-            && (int) $user->market_id > 0
+    public static function canCreate(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return (bool) $user && $user->can('markets.create');
+    }
+
+    public static function canEdit($record): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user || ! $user->can('markets.update')) {
+            return false;
+        }
+
+        // Если есть viewAny — можно редактировать любой рынок
+        if ($user->can('markets.viewAny')) {
+            return true;
+        }
+
+        // Иначе — только свой рынок
+        return (int) ($user->market_id ?? 0) > 0
             && (int) $record->id === (int) $user->market_id;
     }
 
@@ -206,9 +216,6 @@ class MarketResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        // удаление — только super-admin
-        return (bool) $user
-            && method_exists($user, 'isSuperAdmin')
-            && $user->isSuperAdmin();
+        return (bool) $user && $user->can('markets.delete');
     }
 }
