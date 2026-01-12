@@ -6,6 +6,7 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class StaffForm
 {
@@ -31,6 +32,7 @@ class StaffForm
             ->dehydrated(true);
 
         $nameEmail = [];
+
         if (class_exists(\Filament\Forms\Components\Grid::class)) {
             $nameEmail[] = \Filament\Forms\Components\Grid::make(2)->schema([
                 Forms\Components\TextInput::make('name')
@@ -60,6 +62,7 @@ class StaffForm
         }
 
         $passwordPair = [];
+
         if (class_exists(\Filament\Forms\Components\Grid::class)) {
             $passwordPair[] = \Filament\Forms\Components\Grid::make(2)->schema([
                 Forms\Components\TextInput::make('password')
@@ -98,14 +101,6 @@ class StaffForm
                 ->dehydrated(false);
         }
 
-        $roleLabels = [
-            'super-admin' => 'Супер-администратор',
-            'market-admin' => 'Администратор рынка',
-            'market-manager' => 'Менеджер рынка',
-            'market-operator' => 'Оператор рынка',
-            'merchant' => 'Арендатор',
-        ];
-
         return $schema->components([
             $marketSelect,
             $marketHidden,
@@ -133,7 +128,27 @@ class StaffForm
                         return $query;
                     },
                 )
-                ->getOptionLabelFromRecordUsing(fn ($record) => $roleLabels[$record->name] ?? $record->name)
+                ->getOptionLabelFromRecordUsing(function ($record) {
+                    $name = (string) ($record->name ?? '');
+
+                    if ($name === '') {
+                        return '—';
+                    }
+
+                    // Нормализуем на всякий случай (если роль вдруг будет с пробелами/underscore)
+                    $slug = Str::of($name)
+                        ->trim()
+                        ->lower()
+                        ->replace('_', '-')
+                        ->replace(' ', '-')
+                        ->replace('--', '-')
+                        ->toString();
+
+                    $key = "roles.{$slug}";
+                    $translated = __($key);
+
+                    return $translated !== $key ? $translated : $name;
+                })
                 ->helperText('Роли определяют доступ сотрудника в системе.'),
         ]);
     }

@@ -25,6 +25,18 @@ class DatabaseSeeder extends Seeder
             'market-manager',
             'market-operator',
             'merchant',
+            'market-accountant',
+            'market-hr',
+            'market-maintenance',
+            'market-engineer',
+            'market-it',
+            'market-security',
+            'market-guard',
+            'market-marketing',
+            'market-support',
+            'staff',
+            'tenant',
+            'user',
         ];
 
         foreach ($roles as $roleName) {
@@ -34,8 +46,13 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        // 4) Сиды ролей/прав (вынесено в отдельный сидер)
+        $this->call([
+            RolesAndPermissionsSeeder::class,
+        ]);
+
         /**
-         * 4) Опционально создаём супер-админа через .env,
+         * 5) Опционально создаём супер-админа через .env,
          * чтобы НЕ хранить пароль в репозитории.
          *
          * В .env добавь (локально / на сервере перед сидом):
@@ -67,5 +84,8 @@ class DatabaseSeeder extends Seeder
                 $admin->syncRoles([$superAdminRole]);
             }
         }
+
+        // 6) На всякий случай — ещё раз сбросим кеш Spatie после сидов
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }
