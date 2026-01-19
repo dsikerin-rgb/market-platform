@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Pages/MarketSettings.php
 
 namespace App\Filament\Pages;
 
@@ -119,13 +120,11 @@ class MarketSettings extends Page
             ];
         }
 
-        // важно: заполняем UI-форму
         $this->form->fill($this->data);
     }
 
     /**
      * ВАЖНО: именно Schema, а не Form.
-     * И никаких Group/Grid — их нет в твоей сборке.
      */
     public function form(Schema $schema): Schema
     {
@@ -150,9 +149,13 @@ class MarketSettings extends Page
                 Forms\Components\Select::make('timezone')
                     ->label('Часовой пояс')
                     ->required()
-                    ->searchable()
                     ->native(false)
                     ->options(fn () => $this->timezoneOptionsRu())
+                    // КРИТИЧНО: ограничиваем ширину и даём отступ на уровне обёртки поля.
+                    // Это влияет на реальную компоновку (и на расстояние до кнопки ниже).
+                    ->extraFieldWrapperAttributes([
+                        'style' => 'max-width: 28rem; margin-bottom: 1rem;',
+                    ])
                     ->disabled(fn () => ! $editable || ! $marketExists),
             ]);
     }
@@ -207,31 +210,63 @@ class MarketSettings extends Page
         ];
     }
 
+    /**
+     * Российские часовые пояса: русские лейблы + IANA-значения.
+     */
     protected function timezoneOptionsRu(): array
     {
-        $timezones = timezone_identifiers_list();
+        $russian = [
+            'Europe/Kaliningrad' => 'Калининград',
+            'Europe/Moscow' => 'Москва',
+            'Europe/Samara' => 'Самара',
+            'Asia/Yekaterinburg' => 'Екатеринбург',
+            'Asia/Omsk' => 'Омск',
+            'Asia/Krasnoyarsk' => 'Красноярск',
+            'Asia/Irkutsk' => 'Иркутск',
+            'Asia/Yakutsk' => 'Якутск',
+            'Asia/Vladivostok' => 'Владивосток',
+            'Asia/Magadan' => 'Магадан',
+            'Asia/Kamchatka' => 'Камчатка',
+        ];
 
-        if (class_exists(\IntlTimeZone::class)) {
-            $out = [];
+        $out = [];
 
-            foreach ($timezones as $tz) {
-                try {
-                    $intlTz = \IntlTimeZone::createTimeZone($tz);
-                    $nameRu = $intlTz->getDisplayName(false, \IntlTimeZone::DISPLAY_LONG, 'ru_RU');
-
-                    $out[$tz] = (is_string($nameRu) && trim($nameRu) !== '')
-                        ? "{$nameRu} ({$tz})"
-                        : $tz;
-                } catch (\Throwable $e) {
-                    $out[$tz] = $tz;
-                }
-            }
-
-            asort($out);
-
-            return $out;
+        foreach ($russian as $tz => $city) {
+            $out[$tz] = sprintf('%s (%s)', $city, $this->formatUtcOffset($tz));
         }
 
-        return array_combine($timezones, $timezones);
+        // На случай, если в базе уже сохранено значение вне списка
+        $current = $this->data['timezone']
+            ?? $this->market?->timezone
+            ?? config('app.timezone', 'Europe/Moscow');
+
+        if (filled($current) && ! array_key_exists($current, $out)) {
+            $out = [$current => $current] + $out;
+        }
+
+        return $out;
+    }
+
+    protected function formatUtcOffset(string $timezone): string
+    {
+        try {
+            $tz = new \DateTimeZone($timezone);
+            $now = new \DateTime('now', $tz);
+
+            $offset = $tz->getOffset($now);
+            $sign = $offset >= 0 ? '+' : '-';
+            $offset = abs($offset);
+
+            $hours = intdiv($offset, 3600);
+            $minutes = intdiv($offset % 3600, 60);
+
+            if ($minutes === 0) {
+                return "UTC{$sign}{$hours}";
+            }
+
+            return sprintf('UTC%s%d:%02d', $sign, $hours, $minutes);
+        } catch (\Throwable $e) {
+            return $timezone;
+        }
     }
 }
