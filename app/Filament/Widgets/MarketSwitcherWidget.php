@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Widgets/MarketSwitcherWidget.php
 
 namespace App\Filament\Widgets;
 
@@ -16,6 +17,11 @@ class MarketSwitcherWidget extends Widget
 
     public ?int $selectedMarketId = null;
 
+    /**
+     * URL страницы, на которой был отрендерен виджет (не /livewire/update).
+     */
+    public ?string $returnUrl = null;
+
     public static function canView(): bool
     {
         $user = Filament::auth()->user();
@@ -26,6 +32,7 @@ class MarketSwitcherWidget extends Widget
     public function mount(): void
     {
         $this->selectedMarketId = session($this->sessionKey());
+        $this->returnUrl = request()->fullUrl();
     }
 
     public function updatedSelectedMarketId(): void
@@ -34,8 +41,17 @@ class MarketSwitcherWidget extends Widget
 
         session([$this->sessionKey() => $value]);
 
-        // Перезагрузка, чтобы все ресурсы/виджеты перечитали session и перестроили запросы
-        $this->redirect(request()->fullUrl(), navigate: true);
+        $target = request()->headers->get('referer')
+            ?: $this->returnUrl
+            ?: url('/admin');
+
+        if (is_string($target) && str_contains($target, '/livewire/update')) {
+            $target = url('/admin');
+        }
+
+        // ВАЖНО: без navigate=true — принудительно полный reload страницы,
+        // чтобы все виджеты/ресурсы перечитали session и пересобрали запросы.
+        $this->redirect($target);
     }
 
     protected function getViewData(): array
@@ -52,8 +68,6 @@ class MarketSwitcherWidget extends Widget
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
-        // ВАЖНО: совпадает с тем, что используется в ресурсах:
-        // session('filament.admin.selected_market_id')
         return "filament.{$panelId}.selected_market_id";
     }
 }
