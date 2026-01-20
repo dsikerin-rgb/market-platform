@@ -24,7 +24,7 @@ class ImportTenantAccrualsFromCsv extends Command
         {--set-space-tenant : Update market_spaces.tenant_id to current tenant_id (optional)}
     ';
 
-    protected $description = 'Import monthly tenant accruals from CSV into tenant_accruals (upsert tenants/spaces). Supports vacant spaces and skips section/summary rows.';
+    protected $description = 'Import monthly tenant accruals from CSV into tenant_accruals (upsert tenants/spaces). Supports vacant spaces, location types/locations, and skips section/summary rows.';
 
     /** @var array<string, array<int, string>> */
     private array $tableColumnsCache = [];
@@ -89,6 +89,9 @@ class ImportTenantAccrualsFromCsv extends Command
             'spaces_created' => 0,
             'spaces_marked_vacant' => 0,
             'spaces_marked_occupied' => 0,
+            'location_types_created' => 0,
+            'locations_created' => 0,
+            'spaces_location_set' => 0,
             'accruals_inserted' => 0,
             'accruals_updated' => 0,
         ];
@@ -148,9 +151,22 @@ class ImportTenantAccrualsFromCsv extends Command
                 $this->warn('DRY RUN: transaction will be rolled back (no data will be written).');
             }
 
-            $marketSpacesHasType = $this->hasColumn('market_spaces', 'type');
             $marketSpacesHasStatus = $this->hasColumn('market_spaces', 'status');
             $marketSpacesHasTenantId = $this->hasColumn('market_spaces', 'tenant_id');
+            $marketSpacesHasLocationId = $this->hasColumn('market_spaces', 'location_id');
+
+            $hasLocationTypesTable = $this->hasTable('market_location_types')
+                && $this->hasColumn('market_location_types', 'code')
+                && $this->hasColumn('market_location_types', 'name_ru');
+
+            $hasLocationsTable = $this->hasTable('market_locations')
+                && $this->hasColumn('market_locations', 'code')
+                && $this->hasColumn('market_locations', 'name')
+                && $this->hasColumn('market_locations', 'type');
+
+            if ($marketSpacesHasLocationId && (! $hasLocationTypesTable || ! $hasLocationsTable)) {
+                $this->warn('market_spaces.location_id exists, but market_location_types/market_locations tables are missing or incompatible. Location assignment will be skipped.');
+            }
 
             $runner = function () use (
                 $csv,
@@ -163,14 +179,18 @@ class ImportTenantAccrualsFromCsv extends Command
                 $setSpaceTenant,
                 $now,
                 $encoding,
-                $marketSpacesHasType,
                 $marketSpacesHasStatus,
                 $marketSpacesHasTenantId,
+                $marketSpacesHasLocationId,
+                $hasLocationTypesTable,
+                $hasLocationsTable,
                 &$stats
             ) {
                 $tenantCache = []; // name => id
                 $spaceCache = [];  // place_code => id
                 $spaceOccupiedSeen = []; // place_code => true (prevent downgrade to vacant within this run)
+
+                $locationCache = []; // location_type_code => location_id
 
                 $ctxLocationType = '';
                 $ctxTenantName = '';
@@ -207,7 +227,7 @@ class ImportTenantAccrualsFromCsv extends Command
 
                     $locationType = $this->cell($row, $col, 'location_type');
                     if (trim($locationType) !== '') {
-                        $ctxLocationType = trim($locationType);
+                        $ctxLocationType = $this->normalizeLocationName(trim($locationType));
                     }
 
                     $tenantName = trim((string) $tenantNameRaw);
@@ -267,6 +287,23 @@ class ImportTenantAccrualsFromCsv extends Command
                         continue;
                     }
 
+                    // Resolve location_id by ctxLocationType (MVP: 1:1 type -> root location)
+                    $locationId = null;
+                    if (
+                        $marketSpacesHasLocationId
+                        && $hasLocationTypesTable
+                        && $hasLocationsTable
+                        && $ctxLocationType !== ''
+                    ) {
+                        $locationId = $this->resolveOrCreateLocationId(
+                            $marketId,
+                            $ctxLocationType,
+                            $now,
+                            $locationCache,
+                            $stats
+                        );
+                    }
+
                     // Upsert space (и для vacant, и для occupied)
                     $marketSpaceId = null;
                     if ($placeCode !== '') {
@@ -296,8 +333,9 @@ class ImportTenantAccrualsFromCsv extends Command
                                     $insert['status'] = $isVacant ? 'vacant' : 'occupied';
                                 }
 
-                                if ($marketSpacesHasType && $ctxLocationType !== '') {
-                                    $insert['type'] = $ctxLocationType;
+                                if ($marketSpacesHasLocationId && $locationId) {
+                                    $insert['location_id'] = $locationId;
+                                    $stats['spaces_location_set']++;
                                 }
 
                                 $marketSpaceId = DB::table('market_spaces')->insertGetId($insert);
@@ -313,8 +351,10 @@ class ImportTenantAccrualsFromCsv extends Command
                             'updated_at' => $now,
                         ];
 
-                        if ($marketSpacesHasType && $ctxLocationType !== '') {
-                            $update['type'] = $ctxLocationType;
+                        if ($marketSpacesHasLocationId && $locationId) {
+                            // Не перетираем ручные правки: ставим location_id только если он ещё NULL
+                            $update['location_id'] = DB::raw('COALESCE(location_id, ' . (int) $locationId . ')');
+                            $stats['spaces_location_set']++;
                         }
 
                         if ($marketSpacesHasStatus) {
@@ -499,10 +539,108 @@ class ImportTenantAccrualsFromCsv extends Command
         $this->line("Spaces created: {$stats['spaces_created']}");
         $this->line("Spaces marked vacant: {$stats['spaces_marked_vacant']}");
         $this->line("Spaces marked occupied: {$stats['spaces_marked_occupied']}");
+        $this->line("Location types created: {$stats['location_types_created']}");
+        $this->line("Locations created: {$stats['locations_created']}");
+        $this->line("Spaces location set (attempts): {$stats['spaces_location_set']}");
         $this->line("Accruals inserted: {$stats['accruals_inserted']}");
         $this->line("Accruals updated: {$stats['accruals_updated']}");
 
         return self::SUCCESS;
+    }
+
+    private function resolveOrCreateLocationId(
+        int $marketId,
+        string $locationTypeName,
+        Carbon $now,
+        array &$locationCache,
+        array &$stats
+    ): ?int {
+        $name = $this->normalizeLocationName($locationTypeName);
+        if ($name === '') {
+            return null;
+        }
+
+        $typeCode = $this->makeLocationTypeCode($name);
+
+        if (isset($locationCache[$typeCode])) {
+            return (int) $locationCache[$typeCode];
+        }
+
+        // 1) market_location_types: upsert by (market_id, code)
+        $typeId = DB::table('market_location_types')
+            ->where('market_id', $marketId)
+            ->where('code', $typeCode)
+            ->value('id');
+
+        if (! $typeId) {
+            $typeId = DB::table('market_location_types')->insertGetId([
+                'market_id' => $marketId,
+                'name_ru' => $name,
+                'code' => $typeCode,
+                'sort_order' => 0,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $stats['location_types_created']++;
+        } else {
+            // Мягкое обновление названия
+            DB::table('market_location_types')->where('id', $typeId)->update([
+                'name_ru' => $name !== '' ? $name : DB::raw('name_ru'),
+                'updated_at' => $now,
+            ]);
+        }
+
+        // 2) market_locations: root location for this type (1:1 in MVP)
+        $locationId = DB::table('market_locations')
+            ->where('market_id', $marketId)
+            ->where('code', $typeCode)
+            ->value('id');
+
+        if (! $locationId) {
+            $locationId = DB::table('market_locations')->insertGetId([
+                'market_id' => $marketId,
+                'name' => $name,
+                'code' => $typeCode,
+                'type' => $typeCode,
+                'parent_id' => null,
+                'sort_order' => 0,
+                'is_active' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $stats['locations_created']++;
+        } else {
+            DB::table('market_locations')->where('id', $locationId)->update([
+                'name' => $name !== '' ? $name : DB::raw('name'),
+                'type' => $typeCode,
+                'updated_at' => $now,
+            ]);
+        }
+
+        $locationCache[$typeCode] = (int) $locationId;
+
+        return (int) $locationId;
+    }
+
+    private function normalizeLocationName(string $name): string
+    {
+        $s = trim($name);
+        $s = str_replace(["\xC2\xA0", "\t"], ' ', $s);
+        $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+
+        return trim($s);
+    }
+
+    private function makeLocationTypeCode(string $name): string
+    {
+        $code = Str::slug($name, '-');
+
+        if ($code === '') {
+            $code = 'loc-' . substr(hash('sha1', $name), 0, 10);
+        }
+
+        return $code;
     }
 
     private function resolveFilePath(string $fileArg): string
