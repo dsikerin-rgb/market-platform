@@ -223,8 +223,6 @@ class MarketSpaceResource extends Resource
 
     public static function table(Table $table): Table
     {
-        $user = Filament::auth()->user();
-
         $statusOptions = [
             'vacant' => 'Свободно',
             'occupied' => 'Занято',
@@ -235,11 +233,9 @@ class MarketSpaceResource extends Resource
 
         $table = $table
             ->columns([
-                TextColumn::make('market.name')
-                    ->label('Рынок')
-                    ->sortable()
-                    ->searchable()
-                    ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
+                // Колонку "Рынок" скрыли намеренно:
+                // для обычного пользователя рынок однозначен,
+                // для super-admin есть переключатель рынка.
 
                 TextColumn::make('location.name')
                     ->label('Локация')
@@ -295,16 +291,33 @@ class MarketSpaceResource extends Resource
 
         $actions = [];
 
+        // Icon-only actions (no text), keep tooltips for usability
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+            $actions[] = \Filament\Actions\EditAction::make()
+                ->label('')
+                ->tooltip('Редактировать')
+                ->icon('heroicon-o-pencil-square')
+                ->iconButton();
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+            $actions[] = \Filament\Tables\Actions\EditAction::make()
+                ->label('')
+                ->tooltip('Редактировать')
+                ->icon('heroicon-o-pencil-square')
+                ->iconButton();
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
+            $actions[] = \Filament\Actions\DeleteAction::make()
+                ->label('')
+                ->tooltip('Удалить')
+                ->icon('heroicon-o-trash')
+                ->iconButton();
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
+            $actions[] = \Filament\Tables\Actions\DeleteAction::make()
+                ->label('')
+                ->tooltip('Удалить')
+                ->icon('heroicon-o-trash')
+                ->iconButton();
         }
 
         if (! empty($actions)) {
