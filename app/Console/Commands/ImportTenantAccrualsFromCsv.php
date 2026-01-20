@@ -1,10 +1,12 @@
 <?php
+# app/Console/Commands/ImportTenantAccrualsFromCsv.php
 
 namespace App\Console\Commands;
 
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use SplFileObject;
 use Throwable;
@@ -22,7 +24,10 @@ class ImportTenantAccrualsFromCsv extends Command
         {--set-space-tenant : Update market_spaces.tenant_id to current tenant_id (optional)}
     ';
 
-    protected $description = 'Import monthly tenant accruals from CSV into tenant_accruals (upsert tenants/spaces, idempotent by hash).';
+    protected $description = 'Import monthly tenant accruals from CSV into tenant_accruals (upsert tenants/spaces). Supports vacant spaces and skips section/summary rows.';
+
+    /** @var array<string, array<int, string>> */
+    private array $tableColumnsCache = [];
 
     public function handle(): int
     {
@@ -82,6 +87,8 @@ class ImportTenantAccrualsFromCsv extends Command
             'rows_errors' => 0,
             'tenants_created' => 0,
             'spaces_created' => 0,
+            'spaces_marked_vacant' => 0,
+            'spaces_marked_occupied' => 0,
             'accruals_inserted' => 0,
             'accruals_updated' => 0,
         ];
@@ -131,11 +138,19 @@ class ImportTenantAccrualsFromCsv extends Command
                 return self::FAILURE;
             }
 
+            if (! isset($col['place_code'])) {
+                $this->warn('Column "№ отдела" not found. Spaces will not be created/updated; accruals will be imported with market_space_id = NULL.');
+            }
+
             $now = now();
 
             if ($dryRun) {
                 $this->warn('DRY RUN: transaction will be rolled back (no data will be written).');
             }
+
+            $marketSpacesHasType = $this->hasColumn('market_spaces', 'type');
+            $marketSpacesHasStatus = $this->hasColumn('market_spaces', 'status');
+            $marketSpacesHasTenantId = $this->hasColumn('market_spaces', 'tenant_id');
 
             $runner = function () use (
                 $csv,
@@ -148,10 +163,17 @@ class ImportTenantAccrualsFromCsv extends Command
                 $setSpaceTenant,
                 $now,
                 $encoding,
+                $marketSpacesHasType,
+                $marketSpacesHasStatus,
+                $marketSpacesHasTenantId,
                 &$stats
             ) {
                 $tenantCache = []; // name => id
                 $spaceCache = [];  // place_code => id
+                $spaceOccupiedSeen = []; // place_code => true (prevent downgrade to vacant within this run)
+
+                $ctxLocationType = '';
+                $ctxTenantName = '';
 
                 while (! $csv->eof()) {
                     $row = $csv->fgetcsv();
@@ -165,7 +187,6 @@ class ImportTenantAccrualsFromCsv extends Command
                         continue;
                     }
 
-                    // Skip accidental second header repeats
                     if ($this->looksLikeHeaderRepeat($headers, $row)) {
                         $stats['rows_skipped']++;
                         continue;
@@ -177,21 +198,27 @@ class ImportTenantAccrualsFromCsv extends Command
                         break;
                     }
 
-                    $tenantName = $this->cell($row, $col, 'tenant_name');
-                    $placeCode = $this->cell($row, $col, 'place_code');
+                    $sourceRowNumber = $csv->key() + 1;
+
+                    $tenantNameRaw = $this->cell($row, $col, 'tenant_name');
+                    $placeCodeRaw = $this->cell($row, $col, 'place_code');
                     $placeName = $this->cell($row, $col, 'place_name');
                     $activityType = $this->cell($row, $col, 'activity_type');
 
-                    if ($this->shouldSkipRow($tenantName, $placeCode)) {
-                        $stats['rows_skipped']++;
-                        continue;
+                    $locationType = $this->cell($row, $col, 'location_type');
+                    if (trim($locationType) !== '') {
+                        $ctxLocationType = trim($locationType);
                     }
 
-                    $tenantName = trim($tenantName);
-                    $placeCode = trim($placeCode);
+                    $tenantName = trim((string) $tenantNameRaw);
+                    $placeCode = trim((string) $placeCodeRaw);
 
-                    // Numeric fields
-                    $area = $this->parseNumber($this->cell($row, $col, 'area_sqm'));
+                    // Площадь: одна и та же площадь может быть в "свободная" или "сданная"
+                    $freeArea = $this->parseNumber($this->cell($row, $col, 'free_area_sqm'));
+                    $leasedArea = $this->parseNumber($this->cell($row, $col, 'leased_area_sqm'));
+                    $areaFallback = $this->parseNumber($this->cell($row, $col, 'area_sqm'));
+                    $area = max($freeArea, $leasedArea, $areaFallback);
+
                     $rentRate = $this->parseNumber($this->cell($row, $col, 'rent_rate'));
                     $rentAmount = $this->parseMoney($this->cell($row, $col, 'rent_amount'));
 
@@ -208,6 +235,118 @@ class ImportTenantAccrualsFromCsv extends Command
                     $days = $this->parseIntNullable($this->cell($row, $col, 'days'));
                     $discountNote = $this->cell($row, $col, 'discount_note');
                     $cashAmount = $this->parseMoney($this->cell($row, $col, 'cash_amount'));
+
+                    $hasAnyAmounts = (abs($rentAmount) + abs($managementFee) + abs($electricity) + abs($utilities) + abs($totalNoVat) + abs($totalWithVat) + abs($cashAmount)) > 0.00001;
+
+                    // Если ФИО пустое, но есть суммы — это может быть продолжение строки (после объединённых ячеек в Excel)
+                    if ($tenantName !== '') {
+                        $ctxTenantName = $tenantName;
+                    } elseif ($tenantName === '' && $hasAnyAmounts && $ctxTenantName !== '') {
+                        $tenantName = $ctxTenantName;
+                    }
+
+                    // Секции/заголовки: есть текст в ФИО, но нет места, нет площади, нет сумм
+                    if ($this->isSectionLikeRow($tenantName, $placeCode, $area, $rentRate, $days, $hasAnyAmounts)) {
+                        $stats['rows_skipped']++;
+                        continue;
+                    }
+
+                    // Итоги/своды
+                    if ($this->isSummaryRow($tenantName, $placeCode, $area, $hasAnyAmounts)) {
+                        $stats['rows_skipped']++;
+                        continue;
+                    }
+
+                    // Вариант A: свободное место (ФИО пусто, но есть № отдела и площадь)
+                    $isVacant = ($tenantName === '' && $placeCode !== '' && $area > 0);
+
+                    // Если строка совсем "пустая по смыслу" — пропускаем
+                    $looksMeaningful = ($tenantName !== '') || ($placeCode !== '') || ($area > 0) || $hasAnyAmounts;
+                    if (! $looksMeaningful) {
+                        $stats['rows_skipped']++;
+                        continue;
+                    }
+
+                    // Upsert space (и для vacant, и для occupied)
+                    $marketSpaceId = null;
+                    if ($placeCode !== '') {
+                        $marketSpaceId = $spaceCache[$placeCode] ?? null;
+
+                        if (! $marketSpaceId) {
+                            $marketSpaceId = DB::table('market_spaces')
+                                ->where('market_id', $marketId)
+                                ->where(function ($q) use ($placeCode) {
+                                    $q->where('number', $placeCode)->orWhere('code', $placeCode);
+                                })
+                                ->value('id');
+
+                            if (! $marketSpaceId) {
+                                $insert = [
+                                    'market_id' => $marketId,
+                                    'number' => $placeCode,
+                                    'code' => $placeCode,
+                                    'area_sqm' => $area > 0 ? $area : null,
+                                    'is_active' => 1,
+                                    'notes' => $placeName !== '' ? $placeName : null,
+                                    'created_at' => $now,
+                                    'updated_at' => $now,
+                                ];
+
+                                if ($marketSpacesHasStatus) {
+                                    $insert['status'] = $isVacant ? 'vacant' : 'occupied';
+                                }
+
+                                if ($marketSpacesHasType && $ctxLocationType !== '') {
+                                    $insert['type'] = $ctxLocationType;
+                                }
+
+                                $marketSpaceId = DB::table('market_spaces')->insertGetId($insert);
+                                $stats['spaces_created']++;
+                            }
+
+                            $spaceCache[$placeCode] = $marketSpaceId;
+                        }
+
+                        $update = [
+                            'area_sqm' => $area > 0 ? $area : DB::raw('area_sqm'),
+                            'notes' => $placeName !== '' ? $placeName : DB::raw('notes'),
+                            'updated_at' => $now,
+                        ];
+
+                        if ($marketSpacesHasType && $ctxLocationType !== '') {
+                            $update['type'] = $ctxLocationType;
+                        }
+
+                        if ($marketSpacesHasStatus) {
+                            if (! $isVacant) {
+                                $spaceOccupiedSeen[$placeCode] = true;
+                                $update['status'] = 'occupied';
+                            } else {
+                                $update['status'] = isset($spaceOccupiedSeen[$placeCode]) ? 'occupied' : 'vacant';
+                            }
+                        }
+
+                        DB::table('market_spaces')->where('id', $marketSpaceId)->update($update);
+
+                        if ($marketSpacesHasStatus) {
+                            if (($update['status'] ?? null) === 'vacant') {
+                                $stats['spaces_marked_vacant']++;
+                            } elseif (($update['status'] ?? null) === 'occupied') {
+                                $stats['spaces_marked_occupied']++;
+                            }
+                        }
+                    }
+
+                    // Vacant: начисление не создаём
+                    if ($isVacant) {
+                        continue;
+                    }
+
+                    // Occupied: если арендатора нет — не создаём начисление (защита от мусора)
+                    if ($tenantName === '') {
+                        $stats['rows_skipped']++;
+                        continue;
+                    }
 
                     $vatRate = $this->inferVatRate($headers, $totalNoVat, $totalWithVat);
 
@@ -234,59 +373,22 @@ class ImportTenantAccrualsFromCsv extends Command
                         $tenantCache[$tenantName] = $tenantId;
                     }
 
-                    // Upsert space (if place code exists)
-                    $marketSpaceId = null;
-                    if ($placeCode !== '') {
-                        $marketSpaceId = $spaceCache[$placeCode] ?? null;
-
-                        if (! $marketSpaceId) {
-                            $marketSpaceId = DB::table('market_spaces')
-                                ->where('market_id', $marketId)
-                                ->where(function ($q) use ($placeCode) {
-                                    $q->where('number', $placeCode)->orWhere('code', $placeCode);
-                                })
-                                ->value('id');
-
-                            if (! $marketSpaceId) {
-                                $marketSpaceId = DB::table('market_spaces')->insertGetId([
-                                    'market_id' => $marketId,
-                                    'number' => $placeCode,
-                                    'code' => $placeCode,
-                                    'area_sqm' => $area > 0 ? $area : null,
-                                    'type' => null,
-                                    'status' => 'occupied',
-                                    'is_active' => 1,
-                                    'notes' => $placeName !== '' ? $placeName : null,
-                                    'created_at' => $now,
-                                    'updated_at' => $now,
-                                ]);
-                                $stats['spaces_created']++;
-                            } else {
-                                // Mild update (only if data exists)
-                                DB::table('market_spaces')->where('id', $marketSpaceId)->update([
-                                    'area_sqm' => $area > 0 ? $area : DB::raw('area_sqm'),
-                                    'notes' => $placeName !== '' ? $placeName : DB::raw('notes'),
-                                    'updated_at' => $now,
-                                ]);
-                            }
-
-                            if ($setSpaceTenant) {
-                                DB::table('market_spaces')->where('id', $marketSpaceId)->update([
-                                    'tenant_id' => $tenantId,
-                                    'updated_at' => $now,
-                                ]);
-                            }
-
-                            $spaceCache[$placeCode] = $marketSpaceId;
-                        }
+                    // Optionally update market_spaces.tenant_id for occupied rows only
+                    if ($setSpaceTenant && $marketSpaceId && $marketSpacesHasTenantId) {
+                        DB::table('market_spaces')->where('id', $marketSpaceId)->update([
+                            'tenant_id' => $tenantId,
+                            'updated_at' => $now,
+                        ]);
                     }
 
-                    // Idempotent hash per row
+                    // Idempotent hash per row (НЕ зависит от номера строки)
                     $hashData = [
                         'market_id' => $marketId,
                         'period' => $period->format('Y-m-d'),
                         'tenant' => $tenantName,
                         'place' => $placeCode,
+                        'free_area' => $freeArea,
+                        'leased_area' => $leasedArea,
                         'area' => $area,
                         'rent_rate' => $rentRate,
                         'rent_amount' => $rentAmount,
@@ -299,6 +401,7 @@ class ImportTenantAccrualsFromCsv extends Command
                         'cash' => $cashAmount,
                         'discount_note' => $discountNote,
                         'activity' => $activityType,
+                        'location_type' => $ctxLocationType,
                     ];
                     $sourceRowHash = hash('sha256', json_encode($hashData, JSON_UNESCAPED_UNICODE));
 
@@ -344,7 +447,7 @@ class ImportTenantAccrualsFromCsv extends Command
                         'status' => 'imported',
                         'source' => 'excel',
                         'source_file' => basename($filePath),
-                        'source_row_number' => null,
+                        'source_row_number' => $sourceRowNumber,
                         'source_row_hash' => $sourceRowHash,
                         'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE),
                         'imported_at' => $now,
@@ -379,7 +482,6 @@ class ImportTenantAccrualsFromCsv extends Command
                     $runner();
                 });
             }
-
         } catch (Throwable $e) {
             $this->error('Import failed: ' . $e->getMessage());
             return self::FAILURE;
@@ -395,6 +497,8 @@ class ImportTenantAccrualsFromCsv extends Command
         $this->line("Errors: {$stats['rows_errors']}");
         $this->line("Tenants created: {$stats['tenants_created']}");
         $this->line("Spaces created: {$stats['spaces_created']}");
+        $this->line("Spaces marked vacant: {$stats['spaces_marked_vacant']}");
+        $this->line("Spaces marked occupied: {$stats['spaces_marked_occupied']}");
         $this->line("Accruals inserted: {$stats['accruals_inserted']}");
         $this->line("Accruals updated: {$stats['accruals_updated']}");
 
@@ -551,6 +655,11 @@ class ImportTenantAccrualsFromCsv extends Command
                 continue;
             }
 
+            if (! isset($idx['location_type']) && Str::contains($n, ['тип локации', 'тип места'])) {
+                $idx['location_type'] = $i;
+                continue;
+            }
+
             if (! isset($idx['tenant_name']) && Str::contains($n, ['фио'])) {
                 $idx['tenant_name'] = $i;
                 continue;
@@ -571,7 +680,17 @@ class ImportTenantAccrualsFromCsv extends Command
                 continue;
             }
 
-            if (! isset($idx['area_sqm']) && Str::contains($n, ['сданная площадь', 'площадь'])) {
+            if (! isset($idx['free_area_sqm']) && Str::contains($n, ['свободная площадь'])) {
+                $idx['free_area_sqm'] = $i;
+                continue;
+            }
+
+            if (! isset($idx['leased_area_sqm']) && Str::contains($n, ['сданная площадь'])) {
+                $idx['leased_area_sqm'] = $i;
+                continue;
+            }
+
+            if (! isset($idx['area_sqm']) && Str::contains($n, ['площадь'])) {
                 $idx['area_sqm'] = $i;
                 continue;
             }
@@ -586,8 +705,6 @@ class ImportTenantAccrualsFromCsv extends Command
                 continue;
             }
 
-            // Two "management fee" columns in your file:
-            // "услуги управления" and "услуги управления эл.энергия"
             if (Str::contains($n, ['услуги управления'])) {
                 if (Str::contains($n, ['эл', 'эл.энерг'])) {
                     $idx['management_fee_2'] = $i;
@@ -633,10 +750,15 @@ class ImportTenantAccrualsFromCsv extends Command
             }
         }
 
-        // Ensure missing optional keys exist
+        $idx['location_type'] = $idx['location_type'] ?? null;
         $idx['place_code'] = $idx['place_code'] ?? null;
         $idx['place_name'] = $idx['place_name'] ?? null;
         $idx['activity_type'] = $idx['activity_type'] ?? null;
+
+        $idx['free_area_sqm'] = $idx['free_area_sqm'] ?? null;
+        $idx['leased_area_sqm'] = $idx['leased_area_sqm'] ?? null;
+        $idx['area_sqm'] = $idx['area_sqm'] ?? null;
+
         $idx['management_fee_1'] = $idx['management_fee_1'] ?? null;
         $idx['management_fee_2'] = $idx['management_fee_2'] ?? null;
 
@@ -656,21 +778,31 @@ class ImportTenantAccrualsFromCsv extends Command
         return is_string($v) ? trim($v) : (string) $v;
     }
 
-    private function shouldSkipRow(string $tenantName, string $placeCode): bool
+    private function isSummaryRow(string $tenantName, string $placeCode, float $area, bool $hasAnyAmounts): bool
     {
         $name = trim($tenantName);
         if ($name === '') {
-            return true;
+            return false;
         }
 
         $ln = mb_strtolower($name);
 
-        // summary rows
         if (Str::contains($ln, ['итого', 'всего', 'свод', 'результат'])) {
-            return trim($placeCode) === '';
+            return trim($placeCode) === '' && $area <= 0 && ! $hasAnyAmounts;
         }
 
         return false;
+    }
+
+    private function isSectionLikeRow(string $tenantName, string $placeCode, float $area, float $rentRate, ?int $days, bool $hasAnyAmounts): bool
+    {
+        if (trim($tenantName) === '') {
+            return false;
+        }
+
+        $hasSomeData = (trim($placeCode) !== '') || ($area > 0) || ($rentRate > 0) || (($days ?? 0) > 0) || $hasAnyAmounts;
+
+        return ! $hasSomeData;
     }
 
     private function inferTenantType(string $tenantName): ?string
@@ -738,12 +870,38 @@ class ImportTenantAccrualsFromCsv extends Command
 
     private function looksLikeHeaderRepeat(array $headers, array $row): bool
     {
-        // If the row equals header in first 2-3 key fields, treat as header repeat
         $h0 = isset($headers[0]) ? (string) $headers[0] : '';
         $r0 = isset($row[0]) ? (string) $row[0] : '';
         $h0 = $this->normalizeHeader($h0);
         $r0 = $this->normalizeHeader($r0);
 
         return $h0 !== '' && $h0 === $r0;
+    }
+
+    private function hasTable(string $table): bool
+    {
+        try {
+            return Schema::hasTable($table);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        if (! $this->hasTable($table)) {
+            return false;
+        }
+
+        try {
+            $cols = $this->tableColumnsCache[$table] ?? null;
+            if ($cols === null) {
+                $cols = Schema::getColumnListing($table);
+                $this->tableColumnsCache[$table] = $cols;
+            }
+            return in_array($column, $cols, true);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }
