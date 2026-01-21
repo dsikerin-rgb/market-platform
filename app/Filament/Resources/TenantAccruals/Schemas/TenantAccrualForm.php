@@ -3,12 +3,13 @@
 
 namespace App\Filament\Resources\TenantAccruals\Schemas;
 
-use Filament\Forms;
+use App\Models\TenantAccrual;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class TenantAccrualForm
@@ -23,28 +24,23 @@ class TenantAccrualForm
             Section::make('Общее')
                 ->columns(3)
                 ->schema([
-                    TextInput::make('period')
+                    DatePicker::make('period')
                         ->label('Период')
+                        ->displayFormat('Y-m')
                         ->disabled($readOnly)
                         ->dehydrated(false),
 
-                    TextInput::make('tenant.name')
+                    Placeholder::make('tenant_display')
                         ->label('Арендатор')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
+                        ->content(fn (?TenantAccrual $record) => $record?->tenant?->name ?: '—'),
 
-                    TextInput::make('marketSpace.number')
+                    Placeholder::make('market_space_display')
                         ->label('Место')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
+                        ->content(fn (?TenantAccrual $record) => $record?->marketSpace?->number ?: '—'),
 
-                    TextInput::make('marketSpace.location.name')
+                    Placeholder::make('location_display')
                         ->label('Локация')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
+                        ->content(fn (?TenantAccrual $record) => $record?->marketSpace?->location?->name ?: '—'),
 
                     TextInput::make('source_place_code')
                         ->label('Код места из файла')
@@ -214,13 +210,14 @@ class TenantAccrualForm
                             if (is_array($state)) {
                                 return json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
                             }
+
                             if (is_string($state) && $state !== '') {
-                                // на случай, если пришло строкой
                                 $decoded = json_decode($state, true);
                                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                                     return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
                                 }
                             }
+
                             return $state;
                         }),
                 ]),
