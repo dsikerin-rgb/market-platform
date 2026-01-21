@@ -155,6 +155,10 @@ class ImportTenantAccrualsFromCsv extends Command
             $marketSpacesHasTenantId = $this->hasColumn('market_spaces', 'tenant_id');
             $marketSpacesHasLocationId = $this->hasColumn('market_spaces', 'location_id');
 
+            // NEW: отображаемые поля для места
+            $marketSpacesHasDisplayName = $this->hasColumn('market_spaces', 'display_name');
+            $marketSpacesHasActivityType = $this->hasColumn('market_spaces', 'activity_type');
+
             $hasLocationTypesTable = $this->hasTable('market_location_types')
                 && $this->hasColumn('market_location_types', 'code')
                 && $this->hasColumn('market_location_types', 'name_ru');
@@ -182,6 +186,8 @@ class ImportTenantAccrualsFromCsv extends Command
                 $marketSpacesHasStatus,
                 $marketSpacesHasTenantId,
                 $marketSpacesHasLocationId,
+                $marketSpacesHasDisplayName,
+                $marketSpacesHasActivityType,
                 $hasLocationTypesTable,
                 $hasLocationsTable,
                 &$stats
@@ -222,8 +228,8 @@ class ImportTenantAccrualsFromCsv extends Command
 
                     $tenantNameRaw = $this->cell($row, $col, 'tenant_name');
                     $placeCodeRaw = $this->cell($row, $col, 'place_code');
-                    $placeName = $this->cell($row, $col, 'place_name');
-                    $activityType = $this->cell($row, $col, 'activity_type');
+                    $placeName = $this->cell($row, $col, 'place_name');       // "Название отдела"
+                    $activityType = $this->cell($row, $col, 'activity_type'); // "Вид деятельности"
 
                     $locationType = $this->cell($row, $col, 'location_type');
                     if (trim($locationType) !== '') {
@@ -324,7 +330,7 @@ class ImportTenantAccrualsFromCsv extends Command
                                     'code' => $placeCode,
                                     'area_sqm' => $area > 0 ? $area : null,
                                     'is_active' => 1,
-                                    'notes' => $placeName !== '' ? $placeName : null,
+                                    // ВАЖНО: notes — ручные заметки, импортом не заполняем.
                                     'created_at' => $now,
                                     'updated_at' => $now,
                                 ];
@@ -338,6 +344,14 @@ class ImportTenantAccrualsFromCsv extends Command
                                     $stats['spaces_location_set']++;
                                 }
 
+                                // NEW: заполняем отображаемые поля
+                                if ($marketSpacesHasDisplayName) {
+                                    $insert['display_name'] = $placeName !== '' ? $placeName : null;
+                                }
+                                if ($marketSpacesHasActivityType) {
+                                    $insert['activity_type'] = $activityType !== '' ? $activityType : null;
+                                }
+
                                 $marketSpaceId = DB::table('market_spaces')->insertGetId($insert);
                                 $stats['spaces_created']++;
                             }
@@ -347,7 +361,7 @@ class ImportTenantAccrualsFromCsv extends Command
 
                         $update = [
                             'area_sqm' => $area > 0 ? $area : DB::raw('area_sqm'),
-                            'notes' => $placeName !== '' ? $placeName : DB::raw('notes'),
+                            // ВАЖНО: notes — ручные заметки, импортом не перезаписываем.
                             'updated_at' => $now,
                         ];
 
@@ -355,6 +369,14 @@ class ImportTenantAccrualsFromCsv extends Command
                             // Не перетираем ручные правки: ставим location_id только если он ещё NULL
                             $update['location_id'] = DB::raw('COALESCE(location_id, ' . (int) $locationId . ')');
                             $stats['spaces_location_set']++;
+                        }
+
+                        // NEW: обновляем отображаемые поля, но НЕ затираем пустыми значениями
+                        if ($marketSpacesHasDisplayName) {
+                            $update['display_name'] = $placeName !== '' ? $placeName : DB::raw('display_name');
+                        }
+                        if ($marketSpacesHasActivityType) {
+                            $update['activity_type'] = $activityType !== '' ? $activityType : DB::raw('activity_type');
                         }
 
                         if ($marketSpacesHasStatus) {
