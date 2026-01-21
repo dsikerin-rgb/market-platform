@@ -61,6 +61,27 @@ class MarketSpaceResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    /**
+     * Resolve label for MarketSpace.type via market_space_types (market_id + code).
+     */
+    protected static function resolveSpaceTypeLabel(?int $marketId, ?string $typeCode): ?string
+    {
+        if (blank($marketId) || blank($typeCode)) {
+            return null;
+        }
+
+        static $cache = []; // [marketId => [code => name_ru]]
+
+        if (! isset($cache[$marketId])) {
+            $cache[$marketId] = MarketSpaceType::query()
+                ->where('market_id', (int) $marketId)
+                ->pluck('name_ru', 'code')
+                ->all();
+        }
+
+        return $cache[$marketId][$typeCode] ?? $typeCode;
+    }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -161,7 +182,26 @@ class MarketSpaceResource extends Resource
             Forms\Components\TextInput::make('number')
                 ->label('Номер места')
                 ->maxLength(255)
+                ->reactive()
+                ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                    // Для создания: если display_name пуст — подставляем "Место {number}"
+                    if (blank($get('display_name')) && filled($state)) {
+                        $set('display_name', 'Место ' . trim((string) $state));
+                    }
+                })
                 ->helperText('Например: A-101. Внутренний код места формируется автоматически.'),
+
+            Forms\Components\TextInput::make('display_name')
+                ->label('Название (для отображения)')
+                ->maxLength(255)
+                ->helperText('Заполняется импортом или автоматически из номера. Можно изменить вручную.')
+                ->nullable(),
+
+            Forms\Components\TextInput::make('activity_type')
+                ->label('Вид деятельности')
+                ->maxLength(255)
+                ->helperText('Заполняется импортом. Можно уточнить вручную.')
+                ->nullable(),
 
             Forms\Components\TextInput::make('area_sqm')
                 ->label('Площадь, м²')
@@ -233,10 +273,6 @@ class MarketSpaceResource extends Resource
 
         $table = $table
             ->columns([
-                // Колонку "Рынок" скрыли намеренно:
-                // для обычного пользователя рынок однозначен,
-                // для super-admin есть переключатель рынка.
-
                 TextColumn::make('location.name')
                     ->label('Локация')
                     ->sortable()
@@ -249,16 +285,32 @@ class MarketSpaceResource extends Resource
                     ->searchable()
                     ->placeholder('—'),
 
+                TextColumn::make('display_name')
+                    ->label('Название')
+                    ->sortable()
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(),
+
                 TextColumn::make('number')
                     ->label('Номер')
                     ->sortable()
                     ->searchable(),
 
-                TextColumn::make('spaceType.name_ru')
-                    ->label('Тип')
+                // "Тип" (тариф) — оставляем, но по умолчанию прячем, чтобы не дублировать локацию
+                TextColumn::make('type')
+                    ->label('Тариф')
+                    ->formatStateUsing(fn (?string $state, MarketSpace $record) => static::resolveSpaceTypeLabel($record->market_id, $state))
+                    ->sortable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('activity_type')
+                    ->label('Вид деятельности')
+                    ->placeholder('—')
                     ->sortable()
                     ->searchable()
-                    ->placeholder('—'),
+                    ->toggleable(),
 
                 TextColumn::make('status')
                     ->label('Статус')
@@ -284,6 +336,56 @@ class MarketSpaceResource extends Resource
                         'reserved' => 'Зарезервировано',
                         'maintenance' => 'На обслуживании',
                     ]),
+
+                SelectFilter::make('type')
+                    ->label('Тариф')
+                    ->options(function () {
+                        $user = Filament::auth()->user();
+
+                        $marketId = null;
+                        if ($user?->isSuperAdmin()) {
+                            $marketId = static::selectedMarketIdFromSession();
+                        } else {
+                            $marketId = $user?->market_id;
+                        }
+
+                        if (blank($marketId)) {
+                            return [];
+                        }
+
+                        return MarketSpaceType::query()
+                            ->where('market_id', (int) $marketId)
+                            ->where('is_active', true)
+                            ->orderBy('name_ru')
+                            ->pluck('name_ru', 'code')
+                            ->all();
+                    }),
+
+                SelectFilter::make('activity_type')
+                    ->label('Вид деятельности')
+                    ->options(function () {
+                        $user = Filament::auth()->user();
+
+                        $marketId = null;
+                        if ($user?->isSuperAdmin()) {
+                            $marketId = static::selectedMarketIdFromSession();
+                        } else {
+                            $marketId = $user?->market_id;
+                        }
+
+                        if (blank($marketId)) {
+                            return [];
+                        }
+
+                        return \Illuminate\Support\Facades\DB::table('market_spaces')
+                            ->where('market_id', (int) $marketId)
+                            ->whereNotNull('activity_type')
+                            ->where('activity_type', '!=', '')
+                            ->distinct()
+                            ->orderBy('activity_type')
+                            ->pluck('activity_type', 'activity_type')
+                            ->all();
+                    }),
             ])
             ->recordUrl(fn (MarketSpace $record): ?string => static::canEdit($record)
                 ? static::getUrl('edit', ['record' => $record])
