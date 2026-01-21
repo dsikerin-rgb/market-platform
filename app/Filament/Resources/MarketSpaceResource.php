@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -160,7 +161,7 @@ class MarketSpaceResource extends Resource
         return $schema->components([
             ...$components,
 
-            Forms\Components\Section::make('Основные данные')
+            Section::make('Основные данные')
                 ->description('Заполни основные параметры торгового места. Подсказки доступны при наведении на иконку вопроса.')
                 ->schema([
                     Forms\Components\Select::make('location_id')
@@ -322,7 +323,7 @@ class MarketSpaceResource extends Resource
                 ])
                 ->columns(2),
 
-            Forms\Components\Section::make('Примечания')
+            Section::make('Примечания')
                 ->schema([
                     Forms\Components\Textarea::make('notes')
                         ->label('Примечания')
