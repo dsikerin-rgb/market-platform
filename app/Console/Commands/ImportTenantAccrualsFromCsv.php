@@ -157,6 +157,11 @@ class ImportTenantAccrualsFromCsv extends Command
                 $col['activity_type'] = null;
             }
 
+            // Если в файле есть колонки free/leased — они источник истины для occupied/free
+            $hasFreeOrLeasedAreaColumns =
+                (($col['free_area_sqm'] ?? null) !== null)
+                || (($col['leased_area_sqm'] ?? null) !== null);
+
             $now = now();
 
             if ($dryRun) {
@@ -193,10 +198,14 @@ class ImportTenantAccrualsFromCsv extends Command
                 $this->warn('market_spaces.location_id exists, but market_location_types/market_locations tables are missing or incompatible. Location assignment will be skipped.');
             }
 
+            // ВАЖНО: для SQLite возможны "грязные" значения в числовых полях (например, строка "area")
+            $dbDriver = DB::getDriverName();
+
             $runner = function () use (
                 $csv,
                 $headers,
                 $col,
+                $hasFreeOrLeasedAreaColumns,
                 $marketId,
                 $period,
                 $filePath,
@@ -212,6 +221,7 @@ class ImportTenantAccrualsFromCsv extends Command
                 $marketSpacesAreaColumns,
                 $hasLocationTypesTable,
                 $hasLocationsTable,
+                $dbDriver,
                 &$stats
             ) {
                 $tenantCache = []; // name => id
@@ -305,14 +315,60 @@ class ImportTenantAccrualsFromCsv extends Command
                         continue;
                     }
 
-                    // Вариант A: свободное место (ФИО пусто, но есть № отдела и площадь)
-                    $isVacant = ($tenantName === '' && $placeCode !== '' && $area > 0);
-
                     // Если строка совсем "пустая по смыслу" — пропускаем
                     $looksMeaningful = ($tenantName !== '') || ($placeCode !== '') || ($area > 0) || $hasAnyAmounts;
                     if (! $looksMeaningful) {
                         $stats['rows_skipped']++;
                         continue;
+                    }
+
+                    /**
+                     * ВАЖНО:
+                     * occupied/free определяются по площадям:
+                     * - leased_area_sqm > 0 => occupied
+                     * - free_area_sqm > 0 && leased_area_sqm == 0 => free
+                     *
+                     * Если в файле нет этих колонок, используем старую эвристику "vacant" как fallback.
+                     */
+                    $isLeased = false; // occupied
+                    $isFree = false;   // free
+                    $statusKnown = false;
+
+                    if ($hasFreeOrLeasedAreaColumns) {
+                        $statusKnown = true;
+
+                        // Конфликт: обе площади > 0
+                        if ($freeArea > 0 && $leasedArea > 0) {
+                            $stats['rows_errors']++;
+                            $this->warn("Row {$sourceRowNumber}: both \"Свободная площадь\" and \"Сданная площадь\" are > 0 for place \"{$placeCode}\". Treating as leased (occupied).");
+                            $isLeased = true;
+                            $isFree = false;
+                        } elseif ($leasedArea > 0) {
+                            $isLeased = true;
+                        } elseif ($freeArea > 0) {
+                            $isFree = true;
+                        } else {
+                            // Ни free, ни leased не заполнены.
+                            // Мягкий fallback: если строка похожа на свободное место (без сумм/ставки/дней), считаем free.
+                            $looksLikeFreeByContext =
+                                ($tenantName === '' && $placeCode !== '' && $area > 0)
+                                && (! $hasAnyAmounts)
+                                && ($rentRate <= 0)
+                                && (($days ?? 0) <= 0);
+
+                            if ($looksLikeFreeByContext) {
+                                $isFree = true;
+                            } elseif ($hasAnyAmounts || $rentRate > 0 || (($days ?? 0) > 0)) {
+                                // Есть деньги/ставка/дни, но нет leased_area => считаем ошибкой данных и не создаём начисление.
+                                $stats['rows_errors']++;
+                                $this->warn("Row {$sourceRowNumber}: amounts/rate/days present but leased_area_sqm is empty (place \"{$placeCode}\"). Accrual will be skipped.");
+                            }
+                        }
+                    } else {
+                        // Fallback для файлов без колонок free/leased
+                        $isFree = ($tenantName === '' && $placeCode !== '' && $area > 0);
+                        $isLeased = ! $isFree;
+                        $statusKnown = true;
                     }
 
                     // Resolve location_id by ctxLocationType (MVP: 1:1 type -> root location)
@@ -334,7 +390,7 @@ class ImportTenantAccrualsFromCsv extends Command
 
                     $displayNameValue = trim($placeName) !== '' ? trim($placeName) : ($placeCode !== '' ? ('Место ' . $placeCode) : '');
 
-                    // Upsert space (и для vacant, и для occupied)
+                    // Upsert space (и для free, и для occupied)
                     $marketSpaceId = null;
                     if ($placeCode !== '') {
                         $marketSpaceId = $spaceCache[$placeCode] ?? null;
@@ -366,7 +422,8 @@ class ImportTenantAccrualsFromCsv extends Command
                                 }
 
                                 if ($marketSpacesHasStatus) {
-                                    $insert['status'] = $isVacant ? 'free' : 'occupied';
+                                    // Если статус не определён, не увеличиваем free-метрики: по умолчанию occupied
+                                    $insert['status'] = $isLeased ? 'occupied' : ($isFree ? 'free' : 'occupied');
                                 }
 
                                 if ($marketSpacesHasLocationId && $locationId) {
@@ -394,11 +451,26 @@ class ImportTenantAccrualsFromCsv extends Command
                             'updated_at' => $now,
                         ];
 
-                        // площадь: заполняем только если сейчас NULL/0 (идемпотентно)
+                        // площадь: заполняем только если сейчас NULL/0/плейсхолдер (идемпотентно)
                         if ($area > 0) {
                             $sqlArea = $this->formatSqlNumber($area);
+
                             foreach ($marketSpacesAreaColumns as $areaColumn) {
-                                $update[$areaColumn] = DB::raw('COALESCE(NULLIF(' . $areaColumn . ', 0), ' . $sqlArea . ')');
+                                if ($dbDriver === 'sqlite') {
+                                    $update[$areaColumn] = DB::raw(
+                                        "CASE
+                                            WHEN {$areaColumn} IS NULL
+                                                OR {$areaColumn} = ''
+                                                OR {$areaColumn} = 0
+                                                OR {$areaColumn} = '0'
+                                                OR {$areaColumn} IN ('area', 'area_sqm')
+                                            THEN {$sqlArea}
+                                            ELSE {$areaColumn}
+                                        END"
+                                    );
+                                } else {
+                                    $update[$areaColumn] = DB::raw('COALESCE(NULLIF(' . $areaColumn . ', 0), ' . $sqlArea . ')');
+                                }
                             }
                         }
 
@@ -441,12 +513,15 @@ class ImportTenantAccrualsFromCsv extends Command
                             }
                         }
 
-                        if ($marketSpacesHasStatus) {
-                            if (! $isVacant) {
+                        if ($marketSpacesHasStatus && $statusKnown) {
+                            if ($isLeased) {
                                 $spaceOccupiedSeen[$placeCode] = true;
                                 $update['status'] = 'occupied';
-                            } else {
+                            } elseif ($isFree) {
+                                // не понижаем до free, если в рамках этого импорта место уже было occupied
                                 $update['status'] = isset($spaceOccupiedSeen[$placeCode]) ? 'occupied' : 'free';
+                            } else {
+                                // статус не определён — не трогаем
                             }
                         }
 
@@ -461,43 +536,47 @@ class ImportTenantAccrualsFromCsv extends Command
                         }
                     }
 
-                    // Vacant: начисление не создаём
-                    if ($isVacant) {
+                    // Upsert tenant: даже если место free (ФИО != закрепление места)
+                    $tenantId = null;
+                    if ($tenantName !== '') {
+                        $tenantId = $tenantCache[$tenantName] ?? null;
+                        if (! $tenantId) {
+                            $tenantId = DB::table('tenants')
+                                ->where('market_id', $marketId)
+                                ->where('name', $tenantName)
+                                ->value('id');
+
+                            if (! $tenantId) {
+                                $tenantId = DB::table('tenants')->insertGetId([
+                                    'market_id' => $marketId,
+                                    'name' => $tenantName,
+                                    'type' => $this->inferTenantType($tenantName),
+                                    'is_active' => 1,
+                                    'created_at' => $now,
+                                    'updated_at' => $now,
+                                ]);
+                                $stats['tenants_created']++;
+                            }
+
+                            $tenantCache[$tenantName] = $tenantId;
+                        }
+                    }
+
+                    // Начисление создаём только для leased (occupied)
+                    if (! $isLeased) {
                         continue;
                     }
 
-                    // Occupied: если арендатора нет — не создаём начисление (защита от мусора)
-                    if ($tenantName === '') {
-                        $stats['rows_skipped']++;
+                    // leased без арендатора — ошибка исходника (начислять некому)
+                    if ($tenantName === '' || ! $tenantId) {
+                        $stats['rows_errors']++;
+                        $this->warn("Row {$sourceRowNumber}: leased_area_sqm > 0 but tenant name is empty. Accrual skipped for place \"{$placeCode}\".");
                         continue;
                     }
 
                     $vatRate = $this->inferVatRate($headers, $totalNoVat, $totalWithVat);
 
-                    // Upsert tenant
-                    $tenantId = $tenantCache[$tenantName] ?? null;
-                    if (! $tenantId) {
-                        $tenantId = DB::table('tenants')
-                            ->where('market_id', $marketId)
-                            ->where('name', $tenantName)
-                            ->value('id');
-
-                        if (! $tenantId) {
-                            $tenantId = DB::table('tenants')->insertGetId([
-                                'market_id' => $marketId,
-                                'name' => $tenantName,
-                                'type' => $this->inferTenantType($tenantName),
-                                'is_active' => 1,
-                                'created_at' => $now,
-                                'updated_at' => $now,
-                            ]);
-                            $stats['tenants_created']++;
-                        }
-
-                        $tenantCache[$tenantName] = $tenantId;
-                    }
-
-                    // Optionally update market_spaces.tenant_id for occupied rows only
+                    // Optionally update market_spaces.tenant_id ONLY for leased rows
                     if ($setSpaceTenant && $marketSpaceId && $marketSpacesHasTenantId) {
                         DB::table('market_spaces')->where('id', $marketSpaceId)->update([
                             'tenant_id' => $tenantId,
