@@ -17,6 +17,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class MarketSpaceResource extends Resource
 {
@@ -82,6 +83,48 @@ class MarketSpaceResource extends Resource
         return $cache[$marketId][$typeCode] ?? $typeCode;
     }
 
+    /**
+     * Canonical statuses for UI (legacy "free" => "vacant").
+     */
+    protected static function normalizeStatus(?string $state): ?string
+    {
+        if ($state === 'free') {
+            return 'vacant';
+        }
+
+        return $state;
+    }
+
+    protected static function statusLabel(?string $state): ?string
+    {
+        $state = static::normalizeStatus($state);
+
+        return match ($state) {
+            'vacant' => 'Свободно',
+            'occupied' => 'Занято',
+            'reserved' => 'Зарезервировано',
+            'maintenance' => 'На обслуживании',
+            default => $state,
+        };
+    }
+
+    /**
+     * Color mapping for badge() in table.
+     * Требование: Занято = зелёный, Свободно = красный.
+     */
+    protected static function statusColor(?string $state): string
+    {
+        $state = static::normalizeStatus($state);
+
+        return match ($state) {
+            'occupied' => 'success',
+            'vacant' => 'danger',
+            'reserved' => 'warning',
+            'maintenance' => 'gray',
+            default => 'gray',
+        };
+    }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -104,6 +147,8 @@ class MarketSpaceResource extends Resource
                     ->searchable()
                     ->preload()
                     ->reactive()
+                    ->hintIcon('heroicon-m-question-mark-circle')
+                    ->hintIconTooltip('Рынок нужен, чтобы корректно фильтровать локации, арендаторов и тарифы.')
                     ->dehydrated(true);
             }
         } else {
@@ -115,189 +160,213 @@ class MarketSpaceResource extends Resource
         return $schema->components([
             ...$components,
 
-            Forms\Components\Select::make('location_id')
-                ->label('Локация')
-                ->options(function ($get, ?MarketSpace $record) use ($user) {
-                    $marketId = $get('market_id') ?? $record?->market_id;
+            Forms\Components\Section::make('Основные данные')
+                ->description('Заполни основные параметры торгового места. Подсказки доступны при наведении на иконку вопроса.')
+                ->schema([
+                    Forms\Components\Select::make('location_id')
+                        ->label('Локация')
+                        ->options(function ($get, ?MarketSpace $record) use ($user) {
+                            $marketId = $get('market_id') ?? $record?->market_id;
 
-                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
-                        $marketId = $user->market_id;
-                    }
+                            if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                $marketId = $user->market_id;
+                            }
 
-                    if (blank($marketId)) {
-                        return [];
-                    }
+                            if (blank($marketId)) {
+                                return [];
+                            }
 
-                    return MarketLocation::query()
-                        ->where('market_id', (int) $marketId)
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->all();
-                })
-                ->searchable()
-                ->preload()
-                ->disabled(function ($get, ?MarketSpace $record) use ($user) {
-                    if (! ((bool) $user && $user->isSuperAdmin())) {
-                        return false;
-                    }
+                            return MarketLocation::query()
+                                ->where('market_id', (int) $marketId)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Физическая зона рынка: павильоны, острова, уличная торговля и т.д.')
+                        ->disabled(function ($get, ?MarketSpace $record) use ($user) {
+                            if (! ((bool) $user && $user->isSuperAdmin())) {
+                                return false;
+                            }
 
-                    $marketId = $get('market_id') ?? $record?->market_id;
+                            $marketId = $get('market_id') ?? $record?->market_id;
 
-                    return blank($marketId);
-                })
-                ->nullable(),
+                            return blank($marketId);
+                        })
+                        ->nullable(),
 
-            Forms\Components\Select::make('tenant_id')
-                ->label('Арендатор')
-                ->options(function ($get, ?MarketSpace $record) use ($user) {
-                    $marketId = $get('market_id') ?? $record?->market_id;
+                    Forms\Components\Select::make('tenant_id')
+                        ->label('Арендатор')
+                        ->options(function ($get, ?MarketSpace $record) use ($user) {
+                            $marketId = $get('market_id') ?? $record?->market_id;
 
-                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
-                        $marketId = $user->market_id;
-                    }
+                            if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                $marketId = $user->market_id;
+                            }
 
-                    if (blank($marketId)) {
-                        return [];
-                    }
+                            if (blank($marketId)) {
+                                return [];
+                            }
 
-                    return Tenant::query()
-                        ->where('market_id', (int) $marketId)
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->all();
-                })
-                ->searchable()
-                ->preload()
-                ->disabled(function ($get, ?MarketSpace $record) use ($user) {
-                    if (! ((bool) $user && $user->isSuperAdmin())) {
-                        return false;
-                    }
+                            return Tenant::query()
+                                ->where('market_id', (int) $marketId)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
+                        ->disabled(function ($get, ?MarketSpace $record) use ($user) {
+                            if (! ((bool) $user && $user->isSuperAdmin())) {
+                                return false;
+                            }
 
-                    $marketId = $get('market_id') ?? $record?->market_id;
+                            $marketId = $get('market_id') ?? $record?->market_id;
 
-                    return blank($marketId);
-                })
-                ->nullable(),
+                            return blank($marketId);
+                        })
+                        ->nullable(),
 
-            Forms\Components\TextInput::make('number')
-                ->label('Номер места')
-                ->maxLength(255)
-                ->reactive()
-                ->afterStateUpdated(function ($state, callable $set, callable $get) {
-                    // Для создания: если display_name пуст — подставляем "Место {number}"
-                    if (blank($get('display_name')) && filled($state)) {
-                        $set('display_name', 'Место ' . trim((string) $state));
-                    }
-                })
-                ->helperText('Например: A-101. Внутренний код места формируется автоматически.'),
+                    Forms\Components\TextInput::make('number')
+                        ->label('Номер места')
+                        ->maxLength(255)
+                        ->reactive()
+                        ->placeholder('Например: П/1 или A-101')
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            // Для создания: если display_name пуст — подставляем "Место {number}"
+                            if (blank($get('display_name')) && filled($state)) {
+                                $set('display_name', 'Место ' . trim((string) $state));
+                            }
+                        })
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Короткий идентификатор места. Используется в поиске и в импорте начислений.'),
 
-            Forms\Components\TextInput::make('display_name')
-                ->label('Название (для отображения)')
-                ->maxLength(255)
-                ->helperText('Заполняется импортом или автоматически из номера. Можно изменить вручную.')
-                ->nullable(),
+                    Forms\Components\TextInput::make('display_name')
+                        ->label('Название (для отображения)')
+                        ->maxLength(255)
+                        ->placeholder('Например: Аптека 22')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Понятное название для пользователей. Обычно заполняется импортом, но можно редактировать вручную.')
+                        ->nullable(),
 
-            Forms\Components\TextInput::make('activity_type')
-                ->label('Вид деятельности')
-                ->maxLength(255)
-                ->helperText('Заполняется импортом. Можно уточнить вручную.')
-                ->nullable(),
+                    Forms\Components\TextInput::make('activity_type')
+                        ->label('Вид деятельности')
+                        ->maxLength(255)
+                        ->placeholder('Например: аптека / электро / мясо')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Заполняется импортом начислений и может уточняться вручную.')
+                        ->nullable(),
 
-            Forms\Components\TextInput::make('area_sqm')
-                ->label('Площадь, м²')
-                ->numeric()
-                ->inputMode('decimal'),
+                    Forms\Components\Select::make('type')
+                        ->label('Тариф')
+                        ->options(function ($get, ?MarketSpace $record) use ($user) {
+                            $marketId = $get('market_id') ?? $record?->market_id;
 
-            Forms\Components\Select::make('type')
-                ->label('Тип')
-                ->options(function ($get, ?MarketSpace $record) use ($user) {
-                    $marketId = $get('market_id') ?? $record?->market_id;
+                            if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                $marketId = $user->market_id;
+                            }
 
-                    if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
-                        $marketId = $user->market_id;
-                    }
+                            if (blank($marketId)) {
+                                return [];
+                            }
 
-                    if (blank($marketId)) {
-                        return [];
-                    }
+                            return MarketSpaceType::query()
+                                ->where('market_id', (int) $marketId)
+                                ->where('is_active', true)
+                                ->orderBy('name_ru')
+                                ->pluck('name_ru', 'code')
+                                ->all();
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->reactive()
+                        ->required()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Тариф/категория места для расчётов. Берётся из справочника “Типы мест”.'),
 
-                    return MarketSpaceType::query()
-                        ->where('market_id', (int) $marketId)
-                        ->where('is_active', true)
-                        ->orderBy('name_ru')
-                        ->pluck('name_ru', 'code')
-                        ->all();
-                })
-                ->searchable()
-                ->preload()
-                ->reactive()
-                ->required()
-                ->helperText('Типы и тарифы берутся из справочника “Типы мест”.'),
+                    Forms\Components\TextInput::make('area_sqm')
+                        ->label('Площадь, м²')
+                        ->numeric()
+                        ->inputMode('decimal')
+                        ->placeholder('Например: 48')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
 
-            // Канон: vacant/occupied/reserved/maintenance (legacy "free" нормализуем в vacant)
-            Forms\Components\Select::make('status')
-                ->label('Статус')
-                ->options([
-                    'vacant' => 'Свободно',
-                    'occupied' => 'Занято',
-                    'reserved' => 'Зарезервировано',
-                    'maintenance' => 'На обслуживании',
+                    Forms\Components\Select::make('status')
+                        ->label('Статус')
+                        ->options([
+                            'vacant' => 'Свободно',
+                            'occupied' => 'Занято',
+                            'reserved' => 'Зарезервировано',
+                            'maintenance' => 'На обслуживании',
+                        ])
+                        ->default('vacant')
+                        ->afterStateHydrated(function (Forms\Components\Select $component, $state): void {
+                            if ($state === 'free') {
+                                $component->state('vacant');
+                            }
+                        })
+                        ->dehydrateStateUsing(fn ($state) => $state === 'free' ? 'vacant' : $state)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Используется для быстрой визуальной оценки занятости. В таблице помечается цветом.'),
+
+                    Forms\Components\Toggle::make('is_active')
+                        ->label('Активно')
+                        ->default(true)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Если выключить — место скрывается из большинства сценариев, но данные остаются в системе.'),
                 ])
-                ->default('vacant')
-                ->afterStateHydrated(function (Forms\Components\Select $component, $state): void {
-                    if ($state === 'free') {
-                        $component->state('vacant');
-                    }
-                })
-                ->dehydrateStateUsing(fn ($state) => $state === 'free' ? 'vacant' : $state),
+                ->columns(2),
 
-            Forms\Components\Toggle::make('is_active')
-                ->label('Активно')
-                ->default(true),
-
-            Forms\Components\Textarea::make('notes')
-                ->label('Примечания')
-                ->columnSpanFull(),
+            Forms\Components\Section::make('Примечания')
+                ->schema([
+                    Forms\Components\Textarea::make('notes')
+                        ->label('Примечания')
+                        ->rows(4)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Свободный комментарий. Это поле не должно перетираться импортом.')
+                        ->columnSpanFull(),
+                ]),
         ]);
     }
 
     public static function table(Table $table): Table
     {
-        $statusOptions = [
-            'vacant' => 'Свободно',
-            'occupied' => 'Занято',
-            'reserved' => 'Зарезервировано',
-            'maintenance' => 'На обслуживании',
-            'free' => 'Свободно', // legacy
-        ];
-
         $table = $table
             ->columns([
                 TextColumn::make('location.name')
                     ->label('Локация')
                     ->sortable()
                     ->searchable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->tooltip(fn (MarketSpace $record) => $record->location?->name ?: null),
 
                 TextColumn::make('tenant.name')
                     ->label('Арендатор')
                     ->sortable()
                     ->searchable()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->tooltip(fn (MarketSpace $record) => $record->tenant?->name ?: null),
 
                 TextColumn::make('display_name')
                     ->label('Название')
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->tooltip(fn (MarketSpace $record) => $record->display_name ?: null),
 
                 TextColumn::make('number')
                     ->label('Номер')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->tooltip(fn (MarketSpace $record) => $record->number ?: null),
 
-                // "Тип" (тариф) — оставляем, но по умолчанию прячем, чтобы не дублировать локацию
+                // "Тариф" — отдельная сущность от локации, по умолчанию прячем
                 TextColumn::make('type')
                     ->label('Тариф')
                     ->formatStateUsing(fn (?string $state, MarketSpace $record) => static::resolveSpaceTypeLabel($record->market_id, $state))
@@ -310,13 +379,19 @@ class MarketSpaceResource extends Resource
                     ->placeholder('—')
                     ->sortable()
                     ->searchable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->tooltip(fn (MarketSpace $record) => $record->activity_type ?: null),
 
                 TextColumn::make('status')
                     ->label('Статус')
-                    ->formatStateUsing(fn (?string $state) => $statusOptions[$state ?? ''] ?? $state)
+                    ->formatStateUsing(fn (?string $state) => static::statusLabel($state))
+                    ->badge()
+                    ->color(fn (?string $state) => static::statusColor($state))
                     ->sortable()
-                    ->badge(),
+                    ->tooltip(function (MarketSpace $record) {
+                        $label = static::statusLabel($record->status);
+                        return $label ? "Статус: {$label}" : null;
+                    }),
 
                 TextColumn::make('area_sqm')
                     ->label('Площадь, м²')
@@ -325,7 +400,8 @@ class MarketSpaceResource extends Resource
 
                 IconColumn::make('is_active')
                     ->label('Активен')
-                    ->boolean(),
+                    ->boolean()
+                    ->tooltip(fn (MarketSpace $record) => $record->is_active ? 'Активно' : 'Неактивно'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -377,7 +453,7 @@ class MarketSpaceResource extends Resource
                             return [];
                         }
 
-                        return \Illuminate\Support\Facades\DB::table('market_spaces')
+                        return DB::table('market_spaces')
                             ->where('market_id', (int) $marketId)
                             ->whereNotNull('activity_type')
                             ->where('activity_type', '!=', '')
