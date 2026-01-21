@@ -87,7 +87,7 @@ class ImportTenantAccrualsFromCsv extends Command
             'rows_errors' => 0,
             'tenants_created' => 0,
             'spaces_created' => 0,
-            'spaces_marked_vacant' => 0,
+            'spaces_marked_vacant' => 0,   // по смыслу: free
             'spaces_marked_occupied' => 0,
             'location_types_created' => 0,
             'locations_created' => 0,
@@ -145,6 +145,18 @@ class ImportTenantAccrualsFromCsv extends Command
                 $this->warn('Column "№ отдела" not found. Spaces will not be created/updated; accruals will be imported with market_space_id = NULL.');
             }
 
+            // Защита: иногда "Вид деятельности" ошибочно распознаётся как та же колонка, что и "Название отдела"
+            if (
+                array_key_exists('activity_type', $col)
+                && array_key_exists('place_name', $col)
+                && $col['activity_type'] !== null
+                && $col['place_name'] !== null
+                && (int) $col['activity_type'] === (int) $col['place_name']
+            ) {
+                $this->warn('Column "Вид деятельности" overlaps with "Название отдела" in header detection. activity_type import will be disabled for this file to prevent wrong values.');
+                $col['activity_type'] = null;
+            }
+
             $now = now();
 
             if ($dryRun) {
@@ -158,6 +170,15 @@ class ImportTenantAccrualsFromCsv extends Command
             // NEW: отображаемые поля для места
             $marketSpacesHasDisplayName = $this->hasColumn('market_spaces', 'display_name');
             $marketSpacesHasActivityType = $this->hasColumn('market_spaces', 'activity_type');
+
+            // Площадь в market_spaces может называться по-разному (area или area_sqm)
+            $marketSpacesAreaColumns = [];
+            if ($this->hasColumn('market_spaces', 'area')) {
+                $marketSpacesAreaColumns[] = 'area';
+            }
+            if ($this->hasColumn('market_spaces', 'area_sqm')) {
+                $marketSpacesAreaColumns[] = 'area_sqm';
+            }
 
             $hasLocationTypesTable = $this->hasTable('market_location_types')
                 && $this->hasColumn('market_location_types', 'code')
@@ -188,13 +209,14 @@ class ImportTenantAccrualsFromCsv extends Command
                 $marketSpacesHasLocationId,
                 $marketSpacesHasDisplayName,
                 $marketSpacesHasActivityType,
+                $marketSpacesAreaColumns,
                 $hasLocationTypesTable,
                 $hasLocationsTable,
                 &$stats
             ) {
                 $tenantCache = []; // name => id
                 $spaceCache = [];  // place_code => id
-                $spaceOccupiedSeen = []; // place_code => true (prevent downgrade to vacant within this run)
+                $spaceOccupiedSeen = []; // place_code => true (prevent downgrade to free within this run)
 
                 $locationCache = []; // location_type_code => location_id
 
@@ -310,6 +332,8 @@ class ImportTenantAccrualsFromCsv extends Command
                         );
                     }
 
+                    $displayNameValue = trim($placeName) !== '' ? trim($placeName) : ($placeCode !== '' ? ('Место ' . $placeCode) : '');
+
                     // Upsert space (и для vacant, и для occupied)
                     $marketSpaceId = null;
                     if ($placeCode !== '') {
@@ -328,15 +352,21 @@ class ImportTenantAccrualsFromCsv extends Command
                                     'market_id' => $marketId,
                                     'number' => $placeCode,
                                     'code' => $placeCode,
-                                    'area_sqm' => $area > 0 ? $area : null,
                                     'is_active' => 1,
                                     // ВАЖНО: notes — ручные заметки, импортом не заполняем.
                                     'created_at' => $now,
                                     'updated_at' => $now,
                                 ];
 
+                                // площадь (если в схеме есть area/area_sqm)
+                                if ($area > 0) {
+                                    foreach ($marketSpacesAreaColumns as $areaColumn) {
+                                        $insert[$areaColumn] = $area;
+                                    }
+                                }
+
                                 if ($marketSpacesHasStatus) {
-                                    $insert['status'] = $isVacant ? 'vacant' : 'occupied';
+                                    $insert['status'] = $isVacant ? 'free' : 'occupied';
                                 }
 
                                 if ($marketSpacesHasLocationId && $locationId) {
@@ -344,12 +374,12 @@ class ImportTenantAccrualsFromCsv extends Command
                                     $stats['spaces_location_set']++;
                                 }
 
-                                // NEW: заполняем отображаемые поля
+                                // NEW: заполняем отображаемые поля (мягко)
                                 if ($marketSpacesHasDisplayName) {
-                                    $insert['display_name'] = $placeName !== '' ? $placeName : null;
+                                    $insert['display_name'] = $displayNameValue !== '' ? $displayNameValue : null;
                                 }
                                 if ($marketSpacesHasActivityType) {
-                                    $insert['activity_type'] = $activityType !== '' ? $activityType : null;
+                                    $insert['activity_type'] = trim($activityType) !== '' ? trim($activityType) : null;
                                 }
 
                                 $marketSpaceId = DB::table('market_spaces')->insertGetId($insert);
@@ -360,10 +390,17 @@ class ImportTenantAccrualsFromCsv extends Command
                         }
 
                         $update = [
-                            'area_sqm' => $area > 0 ? $area : DB::raw('area_sqm'),
                             // ВАЖНО: notes — ручные заметки, импортом не перезаписываем.
                             'updated_at' => $now,
                         ];
+
+                        // площадь: заполняем только если сейчас NULL/0 (идемпотентно)
+                        if ($area > 0) {
+                            $sqlArea = $this->formatSqlNumber($area);
+                            foreach ($marketSpacesAreaColumns as $areaColumn) {
+                                $update[$areaColumn] = DB::raw('COALESCE(NULLIF(' . $areaColumn . ', 0), ' . $sqlArea . ')');
+                            }
+                        }
 
                         if ($marketSpacesHasLocationId && $locationId) {
                             // Не перетираем ручные правки: ставим location_id только если он ещё NULL
@@ -371,12 +408,37 @@ class ImportTenantAccrualsFromCsv extends Command
                             $stats['spaces_location_set']++;
                         }
 
-                        // NEW: обновляем отображаемые поля, но НЕ затираем пустыми значениями
-                        if ($marketSpacesHasDisplayName) {
-                            $update['display_name'] = $placeName !== '' ? $placeName : DB::raw('display_name');
+                        // NEW: обновляем отображаемые поля, но НЕ перетираем уже заполненные вручную/ранее
+                        if ($marketSpacesHasDisplayName && $displayNameValue !== '') {
+                            $q = $this->quoteSqlString($displayNameValue);
+                            $update['display_name'] = DB::raw("CASE WHEN display_name IS NULL OR display_name = '' OR display_name = 'display_name' THEN {$q} ELSE display_name END");
                         }
+
                         if ($marketSpacesHasActivityType) {
-                            $update['activity_type'] = $activityType !== '' ? $activityType : DB::raw('activity_type');
+                            if (trim($activityType) !== '') {
+                                $q = $this->quoteSqlString(trim($activityType));
+                                $update['activity_type'] = DB::raw("CASE WHEN activity_type IS NULL OR activity_type = '' OR activity_type = 'activity_type' OR activity_type = 'не указано' THEN {$q} ELSE activity_type END");
+                            } else {
+                                // Если в исходнике пусто — не подставляем чужие значения.
+                                // 1) Пустое/плейсхолдер -> "не указано"
+                                // 2) Если ранее был баг и activity_type совпал с display_name и notes (notes не пустые) -> "не указано"
+                                if ($marketSpacesHasDisplayName) {
+                                    $update['activity_type'] = DB::raw(
+                                        "CASE
+                                            WHEN activity_type IS NULL OR activity_type = '' OR activity_type = 'activity_type' THEN 'не указано'
+                                            WHEN notes IS NOT NULL AND notes <> '' AND display_name IS NOT NULL AND display_name <> '' AND activity_type = display_name AND activity_type = notes THEN 'не указано'
+                                            ELSE activity_type
+                                        END"
+                                    );
+                                } else {
+                                    $update['activity_type'] = DB::raw(
+                                        "CASE
+                                            WHEN activity_type IS NULL OR activity_type = '' OR activity_type = 'activity_type' THEN 'не указано'
+                                            ELSE activity_type
+                                        END"
+                                    );
+                                }
+                            }
                         }
 
                         if ($marketSpacesHasStatus) {
@@ -384,14 +446,14 @@ class ImportTenantAccrualsFromCsv extends Command
                                 $spaceOccupiedSeen[$placeCode] = true;
                                 $update['status'] = 'occupied';
                             } else {
-                                $update['status'] = isset($spaceOccupiedSeen[$placeCode]) ? 'occupied' : 'vacant';
+                                $update['status'] = isset($spaceOccupiedSeen[$placeCode]) ? 'occupied' : 'free';
                             }
                         }
 
                         DB::table('market_spaces')->where('id', $marketSpaceId)->update($update);
 
                         if ($marketSpacesHasStatus) {
-                            if (($update['status'] ?? null) === 'vacant') {
+                            if (($update['status'] ?? null) === 'free') {
                                 $stats['spaces_marked_vacant']++;
                             } elseif (($update['status'] ?? null) === 'occupied') {
                                 $stats['spaces_marked_occupied']++;
@@ -559,7 +621,7 @@ class ImportTenantAccrualsFromCsv extends Command
         $this->line("Errors: {$stats['rows_errors']}");
         $this->line("Tenants created: {$stats['tenants_created']}");
         $this->line("Spaces created: {$stats['spaces_created']}");
-        $this->line("Spaces marked vacant: {$stats['spaces_marked_vacant']}");
+        $this->line("Spaces marked free: {$stats['spaces_marked_vacant']}");
         $this->line("Spaces marked occupied: {$stats['spaces_marked_occupied']}");
         $this->line("Location types created: {$stats['location_types_created']}");
         $this->line("Locations created: {$stats['locations_created']}");
@@ -1063,5 +1125,21 @@ class ImportTenantAccrualsFromCsv extends Command
         } catch (Throwable) {
             return false;
         }
+    }
+
+    private function quoteSqlString(string $value): string
+    {
+        try {
+            return DB::getPdo()->quote($value);
+        } catch (Throwable) {
+            return "'" . str_replace("'", "''", $value) . "'";
+        }
+    }
+
+    private function formatSqlNumber(float $value): string
+    {
+        $s = number_format($value, 6, '.', '');
+        $s = rtrim(rtrim($s, '0'), '.');
+        return $s === '' ? '0' : $s;
     }
 }
