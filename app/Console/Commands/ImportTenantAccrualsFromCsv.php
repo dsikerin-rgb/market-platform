@@ -24,7 +24,7 @@ class ImportTenantAccrualsFromCsv extends Command
         {--set-space-tenant : Update market_spaces.tenant_id to current tenant_id (optional)}
     ';
 
-    protected $description = 'Import monthly tenant accruals from CSV into tenant_accruals (upsert tenants/spaces). Supports vacant spaces, location types/locations, and skips section/summary rows.';
+    protected $description = 'Import monthly tenant accruals from CSV into tenant_accruals (upsert tenants/spaces). Occupied/free is determined by rent_amount (non-zero => occupied). Free/leased area columns are used only for area. Skips section/summary rows.';
 
     /** @var array<string, array<int, string>> */
     private array $tableColumnsCache = [];
@@ -157,11 +157,6 @@ class ImportTenantAccrualsFromCsv extends Command
                 $col['activity_type'] = null;
             }
 
-            // Если в файле есть колонки free/leased — они источник истины для occupied/free
-            $hasFreeOrLeasedAreaColumns =
-                (($col['free_area_sqm'] ?? null) !== null)
-                || (($col['leased_area_sqm'] ?? null) !== null);
-
             $now = now();
 
             if ($dryRun) {
@@ -205,7 +200,6 @@ class ImportTenantAccrualsFromCsv extends Command
                 $csv,
                 $headers,
                 $col,
-                $hasFreeOrLeasedAreaColumns,
                 $marketId,
                 $period,
                 $filePath,
@@ -232,6 +226,8 @@ class ImportTenantAccrualsFromCsv extends Command
 
                 $ctxLocationType = '';
                 $ctxTenantName = '';
+
+                $rentEps = 0.00001;
 
                 while (! $csv->eof()) {
                     $row = $csv->fgetcsv();
@@ -324,51 +320,25 @@ class ImportTenantAccrualsFromCsv extends Command
 
                     /**
                      * ВАЖНО:
-                     * occupied/free определяются по площадям:
-                     * - leased_area_sqm > 0 => occupied
-                     * - free_area_sqm > 0 && leased_area_sqm == 0 => free
+                     * Главный признак "сдано/не сдано" = "Сумма аренды" (rent_amount).
+                     * - abs(rent_amount) > 0 => occupied (leased)
+                     * - abs(rent_amount) == 0 => free
                      *
-                     * Если в файле нет этих колонок, используем старую эвристику "vacant" как fallback.
+                     * Колонки "Свободная площадь"/"Сданная площадь" используются только для площади и в статус НЕ вмешиваются.
                      */
-                    $isLeased = false; // occupied
-                    $isFree = false;   // free
-                    $statusKnown = false;
+                    $isLeased = abs($rentAmount) > $rentEps; // occupied
+                    $isFree = ! $isLeased;                  // free
+                    $statusKnown = true;
 
-                    if ($hasFreeOrLeasedAreaColumns) {
-                        $statusKnown = true;
-
-                        // Конфликт: обе площади > 0
-                        if ($freeArea > 0 && $leasedArea > 0) {
-                            $stats['rows_errors']++;
-                            $this->warn("Row {$sourceRowNumber}: both \"Свободная площадь\" and \"Сданная площадь\" are > 0 for place \"{$placeCode}\". Treating as leased (occupied).");
-                            $isLeased = true;
-                            $isFree = false;
-                        } elseif ($leasedArea > 0) {
-                            $isLeased = true;
-                        } elseif ($freeArea > 0) {
-                            $isFree = true;
-                        } else {
-                            // Ни free, ни leased не заполнены.
-                            // Мягкий fallback: если строка похожа на свободное место (без сумм/ставки/дней), считаем free.
-                            $looksLikeFreeByContext =
-                                ($tenantName === '' && $placeCode !== '' && $area > 0)
-                                && (! $hasAnyAmounts)
-                                && ($rentRate <= 0)
-                                && (($days ?? 0) <= 0);
-
-                            if ($looksLikeFreeByContext) {
-                                $isFree = true;
-                            } elseif ($hasAnyAmounts || $rentRate > 0 || (($days ?? 0) > 0)) {
-                                // Есть деньги/ставка/дни, но нет leased_area => считаем ошибкой данных и не создаём начисление.
-                                $stats['rows_errors']++;
-                                $this->warn("Row {$sourceRowNumber}: amounts/rate/days present but leased_area_sqm is empty (place \"{$placeCode}\"). Accrual will be skipped.");
-                            }
-                        }
-                    } else {
-                        // Fallback для файлов без колонок free/leased
-                        $isFree = ($tenantName === '' && $placeCode !== '' && $area > 0);
-                        $isLeased = ! $isFree;
-                        $statusKnown = true;
+                    // Мягкие предупреждения о качестве исходника (НЕ блокируют, НЕ меняют статус)
+                    if ($isFree && ($managementFee != 0.0 || $electricity != 0.0 || $utilities != 0.0 || $totalNoVat != 0.0 || $totalWithVat != 0.0 || $cashAmount != 0.0)) {
+                        $this->warn("Row {$sourceRowNumber}: rent_amount is 0 but other amounts present (place \"{$placeCode}\"). Treating as FREE and skipping accrual.");
+                    }
+                    if ($isFree && $leasedArea > 0 && $freeArea <= 0) {
+                        $this->warn("Row {$sourceRowNumber}: leased_area_sqm > 0 but rent_amount is 0 (place \"{$placeCode}\"). Treating as FREE.");
+                    }
+                    if ($isLeased && $leasedArea <= 0 && $freeArea > 0) {
+                        $this->warn("Row {$sourceRowNumber}: rent_amount is non-zero but free_area_sqm > 0 and leased_area_sqm is empty/0 (place \"{$placeCode}\"). Treating as OCCUPIED.");
                     }
 
                     // Resolve location_id by ctxLocationType (MVP: 1:1 type -> root location)
@@ -422,8 +392,7 @@ class ImportTenantAccrualsFromCsv extends Command
                                 }
 
                                 if ($marketSpacesHasStatus) {
-                                    // Если статус не определён, не увеличиваем free-метрики: по умолчанию occupied
-                                    $insert['status'] = $isLeased ? 'occupied' : ($isFree ? 'free' : 'occupied');
+                                    $insert['status'] = $isLeased ? 'occupied' : 'free';
                                 }
 
                                 if ($marketSpacesHasLocationId && $locationId) {
@@ -520,8 +489,6 @@ class ImportTenantAccrualsFromCsv extends Command
                             } elseif ($isFree) {
                                 // не понижаем до free, если в рамках этого импорта место уже было occupied
                                 $update['status'] = isset($spaceOccupiedSeen[$placeCode]) ? 'occupied' : 'free';
-                            } else {
-                                // статус не определён — не трогаем
                             }
                         }
 
@@ -562,7 +529,7 @@ class ImportTenantAccrualsFromCsv extends Command
                         }
                     }
 
-                    // Начисление создаём только для leased (occupied)
+                    // Начисление создаём только для leased (occupied) по rent_amount
                     if (! $isLeased) {
                         continue;
                     }
@@ -570,7 +537,7 @@ class ImportTenantAccrualsFromCsv extends Command
                     // leased без арендатора — ошибка исходника (начислять некому)
                     if ($tenantName === '' || ! $tenantId) {
                         $stats['rows_errors']++;
-                        $this->warn("Row {$sourceRowNumber}: leased_area_sqm > 0 but tenant name is empty. Accrual skipped for place \"{$placeCode}\".");
+                        $this->warn("Row {$sourceRowNumber}: rent_amount is non-zero but tenant name is empty. Accrual skipped for place \"{$placeCode}\".");
                         continue;
                     }
 
