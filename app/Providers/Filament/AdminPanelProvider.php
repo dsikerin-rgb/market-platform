@@ -1,4 +1,5 @@
 <?php
+# app/Providers/Filament/AdminPanelProvider.php
 
 declare(strict_types=1);
 
@@ -39,6 +40,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->sidebarCollapsibleOnDesktop()
 
             // Важно: не подключаем тему через Vite, чтобы Filament не тянул resources/css/filament/admin/theme.css
             // и не поднимал Vite/PostCSS overlay при проблемах сборки.
