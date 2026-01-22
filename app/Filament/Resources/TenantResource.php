@@ -6,14 +6,19 @@ use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
+use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class TenantResource extends Resource
 {
@@ -37,7 +42,7 @@ class TenantResource extends Resource
             return null;
         }
 
-        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок'; // Динамическое название группы
+        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок';
     }
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-users';
@@ -57,8 +62,6 @@ class TenantResource extends Resource
         $user = Filament::auth()->user();
 
         return $schema->components([
-
-            // Рынок только для super-admin, для других заполняется автоматически из сессии
             Forms\Components\Select::make('market_id')
                 ->label('Рынок')
                 ->relationship('market', 'name')
@@ -71,7 +74,6 @@ class TenantResource extends Resource
                     }
 
                     if ($user->isSuperAdmin()) {
-                        // Если фильтр "Все рынки", то не подставляем null — пусть выберет рынок явно
                         return static::selectedMarketIdFromSession() ?: null;
                     }
 
@@ -146,45 +148,132 @@ class TenantResource extends Resource
                     ->label('Рынок')
                     ->sortable()
                     ->searchable()
-                    ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
+                    ->visible(fn () => (bool) $user && $user->isSuperAdmin())
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('name')
-                    ->label('Название арендатора')
+                    ->label('Арендатор')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->wrap()
+                    ->description(function (Tenant $record): ?string {
+                        $parts = [];
 
-                TextColumn::make('short_name')
-                    ->label('Краткое название')
+                        if (filled($record->short_name)) {
+                            $parts[] = (string) $record->short_name;
+                        }
+
+                        if (filled($record->inn)) {
+                            $parts[] = 'ИНН ' . (string) $record->inn;
+                        }
+
+                        if (filled($record->phone)) {
+                            $parts[] = (string) $record->phone;
+                        }
+
+                        return $parts ? implode(' · ', $parts) : null;
+                    }),
+
+                TextColumn::make('type')
+                    ->label('Тип')
+                    ->formatStateUsing(function (?string $state): string {
+                        $s = trim((string) $state);
+                        if ($s === '') {
+                            return '—';
+                        }
+
+                        return match ($s) {
+                            'llc' => 'ООО',
+                            'sole_trader' => 'ИП',
+                            'self_employed' => 'Самозанятый',
+                            'individual' => 'Физ. лицо',
+                            default => $s, // поддержка исторических значений типа "ИП/ООО/АО"
+                        };
+                    })
                     ->sortable()
-                    ->searchable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('inn')
-                    ->label('ИНН')
-                    ->searchable(),
+                TextColumn::make('accruals_last_period')
+                    ->label('Последнее начисление')
+                    ->formatStateUsing(function ($state): string {
+                        if (! filled($state)) {
+                            return '—';
+                        }
 
-                TextColumn::make('phone')
-                    ->label('Телефон')
-                    ->searchable(),
+                        try {
+                            return Carbon::parse((string) $state)->format('Y-m');
+                        } catch (\Throwable) {
+                            return (string) $state;
+                        }
+                    })
+                    ->sortable(),
+
+                TextColumn::make('accruals_count')
+                    ->label('Начислений')
+                    ->numeric()
+                    ->sortable()
+                    ->alignCenter(),
+
+                TextColumn::make('accruals_distinct_spaces_count')
+                    ->label('Мест (в начисл.)')
+                    ->numeric()
+                    ->sortable()
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('accruals_total_with_vat_sum')
+                    ->label('Сумма начислений')
+                    ->money('RUB', locale: 'ru')
+                    ->sortable(),
 
                 TextColumn::make('status')
-                    ->label('Статус')
+                    ->label('Статус договора')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'active' => 'В аренде',
                         'paused' => 'Приостановлено',
                         'finished' => 'Завершён договор',
-                        default => $state,
+                        default => filled($state) ? $state : '—',
                     })
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
-                    ->boolean(),
+                    ->boolean()
+                    ->alignCenter(),
 
                 TextColumn::make('created_at')
                     ->label('Создан')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->filters([
+                TernaryFilter::make('is_active')
+                    ->label('Активен'),
+
+                SelectFilter::make('status')
+                    ->label('Статус договора')
+                    ->options([
+                        'active' => 'В аренде',
+                        'paused' => 'Приостановлено',
+                        'finished' => 'Завершён договор',
+                    ]),
+
+                SelectFilter::make('type')
+                    ->label('Тип')
+                    ->options([
+                        'llc' => 'ООО',
+                        'sole_trader' => 'ИП',
+                        'self_employed' => 'Самозанятый',
+                        'individual' => 'Физ. лицо',
+                        // исторические значения из импорта
+                        'ООО' => 'ООО (legacy)',
+                        'АО' => 'АО (legacy)',
+                        'ИП' => 'ИП (legacy)',
+                    ]),
+            ])
+            ->defaultSort('accruals_total_with_vat_sum', 'desc')
             ->recordUrl(fn (Tenant $record): string => static::getUrl('edit', ['record' => $record]));
     }
 
@@ -216,17 +305,31 @@ class TenantResource extends Resource
 
         if ($user->isSuperAdmin()) {
             $selectedMarketId = static::selectedMarketIdFromSession();
-
-            return filled($selectedMarketId)
+            $query = filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
                 : $query;
+        } elseif ($user->market_id) {
+            $query = $query->where('market_id', $user->market_id);
+        } else {
+            return $query->whereRaw('1 = 0');
         }
 
-        if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
-        }
+        return static::withAccrualMetrics($query);
+    }
 
-        return $query->whereRaw('1 = 0');
+    protected static function withAccrualMetrics(Builder $query): Builder
+    {
+        // Коррелированные сабквери: безопасно для SQLite и не требует отношений в модели.
+        $base = DB::table('tenant_accruals as ta')
+            ->whereColumn('ta.tenant_id', 'tenants.id')
+            ->whereColumn('ta.market_id', 'tenants.market_id');
+
+        return $query->addSelect([
+            'accruals_count' => (clone $base)->selectRaw('COUNT(*)'),
+            'accruals_last_period' => (clone $base)->selectRaw('MAX(period)'),
+            'accruals_total_with_vat_sum' => (clone $base)->selectRaw('COALESCE(SUM(total_with_vat), 0)'),
+            'accruals_distinct_spaces_count' => (clone $base)->selectRaw('COUNT(DISTINCT ta.market_space_id)'),
+        ]);
     }
 
     public static function canViewAny(): bool
