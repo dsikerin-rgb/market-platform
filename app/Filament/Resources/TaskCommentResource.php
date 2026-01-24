@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/TaskCommentResource.php
 
 namespace App\Filament\Resources;
 
@@ -34,7 +35,7 @@ class TaskCommentResource extends Resource
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
+        $key = "filament.{$panelId}.selected_market_id";
 
         $value = session($key);
 
@@ -71,7 +72,7 @@ class TaskCommentResource extends Resource
                 ->searchable()
                 ->preload(),
 
-            Forms\Components\Select::make('user_id')
+            Forms\Components\Select::make('author_user_id')
                 ->label('Автор')
                 ->relationship('author', 'name', function (Builder $query) use ($user) {
                     if (! $user) {

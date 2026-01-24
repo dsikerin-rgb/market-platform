@@ -1,14 +1,20 @@
 <?php
+# app/Filament/Resources/TaskResource.php
 
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TaskResource\Pages;
+use App\Filament\Resources\TaskResource\RelationManagers\TaskAttachmentsRelationManager;
+use App\Filament\Resources\TaskResource\RelationManagers\TaskCommentsRelationManager;
 use App\Models\Task;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -30,7 +36,7 @@ class TaskResource extends Resource
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $components = [];
 
@@ -63,15 +69,31 @@ class TaskResource extends Resource
 
             Forms\Components\Textarea::make('description')
                 ->label('Описание')
-                ->rows(4),
+                ->rows(4)
+                ->columnSpanFull(),
 
-            Forms\Components\TextInput::make('status')
+            Forms\Components\Select::make('status')
                 ->label('Статус')
-                ->maxLength(255),
+                ->options([
+                    Task::STATUS_NEW => 'Новая',
+                    Task::STATUS_IN_PROGRESS => 'В работе',
+                    Task::STATUS_ON_HOLD => 'На паузе',
+                    Task::STATUS_COMPLETED => 'Завершена',
+                    Task::STATUS_CANCELLED => 'Отменена',
+                ])
+                ->default(Task::STATUS_NEW)
+                ->required(),
 
-            Forms\Components\TextInput::make('priority')
+            Forms\Components\Select::make('priority')
                 ->label('Приоритет')
-                ->maxLength(255),
+                ->options([
+                    Task::PRIORITY_LOW => 'Низкий',
+                    Task::PRIORITY_NORMAL => 'Обычный',
+                    Task::PRIORITY_HIGH => 'Высокий',
+                    Task::PRIORITY_URGENT => 'Критичный',
+                ])
+                ->default(Task::PRIORITY_NORMAL)
+                ->required(),
 
             Forms\Components\DateTimePicker::make('due_at')
                 ->label('Дедлайн'),
@@ -79,38 +101,30 @@ class TaskResource extends Resource
             Forms\Components\Select::make('assignee_id')
                 ->label('Исполнитель')
                 ->relationship('assignee', 'name', function (Builder $query) use ($user) {
-                    if (! $user) {
-                        return $query->whereRaw('1 = 0');
-                    }
-
-                    if ($user->isSuperAdmin()) {
-                        $selectedMarketId = session('filament.admin.selected_market_id');
-
-                        return filled($selectedMarketId)
-                            ? $query->where('market_id', (int) $selectedMarketId)
-                            : $query;
-                    }
-
-                    if ($user->market_id) {
-                        return $query->where('market_id', $user->market_id);
-                    }
-
-                    return $query->whereRaw('1 = 0');
+                    return static::limitUsersToMarket($query, $user);
                 })
                 ->searchable()
-                ->preload(),
+                ->preload()
+                ->nullable(),
 
-            Forms\Components\Hidden::make('created_by')
+            Forms\Components\Select::make('participants')
+                ->label('Участники/наблюдатели')
+                ->relationship('participants', 'name', function (Builder $query) use ($user) {
+                    return static::limitUsersToMarket($query, $user);
+                })
+                ->searchable()
+                ->preload()
+                ->multiple(),
+
+            Forms\Components\Hidden::make('created_by_user_id')
                 ->default(fn () => $user?->id)
                 ->dehydrated(true),
 
-            Forms\Components\TextInput::make('source_type')
-                ->label('Источник тип')
-                ->maxLength(255),
-
-            Forms\Components\TextInput::make('source_id')
-                ->label('Источник ID')
-                ->maxLength(255),
+            Forms\Components\Placeholder::make('source_label')
+                ->label('Источник')
+                ->content(function (?Task $record): string {
+                    return $record?->source_label ?? '—';
+                }),
         ];
 
         if (class_exists(Forms\Components\Grid::class)) {
@@ -147,10 +161,25 @@ class TaskResource extends Resource
 
                 TextColumn::make('status')
                     ->label('Статус')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        Task::STATUS_NEW => 'Новая',
+                        Task::STATUS_IN_PROGRESS => 'В работе',
+                        Task::STATUS_ON_HOLD => 'На паузе',
+                        Task::STATUS_COMPLETED => 'Завершена',
+                        Task::STATUS_CANCELLED => 'Отменена',
+                        default => $state,
+                    })
                     ->sortable(),
 
                 TextColumn::make('priority')
                     ->label('Приоритет')
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        Task::PRIORITY_LOW => 'Низкий',
+                        Task::PRIORITY_NORMAL => 'Обычный',
+                        Task::PRIORITY_HIGH => 'Высокий',
+                        Task::PRIORITY_URGENT => 'Критичный',
+                        default => $state,
+                    })
                     ->sortable(),
 
                 TextColumn::make('assignee.name')
@@ -163,9 +192,62 @@ class TaskResource extends Resource
                     ->dateTime()
                     ->sortable(),
 
+                TextColumn::make('source_label')
+                    ->label('Источник'),
+
                 TextColumn::make('comments_count')
                     ->label('Комментарии')
                     ->sortable(),
+            ])
+            ->filters([
+                TernaryFilter::make('my_tasks')
+                    ->label('Мои задачи')
+                    ->trueLabel('Только мои')
+                    ->falseLabel('Кроме моих')
+                    ->queries(
+                        true: fn (Builder $query) => $user?->id
+                            ? $query->where('assignee_id', $user->id)
+                            : $query->whereRaw('1 = 0'),
+                        false: fn (Builder $query) => $user?->id
+                            ? $query->where(function (Builder $inner) use ($user) {
+                                $inner->whereNull('assignee_id')
+                                    ->orWhere('assignee_id', '!=', $user->id);
+                            })
+                            : $query,
+                        blank: fn (Builder $query) => $query,
+                    ),
+
+                SelectFilter::make('status')
+                    ->label('Статус')
+                    ->options([
+                        Task::STATUS_NEW => 'Новая',
+                        Task::STATUS_IN_PROGRESS => 'В работе',
+                        Task::STATUS_ON_HOLD => 'На паузе',
+                        Task::STATUS_COMPLETED => 'Завершена',
+                        Task::STATUS_CANCELLED => 'Отменена',
+                    ]),
+
+                SelectFilter::make('priority')
+                    ->label('Приоритет')
+                    ->options([
+                        Task::PRIORITY_LOW => 'Низкий',
+                        Task::PRIORITY_NORMAL => 'Обычный',
+                        Task::PRIORITY_HIGH => 'Высокий',
+                        Task::PRIORITY_URGENT => 'Критичный',
+                    ]),
+
+                TernaryFilter::make('overdue')
+                    ->label('Просроченные')
+                    ->trueLabel('Только просроченные')
+                    ->falseLabel('Без просрочки')
+                    ->queries(
+                        true: fn (Builder $query) => $query->overdue(),
+                        false: fn (Builder $query) => $query->where(function (Builder $inner) {
+                            $inner->whereNull('due_at')
+                                ->orWhere('due_at', '>=', now());
+                        }),
+                        blank: fn (Builder $query) => $query,
+                    ),
             ])
             ->recordUrl(fn (Task $record): ?string => static::canEdit($record)
                 ? static::getUrl('edit', ['record' => $record])
@@ -194,7 +276,10 @@ class TaskResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            TaskCommentsRelationManager::class,
+            TaskAttachmentsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
@@ -215,8 +300,16 @@ class TaskResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
+        if (static::isMerchantUser($user)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if (! $user->isSuperAdmin() && ! $user->hasAnyRole(['market-admin', 'market-maintenance'])) {
+            return $query->whereRaw('1 = 0');
+        }
+
         if ($user->isSuperAdmin()) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = static::selectedMarketIdFromSession();
 
             return filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
@@ -234,21 +327,37 @@ class TaskResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        if (! $user || static::isMerchantUser($user)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->market_id && $user->hasAnyRole(['market-admin', 'market-maintenance']);
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        if (! $user || static::isMerchantUser($user)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->market_id && $user->hasAnyRole(['market-admin', 'market-maintenance']);
     }
 
     public static function canEdit($record): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! $user || static::isMerchantUser($user)) {
             return false;
         }
 
@@ -256,14 +365,16 @@ class TaskResource extends Resource
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return $user->market_id
+            && $record->market_id === $user->market_id
+            && $user->hasAnyRole(['market-admin', 'market-maintenance']);
     }
 
     public static function canDelete($record): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! $user || static::isMerchantUser($user)) {
             return false;
         }
 
@@ -271,6 +382,41 @@ class TaskResource extends Resource
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return $user->market_id
+            && $record->market_id === $user->market_id
+            && $user->hasRole('market-admin');
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $value = session('filament.admin.selected_market_id');
+
+        return filled($value) ? (int) $value : null;
+    }
+
+    protected static function limitUsersToMarket(Builder $query, ?User $user): Builder
+    {
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isSuperAdmin()) {
+            $selectedMarketId = static::selectedMarketIdFromSession();
+
+            return filled($selectedMarketId)
+                ? $query->where('market_id', (int) $selectedMarketId)
+                : $query;
+        }
+
+        if ($user->market_id) {
+            return $query->where('market_id', $user->market_id);
+        }
+
+        return $query->whereRaw('1 = 0');
+    }
+
+    protected static function isMerchantUser(User $user): bool
+    {
+        return $user->hasAnyRole(['merchant', 'merchant-user']);
     }
 }
