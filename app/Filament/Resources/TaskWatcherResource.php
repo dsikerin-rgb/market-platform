@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/TaskWatcherResource.php
 
 namespace App\Filament\Resources;
 
@@ -34,7 +35,7 @@ class TaskWatcherResource extends Resource
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
+        $key = "filament.{$panelId}.selected_market_id";
 
         $value = session($key);
 

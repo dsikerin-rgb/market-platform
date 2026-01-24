@@ -1,4 +1,5 @@
 <?php
+# app/Models/TaskComment.php
 
 namespace App\Models;
 
@@ -16,8 +17,22 @@ class TaskComment extends Model
     protected $fillable = [
         'task_id',
         'user_id',
+        'author_user_id',
         'body',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $comment): void {
+            if (blank($comment->author_user_id) && filled($comment->user_id)) {
+                $comment->author_user_id = (int) $comment->user_id;
+            }
+
+            if (blank($comment->user_id) && filled($comment->author_user_id)) {
+                $comment->user_id = (int) $comment->author_user_id;
+            }
+        });
+    }
 
     public function task(): BelongsTo
     {
@@ -25,6 +40,11 @@ class TaskComment extends Model
     }
 
     public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'author_user_id');
+    }
+
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
