@@ -1,12 +1,17 @@
 <?php
+
 # app/Notifications/TaskAssignedNotification.php
+
+declare(strict_types=1);
 
 namespace App\Notifications;
 
 use App\Models\Task;
-use Illuminate\Notifications\Notification;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
+use Illuminate\Notifications\Notification as LaravelNotification;
 
-class TaskAssignedNotification extends Notification
+class TaskAssignedNotification extends LaravelNotification
 {
     public function __construct(private readonly Task $task)
     {
@@ -18,18 +23,41 @@ class TaskAssignedNotification extends Notification
     }
 
     /**
+     * Filament: чтобы уведомления отображались в колокольчике панели,
+     * сохраняем payload в формате Filament database message.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDatabase(object $notifiable): array
+    {
+        $taskId = $this->task->getKey();
+
+        // Панель у нас на /admin (см. AdminPanelProvider->path('admin'))
+        $url = url("/admin/tasks/{$taskId}/edit");
+
+        return Notification::make()
+            ->title('Назначена задача')
+            ->body((string) $this->task->title)
+            ->icon('heroicon-o-clipboard-document-check')
+            ->actions([
+                Action::make('view')
+                    ->label('Открыть')
+                    ->url($url)
+                    ->button()
+                    ->markAsRead(),
+            ])
+            ->getDatabaseMessage();
+    }
+
+    /**
+     * Fallback (не используется Filament-колокольчиком, но полезно для отладки).
+     *
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array
     {
         return [
-            'task_id' => $this->task->id,
-            'title' => $this->task->title,
-            'market_id' => $this->task->market_id,
-            'assignee_id' => $this->task->assignee_id,
-            'status' => $this->task->status,
-            'priority' => $this->task->priority,
-            'due_at' => $this->task->due_at?->toDateTimeString(),
+            'task_id' => $this->task->getKey(),
         ];
     }
 }
