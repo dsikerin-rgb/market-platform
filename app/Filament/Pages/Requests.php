@@ -1,4 +1,7 @@
 <?php
+# app/Filament/Pages/Requests.php
+
+declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
@@ -8,6 +11,7 @@ use Filament\Pages\Page;
 class Requests extends Page
 {
     protected static ?string $title = 'Обращения';
+
     protected static ?string $navigationLabel = 'Обращения';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-inbox';

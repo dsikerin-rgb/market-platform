@@ -48,6 +48,12 @@ class AdminPanelProvider extends PanelProvider
             ->passwordReset()
             ->profile()
 
+            // Колокольчик уведомлений (Filament database notifications).
+            // Таблица `notifications` создаётся стандартной миграцией Laravel (make:notifications-table).
+            // Polling раз в 30 секунд — дефолт Filament, явно фиксируем для предсказуемости.
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('30s')
+
             ->userMenuItems([
                 'horizon' => MenuItem::make()
                     ->label('Horizon (очереди)')
