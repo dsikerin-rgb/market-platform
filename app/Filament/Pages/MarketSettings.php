@@ -1,96 +1,63 @@
 <?php
-# app/Filament/Pages/MarketSettings.php
+
+declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
-use App\Filament\Resources\IntegrationExchangeResource;
-use App\Filament\Resources\MarketLocationTypeResource;
-use App\Filament\Resources\MarketResource;
-use App\Filament\Resources\MarketSpaceTypeResource;
-use App\Filament\Resources\PermissionResource;
-use App\Filament\Resources\Roles\RoleResource;
-use App\Filament\Resources\Staff\StaffResource;
-use App\Filament\Resources\TenantResource;
 use App\Models\Market;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class MarketSettings extends Page
 {
-    protected static ?string $title = 'Настройки рынка';
     protected static ?string $navigationLabel = 'Настройки рынка';
-    protected static \UnitEnum|string|null $navigationGroup = null;
+
+    /**
+     * На prod у market-admin этот пункт лежит в “Панель управления”.
+     * Важно: в Filament 4 тип должен совпадать с базовым классом.
+     */
+    protected static \UnitEnum|string|null $navigationGroup = 'Панель управления';
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $slug = 'market-settings';
+    protected static ?string $title = 'Настройки рынка';
 
     protected string $view = 'filament.pages.market-settings';
 
     public ?Market $market = null;
 
-    /** Состояние формы */
+    public bool $isSuperAdmin = false;
+    public bool $canEditMarket = false;
+
+    public ?string $marketsUrl = null;
+    public ?string $locationTypesUrl = null;
+    public ?string $spaceTypesUrl = null;
+    public ?string $staffUrl = null;
+    public ?string $tenantUrl = null;
+    public ?string $permissionsUrl = null;
+    public ?string $rolesUrl = null;
+    public ?string $integrationExchangesUrl = null;
+
+    /**
+     * @var array{name:?string,address:?string,timezone:?string}
+     */
     public array $data = [
         'name' => null,
         'address' => null,
         'timezone' => null,
     ];
 
-    public static function canAccess(): bool
-    {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) $user->market_id
-        );
-    }
-
     public static function shouldRegisterNavigation(): bool
-    {
-        return static::canAccess();
-    }
-
-    protected static function selectedMarketIdFromSession(): ?int
-    {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
-    }
-
-    protected function resolveMarket(): ?Market
     {
         $user = Filament::auth()->user();
 
         if (! $user) {
-            return null;
-        }
-
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if ($isSuperAdmin) {
-            $selectedId = static::selectedMarketIdFromSession();
-
-            return $selectedId ? Market::query()->find($selectedId) : null;
-        }
-
-        return $user->market_id ? Market::query()->find((int) $user->market_id) : null;
-    }
-
-    protected function canEditMarket(): bool
-    {
-        $user = Filament::auth()->user();
-
-        if (! $user || ! $this->market) {
             return false;
         }
 
@@ -98,175 +65,363 @@ class MarketSettings extends Page
             return true;
         }
 
-        return $user->hasRole('market-admin')
-            && (int) $user->market_id === (int) $this->market->id;
+        $hasMarket = (int) ($user->market_id ?? 0) > 0;
+
+        // На локали права могут быть не посеяны/отличаться, поэтому страхуемся ролями.
+        $hasRoleAccess = method_exists($user, 'hasAnyRole')
+            && $user->hasAnyRole(['market-admin', 'market-maintenance']);
+
+        $hasPermissionAccess =
+            $user->can('markets.view') ||
+            $user->can('markets.update') ||
+            $user->can('markets.viewAny');
+
+        return $hasMarket && ($hasRoleAccess || $hasPermissionAccess);
+    }
+
+    public static function canAccess(): bool
+    {
+        return static::shouldRegisterNavigation();
     }
 
     public function mount(): void
     {
-        $this->market = $this->resolveMarket();
+        $user = Filament::auth()->user();
 
-        if ($this->market) {
-            $this->data = [
-                'name' => $this->market->name,
-                'address' => $this->market->address,
-                'timezone' => $this->market->timezone ?: config('app.timezone', 'Europe/Moscow'),
-            ];
-        } else {
-            $this->data = [
-                'name' => null,
-                'address' => null,
-                'timezone' => config('app.timezone', 'Europe/Moscow'),
-            ];
-        }
+        $this->isSuperAdmin = (bool) $user
+            && method_exists($user, 'isSuperAdmin')
+            && $user->isSuperAdmin();
 
-        $this->form->fill($this->data);
+        $this->market = $this->resolveMarketForUser();
+
+        abort_unless($this->market, 404);
+
+        $this->canEditMarket = $this->resolveCanEditMarket();
+
+        $this->fillQuickLinks();
+
+        $this->form->fill([
+            'name' => $this->market->name,
+            'address' => $this->market->address,
+            'timezone' => $this->market->timezone ?: config('app.timezone', 'Europe/Moscow'),
+        ]);
     }
 
     /**
-     * ВАЖНО: именно Schema, а не Form.
+     * Filament 4: Page-форма строится через Schema.
      */
     public function form(Schema $schema): Schema
     {
-        $editable = $this->canEditMarket();
-        $marketExists = (bool) $this->market;
-
         return $schema
             ->statePath('data')
+            ->model($this->market)
             ->components([
-                Forms\Components\TextInput::make('name')
-                    ->label('Название рынка')
-                    ->required()
-                    ->maxLength(255)
-                    ->disabled(fn () => ! $editable || ! $marketExists),
+                Section::make()
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->label('Название рынка')
+                            ->required()
+                            ->maxLength(255)
+                            ->autocomplete(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 8,
+                            ]),
 
-                Forms\Components\TextInput::make('address')
-                    ->label('Адрес')
-                    ->required()
-                    ->maxLength(255)
-                    ->disabled(fn () => ! $editable || ! $marketExists),
+                        Forms\Components\TextInput::make('address')
+                            ->label('Адрес')
+                            ->required()
+                            ->maxLength(255)
+                            ->autocomplete(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 8,
+                            ]),
 
-                Forms\Components\Select::make('timezone')
-                    ->label('Часовой пояс')
-                    ->required()
-                    ->native(false)
-                    ->options(fn () => $this->timezoneOptionsRu())
-                    // КРИТИЧНО: ограничиваем ширину и даём отступ на уровне обёртки поля.
-                    // Это влияет на реальную компоновку (и на расстояние до кнопки ниже).
-                    ->extraFieldWrapperAttributes([
-                        'style' => 'max-width: 28rem; margin-bottom: 1rem;',
+                        Forms\Components\Select::make('timezone')
+                            ->label('Часовой пояс')
+                            ->options(fn (): array => $this->timezoneOptionsRu())
+                            ->searchable()
+                            ->native(false)
+                            ->required()
+                            ->helperText('Используется для дедлайнов, уведомлений и отображения дат.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
                     ])
-                    ->disabled(fn () => ! $editable || ! $marketExists),
+                    ->columns(12),
             ]);
     }
 
     public function save(): void
     {
-        if (! $this->market) {
-            Notification::make()
-                ->title('Рынок не выбран')
-                ->body('Для super-admin сначала выбери рынок (фильтр/переключатель рынка), затем открой “Настройки рынка”.')
-                ->warning()
-                ->send();
+        abort_unless($this->market, 404);
+        abort_unless($this->canEditMarket, 403);
 
-            return;
-        }
+        $state = $this->form->getState();
 
-        if (! $this->canEditMarket()) {
-            abort(403);
-        }
-
-        $this->market->update([
-            'name' => $this->data['name'] ?? $this->market->name,
-            'address' => $this->data['address'] ?? $this->market->address,
-            'timezone' => $this->data['timezone'] ?? $this->market->timezone,
+        $this->market->fill([
+            'name' => (string) ($state['name'] ?? ''),
+            'address' => (string) ($state['address'] ?? ''),
+            // Храним IANA timezone (Asia/Omsk и т.д.) — это стандарт.
+            'timezone' => (string) ($state['timezone'] ?? config('app.timezone', 'Europe/Moscow')),
         ]);
+
+        $this->market->save();
 
         Notification::make()
             ->title('Сохранено')
+            ->body('Настройки рынка обновлены.')
             ->success()
             ->send();
     }
 
-    protected function getViewData(): array
+    protected function resolveCanEditMarket(): bool
     {
         $user = Filament::auth()->user();
-        $isSuperAdmin = (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
 
-        return [
-            'market' => $this->market,
-            'canEditMarket' => $this->canEditMarket(),
-            'isSuperAdmin' => $isSuperAdmin,
+        if (! $user || ! $this->market) {
+            return false;
+        }
 
-            'marketsUrl' => $isSuperAdmin ? MarketResource::getUrl('index') : null,
-            'locationTypesUrl' => MarketLocationTypeResource::getUrl('index'),
-            'spaceTypesUrl' => MarketSpaceTypeResource::getUrl('index'),
-            'staffUrl' => StaffResource::getUrl('index'),
-            'tenantUrl' => TenantResource::getUrl('index'),
+        if ($this->isSuperAdmin) {
+            return true;
+        }
 
-            'permissionsUrl' => $isSuperAdmin ? PermissionResource::getUrl('index') : null,
-            'rolesUrl' => $isSuperAdmin ? RoleResource::getUrl('index') : null,
-            'integrationExchangesUrl' => $isSuperAdmin ? IntegrationExchangeResource::getUrl('index') : null,
-        ];
+        $sameMarket = (int) ($user->market_id ?? 0) > 0
+            && (int) $user->market_id === (int) $this->market->id;
+
+        if (! $sameMarket) {
+            return false;
+        }
+
+        // Редактировать — market-admin (и/или permission markets.update).
+        $canEditByRole = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+
+        return $canEditByRole || $user->can('markets.update');
+    }
+
+    protected function resolveMarketForUser(): ?Market
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin) {
+            $selectedMarketId = $this->selectedMarketIdFromSession();
+
+            if ($selectedMarketId) {
+                return Market::query()->whereKey($selectedMarketId)->first();
+            }
+
+            return Market::query()->orderBy('id')->first();
+        }
+
+        $marketId = (int) ($user->market_id ?? 0);
+
+        return $marketId > 0
+            ? Market::query()->whereKey($marketId)->first()
+            : null;
+    }
+
+    protected function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+
+        $value = session("filament.{$panelId}.selected_market_id");
+
+        if (! filled($value)) {
+            $value = session('filament.admin.selected_market_id');
+        }
+
+        return filled($value) ? (int) $value : null;
+    }
+
+    protected function fillQuickLinks(): void
+    {
+        $this->marketsUrl = $this->isSuperAdmin
+            ? $this->resourceUrl([\App\Filament\Resources\MarketResource::class], 'index')
+            : null;
+
+        $this->locationTypesUrl = $this->resourceUrl([
+            \App\Filament\Resources\LocationTypeResource::class,
+            \App\Filament\Resources\MarketLocationTypeResource::class,
+        ], 'index');
+
+        $this->spaceTypesUrl = $this->resourceUrl([
+            \App\Filament\Resources\SpaceTypeResource::class,
+            \App\Filament\Resources\MarketSpaceTypeResource::class,
+        ], 'index');
+
+        $this->staffUrl = $this->resourceUrl([
+            \App\Filament\Resources\StaffResource::class,
+            \App\Filament\Resources\UserResource::class,
+        ], 'index');
+
+        $this->tenantUrl = $this->resourceUrl([
+            \App\Filament\Resources\TenantResource::class,
+        ], 'index');
+
+        $this->permissionsUrl = $this->resourceUrl([
+            \App\Filament\Resources\PermissionResource::class,
+        ], 'index');
+
+        $this->rolesUrl = $this->resourceUrl([
+            \App\Filament\Resources\RoleResource::class,
+        ], 'index');
+
+        $this->integrationExchangesUrl = $this->resourceUrl([
+            \App\Filament\Resources\IntegrationExchangeResource::class,
+            \App\Filament\Resources\IntegrationExchangesResource::class,
+        ], 'index');
     }
 
     /**
-     * Российские часовые пояса: русские лейблы + IANA-значения.
+     * @param  array<int, class-string>  $candidates
      */
+    protected function resourceUrl(array $candidates, string $page = 'index'): ?string
+    {
+        foreach ($candidates as $class) {
+            if (! class_exists($class)) {
+                continue;
+            }
+
+            if (! method_exists($class, 'getUrl')) {
+                continue;
+            }
+
+            try {
+                /** @var string $url */
+                $url = $class::getUrl($page);
+
+                return $url;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return null;
+    }
+
     protected function timezoneOptionsRu(): array
     {
-        $russian = [
-            'Europe/Kaliningrad' => 'Калининград',
+        $timezones = timezone_identifiers_list();
+        $out = [];
+
+        foreach ($timezones as $tz) {
+            $out[$tz] = $this->formatTimezoneLabelRu($tz);
+        }
+
+        $preferred = [
+            'Europe/Moscow',
+            'Asia/Omsk',
+            'Asia/Barnaul',
+            'Asia/Novosibirsk',
+            'Asia/Yekaterinburg',
+            'Asia/Krasnoyarsk',
+            'Asia/Irkutsk',
+            'Asia/Yakutsk',
+            'Asia/Vladivostok',
+        ];
+
+        uksort($out, function (string $a, string $b) use ($preferred, $out): int {
+            $ia = array_search($a, $preferred, true);
+            $ib = array_search($b, $preferred, true);
+
+            if ($ia !== false && $ib !== false) {
+                return $ia <=> $ib;
+            }
+
+            if ($ia !== false) {
+                return -1;
+            }
+
+            if ($ib !== false) {
+                return 1;
+            }
+
+            return strcmp($out[$a], $out[$b]);
+        });
+
+        return $out;
+    }
+
+    protected function formatTimezoneLabelRu(string $timezone): string
+    {
+        $name = $this->timezoneCityNameRu($timezone);
+        $offset = $this->formatUtcOffset($timezone);
+
+        return "{$name} ({$offset})";
+    }
+
+    protected function timezoneCityNameRu(string $timezone): string
+    {
+        $map = [
             'Europe/Moscow' => 'Москва',
-            'Europe/Samara' => 'Самара',
-            'Asia/Yekaterinburg' => 'Екатеринбург',
             'Asia/Omsk' => 'Омск',
+            'Asia/Barnaul' => 'Барнаул',
+            'Asia/Novosibirsk' => 'Новосибирск',
+            'Asia/Yekaterinburg' => 'Екатеринбург',
             'Asia/Krasnoyarsk' => 'Красноярск',
             'Asia/Irkutsk' => 'Иркутск',
             'Asia/Yakutsk' => 'Якутск',
             'Asia/Vladivostok' => 'Владивосток',
-            'Asia/Magadan' => 'Магадан',
-            'Asia/Kamchatka' => 'Камчатка',
         ];
 
-        $out = [];
-
-        foreach ($russian as $tz => $city) {
-            $out[$tz] = sprintf('%s (%s)', $city, $this->formatUtcOffset($tz));
+        if (isset($map[$timezone])) {
+            return $map[$timezone];
         }
 
-        // На случай, если в базе уже сохранено значение вне списка
-        $current = $this->data['timezone']
-            ?? $this->market?->timezone
-            ?? config('app.timezone', 'Europe/Moscow');
+        if (class_exists(\IntlTimeZone::class)) {
+            try {
+                $tz = \IntlTimeZone::createTimeZone($timezone);
 
-        if (filled($current) && ! array_key_exists($current, $out)) {
-            $out = [$current => $current] + $out;
+                if ($tz) {
+                    $label = $tz->getDisplayName(false, \IntlTimeZone::DISPLAY_GENERIC_LOCATION, 'ru_RU');
+
+                    if (is_string($label) && $label !== '' && $label !== $timezone) {
+                        return $label;
+                    }
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
         }
 
-        return $out;
+        $parts = explode('/', $timezone);
+        $city = end($parts) ?: $timezone;
+
+        return str_replace('_', ' ', $city);
     }
 
     protected function formatUtcOffset(string $timezone): string
     {
         try {
             $tz = new \DateTimeZone($timezone);
-            $now = new \DateTime('now', $tz);
-
-            $offset = $tz->getOffset($now);
-            $sign = $offset >= 0 ? '+' : '-';
-            $offset = abs($offset);
-
-            $hours = intdiv($offset, 3600);
-            $minutes = intdiv($offset % 3600, 60);
-
-            if ($minutes === 0) {
-                return "UTC{$sign}{$hours}";
-            }
-
-            return sprintf('UTC%s%d:%02d', $sign, $hours, $minutes);
-        } catch (\Throwable $e) {
-            return $timezone;
+            $now = new \DateTimeImmutable('now', $tz);
+            $offsetSeconds = $tz->getOffset($now);
+        } catch (\Throwable) {
+            return 'UTC';
         }
+
+        $sign = $offsetSeconds >= 0 ? '+' : '-';
+        $offsetSeconds = abs($offsetSeconds);
+
+        $hours = intdiv($offsetSeconds, 3600);
+        $minutes = intdiv($offsetSeconds % 3600, 60);
+
+        if ($minutes === 0) {
+            return "UTC{$sign}{$hours}";
+        }
+
+        $mm = str_pad((string) $minutes, 2, '0', STR_PAD_LEFT);
+
+        return "UTC{$sign}{$hours}:{$mm}";
     }
 }
