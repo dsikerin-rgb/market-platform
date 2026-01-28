@@ -42,15 +42,15 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->sidebarCollapsibleOnDesktop()
 
-            // Важно: не подключаем тему через Vite, чтобы Filament не тянул resources/css/filament/admin/theme.css
-            // и не поднимал Vite/PostCSS overlay при проблемах сборки.
+            // ВАЖНО:
+            // Не используем ->viteTheme() для мелких CSS-правок.
+            // ->viteTheme() подменяет тему Filament целиком, и если theme.css не включает базовые стили Filament,
+            // получаются "огромные" элементы и разваленная вёрстка.
+
             ->login()
             ->passwordReset()
             ->profile()
 
-            // Колокольчик уведомлений (Filament database notifications).
-            // Таблица `notifications` создаётся стандартной миграцией Laravel (make:notifications-table).
-            // Polling раз в 30 секунд — дефолт Filament, явно фиксируем для предсказуемости.
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
 
@@ -76,7 +76,6 @@ class AdminPanelProvider extends PanelProvider
                     ->url(function (): string {
                         $path = trim((string) config('telescope.path', 'telescope'), '/');
 
-                        // Наиболее полезный стартовый экран.
                         return url('/' . $path . '/requests');
                     })
                     ->openUrlInNewTab()
@@ -131,8 +130,6 @@ class AdminPanelProvider extends PanelProvider
                 Dashboard::class,
                 MarketSettings::class,
                 Requests::class,
-
-                // Ops-инструменты
                 OpsDiagnostics::class,
             ])
 
@@ -146,10 +143,16 @@ class AdminPanelProvider extends PanelProvider
             ])
 
             // Блок с именем/ролью рядом с аватаром (после global search).
-            // Возвращаем View (без ->render()), Filament сам корректно отрендерит.
             ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_AFTER,
                 fn () => view('filament.components.topbar-user-info'),
+            )
+
+            // CSS-оверрайды админки (без Vite/Tailwind).
+            // ВНИМАНИЕ: view должен существовать, иначе будет 500.
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn () => view('filament.components.admin-overrides-css'),
             )
 
             ->middleware([

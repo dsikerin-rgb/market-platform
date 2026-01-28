@@ -1,6 +1,8 @@
 <?php
 # app/Models/Task.php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Notifications\TaskAssignedNotification;
@@ -112,6 +114,7 @@ class Task extends Model
         });
 
         static::saving(function (self $task): void {
+            // completed_at ставим только для completed, иначе очищаем
             if ($task->status === self::STATUS_COMPLETED && ! $task->completed_at) {
                 $task->completed_at = now();
             }
@@ -128,6 +131,40 @@ class Task extends Model
         static::updated(function (self $task): void {
             if ($task->wasChanged('assignee_id')) {
                 $task->notifyAssignee();
+            }
+        });
+
+        /**
+         * При удалении задачи стараемся корректно подчистить связанные сущности.
+         * Важно: вложения удаляем через модели, чтобы отработал хук удаления файла в TaskAttachment.
+         */
+        static::deleting(function (self $task): void {
+            try {
+                $task->attachments()->cursor()->each(static function (TaskAttachment $attachment): void {
+                    $attachment->delete();
+                });
+            } catch (\Throwable) {
+                // ignore
+            }
+
+            try {
+                $task->comments()->delete();
+            } catch (\Throwable) {
+                // ignore
+            }
+
+            try {
+                $task->participantEntries()->delete();
+            } catch (\Throwable) {
+                // ignore
+            }
+
+            if (self::supportsWatchers()) {
+                try {
+                    $task->watchers()->detach();
+                } catch (\Throwable) {
+                    // ignore
+                }
             }
         });
     }
