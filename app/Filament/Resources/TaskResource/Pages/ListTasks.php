@@ -1,10 +1,12 @@
 <?php
+
 # app/Filament/Resources/TaskResource/Pages/ListTasks.php
+
+declare(strict_types=1);
 
 namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
-use App\Models\Task;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
@@ -16,13 +18,37 @@ class ListTasks extends ListRecords
 
     protected static ?string $title = 'Задачи';
 
+    /**
+     * ✅ Нужно, чтобы URL был вида /admin/tasks?tab=all, а не ?activeTab=...
+     * И чтобы дефолтный таб не попадал в URL (except).
+     */
+    protected array $queryString = [
+        'activeTab' => ['as' => 'tab', 'except' => 'all'],
+    ];
+
+    /**
+     * ✅ Жёстко задаём дефолт.
+     * Важно: Filament может инициализировать activeTab до вызова getDefaultActiveTab(),
+     * поэтому держим обе настройки.
+     */
+    public ?string $activeTab = 'all';
+
     public function getBreadcrumb(): string
     {
         return 'Задачи';
     }
 
     /**
+     * ✅ По умолчанию — «Все».
+     */
+    public function getDefaultActiveTab(): string|int|null
+    {
+        return 'all';
+    }
+
+    /**
      * Быстрые “рабочие” срезы над таблицей.
+     * ✅ «Все» — самый левый.
      */
     public function getTabs(): array
     {
@@ -30,6 +56,7 @@ class ListTasks extends ListRecords
 
         $user = Filament::auth()->user();
 
+        // Даже если пользователя нет — пусть будет один таб.
         if (! $user) {
             return [
                 'all' => $tabClass::make('Все'),
@@ -39,6 +66,8 @@ class ListTasks extends ListRecords
         $myId = (int) $user->id;
 
         return [
+            'all' => $tabClass::make('Все'),
+
             'in_progress' => $this->makeTab(
                 $tabClass,
                 'В работе',
@@ -80,14 +109,7 @@ class ListTasks extends ListRecords
                 'Критичные',
                 fn (Builder $query) => $query->urgent()->workOrder()
             ),
-
-            'all' => $tabClass::make('Все'),
         ];
-    }
-
-    public function getDefaultActiveTab(): ?string
-    {
-        return 'in_progress';
     }
 
     protected function getHeaderActions(): array

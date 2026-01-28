@@ -27,6 +27,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class TaskResource extends Resource
@@ -43,47 +44,195 @@ class TaskResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
+    /**
+     * Чтобы Filament (где поддерживается) использовал название задачи как заголовок записи.
+     */
+    protected static ?string $recordTitleAttribute = 'title';
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
         $selectedMarketId = static::selectedMarketIdFromSession();
 
+        $isSuperAdmin = (bool) $user && $user->isSuperAdmin();
+        $isMarketAdmin = (bool) $user && $user->hasRole('market-admin');
+        $isSuperOrMarketAdmin = $isSuperAdmin || $isMarketAdmin;
+
+        $isCreator = static function (?Task $record) use ($user): bool {
+            return (bool) $record
+                && (bool) $user
+                && (int) $record->created_by_user_id === (int) $user->id;
+        };
+
+        $isAssignee = static function (?Task $record) use ($user): bool {
+            return (bool) $record
+                && (bool) $user
+                && (int) $record->assignee_id === (int) $user->id;
+        };
+
+        $isCoexecutor = static function (?Task $record) use ($user): bool {
+            if (! $record || ! $record->exists || ! $user) {
+                return false;
+            }
+
+            return $record->participantEntries()
+                ->where('user_id', (int) $user->id)
+                ->where('role', Task::PARTICIPANT_ROLE_COEXECUTOR)
+                ->exists();
+        };
+
+        $isNew = static function (?Task $record): bool {
+            return (bool) $record && (string) $record->status === (string) Task::STATUS_NEW;
+        };
+
+        $canUpdateCore = static function (?Task $record, string $operation) use ($isSuperOrMarketAdmin, $isCreator, $isNew): bool {
+            if ($operation === 'create') {
+                return true;
+            }
+
+            if ($isSuperOrMarketAdmin) {
+                return true;
+            }
+
+            return $isCreator($record) && $isNew($record);
+        };
+
+        $canUpdateStatus = static function (?Task $record, string $operation) use ($isSuperOrMarketAdmin, $isCreator, $isAssignee, $isCoexecutor, $isNew): bool {
+            if ($operation === 'create') {
+                return false;
+            }
+
+            if ($isSuperOrMarketAdmin) {
+                return true;
+            }
+
+            if ($isAssignee($record) || $isCoexecutor($record)) {
+                return true;
+            }
+
+            return $isCreator($record) && $isNew($record);
+        };
+
+        $canManageParticipants = static function (?Task $record, string $operation) use ($isSuperOrMarketAdmin, $isCreator, $isNew): bool {
+            if ($operation === 'create') {
+                return true;
+            }
+
+            if ($isSuperOrMarketAdmin) {
+                return true;
+            }
+
+            return $isCreator($record) && $isNew($record);
+        };
+
+        $canManageObservers = static function (?Task $record, string $operation) use ($isSuperOrMarketAdmin, $isCreator, $isAssignee, $isCoexecutor): bool {
+            if ($operation === 'create') {
+                return true;
+            }
+
+            if ($isSuperOrMarketAdmin) {
+                return true;
+            }
+
+            return $isCreator($record) || $isAssignee($record) || $isCoexecutor($record);
+        };
+
         /**
-         * Правило рынка:
-         * - Рынок видит только super-admin
-         * - Create:
-         *   - если выбран рынок в панели -> placeholder + hidden market_id
-         *   - иначе -> Select market_id
-         * - Edit:
-         *   - рынок всегда read-only placeholder + hidden market_id (нельзя переносить задачу)
-         * - не super-admin -> только hidden market_id
+         * Inline label (лейбл слева). Безопасно для разных версий Filament.
          */
+        $inline = static function ($component, bool $enabled = true) {
+            if ($enabled && is_object($component) && method_exists($component, 'inlineLabel')) {
+                $component->inlineLabel();
+            }
+
+            return $component;
+        };
+
+        $readonlyText = static function (
+            string $name,
+            string $label,
+            \Closure $content,
+            array|int|string|null $columnSpan = null,
+            ?\Closure $visible = null,
+        ) use ($inline) {
+            $p = Forms\Components\Placeholder::make($name)
+                ->label($label)
+                ->content($content);
+
+            // В "Сводке" хотим единый стиль с лейблом слева
+            $inline($p, true);
+
+            if ($columnSpan !== null) {
+                if (method_exists($p, 'columnSpan') && $columnSpan !== 'full') {
+                    $p->columnSpan($columnSpan);
+                }
+                if ($columnSpan === 'full' && method_exists($p, 'columnSpanFull')) {
+                    $p->columnSpanFull();
+                }
+            }
+
+            if ($visible) {
+                $p->visible($visible);
+            }
+
+            return $p;
+        };
+
+        $readonlyMultiline = static function (
+            string $name,
+            string $label,
+            \Closure $content,
+            array|int|string|null $columnSpan = null,
+            ?\Closure $visible = null,
+        ) use ($readonlyText) {
+            return $readonlyText(
+                $name,
+                $label,
+                function (?Task $record) use ($content): HtmlString {
+                    $text = (string) $content($record);
+                    $text = trim($text);
+
+                    if ($text === '') {
+                        $text = '—';
+                    }
+
+                    return new HtmlString(nl2br(e($text)));
+                },
+                $columnSpan,
+                $visible,
+            );
+        };
+
+        // -------------------------
+        // Рынок
+        // -------------------------
         $marketComponents = [];
 
         if ($user && $user->isSuperAdmin()) {
-            $marketComponents[] = Forms\Components\Placeholder::make('market_context')
-                ->label('Рынок')
-                ->content(function (?Task $record) use ($selectedMarketId): string {
+            $marketComponents[] = $readonlyText(
+                'market_context',
+                'Рынок',
+                function (?Task $record) use ($selectedMarketId): string {
                     $marketId = $record?->market_id ?: (filled($selectedMarketId) ? (int) $selectedMarketId : null);
 
                     return static::resolveMarketName($marketId) ?: '—';
-                })
-                ->helperText('Контекст задачи. На редактировании рынок нельзя менять.')
-                ->visible(fn (?Task $record): bool => (bool) $record || filled($selectedMarketId))
-                ->columnSpanFull();
+                },
+                'full',
+                fn (?Task $record, string $operation): bool => $operation === 'edit' || filled($selectedMarketId),
+            );
 
             $marketComponents[] = Forms\Components\Hidden::make('market_id')
                 ->default(function (?Task $record) use ($selectedMarketId) {
-                    if ($record) {
+                    if ($record?->exists) {
                         return (int) $record->market_id;
                     }
 
                     return filled($selectedMarketId) ? (int) $selectedMarketId : null;
                 })
                 ->dehydrated(true)
-                ->visible(fn (?Task $record): bool => (bool) $record || filled($selectedMarketId));
+                ->visible(fn (?Task $record, string $operation): bool => $operation === 'edit' || filled($selectedMarketId));
 
-            $marketComponents[] = Forms\Components\Select::make('market_id')
+            $marketSelect = Forms\Components\Select::make('market_id')
                 ->label('Рынок')
                 ->placeholder('Выберите рынок')
                 ->relationship('market', 'name')
@@ -93,117 +242,251 @@ class TaskResource extends Resource
                 ->reactive()
                 ->native(false)
                 ->helperText('Если выбрать рынок в панели — здесь он подставится автоматически.')
-                ->visible(fn (?Task $record): bool => ! $record && blank($selectedMarketId))
+                ->visible(fn (string $operation): bool => $operation === 'create' && blank($selectedMarketId))
                 ->columnSpanFull()
                 ->dehydrated(true);
+
+            // В create тоже можно оставить inline (не критично), но он будет "как в сводке" и аккуратнее
+            $marketComponents[] = $inline($marketSelect, true);
         } else {
             $marketComponents[] = Forms\Components\Hidden::make('market_id')
-                ->default(fn (?Task $record) => $record?->market_id ?: $user?->market_id)
+                ->default(fn (?Task $record) => ($record?->exists ? $record->market_id : null) ?: $user?->market_id)
                 ->dehydrated(true);
         }
 
         // -------------------------
-        // Основные поля
+        // Постановщик (read-only)
         // -------------------------
-        $titleField = Forms\Components\TextInput::make('title')
-            ->label('Название задачи')
-            ->placeholder('Например: Проверить холодильник в павильоне 12')
-            ->required()
-            ->maxLength(255)
-            ->columnSpanFull();
+        $creatorDisplay = $readonlyText(
+            'creator_display',
+            'Постановщик',
+            function (?Task $record) use ($user): string {
+                if ($record?->exists) {
+                    $name = $record->creator?->name;
+                    if (filled($name)) {
+                        return (string) $name;
+                    }
 
-        $descriptionField = Forms\Components\Textarea::make('description')
-            ->label('Описание')
-            ->placeholder('Коротко опиши, что нужно сделать. Если важно — добавь детали и критерии готовности.')
-            ->rows(6)
-            ->autosize()
-            ->columnSpanFull();
+                    return filled($record->created_by_user_id)
+                        ? ('Пользователь #' . (int) $record->created_by_user_id)
+                        : '—';
+                }
 
-        // Создателя выставляем только при создании
+                return $user?->name ?: '—';
+            },
+            'full'
+        );
+
+        // -------------------------
+        // CORE: title / description
+        // -------------------------
+        $titleEditable = $inline(
+            Forms\Components\TextInput::make('title')
+                ->label('Название задачи')
+                ->placeholder('Например: Проверить холодильник в павильоне 12')
+                ->required()
+                ->maxLength(255)
+                ->columnSpanFull()
+                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+        );
+
+        $titleReadonly = $readonlyText(
+            'title_readonly',
+            'Название задачи',
+            fn (?Task $record): string => $record?->title ?: '—',
+            'full',
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
+        );
+
+        $descriptionEditable = $inline(
+            Forms\Components\Textarea::make('description')
+                ->label('Описание')
+                ->placeholder('Коротко опиши, что нужно сделать. Если важно — добавь детали и критерии готовности.')
+                ->rows(6)
+                ->autosize()
+                ->columnSpanFull()
+                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+        );
+
+        $descriptionReadonly = $readonlyMultiline(
+            'description_readonly',
+            'Описание',
+            fn (?Task $record): string => filled($record?->description) ? (string) $record->description : '—',
+            'full',
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
+        );
+
         $createdByHidden = Forms\Components\Hidden::make('created_by_user_id')
             ->default(fn () => $user?->id)
-            ->dehydrated(fn (?Task $record): bool => ! (bool) $record);
+            ->dehydrated(fn (string $operation): bool => $operation === 'create');
 
-        /**
-         * Статус:
-         * - при создании НЕ спрашиваем (ставим STATUS_NEW скрытым полем)
-         * - на редактировании показываем Select
-         */
+        // -------------------------
+        // STATUS
+        // -------------------------
         $statusHiddenOnCreate = Forms\Components\Hidden::make('status')
             ->default(Task::STATUS_NEW)
-            ->visible(fn (?Task $record): bool => ! (bool) $record)
-            ->dehydrated(fn (?Task $record): bool => ! (bool) $record);
+            ->visible(fn (string $operation): bool => $operation === 'create')
+            ->dehydrated(fn (string $operation): bool => $operation === 'create');
 
-        $statusFieldOnEdit = Forms\Components\Select::make('status')
-            ->label('Статус задачи')
-            ->options(Task::statusOptions())
-            ->required()
-            ->native(false)
-            ->visible(fn (?Task $record): bool => (bool) $record)
-            ->columnSpan(fn (?Task $record): array => [
+        $statusEditableOnEdit = $inline(
+            Forms\Components\Select::make('status')
+                ->label('Статус задачи')
+                ->options(function (?Task $record) use ($isSuperOrMarketAdmin, $isCreator, $isAssignee, $isCoexecutor, $isNew): array {
+                    $all = Task::statusOptions();
+
+                    if ($isSuperOrMarketAdmin) {
+                        return $all;
+                    }
+
+                    if (! $record) {
+                        return $all;
+                    }
+
+                    if ($isCreator($record) && $isNew($record)) {
+                        return array_intersect_key($all, array_flip([Task::STATUS_NEW, Task::STATUS_CANCELLED]));
+                    }
+
+                    if ($isAssignee($record) || $isCoexecutor($record)) {
+                        unset($all[Task::STATUS_CANCELLED]);
+
+                        return $all;
+                    }
+
+                    return $all;
+                })
+                ->required()
+                ->native(false)
+                ->visible(fn (?Task $record, string $operation): bool => $operation === 'edit' && $canUpdateStatus($record, $operation))
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 6,
+                ])
+        );
+
+        $statusReadonlyOnEdit = $readonlyText(
+            'status_readonly',
+            'Статус задачи',
+            fn (?Task $record): string => $record ? (Task::STATUS_LABELS[$record->status] ?? (string) $record->status) : '—',
+            [
                 'default' => 12,
                 'lg' => 6,
-            ]);
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateStatus($record, $operation),
+        );
 
         // -------------------------
         // Параметры
         // -------------------------
-        $priorityField = Forms\Components\Select::make('priority')
-            ->label('Приоритет')
-            ->options(Task::priorityOptions())
-            ->default(Task::PRIORITY_NORMAL)
-            ->required()
-            ->native(false)
-            ->columnSpan([
+        $priorityEditable = $inline(
+            Forms\Components\Select::make('priority')
+                ->label('Приоритет')
+                ->options(Task::priorityOptions())
+                ->default(Task::PRIORITY_NORMAL)
+                ->required()
+                ->native(false)
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 6,
+                ])
+                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+        );
+
+        $priorityReadonly = $readonlyText(
+            'priority_readonly',
+            'Приоритет',
+            fn (?Task $record): string => $record ? (Task::PRIORITY_LABELS[$record->priority] ?? (string) $record->priority) : '—',
+            [
                 'default' => 12,
                 'lg' => 6,
-            ]);
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
+        );
 
-        $dueAtField = Forms\Components\DateTimePicker::make('due_at')
-            ->label('Дедлайн')
-            ->seconds(false)
-            ->helperText('Можно оставить пустым и назначить позже.')
-            ->columnSpan([
+        $dueAtEditable = $inline(
+            Forms\Components\DateTimePicker::make('due_at')
+                ->label('Дедлайн')
+                ->seconds(false)
+                ->helperText('Можно оставить пустым и назначить позже.')
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 6,
+                ])
+                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+        );
+
+        $dueAtReadonly = $readonlyText(
+            'due_at_readonly',
+            'Дедлайн',
+            fn (?Task $record): string => $record?->due_at ? $record->due_at->format('d.m.Y H:i') : '—',
+            [
                 'default' => 12,
                 'lg' => 6,
-            ]);
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
+        );
 
-        // На create — можно шире, на edit — в пару к дедлайну (чтобы не растягивать форму)
-        $assigneeField = Forms\Components\Select::make('assignee_id')
-            ->label('Исполнитель')
-            ->placeholder('Назначить исполнителя')
-            ->relationship('assignee', 'name', function (Builder $query) use ($user) {
-                return static::limitUsersToMarket($query, $user);
-            })
-            ->searchable()
-            ->preload()
-            ->nullable()
-            ->native(false)
-            ->helperText('Исполнитель получит уведомление при назначении.')
-            ->columnSpan(fn (?Task $record): array => [
+        $assigneeEditable = $inline(
+            Forms\Components\Select::make('assignee_id')
+                ->label('Исполнитель')
+                ->placeholder('Назначить исполнителя')
+                ->relationship('assignee', 'name', function (Builder $query) use ($user) {
+                    return static::limitUsersToMarket($query, $user);
+                })
+                ->searchable()
+                ->preload()
+                ->nullable()
+                ->native(false)
+                ->helperText('Исполнитель получит уведомление при назначении.')
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 6,
+                ])
+                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+        );
+
+        $assigneeReadonly = $readonlyText(
+            'assignee_readonly',
+            'Исполнитель',
+            fn (?Task $record): string => $record?->assignee?->name ?: '—',
+            [
                 'default' => 12,
-                'lg' => $record ? 6 : 12,
-            ]);
+                'lg' => 6,
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
+        );
 
         // -------------------------
-        // Участники: coexecutor / observer
+        // Участники (ВАЖНО: без inlineLabel — чтобы не было "наезда")
         // -------------------------
-        $coexecutorsField = Forms\Components\Select::make('coexecutor_user_ids')
-            ->label('Соисполнители')
-            ->placeholder('Добавить соисполнителей')
-            ->relationship('participants', 'name', function (Builder $query) use ($user) {
-                return static::limitUsersToMarket($query, $user);
-            })
-            ->multiple()
-            ->searchable()
-            ->preload()
-            ->native(false)
-            ->helperText('Соисполнители участвуют в выполнении. Если пользователь выбран и тут, и в наблюдателях — он станет соисполнителем.')
-            ->dehydrated(false)
-            ->columnSpan([
-                'default' => 12,
-                'lg' => 6,
-            ]);
+        $coexecutorsField = $inline(
+            Forms\Components\Select::make('coexecutor_user_ids')
+                ->label('Соисполнители')
+                ->placeholder('Добавить соисполнителей')
+                ->relationship('participants', 'name', function (Builder $query) use ($user) {
+                    return static::limitUsersToMarket($query, $user);
+                })
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->native(false)
+                ->helperText('Соисполнители участвуют в выполнении. Если пользователь выбран и тут, и в наблюдателях — он станет соисполнителем.')
+                ->dehydrated(false)
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 6,
+                ])
+                ->visible(fn (?Task $record, string $operation): bool => $canManageParticipants($record, $operation)),
+            false
+        );
+
+        if (method_exists($coexecutorsField, 'getOptionLabelsUsing')) {
+            $coexecutorsField->getOptionLabelsUsing(function (array $values): array {
+                return User::query()
+                    ->whereIn('id', array_map('intval', $values))
+                    ->pluck('name', 'id')
+                    ->toArray();
+            });
+        }
 
         if (method_exists($coexecutorsField, 'reactive')) {
             $coexecutorsField->reactive();
@@ -223,7 +506,7 @@ class TaskResource extends Resource
 
         if (method_exists($coexecutorsField, 'afterStateHydrated')) {
             $coexecutorsField->afterStateHydrated(function (Forms\Components\Select $component, ?Task $record): void {
-                if (! $record) {
+                if (! $record || ! $record->exists) {
                     $component->state([]);
 
                     return;
@@ -240,7 +523,7 @@ class TaskResource extends Resource
 
         if (method_exists($coexecutorsField, 'saveRelationshipsUsing')) {
             $coexecutorsField->saveRelationshipsUsing(function (?Task $record, $state, Get $get): void {
-                if (! $record) {
+                if (! $record || ! $record->exists) {
                     return;
                 }
 
@@ -251,22 +534,46 @@ class TaskResource extends Resource
             });
         }
 
-        $observersField = Forms\Components\Select::make('observer_user_ids')
-            ->label('Наблюдатели')
-            ->placeholder('Добавить наблюдателей')
-            ->relationship('participants', 'name', function (Builder $query) use ($user) {
-                return static::limitUsersToMarket($query, $user);
-            })
-            ->multiple()
-            ->searchable()
-            ->preload()
-            ->native(false)
-            ->helperText('Наблюдатели видят задачу и получают уведомления, но не считаются исполнителями.')
-            ->dehydrated(false)
-            ->columnSpan([
+        $coexecutorsReadonly = $readonlyText(
+            'coexecutors_readonly',
+            'Соисполнители',
+            fn (?Task $record): string => static::formatUsersByRole($record, Task::PARTICIPANT_ROLE_COEXECUTOR),
+            [
                 'default' => 12,
                 'lg' => 6,
-            ]);
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canManageParticipants($record, $operation),
+        );
+
+        $observersField = $inline(
+            Forms\Components\Select::make('observer_user_ids')
+                ->label('Наблюдатели')
+                ->placeholder('Добавить наблюдателей')
+                ->relationship('participants', 'name', function (Builder $query) use ($user) {
+                    return static::limitUsersToMarket($query, $user);
+                })
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->native(false)
+                ->helperText('Наблюдатели видят задачу и получают уведомления, но не считаются исполнителями.')
+                ->dehydrated(false)
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 6,
+                ])
+                ->visible(fn (?Task $record, string $operation): bool => $canManageObservers($record, $operation)),
+            false
+        );
+
+        if (method_exists($observersField, 'getOptionLabelsUsing')) {
+            $observersField->getOptionLabelsUsing(function (array $values): array {
+                return User::query()
+                    ->whereIn('id', array_map('intval', $values))
+                    ->pluck('name', 'id')
+                    ->toArray();
+            });
+        }
 
         if (method_exists($observersField, 'reactive')) {
             $observersField->reactive();
@@ -286,7 +593,7 @@ class TaskResource extends Resource
 
         if (method_exists($observersField, 'afterStateHydrated')) {
             $observersField->afterStateHydrated(function (Forms\Components\Select $component, ?Task $record): void {
-                if (! $record) {
+                if (! $record || ! $record->exists) {
                     $component->state([]);
 
                     return;
@@ -303,7 +610,7 @@ class TaskResource extends Resource
 
         if (method_exists($observersField, 'saveRelationshipsUsing')) {
             $observersField->saveRelationshipsUsing(function (?Task $record, $state, Get $get): void {
-                if (! $record) {
+                if (! $record || ! $record->exists) {
                     return;
                 }
 
@@ -314,68 +621,264 @@ class TaskResource extends Resource
             });
         }
 
-        $sourceLabel = Forms\Components\Placeholder::make('source_label')
-            ->label('Источник')
-            ->content(fn (?Task $record): string => $record?->source_label ?? '—')
-            ->visible(fn (?Task $record): bool => (bool) $record && filled($record->source_type) && filled($record->source_id))
-            ->columnSpanFull();
+        $observersReadonly = $readonlyText(
+            'observers_readonly',
+            'Наблюдатели',
+            fn (?Task $record): string => static::formatUsersByRole($record, Task::PARTICIPANT_ROLE_OBSERVER),
+            [
+                'default' => 12,
+                'lg' => 6,
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canManageObservers($record, $operation),
+        );
 
-        /**
-         * Wizard:
-         * - На create статус не спрашиваем (Hidden статус = NEW)
-         * - На edit статус доступен
-         *
-         * Дизайн:
-         * - Каждый шаг ограничен по ширине: max-w-5xl mx-auto
-         * - На lg — логичные 2 колонки для “коротких” полей
-         */
-        return $schema->components([
-            Wizard::make([
-                Step::make('Основное')
-                    ->description('Что нужно сделать')
-                    ->schema([
-                        Section::make('Данные задачи')
-                            ->schema([
-                                ...$marketComponents,
-                                $titleField,
-                                $descriptionField,
-                                $createdByHidden,
-                            ])
-                            ->columns(12)
-                            ->extraAttributes(['class' => 'max-w-5xl mx-auto']),
-                    ]),
+        $sourceLabel = $readonlyText(
+            'source_label',
+            'Источник',
+            fn (?Task $record): string => $record?->source_label ?? '—',
+            'full',
+            fn (?Task $record): bool => (bool) $record && filled($record->source_type) && filled($record->source_id),
+        );
 
-                Step::make('Назначение')
-                    ->description('Приоритет, сроки и исполнитель')
-                    ->schema([
-                        Section::make('Параметры')
-                            ->schema([
-                                $statusHiddenOnCreate,
-                                $statusFieldOnEdit,
+        // -------------------------
+        // EDIT: Дата создания
+        // -------------------------
+        $createdAt = $readonlyText(
+            'created_at_display',
+            'Дата создания',
+            fn (?Task $record): string => $record?->created_at ? $record->created_at->format('d.m.Y H:i') : '—',
+            [
+                'default' => 12,
+                'lg' => 6,
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit',
+        );
 
-                                $priorityField,
-                                $dueAtField,
-                                $assigneeField,
-                            ])
-                            ->columns(12)
-                            ->extraAttributes(['class' => 'max-w-5xl mx-auto']),
-                    ]),
+        // -------------------------
+        // CREATE: Wizard
+        // -------------------------
+        $createWizard = Wizard::make([
+            Step::make('Основное')
+                ->description('Что нужно сделать')
+                ->schema([
+                    Section::make('Данные задачи')
+                        ->schema([
+                            ...$marketComponents,
 
-                Step::make('Участники')
-                    ->description('Соисполнители и наблюдатели')
-                    ->schema([
-                        Section::make('Участники')
-                            ->schema([
-                                $coexecutorsField,
-                                $observersField,
-                                $sourceLabel,
-                            ])
-                            ->columns(12)
-                            ->extraAttributes(['class' => 'max-w-5xl mx-auto']),
-                    ]),
+                            $creatorDisplay,
+
+                            $titleEditable,
+                            $titleReadonly,
+
+                            $descriptionEditable,
+                            $descriptionReadonly,
+
+                            $createdByHidden,
+                        ])
+                        ->columns(12)
+                        ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
+                ]),
+
+            Step::make('Назначение')
+                ->description('Приоритет, сроки и исполнитель')
+                ->schema([
+                    Section::make('Параметры')
+                        ->schema([
+                            $statusHiddenOnCreate,
+
+                            $statusEditableOnEdit,
+                            $statusReadonlyOnEdit,
+
+                            $priorityEditable,
+                            $priorityReadonly,
+
+                            $dueAtEditable,
+                            $dueAtReadonly,
+
+                            $assigneeEditable,
+                            $assigneeReadonly,
+                        ])
+                        ->columns(12)
+                        ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
+                ]),
+
+            Step::make('Участники')
+                ->description('Соисполнители и наблюдатели')
+                ->schema([
+                    Section::make('Участники')
+                        ->schema([
+                            $coexecutorsField,
+                            $coexecutorsReadonly,
+
+                            $observersField,
+                            $observersReadonly,
+
+                            $sourceLabel,
+                        ])
+                        ->columns(12)
+                        ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
+                ]),
+        ])->skippable(false);
+
+        if (method_exists($createWizard, 'visible')) {
+            $createWizard->visible(fn (string $operation): bool => $operation === 'create');
+        }
+        if (method_exists($createWizard, 'columnSpanFull')) {
+            $createWizard->columnSpanFull();
+        }
+
+        // -------------------------
+        // EDIT: Сводка + вкладки
+        // -------------------------
+        $editSummary = Section::make('Сводка')
+            ->schema([
+                ...$marketComponents,
+
+                $creatorDisplay,
+
+                $createdAt,
+
+                $titleEditable,
+                $titleReadonly,
+
+                $descriptionEditable,
+                $descriptionReadonly,
+
+                $statusHiddenOnCreate,
+
+                $statusEditableOnEdit,
+                $statusReadonlyOnEdit,
+
+                $priorityEditable,
+                $priorityReadonly,
+
+                $dueAtEditable,
+                $dueAtReadonly,
+
+                $assigneeEditable,
+                $assigneeReadonly,
             ])
-                ->skippable(false)
-                ->columnSpanFull(),
+            ->columns(12);
+
+        // CSS-хук: применяем твои правки inline-label только к "Сводке"
+        if (method_exists($editSummary, 'extraAttributes')) {
+            $editSummary->extraAttributes([
+                'class' => 'task-summary-compact',
+            ]);
+        }
+
+        if (method_exists($editSummary, 'columnSpanFull')) {
+            $editSummary->columnSpanFull();
+        }
+
+        $tabsComponent = null;
+
+        $TabsClass = null;
+        $TabClass = null;
+
+        if (class_exists(\Filament\Schemas\Components\Tabs::class) && class_exists(\Filament\Schemas\Components\Tabs\Tab::class)) {
+            $TabsClass = \Filament\Schemas\Components\Tabs::class;
+            $TabClass = \Filament\Schemas\Components\Tabs\Tab::class;
+        } elseif (class_exists(\Filament\Forms\Components\Tabs::class) && class_exists(\Filament\Forms\Components\Tabs\Tab::class)) {
+            $TabsClass = \Filament\Forms\Components\Tabs::class;
+            $TabClass = \Filament\Forms\Components\Tabs\Tab::class;
+        }
+
+        if ($TabsClass && $TabClass) {
+            $filesHint = Forms\Components\Placeholder::make('files_tab_hint')
+                ->label('')
+                ->content('Файлы подключаются через вкладку Relation Manager “Файлы” (ниже страницы). Следующим шагом перенесём их в эту зону, если потребуется.')
+                ->columnSpanFull();
+
+            $checklistHint = Forms\Components\Placeholder::make('checklist_tab_hint')
+                ->label('')
+                ->content('Чек-лист добавим следующим модулем (пункты + отметки выполнения).')
+                ->columnSpanFull();
+
+            $historyHint = Forms\Components\Placeholder::make('history_tab_hint')
+                ->label('')
+                ->content('Историю/ленту событий добавим следующим шагом (принятие/завершение/смена статуса/изменения участников).')
+                ->columnSpanFull();
+
+            $participantsGrid = static::makeGrid(12, [
+                $coexecutorsField,
+                $coexecutorsReadonly,
+
+                $observersField,
+                $observersReadonly,
+
+                $sourceLabel,
+            ]);
+
+            if (method_exists($participantsGrid, 'columnSpanFull')) {
+                $participantsGrid->columnSpanFull();
+            }
+
+            $makeTab = static function (string $label, array $tabSchema) use ($TabClass) {
+                $tab = $TabClass::make($label);
+
+                if (method_exists($tab, 'schema')) {
+                    $tab->schema($tabSchema);
+                } elseif (method_exists($tab, 'components')) {
+                    $tab->components($tabSchema);
+                }
+
+                return $tab;
+            };
+
+            $tabsComponent = $TabsClass::make('task_tabs');
+
+            if (method_exists($tabsComponent, 'tabs')) {
+                $tabsComponent->tabs([
+                    $makeTab('Файлы', [$filesHint]),
+                    $makeTab('Чек-лист', [$checklistHint]),
+                    $makeTab('Участники', [$participantsGrid]),
+                    $makeTab('История', [$historyHint]),
+                ]);
+            }
+
+            if (method_exists($tabsComponent, 'persistTabInQueryString')) {
+                $tabsComponent->persistTabInQueryString();
+            }
+
+            if (method_exists($tabsComponent, 'columnSpanFull')) {
+                $tabsComponent->columnSpanFull();
+            }
+        }
+
+        if (! $tabsComponent) {
+            $tabsComponent = Section::make('Участники')
+                ->schema([
+                    $coexecutorsField,
+                    $coexecutorsReadonly,
+
+                    $observersField,
+                    $observersReadonly,
+
+                    $sourceLabel,
+                ])
+                ->columns(12);
+
+            if (method_exists($tabsComponent, 'columnSpanFull')) {
+                $tabsComponent->columnSpanFull();
+            }
+        }
+
+        $editGrid = static::makeGrid(12, [
+            $editSummary,
+            $tabsComponent,
+        ]);
+
+        if (method_exists($editGrid, 'visible')) {
+            $editGrid->visible(fn (string $operation): bool => $operation === 'edit');
+        }
+        if (method_exists($editGrid, 'columnSpanFull')) {
+            $editGrid->columnSpanFull();
+        }
+
+        return $schema->components([
+            $createWizard,
+            $editGrid,
         ]);
     }
 
@@ -387,7 +890,7 @@ class TaskResource extends Resource
             ->label('Рынок')
             ->sortable()
             ->searchable()
-            ->visible(fn () => (bool) $user && $user->isSuperAdmin());
+            ->visible(fn (): bool => (bool) $user && $user->isSuperAdmin());
 
         $marketColumn = static::toggleable($marketColumn, true);
 
@@ -409,6 +912,33 @@ class TaskResource extends Resource
                 return Str::limit((string) $record->description, 90);
             });
         }
+
+        $createdAtColumn = TextColumn::make('created_at')
+            ->label('Создано')
+            ->sortable();
+
+        if (method_exists($createdAtColumn, 'dateTime')) {
+            $createdAtColumn->dateTime('d.m.Y H:i');
+        } else {
+            $createdAtColumn->formatStateUsing(fn ($state): string => $state ? $state->format('d.m.Y H:i') : '—');
+        }
+
+        if (method_exists($createdAtColumn, 'tooltip')) {
+            $createdAtColumn->tooltip(fn ($state): ?string => $state ? $state->diffForHumans() : null);
+        }
+
+        $creatorColumn = TextColumn::make('created_by_user_id')
+            ->label('Постановщик')
+            ->sortable()
+            ->formatStateUsing(function ($state, Task $record): string {
+                $name = $record->creator?->name;
+
+                if (filled($name)) {
+                    return (string) $name;
+                }
+
+                return filled($state) ? ('Пользователь #' . (int) $state) : '—';
+            });
 
         $statusColumn = TextColumn::make('status')
             ->label('Статус')
@@ -506,6 +1036,8 @@ class TaskResource extends Resource
             ->columns([
                 $marketColumn,
                 $titleColumn,
+                $createdAtColumn,
+                $creatorColumn,
                 $statusColumn,
                 $priorityColumn,
                 $assigneeColumn,
@@ -519,13 +1051,14 @@ class TaskResource extends Resource
                     ->trueLabel('Только мои')
                     ->falseLabel('Кроме моих')
                     ->queries(
-                        true: fn (Builder $query) => $user?->id
-                            ? $query->where('assignee_id', $user->id)
+                        true: fn (Builder $query) => Filament::auth()->id()
+                            ? $query->where('assignee_id', (int) Filament::auth()->id())
                             : $query->whereRaw('1 = 0'),
-                        false: fn (Builder $query) => $user?->id
-                            ? $query->where(function (Builder $inner) use ($user) {
+                        false: fn (Builder $query) => Filament::auth()->id()
+                            ? $query->where(function (Builder $inner) {
+                                $userId = (int) Filament::auth()->id();
                                 $inner->whereNull('assignee_id')
-                                    ->orWhere('assignee_id', '!=', $user->id);
+                                    ->orWhere('assignee_id', '!=', $userId);
                             })
                             : $query,
                         blank: fn (Builder $query) => $query,
@@ -552,9 +1085,17 @@ class TaskResource extends Resource
                         blank: fn (Builder $query) => $query,
                     ),
             ])
-            ->recordUrl(fn (Task $record): ?string => static::canEdit($record)
-                ? static::getUrl('edit', ['record' => $record])
-                : null);
+            ->recordUrl(function (Task $record): ?string {
+                if (static::canEdit($record)) {
+                    return static::getUrl('edit', ['record' => $record]);
+                }
+
+                if (static::canView($record)) {
+                    return static::getUrl('view', ['record' => $record]);
+                }
+
+                return null;
+            });
 
         $actions = [];
 
@@ -562,14 +1103,32 @@ class TaskResource extends Resource
             $actions[] = \Filament\Actions\EditAction::make()
                 ->label('')
                 ->icon('heroicon-o-pencil-square')
-                ->tooltip('Редактировать')
-                ->iconButton();
+                ->tooltip('Открыть')
+                ->iconButton()
+                ->visible(fn (Task $record): bool => static::canEdit($record));
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
             $actions[] = \Filament\Tables\Actions\EditAction::make()
                 ->label('')
                 ->icon('heroicon-o-pencil-square')
-                ->tooltip('Редактировать')
-                ->iconButton();
+                ->tooltip('Открыть')
+                ->iconButton()
+                ->visible(fn (Task $record): bool => static::canEdit($record));
+        }
+
+        if (class_exists(\Filament\Actions\ViewAction::class)) {
+            $actions[] = \Filament\Actions\ViewAction::make()
+                ->label('')
+                ->icon('heroicon-o-eye')
+                ->tooltip('Просмотр')
+                ->iconButton()
+                ->visible(fn (Task $record): bool => static::canView($record) && ! static::canEdit($record));
+        } elseif (class_exists(\Filament\Tables\Actions\ViewAction::class)) {
+            $actions[] = \Filament\Tables\Actions\ViewAction::make()
+                ->label('')
+                ->icon('heroicon-o-eye')
+                ->tooltip('Просмотр')
+                ->iconButton()
+                ->visible(fn (Task $record): bool => static::canView($record) && ! static::canEdit($record));
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
@@ -578,14 +1137,16 @@ class TaskResource extends Resource
                 ->icon('heroicon-o-trash')
                 ->tooltip('Удалить')
                 ->requiresConfirmation()
-                ->iconButton();
+                ->iconButton()
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin')));
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
             $actions[] = \Filament\Tables\Actions\DeleteAction::make()
                 ->label('')
                 ->icon('heroicon-o-trash')
                 ->tooltip('Удалить')
                 ->requiresConfirmation()
-                ->iconButton();
+                ->iconButton()
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin')));
         }
 
         if (! empty($actions)) {
@@ -598,8 +1159,8 @@ class TaskResource extends Resource
     public static function getRelations(): array
     {
         return [
-            TaskCommentsRelationManager::class,
             TaskAttachmentsRelationManager::class,
+            TaskCommentsRelationManager::class,
         ];
     }
 
@@ -608,6 +1169,7 @@ class TaskResource extends Resource
         return [
             'index' => Pages\ListTasks::route('/'),
             'create' => Pages\CreateTask::route('/create'),
+            'view' => Pages\ViewTask::route('/{record}'),
             'edit' => Pages\EditTask::route('/{record}/edit'),
         ];
     }
@@ -615,6 +1177,7 @@ class TaskResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
+            ->with(['creator', 'assignee'])
             ->withCount('comments')
             ->workOrder();
 
@@ -628,10 +1191,6 @@ class TaskResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        if (! $user->isSuperAdmin() && ! $user->hasAnyRole(['market-admin', 'market-maintenance'])) {
-            return $query->whereRaw('1 = 0');
-        }
-
         if ($user->isSuperAdmin()) {
             $selectedMarketId = static::selectedMarketIdFromSession();
 
@@ -640,11 +1199,21 @@ class TaskResource extends Resource
                 : $query;
         }
 
-        if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
+        if (! $user->market_id) {
+            return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereRaw('1 = 0');
+        if ($user->hasRole('market-admin')) {
+            return $query->where('market_id', (int) $user->market_id);
+        }
+
+        return $query
+            ->where('market_id', (int) $user->market_id)
+            ->where(function (Builder $inner) use ($user) {
+                $inner->where('created_by_user_id', (int) $user->id)
+                    ->orWhere('assignee_id', (int) $user->id)
+                    ->orWhereHas('participants', fn (Builder $q) => $q->whereKey((int) $user->id));
+            });
     }
 
     public static function canViewAny(): bool
@@ -659,7 +1228,40 @@ class TaskResource extends Resource
             return true;
         }
 
-        return (bool) $user->market_id && $user->hasAnyRole(['market-admin', 'market-maintenance']);
+        return (bool) $user->market_id;
+    }
+
+    public static function canView($record): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user || static::isMerchantUser($user) || ! ($record instanceof Task)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $user->market_id || (int) $record->market_id !== (int) $user->market_id) {
+            return false;
+        }
+
+        if ($user->hasRole('market-admin')) {
+            return true;
+        }
+
+        if ((int) $record->created_by_user_id === (int) $user->id) {
+            return true;
+        }
+
+        if ((int) $record->assignee_id === (int) $user->id) {
+            return true;
+        }
+
+        return $record->participantEntries()
+            ->where('user_id', (int) $user->id)
+            ->exists();
     }
 
     public static function canCreate(): bool
@@ -674,14 +1276,14 @@ class TaskResource extends Resource
             return true;
         }
 
-        return (bool) $user->market_id && $user->hasAnyRole(['market-admin', 'market-maintenance']);
+        return (bool) $user->market_id;
     }
 
     public static function canEdit($record): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user || static::isMerchantUser($user)) {
+        if (! $user || static::isMerchantUser($user) || ! ($record instanceof Task)) {
             return false;
         }
 
@@ -689,16 +1291,41 @@ class TaskResource extends Resource
             return true;
         }
 
-        return $user->market_id
-            && $record->market_id === $user->market_id
-            && $user->hasAnyRole(['market-admin', 'market-maintenance']);
+        if (! $user->market_id || (int) $record->market_id !== (int) $user->market_id) {
+            return false;
+        }
+
+        if ($user->hasRole('market-admin')) {
+            return true;
+        }
+
+        if ((int) $record->created_by_user_id === (int) $user->id) {
+            return true;
+        }
+
+        if ((int) $record->assignee_id === (int) $user->id) {
+            return true;
+        }
+
+        if ($record->participantEntries()
+            ->where('user_id', (int) $user->id)
+            ->where('role', Task::PARTICIPANT_ROLE_OBSERVER)
+            ->exists()
+        ) {
+            return false;
+        }
+
+        return $record->participantEntries()
+            ->where('user_id', (int) $user->id)
+            ->where('role', Task::PARTICIPANT_ROLE_COEXECUTOR)
+            ->exists();
     }
 
     public static function canDelete($record): bool
     {
         $user = Filament::auth()->user();
 
-        if (! $user || static::isMerchantUser($user)) {
+        if (! $user || static::isMerchantUser($user) || ! ($record instanceof Task)) {
             return false;
         }
 
@@ -707,7 +1334,7 @@ class TaskResource extends Resource
         }
 
         return $user->market_id
-            && $record->market_id === $user->market_id
+            && (int) $record->market_id === (int) $user->market_id
             && $user->hasRole('market-admin');
     }
 
@@ -759,13 +1386,36 @@ class TaskResource extends Resource
         return $user->hasAnyRole(['merchant', 'merchant-user']);
     }
 
-    /**
-     * Синхронизация участников по ролям (task_participants.role) без конфликтов unique(task_id,user_id).
-     * Правило конфликтов: если пользователь выбран в обоих списках — роль становится coexecutor.
-     *
-     * @param  array<int, mixed>  $observerIds
-     * @param  array<int, mixed>  $coexecutorIds
-     */
+    protected static function formatUsersByRole(?Task $record, string $role): string
+    {
+        if (! $record || ! $record->exists) {
+            return '—';
+        }
+
+        $ids = $record->participantEntries()
+            ->where('role', $role)
+            ->pluck('user_id')
+            ->all();
+
+        if (empty($ids)) {
+            return '—';
+        }
+
+        $users = User::query()
+            ->whereIn('id', $ids)
+            ->get(['id', 'name']);
+
+        $byId = $users->keyBy('id');
+
+        $labels = [];
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            $labels[] = $byId->get($id)?->name ?: "Пользователь #{$id}";
+        }
+
+        return implode(', ', $labels);
+    }
+
     protected static function syncParticipantsByRole(Task $task, array $observerIds, array $coexecutorIds): void
     {
         $observerIds = static::normalizeIds($observerIds);
@@ -831,10 +1481,6 @@ class TaskResource extends Resource
         }
     }
 
-    /**
-     * @param  array<int, mixed>  $ids
-     * @return array<int, int>
-     */
     protected static function normalizeIds(array $ids): array
     {
         $out = [];
@@ -862,5 +1508,37 @@ class TaskResource extends Resource
         } catch (\Throwable) {
             return $column->toggleable($hiddenByDefault);
         }
+    }
+
+    /**
+     * Filament v4: Filament\Schemas\Components\Grid
+     * Filament v3: Filament\Forms\Components\Grid
+     */
+    protected static function resolveGridClass(): string
+    {
+        if (class_exists(\Filament\Schemas\Components\Grid::class)) {
+            return \Filament\Schemas\Components\Grid::class;
+        }
+
+        if (class_exists(\Filament\Forms\Components\Grid::class)) {
+            return \Filament\Forms\Components\Grid::class;
+        }
+
+        throw new \RuntimeException('Filament Grid class not found for this version.');
+    }
+
+    protected static function makeGrid(int $columns, array $schema): object
+    {
+        $gridClass = static::resolveGridClass();
+
+        $grid = $gridClass::make($columns);
+
+        if (method_exists($grid, 'schema')) {
+            $grid->schema($schema);
+        } elseif (method_exists($grid, 'components')) {
+            $grid->components($schema);
+        }
+
+        return $grid;
     }
 }
