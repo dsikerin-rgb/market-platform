@@ -1,9 +1,12 @@
 <?php
 # app/Filament/Widgets/MarketSwitcherWidget.php
 
+declare(strict_types=1);
+
 namespace App\Filament\Widgets;
 
 use App\Models\Market;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 
@@ -31,7 +34,24 @@ class MarketSwitcherWidget extends Widget
 
     public function mount(): void
     {
-        $this->selectedMarketId = session($this->sessionKey());
+        // Единый ключ выбора рынка для всего дашборда
+        $value = session('dashboard_market_id');
+
+        // fallback-ключи (на случай старых версий/кэшей)
+        if (blank($value)) {
+            $value = session($this->sessionKey());
+        }
+
+        if (blank($value)) {
+            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+            $value = session("filament_{$panelId}_market_id");
+        }
+
+        if (blank($value)) {
+            $value = session('filament.admin.selected_market_id');
+        }
+
+        $this->selectedMarketId = filled($value) ? (int) $value : null;
         $this->returnUrl = request()->fullUrl();
     }
 
@@ -39,7 +59,35 @@ class MarketSwitcherWidget extends Widget
     {
         $value = $this->selectedMarketId ? (int) $this->selectedMarketId : null;
 
+        // 1) Главный ключ (его читают Dashboard и виджеты)
+        session(['dashboard_market_id' => $value]);
+
+        // 2) Совместимость: старые/разные ключи (чтобы ничего не "отвалилось" внезапно)
         session([$this->sessionKey() => $value]);
+
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        session(["filament_{$panelId}_market_id" => $value]);
+        session(['filament.admin.selected_market_id' => $value]);
+
+        // 3) При смене рынка — дефолтим месяц на текущий месяц в TZ выбранного рынка
+        if ($value) {
+            $tz = (string) config('app.timezone', 'UTC');
+
+            $market = Market::query()->select(['id', 'timezone'])->find($value);
+            $candidate = trim((string) ($market?->timezone ?? ''));
+
+            if ($candidate !== '') {
+                $tz = $candidate;
+            }
+
+            try {
+                $month = CarbonImmutable::now($tz)->format('Y-m');
+            } catch (\Throwable) {
+                $month = CarbonImmutable::now((string) config('app.timezone', 'UTC'))->format('Y-m');
+            }
+
+            session(['dashboard_month' => $month]);
+        }
 
         $target = request()->headers->get('referer')
             ?: $this->returnUrl
@@ -49,8 +97,7 @@ class MarketSwitcherWidget extends Widget
             $target = url('/admin');
         }
 
-        // ВАЖНО: без navigate=true — принудительно полный reload страницы,
-        // чтобы все виджеты/ресурсы перечитали session и пересобрали запросы.
+        // ВАЖНО: полный reload страницы, чтобы все виджеты перечитали session и пересобрали запросы.
         $this->redirect($target);
     }
 
@@ -64,6 +111,9 @@ class MarketSwitcherWidget extends Widget
         ];
     }
 
+    /**
+     * Старый ключ (оставляем для совместимости).
+     */
     protected function sessionKey(): string
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';

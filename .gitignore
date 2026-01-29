@@ -24,3 +24,19 @@ yarn-error.log
 
 # ignore accidental Windows reserved filename
 NUL
+
+# Local SQLite DB
+/database/database.sqlite
+/database/*.sqlite
+
+# Local SQLite DB
+/database/database.sqlite
+/database/*.sqlite
+
+# local artifacts
+*.sqlite
+*.patch
+app/Console/Commands/*.LOCAL.bak.*
+
+# local css (keep if you want to version it)
+resources/css/filament/

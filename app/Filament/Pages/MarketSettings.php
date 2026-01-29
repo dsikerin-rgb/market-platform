@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Pages/MarketSettings.php
 
 declare(strict_types=1);
 
@@ -11,6 +12,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class MarketSettings extends Page
 {
@@ -45,12 +47,24 @@ class MarketSettings extends Page
     public ?string $integrationExchangesUrl = null;
 
     /**
-     * @var array{name:?string,address:?string,timezone:?string}
+     * URL страницы просмотра карты.
+     * Ожидаем маршрут filament.admin.market-map (см. routes/web.php).
+     */
+    public ?string $marketMapViewerUrl = null;
+
+    /**
+     * @var array{
+     *   name:?string,
+     *   address:?string,
+     *   timezone:?string,
+     *   map_pdf_path?:string|null
+     * }
      */
     public array $data = [
         'name' => null,
         'address' => null,
         'timezone' => null,
+        'map_pdf_path' => null,
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -100,10 +114,13 @@ class MarketSettings extends Page
 
         $this->fillQuickLinks();
 
+        $settings = (array) ($this->market->settings ?? []);
+
         $this->form->fill([
             'name' => $this->market->name,
             'address' => $this->market->address,
             'timezone' => $this->market->timezone ?: config('app.timezone', 'Europe/Moscow'),
+            'map_pdf_path' => isset($settings['map_pdf_path']) && is_string($settings['map_pdf_path']) ? $settings['map_pdf_path'] : null,
         ]);
     }
 
@@ -154,6 +171,45 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12),
+
+                Section::make('Карта рынка')
+                    ->description('PDF-карта для просмотра с масштабированием и перемещением.')
+                    ->schema([
+                        Forms\Components\FileUpload::make('map_pdf_path')
+                            ->label('Карта (PDF)')
+                            ->helperText('Загрузите векторный PDF (рекомендуется). Файл хранится приватно.')
+                            ->acceptedFileTypes(['application/pdf'])
+                            ->disk('local')
+                            ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
+                            ->visibility('private')
+                            ->preserveFilenames()
+                            // 20 МБ запасом (у нас сейчас ~2 МБ)
+                            ->maxSize(20480)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
+
+                        Forms\Components\Actions::make([
+                            Forms\Components\Actions\Action::make('openMarketMap')
+                                ->label('Открыть карту')
+                                ->icon('heroicon-o-map')
+                                ->url(fn (): ?string => $this->marketMapViewerUrl)
+                                ->openUrlInNewTab()
+                                // Важно: viewer берёт PDF из БД, поэтому без сохранения “свежая” загрузка может не отобразиться.
+                                ->disabled(fn (): bool => blank($this->marketMapViewerUrl) || blank($this->data['map_pdf_path'] ?? null))
+                                ->tooltip(function (): ?string {
+                                    if (blank($this->marketMapViewerUrl)) {
+                                        return 'Маршрут просмотра карты не найден (проверь routes/web.php).';
+                                    }
+
+                                    if (blank($this->data['map_pdf_path'] ?? null)) {
+                                        return 'Сначала загрузите PDF-карту и сохраните настройки.';
+                                    }
+
+                                    return 'Откроется просмотр карты в новой вкладке.';
+                                }),
+                        ])->columnSpanFull(),
+                    ])
+                    ->columns(12),
             ]);
     }
 
@@ -164,11 +220,33 @@ class MarketSettings extends Page
 
         $state = $this->form->getState();
 
+        // Нормализуем путь (Filament отдаёт строку для single upload).
+        $newMapPath = $state['map_pdf_path'] ?? null;
+        if (is_array($newMapPath)) {
+            $newMapPath = $newMapPath[0] ?? null;
+        }
+        $newMapPath = (is_string($newMapPath) && $newMapPath !== '') ? $newMapPath : null;
+
+        $settings = (array) ($this->market->settings ?? []);
+        $oldMapPath = isset($settings['map_pdf_path']) && is_string($settings['map_pdf_path']) ? $settings['map_pdf_path'] : null;
+
+        // Если файл заменили/удалили — удаляем старый, чтобы не копить мусор.
+        if ($oldMapPath && $oldMapPath !== $newMapPath) {
+            try {
+                Storage::disk('local')->delete($oldMapPath);
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        $settings['map_pdf_path'] = $newMapPath;
+
         $this->market->fill([
             'name' => (string) ($state['name'] ?? ''),
             'address' => (string) ($state['address'] ?? ''),
             // Храним IANA timezone (Asia/Omsk и т.д.) — это стандарт.
             'timezone' => (string) ($state['timezone'] ?? config('app.timezone', 'Europe/Moscow')),
+            'settings' => $settings,
         ]);
 
         $this->market->save();
@@ -280,6 +358,12 @@ class MarketSettings extends Page
             \App\Filament\Resources\IntegrationExchangeResource::class,
             \App\Filament\Resources\IntegrationExchangesResource::class,
         ], 'index');
+
+        try {
+            $this->marketMapViewerUrl = route('filament.admin.market-map');
+        } catch (\Throwable) {
+            $this->marketMapViewerUrl = null;
+        }
     }
 
     /**

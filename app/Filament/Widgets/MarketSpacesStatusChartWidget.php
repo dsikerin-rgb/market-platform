@@ -1,15 +1,25 @@
 <?php
+# app/Filament/Widgets/MarketSpacesStatusChartWidget.php
+
+declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Models\Market;
 use App\Models\MarketSpace;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Collection;
+use Filament\Widgets\Concerns\InteractsWithPageFilters;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
-    protected ?string $heading = 'Статусы торговых мест';
+    use InteractsWithPageFilters;
+
+    protected ?string $heading = 'Заполняемость торговых мест за месяц';
 
     protected function getType(): string
     {
@@ -30,53 +40,58 @@ class MarketSpacesStatusChartWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
 
-        // На всякий случай (хотя canView уже отсекает)
         if (! $user) {
-            return $this->emptyChart();
+            return $this->emptyChart('Нет пользователя');
         }
-
-        $query = MarketSpace::query();
 
         $marketId = $this->resolveMarketIdForWidget($user);
 
-        // Для market-admin рынок обязателен, иначе данных нет
-        if (! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && ! $marketId) {
-            return $this->emptyChart();
+        if (! $marketId) {
+            return $this->emptyChart('Выбери рынок');
         }
 
-        // Если marketId найден — фильтруем, если нет (super-admin без выбора) — считаем по всем рынкам
-        if ($marketId) {
-            $query->where('market_id', $marketId);
+        $market = Market::query()
+            ->select(['id', 'timezone'])
+            ->find($marketId);
+
+        $tz = $this->resolveTimezone($market?->timezone);
+
+        [$monthYm, $monthStart, $monthEnd, $periodLabel] = $this->resolveMonthRange($tz);
+
+        $totalSpaces = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->count();
+
+        if ($totalSpaces <= 0) {
+            return $this->emptyChart($periodLabel);
         }
 
-        /** @var Collection<string|int, int> $counts */
-        $counts = $query
-            ->selectRaw('status, COUNT(*) as aggregate')
-            ->groupBy('status')
-            ->pluck('aggregate', 'status');
+        $occupiedSpaces = $this->countOccupiedSpacesForMonth($marketId, $monthYm, $monthStart, $monthEnd);
 
-        $ordered = $this->orderedStatuses($counts);
-        $data = $ordered->values()->map(fn ($v) => (int) $v)->toArray();
+        // fallback на "текущее" состояние, если tenant_accruals недоступен или колонок не хватает
+        if ($occupiedSpaces === null) {
+            $occupiedSpaces = MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->where('status', 'occupied')
+                ->count();
+        }
 
-        // Chart.js не рисует pie, если сумма = 0
-        if (array_sum($data) === 0) {
-            return $this->emptyChart();
+        $freeSpaces = max($totalSpaces - $occupiedSpaces, 0);
+
+        if (($freeSpaces + $occupiedSpaces) === 0) {
+            return $this->emptyChart($periodLabel);
         }
 
         return [
-            'labels' => ['Свободно', 'Занято', 'Зарезервировано', 'На обслуживании'],
+            'labels' => ['Свободно', 'Занято'],
             'datasets' => [
                 [
-                    'data' => $data,
+                    'data' => [(int) $freeSpaces, (int) $occupiedSpaces],
                 ],
             ],
         ];
     }
 
-    /**
-     * super-admin: рынок из переключателя (если выбран), иначе null (все рынки)
-     * market-admin: всегда user->market_id
-     */
     protected function resolveMarketIdForWidget($user): ?int
     {
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
@@ -85,13 +100,13 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             return $user->market_id ? (int) $user->market_id : null;
         }
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $value = session('dashboard_market_id');
 
-        // новый ключ
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
+        if (blank($value)) {
+            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+            $value = session("filament_{$panelId}_market_id");
+        }
 
-        // запасной старый ключ
         if (blank($value)) {
             $value = session('filament.admin.selected_market_id');
         }
@@ -99,20 +114,228 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         return filled($value) ? (int) $value : null;
     }
 
-    private function orderedStatuses(Collection $counts): Collection
+    private function resolveTimezone(?string $marketTimezone): string
     {
-        return collect([
-            'free' => 0,
-            'occupied' => 0,
-            'reserved' => 0,
-            'maintenance' => 0,
-        ])->map(fn (int $default, string $status): int => (int) ($counts[$status] ?? 0));
+        $tz = trim((string) $marketTimezone);
+
+        if ($tz === '') {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        try {
+            CarbonImmutable::now($tz);
+        } catch (\Throwable) {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        return $tz;
     }
 
-    private function emptyChart(): array
+    private function resolveMonthRange(string $tz): array
+    {
+        $raw = null;
+
+        if (is_array($this->filters ?? null)) {
+            $raw = $this->filters['month'] ?? $this->filters['period'] ?? $this->filters['dashboard_month'] ?? null;
+        }
+
+        $raw = $raw ?: session('dashboard_month') ?: session('dashboard_period');
+
+        $monthYm = is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)
+            ? $raw
+            : CarbonImmutable::now($tz)->format('Y-m');
+
+        $start = CarbonImmutable::createFromFormat('Y-m', $monthYm, $tz)->startOfMonth();
+        $end   = $start->addMonth();
+
+        $label = $start->format('m.Y') . ' (TZ: ' . $tz . ')';
+
+        return [$monthYm, $start, $end, $label];
+    }
+
+    private function countOccupiedSpacesForMonth(int $marketId, string $monthYm, CarbonImmutable $start, CarbonImmutable $end): ?int
+    {
+        if (! Schema::hasTable('tenant_accruals')) {
+            return null;
+        }
+
+        $meta = $this->getTableMeta('tenant_accruals');
+        $cols = $meta['columns'];
+
+        $marketCol = $this->pickFirstExisting($cols, ['market_id']);
+        $spaceCol  = $this->pickFirstExisting($cols, ['market_space_id', 'space_id']);
+        $periodCol = $this->pickPeriodColumn($cols);
+
+        if (! $marketCol || ! $spaceCol || ! $periodCol) {
+            return null;
+        }
+
+        $rentCol = $this->pickFirstExisting($cols, ['rent_amount']);
+
+        // ВАЖНО: для WHERE нужно построчное выражение (без SUM)
+        $payableRowExpr = $this->buildPayableRowExpression($cols);
+
+        if (! $rentCol && $payableRowExpr === null) {
+            return null;
+        }
+
+        $q = DB::table('tenant_accruals')->where($marketCol, $marketId);
+
+        $this->applyMonthFilter($q, $meta, $periodCol, $monthYm, $start, $end);
+
+        if ($rentCol) {
+            $q->where($rentCol, '>', 0);
+        } else {
+            $q->whereRaw('(' . $payableRowExpr . ') > 0');
+        }
+
+        try {
+            return (int) $q->distinct()->count($spaceCol);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function getTableMeta(string $table): array
+    {
+        $columns = [];
+        $types = [];
+
+        try {
+            if (DB::getDriverName() === 'sqlite') {
+                $rows = DB::select('PRAGMA table_info(' . $table . ')');
+                foreach ($rows as $row) {
+                    $name = (string) ($row->name ?? '');
+                    if ($name === '') {
+                        continue;
+                    }
+                    $columns[] = $name;
+                    $types[$name] = strtoupper((string) ($row->type ?? ''));
+                }
+
+                return [
+                    'columns' => $columns,
+                    'types' => $types,
+                ];
+            }
+        } catch (\Throwable) {
+            // ignore
+        }
+
+        try {
+            $columns = Schema::getColumnListing($table);
+        } catch (\Throwable) {
+            $columns = [];
+        }
+
+        return [
+            'columns' => $columns,
+            'types' => $types,
+        ];
+    }
+
+    private function pickFirstExisting(array $columns, array $candidates): ?string
+    {
+        $set = array_flip($columns);
+
+        foreach ($candidates as $candidate) {
+            if (isset($set[$candidate])) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function pickPeriodColumn(array $columns): ?string
+    {
+        return $this->pickFirstExisting($columns, [
+            'period',
+            'period_ym',
+            'period_start',
+            'period_date',
+            'accrual_period',
+            'month',
+        ]);
+    }
+
+    private function applyMonthFilter(
+        Builder $q,
+        array $meta,
+        string $periodCol,
+        string $monthYm,
+        CarbonImmutable $start,
+        CarbonImmutable $end
+    ): void {
+        $types = $meta['types'] ?? [];
+        $type = strtoupper((string) ($types[$periodCol] ?? ''));
+
+        $startDate = $start->toDateString();
+        $endDate = $end->toDateString();
+
+        if ($type !== '' && str_contains($type, 'INT')) {
+            $ymInt = (int) str_replace('-', '', $monthYm);
+            $q->where($periodCol, $ymInt);
+
+            return;
+        }
+
+        $lower = strtolower($periodCol);
+        if (str_contains($lower, 'start') || str_contains($lower, 'date') || str_contains($lower, '_at')) {
+            $q->where($periodCol, '>=', $startDate)->where($periodCol, '<', $endDate);
+
+            return;
+        }
+
+        $q->where(function (Builder $qq) use ($periodCol, $monthYm, $startDate): void {
+            $qq->where($periodCol, $monthYm)->orWhere($periodCol, $startDate);
+        });
+    }
+
+    /**
+     * Построчное выражение суммы начислений для WHERE (без SUM).
+     */
+    private function buildPayableRowExpression(array $columns): ?string
+    {
+        $totalCol = $this->pickFirstExisting($columns, [
+            'total_amount',
+            'payable_total',
+            'amount_total',
+            'total',
+        ]);
+
+        if ($totalCol) {
+            return 'COALESCE("' . $totalCol . '", 0)';
+        }
+
+        $parts = [];
+
+        foreach ([
+            'rent_amount',
+            'utility_amount',
+            'utilities_amount',
+            'service_amount',
+            'services_amount',
+            'maintenance_amount',
+            'penalty_amount',
+            'penalties_amount',
+        ] as $col) {
+            if (in_array($col, $columns, true)) {
+                $parts[] = 'COALESCE("' . $col . '", 0)';
+            }
+        }
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode(' + ', $parts);
+    }
+
+    private function emptyChart(string $label = 'Нет данных'): array
     {
         return [
-            'labels' => ['Нет данных'],
+            'labels' => [$label],
             'datasets' => [
                 [
                     'data' => [1],
