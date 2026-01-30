@@ -35,6 +35,21 @@ class Dashboard extends BaseDashboard
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-home';
 
     /**
+     * Колонки виджетов на дашборде.
+     * md=2 сохраняет привычную сетку,
+     * xl=3 даёт возможность виджету занимать "2 колонки из 3" на больших экранах.
+     *
+     * ВАЖНО: сигнатура должна совпадать с Filament\Pages\Dashboard::getColumns(): array|int
+     */
+    public function getColumns(): array|int
+    {
+        return [
+            'md' => 2,
+            'xl' => 3,
+        ];
+    }
+
+    /**
      * В некоторых сборках Livewire/Filament хук mount может “не находиться” (кэш/особенности загрузки),
      * из-за чего Livewire дергает __call('mount') и падает с BadMethodCallException.
      *
@@ -142,7 +157,6 @@ class Dashboard extends BaseDashboard
             Section::make()
                 ->columnSpanFull()
                 ->extraAttributes([
-                    // расширяем контейнер секции на всякий случай
                     'class' => 'w-full',
                     'style' => 'width:100%;',
                 ])
@@ -162,7 +176,6 @@ class Dashboard extends BaseDashboard
                                 ? $raw
                                 : CarbonImmutable::now($tz)->format('Y-m');
                         })
-                        // Нативный select — самый стабильный (без “вертикальных цифр” и CSS-ломаний).
                         ->native()
                         ->live()
                         ->columnSpanFull()
@@ -170,8 +183,6 @@ class Dashboard extends BaseDashboard
                             'class' => 'w-full',
                             'style' => 'width:100%;min-width:16rem;',
                         ])
-                        // на разных версиях Filament атрибуты могут ложиться на разные узлы,
-                        // поэтому дублируем и class, и style
                         ->extraAttributes([
                             'class' => 'w-full',
                             'style' => 'width:100%;min-width:16rem;',
@@ -230,7 +241,6 @@ class Dashboard extends BaseDashboard
             RecentTenantRequestsWidget::class,
         ];
 
-        // Если виджет графика выручки уже создан — подключаем без риска фатала.
         if (class_exists(\App\Filament\Widgets\RevenueYearChartWidget::class)) {
             array_splice($widgets, 1, 0, [\App\Filament\Widgets\RevenueYearChartWidget::class]);
         }
@@ -268,9 +278,6 @@ class Dashboard extends BaseDashboard
         return (int) ($value ?: 0);
     }
 
-    /**
-     * Приводим выбор рынка к единому ключу dashboard_market_id (для super-admin).
-     */
     private function syncDashboardMarketId(): void
     {
         $user = Filament::auth()->user();
@@ -308,9 +315,6 @@ class Dashboard extends BaseDashboard
         return $tz;
     }
 
-    /**
-     * 'YYYY-MM' => 'MM.YYYY' (свежие сверху)
-     */
     private function getMonthOptions(int $marketId, string $tz): array
     {
         $months = [];
@@ -339,15 +343,13 @@ class Dashboard extends BaseDashboard
                         }
                     }
                 } catch (\Throwable) {
-                    // ignore and fallback
+                    // ignore
                 }
             }
         }
 
-        // текущий месяц всегда доступен
         $months[CarbonImmutable::now($tz)->format('Y-m')] = true;
 
-        // если данных мало — рисуем последние 24 месяца
         if ($months === [] || count($months) < 3) {
             $now = CarbonImmutable::now($tz)->startOfMonth();
             for ($i = 0; $i < 24; $i++) {
@@ -388,9 +390,6 @@ class Dashboard extends BaseDashboard
         return null;
     }
 
-    /**
-     * int YYYYMM | "YYYYMM" | "YYYY-MM" | "YYYY-MM-DD" => "YYYY-MM"
-     */
     private function normalizeYm(mixed $value): ?string
     {
         if (is_int($value) || (is_string($value) && preg_match('/^\d{6}$/', $value))) {
