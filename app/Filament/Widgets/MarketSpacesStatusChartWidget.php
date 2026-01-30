@@ -36,6 +36,68 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         );
     }
 
+    /**
+     * “Легенда как Локация”: показываем под заголовком.
+     * Важно: в ChartWidget метод должен быть PUBLIC.
+     */
+    public function getDescription(): ?string
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $marketId = $this->resolveMarketIdForWidget($user);
+
+        if (! $marketId) {
+            return null;
+        }
+
+        $market = Market::query()
+            ->select(['id', 'name', 'timezone'])
+            ->find($marketId);
+
+        $tz = $this->resolveTimezone($market?->timezone);
+
+        [, $start,, $periodLabel] = $this->resolveMonthRange($tz);
+
+        $marketName = trim((string) ($market?->name ?? ''));
+
+        $parts = [];
+
+        if ($marketName !== '') {
+            $parts[] = 'Локация: ' . $marketName;
+        }
+
+        // periodLabel уже содержит "m.Y (TZ: ...)"
+        $parts[] = $periodLabel;
+
+        return implode(' • ', $parts);
+    }
+
+    /**
+     * Настройки Chart.js (легенда/отображение).
+     */
+    protected function getOptions(): array
+    {
+        return [
+            'maintainAspectRatio' => false,
+            'plugins' => [
+                'legend' => [
+                    'position' => 'bottom',
+                    'labels' => [
+                        'usePointStyle' => true,
+                        'pointStyle' => 'rectRounded',
+                        'boxWidth' => 12,
+                        'boxHeight' => 12,
+                        'padding' => 16,
+                    ],
+                ],
+            ],
+        ];
+    }
+
     protected function getData(): array
     {
         $user = Filament::auth()->user();
@@ -76,17 +138,37 @@ class MarketSpacesStatusChartWidget extends ChartWidget
                 ->count();
         }
 
+        $occupiedSpaces = max((int) $occupiedSpaces, 0);
         $freeSpaces = max($totalSpaces - $occupiedSpaces, 0);
 
         if (($freeSpaces + $occupiedSpaces) === 0) {
             return $this->emptyChart($periodLabel);
         }
 
+        // В legend показываем сразу значения — читается лучше.
+        $labels = [
+            'Свободно (' . $freeSpaces . ')',
+            'Занято (' . $occupiedSpaces . ')',
+        ];
+
         return [
-            'labels' => ['Свободно', 'Занято'],
+            'labels' => $labels,
             'datasets' => [
                 [
-                    'data' => [(int) $freeSpaces, (int) $occupiedSpaces],
+                    'data' => [$freeSpaces, $occupiedSpaces],
+
+                    // Разные цвета сегментов => разные цвета легенды
+                    'backgroundColor' => [
+                        '#94A3B8', // Свободно
+                        '#22C55E', // Занято
+                    ],
+
+                    'borderColor' => [
+                        '#FFFFFF',
+                        '#FFFFFF',
+                    ],
+                    'borderWidth' => 2,
+                    'hoverOffset' => 6,
                 ],
             ],
         ];
@@ -100,16 +182,13 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             return $user->market_id ? (int) $user->market_id : null;
         }
 
-        $value = session('dashboard_market_id');
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament_{$panelId}_market_id");
-        }
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
+        $value =
+            session('dashboard_market_id')
+            ?? session("filament.{$panelId}.selected_market_id")
+            ?? session("filament_{$panelId}_market_id")
+            ?? session('filament.admin.selected_market_id');
 
         return filled($value) ? (int) $value : null;
     }
@@ -131,17 +210,34 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         return $tz;
     }
 
-    private function resolveMonthRange(string $tz): array
+    /**
+     * Берем фильтры и из Filament 4 (pageFilters), и из возможного legacy (filters).
+     *
+     * @return array<string, mixed>
+     */
+    private function currentFilters(): array
     {
-        $raw = null;
+        $out = [];
 
-        if (is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? $this->filters['period'] ?? $this->filters['dashboard_month'] ?? null;
+        if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
+            $out = array_merge($out, $this->pageFilters);
         }
 
+        if (is_array($this->filters ?? null)) {
+            $out = array_merge($out, $this->filters);
+        }
+
+        return $out;
+    }
+
+    private function resolveMonthRange(string $tz): array
+    {
+        $filters = $this->currentFilters();
+
+        $raw = $filters['month'] ?? $filters['period'] ?? $filters['dashboard_month'] ?? null;
         $raw = $raw ?: session('dashboard_month') ?: session('dashboard_period');
 
-        $monthYm = is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)
+        $monthYm = (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
             ? $raw
             : CarbonImmutable::now($tz)->format('Y-m');
 
@@ -204,11 +300,13 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         try {
             if (DB::getDriverName() === 'sqlite') {
                 $rows = DB::select('PRAGMA table_info(' . $table . ')');
+
                 foreach ($rows as $row) {
                     $name = (string) ($row->name ?? '');
                     if ($name === '') {
                         continue;
                     }
+
                     $columns[] = $name;
                     $types[$name] = strtoupper((string) ($row->type ?? ''));
                 }
@@ -281,6 +379,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         }
 
         $lower = strtolower($periodCol);
+
         if (str_contains($lower, 'start') || str_contains($lower, 'date') || str_contains($lower, '_at')) {
             $q->where($periodCol, '>=', $startDate)->where($periodCol, '<', $endDate);
 
@@ -339,6 +438,9 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             'datasets' => [
                 [
                     'data' => [1],
+                    'backgroundColor' => ['#64748B'],
+                    'borderColor' => ['#FFFFFF'],
+                    'borderWidth' => 2,
                 ],
             ],
         ];

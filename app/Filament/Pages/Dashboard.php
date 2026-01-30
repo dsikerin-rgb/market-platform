@@ -34,22 +34,86 @@ class Dashboard extends BaseDashboard
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-home';
 
-    public function mount(): void
+    /**
+     * В некоторых сборках Livewire/Filament хук mount может “не находиться” (кэш/особенности загрузки),
+     * из-за чего Livewire дергает __call('mount') и падает с BadMethodCallException.
+     *
+     * Мы:
+     * 1) держим реальный mount
+     * 2) добавляем страховку в __call для 'mount'
+     * 3) дублируем дефолты через getDefaultFilters (если Filament их использует)
+     */
+    public function mount(...$params): void
     {
-        parent::mount();
+        // если у родителя есть mount — пробуем дать ему отработать (без риска свалить страницу)
+        try {
+            $parent = get_parent_class($this) ?: null;
 
-        // Приводим разные session-ключи выбора рынка к единому dashboard_market_id.
-        $this->syncDashboardMarketId();
-
-        // Гарантируем, что dashboard_month задан.
-        $tz = $this->resolveMarketTimezone($this->resolveMarketId());
-
-        $month = $this->filters['month'] ?? session('dashboard_month');
-
-        if (! is_string($month) || ! preg_match('/^\d{4}-\d{2}$/', $month)) {
-            $month = CarbonImmutable::now($tz)->format('Y-m');
+            if ($parent && method_exists($parent, 'mount')) {
+                /** @phpstan-ignore-next-line */
+                parent::mount(...$params);
+            }
+        } catch (\Throwable) {
+            // ignore
         }
 
+        $this->bootstrapDashboardState();
+    }
+
+    /**
+     * Страховка: если Livewire по какой-то причине не “видит” mount и вызывает его через __call — не падаем.
+     */
+    public function __call($method, $params)
+    {
+        if ($method === 'mount') {
+            $this->bootstrapDashboardState();
+
+            return null;
+        }
+
+        return parent::__call($method, $params);
+    }
+
+    protected function getDefaultFilters(): array
+    {
+        $this->syncDashboardMarketId();
+
+        $marketId = $this->resolveMarketId();
+        $tz = $this->resolveMarketTimezone($marketId);
+
+        $raw = session('dashboard_month');
+
+        $month = (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
+            ? $raw
+            : CarbonImmutable::now($tz)->format('Y-m');
+
+        session(['dashboard_month' => $month]);
+
+        return [
+            'month' => $month,
+        ];
+    }
+
+    private function bootstrapDashboardState(): void
+    {
+        $this->syncDashboardMarketId();
+
+        $marketId = $this->resolveMarketId();
+        $tz = $this->resolveMarketTimezone($marketId);
+
+        $current = null;
+
+        if (is_array($this->filters ?? null)) {
+            $current = $this->filters['month'] ?? null;
+        }
+
+        $current = $current ?: session('dashboard_month');
+
+        $month = (is_string($current) && preg_match('/^\d{4}-\d{2}$/', $current))
+            ? $current
+            : CarbonImmutable::now($tz)->format('Y-m');
+
+        $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
         session(['dashboard_month' => $month]);
     }
 
@@ -64,28 +128,65 @@ class Dashboard extends BaseDashboard
     }
 
     /**
-     * Глобальные фильтры дашборда (прокидываются во все виджеты через InteractsWithPageFilters).
+     * Filament 4: фильтры дашборда строятся через Schema.
      */
     public function filtersForm(Schema $schema): Schema
     {
-        $marketId = $this->resolveMarketId();
-        $tz = $this->resolveMarketTimezone($marketId);
+        $this->syncDashboardMarketId();
+
+        $resolveTz = function (): string {
+            return $this->resolveMarketTimezone($this->resolveMarketId());
+        };
 
         return $schema->schema([
             Section::make()
+                ->columnSpanFull()
+                ->extraAttributes([
+                    // расширяем контейнер секции на всякий случай
+                    'class' => 'w-full',
+                    'style' => 'width:100%;',
+                ])
                 ->schema([
                     Select::make('month')
                         ->label('Период (месяц)')
                         ->placeholder('Выбери месяц')
-                        ->options(fn (): array => $this->getMonthOptions($marketId, $tz))
-                        ->default(fn (): string => CarbonImmutable::now($tz)->format('Y-m'))
-                        ->native(false)
-                        ->searchable()
+                        ->options(fn (): array => $this->getMonthOptions(
+                            $this->resolveMarketId(),
+                            $resolveTz()
+                        ))
+                        ->default(function () use ($resolveTz): string {
+                            $tz = $resolveTz();
+                            $raw = session('dashboard_month');
+
+                            return (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
+                                ? $raw
+                                : CarbonImmutable::now($tz)->format('Y-m');
+                        })
+                        // Нативный select — самый стабильный (без “вертикальных цифр” и CSS-ломаний).
+                        ->native()
                         ->live()
-                        ->afterStateHydrated(function (Select $component, $state) use ($tz): void {
+                        ->columnSpanFull()
+                        ->extraFieldWrapperAttributes([
+                            'class' => 'w-full',
+                            'style' => 'width:100%;min-width:16rem;',
+                        ])
+                        // на разных версиях Filament атрибуты могут ложиться на разные узлы,
+                        // поэтому дублируем и class, и style
+                        ->extraAttributes([
+                            'class' => 'w-full',
+                            'style' => 'width:100%;min-width:16rem;',
+                        ])
+                        ->extraInputAttributes([
+                            'class' => 'w-full',
+                            'style' => 'width:100%;min-width:16rem;',
+                        ])
+                        ->afterStateHydrated(function (Select $component, $state) use ($resolveTz): void {
+                            $tz = $resolveTz();
+                            $fallback = (string) (session('dashboard_month') ?: CarbonImmutable::now($tz)->format('Y-m'));
+
                             $value = (is_string($state) && preg_match('/^\d{4}-\d{2}$/', $state))
                                 ? $state
-                                : CarbonImmutable::now($tz)->format('Y-m');
+                                : $fallback;
 
                             if ($state !== $value) {
                                 $component->state($value);
@@ -93,16 +194,17 @@ class Dashboard extends BaseDashboard
 
                             session(['dashboard_month' => $value]);
                         })
-                        ->afterStateUpdated(function ($state): void {
-                            if (is_string($state) && preg_match('/^\d{4}-\d{2}$/', $state)) {
-                                session(['dashboard_month' => $state]);
-                            }
+                        ->afterStateUpdated(function ($state) use ($resolveTz): void {
+                            $tz = $resolveTz();
+
+                            $value = (is_string($state) && preg_match('/^\d{4}-\d{2}$/', $state))
+                                ? $state
+                                : CarbonImmutable::now($tz)->format('Y-m');
+
+                            session(['dashboard_month' => $value]);
                         }),
                 ])
-                ->columns([
-                    'md' => 2,
-                    'xl' => 3,
-                ]),
+                ->columns(1),
         ]);
     }
 
@@ -119,7 +221,7 @@ class Dashboard extends BaseDashboard
 
     public function getWidgets(): array
     {
-        return [
+        $widgets = [
             MarketOverviewStatsWidget::class,
             TenantActivityStatsWidget::class,
             MarketSpacesStatusChartWidget::class,
@@ -127,6 +229,13 @@ class Dashboard extends BaseDashboard
             ExpiringContractsWidget::class,
             RecentTenantRequestsWidget::class,
         ];
+
+        // Если виджет графика выручки уже создан — подключаем без риска фатала.
+        if (class_exists(\App\Filament\Widgets\RevenueYearChartWidget::class)) {
+            array_splice($widgets, 1, 0, [\App\Filament\Widgets\RevenueYearChartWidget::class]);
+        }
+
+        return $widgets;
     }
 
     private function resolveMarketId(): int
@@ -143,9 +252,25 @@ class Dashboard extends BaseDashboard
             return (int) ($user->market_id ?: 0);
         }
 
-        return (int) (session('dashboard_market_id') ?: 0);
+        return $this->resolveSelectedMarketId();
     }
 
+    private function resolveSelectedMarketId(): int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+
+        $value =
+            session('dashboard_market_id')
+            ?? session("filament.{$panelId}.selected_market_id")
+            ?? session("filament_{$panelId}_market_id")
+            ?? session('filament.admin.selected_market_id');
+
+        return (int) ($value ?: 0);
+    }
+
+    /**
+     * Приводим выбор рынка к единому ключу dashboard_market_id (для super-admin).
+     */
     private function syncDashboardMarketId(): void
     {
         $user = Filament::auth()->user();
@@ -154,20 +279,10 @@ class Dashboard extends BaseDashboard
             return;
         }
 
-        if (filled(session('dashboard_market_id'))) {
-            return;
-        }
+        $marketId = $this->resolveSelectedMarketId();
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        // Поддерживаем ВСЕ варианты ключей, которые встречались в проекте
-        $fallback =
-            session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        if (filled($fallback)) {
-            session(['dashboard_market_id' => (int) $fallback]);
+        if ($marketId > 0) {
+            session(['dashboard_market_id' => $marketId]);
         }
     }
 
@@ -193,6 +308,9 @@ class Dashboard extends BaseDashboard
         return $tz;
     }
 
+    /**
+     * 'YYYY-MM' => 'MM.YYYY' (свежие сверху)
+     */
     private function getMonthOptions(int $marketId, string $tz): array
     {
         $months = [];
@@ -221,13 +339,15 @@ class Dashboard extends BaseDashboard
                         }
                     }
                 } catch (\Throwable) {
-                    // ignore
+                    // ignore and fallback
                 }
             }
         }
 
+        // текущий месяц всегда доступен
         $months[CarbonImmutable::now($tz)->format('Y-m')] = true;
 
+        // если данных мало — рисуем последние 24 месяца
         if ($months === [] || count($months) < 3) {
             $now = CarbonImmutable::now($tz)->startOfMonth();
             for ($i = 0; $i < 24; $i++) {
@@ -268,10 +388,14 @@ class Dashboard extends BaseDashboard
         return null;
     }
 
+    /**
+     * int YYYYMM | "YYYYMM" | "YYYY-MM" | "YYYY-MM-DD" => "YYYY-MM"
+     */
     private function normalizeYm(mixed $value): ?string
     {
         if (is_int($value) || (is_string($value) && preg_match('/^\d{6}$/', $value))) {
             $s = (string) $value;
+
             return substr($s, 0, 4) . '-' . substr($s, 4, 2);
         }
 

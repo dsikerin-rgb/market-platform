@@ -15,7 +15,64 @@ html:not([data-admin-overrides="0"])::before{
   pointer-events:none;
 }
 
-/* === Task "Сводка": выравниваем значения строго в одну колонку === */
+/* ====================================================================== */
+/* === Dashboard: фикс фильтра "Период (месяц)" (вертикальные цифры)     === */
+/* ====================================================================== */
+/* Причина эффекта: контрол/контейнер слишком узкий + где-то включён break-all/word-wrap.
+   Фикс: даём нормальную минимальную ширину и запрещаем перенос по символам. */
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .fi-fo-field-wrp,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .fi-fo-field-wrp-content{
+  min-width: 0 !important;
+}
+
+/* Пытаемся попасть максимально надёжно: по data-атрибутам поля "month" (если есть) */
+html:not([data-admin-overrides="0"]) .fi-dashboard-page [data-field*="month"],
+html:not([data-admin-overrides="0"]) .fi-dashboard-page [data-field-wrapper*="month"]{
+  min-width: 16rem;
+}
+
+/* Нативный select (native(true)) */
+html:not([data-admin-overrides="0"]) .fi-dashboard-page select[name="month"],
+html:not([data-admin-overrides="0"]) .fi-dashboard-page select[id$="month"],
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .fi-fo-field-wrp select{
+  width: 100% !important;
+  min-width: 16rem;
+  white-space: nowrap;
+  word-break: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Если всё-таки используется кастомный select (tom-select / choices) — страхуем */
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .ts-wrapper,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .ts-control,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .choices,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .choices__inner,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .fi-select,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .fi-input-wrp{
+  width: 100% !important;
+  min-width: 16rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .ts-control,
+html:not([data-admin-overrides="0"]) .fi-dashboard-page .choices__inner{
+  white-space: nowrap;
+}
+
+/* На десктопе можно чуть шире, чтобы выглядело аккуратнее */
+@media (min-width: 1024px){
+  html:not([data-admin-overrides="0"]) .fi-dashboard-page select[name="month"],
+  html:not([data-admin-overrides="0"]) .fi-dashboard-page select[id$="month"],
+  html:not([data-admin-overrides="0"]) .fi-dashboard-page .fi-fo-field-wrp select,
+  html:not([data-admin-overrides="0"]) .fi-dashboard-page .ts-wrapper,
+  html:not([data-admin-overrides="0"]) .fi-dashboard-page .choices{
+    min-width: 18rem;
+  }
+}
+
+/* ====================================================================== */
+/* === Task "Сводка": выравниваем значения строго в одну колонку         === */
+/* ====================================================================== */
 @media (min-width: 1024px){
 
   .task-summary-compact{

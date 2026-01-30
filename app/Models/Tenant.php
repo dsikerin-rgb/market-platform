@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -33,6 +34,15 @@ class Tenant extends Model
         'is_active' => 'boolean',
     ];
 
+    /**
+     * Чтобы в JSON/карточках можно было брать tenant.display_name.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'display_name',
+    ];
+
     public function market(): BelongsTo
     {
         return $this->belongsTo(Market::class);
@@ -51,5 +61,32 @@ class Tenant extends Model
     public function requests(): HasMany
     {
         return $this->hasMany(TenantRequest::class);
+    }
+
+    /**
+     * Каноническое имя для UI:
+     * short_name (если есть) -> name -> "Арендатор"
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        $short = trim((string) ($this->short_name ?? ''));
+        if ($short !== '') {
+            return $short;
+        }
+
+        $name = trim((string) ($this->name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        return 'Арендатор';
+    }
+
+    /**
+     * Удобный scope (пригодится для карты/выборок).
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
     }
 }
