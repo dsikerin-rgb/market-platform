@@ -2,14 +2,6 @@
 
 <x-filament-panels::page>
     <style>
-        /* Скрыть стандартный заголовок/подзаголовок Filament на этой странице */
-        .fi-page-header,
-        header.fi-page-header,
-        .fi-page-header-heading,
-        .fi-page-header-subheading {
-            display: none !important;
-        }
-
         /* Только для этой страницы */
         .ms-page {
             padding-bottom: 28px; /* воздух внизу страницы */
@@ -37,11 +29,12 @@
                 z-index: 20;
             }
         }
+
         .ms-actions-row {
             display: flex;
             gap: 12px;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start; /* ✅ кнопка не улетает вправо */
             flex-wrap: wrap;
         }
 
@@ -158,10 +151,7 @@
                             <div class="ms-actions">
                                 <div class="ms-actions-row">
                                     @if (!empty($canEditMarket) && $canEditMarket)
-                                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                                            Изменения применятся после сохранения.
-                                        </div>
-
+                                        {{-- ✅ Кнопка слева и первая --}}
                                         <x-filament::button
                                             type="submit"
                                             color="primary"
@@ -170,11 +160,11 @@
                                         >
                                             Сохранить
                                         </x-filament::button>
-                                    @else
-                                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                                            Доступно только для просмотра.
-                                        </div>
 
+                                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                                            Изменения применятся после сохранения.
+                                        </div>
+                                    @else
                                         <x-filament::button
                                             type="button"
                                             color="gray"
@@ -183,6 +173,10 @@
                                         >
                                             Только просмотр
                                         </x-filament::button>
+
+                                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                                            Доступно только для просмотра.
+                                        </div>
                                     @endif
                                 </div>
                             </div>
