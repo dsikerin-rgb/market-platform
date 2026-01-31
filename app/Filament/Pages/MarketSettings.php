@@ -13,6 +13,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 
 class MarketSettings extends Page
 {
@@ -173,43 +174,32 @@ class MarketSettings extends Page
                     ->columns(12),
 
                 Section::make('Карта рынка')
-                    ->description('PDF-карта для просмотра с масштабированием и перемещением.')
-                    ->schema([
-                        Forms\Components\FileUpload::make('map_pdf_path')
-                            ->label('Карта (PDF)')
-                            ->helperText('Загрузите векторный PDF (рекомендуется). Файл хранится приватно.')
-                            ->acceptedFileTypes(['application/pdf'])
-                            ->disk('local')
-                            ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
-                            ->visibility('private')
-                            ->preserveFilenames()
-                            // 20 МБ запасом (у нас сейчас ~2 МБ)
-                            ->maxSize(20480)
-                            ->disabled(fn (): bool => ! $this->canEditMarket)
-                            ->columnSpanFull(),
+    ->description('PDF-карта для просмотра с масштабированием и перемещением.')
+    ->schema([
+        Forms\Components\FileUpload::make('map_pdf_path')
+            ->label('Карта (PDF)')
+            ->helperText('Загрузите векторный PDF (рекомендуется). Файл хранится приватно.')
+            ->acceptedFileTypes(['application/pdf'])
+            ->disk('local')
+            ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
+            ->visibility('private')
+            ->preserveFilenames()
+            ->maxSize(20480)
+            ->disabled(fn (): bool => ! $this->canEditMarket)
+            ->columnSpan([
+                'default' => 12,
+                'lg' => 7,   // ✅ не на всю ширину
+            ]),
 
-                        Forms\Components\Actions::make([
-                            Forms\Components\Actions\Action::make('openMarketMap')
-                                ->label('Открыть карту')
-                                ->icon('heroicon-o-map')
-                                ->url(fn (): ?string => $this->marketMapViewerUrl)
-                                ->openUrlInNewTab()
-                                // Важно: viewer берёт PDF из БД, поэтому без сохранения “свежая” загрузка может не отобразиться.
-                                ->disabled(fn (): bool => blank($this->marketMapViewerUrl) || blank($this->data['map_pdf_path'] ?? null))
-                                ->tooltip(function (): ?string {
-                                    if (blank($this->marketMapViewerUrl)) {
-                                        return 'Маршрут просмотра карты не найден (проверь routes/web.php).';
-                                    }
-
-                                    if (blank($this->data['map_pdf_path'] ?? null)) {
-                                        return 'Сначала загрузите PDF-карту и сохраните настройки.';
-                                    }
-
-                                    return 'Откроется просмотр карты в новой вкладке.';
-                                }),
-                        ])->columnSpanFull(),
-                    ])
-                    ->columns(12),
+        Forms\Components\Placeholder::make('market_map_open_button')
+            ->hiddenLabel()
+            ->content(fn (): HtmlString => $this->renderOpenMapButton())
+            ->columnSpan([
+                'default' => 12,
+                'lg' => 5,
+            ]),
+    ])
+    ->columns(12),
             ]);
     }
 
@@ -310,9 +300,13 @@ class MarketSettings extends Page
 
     protected function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        // сначала единый ключ дашборда (он у тебя уже используется в виджетах)
+        $value = session('dashboard_market_id');
 
-        $value = session("filament.{$panelId}.selected_market_id");
+        if (! filled($value)) {
+            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+            $value = session("filament.{$panelId}.selected_market_id");
+        }
 
         if (! filled($value)) {
             $value = session('filament.admin.selected_market_id');
@@ -391,6 +385,34 @@ class MarketSettings extends Page
         }
 
         return null;
+    }
+
+    protected function renderOpenMapButton(): HtmlString
+    {
+        if (blank($this->marketMapViewerUrl)) {
+            return new HtmlString(
+                '<div class="text-sm text-gray-500">Маршрут просмотра карты не найден (проверь routes/web.php).</div>'
+            );
+        }
+
+        if (blank($this->data['map_pdf_path'] ?? null)) {
+            return new HtmlString(
+                '<div class="text-sm text-gray-500">Сначала загрузите PDF-карту и сохраните настройки.</div>'
+            );
+        }
+
+        $href = e($this->marketMapViewerUrl);
+
+        // ВАЖНО: tailwind-классы из PHP-строки не попадают в сборку, поэтому
+        // используем готовые классы Filament кнопки (они уже в CSS) + inline как страховку.
+        return new HtmlString(
+            '<a href="' . $href . '" target="_blank" rel="noopener" role="button" ' .
+            'class="fi-btn fi-btn-color-primary fi-btn-size-md" ' .
+            'style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;' .
+            'padding:.55rem .95rem;border-radius:.75rem;font-weight:600;text-decoration:none;">' .
+                '<span class="fi-btn-label">Открыть карту</span>' .
+            '</a>'
+        );
     }
 
     protected function timezoneOptionsRu(): array
