@@ -13,7 +13,6 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\HtmlString;
 
 class MarketSettings extends Page
 {
@@ -184,16 +183,31 @@ class MarketSettings extends Page
                             ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
                             ->visibility('private')
                             ->preserveFilenames()
+                            // 20 МБ запасом (у нас сейчас ~2 МБ)
                             ->maxSize(20480)
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpanFull(),
 
-                        // В Filament 4 в твоей сборке нет Forms\Components\Actions,
-                        // поэтому рендерим кнопку через Placeholder.
-                        Forms\Components\Placeholder::make('market_map_open_button')
-                            ->hiddenLabel()
-                            ->content(fn (): HtmlString => $this->renderOpenMapButton())
-                            ->columnSpanFull(),
+                        Forms\Components\Actions::make([
+                            Forms\Components\Actions\Action::make('openMarketMap')
+                                ->label('Открыть карту')
+                                ->icon('heroicon-o-map')
+                                ->url(fn (): ?string => $this->marketMapViewerUrl)
+                                ->openUrlInNewTab()
+                                // Важно: viewer берёт PDF из БД, поэтому без сохранения “свежая” загрузка может не отобразиться.
+                                ->disabled(fn (): bool => blank($this->marketMapViewerUrl) || blank($this->data['map_pdf_path'] ?? null))
+                                ->tooltip(function (): ?string {
+                                    if (blank($this->marketMapViewerUrl)) {
+                                        return 'Маршрут просмотра карты не найден (проверь routes/web.php).';
+                                    }
+
+                                    if (blank($this->data['map_pdf_path'] ?? null)) {
+                                        return 'Сначала загрузите PDF-карту и сохраните настройки.';
+                                    }
+
+                                    return 'Откроется просмотр карты в новой вкладке.';
+                                }),
+                        ])->columnSpanFull(),
                     ])
                     ->columns(12),
             ]);
@@ -296,13 +310,9 @@ class MarketSettings extends Page
 
     protected function selectedMarketIdFromSession(): ?int
     {
-        // сначала единый ключ дашборда (он у тебя уже используется в виджетах)
-        $value = session('dashboard_market_id');
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
-        if (! filled($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id");
-        }
+        $value = session("filament.{$panelId}.selected_market_id");
 
         if (! filled($value)) {
             $value = session('filament.admin.selected_market_id');
@@ -381,32 +391,6 @@ class MarketSettings extends Page
         }
 
         return null;
-    }
-
-    protected function renderOpenMapButton(): HtmlString
-    {
-        if (blank($this->marketMapViewerUrl)) {
-            return new HtmlString(
-                '<div class="text-sm text-gray-500">Маршрут просмотра карты не найден (проверь routes/web.php).</div>'
-            );
-        }
-
-        if (blank($this->data['map_pdf_path'] ?? null)) {
-            return new HtmlString(
-                '<div class="text-sm text-gray-500">Сначала загрузите PDF-карту и сохраните настройки.</div>'
-            );
-        }
-
-        $href = e($this->marketMapViewerUrl);
-
-        // Стили — tailwind, чтобы не зависеть от внутренних классов Filament.
-        return new HtmlString(
-            '<a href="' . $href . '" target="_blank" rel="noopener" ' .
-            'class="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold ' .
-            'bg-primary-600 text-white hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2">' .
-            'Открыть карту' .
-            '</a>'
-        );
     }
 
     protected function timezoneOptionsRu(): array
