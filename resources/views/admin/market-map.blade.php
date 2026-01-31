@@ -446,6 +446,10 @@
 
         const CAN_EDIT  = @json((bool) $canEdit);
         const MARKET_ID = @json((int) $marketId);
+        const MAP_PAGE = @json((int) ($mapPage ?? 1));
+        const MAP_VERSION = @json((int) ($mapVersion ?? 1));
+        const FOCUS_SPACE_ID = @json(isset($marketSpaceId) ? (int) $marketSpaceId : null);
+        const FOCUS_SHAPE = @json($focusShape ?? null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
@@ -834,6 +838,42 @@
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
 
+          function normalizeBbox(raw) {
+            if (!raw) return null;
+            const x1 = Number(raw.x1 ?? raw.bbox_x1 ?? raw.bboxX1);
+            const y1 = Number(raw.y1 ?? raw.bbox_y1 ?? raw.bboxY1);
+            const x2 = Number(raw.x2 ?? raw.bbox_x2 ?? raw.bboxX2);
+            const y2 = Number(raw.y2 ?? raw.bbox_y2 ?? raw.bboxY2);
+            if (![x1, y1, x2, y2].every((v) => Number.isFinite(v))) return null;
+            return { x1, y1, x2, y2 };
+          }
+
+          function bboxFromPolygon(poly) {
+            if (!Array.isArray(poly) || poly.length < 3) return null;
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+            for (const p of poly) {
+              const x = Number((p && (p.x ?? p[0])) ?? NaN);
+              const y = Number((p && (p.y ?? p[1])) ?? NaN);
+              if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+            if (![minX, minY, maxX, maxY].every((v) => Number.isFinite(v))) return null;
+            return { x1: minX, y1: minY, x2: maxX, y2: maxY };
+          }
+
+          function resolveShapeBbox(shape) {
+            if (!shape) return null;
+            const bbox = normalizeBbox(shape);
+            if (bbox) return bbox;
+            return bboxFromPolygon(shape.polygon);
+          }
+
           function setScaleLabel() {
             if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
           }
@@ -900,8 +940,8 @@
           async function loadShapes() {
             try {
               const url = new URL(SHAPES_URL, window.location.origin);
-              url.searchParams.set('page', '1');
-              url.searchParams.set('version', '1');
+              url.searchParams.set('page', String(MAP_PAGE || 1));
+              url.searchParams.set('version', String(MAP_VERSION || 1));
 
               const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
               const json = await res.json();
@@ -1040,6 +1080,68 @@
             }
           }
 
+          async function centerOnBbox(bbox, opts = {}) {
+            if (!bbox || !page || !currentViewport || !stage) return;
+
+            const padding = Number(opts.padding ?? 40);
+            const zoomFactor = Number(opts.zoomFactor ?? 1.15);
+
+            const w = Math.max(1, Math.abs(bbox.x2 - bbox.x1));
+            const h = Math.max(1, Math.abs(bbox.y2 - bbox.y1));
+
+            const availableW = Math.max(200, stage.clientWidth - padding);
+            const availableH = Math.max(200, stage.clientHeight - padding);
+
+            let nextScale = Math.min(availableW / w, availableH / h) * zoomFactor;
+            if (!Number.isFinite(nextScale) || nextScale <= 0) {
+              nextScale = 1.0;
+            }
+
+            nextScale = Math.max(0.2, Math.min(6, nextScale));
+
+            scale = nextScale;
+            await render();
+
+            const centerX = (bbox.x1 + bbox.x2) / 2;
+            const centerY = (bbox.y1 + bbox.y2) / 2;
+
+            const v = currentViewport.convertToViewportPoint(centerX, centerY);
+            if (Array.isArray(v)) {
+              stage.scrollLeft = Math.max(0, v[0] - stage.clientWidth / 2);
+              stage.scrollTop = Math.max(0, v[1] - stage.clientHeight / 2);
+            }
+          }
+
+          async function applyInitialFocus() {
+            if (!FOCUS_SPACE_ID && !FOCUS_SHAPE) return;
+
+            let targetShape = null;
+            let bbox = null;
+
+            if (FOCUS_SHAPE) {
+              bbox = normalizeBbox(FOCUS_SHAPE.bbox || FOCUS_SHAPE);
+              if (FOCUS_SHAPE.id) {
+                targetShape = findShapeById(FOCUS_SHAPE.id);
+              }
+            }
+
+            if (!bbox && FOCUS_SPACE_ID) {
+              targetShape = shapes.find(s => Number(s.market_space_id) === Number(FOCUS_SPACE_ID)) || null;
+              bbox = resolveShapeBbox(targetShape);
+            }
+
+            if (!bbox) {
+              toast('Не удалось найти место на карте');
+              return;
+            }
+
+            if (targetShape?.id) {
+              setSelectedShape(targetShape.id);
+            }
+
+            await centerOnBbox(bbox, { zoomFactor: 1.2 });
+          }
+
           async function render() {
             if (!page) return;
 
@@ -1089,8 +1191,8 @@
             }
 
             const payload = {
-              page: 1,
-              version: 1,
+              page: MAP_PAGE || 1,
+              version: MAP_VERSION || 1,
               polygon: pdfPolygon,
             };
             if (msId) payload.market_space_id = msId;
@@ -1270,12 +1372,22 @@
           async function init() {
             const loadingTask = pdfjsLib.getDocument(PDF_URL);
             const pdfDoc = await loadingTask.promise;
-            page = await pdfDoc.getPage(1);
+            const requestedPage = MAP_PAGE || 1;
+            try {
+              page = await pdfDoc.getPage(requestedPage);
+            } catch (e) {
+              console.error(e);
+              page = await pdfDoc.getPage(1);
+              if (requestedPage !== 1) {
+                toast('Страница карты не найдена, показана первая');
+              }
+            }
 
             await fitWidth();
 
             await loadShapes();
             redrawShapes();
+            await applyInitialFocus();
 
             if (CAN_EDIT) {
               await refreshChosenSpaceFromServer();
@@ -1617,8 +1729,8 @@
               const url = new URL(HIT_URL, window.location.origin);
               url.searchParams.set('x', String(xPdf));
               url.searchParams.set('y', String(yPdf));
-              url.searchParams.set('page', '1');
-              url.searchParams.set('version', '1');
+              url.searchParams.set('page', String(MAP_PAGE || 1));
+              url.searchParams.set('version', String(MAP_VERSION || 1));
 
               const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
               const json = await res.json();

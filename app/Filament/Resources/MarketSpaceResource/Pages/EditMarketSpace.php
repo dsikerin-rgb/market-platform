@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
+use App\Models\MarketSpaceMapShape;
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Schema;
 use Filament\Resources\Pages\EditRecord;
 
 class EditMarketSpace extends EditRecord
@@ -48,6 +50,46 @@ class EditMarketSpace extends EditRecord
     protected function getHeaderActions(): array
     {
         $actions = [];
+
+        $marketSpaceId = $this->record?->id ? (int) $this->record->id : null;
+        $mapUrl = null;
+
+        if ($marketSpaceId) {
+            $page = 1;
+            $version = 1;
+
+            if (Schema::hasTable('market_space_map_shapes')) {
+                $shape = MarketSpaceMapShape::query()
+                    ->where('market_id', (int) $this->record->market_id)
+                    ->where('market_space_id', $marketSpaceId)
+                    ->where('is_active', true)
+                    ->orderByDesc('id')
+                    ->first(['page', 'version']);
+
+                if ($shape) {
+                    $page = (int) ($shape->page ?? 1);
+                    $version = (int) ($shape->version ?? 1);
+                }
+            }
+
+            $mapUrl = route('filament.admin.market-map', [
+                'market_space_id' => $marketSpaceId,
+                'page' => $page,
+                'version' => $version,
+            ]);
+        }
+
+        if ($mapUrl) {
+            if (class_exists(\Filament\Actions\Action::class)) {
+                $actions[] = \Filament\Actions\Action::make('openMap')
+                    ->label('Перейти на карту')
+                    ->url($mapUrl);
+            } elseif (class_exists(\Filament\Pages\Actions\Action::class)) {
+                $actions[] = \Filament\Pages\Actions\Action::make('openMap')
+                    ->label('Перейти на карту')
+                    ->url($mapUrl);
+            }
+        }
 
         $canDelete = MarketSpaceResource::canDelete($this->record);
 
