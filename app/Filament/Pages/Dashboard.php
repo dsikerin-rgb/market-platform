@@ -144,6 +144,9 @@ class Dashboard extends BaseDashboard
 
     /**
      * Filament 4: фильтры дашборда строятся через Schema.
+     *
+     * ВАЖНО: НЕ используем Grid внутри filtersForm, иначе на md/xl контейнер делится на колонки,
+     * и единственный фильтр попадает в узкую колонку (отсюда “скомкано в 1 см”).
      */
     public function filtersForm(Schema $schema): Schema
     {
@@ -154,16 +157,26 @@ class Dashboard extends BaseDashboard
         };
 
         return $schema->schema([
-            Section::make()
+            Section::make('Отчётный месяц')
+                ->description('Выберите месяц, за который показывать показатели на дашборде.')
                 ->columnSpanFull()
                 ->extraAttributes([
-                    'class' => 'w-full',
-                    'style' => 'width:100%;',
+                    // якорь + inline-стили (перебивают большинство раскладок/сжатий на wide)
+                    'class' => 'dashboard-period-filter',
+                    'style' => implode(';', [
+                        'width:100%',
+                        // визуально “как один блок”, но не полоса на всю страницу
+                        'max-width:34rem',
+                        // ключ: нельзя схлопнуть
+                        'min-width:18rem',
+                        // если где-то выше flex-строка — запрещаем сжатие
+                        'flex:0 0 auto',
+                    ]) . ';',
                 ])
                 ->schema([
                     Select::make('month')
-                        ->label('Период (месяц)')
-                        ->placeholder('Выбери месяц')
+                        ->hiddenLabel()
+                        ->placeholder('Выберите месяц')
                         ->options(fn (): array => $this->getMonthOptions(
                             $this->resolveMarketId(),
                             $resolveTz()
@@ -180,16 +193,13 @@ class Dashboard extends BaseDashboard
                         ->live()
                         ->columnSpanFull()
                         ->extraFieldWrapperAttributes([
-                            'class' => 'w-full',
-                            'style' => 'width:100%;min-width:16rem;',
+                            'style' => 'width:100%;',
                         ])
                         ->extraAttributes([
-                            'class' => 'w-full',
-                            'style' => 'width:100%;min-width:16rem;',
+                            'style' => 'width:100%;',
                         ])
                         ->extraInputAttributes([
-                            'class' => 'w-full',
-                            'style' => 'width:100%;min-width:16rem;',
+                            'style' => 'width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
                         ])
                         ->afterStateHydrated(function (Select $component, $state) use ($resolveTz): void {
                             $tz = $resolveTz();
