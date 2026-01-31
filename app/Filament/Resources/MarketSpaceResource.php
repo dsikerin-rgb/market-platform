@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use Filament\Facades\Filament;
@@ -19,6 +20,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as SchemaFacade;
+use Illuminate\Support\HtmlString;
 
 class MarketSpaceResource extends Resource
 {
@@ -160,6 +163,38 @@ class MarketSpaceResource extends Resource
 
         return $schema->components([
             ...$components,
+
+            Section::make('Карта')
+                ->schema([
+                    Forms\Components\Placeholder::make('map_status')
+                        ->hiddenLabel()
+                        ->content(function (?MarketSpace $record): HtmlString {
+                            if (! $record) {
+                                return new HtmlString('');
+                            }
+
+                            $isMapLinked = false;
+
+                            if (SchemaFacade::hasTable('market_space_map_shapes')) {
+                                $isMapLinked = MarketSpaceMapShape::query()
+                                    ->where('market_id', (int) $record->market_id)
+                                    ->where('market_space_id', (int) $record->id)
+                                    ->where('is_active', true)
+                                    ->exists();
+                            }
+
+                            $statusText = $isMapLinked
+                                ? 'Торговое место привязано к карте.'
+                                : 'Торговое место не привязано к объектам карты.';
+
+                            return new HtmlString(view('admin.market-space-edit', [
+                                'isMapLinked' => $isMapLinked,
+                                'statusText' => $statusText,
+                            ])->render());
+                        })
+                        ->visible(fn (?MarketSpace $record): bool => (bool) $record),
+                ])
+                ->columns(1),
 
             Section::make('Основные данные')
                 ->description('Заполни основные параметры торгового места. Подсказки доступны при наведении на иконку вопроса.')

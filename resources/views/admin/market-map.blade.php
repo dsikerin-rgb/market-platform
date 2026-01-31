@@ -8,6 +8,7 @@
 
     $hasMap   = isset($hasMap) ? (bool) $hasMap : true;
     $canEdit  = isset($canEdit) ? (bool) $canEdit : false;
+    $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
 
@@ -347,6 +348,13 @@
         <strong>Карта не загружена.</strong>
         <div style="margin-top:6px; opacity:.8;">
           Загрузите PDF-карту в настройках рынка (поле “Карта (PDF)”), нажмите “Сохранить”, затем откройте просмотр снова.
+        </div>
+      </div>
+    @elseif ($marketSpaceNotLinked)
+      <div class="empty">
+        <strong>Торговое место не привязано к объектам карты.</strong>
+        <div style="margin-top:6px; opacity:.8;">
+          Привяжите место к полигону или прямоугольнику, чтобы открыть карту с фокусом.
         </div>
       </div>
     @else
