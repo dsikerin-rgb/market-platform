@@ -63,7 +63,7 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        [$monthStartTz, $monthEndTz, $periodLabel] = $this->resolveMonthRange($tz);
+        [$monthStartTz, $monthEndTz] = $this->resolveMonthRange($tz);
 
         // Границы месяца считаем в TZ рынка, но в БД обычно лежит UTC → сравниваем по UTC.
         $monthStartUtc = $monthStartTz->utc();
@@ -140,12 +140,14 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
             }
         }
 
+        // Убираем лишнюю подпись "MM.YYYY (TZ: ...)" в каждом виджете:
+        // - не добавляем periodLabel в description
         return [
-            Stat::make('Новых обращений', $requestsCreatedInMonth)->description($periodLabel),
-            Stat::make('Открытых обращений', $openRequestsAtMonthEnd)->description($periodLabel),
-            Stat::make('Решённых обращений', $resolvedInMonth)->description($periodLabel),
-            Stat::make('Новых договоров', $contractsCreatedInMonth)->description($periodLabel),
-            Stat::make('Завершённых договоров', $contractsFinishedInMonth)->description($periodLabel),
+            Stat::make('Новых обращений', $requestsCreatedInMonth),
+            Stat::make('Открытых обращений', $openRequestsAtMonthEnd),
+            Stat::make('Решённых обращений', $resolvedInMonth),
+            Stat::make('Новых договоров', $contractsCreatedInMonth),
+            Stat::make('Завершённых договоров', $contractsFinishedInMonth),
         ];
     }
 
@@ -170,7 +172,6 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
      * Возвращает:
      * - startOfMonth (TZ рынка)
      * - startOfNextMonth (TZ рынка)
-     * - label "MM.YYYY (TZ: ...)"
      */
     private function resolveMonthRange(string $tz): array
     {
@@ -189,9 +190,7 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         $start = CarbonImmutable::createFromFormat('Y-m', $monthYm, $tz)->startOfMonth();
         $end   = $start->addMonth();
 
-        $label = $start->format('m.Y') . ' (TZ: ' . $tz . ')';
-
-        return [$start, $end, $label];
+        return [$start, $end];
     }
 
     private function pickFirstExistingColumn(string $table, array $candidates): ?string

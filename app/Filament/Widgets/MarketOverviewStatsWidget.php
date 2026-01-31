@@ -63,13 +63,21 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz);
 
-        $periodLabel = $monthStart->format('m.Y') . ' (TZ: ' . $tz . ')';
+        $spacesQuery = MarketSpace::query()->where('market_id', $marketId);
 
-        $tenantsQuery = Tenant::query()->where('market_id', $marketId);
-        $spacesQuery  = MarketSpace::query()->where('market_id', $marketId);
+        $totalSpaces = $spacesQuery->count();
 
-        $totalTenants = $tenantsQuery->count();
-        $totalSpaces  = $spacesQuery->count();
+        // Арендаторов — только в выбранном периоде (сначала по начислениям, затем fallback по договорам)
+        $tenantsInPeriod = $this->countTenantsForMonth($marketId, $monthYm, $monthStart, $monthEnd);
+
+        if ($tenantsInPeriod === null) {
+            $tenantsInPeriod = $this->countTenantsWithContractsInPeriod($marketId, $monthStart, $monthEnd);
+        }
+
+        if ($tenantsInPeriod === null) {
+            // последний fallback — как раньше (все арендаторы в БД рынка)
+            $tenantsInPeriod = Tenant::query()->where('market_id', $marketId)->count();
+        }
 
         $occupiedSpaces = $this->countOccupiedSpacesForMonth($marketId, $monthYm, $monthStart, $monthEnd);
 
@@ -93,30 +101,27 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats = [];
 
         if ($isSuperAdmin) {
-            $stats[] = Stat::make('Всего рынков', Market::query()->count())
-                ->description($periodLabel);
+            $stats[] = Stat::make('Всего рынков', Market::query()->count());
         }
 
+        // Убираем лишние подписи вида "01.2026 (TZ: ...)" — не добавляем description вообще.
         if ($accrued !== null) {
-            $stats[] = Stat::make('Начислено за месяц', $this->formatMoney($accrued))
-                ->description($periodLabel);
+            $stats[] = Stat::make('Начислено за месяц', $this->formatMoney($accrued));
         }
 
         if ($paid !== null) {
-            $stats[] = Stat::make('Оплачено за месяц', $this->formatMoney($paid))
-                ->description($periodLabel);
+            $stats[] = Stat::make('Оплачено за месяц', $this->formatMoney($paid));
         }
 
         if ($accrued !== null && $paid !== null) {
-            $stats[] = Stat::make('Долг за месяц', $this->formatMoney($accrued - $paid))
-                ->description($periodLabel);
+            $stats[] = Stat::make('Долг за месяц', $this->formatMoney($accrued - $paid));
         }
 
-        $stats[] = Stat::make('Арендаторов', $totalTenants)->description($periodLabel);
-        $stats[] = Stat::make('Торговых мест всего', $totalSpaces)->description($periodLabel);
-        $stats[] = Stat::make('Торговых мест занято', $occupiedSpaces)->description($periodLabel);
-        $stats[] = Stat::make('Торговых мест свободно', $freeSpaces)->description($periodLabel);
-        $stats[] = Stat::make('Договоров в периоде', $contractsInPeriod)->description($periodLabel);
+        $stats[] = Stat::make('Арендаторов', $tenantsInPeriod);
+        $stats[] = Stat::make('Торговых мест всего', $totalSpaces);
+        $stats[] = Stat::make('Торговых мест занято', $occupiedSpaces);
+        $stats[] = Stat::make('Торговых мест свободно', $freeSpaces);
+        $stats[] = Stat::make('Договоров в периоде', $contractsInPeriod);
 
         return $stats;
     }
@@ -156,6 +161,104 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $end   = $start->addMonth();
 
         return [$monthYm, $start, $end];
+    }
+
+    /**
+     * Арендаторы в периоде: считаем по tenant_accruals (если таблица/колонки позволяют).
+     * Логика: DISTINCT tenant_id за месяц по рынку (опционально только строки с payable > 0).
+     */
+    private function countTenantsForMonth(int $marketId, string $monthYm, CarbonImmutable $start, CarbonImmutable $end): ?int
+    {
+        if (! $this->tenantAccrualsReady()) {
+            return null;
+        }
+
+        $meta = $this->getTableMeta('tenant_accruals');
+        $cols = $meta['columns'];
+
+        $marketCol = $this->pickFirstExisting($cols, ['market_id']);
+        $tenantCol = $this->pickFirstExisting($cols, ['tenant_id']);
+
+        if (! $marketCol || ! $tenantCol) {
+            return null;
+        }
+
+        $periodCol = $this->pickPeriodColumn($cols);
+        if (! $periodCol) {
+            return null;
+        }
+
+        $q = DB::table('tenant_accruals')->where($marketCol, $marketId);
+        $this->applyMonthFilter($q, $meta, $periodCol, $monthYm, $start, $end);
+
+        // если можем определить начисление (payable) — отсечём нулевые строки
+        $rentCol = $this->pickFirstExisting($cols, ['rent_amount']);
+        $payableRowExpr = $this->buildPayableRowExpression($cols);
+
+        if ($rentCol) {
+            $q->where($rentCol, '>', 0);
+        } elseif ($payableRowExpr !== null) {
+            $q->whereRaw('(' . $payableRowExpr . ') > 0');
+        }
+
+        try {
+            return (int) $q->distinct()->count($tenantCol);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Fallback: арендаторы в периоде по договорам (DISTINCT tenant_id, пересечение с периодом).
+     */
+    private function countTenantsWithContractsInPeriod(int $marketId, CarbonImmutable $start, CarbonImmutable $end): ?int
+    {
+        if (! Schema::hasTable('tenant_contracts')) {
+            return null;
+        }
+
+        $meta = $this->getTableMeta('tenant_contracts');
+        $cols = $meta['columns'];
+
+        $marketCol = $this->pickFirstExisting($cols, ['market_id']);
+        $tenantCol = $this->pickFirstExisting($cols, ['tenant_id']);
+
+        if (! $marketCol || ! $tenantCol) {
+            return null;
+        }
+
+        $startCol = $this->pickFirstExisting($cols, ['start_date', 'starts_at', 'date_start', 'begins_at']);
+        $endCol   = $this->pickFirstExisting($cols, ['end_date', 'ends_at', 'date_end', 'expires_at']);
+
+        if (! $startCol && ! $endCol) {
+            return null;
+        }
+
+        $q = DB::table('tenant_contracts')->where($marketCol, $marketId);
+
+        $statusCol = $this->pickFirstExisting($cols, ['status']);
+        if ($statusCol) {
+            $q->where($statusCol, '!=', 'cancelled');
+        }
+
+        $startDate = $start->toDateString();
+        $endDate   = $end->toDateString();
+
+        if ($startCol) {
+            $q->where($startCol, '<', $endDate);
+        }
+
+        if ($endCol) {
+            $q->where(function (Builder $qq) use ($endCol, $startDate): void {
+                $qq->whereNull($endCol)->orWhere($endCol, '>=', $startDate);
+            });
+        }
+
+        try {
+            return (int) $q->distinct()->count($tenantCol);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function countOccupiedSpacesForMonth(int $marketId, string $monthYm, CarbonImmutable $start, CarbonImmutable $end): ?int
