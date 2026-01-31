@@ -16,7 +16,7 @@
     $hitUrl    = $hitUrl ?? '';
     $shapesUrl = $shapesUrl ?? '';
     $spaceUrl  = $spaceUrl ?? '';
-    $spacesUrl = $spacesUrl ?? ''; // ✅ endpoint автокомплита/поиска по номеру
+    $spacesUrl = $spacesUrl ?? '';
   @endphp
 
   <meta charset="utf-8">
@@ -308,7 +308,6 @@
               <button id="toolRect" type="button" style="display:none;">Прямоугольник</button>
               <button id="toolPoly" type="button" style="display:none;">Полигон</button>
 
-              {{-- Ввод номера места → быстрое получение ID --}}
               <label class="pill" id="spaceNumberPill" style="display:none;">
                 Номер:
                 <input
@@ -367,9 +366,6 @@
         const PDF_URL    = @json($pdfUrl,    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const HIT_URL    = @json($hitUrl,    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const SHAPES_URL = @json($shapesUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        // ✅ SPACE_URL = проверка по id (space?id=123)
-        // ✅ SPACES_URL = поиск по номеру/строке (spaces?number=99 ... или spaces?q=99)
         const SPACE_URL  = @json($spaceUrl,  JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const SPACES_URL = @json($spacesUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
@@ -597,7 +593,6 @@
           }
         }
 
-        // ✅ Поиск ID по номеру должен ходить в SPACES_URL, а не в SPACE_URL
         async function resolveSpaceIdByNumber(showToast = true) {
           if (!marketSpaceNumberInput) return { ok: true, found: false, item: null };
 
@@ -610,53 +605,59 @@
           }
 
           if (!SPACES_URL) {
-            if (showToast) toast('Не задан URL поиска (spacesUrl)');
+            if (showToast) toast('Не задан SPACES_URL');
             return { ok: false, found: false, item: null };
           }
 
-          const requestOnce = async (params) => {
-            const url = new URL(SPACES_URL, window.location.origin);
-            for (const [k, v] of Object.entries(params)) {
-              if (v === null || v === undefined || String(v).trim() === '') continue;
-              url.searchParams.set(k, String(v));
-            }
+          const origin = window.location.origin;
+          const clean = String(number).trim();
+
+          async function fetchAsNumberParam() {
+            const url = new URL(SPACES_URL, origin);
+            url.searchParams.set('number', clean);
             const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
-            let json = null;
-            try { json = await res.json(); } catch { json = null; }
+            const json = await res.json().catch(() => null);
             return { res, json };
-          };
+          }
+
+          async function fetchAsQParam() {
+            const url = new URL(SPACES_URL, origin);
+            url.searchParams.set('q', clean);
+            const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+            const json = await res.json().catch(() => null);
+            return { res, json };
+          }
 
           try {
-            // 1) пробуем формат ?number=...
-            let { res, json } = await requestOnce({ number, limit: 10 });
+            let out = await fetchAsNumberParam();
 
-            // 2) если backend требует q — пробуем ?q=...
-            if (res.status === 422 && json?.errors?.q) {
-              ({ res, json } = await requestOnce({ q: number, limit: 10 }));
+            // fallback: если эндпоинт требует q (старый вариант)
+            if (!out.res.ok && out.json?.errors?.q) {
+              out = await fetchAsQParam();
             }
 
-            if (!res.ok || !json || json.ok !== true) {
-              const msg = json?.message ? String(json.message) : ('Ошибка поиска по номеру (HTTP ' + res.status + ')');
-              if (showToast) toast(msg);
+            if (!out.res.ok || !out.json || out.json.ok !== true) {
+              const msg = out.json?.message ? String(out.json.message) : ('HTTP ' + out.res.status);
+              if (showToast) toast('Ошибка поиска: ' + msg);
               return { ok: false, found: false, item: null };
             }
 
-            const items = Array.isArray(json.items) ? json.items : [];
-            if (items.length === 0) {
-              if (showToast) toast('Номер ' + String(number) + ' не найден');
+            const items = Array.isArray(out.json.items) ? out.json.items : [];
+            if (!items.length) {
+              if (showToast) toast('Номер ' + clean + ' не найден');
               return { ok: true, found: false, item: null };
             }
 
-            const first = items[0] || null;
-            const id = Number(first?.id);
+            const norm = clean.toLowerCase();
+            const best =
+              items.find(i => String(i?.number ?? '').trim().toLowerCase() === norm) ||
+              items.find(i => String(i?.code ?? '').trim().toLowerCase() === norm) ||
+              items[0];
 
+            const id = Number(best?.id);
             if (!Number.isFinite(id) || id <= 0) {
               if (showToast) toast('Некорректный ID в ответе');
               return { ok: false, found: false, item: null };
-            }
-
-            if (items.length > 1 && showToast) {
-              toast('Найдено ' + String(items.length) + ' вариантов — выбран первый');
             }
 
             if (marketSpaceIdInput) {
@@ -666,7 +667,11 @@
               if (showToast) toast('Найдено: ID ' + String(Math.trunc(id)));
             }
 
-            return { ok: true, found: true, item: first };
+            if (showToast && items.length > 1) {
+              toast('Найдено совпадений: ' + String(items.length) + ' • взял первое');
+            }
+
+            return { ok: true, found: true, item: best };
           } catch (e) {
             console.error(e);
             if (showToast) toast('Ошибка поиска по номеру');
@@ -713,21 +718,18 @@
           let scale = 1.0;
           let currentViewport = null;
 
-          /** shapes[]: {id, market_space_id, polygon: [{x,y}], ...} */
           let shapes = [];
 
           let editMode = false;
-          let tool = 'select'; // select | rect | poly
+          let tool = 'select';
 
-          // selection + handles
           let selectedShapeId = null;
           let activeVertexIndex = null;
-          let draggingVertex = null; // {shapeId, index}
+          let draggingVertex = null;
           let draggingVertexMoved = false;
 
-          // polygon draw draft (pdf coords)
           let polyDrawing = false;
-          let polyDraft = []; // [{x,y}] in pdf coords
+          let polyDraft = [];
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
 
@@ -773,8 +775,6 @@
             }
 
             if (tool === 'poly') {
-              // FIX: после панорамирования moved=true и клики режутся (if (moved) return)
-              // поэтому при входе в режим полигонов сбрасываем состояние панорамирования.
               moved = false;
               isDown = false;
               overlay.classList.remove('grabbing');
@@ -849,19 +849,17 @@
 
               const isSel = selected && Number(selected.id) === Number(s.id);
 
-              // ✅ фикс двойной кавычки в stroke-opacity / stroke-width
               parts.push(
                 '<polygon points="' + pts +
                 '" fill="' + fill +
                 '" fill-opacity="' + (isSel ? Math.min(1, fo + 0.08) : fo) +
                 '" stroke="' + stroke +
                 '" stroke-opacity="1"' +
-                ' stroke-width="' + (isSel ? (sw + 1.0) : sw) +
+                '" stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
             }
 
-            // draft polygon
             if (polyDrawing && Array.isArray(polyDraft) && polyDraft.length > 0) {
               const pts = polyDraft.map((p) => {
                 const v = currentViewport.convertToViewportPoint(Number(p.x), Number(p.y));
@@ -873,7 +871,6 @@
                 parts.push(
                   '<polyline points="' + pts + '" fill="none" stroke="#00A3FF" stroke-width="2" stroke-dasharray="6 6" opacity="0.95"></polyline>'
                 );
-                // точки-драфт (визуальные)
                 for (const p of polyDraft) {
                   const v = currentViewport.convertToViewportPoint(Number(p.x), Number(p.y));
                   if (!Array.isArray(v)) continue;
@@ -1017,7 +1014,7 @@
             const id = Number(shapeId);
             if (!Number.isFinite(id) || id <= 0) throw new Error('Bad shape id');
 
-            const url = SHAPES_BASE + '/' + String(Math.trunc(id));
+            const url = String(SHAPES_BASE + '/' + String(Math.trunc(id)));
 
             const res = await apiFetch(url, {
               method: 'PATCH',
@@ -1043,7 +1040,7 @@
             const ok = confirm('Удалить этот полигон?');
             if (!ok) return;
 
-            const url = SHAPES_BASE + '/' + String(Math.trunc(id));
+            const url = String(SHAPES_BASE + '/' + String(Math.trunc(id)));
             const res = await apiFetch(url, { method: 'DELETE' });
 
             let json = null;
@@ -1117,7 +1114,6 @@
 
             poly.splice(bestI + 1, 0, { x: Number(xPdf), y: Number(yPdf) });
 
-            // optimistic update
             shape.polygon = poly;
             redrawShapes();
             renderHandles();
@@ -1219,32 +1215,11 @@
             });
           }
 
-          if (CAN_EDIT && toolSelectBtn) {
-            toolSelectBtn.addEventListener('click', () => {
-              if (!editMode) return;
-              setTool('select');
-            });
-          }
+          if (CAN_EDIT && toolSelectBtn) toolSelectBtn.addEventListener('click', () => { if (editMode) setTool('select'); });
+          if (CAN_EDIT && toolRectBtn) toolRectBtn.addEventListener('click', () => { if (editMode) setTool('rect'); });
+          if (CAN_EDIT && toolPolyBtn) toolPolyBtn.addEventListener('click', () => { if (editMode) setTool('poly'); });
 
-          if (CAN_EDIT && toolRectBtn) {
-            toolRectBtn.addEventListener('click', () => {
-              if (!editMode) return;
-              setTool('rect');
-            });
-          }
-
-          if (CAN_EDIT && toolPolyBtn) {
-            toolPolyBtn.addEventListener('click', () => {
-              if (!editMode) return;
-              setTool('poly');
-            });
-          }
-
-          if (CAN_EDIT && findByNumberBtn) {
-            findByNumberBtn.addEventListener('click', () => {
-              resolveSpaceIdByNumber(true);
-            });
-          }
+          if (CAN_EDIT && findByNumberBtn) findByNumberBtn.addEventListener('click', () => resolveSpaceIdByNumber(true));
 
           if (CAN_EDIT && marketSpaceNumberInput) {
             marketSpaceNumberInput.addEventListener('change', () => saveSpaceNumberToLS());
@@ -1268,13 +1243,11 @@
             });
           }
 
-          // Pan + rect draw state
           let isDown = false;
           let moved = false;
           let startX = 0, startY = 0, startLeft = 0, startTop = 0;
           const MOVE_THRESHOLD = 6;
 
-          // Rect draw
           let drawingRect = false;
           let drawStart = null;
 
@@ -1298,10 +1271,8 @@
           }
 
           function onDown(e) {
-            // dragging vertex handles is handled by mousedown on handleDot (stopPropagation there)
             if (draggingVertex) return;
 
-            // rect draw only in edit + rect tool + Shift
             if (CAN_EDIT && editMode && tool === 'rect' && e.shiftKey) {
               drawingRect = true;
               drawStart = getCanvasPointFromClient(e.clientX, e.clientY);
@@ -1310,12 +1281,8 @@
               return;
             }
 
-            // in poly tool we don't pan on down (точки ставятся кликом)
-            if (CAN_EDIT && editMode && tool === 'poly') {
-              return;
-            }
+            if (CAN_EDIT && editMode && tool === 'poly') return;
 
-            // pan
             isDown = true;
             moved = false;
 
@@ -1381,7 +1348,6 @@
           }
 
           function onMove(e) {
-            // dragging vertex
             if (draggingVertex && currentViewport) {
               draggingVertexMoved = true;
 
@@ -1405,7 +1371,6 @@
 
               poly[idx] = { x: nx, y: ny };
 
-              // optimistic update
               shape.polygon = poly;
               redrawShapes();
               renderHandles();
@@ -1440,7 +1405,6 @@
             const { shapeId } = draggingVertex;
             draggingVertex = null;
 
-            // commit only if moved (иначе это просто клик по хэндлу)
             if (!draggingVertexMoved) {
               draggingVertexMoved = false;
               renderHandles();
@@ -1487,9 +1451,7 @@
             const xPdf = Array.isArray(pPdfArr) ? Number(pPdfArr[0]) : 0;
             const yPdf = Array.isArray(pPdfArr) ? Number(pPdfArr[1]) : 0;
 
-            // polygon draw click (ВАЖНО: до проверки moved, иначе клики съедаются после панорамирования)
             if (CAN_EDIT && editMode && tool === 'poly' && polyDrawing) {
-              // close if click near first point
               if (polyDraft.length >= 3) {
                 const first = polyDraft[0];
                 const v0 = currentViewport.convertToViewportPoint(Number(first.x), Number(first.y));
@@ -1508,10 +1470,8 @@
               return;
             }
 
-            // если это клик после панорамирования — гасим (для hit-test/поповера)
             if (moved) return;
 
-            // in edit select: Alt+click inserts vertex into selected polygon
             if (CAN_EDIT && editMode && tool === 'select' && e.altKey && selectedShapeId) {
               await insertVertexAtClick(xPdf, yPdf);
               return;
@@ -1577,7 +1537,6 @@
               }
 
               let actions = '';
-
               const btns = [];
               const shapeId = hit.shape_id ? Number(hit.shape_id) : null;
               const hitSpaceId = hit.market_space_id ? Number(hit.market_space_id) : null;
@@ -1630,7 +1589,6 @@
             if (action === 'open-space') {
               const id = Number(t.getAttribute('data-space-id') || 0);
               if (!Number.isFinite(id) || id <= 0) return;
-              // В Filament обычно /admin/market-spaces/{id}/edit
               window.open('/admin/market-spaces/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
               return;
             }
@@ -1694,11 +1652,9 @@
             }
           });
 
-          // Keyboard shortcuts for polygon + delete
           window.addEventListener('keydown', async (e) => {
             if (!CAN_EDIT || !editMode) return;
 
-            // poly tool controls
             if (tool === 'poly' && polyDrawing) {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1721,7 +1677,6 @@
               }
             }
 
-            // delete selected shape
             if (tool === 'select' && selectedShapeId && (e.key === 'Delete')) {
               e.preventDefault();
               deleteShape(selectedShapeId).catch((err) => {
@@ -1739,11 +1694,7 @@
           window.addEventListener('mouseup', onGlobalUp);
           window.addEventListener('mousemove', onMove);
 
-          // stop overlay from panning when interacting with handles layer
-          handlesLayer?.addEventListener('mousedown', (e) => {
-            // handles themselves stop propagation; this is just safety
-            e.stopPropagation();
-          });
+          handlesLayer?.addEventListener('mousedown', (e) => e.stopPropagation());
 
           init().catch((err) => {
             console.error(err);
@@ -1763,14 +1714,12 @@
         }
 
         async function loadPdfJs() {
-          // локальные варианты (если когда-нибудь положишь в public/vendor)
           const localMjs = await tryImport('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
           if (localMjs) return localMjs;
 
           const localJs = await tryImport('/vendor/pdfjs/pdf.min.js', '/vendor/pdfjs/pdf.worker.min.js');
           if (localJs) return localJs;
 
-          // CDN fallback
           const cdn = await tryImport(
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs',
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs'

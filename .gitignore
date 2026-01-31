@@ -40,3 +40,4 @@ app/Console/Commands/*.LOCAL.bak.*
 
 # local css (keep if you want to version it)
 resources/css/filament/
+.recovery/
