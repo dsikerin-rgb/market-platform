@@ -53,10 +53,13 @@ class EditMarketSpace extends EditRecord
 
         $marketSpaceId = $this->record?->id ? (int) $this->record->id : null;
         $mapUrl = null;
+        $isMapLinked = false;
+        $mapStatus = 'Торговое место не привязано к объектам карты.';
 
         if ($marketSpaceId) {
             $page = 1;
             $version = 1;
+            $bbox = null;
 
             if (Schema::hasTable('market_space_map_shapes')) {
                 $shape = MarketSpaceMapShape::query()
@@ -64,30 +67,74 @@ class EditMarketSpace extends EditRecord
                     ->where('market_space_id', $marketSpaceId)
                     ->where('is_active', true)
                     ->orderByDesc('id')
-                    ->first(['page', 'version']);
+                    ->first(['page', 'version', 'bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2']);
 
                 if ($shape) {
+                    $isMapLinked = true;
+                    $mapStatus = 'Торговое место привязано к карте.';
                     $page = (int) ($shape->page ?? 1);
                     $version = (int) ($shape->version ?? 1);
+
+                    $bbox = [
+                        'bbox_x1' => $shape->bbox_x1 !== null ? (float) $shape->bbox_x1 : null,
+                        'bbox_y1' => $shape->bbox_y1 !== null ? (float) $shape->bbox_y1 : null,
+                        'bbox_x2' => $shape->bbox_x2 !== null ? (float) $shape->bbox_x2 : null,
+                        'bbox_y2' => $shape->bbox_y2 !== null ? (float) $shape->bbox_y2 : null,
+                    ];
                 }
             }
 
-            $mapUrl = route('filament.admin.market-map', [
-                'market_space_id' => $marketSpaceId,
-                'page' => $page,
-                'version' => $version,
-            ]);
+            if ($isMapLinked) {
+                $params = [
+                    'market_space_id' => $marketSpaceId,
+                    'page' => $page,
+                    'version' => $version,
+                ];
+
+                if ($bbox
+                    && $bbox['bbox_x1'] !== null
+                    && $bbox['bbox_y1'] !== null
+                    && $bbox['bbox_x2'] !== null
+                    && $bbox['bbox_y2'] !== null
+                ) {
+                    $params = array_merge($params, $bbox);
+                }
+
+                $mapUrl = route('filament.admin.market-map', $params);
+            }
         }
 
-        if ($mapUrl) {
-            if (class_exists(\Filament\Actions\Action::class)) {
-                $actions[] = \Filament\Actions\Action::make('openMap')
-                    ->label('Перейти на карту')
-                    ->url($mapUrl);
-            } elseif (class_exists(\Filament\Pages\Actions\Action::class)) {
-                $actions[] = \Filament\Pages\Actions\Action::make('openMap')
-                    ->label('Перейти на карту')
-                    ->url($mapUrl);
+        if (class_exists(\Filament\Actions\Action::class)) {
+            $openMapAction = \Filament\Actions\Action::make('openMap')
+                ->label('Перейти на карту')
+                ->disabled(! $isMapLinked);
+
+            if ($mapUrl) {
+                $openMapAction->url($mapUrl, shouldOpenInNewTab: true);
+            }
+
+            $actions[] = $openMapAction;
+
+            if (! $isMapLinked) {
+                $actions[] = \Filament\Actions\Action::make('mapStatus')
+                    ->label($mapStatus)
+                    ->disabled();
+            }
+        } elseif (class_exists(\Filament\Pages\Actions\Action::class)) {
+            $openMapAction = \Filament\Pages\Actions\Action::make('openMap')
+                ->label('Перейти на карту')
+                ->disabled(! $isMapLinked);
+
+            if ($mapUrl) {
+                $openMapAction->url($mapUrl, shouldOpenInNewTab: true);
+            }
+
+            $actions[] = $openMapAction;
+
+            if (! $isMapLinked) {
+                $actions[] = \Filament\Pages\Actions\Action::make('mapStatus')
+                    ->label($mapStatus)
+                    ->disabled();
             }
         }
 

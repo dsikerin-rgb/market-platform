@@ -931,6 +931,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'market_space_id' => ['nullable', 'integer', 'min:1'],
             'page' => ['nullable', 'integer', 'min:1'],
             'version' => ['nullable', 'integer', 'min:1'],
+            'bbox_x1' => ['nullable', 'numeric'],
+            'bbox_y1' => ['nullable', 'numeric'],
+            'bbox_x2' => ['nullable', 'numeric'],
+            'bbox_y2' => ['nullable', 'numeric'],
         ]);
 
         $marketSpaceId = isset($validated['market_space_id']) ? (int) $validated['market_space_id'] : null;
@@ -939,8 +943,24 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $pageRequested = $request->has('page');
         $versionRequested = $request->has('version');
+        $bboxRequested = $request->has('bbox_x1')
+            && $request->has('bbox_y1')
+            && $request->has('bbox_x2')
+            && $request->has('bbox_y2');
+
+        $bboxFromRequest = null;
+
+        if ($bboxRequested) {
+            $bboxFromRequest = [
+                'x1' => (float) ($validated['bbox_x1'] ?? 0),
+                'y1' => (float) ($validated['bbox_y1'] ?? 0),
+                'x2' => (float) ($validated['bbox_x2'] ?? 0),
+                'y2' => (float) ($validated['bbox_y2'] ?? 0),
+            ];
+        }
 
         $focusShape = null;
+        $marketSpaceNotLinked = false;
 
         if ($marketSpaceId && Schema::hasTable('market_space_map_shapes')) {
             $shapeQuery = MarketSpaceMapShape::query()
@@ -1002,13 +1022,17 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'page' => (int) ($shape->page ?? 1),
                     'version' => (int) ($shape->version ?? 1),
                     'bbox' => [
-                        'x1' => $shape->bbox_x1 !== null ? (float) $shape->bbox_x1 : null,
-                        'y1' => $shape->bbox_y1 !== null ? (float) $shape->bbox_y1 : null,
-                        'x2' => $shape->bbox_x2 !== null ? (float) $shape->bbox_x2 : null,
-                        'y2' => $shape->bbox_y2 !== null ? (float) $shape->bbox_y2 : null,
+                        'x1' => $bboxFromRequest['x1'] ?? ($shape->bbox_x1 !== null ? (float) $shape->bbox_x1 : null),
+                        'y1' => $bboxFromRequest['y1'] ?? ($shape->bbox_y1 !== null ? (float) $shape->bbox_y1 : null),
+                        'x2' => $bboxFromRequest['x2'] ?? ($shape->bbox_x2 !== null ? (float) $shape->bbox_x2 : null),
+                        'y2' => $bboxFromRequest['y2'] ?? ($shape->bbox_y2 !== null ? (float) $shape->bbox_y2 : null),
                     ],
                 ];
+            } else {
+                $marketSpaceNotLinked = true;
             }
+        } elseif ($marketSpaceId) {
+            $marketSpaceNotLinked = true;
         }
 
         $payload = [
@@ -1021,6 +1045,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'mapVersion' => $version,
             'marketSpaceId' => $marketSpaceId,
             'focusShape' => $focusShape,
+            'marketSpaceNotLinked' => $marketSpaceNotLinked,
 
             'settingsUrl' => url('/admin/market-settings'),
 
@@ -1034,6 +1059,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         if (! $hasMap) {
             return response()
                 ->view('admin.market-map-empty', $payload)
+                ->header('Content-Type', 'text/html; charset=UTF-8');
+        }
+
+        if ($marketSpaceNotLinked) {
+            return response()
+                ->view('admin.market-map-unbound', $payload)
                 ->header('Content-Type', 'text/html; charset=UTF-8');
         }
 
