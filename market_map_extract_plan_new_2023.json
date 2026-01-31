@@ -1,0 +1,4670 @@
+{
+  "pdf": "план новый 2023.pdf",
+  "page_size": {
+    "w": 1190.5511474609375,
+    "h": 841.8897705078125
+  },
+  "count": 136,
+  "items": [
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 974.38,
+          "y": 477.89
+        },
+        {
+          "x": 1062.15,
+          "y": 477.89
+        },
+        {
+          "x": 1062.15,
+          "y": 368.06
+        },
+        {
+          "x": 974.38,
+          "y": 368.06
+        }
+      ],
+      "bbox_x1": 974.38,
+      "bbox_y1": 368.06,
+      "bbox_x2": 1062.15,
+      "bbox_y2": 477.89,
+      "meta": {
+        "area_bbox": 9640.25
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 593.72,
+          "y": 581.36
+        },
+        {
+          "x": 610.39,
+          "y": 581.36
+        },
+        {
+          "x": 610.39,
+          "y": 548.5
+        },
+        {
+          "x": 593.72,
+          "y": 548.5
+        }
+      ],
+      "bbox_x1": 593.72,
+      "bbox_y1": 548.5,
+      "bbox_x2": 610.39,
+      "bbox_y2": 581.36,
+      "meta": {
+        "area_bbox": 547.7
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 732.48,
+          "y": 543.44
+        },
+        {
+          "x": 753.08,
+          "y": 543.44
+        },
+        {
+          "x": 753.08,
+          "y": 502.41
+        },
+        {
+          "x": 732.48,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 732.48,
+      "bbox_y1": 502.41,
+      "bbox_x2": 753.08,
+      "bbox_y2": 543.44,
+      "meta": {
+        "area_bbox": 844.88
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 855.23,
+          "y": 374.43
+        },
+        {
+          "x": 875.5,
+          "y": 374.43
+        },
+        {
+          "x": 875.5,
+          "y": 295.65
+        },
+        {
+          "x": 855.23,
+          "y": 295.65
+        }
+      ],
+      "bbox_x1": 855.23,
+      "bbox_y1": 295.65,
+      "bbox_x2": 875.5,
+      "bbox_y2": 374.43,
+      "meta": {
+        "area_bbox": 1596.65
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 546.32,
+          "y": 452.72
+        },
+        {
+          "x": 590.28,
+          "y": 452.72
+        },
+        {
+          "x": 590.28,
+          "y": 400.75
+        },
+        {
+          "x": 546.32,
+          "y": 400.75
+        }
+      ],
+      "bbox_x1": 546.32,
+      "bbox_y1": 400.75,
+      "bbox_x2": 590.28,
+      "bbox_y2": 452.72,
+      "meta": {
+        "area_bbox": 2285.23
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C0DDE4",
+      "stroke_color": "#C0DDE4",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 672.5,
+          "y": 316.41
+        },
+        {
+          "x": 692.93,
+          "y": 316.41
+        },
+        {
+          "x": 692.93,
+          "y": 286.5
+        },
+        {
+          "x": 672.5,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 672.5,
+      "bbox_y1": 286.5,
+      "bbox_x2": 692.93,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 611.08
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 287.75,
+          "y": 676.15
+        },
+        {
+          "x": 527.03,
+          "y": 676.15
+        },
+        {
+          "x": 527.03,
+          "y": 541.73
+        },
+        {
+          "x": 287.75,
+          "y": 541.73
+        }
+      ],
+      "bbox_x1": 287.75,
+      "bbox_y1": 541.73,
+      "bbox_x2": 527.03,
+      "bbox_y2": 676.15,
+      "meta": {
+        "area_bbox": 32164.62
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F9FADE",
+      "stroke_color": "#F9FADE",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 198.83,
+          "y": 624.51
+        },
+        {
+          "x": 239.37,
+          "y": 624.51
+        },
+        {
+          "x": 239.37,
+          "y": 502.41
+        },
+        {
+          "x": 198.83,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 198.83,
+      "bbox_y1": 502.41,
+      "bbox_x2": 239.37,
+      "bbox_y2": 624.51,
+      "meta": {
+        "area_bbox": 4949.02
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 76.58,
+          "y": 675.34
+        },
+        {
+          "x": 198.34,
+          "y": 675.34
+        },
+        {
+          "x": 198.34,
+          "y": 618.13
+        },
+        {
+          "x": 76.58,
+          "y": 618.13
+        }
+      ],
+      "bbox_x1": 76.58,
+      "bbox_y1": 618.13,
+      "bbox_x2": 198.34,
+      "bbox_y2": 675.34,
+      "meta": {
+        "area_bbox": 6965.81
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 880.56,
+          "y": 535.43
+        },
+        {
+          "x": 895.6,
+          "y": 535.43
+        },
+        {
+          "x": 895.6,
+          "y": 502.25
+        },
+        {
+          "x": 880.56,
+          "y": 502.25
+        }
+      ],
+      "bbox_x1": 880.56,
+      "bbox_y1": 502.25,
+      "bbox_x2": 895.6,
+      "bbox_y2": 535.43,
+      "meta": {
+        "area_bbox": 498.91
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 907.69,
+          "y": 690.7
+        },
+        {
+          "x": 936.95,
+          "y": 690.7
+        },
+        {
+          "x": 936.95,
+          "y": 677.3
+        },
+        {
+          "x": 907.69,
+          "y": 677.3
+        }
+      ],
+      "bbox_x1": 907.69,
+      "bbox_y1": 677.3,
+      "bbox_x2": 936.95,
+      "bbox_y2": 690.7,
+      "meta": {
+        "area_bbox": 392.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 773.51,
+          "y": 554.71
+        },
+        {
+          "x": 814.2,
+          "y": 554.71
+        },
+        {
+          "x": 814.2,
+          "y": 502.41
+        },
+        {
+          "x": 773.51,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 773.51,
+      "bbox_y1": 502.41,
+      "bbox_x2": 814.2,
+      "bbox_y2": 554.71,
+      "meta": {
+        "area_bbox": 2128.59
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#FBC7BD",
+      "stroke_color": "#FBC7BD",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 753.08,
+          "y": 543.44
+        },
+        {
+          "x": 773.51,
+          "y": 543.44
+        },
+        {
+          "x": 773.51,
+          "y": 502.41
+        },
+        {
+          "x": 753.08,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 753.08,
+      "bbox_y1": 502.41,
+      "bbox_x2": 773.51,
+      "bbox_y2": 543.44,
+      "meta": {
+        "area_bbox": 838.17
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 650.92,
+          "y": 543.44
+        },
+        {
+          "x": 691.62,
+          "y": 543.44
+        },
+        {
+          "x": 691.62,
+          "y": 502.41
+        },
+        {
+          "x": 650.92,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 650.92,
+      "bbox_y1": 502.41,
+      "bbox_x2": 691.62,
+      "bbox_y2": 543.44,
+      "meta": {
+        "area_bbox": 1669.6
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 610.39,
+          "y": 572.86
+        },
+        {
+          "x": 650.92,
+          "y": 572.86
+        },
+        {
+          "x": 650.92,
+          "y": 502.41
+        },
+        {
+          "x": 610.39,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 610.39,
+      "bbox_y1": 502.41,
+      "bbox_x2": 650.92,
+      "bbox_y2": 572.86,
+      "meta": {
+        "area_bbox": 2855.47
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 610.39,
+          "y": 617.8
+        },
+        {
+          "x": 637.19,
+          "y": 617.8
+        },
+        {
+          "x": 637.19,
+          "y": 572.86
+        },
+        {
+          "x": 610.39,
+          "y": 572.86
+        }
+      ],
+      "bbox_x1": 610.39,
+      "bbox_y1": 572.86,
+      "bbox_x2": 637.19,
+      "bbox_y2": 617.8,
+      "meta": {
+        "area_bbox": 1204.82
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 681.0,
+          "y": 690.54
+        },
+        {
+          "x": 710.09,
+          "y": 690.54
+        },
+        {
+          "x": 710.09,
+          "y": 677.14
+        },
+        {
+          "x": 681.0,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 681.0,
+      "bbox_y1": 677.14,
+      "bbox_x2": 710.09,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 389.92
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 622.48,
+          "y": 690.54
+        },
+        {
+          "x": 651.74,
+          "y": 690.54
+        },
+        {
+          "x": 651.74,
+          "y": 677.14
+        },
+        {
+          "x": 622.48,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 622.48,
+      "bbox_y1": 677.14,
+      "bbox_x2": 651.74,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.11
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 651.74,
+          "y": 690.54
+        },
+        {
+          "x": 681.0,
+          "y": 690.54
+        },
+        {
+          "x": 681.0,
+          "y": 677.14
+        },
+        {
+          "x": 651.74,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 651.74,
+      "bbox_y1": 677.14,
+      "bbox_x2": 681.0,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 588.65,
+          "y": 674.68
+        },
+        {
+          "x": 610.22,
+          "y": 674.68
+        },
+        {
+          "x": 610.22,
+          "y": 640.36
+        },
+        {
+          "x": 588.65,
+          "y": 640.36
+        }
+      ],
+      "bbox_x1": 588.65,
+      "bbox_y1": 640.36,
+      "bbox_x2": 610.22,
+      "bbox_y2": 674.68,
+      "meta": {
+        "area_bbox": 740.52
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 505.62,
+          "y": 690.54
+        },
+        {
+          "x": 534.88,
+          "y": 690.54
+        },
+        {
+          "x": 534.88,
+          "y": 677.14
+        },
+        {
+          "x": 505.62,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 505.62,
+      "bbox_y1": 677.14,
+      "bbox_x2": 534.88,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.11
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 476.36,
+          "y": 690.54
+        },
+        {
+          "x": 505.62,
+          "y": 690.54
+        },
+        {
+          "x": 505.62,
+          "y": 677.14
+        },
+        {
+          "x": 476.36,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 476.36,
+      "bbox_y1": 677.14,
+      "bbox_x2": 505.62,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.11
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 447.11,
+          "y": 690.54
+        },
+        {
+          "x": 476.36,
+          "y": 690.54
+        },
+        {
+          "x": 476.36,
+          "y": 677.14
+        },
+        {
+          "x": 447.11,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 447.11,
+      "bbox_y1": 677.14,
+      "bbox_x2": 476.36,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 417.85,
+          "y": 690.54
+        },
+        {
+          "x": 447.11,
+          "y": 690.54
+        },
+        {
+          "x": 447.11,
+          "y": 677.14
+        },
+        {
+          "x": 417.85,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 417.85,
+      "bbox_y1": 677.14,
+      "bbox_x2": 447.11,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.11
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 74.12,
+          "y": 690.54
+        },
+        {
+          "x": 181.51,
+          "y": 690.54
+        },
+        {
+          "x": 181.51,
+          "y": 676.81
+        },
+        {
+          "x": 74.12,
+          "y": 676.81
+        }
+      ],
+      "bbox_x1": 74.12,
+      "bbox_y1": 676.81,
+      "bbox_x2": 181.51,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 1474.31
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 199.0,
+          "y": 690.54
+        },
+        {
+          "x": 228.25,
+          "y": 690.54
+        },
+        {
+          "x": 228.25,
+          "y": 677.14
+        },
+        {
+          "x": 199.0,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 199.0,
+      "bbox_y1": 677.14,
+      "bbox_x2": 228.25,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 372.41,
+          "y": 690.54
+        },
+        {
+          "x": 401.67,
+          "y": 690.54
+        },
+        {
+          "x": 401.67,
+          "y": 677.14
+        },
+        {
+          "x": 372.41,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 372.41,
+      "bbox_y1": 677.14,
+      "bbox_x2": 401.67,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 343.15,
+          "y": 690.54
+        },
+        {
+          "x": 372.41,
+          "y": 690.54
+        },
+        {
+          "x": 372.41,
+          "y": 677.14
+        },
+        {
+          "x": 343.15,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 343.15,
+      "bbox_y1": 677.14,
+      "bbox_x2": 372.41,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.11
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 313.9,
+          "y": 690.54
+        },
+        {
+          "x": 343.15,
+          "y": 690.54
+        },
+        {
+          "x": 343.15,
+          "y": 677.14
+        },
+        {
+          "x": 313.9,
+          "y": 677.14
+        }
+      ],
+      "bbox_x1": 313.9,
+      "bbox_y1": 677.14,
+      "bbox_x2": 343.15,
+      "bbox_y2": 690.54,
+      "meta": {
+        "area_bbox": 392.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#FFF200",
+      "stroke_color": "#FFF200",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 393.39,
+          "y": 581.42
+        },
+        {
+          "x": 404.02,
+          "y": 581.42
+        },
+        {
+          "x": 404.02,
+          "y": 542.55
+        },
+        {
+          "x": 393.39,
+          "y": 542.55
+        }
+      ],
+      "bbox_x1": 393.39,
+      "bbox_y1": 542.55,
+      "bbox_x2": 404.02,
+      "bbox_y2": 581.42,
+      "meta": {
+        "area_bbox": 412.86
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 484.7,
+          "y": 562.23
+        },
+        {
+          "x": 525.56,
+          "y": 562.23
+        },
+        {
+          "x": 525.56,
+          "y": 502.41
+        },
+        {
+          "x": 484.7,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 484.7,
+      "bbox_y1": 502.41,
+      "bbox_x2": 525.56,
+      "bbox_y2": 562.23,
+      "meta": {
+        "area_bbox": 2444.4
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 362.28,
+          "y": 543.44
+        },
+        {
+          "x": 403.3,
+          "y": 543.44
+        },
+        {
+          "x": 403.3,
+          "y": 502.41
+        },
+        {
+          "x": 362.28,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 362.28,
+      "bbox_y1": 502.41,
+      "bbox_x2": 403.3,
+      "bbox_y2": 543.44,
+      "meta": {
+        "area_bbox": 1683.04
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#FFF200",
+      "stroke_color": "#FFF200",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 403.85,
+          "y": 581.43
+        },
+        {
+          "x": 485.24,
+          "y": 581.43
+        },
+        {
+          "x": 485.24,
+          "y": 502.16
+        },
+        {
+          "x": 403.85,
+          "y": 502.16
+        }
+      ],
+      "bbox_x1": 403.85,
+      "bbox_y1": 502.16,
+      "bbox_x2": 485.24,
+      "bbox_y2": 581.43,
+      "meta": {
+        "area_bbox": 6452.36
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 280.88,
+          "y": 543.44
+        },
+        {
+          "x": 321.42,
+          "y": 543.44
+        },
+        {
+          "x": 321.42,
+          "y": 502.41
+        },
+        {
+          "x": 280.88,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 280.88,
+      "bbox_y1": 502.41,
+      "bbox_x2": 321.42,
+      "bbox_y2": 543.44,
+      "meta": {
+        "area_bbox": 1662.92
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 321.42,
+          "y": 543.44
+        },
+        {
+          "x": 362.28,
+          "y": 543.44
+        },
+        {
+          "x": 362.28,
+          "y": 502.41
+        },
+        {
+          "x": 321.42,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 321.42,
+      "bbox_y1": 502.41,
+      "bbox_x2": 362.28,
+      "bbox_y2": 543.44,
+      "meta": {
+        "area_bbox": 1676.33
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#FBC7BD",
+      "stroke_color": "#FBC7BD",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 362.28,
+          "y": 374.27
+        },
+        {
+          "x": 402.98,
+          "y": 374.27
+        },
+        {
+          "x": 402.98,
+          "y": 327.69
+        },
+        {
+          "x": 362.28,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 362.28,
+      "bbox_y1": 327.69,
+      "bbox_x2": 402.98,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1895.8
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 321.58,
+          "y": 374.27
+        },
+        {
+          "x": 342.01,
+          "y": 374.27
+        },
+        {
+          "x": 342.01,
+          "y": 327.69
+        },
+        {
+          "x": 321.58,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 321.58,
+      "bbox_y1": 327.69,
+      "bbox_x2": 342.01,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 951.69
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 280.88,
+          "y": 374.27
+        },
+        {
+          "x": 321.58,
+          "y": 374.27
+        },
+        {
+          "x": 321.58,
+          "y": 327.69
+        },
+        {
+          "x": 280.88,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 280.88,
+      "bbox_y1": 327.69,
+      "bbox_x2": 321.58,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1895.8
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 240.18,
+          "y": 374.27
+        },
+        {
+          "x": 280.88,
+          "y": 374.27
+        },
+        {
+          "x": 280.88,
+          "y": 327.69
+        },
+        {
+          "x": 240.18,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 240.18,
+      "bbox_y1": 327.69,
+      "bbox_x2": 280.88,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1895.79
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F7C69B",
+      "stroke_color": "#F7C69B",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 201.77,
+          "y": 389.14
+        },
+        {
+          "x": 223.68,
+          "y": 389.14
+        },
+        {
+          "x": 223.68,
+          "y": 327.69
+        },
+        {
+          "x": 201.77,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 201.77,
+      "bbox_y1": 327.69,
+      "bbox_x2": 223.68,
+      "bbox_y2": 389.14,
+      "meta": {
+        "area_bbox": 1345.99
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 201.77,
+          "y": 459.75
+        },
+        {
+          "x": 227.11,
+          "y": 459.75
+        },
+        {
+          "x": 227.11,
+          "y": 389.14
+        },
+        {
+          "x": 201.77,
+          "y": 389.14
+        }
+      ],
+      "bbox_x1": 201.77,
+      "bbox_y1": 389.14,
+      "bbox_x2": 227.11,
+      "bbox_y2": 459.75,
+      "meta": {
+        "area_bbox": 1788.8
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 529.54
+        },
+        {
+          "x": 198.51,
+          "y": 529.54
+        },
+        {
+          "x": 198.51,
+          "y": 499.96
+        },
+        {
+          "x": 158.62,
+          "y": 499.96
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 499.96,
+      "bbox_x2": 198.51,
+      "bbox_y2": 529.54,
+      "meta": {
+        "area_bbox": 1179.84
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 542.13
+        },
+        {
+          "x": 72.98,
+          "y": 542.13
+        },
+        {
+          "x": 72.98,
+          "y": 517.94
+        },
+        {
+          "x": 55.65,
+          "y": 517.94
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 517.94,
+      "bbox_x2": 72.98,
+      "bbox_y2": 542.13,
+      "meta": {
+        "area_bbox": 419.09
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 517.94
+        },
+        {
+          "x": 72.98,
+          "y": 517.94
+        },
+        {
+          "x": 72.98,
+          "y": 493.91
+        },
+        {
+          "x": 55.65,
+          "y": 493.91
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 493.91,
+      "bbox_x2": 72.98,
+      "bbox_y2": 517.94,
+      "meta": {
+        "area_bbox": 416.26
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 340.93
+        },
+        {
+          "x": 72.98,
+          "y": 340.93
+        },
+        {
+          "x": 72.98,
+          "y": 316.74
+        },
+        {
+          "x": 55.65,
+          "y": 316.74
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 316.74,
+      "bbox_x2": 72.98,
+      "bbox_y2": 340.93,
+      "meta": {
+        "area_bbox": 419.09
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 316.74
+        },
+        {
+          "x": 72.98,
+          "y": 316.74
+        },
+        {
+          "x": 72.98,
+          "y": 292.71
+        },
+        {
+          "x": 55.65,
+          "y": 292.71
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 292.71,
+      "bbox_x2": 72.98,
+      "bbox_y2": 316.74,
+      "meta": {
+        "area_bbox": 416.26
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 389.14
+        },
+        {
+          "x": 72.98,
+          "y": 389.14
+        },
+        {
+          "x": 72.98,
+          "y": 364.95
+        },
+        {
+          "x": 55.65,
+          "y": 364.95
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 364.95,
+      "bbox_x2": 72.98,
+      "bbox_y2": 389.14,
+      "meta": {
+        "area_bbox": 419.09
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 364.95
+        },
+        {
+          "x": 72.98,
+          "y": 364.95
+        },
+        {
+          "x": 72.98,
+          "y": 340.93
+        },
+        {
+          "x": 55.65,
+          "y": 340.93
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 340.93,
+      "bbox_x2": 72.98,
+      "bbox_y2": 364.95,
+      "meta": {
+        "area_bbox": 416.26
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 437.36
+        },
+        {
+          "x": 72.98,
+          "y": 437.36
+        },
+        {
+          "x": 72.98,
+          "y": 413.17
+        },
+        {
+          "x": 55.65,
+          "y": 413.17
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 413.17,
+      "bbox_x2": 72.98,
+      "bbox_y2": 437.36,
+      "meta": {
+        "area_bbox": 419.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#CBE4D3",
+      "stroke_color": "#CBE4D3",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 55.65,
+          "y": 413.17
+        },
+        {
+          "x": 72.98,
+          "y": 413.17
+        },
+        {
+          "x": 72.98,
+          "y": 389.14
+        },
+        {
+          "x": 55.65,
+          "y": 389.14
+        }
+      ],
+      "bbox_x1": 55.65,
+      "bbox_y1": 389.14,
+      "bbox_x2": 72.98,
+      "bbox_y2": 413.17,
+      "meta": {
+        "area_bbox": 416.26
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 405.33
+        },
+        {
+          "x": 198.83,
+          "y": 405.33
+        },
+        {
+          "x": 198.83,
+          "y": 375.74
+        },
+        {
+          "x": 158.62,
+          "y": 375.74
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 375.74,
+      "bbox_x2": 198.83,
+      "bbox_y2": 405.33,
+      "meta": {
+        "area_bbox": 1189.48
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 434.75
+        },
+        {
+          "x": 198.83,
+          "y": 434.75
+        },
+        {
+          "x": 198.83,
+          "y": 420.04
+        },
+        {
+          "x": 158.62,
+          "y": 420.04
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 420.04,
+      "bbox_x2": 198.83,
+      "bbox_y2": 434.75,
+      "meta": {
+        "area_bbox": 591.46
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 434.75
+        },
+        {
+          "x": 198.83,
+          "y": 434.75
+        },
+        {
+          "x": 198.83,
+          "y": 405.33
+        },
+        {
+          "x": 158.62,
+          "y": 405.33
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 405.33,
+      "bbox_x2": 198.83,
+      "bbox_y2": 434.75,
+      "meta": {
+        "area_bbox": 1182.9
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 464.33
+        },
+        {
+          "x": 198.83,
+          "y": 464.33
+        },
+        {
+          "x": 198.83,
+          "y": 434.75
+        },
+        {
+          "x": 158.62,
+          "y": 434.75
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 434.75,
+      "bbox_x2": 198.83,
+      "bbox_y2": 464.33,
+      "meta": {
+        "area_bbox": 1189.5
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 76.58,
+          "y": 464.33
+        },
+        {
+          "x": 114.33,
+          "y": 464.33
+        },
+        {
+          "x": 114.33,
+          "y": 366.75
+        },
+        {
+          "x": 76.58,
+          "y": 366.75
+        }
+      ],
+      "bbox_x1": 76.58,
+      "bbox_y1": 366.75,
+      "bbox_x2": 114.33,
+      "bbox_y2": 464.33,
+      "meta": {
+        "area_bbox": 3684.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 127.57,
+          "y": 463.51
+        },
+        {
+          "x": 147.18,
+          "y": 463.51
+        },
+        {
+          "x": 147.18,
+          "y": 366.75
+        },
+        {
+          "x": 127.57,
+          "y": 366.75
+        }
+      ],
+      "bbox_x1": 127.57,
+      "bbox_y1": 366.75,
+      "bbox_x2": 147.18,
+      "bbox_y2": 463.51,
+      "meta": {
+        "area_bbox": 1897.79
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 375.74
+        },
+        {
+          "x": 198.83,
+          "y": 375.74
+        },
+        {
+          "x": 198.83,
+          "y": 346.16
+        },
+        {
+          "x": 158.62,
+          "y": 346.16
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 346.16,
+      "bbox_x2": 198.83,
+      "bbox_y2": 375.74,
+      "meta": {
+        "area_bbox": 1189.48
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 158.62,
+          "y": 346.16
+        },
+        {
+          "x": 198.83,
+          "y": 346.16
+        },
+        {
+          "x": 198.83,
+          "y": 316.74
+        },
+        {
+          "x": 158.62,
+          "y": 316.74
+        }
+      ],
+      "bbox_x1": 158.62,
+      "bbox_y1": 316.74,
+      "bbox_x2": 198.83,
+      "bbox_y2": 346.16,
+      "meta": {
+        "area_bbox": 1182.91
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 135.42,
+          "y": 316.74
+        },
+        {
+          "x": 198.83,
+          "y": 316.74
+        },
+        {
+          "x": 198.83,
+          "y": 286.5
+        },
+        {
+          "x": 135.42,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 135.42,
+      "bbox_y1": 286.5,
+      "bbox_x2": 198.83,
+      "bbox_y2": 316.74,
+      "meta": {
+        "area_bbox": 1917.57
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#E9E9E6",
+      "stroke_color": "#E9E9E6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 201.77,
+          "y": 311.83
+        },
+        {
+          "x": 240.02,
+          "y": 311.83
+        },
+        {
+          "x": 240.02,
+          "y": 286.5
+        },
+        {
+          "x": 201.77,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 201.77,
+      "bbox_y1": 286.5,
+      "bbox_x2": 240.02,
+      "bbox_y2": 311.83,
+      "meta": {
+        "area_bbox": 968.96
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 362.28,
+          "y": 316.41
+        },
+        {
+          "x": 382.87,
+          "y": 316.41
+        },
+        {
+          "x": 382.87,
+          "y": 286.5
+        },
+        {
+          "x": 362.28,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 362.28,
+      "bbox_y1": 286.5,
+      "bbox_x2": 382.87,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 615.99
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 341.68,
+          "y": 316.41
+        },
+        {
+          "x": 362.28,
+          "y": 316.41
+        },
+        {
+          "x": 362.28,
+          "y": 286.5
+        },
+        {
+          "x": 341.68,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 341.68,
+      "bbox_y1": 286.5,
+      "bbox_x2": 362.28,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 615.97
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 321.25,
+          "y": 316.41
+        },
+        {
+          "x": 341.68,
+          "y": 316.41
+        },
+        {
+          "x": 341.68,
+          "y": 286.5
+        },
+        {
+          "x": 321.25,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 321.25,
+      "bbox_y1": 286.5,
+      "bbox_x2": 341.68,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 611.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 403.3,
+          "y": 316.41
+        },
+        {
+          "x": 423.9,
+          "y": 316.41
+        },
+        {
+          "x": 423.9,
+          "y": 286.5
+        },
+        {
+          "x": 403.3,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 403.3,
+      "bbox_y1": 286.5,
+      "bbox_x2": 423.9,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 616.0
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 382.87,
+          "y": 316.41
+        },
+        {
+          "x": 403.3,
+          "y": 316.41
+        },
+        {
+          "x": 403.3,
+          "y": 286.5
+        },
+        {
+          "x": 382.87,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 382.87,
+      "bbox_y1": 286.5,
+      "bbox_x2": 403.3,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 611.08
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 362.28,
+          "y": 374.27
+        },
+        {
+          "x": 484.21,
+          "y": 374.27
+        },
+        {
+          "x": 484.21,
+          "y": 327.69
+        },
+        {
+          "x": 362.28,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 362.28,
+      "bbox_y1": 327.69,
+      "bbox_x2": 484.21,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 5679.79
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 484.21,
+          "y": 374.27
+        },
+        {
+          "x": 525.4,
+          "y": 374.27
+        },
+        {
+          "x": 525.4,
+          "y": 327.69
+        },
+        {
+          "x": 484.21,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 484.21,
+      "bbox_y1": 327.69,
+      "bbox_x2": 525.4,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1918.64
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 538.64,
+          "y": 374.27
+        },
+        {
+          "x": 597.48,
+          "y": 374.27
+        },
+        {
+          "x": 597.48,
+          "y": 327.69
+        },
+        {
+          "x": 538.64,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 538.64,
+      "bbox_y1": 327.69,
+      "bbox_x2": 597.48,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 2740.93
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 463.78,
+          "y": 316.41
+        },
+        {
+          "x": 482.9,
+          "y": 316.41
+        },
+        {
+          "x": 482.9,
+          "y": 286.5
+        },
+        {
+          "x": 463.78,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 463.78,
+      "bbox_y1": 286.5,
+      "bbox_x2": 482.9,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 571.98
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 423.9,
+          "y": 316.41
+        },
+        {
+          "x": 463.78,
+          "y": 316.41
+        },
+        {
+          "x": 463.78,
+          "y": 286.5
+        },
+        {
+          "x": 423.9,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 423.9,
+      "bbox_y1": 286.5,
+      "bbox_x2": 463.78,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 1192.84
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#E9E9E6",
+      "stroke_color": "#E9E9E6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 936.95,
+          "y": 335.86
+        },
+        {
+          "x": 961.3,
+          "y": 335.86
+        },
+        {
+          "x": 961.3,
+          "y": 305.62
+        },
+        {
+          "x": 936.95,
+          "y": 305.62
+        }
+      ],
+      "bbox_x1": 936.95,
+      "bbox_y1": 305.62,
+      "bbox_x2": 961.3,
+      "bbox_y2": 335.86,
+      "meta": {
+        "area_bbox": 736.38
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#E9E9E6",
+      "stroke_color": "#E9E9E6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 936.95,
+          "y": 305.62
+        },
+        {
+          "x": 961.3,
+          "y": 305.62
+        },
+        {
+          "x": 961.3,
+          "y": 286.5
+        },
+        {
+          "x": 936.95,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 936.95,
+      "bbox_y1": 286.5,
+      "bbox_x2": 961.3,
+      "bbox_y2": 305.62,
+      "meta": {
+        "area_bbox": 465.72
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 560.37,
+          "y": 604.4
+        },
+        {
+          "x": 578.52,
+          "y": 604.4
+        },
+        {
+          "x": 578.52,
+          "y": 587.73
+        },
+        {
+          "x": 560.37,
+          "y": 587.73
+        }
+      ],
+      "bbox_x1": 560.37,
+      "bbox_y1": 587.73,
+      "bbox_x2": 578.52,
+      "bbox_y2": 604.4,
+      "meta": {
+        "area_bbox": 302.46
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 560.37,
+          "y": 564.36
+        },
+        {
+          "x": 578.52,
+          "y": 564.36
+        },
+        {
+          "x": 578.52,
+          "y": 547.69
+        },
+        {
+          "x": 560.37,
+          "y": 547.69
+        }
+      ],
+      "bbox_x1": 560.37,
+      "bbox_y1": 547.69,
+      "bbox_x2": 578.52,
+      "bbox_y2": 564.36,
+      "meta": {
+        "area_bbox": 302.46
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 773.18,
+          "y": 374.27
+        },
+        {
+          "x": 813.88,
+          "y": 374.27
+        },
+        {
+          "x": 813.88,
+          "y": 327.69
+        },
+        {
+          "x": 773.18,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 773.18,
+      "bbox_y1": 327.69,
+      "bbox_x2": 813.88,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1895.79
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#7A7FBD",
+      "stroke_color": "#7A7FBD",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 691.95,
+          "y": 374.27
+        },
+        {
+          "x": 773.18,
+          "y": 374.27
+        },
+        {
+          "x": 773.18,
+          "y": 327.69
+        },
+        {
+          "x": 691.95,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 691.95,
+      "bbox_y1": 327.69,
+      "bbox_x2": 773.18,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 3783.98
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 651.25,
+          "y": 374.27
+        },
+        {
+          "x": 691.95,
+          "y": 374.27
+        },
+        {
+          "x": 691.95,
+          "y": 327.69
+        },
+        {
+          "x": 651.25,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 651.25,
+      "bbox_y1": 327.69,
+      "bbox_x2": 691.95,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1895.79
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#FBC7BD",
+      "stroke_color": "#FBC7BD",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 610.71,
+          "y": 374.27
+        },
+        {
+          "x": 651.25,
+          "y": 374.27
+        },
+        {
+          "x": 651.25,
+          "y": 327.69
+        },
+        {
+          "x": 610.71,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 610.71,
+      "bbox_y1": 327.69,
+      "bbox_x2": 651.25,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 1888.19
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C0DDE4",
+      "stroke_color": "#C0DDE4",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 652.07,
+          "y": 316.41
+        },
+        {
+          "x": 672.5,
+          "y": 316.41
+        },
+        {
+          "x": 672.5,
+          "y": 286.5
+        },
+        {
+          "x": 652.07,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 652.07,
+      "bbox_y1": 286.5,
+      "bbox_x2": 672.5,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 611.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C0DDE4",
+      "stroke_color": "#C0DDE4",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 692.93,
+          "y": 316.41
+        },
+        {
+          "x": 723.0,
+          "y": 316.41
+        },
+        {
+          "x": 723.0,
+          "y": 286.5
+        },
+        {
+          "x": 692.93,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 692.93,
+      "bbox_y1": 286.5,
+      "bbox_x2": 723.0,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 899.54
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C0DDE4",
+      "stroke_color": "#C0DDE4",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 723.0,
+          "y": 316.41
+        },
+        {
+          "x": 753.08,
+          "y": 316.41
+        },
+        {
+          "x": 753.08,
+          "y": 286.5
+        },
+        {
+          "x": 723.0,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 723.0,
+      "bbox_y1": 286.5,
+      "bbox_x2": 753.08,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 899.53
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C0DDE4",
+      "stroke_color": "#C0DDE4",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 753.08,
+          "y": 316.41
+        },
+        {
+          "x": 783.15,
+          "y": 316.41
+        },
+        {
+          "x": 783.15,
+          "y": 286.5
+        },
+        {
+          "x": 753.08,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 753.08,
+      "bbox_y1": 286.5,
+      "bbox_x2": 783.15,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 899.52
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C0DDE4",
+      "stroke_color": "#C0DDE4",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 783.15,
+          "y": 316.41
+        },
+        {
+          "x": 813.22,
+          "y": 316.41
+        },
+        {
+          "x": 813.22,
+          "y": 286.5
+        },
+        {
+          "x": 783.15,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 783.15,
+      "bbox_y1": 286.5,
+      "bbox_x2": 813.22,
+      "bbox_y2": 316.41,
+      "meta": {
+        "area_bbox": 899.53
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 936.95,
+          "y": 674.85
+        },
+        {
+          "x": 1126.71,
+          "y": 674.85
+        },
+        {
+          "x": 1126.71,
+          "y": 505.84
+        },
+        {
+          "x": 936.95,
+          "y": 505.84
+        }
+      ],
+      "bbox_x1": 936.95,
+      "bbox_y1": 505.84,
+      "bbox_x2": 1126.71,
+      "bbox_y2": 674.85,
+      "meta": {
+        "area_bbox": 32069.99
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 961.3,
+          "y": 358.25
+        },
+        {
+          "x": 1049.4,
+          "y": 358.25
+        },
+        {
+          "x": 1049.4,
+          "y": 286.5
+        },
+        {
+          "x": 961.3,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 961.3,
+      "bbox_y1": 286.5,
+      "bbox_x2": 1049.4,
+      "bbox_y2": 358.25,
+      "meta": {
+        "area_bbox": 6321.18
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 239.69,
+          "y": 420.85
+        },
+        {
+          "x": 283.17,
+          "y": 420.85
+        },
+        {
+          "x": 283.17,
+          "y": 380.32
+        },
+        {
+          "x": 239.69,
+          "y": 380.32
+        }
+      ],
+      "bbox_x1": 239.69,
+      "bbox_y1": 380.32,
+      "bbox_x2": 283.17,
+      "bbox_y2": 420.85,
+      "meta": {
+        "area_bbox": 1762.29
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F8951F",
+      "stroke_color": "#F8951F",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 239.2,
+          "y": 470.05
+        },
+        {
+          "x": 265.19,
+          "y": 470.05
+        },
+        {
+          "x": 265.19,
+          "y": 434.42
+        },
+        {
+          "x": 239.2,
+          "y": 434.42
+        }
+      ],
+      "bbox_x1": 239.2,
+      "bbox_y1": 434.42,
+      "bbox_x2": 265.19,
+      "bbox_y2": 470.05,
+      "meta": {
+        "area_bbox": 925.97
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 294.77,
+          "y": 420.85
+        },
+        {
+          "x": 329.92,
+          "y": 420.85
+        },
+        {
+          "x": 329.92,
+          "y": 381.95
+        },
+        {
+          "x": 294.77,
+          "y": 381.95
+        }
+      ],
+      "bbox_x1": 294.77,
+      "bbox_y1": 381.95,
+      "bbox_x2": 329.92,
+      "bbox_y2": 420.85,
+      "meta": {
+        "area_bbox": 1366.98
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 340.21,
+          "y": 420.69
+        },
+        {
+          "x": 358.03,
+          "y": 420.69
+        },
+        {
+          "x": 358.03,
+          "y": 382.12
+        },
+        {
+          "x": 340.21,
+          "y": 382.12
+        }
+      ],
+      "bbox_x1": 340.21,
+      "bbox_y1": 382.12,
+      "bbox_x2": 358.03,
+      "bbox_y2": 420.69,
+      "meta": {
+        "area_bbox": 687.2
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 275.65,
+          "y": 470.05
+        },
+        {
+          "x": 288.56,
+          "y": 470.05
+        },
+        {
+          "x": 288.56,
+          "y": 434.42
+        },
+        {
+          "x": 275.65,
+          "y": 434.42
+        }
+      ],
+      "bbox_x1": 275.65,
+      "bbox_y1": 434.42,
+      "bbox_x2": 288.56,
+      "bbox_y2": 470.05,
+      "meta": {
+        "area_bbox": 460.07
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#63BC46",
+      "stroke_color": "#63BC46",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 297.88,
+          "y": 470.21
+        },
+        {
+          "x": 317.49,
+          "y": 470.21
+        },
+        {
+          "x": 317.49,
+          "y": 434.42
+        },
+        {
+          "x": 297.88,
+          "y": 434.42
+        }
+      ],
+      "bbox_x1": 297.88,
+      "bbox_y1": 434.42,
+      "bbox_x2": 317.49,
+      "bbox_y2": 470.21,
+      "meta": {
+        "area_bbox": 702.06
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 325.67,
+          "y": 470.05
+        },
+        {
+          "x": 358.03,
+          "y": 470.05
+        },
+        {
+          "x": 358.03,
+          "y": 434.42
+        },
+        {
+          "x": 325.67,
+          "y": 434.42
+        }
+      ],
+      "bbox_x1": 325.67,
+      "bbox_y1": 434.42,
+      "bbox_x2": 358.03,
+      "bbox_y2": 470.05,
+      "meta": {
+        "area_bbox": 1153.09
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 342.01,
+          "y": 374.27
+        },
+        {
+          "x": 362.28,
+          "y": 374.27
+        },
+        {
+          "x": 362.28,
+          "y": 327.69
+        },
+        {
+          "x": 342.01,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 342.01,
+      "bbox_y1": 327.69,
+      "bbox_x2": 362.28,
+      "bbox_y2": 374.27,
+      "meta": {
+        "area_bbox": 944.1
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 880.56,
+          "y": 675.34
+        },
+        {
+          "x": 934.17,
+          "y": 675.34
+        },
+        {
+          "x": 934.17,
+          "y": 652.13
+        },
+        {
+          "x": 880.56,
+          "y": 652.13
+        }
+      ],
+      "bbox_x1": 880.56,
+      "bbox_y1": 652.13,
+      "bbox_x2": 934.17,
+      "bbox_y2": 675.34,
+      "meta": {
+        "area_bbox": 1244.24
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 880.56,
+          "y": 652.13
+        },
+        {
+          "x": 934.17,
+          "y": 652.13
+        },
+        {
+          "x": 934.17,
+          "y": 630.23
+        },
+        {
+          "x": 880.56,
+          "y": 630.23
+        }
+      ],
+      "bbox_x1": 880.56,
+      "bbox_y1": 630.23,
+      "bbox_x2": 934.17,
+      "bbox_y2": 652.13,
+      "meta": {
+        "area_bbox": 1174.16
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 880.56,
+          "y": 630.23
+        },
+        {
+          "x": 934.17,
+          "y": 630.23
+        },
+        {
+          "x": 934.17,
+          "y": 594.92
+        },
+        {
+          "x": 880.56,
+          "y": 594.92
+        }
+      ],
+      "bbox_x1": 880.56,
+      "bbox_y1": 594.92,
+      "bbox_x2": 934.17,
+      "bbox_y2": 630.23,
+      "meta": {
+        "area_bbox": 1892.65
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 525.56,
+          "y": 617.97
+        },
+        {
+          "x": 542.23,
+          "y": 617.97
+        },
+        {
+          "x": 542.23,
+          "y": 587.08
+        },
+        {
+          "x": 525.56,
+          "y": 587.08
+        }
+      ],
+      "bbox_x1": 525.56,
+      "bbox_y1": 587.08,
+      "bbox_x2": 542.23,
+      "bbox_y2": 617.97,
+      "meta": {
+        "area_bbox": 515.0
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 525.56,
+          "y": 587.08
+        },
+        {
+          "x": 542.23,
+          "y": 587.08
+        },
+        {
+          "x": 542.23,
+          "y": 564.03
+        },
+        {
+          "x": 525.56,
+          "y": 564.03
+        }
+      ],
+      "bbox_x1": 525.56,
+      "bbox_y1": 564.03,
+      "bbox_x2": 542.23,
+      "bbox_y2": 587.08,
+      "meta": {
+        "area_bbox": 384.2
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 525.56,
+          "y": 533.3
+        },
+        {
+          "x": 542.23,
+          "y": 533.3
+        },
+        {
+          "x": 542.23,
+          "y": 502.41
+        },
+        {
+          "x": 525.56,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 525.56,
+      "bbox_y1": 502.41,
+      "bbox_x2": 542.23,
+      "bbox_y2": 533.3,
+      "meta": {
+        "area_bbox": 515.0
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#63BC46",
+      "stroke_color": "#63BC46",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 533.57,
+          "y": 253.48
+        },
+        {
+          "x": 669.23,
+          "y": 253.48
+        },
+        {
+          "x": 669.23,
+          "y": 236.32
+        },
+        {
+          "x": 533.57,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 533.57,
+      "bbox_y1": 236.32,
+      "bbox_x2": 669.23,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.16
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#63BC46",
+      "stroke_color": "#63BC46",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 384.51,
+          "y": 253.48
+        },
+        {
+          "x": 520.17,
+          "y": 253.48
+        },
+        {
+          "x": 520.17,
+          "y": 236.32
+        },
+        {
+          "x": 384.51,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 384.51,
+      "bbox_y1": 236.32,
+      "bbox_x2": 520.17,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.17
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 86.38,
+          "y": 253.48
+        },
+        {
+          "x": 222.04,
+          "y": 253.48
+        },
+        {
+          "x": 222.04,
+          "y": 236.32
+        },
+        {
+          "x": 86.38,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 86.38,
+      "bbox_y1": 236.32,
+      "bbox_x2": 222.04,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.16
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 235.44,
+          "y": 253.48
+        },
+        {
+          "x": 371.1,
+          "y": 253.48
+        },
+        {
+          "x": 371.1,
+          "y": 236.32
+        },
+        {
+          "x": 235.44,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 235.44,
+      "bbox_y1": 236.32,
+      "bbox_x2": 371.1,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.17
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F4795E",
+      "stroke_color": "#F4795E",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 533.57,
+          "y": 253.48
+        },
+        {
+          "x": 669.23,
+          "y": 253.48
+        },
+        {
+          "x": 669.23,
+          "y": 236.32
+        },
+        {
+          "x": 533.57,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 533.57,
+      "bbox_y1": 236.32,
+      "bbox_x2": 669.23,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.16
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#B9BDE0",
+      "stroke_color": "#B9BDE0",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 682.63,
+          "y": 253.48
+        },
+        {
+          "x": 818.29,
+          "y": 253.48
+        },
+        {
+          "x": 818.29,
+          "y": 236.32
+        },
+        {
+          "x": 682.63,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 682.63,
+      "bbox_y1": 236.32,
+      "bbox_x2": 818.29,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.17
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 831.69,
+          "y": 253.48
+        },
+        {
+          "x": 967.35,
+          "y": 253.48
+        },
+        {
+          "x": 967.35,
+          "y": 236.32
+        },
+        {
+          "x": 831.69,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 831.69,
+      "bbox_y1": 236.32,
+      "bbox_x2": 967.35,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.17
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 980.76,
+          "y": 253.48
+        },
+        {
+          "x": 1116.41,
+          "y": 253.48
+        },
+        {
+          "x": 1116.41,
+          "y": 236.32
+        },
+        {
+          "x": 980.76,
+          "y": 236.32
+        }
+      ],
+      "bbox_x1": 980.76,
+      "bbox_y1": 236.32,
+      "bbox_x2": 1116.41,
+      "bbox_y2": 253.48,
+      "meta": {
+        "area_bbox": 2328.16
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 560.37,
+          "y": 584.46
+        },
+        {
+          "x": 578.52,
+          "y": 584.46
+        },
+        {
+          "x": 578.52,
+          "y": 567.79
+        },
+        {
+          "x": 560.37,
+          "y": 567.79
+        }
+      ],
+      "bbox_x1": 560.37,
+      "bbox_y1": 567.79,
+      "bbox_x2": 578.52,
+      "bbox_y2": 584.46,
+      "meta": {
+        "area_bbox": 302.46
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 936.79,
+          "y": 427.06
+        },
+        {
+          "x": 961.47,
+          "y": 427.06
+        },
+        {
+          "x": 961.47,
+          "y": 401.57
+        },
+        {
+          "x": 936.79,
+          "y": 401.57
+        }
+      ],
+      "bbox_x1": 936.79,
+      "bbox_y1": 401.57,
+      "bbox_x2": 961.47,
+      "bbox_y2": 427.06,
+      "meta": {
+        "area_bbox": 629.29
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 936.79,
+          "y": 472.04
+        },
+        {
+          "x": 961.47,
+          "y": 472.04
+        },
+        {
+          "x": 961.47,
+          "y": 427.06
+        },
+        {
+          "x": 936.79,
+          "y": 427.06
+        }
+      ],
+      "bbox_x1": 936.79,
+      "bbox_y1": 427.06,
+      "bbox_x2": 961.47,
+      "bbox_y2": 472.04,
+      "meta": {
+        "area_bbox": 1110.03
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 936.79,
+          "y": 401.57
+        },
+        {
+          "x": 961.47,
+          "y": 401.57
+        },
+        {
+          "x": 961.47,
+          "y": 375.9
+        },
+        {
+          "x": 936.79,
+          "y": 375.9
+        }
+      ],
+      "bbox_x1": 936.79,
+      "bbox_y1": 375.9,
+      "bbox_x2": 961.47,
+      "bbox_y2": 401.57,
+      "meta": {
+        "area_bbox": 633.33
+      }
+    },
+    {
+      "source": "pdf_rect",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 506.18,
+          "y": 676.11
+        },
+        {
+          "x": 549.42,
+          "y": 676.11
+        },
+        {
+          "x": 549.42,
+          "y": 638.99
+        },
+        {
+          "x": 506.18,
+          "y": 638.99
+        }
+      ],
+      "bbox_x1": 506.18,
+      "bbox_y1": 638.99,
+      "bbox_x2": 549.42,
+      "bbox_y2": 676.11,
+      "meta": {
+        "area_bbox": 1605.22
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#BA8565",
+      "stroke_color": "#BA8565",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 1062.15,
+          "y": 477.89
+        },
+        {
+          "x": 1114.13,
+          "y": 477.89
+        },
+        {
+          "x": 1114.13,
+          "y": 467.76
+        },
+        {
+          "x": 1126.71,
+          "y": 467.92
+        },
+        {
+          "x": 1126.71,
+          "y": 388.16
+        },
+        {
+          "x": 1078.01,
+          "y": 388.16
+        },
+        {
+          "x": 1078.01,
+          "y": 368.06
+        },
+        {
+          "x": 1062.15,
+          "y": 368.06
+        }
+      ],
+      "bbox_x1": 1062.15,
+      "bbox_y1": 368.06,
+      "bbox_x2": 1126.71,
+      "bbox_y2": 477.89,
+      "meta": {
+        "n_points": 8
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 790.06,
+          "y": 675.34
+        },
+        {
+          "x": 863.31,
+          "y": 675.17
+        },
+        {
+          "x": 862.54,
+          "y": 647.55
+        },
+        {
+          "x": 862.54,
+          "y": 647.22
+        },
+        {
+          "x": 862.2,
+          "y": 569.59
+        },
+        {
+          "x": 854.26,
+          "y": 569.59
+        },
+        {
+          "x": 854.26,
+          "y": 543.6
+        },
+        {
+          "x": 814.22,
+          "y": 543.44
+        },
+        {
+          "x": 814.22,
+          "y": 554.71
+        },
+        {
+          "x": 790.06,
+          "y": 554.71
+        }
+      ],
+      "bbox_x1": 790.06,
+      "bbox_y1": 543.44,
+      "bbox_x2": 863.31,
+      "bbox_y2": 675.34,
+      "meta": {
+        "n_points": 10
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 862.58,
+          "y": 569.59
+        },
+        {
+          "x": 854.74,
+          "y": 569.59
+        },
+        {
+          "x": 854.58,
+          "y": 543.76
+        },
+        {
+          "x": 843.3,
+          "y": 543.6
+        },
+        {
+          "x": 843.3,
+          "y": 502.41
+        },
+        {
+          "x": 862.58,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 843.3,
+      "bbox_y1": 502.41,
+      "bbox_x2": 862.58,
+      "bbox_y2": 569.59,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 843.3,
+          "y": 543.93
+        },
+        {
+          "x": 814.37,
+          "y": 543.6
+        },
+        {
+          "x": 814.37,
+          "y": 502.41
+        },
+        {
+          "x": 843.3,
+          "y": 502.41
+        }
+      ],
+      "bbox_x1": 814.37,
+      "bbox_y1": 502.41,
+      "bbox_x2": 843.3,
+      "bbox_y2": 543.93,
+      "meta": {
+        "n_points": 4
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#E0E2F2",
+      "stroke_color": "#E0E2F2",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 778.57,
+          "y": 474.95
+        },
+        {
+          "x": 784.46,
+          "y": 480.67
+        },
+        {
+          "x": 799.82,
+          "y": 480.67
+        },
+        {
+          "x": 805.7,
+          "y": 474.79
+        },
+        {
+          "x": 805.87,
+          "y": 467.43
+        },
+        {
+          "x": 805.87,
+          "y": 388.65
+        },
+        {
+          "x": 778.57,
+          "y": 388.65
+        }
+      ],
+      "bbox_x1": 778.57,
+      "bbox_y1": 388.65,
+      "bbox_x2": 805.87,
+      "bbox_y2": 480.67,
+      "meta": {
+        "n_points": 7
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4E2C0",
+      "stroke_color": "#C4E2C0",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 379.77,
+          "y": 467.6
+        },
+        {
+          "x": 383.04,
+          "y": 470.87
+        },
+        {
+          "x": 402.81,
+          "y": 470.87
+        },
+        {
+          "x": 407.06,
+          "y": 469.23
+        },
+        {
+          "x": 456.26,
+          "y": 420.04
+        },
+        {
+          "x": 457.89,
+          "y": 415.79
+        },
+        {
+          "x": 457.89,
+          "y": 397.81
+        },
+        {
+          "x": 454.62,
+          "y": 394.54
+        },
+        {
+          "x": 434.68,
+          "y": 394.54
+        },
+        {
+          "x": 430.6,
+          "y": 396.34
+        },
+        {
+          "x": 381.4,
+          "y": 445.53
+        },
+        {
+          "x": 379.77,
+          "y": 449.62
+        }
+      ],
+      "bbox_x1": 379.77,
+      "bbox_y1": 394.54,
+      "bbox_x2": 457.89,
+      "bbox_y2": 470.87,
+      "meta": {
+        "n_points": 12
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#F9FADE",
+      "stroke_color": "#F9FADE",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 480.29,
+          "y": 469.4
+        },
+        {
+          "x": 485.84,
+          "y": 474.79
+        },
+        {
+          "x": 522.45,
+          "y": 474.79
+        },
+        {
+          "x": 528.01,
+          "y": 469.4
+        },
+        {
+          "x": 528.01,
+          "y": 390.78
+        },
+        {
+          "x": 522.45,
+          "y": 385.38
+        },
+        {
+          "x": 485.84,
+          "y": 385.38
+        },
+        {
+          "x": 480.29,
+          "y": 390.78
+        }
+      ],
+      "bbox_x1": 480.29,
+      "bbox_y1": 385.38,
+      "bbox_x2": 528.01,
+      "bbox_y2": 474.79,
+      "meta": {
+        "n_points": 8
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#F9FADE",
+      "stroke_color": "#F9FADE",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 608.59,
+          "y": 469.4
+        },
+        {
+          "x": 614.31,
+          "y": 474.63
+        },
+        {
+          "x": 647.33,
+          "y": 474.95
+        },
+        {
+          "x": 654.85,
+          "y": 467.6
+        },
+        {
+          "x": 654.85,
+          "y": 394.05
+        },
+        {
+          "x": 647.33,
+          "y": 386.69
+        },
+        {
+          "x": 614.31,
+          "y": 386.69
+        },
+        {
+          "x": 608.59,
+          "y": 392.09
+        }
+      ],
+      "bbox_x1": 608.59,
+      "bbox_y1": 386.69,
+      "bbox_x2": 654.85,
+      "bbox_y2": 474.95,
+      "meta": {
+        "n_points": 8
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#FBC7BD",
+      "stroke_color": "#FBC7BD",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 672.17,
+          "y": 480.67
+        },
+        {
+          "x": 761.08,
+          "y": 480.67
+        },
+        {
+          "x": 761.08,
+          "y": 434.75
+        },
+        {
+          "x": 715.16,
+          "y": 388.65
+        },
+        {
+          "x": 672.17,
+          "y": 388.65
+        }
+      ],
+      "bbox_x1": 672.17,
+      "bbox_y1": 388.65,
+      "bbox_x2": 761.08,
+      "bbox_y2": 480.67,
+      "meta": {
+        "n_points": 5
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 448.12,
+          "y": 639.41
+        },
+        {
+          "x": 525.56,
+          "y": 639.41
+        },
+        {
+          "x": 525.56,
+          "y": 562.23
+        },
+        {
+          "x": 499.68,
+          "y": 562.23
+        },
+        {
+          "x": 499.68,
+          "y": 581.69
+        },
+        {
+          "x": 448.12,
+          "y": 581.69
+        }
+      ],
+      "bbox_x1": 448.12,
+      "bbox_y1": 562.23,
+      "bbox_x2": 525.56,
+      "bbox_y2": 639.41,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 76.58,
+          "y": 366.75
+        },
+        {
+          "x": 147.18,
+          "y": 366.75
+        },
+        {
+          "x": 147.02,
+          "y": 316.74
+        },
+        {
+          "x": 135.91,
+          "y": 316.74
+        },
+        {
+          "x": 135.91,
+          "y": 286.5
+        },
+        {
+          "x": 76.58,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 76.58,
+      "bbox_y1": 286.5,
+      "bbox_x2": 147.18,
+      "bbox_y2": 366.75,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 76.58,
+          "y": 618.13
+        },
+        {
+          "x": 198.51,
+          "y": 618.13
+        },
+        {
+          "x": 198.51,
+          "y": 529.38
+        },
+        {
+          "x": 138.03,
+          "y": 529.38
+        },
+        {
+          "x": 138.03,
+          "y": 506.01
+        },
+        {
+          "x": 76.58,
+          "y": 506.17
+        }
+      ],
+      "bbox_x1": 76.58,
+      "bbox_y1": 506.01,
+      "bbox_x2": 198.51,
+      "bbox_y2": 618.13,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 880.56,
+          "y": 594.92
+        },
+        {
+          "x": 934.17,
+          "y": 594.92
+        },
+        {
+          "x": 934.17,
+          "y": 502.41
+        },
+        {
+          "x": 895.6,
+          "y": 502.41
+        },
+        {
+          "x": 895.76,
+          "y": 546.54
+        },
+        {
+          "x": 880.56,
+          "y": 546.54
+        }
+      ],
+      "bbox_x1": 880.56,
+      "bbox_y1": 502.41,
+      "bbox_x2": 934.17,
+      "bbox_y2": 594.92,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 610.22,
+          "y": 675.34
+        },
+        {
+          "x": 793.94,
+          "y": 675.34
+        },
+        {
+          "x": 793.94,
+          "y": 617.8
+        },
+        {
+          "x": 650.92,
+          "y": 617.8
+        },
+        {
+          "x": 650.92,
+          "y": 572.86
+        },
+        {
+          "x": 637.19,
+          "y": 572.86
+        },
+        {
+          "x": 637.36,
+          "y": 617.8
+        },
+        {
+          "x": 623.79,
+          "y": 617.8
+        },
+        {
+          "x": 623.79,
+          "y": 623.85
+        },
+        {
+          "x": 610.22,
+          "y": 623.85
+        }
+      ],
+      "bbox_x1": 610.22,
+      "bbox_y1": 572.86,
+      "bbox_x2": 793.94,
+      "bbox_y2": 675.34,
+      "meta": {
+        "n_points": 10
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 793.94,
+          "y": 617.8
+        },
+        {
+          "x": 793.94,
+          "y": 554.71
+        },
+        {
+          "x": 773.51,
+          "y": 554.71
+        },
+        {
+          "x": 773.51,
+          "y": 546.38
+        },
+        {
+          "x": 732.48,
+          "y": 546.38
+        },
+        {
+          "x": 732.48,
+          "y": 502.41
+        },
+        {
+          "x": 691.62,
+          "y": 502.41
+        },
+        {
+          "x": 691.62,
+          "y": 546.38
+        },
+        {
+          "x": 650.92,
+          "y": 546.38
+        },
+        {
+          "x": 650.92,
+          "y": 617.8
+        }
+      ],
+      "bbox_x1": 650.92,
+      "bbox_y1": 502.41,
+      "bbox_x2": 793.94,
+      "bbox_y2": 617.8,
+      "meta": {
+        "n_points": 10
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 280.72,
+          "y": 310.69
+        },
+        {
+          "x": 292.81,
+          "y": 316.41
+        },
+        {
+          "x": 307.03,
+          "y": 316.41
+        },
+        {
+          "x": 307.03,
+          "y": 304.48
+        },
+        {
+          "x": 280.72,
+          "y": 304.48
+        }
+      ],
+      "bbox_x1": 280.72,
+      "bbox_y1": 304.48,
+      "bbox_x2": 307.03,
+      "bbox_y2": 316.41,
+      "meta": {
+        "n_points": 5
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#E9E9E6",
+      "stroke_color": "#E9E9E6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 538.47,
+          "y": 374.43
+        },
+        {
+          "x": 538.47,
+          "y": 379.01
+        },
+        {
+          "x": 545.99,
+          "y": 386.86
+        },
+        {
+          "x": 590.12,
+          "y": 386.86
+        },
+        {
+          "x": 597.48,
+          "y": 379.01
+        },
+        {
+          "x": 597.48,
+          "y": 374.43
+        }
+      ],
+      "bbox_x1": 538.47,
+      "bbox_y1": 374.43,
+      "bbox_x2": 597.48,
+      "bbox_y2": 386.86,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 597.48,
+          "y": 320.5
+        },
+        {
+          "x": 582.77,
+          "y": 311.18
+        },
+        {
+          "x": 568.06,
+          "y": 311.18
+        },
+        {
+          "x": 568.06,
+          "y": 327.69
+        },
+        {
+          "x": 597.48,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 568.06,
+      "bbox_y1": 311.18,
+      "bbox_x2": 597.48,
+      "bbox_y2": 327.69,
+      "meta": {
+        "n_points": 5
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 538.64,
+          "y": 320.5
+        },
+        {
+          "x": 553.35,
+          "y": 310.85
+        },
+        {
+          "x": 568.06,
+          "y": 310.85
+        },
+        {
+          "x": 568.06,
+          "y": 327.69
+        },
+        {
+          "x": 538.64,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 538.64,
+      "bbox_y1": 310.85,
+      "bbox_x2": 568.06,
+      "bbox_y2": 327.69,
+      "meta": {
+        "n_points": 5
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 525.56,
+          "y": 309.55
+        },
+        {
+          "x": 511.34,
+          "y": 316.41
+        },
+        {
+          "x": 497.12,
+          "y": 316.41
+        },
+        {
+          "x": 497.12,
+          "y": 304.48
+        },
+        {
+          "x": 511.34,
+          "y": 304.32
+        },
+        {
+          "x": 525.56,
+          "y": 304.32
+        }
+      ],
+      "bbox_x1": 497.12,
+      "bbox_y1": 304.32,
+      "bbox_x2": 525.56,
+      "bbox_y2": 316.41,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C4DAB8",
+      "stroke_color": "#C4DAB8",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 828.1,
+          "y": 466.13
+        },
+        {
+          "x": 933.85,
+          "y": 466.13
+        },
+        {
+          "x": 933.85,
+          "y": 374.43
+        },
+        {
+          "x": 855.23,
+          "y": 374.43
+        },
+        {
+          "x": 855.07,
+          "y": 327.69
+        },
+        {
+          "x": 828.1,
+          "y": 327.69
+        }
+      ],
+      "bbox_x1": 828.1,
+      "bbox_y1": 327.69,
+      "bbox_x2": 933.85,
+      "bbox_y2": 466.13,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#F3F3B5",
+      "stroke_color": "#F3F3B5",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 1049.4,
+          "y": 286.5
+        },
+        {
+          "x": 1049.4,
+          "y": 358.25
+        },
+        {
+          "x": 1066.4,
+          "y": 358.25
+        },
+        {
+          "x": 1066.4,
+          "y": 368.06
+        },
+        {
+          "x": 1078.01,
+          "y": 368.06
+        },
+        {
+          "x": 1078.01,
+          "y": 388.16
+        },
+        {
+          "x": 1116.91,
+          "y": 388.16
+        },
+        {
+          "x": 1116.91,
+          "y": 305.95
+        },
+        {
+          "x": 1106.44,
+          "y": 305.95
+        },
+        {
+          "x": 1106.44,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 1049.4,
+      "bbox_y1": 286.5,
+      "bbox_x2": 1116.91,
+      "bbox_y2": 388.16,
+      "meta": {
+        "n_points": 10
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#C3C5C6",
+      "stroke_color": "#C3C5C6",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 933.85,
+          "y": 374.43
+        },
+        {
+          "x": 875.5,
+          "y": 374.43
+        },
+        {
+          "x": 875.5,
+          "y": 295.82
+        },
+        {
+          "x": 896.74,
+          "y": 295.82
+        },
+        {
+          "x": 896.74,
+          "y": 286.5
+        },
+        {
+          "x": 933.85,
+          "y": 286.5
+        }
+      ],
+      "bbox_x1": 875.5,
+      "bbox_y1": 286.5,
+      "bbox_x2": 933.85,
+      "bbox_y2": 374.43,
+      "meta": {
+        "n_points": 6
+      }
+    },
+    {
+      "source": "pdf_path",
+      "fill_color": "#63BC46",
+      "stroke_color": "#63BC46",
+      "fill_opacity": 0.12,
+      "stroke_width": 1.5,
+      "polygon": [
+        {
+          "x": 554.82,
+          "y": 457.14
+        },
+        {
+          "x": 554.82,
+          "y": 478.22
+        },
+        {
+          "x": 562.01,
+          "y": 478.22
+        },
+        {
+          "x": 562.01,
+          "y": 485.25
+        },
+        {
+          "x": 581.95,
+          "y": 485.25
+        },
+        {
+          "x": 581.95,
+          "y": 463.84
+        },
+        {
+          "x": 574.92,
+          "y": 463.84
+        },
+        {
+          "x": 574.92,
+          "y": 478.22
+        },
+        {
+          "x": 562.01,
+          "y": 478.22
+        },
+        {
+          "x": 562.01,
+          "y": 463.84
+        },
+        {
+          "x": 566.42,
+          "y": 463.84
+        },
+        {
+          "x": 566.42,
+          "y": 457.14
+        }
+      ],
+      "bbox_x1": 554.82,
+      "bbox_y1": 457.14,
+      "bbox_x2": 581.95,
+      "bbox_y2": 485.25,
+      "meta": {
+        "n_points": 12
+      }
+    }
+  ]
+}
