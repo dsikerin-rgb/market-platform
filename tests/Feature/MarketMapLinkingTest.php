@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Feature;
 
 use App\Models\Market;
@@ -17,12 +19,39 @@ class MarketMapLinkingTest extends TestCase
 
     private function actingAsSuperAdmin(): User
     {
-        Role::findOrCreate('super-admin');
+        // Явно задаём guard, чтобы роль точно совпала с guard user-а (web)
+        Role::findOrCreate('super-admin', 'web');
 
         $user = User::factory()->create();
         $user->assignRole('super-admin');
 
+        // Filament middleware может быть на web или на отдельном guard.
+        $this->loginForPossibleGuards($user);
+
         return $user;
+    }
+
+    private function loginForPossibleGuards(User $user): void
+    {
+        // Всегда логинимся в web
+        $this->actingAs($user, 'web');
+
+        // На всякий случай логинимся и в filament-guard, если он используется/не определён.
+        if (! config('auth.guards.filament')) {
+            config()->set('auth.guards.filament', [
+                'driver' => 'session',
+                'provider' => 'users',
+            ]);
+        }
+
+        $this->actingAs($user, 'filament');
+    }
+
+    private function selectMarketInSession(Market $market): void
+    {
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
     }
 
     private function createMarketWithMap(): Market
@@ -45,6 +74,7 @@ class MarketMapLinkingTest extends TestCase
         $this->actingAsSuperAdmin();
 
         $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
 
         $space = MarketSpace::create([
             'market_id' => $market->id,
@@ -67,6 +97,7 @@ class MarketMapLinkingTest extends TestCase
         $this->actingAsSuperAdmin();
 
         $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
 
         $space = MarketSpace::create([
             'market_id' => $market->id,
@@ -83,6 +114,10 @@ class MarketMapLinkingTest extends TestCase
                 ['x' => 2, 'y' => 1],
                 ['x' => 2, 'y' => 2],
             ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
             'is_active' => true,
         ]);
 
@@ -98,6 +133,7 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertViewIs('admin.market-map');
+
         $response->assertViewHas('focusShape', function (?array $focusShape): bool {
             if (! $focusShape) {
                 return false;
@@ -119,13 +155,19 @@ class MarketMapLinkingTest extends TestCase
             'statusText' => 'Торговое место привязано к карте.',
         ]);
 
-        $linkedView->assertSee('Торговое место привязано к карте.');
+        $this->assertStringContainsString(
+            'Торговое место привязано к карте.',
+            $linkedView->render()
+        );
 
         $unlinkedView = view('admin.market-space-edit', [
             'isMapLinked' => false,
             'statusText' => 'Торговое место не привязано к объектам карты.',
         ]);
 
-        $unlinkedView->assertSee('Торговое место не привязано к объектам карты.');
+        $this->assertStringContainsString(
+            'Торговое место не привязано к объектам карты.',
+            $unlinkedView->render()
+        );
     }
 }
