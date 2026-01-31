@@ -1,11 +1,17 @@
 <?php
+# app/Filament/Pages/OpsDiagnostics.php
 
 declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Carbon;
@@ -28,6 +34,12 @@ class OpsDiagnostics extends Page
     private const TELESCOPE_ENABLED_UNTIL_CACHE_KEY = 'ops:telescope:enabled_until';
 
     private const TELESCOPE_DEFAULT_ENABLE_MINUTES = 30;
+
+    /**
+     * Импорт "подложки" карты из JSON (market_map_extract_*.json).
+     * Эти записи создаются с market_space_id = NULL.
+     */
+    private const MAP_EXTRACT_IMPORT_SOURCE_KEY = 'import_source';
 
     /**
      * В вашей версии Filament view у Page задан как НЕ static.
@@ -55,6 +67,101 @@ class OpsDiagnostics extends Page
         return static::canAccess();
     }
 
+    /**
+     * Header actions (кнопки справа вверху страницы).
+     * Не требует правок Blade-шаблона.
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('importMapExtractJson')
+                ->label('Импорт подложки карты (JSON)')
+                ->icon('heroicon-o-arrow-up-tray')
+                ->color('primary')
+                ->modalHeading('Импорт подложки карты из JSON')
+                ->modalDescription('Загрузите market_map_extract_*.json. Импорт идемпотентный: при включённой замене будут удалены ранее импортированные записи из этого же файла.')
+                ->form([
+                    FileUpload::make('json_file')
+                        ->label('JSON файл')
+                        ->required()
+                        ->disk('local')
+                        ->directory('imports')
+                        ->preserveFilenames()
+                        ->acceptedFileTypes(['application/json', 'text/plain'])
+                        ->maxSize(10_240) // 10 MB
+                        ->helperText('Файл будет сохранён в storage/app/imports'),
+
+                    Select::make('market_id')
+                        ->label('Рынок')
+                        ->required()
+                        ->options(fn (): array => $this->getMarketOptions())
+                        ->default(fn (): int => (int) (DB::table('markets')->min('id') ?? 1))
+                        ->searchable(),
+
+                    TextInput::make('page')
+                        ->label('Page')
+                        ->numeric()
+                        ->minValue(1)
+                        ->default(1)
+                        ->required(),
+
+                    TextInput::make('version')
+                        ->label('Version')
+                        ->numeric()
+                        ->minValue(1)
+                        ->default(1)
+                        ->required(),
+
+                    Toggle::make('replace_existing')
+                        ->label('Заменить ранее импортированное из этого файла')
+                        ->default(true)
+                        ->helperText('Удалит записи market_space_id=NULL и meta содержит import_source=<имя файла>.'),
+                ])
+                ->action(function (array $data): void {
+                    $this->ensureSuperAdmin();
+
+                    $storedPath = (string) ($data['json_file'] ?? '');
+                    $marketId = (int) ($data['market_id'] ?? 0);
+                    $page = max(1, (int) ($data['page'] ?? 1));
+                    $version = max(1, (int) ($data['version'] ?? 1));
+                    $replace = (bool) ($data['replace_existing'] ?? true);
+
+                    if ($storedPath === '') {
+                        Notification::make()
+                            ->title('Файл не загружен')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    try {
+                        $result = $this->importMapExtractJson($storedPath, $marketId, $page, $version, $replace);
+
+                        Notification::make()
+                            ->title('Импорт выполнен')
+                            ->body(
+                                "Рынок: {$result['market_id']}\n"
+                                . "Удалено: {$result['deleted']}\n"
+                                . "Импортировано: {$result['imported']}\n"
+                                . "Всего shapes по рынку: {$result['shapes_total']}\n"
+                                . "Источник: {$result['source']}"
+                            )
+                            ->success()
+                            ->send();
+
+                        $this->dispatch('$refresh');
+                    } catch (Throwable $e) {
+                        Notification::make()
+                            ->title('Ошибка импорта')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+        ];
+    }
+
     protected function getViewData(): array
     {
         $telescopeInstalled = class_exists(\Laravel\Telescope\Telescope::class);
@@ -72,6 +179,9 @@ class OpsDiagnostics extends Page
             && $telescopeEnabledUntil->isFuture();
 
         $git = $this->getGitInfo();
+
+        // Небольшая диагностика для карты (не ломает страницу, даже если таблицы нет)
+        $mapStats = $this->getMapShapesStatsBestEffort();
 
         return [
             'appEnv' => (string) config('app.env'),
@@ -93,6 +203,10 @@ class OpsDiagnostics extends Page
             'telescopeRecordingEnabled' => $telescopeRecordingEnabled,
             'telescopeEnabledUntil' => $telescopeEnabledUntil?->toDateTimeString(),
             'telescopeEnabledUntilHuman' => $telescopeEnabledUntil?->diffForHumans(),
+
+            // Map stats (optional rendering in Blade)
+            'mapShapesTotal' => $mapStats['total'],
+            'mapShapesUnlinked' => $mapStats['unlinked'],
         ];
     }
 
@@ -262,6 +376,188 @@ class OpsDiagnostics extends Page
     {
         if (! static::canAccess()) {
             abort(403);
+        }
+    }
+
+    /**
+     * Импорт подложки карты из файла вида market_map_extract_*.json, уже загруженного FileUpload.
+     *
+     * @param  string  $storedPath  Путь относительно storage/app (например imports/xxx.json)
+     * @return array{market_id:int,deleted:int,imported:int,shapes_total:int,source:string}
+     */
+    private function importMapExtractJson(string $storedPath, int $marketId, int $page, int $version, bool $replaceExisting): array
+    {
+        if ($marketId <= 0) {
+            throw new \RuntimeException('Некорректный market_id');
+        }
+
+        $absPath = storage_path('app/' . ltrim($storedPath, '/'));
+        if (! is_file($absPath)) {
+            throw new \RuntimeException("Файл не найден: {$absPath}");
+        }
+
+        $json = File::get($absPath);
+        $data = json_decode($json, true);
+
+        if (! is_array($data) || ! isset($data['items']) || ! is_array($data['items'])) {
+            throw new \RuntimeException('Некорректный JSON: ожидается ключ items (массив).');
+        }
+
+        $items = $data['items'];
+        $count = count($items);
+
+        if ($count === 0) {
+            throw new \RuntimeException('В JSON нет элементов для импорта (items пуст).');
+        }
+
+        $tag = basename($absPath);
+        $pattern = '%' . $tag . '%';
+
+        DB::beginTransaction();
+
+        try {
+            $deleted = 0;
+
+            if ($replaceExisting) {
+                // Удаляем только ранее импортированную "подложку" из этого же файла
+                $deleted = DB::table('market_space_map_shapes')
+                    ->where('market_id', $marketId)
+                    ->whereNull('market_space_id')
+                    ->where('meta', 'like', $pattern)
+                    ->delete();
+            }
+
+            $now = now()->toDateTimeString();
+            $imported = 0;
+
+            $buffer = [];
+            $sort = 0;
+
+            foreach ($items as $it) {
+                if (! is_array($it)) {
+                    continue;
+                }
+
+                foreach (['bbox_x1', 'bbox_y1', 'bbox_x2', 'bbox_y2', 'polygon'] as $req) {
+                    if (! array_key_exists($req, $it)) {
+                        throw new \RuntimeException("Некорректный items[]: нет ключа {$req}");
+                    }
+                }
+
+                $polygonJson = json_encode($it['polygon'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($polygonJson === false) {
+                    throw new \RuntimeException('Ошибка кодирования polygon: ' . json_last_error_msg());
+                }
+
+                $metaJson = json_encode([
+                    self::MAP_EXTRACT_IMPORT_SOURCE_KEY => $tag,
+                    'source' => $it['source'] ?? null,
+                    'meta' => $it['meta'] ?? null,
+                    'pdf' => $data['pdf'] ?? null,
+                    'page_size' => $data['page_size'] ?? null,
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+                if ($metaJson === false) {
+                    throw new \RuntimeException('Ошибка кодирования meta: ' . json_last_error_msg());
+                }
+
+                $buffer[] = [
+                    'market_id' => $marketId,
+                    'market_space_id' => null,
+                    'page' => $page,
+                    'version' => $version,
+                    'bbox_x1' => (float) $it['bbox_x1'],
+                    'bbox_y1' => (float) $it['bbox_y1'],
+                    'bbox_x2' => (float) $it['bbox_x2'],
+                    'bbox_y2' => (float) $it['bbox_y2'],
+                    'polygon' => $polygonJson,
+                    'stroke_color' => $it['stroke_color'] ?? null,
+                    'fill_color' => $it['fill_color'] ?? null,
+                    'fill_opacity' => array_key_exists('fill_opacity', $it) ? $it['fill_opacity'] : null,
+                    'stroke_width' => array_key_exists('stroke_width', $it) ? $it['stroke_width'] : null,
+                    'meta' => $metaJson,
+                    'is_active' => 1,
+                    'sort_order' => $sort,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+
+                $sort++;
+                $imported++;
+
+                // На всякий случай батчим
+                if (count($buffer) >= 500) {
+                    DB::table('market_space_map_shapes')->insert($buffer);
+                    $buffer = [];
+                }
+            }
+
+            if ($buffer !== []) {
+                DB::table('market_space_map_shapes')->insert($buffer);
+            }
+
+            DB::commit();
+
+            $shapesTotal = (int) DB::table('market_space_map_shapes')
+                ->where('market_id', $marketId)
+                ->count();
+
+            return [
+                'market_id' => $marketId,
+                'deleted' => (int) $deleted,
+                'imported' => (int) $imported,
+                'shapes_total' => $shapesTotal,
+                'source' => $tag,
+            ];
+        } catch (Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * @return array<int,string>
+     */
+    private function getMarketOptions(): array
+    {
+        try {
+            $rows = DB::table('markets')->orderBy('id')->get();
+
+            $out = [];
+            foreach ($rows as $r) {
+                $id = (int) ($r->id ?? 0);
+                if ($id <= 0) {
+                    continue;
+                }
+
+                $label = null;
+
+                // чаще всего есть name, но не предполагаем жёстко
+                if (isset($r->name) && is_string($r->name) && trim($r->name) !== '') {
+                    $label = trim($r->name);
+                }
+
+                $out[$id] = $label ? "{$label} (#{$id})" : "#{$id}";
+            }
+
+            return $out;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array{total:int,unlinked:int}
+     */
+    private function getMapShapesStatsBestEffort(): array
+    {
+        try {
+            $total = (int) DB::table('market_space_map_shapes')->count();
+            $unlinked = (int) DB::table('market_space_map_shapes')->whereNull('market_space_id')->count();
+
+            return ['total' => $total, 'unlinked' => $unlinked];
+        } catch (Throwable) {
+            return ['total' => 0, 'unlinked' => 0];
         }
     }
 

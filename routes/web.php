@@ -2,6 +2,8 @@
 
 # routes/web.php
 
+declare(strict_types=1);
+
 use App\Http\Controllers\Auth\MarketRegistrationController;
 use App\Models\Market;
 use App\Models\MarketSpace;
@@ -161,6 +163,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
     /**
      * CREATE shape.
+     *
+     * Важно: эти endpoints НЕ должны создавать/обновлять MarketSpace.
+     * Они работают только с MarketSpaceMapShape и привязкой market_space_id к существующему месту.
      */
     Route::post('/admin/market-map/shapes', function (Request $request) use (
         $resolveMarketForMap,
@@ -214,6 +219,59 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         [$polygon, $bbox] = $normalizePolygonAndBbox($validated['polygon']);
 
+        // ВАЖНО: в БД есть UNIQUE(market_id, version, page, market_space_id).
+        // Если shape ранее "удалили" через is_active=0, запись всё равно остаётся и мешает создать новую.
+        // Поэтому при market_space_id делаем upsert: если запись с таким ключом уже есть — обновляем её.
+        if ($marketSpaceId !== null) {
+            $existing = MarketSpaceMapShape::query()
+                ->where('market_id', (int) $market->id)
+                ->where('page', $page)
+                ->where('version', $version)
+                ->where('market_space_id', (int) $marketSpaceId)
+                ->first();
+
+            if ($existing) {
+                $existing->polygon = $polygon;
+                $existing->bbox_x1 = $bbox['bbox_x1'];
+                $existing->bbox_y1 = $bbox['bbox_y1'];
+                $existing->bbox_x2 = $bbox['bbox_x2'];
+                $existing->bbox_y2 = $bbox['bbox_y2'];
+
+                $existing->stroke_color = $validated['stroke_color'] ?? ($existing->stroke_color ?: '#00A3FF');
+                $existing->fill_color = $validated['fill_color'] ?? ($existing->fill_color ?: '#00A3FF');
+                $existing->fill_opacity = array_key_exists('fill_opacity', $validated)
+                    ? (float) $validated['fill_opacity']
+                    : (float) ($existing->fill_opacity ?? 0.12);
+                $existing->stroke_width = array_key_exists('stroke_width', $validated)
+                    ? (float) $validated['stroke_width']
+                    : (float) ($existing->stroke_width ?? 1.5);
+
+                $existing->meta = $validated['meta'] ?? $existing->meta;
+                $existing->sort_order = array_key_exists('sort_order', $validated)
+                    ? (int) $validated['sort_order']
+                    : (int) ($existing->sort_order ?? 0);
+
+                $existing->is_active = array_key_exists('is_active', $validated)
+                    ? (bool) $validated['is_active']
+                    : true;
+
+                try {
+                    $existing->save();
+                } catch (\Throwable $e) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'Не удалось обновить существующий shape (upsert): ' . $e->getMessage(),
+                    ], 500);
+                }
+
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'updated',
+                    'item' => $existing->fresh()->toArray(),
+                ]);
+            }
+        }
+
         try {
             $shape = MarketSpaceMapShape::query()->create([
                 'market_id' => (int) $market->id,
@@ -242,6 +300,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         return response()->json([
             'ok' => true,
+            'mode' => 'created',
             'item' => $shape->fresh()->toArray(),
         ]);
     })->name('filament.admin.market-map.shapes.store');
@@ -289,6 +348,20 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        // Считаем будущие значения ключа уникальности.
+        $nextPage = array_key_exists('page', $validated)
+            ? (int) ($validated['page'] ?? 1)
+            : (int) ($shapeModel->page ?? 1);
+
+        $nextVersion = array_key_exists('version', $validated)
+            ? (int) ($validated['version'] ?? 1)
+            : (int) ($shapeModel->version ?? 1);
+
+        $nextMarketSpaceId = array_key_exists('market_space_id', $validated)
+            ? $validated['market_space_id']
+            : $shapeModel->market_space_id;
+
+        // Проверяем, что market_space_id принадлежит рынку.
         if (array_key_exists('market_space_id', $validated)) {
             $marketSpaceId = $validated['market_space_id'];
 
@@ -304,16 +377,45 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     ]);
                 }
             }
+        }
 
-            $shapeModel->market_space_id = $marketSpaceId !== null ? (int) $marketSpaceId : null;
+        // ВАЖНО: защитимся от UNIQUE(market_id, version, page, market_space_id).
+        // Если пытаемся привязать к месту, которое уже занято (часто это "удалённая" запись), освобождаем конфликт.
+        if ($nextMarketSpaceId !== null) {
+            $conflict = MarketSpaceMapShape::query()
+                ->where('market_id', (int) $market->id)
+                ->where('page', $nextPage)
+                ->where('version', $nextVersion)
+                ->where('market_space_id', (int) $nextMarketSpaceId)
+                ->where('id', '!=', (int) $shapeModel->id)
+                ->first();
+
+            if ($conflict) {
+                try {
+                    $conflict->market_space_id = null;
+                    $conflict->is_active = false;
+                    $conflict->save();
+                } catch (\Throwable $e) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'Не удалось освободить конфликтующую привязку: ' . $e->getMessage(),
+                    ], 500);
+                }
+            }
+        }
+
+        if (array_key_exists('market_space_id', $validated)) {
+            $shapeModel->market_space_id = $validated['market_space_id'] !== null
+                ? (int) $validated['market_space_id']
+                : null;
         }
 
         if (array_key_exists('page', $validated)) {
-            $shapeModel->page = (int) ($validated['page'] ?? 1);
+            $shapeModel->page = $nextPage;
         }
 
         if (array_key_exists('version', $validated)) {
-            $shapeModel->version = (int) ($validated['version'] ?? 1);
+            $shapeModel->version = $nextVersion;
         }
 
         if (array_key_exists('polygon', $validated) && $validated['polygon'] !== null) {
@@ -388,6 +490,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->firstOrFail();
 
         try {
+            // ВАЖНО: освобождаем уникальный ключ (market_id, version, page, market_space_id)
+            // чтобы можно было снова привязать это же место к новой фигуре.
+            $shapeModel->market_space_id = null;
             $shapeModel->is_active = false;
             $shapeModel->save();
         } catch (\Throwable $e) {
@@ -583,7 +688,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $isNumeric = ctype_digit($q);
-        $qEsc = str_replace(['%', '_'], ['\%', '\_'], $q);
+        $qEsc = str_replace(['%', '_'], ['\%', '\\_'], $q);
         $qLike = '%' . $qEsc . '%';
 
         $rows = MarketSpace::query()
