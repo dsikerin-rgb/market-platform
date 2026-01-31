@@ -2,22 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MarketLocation;
-use App\Models\MarketLocationType;
-use App\Models\MarketSpace;
-use App\Models\MarketSpaceType;
 use Illuminate\Http\Request;
 
 class MarketSettingsController extends Controller
 {
     public function index()
     {
-        $locations = MarketLocation::all();
-        $locationTypes = MarketLocationType::all();
-        $spaces = MarketSpace::all();
-        $spaceTypes = MarketSpaceType::all();
-
-        return view('market-settings.index', compact('locations', 'locationTypes', 'spaces', 'spaceTypes'));
+        return view('market-settings.index');
     }
     
     // Добавим методы для обработки редактирования и сохранения настроек
