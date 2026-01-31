@@ -567,6 +567,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'page' => (int) ($s->page ?? 1),
                 'version' => (int) ($s->version ?? 1),
                 'polygon' => is_array($s->polygon) ? $s->polygon : [],
+                'bbox_x1' => $s->bbox_x1 !== null ? (float) $s->bbox_x1 : null,
+                'bbox_y1' => $s->bbox_y1 !== null ? (float) $s->bbox_y1 : null,
+                'bbox_x2' => $s->bbox_x2 !== null ? (float) $s->bbox_x2 : null,
+                'bbox_y2' => $s->bbox_y2 !== null ? (float) $s->bbox_y2 : null,
 
                 'stroke_color' => (string) ($s->stroke_color ?: '#00A3FF'),
                 'fill_color' => (string) ($s->fill_color ?: '#00A3FF'),
@@ -913,7 +917,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Viewer карты рынка (рендер через Blade).
      */
-    Route::get('/admin/market-map', function () use ($resolveMarketForMap, $canEditShapes) {
+    Route::get('/admin/market-map', function (Request $request) use ($resolveMarketForMap, $canEditShapes) {
         $market = $resolveMarketForMap();
 
         $mapPath = data_get($market->settings ?? [], 'map_pdf_path');
@@ -923,12 +927,125 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             && str_starts_with($mapPath, 'market-maps/')
             && Storage::disk('local')->exists($mapPath);
 
+        $validated = $request->validate([
+            'market_space_id' => ['nullable', 'integer', 'min:1'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'version' => ['nullable', 'integer', 'min:1'],
+            'bbox_x1' => ['nullable', 'numeric'],
+            'bbox_y1' => ['nullable', 'numeric'],
+            'bbox_x2' => ['nullable', 'numeric'],
+            'bbox_y2' => ['nullable', 'numeric'],
+        ]);
+
+        $marketSpaceId = isset($validated['market_space_id']) ? (int) $validated['market_space_id'] : null;
+        $page = (int) ($validated['page'] ?? 1);
+        $version = (int) ($validated['version'] ?? 1);
+
+        $pageRequested = $request->has('page');
+        $versionRequested = $request->has('version');
+        $bboxRequested = $request->has('bbox_x1')
+            && $request->has('bbox_y1')
+            && $request->has('bbox_x2')
+            && $request->has('bbox_y2');
+
+        $bboxFromRequest = null;
+
+        if ($bboxRequested) {
+            $bboxFromRequest = [
+                'x1' => (float) ($validated['bbox_x1'] ?? 0),
+                'y1' => (float) ($validated['bbox_y1'] ?? 0),
+                'x2' => (float) ($validated['bbox_x2'] ?? 0),
+                'y2' => (float) ($validated['bbox_y2'] ?? 0),
+            ];
+        }
+
+        $focusShape = null;
+        $marketSpaceNotLinked = false;
+
+        if ($marketSpaceId && Schema::hasTable('market_space_map_shapes')) {
+            $shapeQuery = MarketSpaceMapShape::query()
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', $marketSpaceId)
+                ->where('is_active', true);
+
+            if ($pageRequested) {
+                $shapeQuery->where('page', $page);
+            }
+
+            if ($versionRequested) {
+                $shapeQuery->where('version', $version);
+            }
+
+            $shape = $shapeQuery
+                ->orderByDesc('id')
+                ->first([
+                    'id',
+                    'market_space_id',
+                    'page',
+                    'version',
+                    'bbox_x1',
+                    'bbox_y1',
+                    'bbox_x2',
+                    'bbox_y2',
+                ]);
+
+            if (! $shape && (! $pageRequested || ! $versionRequested)) {
+                $shape = MarketSpaceMapShape::query()
+                    ->where('market_id', (int) $market->id)
+                    ->where('market_space_id', $marketSpaceId)
+                    ->where('is_active', true)
+                    ->orderByDesc('id')
+                    ->first([
+                        'id',
+                        'market_space_id',
+                        'page',
+                        'version',
+                        'bbox_x1',
+                        'bbox_y1',
+                        'bbox_x2',
+                        'bbox_y2',
+                    ]);
+            }
+
+            if ($shape) {
+                if (! $pageRequested) {
+                    $page = (int) ($shape->page ?? 1);
+                }
+
+                if (! $versionRequested) {
+                    $version = (int) ($shape->version ?? 1);
+                }
+
+                $focusShape = [
+                    'id' => (int) $shape->id,
+                    'market_space_id' => $shape->market_space_id ? (int) $shape->market_space_id : null,
+                    'page' => (int) ($shape->page ?? 1),
+                    'version' => (int) ($shape->version ?? 1),
+                    'bbox' => [
+                        'x1' => $bboxFromRequest['x1'] ?? ($shape->bbox_x1 !== null ? (float) $shape->bbox_x1 : null),
+                        'y1' => $bboxFromRequest['y1'] ?? ($shape->bbox_y1 !== null ? (float) $shape->bbox_y1 : null),
+                        'x2' => $bboxFromRequest['x2'] ?? ($shape->bbox_x2 !== null ? (float) $shape->bbox_x2 : null),
+                        'y2' => $bboxFromRequest['y2'] ?? ($shape->bbox_y2 !== null ? (float) $shape->bbox_y2 : null),
+                    ],
+                ];
+            } else {
+                $marketSpaceNotLinked = true;
+            }
+        } elseif ($marketSpaceId) {
+            $marketSpaceNotLinked = true;
+        }
+
         $payload = [
             'market' => $market,
             'marketId' => (int) ($market->id ?? 0),
             'marketName' => (string) ($market->name ?? 'Рынок'),
             'hasMap' => $hasMap,
             'canEdit' => (bool) $canEditShapes(),
+            'mapPage' => $page,
+            'mapVersion' => $version,
+            'marketSpaceId' => $marketSpaceId,
+            'focusShape' => $focusShape,
+            'marketSpaceNotLinked' => $marketSpaceNotLinked,
 
             'settingsUrl' => url('/admin/market-settings'),
 
@@ -942,6 +1059,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         if (! $hasMap) {
             return response()
                 ->view('admin.market-map-empty', $payload)
+                ->header('Content-Type', 'text/html; charset=UTF-8');
+        }
+
+        if ($marketSpaceNotLinked) {
+            return response()
+                ->view('admin.market-map-unbound', $payload)
                 ->header('Content-Type', 'text/html; charset=UTF-8');
         }
 

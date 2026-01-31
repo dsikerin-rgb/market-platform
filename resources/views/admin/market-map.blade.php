@@ -8,6 +8,7 @@
 
     $hasMap   = isset($hasMap) ? (bool) $hasMap : true;
     $canEdit  = isset($canEdit) ? (bool) $canEdit : false;
+    $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
 
@@ -54,6 +55,68 @@
       gap: 8px;
       text-decoration: none;
       white-space: nowrap;
+    }
+
+    .spacePicker {
+      position: relative;
+      min-width: 220px;
+    }
+
+    .spaceSearchInput {
+      width: 240px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(120,120,120,.25);
+      background: rgba(120,120,120,.06);
+      color: inherit;
+    }
+
+    .spaceDropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 0;
+      z-index: 120;
+      border: 1px solid rgba(120,120,120,.25);
+      border-radius: 10px;
+      background: rgba(30,30,30,.98);
+      color: #fff;
+      padding: 4px;
+      display: none;
+      max-height: 320px;
+      overflow-y: auto;
+      box-shadow: 0 10px 26px rgba(0,0,0,.28);
+    }
+
+    .spaceDropdownItem {
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .spaceDropdownItem:hover,
+    .spaceDropdownItem.active {
+      background: rgba(255,255,255,.12);
+    }
+
+    .spaceDropdownEmpty {
+      padding: 6px 8px;
+      font-size: 12px;
+      opacity: .75;
+    }
+
+    .spacePillButton {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
     }
 
     .viewer {
@@ -287,6 +350,13 @@
           Загрузите PDF-карту в настройках рынка (поле “Карта (PDF)”), нажмите “Сохранить”, затем откройте просмотр снова.
         </div>
       </div>
+    @elseif ($marketSpaceNotLinked)
+      <div class="empty">
+        <strong>Торговое место не привязано к объектам карты.</strong>
+        <div style="margin-top:6px; opacity:.8;">
+          Привяжите место к полигону или прямоугольнику, чтобы открыть карту с фокусом.
+        </div>
+      </div>
     @else
       <div class="viewer">
         <div class="toolbar">
@@ -321,7 +391,7 @@
 
               <button id="findByNumber" type="button" style="display:none;">Найти ID</button>
 
-              <label class="pill">
+              <label class="pill" style="display:none;">
                 Место ID:
                 <input
                   id="marketSpaceId"
@@ -333,6 +403,19 @@
                   style="width:92px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
                 >
               </label>
+
+              <div class="spacePicker" style="display:none;" id="spacePicker">
+                <input
+                  id="spaceSearch"
+                  type="text"
+                  class="spaceSearchInput"
+                  placeholder="Номер / код / арендатор / ID"
+                  autocomplete="off"
+                >
+                <div id="spaceDropdown" class="spaceDropdown" role="listbox" aria-label="Результаты поиска"></div>
+              </div>
+
+              <span class="pill" id="spaceChosenPill" style="display:none;"></span>
 
               <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
               <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
@@ -371,6 +454,10 @@
 
         const CAN_EDIT  = @json((bool) $canEdit);
         const MARKET_ID = @json((int) $marketId);
+        const MAP_PAGE = @json((int) ($mapPage ?? 1));
+        const MAP_VERSION = @json((int) ($mapVersion ?? 1));
+        const FOCUS_SPACE_ID = @json(isset($marketSpaceId) ? (int) $marketSpaceId : null);
+        const FOCUS_SHAPE = @json($focusShape ?? null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
@@ -392,16 +479,21 @@
         const toolRectBtn = document.getElementById('toolRect');
         const toolPolyBtn = document.getElementById('toolPoly');
 
-        const marketSpaceNumberPill = document.getElementById('spaceNumberPill');
-        const marketSpaceNumberInput = document.getElementById('marketSpaceNumber');
-        const findByNumberBtn = document.getElementById('findByNumber');
+        const spacePicker = document.getElementById('spacePicker');
+        const spaceSearchInput = document.getElementById('spaceSearch');
+        const spaceDropdown = document.getElementById('spaceDropdown');
+        const spaceChosenPill = document.getElementById('spaceChosenPill');
 
-        const marketSpaceIdInput = document.getElementById('marketSpaceId');
         const editHint = document.getElementById('editHint');
-        const spaceIdState = document.getElementById('spaceIdState');
 
-        const LS_KEY_ID  = 'mp.marketMap.market_' + String(MARKET_ID) + '.spaceId';
-        const LS_KEY_NUM = 'mp.marketMap.market_' + String(MARKET_ID) + '.spaceNumber';
+        const LS_KEY_CHOSEN = 'mp.marketMap.market_' + String(MARKET_ID) + '.chosenSpace';
+
+        let chosenSpace = null;
+        let isEditMode = false;
+        let searchResults = [];
+        let searchIndex = -1;
+        let searchTimer = null;
+        let searchController = null;
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -497,199 +589,219 @@
         }
 
         function getChosenSpaceId() {
-          if (!marketSpaceIdInput) return null;
-          const raw = String(marketSpaceIdInput.value || '').trim();
-          if (!raw) return null;
-          const n = Number(raw);
-          if (!Number.isFinite(n) || n <= 0) return null;
-          return Math.trunc(n);
+          return chosenSpace?.id ?? null;
         }
 
-        function saveChosenSpaceIdToLS() {
-          if (!marketSpaceIdInput) return;
-          const raw = String(marketSpaceIdInput.value || '').trim();
-          if (!raw) {
-            try { localStorage.removeItem(LS_KEY_ID); } catch {}
+        function normalizeChosenSpace(item) {
+          const id = Number(item?.id);
+          if (!Number.isFinite(id) || id <= 0) return null;
+          return {
+            id: Math.trunc(id),
+            number: item?.number ? String(item.number) : '',
+            code: item?.code ? String(item.code) : '',
+            tenantName: item?.tenant?.name ? String(item.tenant.name) : (item?.tenantName ? String(item.tenantName) : null),
+          };
+        }
+
+        function formatSpaceLabel(space) {
+          if (!space) return '—';
+          const numberLabel = String(space.number ?? '').trim();
+          const codeLabel = String(space.code ?? '').trim();
+          const label = numberLabel || codeLabel || '—';
+          return '№' + label;
+        }
+
+        function formatSpaceDropdownLabel(space) {
+          const numberLabel = String(space.number ?? '').trim();
+          const codeLabel = String(space.code ?? '').trim();
+          const label = numberLabel || codeLabel || '—';
+          const tenant = space.tenantName ? space.tenantName : '—';
+          return '№' + label + ' — ' + tenant + ' (ID ' + String(space.id) + ')';
+        }
+
+        function updateChosenPill() {
+          if (!spaceChosenPill) return;
+          if (!chosenSpace || !isEditMode) {
+            spaceChosenPill.style.display = 'none';
+            spaceChosenPill.innerHTML = '';
             return;
           }
-          try { localStorage.setItem(LS_KEY_ID, raw); } catch {}
+          const label = formatSpaceLabel(chosenSpace);
+          const tenant = chosenSpace.tenantName ? (' • арендатор ' + chosenSpace.tenantName) : ' • арендатор —';
+          spaceChosenPill.style.display = 'inline-flex';
+          spaceChosenPill.innerHTML =
+            'Выбрано: ' + escapeHtml(label) + ' (ID ' + escapeHtml(String(chosenSpace.id)) + ')' +
+            escapeHtml(tenant) +
+            ' <button type="button" class="spacePillButton" data-action="clear-chosen" aria-label="Сбросить">×</button>';
         }
 
-        function getSpaceNumber() {
-          if (!marketSpaceNumberInput) return '';
-          return String(marketSpaceNumberInput.value || '').trim();
-        }
-
-        function saveSpaceNumberToLS() {
-          if (!marketSpaceNumberInput) return;
-          const raw = getSpaceNumber();
-          if (!raw) {
-            try { localStorage.removeItem(LS_KEY_NUM); } catch {}
-            return;
-          }
-          try { localStorage.setItem(LS_KEY_NUM, raw); } catch {}
-        }
-
-        function setSpaceIdState(text, visible = true) {
-          if (!spaceIdState) return;
-          spaceIdState.textContent = text;
-          spaceIdState.style.display = visible ? 'inline-flex' : 'none';
-        }
-
-        function markSpaceIdOk(ok) {
-          if (!marketSpaceIdInput) return;
-          if (ok === null) {
-            marketSpaceIdInput.style.borderColor = 'rgba(120,120,120,.25)';
-            return;
-          }
-          marketSpaceIdInput.style.borderColor = ok ? 'rgba(60,200,120,.85)' : 'rgba(240,80,80,.85)';
-        }
-
-        async function validateSpaceId(showToast = true) {
-          const id = getChosenSpaceId();
-          saveChosenSpaceIdToLS();
-
-          if (!id) {
-            markSpaceIdOk(null);
-            setSpaceIdState('ID: —', false);
-            if (showToast) toast('Место ID очищено');
-            return { ok: true, found: false, item: null };
-          }
-
+        function saveChosenSpaceToLS() {
           try {
-            const url = new URL(SPACE_URL, window.location.origin);
-            url.searchParams.set('id', String(id));
-
-            const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
-            const json = await res.json();
-
-            if (!res.ok || !json || json.ok !== true) {
-              markSpaceIdOk(false);
-              setSpaceIdState('ID: ' + String(id) + ' • ошибка', true);
-              if (showToast) toast('Ошибка проверки ID');
-              return { ok: false, found: false, item: null };
+            if (!chosenSpace) {
+              localStorage.removeItem(LS_KEY_CHOSEN);
+              return;
             }
+            const payload = {
+              id: chosenSpace.id,
+              number: chosenSpace.number,
+              code: chosenSpace.code,
+              tenantName: chosenSpace.tenantName,
+            };
+            localStorage.setItem(LS_KEY_CHOSEN, JSON.stringify(payload));
+          } catch {}
+        }
 
-            if (!json.found) {
-              markSpaceIdOk(false);
-              setSpaceIdState('ID: ' + String(id) + ' • не найдено', true);
-              if (showToast) toast('ID ' + String(id) + ' не найден на этом рынке');
-              return { ok: true, found: false, item: null };
-            }
-
-            const item = json.item || null;
-            const label = item?.number?.trim?.() ? item.number : (item?.code || '');
-            const tenant = item?.tenant?.name ? (' • ' + item.tenant.name) : '';
-            markSpaceIdOk(true);
-            setSpaceIdState('ID: ' + String(id) + (label ? (' • ' + String(label)) : '') + tenant, true);
-            if (showToast) toast('Выбрано место ID ' + String(id) + (label ? (' (' + String(label)) + ')' : ''));
-            return { ok: true, found: true, item };
-          } catch (e) {
-            console.error(e);
-            markSpaceIdOk(false);
-            setSpaceIdState('ID: ' + String(id) + ' • ошибка', true);
-            if (showToast) toast('Ошибка проверки ID');
-            return { ok: false, found: false, item: null };
+        function setChosenSpace(space, opts = {}) {
+          const next = space ? {
+            id: space.id,
+            number: space.number || '',
+            code: space.code || '',
+            tenantName: space.tenantName ?? null,
+          } : null;
+          chosenSpace = next;
+          updateChosenPill();
+          saveChosenSpaceToLS();
+          if (spaceSearchInput && next) {
+            spaceSearchInput.value = '';
+          }
+          if (opts.announce && next) {
+            toast('Выбрано место ' + formatSpaceLabel(next) + ' (ID ' + String(next.id) + ')');
           }
         }
 
-        async function resolveSpaceIdByNumber(showToast = true) {
-          if (!marketSpaceNumberInput) return { ok: true, found: false, item: null };
+        function closeSpaceDropdown() {
+          if (!spaceDropdown) return;
+          spaceDropdown.style.display = 'none';
+          spaceDropdown.innerHTML = '';
+          searchResults = [];
+          searchIndex = -1;
+        }
 
-          const number = getSpaceNumber();
-          saveSpaceNumberToLS();
+        function renderSpaceDropdown(items) {
+          if (!spaceDropdown) return;
+          spaceDropdown.innerHTML = '';
+          searchResults = items;
+          searchIndex = -1;
 
-          if (!number) {
-            if (showToast) toast('Введи номер места');
-            return { ok: true, found: false, item: null };
+          if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'spaceDropdownEmpty';
+            empty.textContent = 'Ничего не найдено';
+            spaceDropdown.appendChild(empty);
+            spaceDropdown.style.display = 'block';
+            return;
+          }
+
+          items.forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'spaceDropdownItem';
+            row.setAttribute('role', 'option');
+            row.dataset.index = String(idx);
+            row.textContent = formatSpaceDropdownLabel(item);
+            row.addEventListener('click', () => {
+              setChosenSpace(item, { announce: true });
+              closeSpaceDropdown();
+            });
+            spaceDropdown.appendChild(row);
+          });
+          spaceDropdown.style.display = 'block';
+        }
+
+        function updateDropdownActive() {
+          if (!spaceDropdown) return;
+          const items = Array.from(spaceDropdown.querySelectorAll('.spaceDropdownItem'));
+          items.forEach((el, idx) => {
+            if (idx === searchIndex) {
+              el.classList.add('active');
+              el.scrollIntoView({ block: 'nearest' });
+            } else {
+              el.classList.remove('active');
+            }
+          });
+        }
+
+        function scheduleSpaceSearch() {
+          if (searchTimer) clearTimeout(searchTimer);
+          searchTimer = setTimeout(() => runSpaceSearch(), 300);
+        }
+
+        async function runSpaceSearch() {
+          if (!spaceSearchInput) return;
+          const value = String(spaceSearchInput.value || '').trim();
+
+          if (!value) {
+            closeSpaceDropdown();
+            return;
           }
 
           if (!SPACES_URL) {
-            if (showToast) toast('Не задан SPACES_URL');
-            return { ok: false, found: false, item: null };
+            toast('Не задан SPACES_URL');
+            closeSpaceDropdown();
+            return;
           }
 
-          const origin = window.location.origin;
-          const clean = String(number).trim();
-
-          async function fetchAsNumberParam() {
-            const url = new URL(SPACES_URL, origin);
-            url.searchParams.set('number', clean);
-            const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
-            const json = await res.json().catch(() => null);
-            return { res, json };
-          }
-
-          async function fetchAsQParam() {
-            const url = new URL(SPACES_URL, origin);
-            url.searchParams.set('q', clean);
-            const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
-            const json = await res.json().catch(() => null);
-            return { res, json };
-          }
+          if (searchController) searchController.abort();
+          searchController = new AbortController();
 
           try {
-            let out = await fetchAsNumberParam();
+            const url = new URL(SPACES_URL, window.location.origin);
+            url.searchParams.set('q', value);
+            url.searchParams.set('limit', '15');
 
-            // fallback: если эндпоинт требует q (старый вариант)
-            if (!out.res.ok && out.json?.errors?.q) {
-              out = await fetchAsQParam();
+            const res = await apiFetch(url.toString(), {
+              headers: { 'Accept': 'application/json' },
+              signal: searchController.signal,
+            });
+            const json = await res.json();
+
+            if (!res.ok || !json || json.ok !== true) {
+              toast('Ошибка поиска');
+              closeSpaceDropdown();
+              return;
             }
 
-            if (!out.res.ok || !out.json || out.json.ok !== true) {
-              const msg = out.json?.message ? String(out.json.message) : ('HTTP ' + out.res.status);
-              if (showToast) toast('Ошибка поиска: ' + msg);
-              return { ok: false, found: false, item: null };
+            const items = Array.isArray(json.items) ? json.items : [];
+            const normalized = items.map((item) => normalizeChosenSpace(item)).filter(Boolean);
+            renderSpaceDropdown(normalized);
+          } catch (e) {
+            if (e?.name === 'AbortError') return;
+            console.error(e);
+            toast('Ошибка поиска');
+            closeSpaceDropdown();
+          }
+        }
+
+        async function refreshChosenSpaceFromServer() {
+          if (!chosenSpace || !SPACE_URL) return;
+          try {
+            const url = new URL(SPACE_URL, window.location.origin);
+            url.searchParams.set('id', String(chosenSpace.id));
+            const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+            const json = await res.json();
+            if (!res.ok || !json || json.ok !== true || !json.found) {
+              setChosenSpace(null, { announce: false });
+              return;
             }
-
-            const items = Array.isArray(out.json.items) ? out.json.items : [];
-            if (!items.length) {
-              if (showToast) toast('Номер ' + clean + ' не найден');
-              return { ok: true, found: false, item: null };
+            const normalized = normalizeChosenSpace(json.item || null);
+            if (!normalized) {
+              setChosenSpace(null, { announce: false });
+              return;
             }
-
-            const norm = clean.toLowerCase();
-            const best =
-              items.find(i => String(i?.number ?? '').trim().toLowerCase() === norm) ||
-              items.find(i => String(i?.code ?? '').trim().toLowerCase() === norm) ||
-              items[0];
-
-            const id = Number(best?.id);
-            if (!Number.isFinite(id) || id <= 0) {
-              if (showToast) toast('Некорректный ID в ответе');
-              return { ok: false, found: false, item: null };
-            }
-
-            if (marketSpaceIdInput) {
-              marketSpaceIdInput.value = String(Math.trunc(id));
-              await validateSpaceId(showToast);
-            } else {
-              if (showToast) toast('Найдено: ID ' + String(Math.trunc(id)));
-            }
-
-            if (showToast && items.length > 1) {
-              toast('Найдено совпадений: ' + String(items.length) + ' • взял первое');
-            }
-
-            return { ok: true, found: true, item: best };
+            setChosenSpace(normalized, { announce: false });
           } catch (e) {
             console.error(e);
-            if (showToast) toast('Ошибка поиска по номеру');
-            return { ok: false, found: false, item: null };
+            setChosenSpace(null, { announce: false });
           }
         }
 
-        // restore inputs from LS
-        if (CAN_EDIT && marketSpaceIdInput) {
+        if (CAN_EDIT) {
           try {
-            const saved = localStorage.getItem(LS_KEY_ID);
-            if (saved) marketSpaceIdInput.value = saved;
-          } catch {}
-        }
-        if (CAN_EDIT && marketSpaceNumberInput) {
-          try {
-            const saved = localStorage.getItem(LS_KEY_NUM);
-            if (saved) marketSpaceNumberInput.value = saved;
+            const saved = localStorage.getItem(LS_KEY_CHOSEN);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              const restored = normalizeChosenSpace(parsed);
+              if (restored) setChosenSpace(restored, { announce: false });
+            }
           } catch {}
         }
 
@@ -719,6 +831,7 @@
           let currentViewport = null;
 
           let shapes = [];
+          let lastHit = null;
 
           let editMode = false;
           let tool = 'select';
@@ -732,6 +845,42 @@
           let polyDraft = [];
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
+
+          function normalizeBbox(raw) {
+            if (!raw) return null;
+            const x1 = Number(raw.x1 ?? raw.bbox_x1 ?? raw.bboxX1);
+            const y1 = Number(raw.y1 ?? raw.bbox_y1 ?? raw.bboxY1);
+            const x2 = Number(raw.x2 ?? raw.bbox_x2 ?? raw.bboxX2);
+            const y2 = Number(raw.y2 ?? raw.bbox_y2 ?? raw.bboxY2);
+            if (![x1, y1, x2, y2].every((v) => Number.isFinite(v))) return null;
+            return { x1, y1, x2, y2 };
+          }
+
+          function bboxFromPolygon(poly) {
+            if (!Array.isArray(poly) || poly.length < 3) return null;
+            let minX = Infinity;
+            let minY = Infinity;
+            let maxX = -Infinity;
+            let maxY = -Infinity;
+            for (const p of poly) {
+              const x = Number((p && (p.x ?? p[0])) ?? NaN);
+              const y = Number((p && (p.y ?? p[1])) ?? NaN);
+              if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+            }
+            if (![minX, minY, maxX, maxY].every((v) => Number.isFinite(v))) return null;
+            return { x1: minX, y1: minY, x2: maxX, y2: maxY };
+          }
+
+          function resolveShapeBbox(shape) {
+            if (!shape) return null;
+            const bbox = normalizeBbox(shape);
+            if (bbox) return bbox;
+            return bboxFromPolygon(shape.polygon);
+          }
 
           function setScaleLabel() {
             if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
@@ -799,8 +948,8 @@
           async function loadShapes() {
             try {
               const url = new URL(SHAPES_URL, window.location.origin);
-              url.searchParams.set('page', '1');
-              url.searchParams.set('version', '1');
+              url.searchParams.set('page', String(MAP_PAGE || 1));
+              url.searchParams.set('version', String(MAP_VERSION || 1));
 
               const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
               const json = await res.json();
@@ -939,6 +1088,68 @@
             }
           }
 
+          async function centerOnBbox(bbox, opts = {}) {
+            if (!bbox || !page || !currentViewport || !stage) return;
+
+            const padding = Number(opts.padding ?? 40);
+            const zoomFactor = Number(opts.zoomFactor ?? 1.15);
+
+            const w = Math.max(1, Math.abs(bbox.x2 - bbox.x1));
+            const h = Math.max(1, Math.abs(bbox.y2 - bbox.y1));
+
+            const availableW = Math.max(200, stage.clientWidth - padding);
+            const availableH = Math.max(200, stage.clientHeight - padding);
+
+            let nextScale = Math.min(availableW / w, availableH / h) * zoomFactor;
+            if (!Number.isFinite(nextScale) || nextScale <= 0) {
+              nextScale = 1.0;
+            }
+
+            nextScale = Math.max(0.2, Math.min(6, nextScale));
+
+            scale = nextScale;
+            await render();
+
+            const centerX = (bbox.x1 + bbox.x2) / 2;
+            const centerY = (bbox.y1 + bbox.y2) / 2;
+
+            const v = currentViewport.convertToViewportPoint(centerX, centerY);
+            if (Array.isArray(v)) {
+              stage.scrollLeft = Math.max(0, v[0] - stage.clientWidth / 2);
+              stage.scrollTop = Math.max(0, v[1] - stage.clientHeight / 2);
+            }
+          }
+
+          async function applyInitialFocus() {
+            if (!FOCUS_SPACE_ID && !FOCUS_SHAPE) return;
+
+            let targetShape = null;
+            let bbox = null;
+
+            if (FOCUS_SHAPE) {
+              bbox = normalizeBbox(FOCUS_SHAPE.bbox || FOCUS_SHAPE);
+              if (FOCUS_SHAPE.id) {
+                targetShape = findShapeById(FOCUS_SHAPE.id);
+              }
+            }
+
+            if (!bbox && FOCUS_SPACE_ID) {
+              targetShape = shapes.find(s => Number(s.market_space_id) === Number(FOCUS_SPACE_ID)) || null;
+              bbox = resolveShapeBbox(targetShape);
+            }
+
+            if (!bbox) {
+              toast('Не удалось найти место на карте');
+              return;
+            }
+
+            if (targetShape?.id) {
+              setSelectedShape(targetShape.id);
+            }
+
+            await centerOnBbox(bbox, { zoomFactor: 1.2 });
+          }
+
           async function render() {
             if (!page) return;
 
@@ -982,13 +1193,17 @@
 
           async function createShape(pdfPolygon) {
             const msId = getChosenSpaceId();
+            const hasTyped = spaceSearchInput && String(spaceSearchInput.value || '').trim().length > 0;
+            if (!msId && hasTyped) {
+              toast('Выбери место из списка');
+            }
 
             const payload = {
-              market_space_id: msId,
-              page: 1,
-              version: 1,
+              page: MAP_PAGE || 1,
+              version: MAP_VERSION || 1,
               polygon: pdfPolygon,
             };
+            if (msId) payload.market_space_id = msId;
 
             const res = await apiFetch(SHAPES_URL, {
               method: 'POST',
@@ -1007,7 +1222,7 @@
             await loadShapes();
             redrawShapes();
             renderHandles();
-            toast(msId ? ('Разметка сохранена (ID ' + String(msId) + ')') : 'Разметка сохранена (без привязки)');
+            toast(msId ? ('Разметка сохранена (ID ' + String(msId) + ')') : 'Разметка сохранена без привязки — выбери место и привяжи');
           }
 
           async function patchShape(shapeId, payload) {
@@ -1165,15 +1380,25 @@
           async function init() {
             const loadingTask = pdfjsLib.getDocument(PDF_URL);
             const pdfDoc = await loadingTask.promise;
-            page = await pdfDoc.getPage(1);
+            const requestedPage = MAP_PAGE || 1;
+            try {
+              page = await pdfDoc.getPage(requestedPage);
+            } catch (e) {
+              console.error(e);
+              page = await pdfDoc.getPage(1);
+              if (requestedPage !== 1) {
+                toast('Страница карты не найдена, показана первая');
+              }
+            }
 
             await fitWidth();
 
             await loadShapes();
             redrawShapes();
+            await applyInitialFocus();
 
-            if (CAN_EDIT && marketSpaceIdInput) {
-              await validateSpaceId(false);
+            if (CAN_EDIT) {
+              await refreshChosenSpaceFromServer();
             }
 
             toast('Клик по месту откроет карточку.');
@@ -1187,6 +1412,7 @@
           if (CAN_EDIT && toggleEditBtn) {
             toggleEditBtn.addEventListener('click', async () => {
               editMode = !editMode;
+              isEditMode = editMode;
 
               toggleEditBtn.textContent = editMode ? 'Разметка: вкл' : 'Разметка: выкл';
 
@@ -1194,16 +1420,13 @@
               if (toolRectBtn) toolRectBtn.style.display = editMode ? 'inline-flex' : 'none';
               if (toolPolyBtn) toolPolyBtn.style.display = editMode ? 'inline-flex' : 'none';
 
-              if (marketSpaceNumberPill) marketSpaceNumberPill.style.display = editMode ? 'inline-flex' : 'none';
-              if (findByNumberBtn) findByNumberBtn.style.display = editMode ? 'inline-flex' : 'none';
-
+              if (spacePicker) spacePicker.style.display = editMode ? 'inline-flex' : 'none';
+              updateChosenPill();
               if (editHint) editHint.style.display = editMode ? 'inline-flex' : 'none';
-              if (spaceIdState) spaceIdState.style.display = editMode ? 'inline-flex' : 'none';
 
               if (editMode) {
-                await validateSpaceId(false);
                 setTool('select');
-                setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить • Номер → Enter: найти ID');
+                setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить');
                 toast('Разметка включена');
               } else {
                 cancelPolygon();
@@ -1219,29 +1442,57 @@
           if (CAN_EDIT && toolRectBtn) toolRectBtn.addEventListener('click', () => { if (editMode) setTool('rect'); });
           if (CAN_EDIT && toolPolyBtn) toolPolyBtn.addEventListener('click', () => { if (editMode) setTool('poly'); });
 
-          if (CAN_EDIT && findByNumberBtn) findByNumberBtn.addEventListener('click', () => resolveSpaceIdByNumber(true));
-
-          if (CAN_EDIT && marketSpaceNumberInput) {
-            marketSpaceNumberInput.addEventListener('change', () => saveSpaceNumberToLS());
-            marketSpaceNumberInput.addEventListener('keydown', (e) => {
-              if (e.key === 'Enter') {
+          if (CAN_EDIT && spaceSearchInput) {
+            spaceSearchInput.addEventListener('input', () => {
+              const currentValue = String(spaceSearchInput.value || '').trim();
+              if (currentValue && chosenSpace) {
+                setChosenSpace(null, { announce: false });
+              }
+              scheduleSpaceSearch();
+            });
+            spaceSearchInput.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') {
+                closeSpaceDropdown();
+                return;
+              }
+              if (!spaceDropdown || spaceDropdown.style.display !== 'block') return;
+              if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                e.stopPropagation();
-                resolveSpaceIdByNumber(true);
+                searchIndex = Math.min(searchResults.length - 1, searchIndex + 1);
+                updateDropdownActive();
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                searchIndex = Math.max(0, searchIndex - 1);
+                updateDropdownActive();
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const item = searchResults[searchIndex];
+                if (item) {
+                  setChosenSpace(item, { announce: true });
+                  closeSpaceDropdown();
+                } else if (String(spaceSearchInput.value || '').trim()) {
+                  toast('Выбери место из списка');
+                }
               }
             });
           }
 
-          if (CAN_EDIT && marketSpaceIdInput) {
-            marketSpaceIdInput.addEventListener('change', () => validateSpaceId(false));
-            marketSpaceIdInput.addEventListener('keydown', (e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                e.stopPropagation();
-                validateSpaceId(true);
-              }
-            });
-          }
+          spaceChosenPill?.addEventListener('click', (e) => {
+            const target = e.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.getAttribute('data-action') === 'clear-chosen') {
+              setChosenSpace(null, { announce: false });
+              if (spaceSearchInput) spaceSearchInput.value = '';
+              closeSpaceDropdown();
+              toast('Выбор сброшен');
+            }
+          });
+
+          document.addEventListener('click', (e) => {
+            if (!spacePicker || !spaceDropdown) return;
+            if (spacePicker.contains(e.target)) return;
+            closeSpaceDropdown();
+          });
 
           let isDown = false;
           let moved = false;
@@ -1486,8 +1737,8 @@
               const url = new URL(HIT_URL, window.location.origin);
               url.searchParams.set('x', String(xPdf));
               url.searchParams.set('y', String(yPdf));
-              url.searchParams.set('page', '1');
-              url.searchParams.set('version', '1');
+              url.searchParams.set('page', String(MAP_PAGE || 1));
+              url.searchParams.set('version', String(MAP_VERSION || 1));
 
               const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
               const json = await res.json();
@@ -1499,6 +1750,7 @@
               }
 
               if (!json.hit) {
+                lastHit = null;
                 if (CAN_EDIT && editMode && tool === 'select') {
                   setSelectedShape(null);
                   clearHandles();
@@ -1515,6 +1767,7 @@
               }
 
               const hit = json.hit;
+              lastHit = hit;
               const space = hit.space || null;
               const tenant = hit.tenant || null;
 
@@ -1541,6 +1794,7 @@
               const shapeId = hit.shape_id ? Number(hit.shape_id) : null;
               const hitSpaceId = hit.market_space_id ? Number(hit.market_space_id) : null;
               const chosenId = getChosenSpaceId();
+              const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
 
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
                 btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '">Открыть место</button>');
@@ -1548,13 +1802,13 @@
 
               if (CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
                 if (hit.market_space_id) {
-                  btns.push('<button type="button" data-action="set-space-id" data-space-id="' + String(hit.market_space_id) + '">Взять ID</button>');
+                  btns.push('<button type="button" data-action="set-chosen-space" data-space-id="' + String(hit.market_space_id) + '">Выбрать это место</button>');
                 }
 
                 if (chosenId && Number.isFinite(chosenId) && chosenId > 0) {
-                  btns.push('<button type="button" data-action="bind-shape" data-shape-id="' + String(shapeId) + '">Привязать к ID</button>');
+                  btns.push('<button type="button" data-action="bind-shape" data-shape-id="' + String(shapeId) + '">Привязать к выбранному месту</button>');
                 } else {
-                  btns.push('<button type="button" disabled>Привязать к ID</button>');
+                  btns.push('<button type="button" disabled>Привязать к выбранному месту</button>');
                 }
 
                 btns.push('<button type="button" data-action="unbind-shape" data-shape-id="' + String(shapeId) + '">Отвязать</button>');
@@ -1569,6 +1823,7 @@
                 e.clientX, e.clientY,
                 '<div class="t">' + title + '</div>' +
                 (shapeId ? '<div class="row muted">shape_id: ' + escapeHtml(String(shapeId)) + '</div>' : '') +
+                (CAN_EDIT && editMode ? '<div class="row muted">Выбрано: ' + escapeHtml(chosenLabel) + '</div>' : '') +
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
                 '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>' +
@@ -1602,16 +1857,23 @@
               return;
             }
 
-            if (action === 'set-space-id') {
-              const id = t.getAttribute('data-space-id');
-              if (!marketSpaceIdInput) return;
+            if (action === 'set-chosen-space') {
+              const id = Number(t.getAttribute('data-space-id') || 0);
+              if (!Number.isFinite(id) || id <= 0) return;
 
-              const n = Number(id);
-              if (!Number.isFinite(n) || n <= 0) return;
+              const spaceLabel = lastHit?.space || null;
+              const hitTenant = lastHit?.tenant || null;
+              const next = normalizeChosenSpace({
+                id,
+                number: spaceLabel?.number ?? '',
+                code: spaceLabel?.code ?? '',
+                tenantName: hitTenant?.name ?? null,
+              });
 
-              marketSpaceIdInput.value = String(Math.trunc(n));
-              validateSpaceId(true);
-              hidePopover();
+              if (next) {
+                setChosenSpace(next, { announce: true });
+                hidePopover();
+              }
               return;
             }
 
@@ -1619,7 +1881,7 @@
               const shapeId = Number(t.getAttribute('data-shape-id') || 0);
               const msId = getChosenSpaceId();
               if (!Number.isFinite(shapeId) || shapeId <= 0) return;
-              if (!msId) { toast('Сначала укажи Место ID'); return; }
+              if (!msId) { toast('Сначала выбери место из списка'); return; }
 
               patchShape(shapeId, { market_space_id: msId }).then(async () => {
                 await loadShapes();
