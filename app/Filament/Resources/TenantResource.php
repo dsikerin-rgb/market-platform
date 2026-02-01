@@ -107,6 +107,38 @@ class TenantResource extends Resource
                                     ->columnSpanFull(),
                             ]),
 
+                        Section::make('Статус задолженности')
+                            ->schema([
+                                Forms\Components\Placeholder::make('debt_status_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Select::make('debt_status')
+                                    ->label('Задолженность')
+                                    ->options(static::debtStatusOptions())
+                                    ->placeholder('Не указано')
+                                    ->nullable()
+                                    ->helperText('Временный ручной статус до интеграции с 1С. Оплата — до 30 календарных дней.'),
+
+                                Forms\Components\Textarea::make('debt_status_note')
+                                    ->label('Комментарий по задолженности')
+                                    ->nullable()
+                                    ->rows(3),
+
+                                Forms\Components\Placeholder::make('debt_status_updated_at')
+                                    ->label('Обновлено')
+                                    ->content(function (?Tenant $record): string {
+                                        if (! $record?->debt_status_updated_at) {
+                                            return '—';
+                                        }
+
+                                        return $record->debt_status_updated_at->format('d.m.Y H:i');
+                                    }),
+                            ])
+                            ->columns(2),
+
                         Section::make('Карточка арендатора')
                             ->schema([
                                 Forms\Components\Select::make('market_id')
@@ -321,6 +353,13 @@ class TenantResource extends Resource
                     })
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('debt_status')
+                    ->label('Задолженность')
+                    ->formatStateUsing(fn (?string $state, Tenant $record) => $record->debt_status_label)
+                    ->badge()
+                    ->color(fn (?string $state) => static::debtStatusColor($state))
+                    ->sortable(),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
@@ -678,6 +717,63 @@ class TenantResource extends Resource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function debtStatusOptions(): array
+    {
+        return Tenant::DEBT_STATUS_LABELS;
+    }
+
+    private static function debtStatusColor(?string $state): string
+    {
+        return match ($state) {
+            'green' => 'success',
+            'orange' => 'warning',
+            'red' => 'danger',
+            default => 'gray',
+        };
+    }
+
+    private static function debtStatusHex(?string $state): string
+    {
+        return match ($state) {
+            'green' => '#16a34a',
+            'orange' => '#f59e0b',
+            'red' => '#dc2626',
+            default => '#6b7280',
+        };
+    }
+
+    private static function renderDebtStatusSummary(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Статус появится после сохранения арендатора.</div>');
+        }
+
+        $label = $record->debt_status_label;
+        $color = static::debtStatusHex($record->debt_status);
+        $note = trim((string) ($record->debt_status_note ?? ''));
+        $noteHtml = $note !== ''
+            ? '<div style="margin-top:6px;opacity:.75;">Комментарий: ' . e($note) . '</div>'
+            : '';
+
+        $updatedAt = $record->debt_status_updated_at
+            ? $record->debt_status_updated_at->format('d.m.Y H:i')
+            : null;
+        $updatedHtml = $updatedAt
+            ? '<div style="margin-top:4px;opacity:.65;">Обновлено: ' . e($updatedAt) . '</div>'
+            : '';
+
+        $badge = '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid ' . e($color) . ';color:' . e($color) . ';font-weight:600;font-size:12px;">'
+            . e($label)
+            . '</span>';
+
+        return new HtmlString(
+            '<div style="font-size:13px;">' . $badge . $noteHtml . $updatedHtml . '</div>'
+        );
     }
 
     private static function renderSpaceStatusBadge(?string $status): string
