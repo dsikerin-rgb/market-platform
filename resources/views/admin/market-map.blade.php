@@ -1024,7 +1024,7 @@
               const fill = isNormalLinked ? (debtFill ?? (s.fill_color || '#00A3FF')) : (s.fill_color || '#00A3FF');
               const stroke = BORDER_COLOR;
               const fo = isNormalLinked
-                ? (debtFill ? 0.7 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
+                ? (debtFill ? 1 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
                 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
               const sw = BORDER_WIDTH_BASE;
 
