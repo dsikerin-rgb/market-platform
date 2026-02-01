@@ -20,6 +20,8 @@ class MarketSpace extends Model
         'tenant_id',
         'number',
         'code',
+        'display_name',
+        'activity_type',
         'area_sqm',
         'type',
         'status',

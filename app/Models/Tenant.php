@@ -13,9 +13,9 @@ class Tenant extends Model
     use HasFactory;
 
     public const DEBT_STATUS_LABELS = [
-        'green' => 'Без задолженности',
-        'orange' => 'До 2 месяцев',
-        'red' => 'Более 3 месяцев',
+        'green' => 'Нет задолженности',
+        'orange' => 'Задолженность до 3 месяцев',
+        'red' => 'Задолженность свыше 3 месяцев',
     ];
 
     /**
