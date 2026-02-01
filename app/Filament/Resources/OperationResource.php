@@ -30,7 +30,7 @@ class OperationResource extends Resource
     protected static ?string $modelLabel = 'Операция';
     protected static ?string $pluralModelLabel = 'Операции';
     protected static ?string $navigationLabel = 'Операции';
-    protected static ?string $navigationGroup = 'Управление';
+    protected static \UnitEnum|string|null $navigationGroup = 'Управление';
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     public static function form(Schema $schema): Schema
