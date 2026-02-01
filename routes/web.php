@@ -11,6 +11,7 @@ use App\Models\MarketSpaceMapShape;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -939,6 +940,163 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'meta' => compact('x', 'y', 'page', 'version'),
         ]);
     })->name('filament.admin.market-map.hit');
+
+    /**
+     * Экспорт реестра по операциям и начислениям (CSV).
+     */
+    Route::get('/admin/operations/export', function (Request $request) use ($resolveMarketForMap) {
+        $market = $resolveMarketForMap();
+
+        $periodInput = $request->query('period');
+        $resolver = app(\App\Services\Operations\MarketPeriodResolver::class);
+        $period = $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null);
+        $periodDate = $period->toDateString();
+
+        $rows = DB::table('tenant_accruals as ta')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'ta.market_space_id')
+            ->leftJoin('tenants as t', 't.id', '=', 'ta.tenant_id')
+            ->where('ta.market_id', (int) $market->id)
+            ->where('ta.period', $periodDate)
+            ->select([
+                'ta.market_space_id',
+                'ta.tenant_id',
+                'ta.days',
+                'ta.area_sqm as accrual_area',
+                'ta.rent_rate',
+                'ta.rent_amount',
+                'ta.management_fee',
+                'ta.utilities_amount',
+                'ta.electricity_amount',
+                'ta.total_with_vat',
+                'ta.source_place_code',
+                'ta.source_place_name',
+                'ms.code as space_code',
+                'ms.number as space_number',
+                'ms.display_name as space_display_name',
+                'ms.area_sqm as space_area',
+                't.short_name as tenant_short_name',
+                't.name as tenant_name',
+            ])
+            ->orderBy('ta.market_space_id')
+            ->get();
+
+        $stateService = app(\App\Services\Operations\OperationsStateService::class);
+        $electricityTotals = $stateService->getElectricityTotalsForPeriod((int) $market->id, $period);
+        $adjustmentTotals = $stateService->getAdjustmentTotalsForPeriod((int) $market->id, $period);
+
+        $grouped = [];
+
+        foreach ($rows as $row) {
+            $spaceId = (int) ($row->market_space_id ?? 0);
+            $tenantId = (int) ($row->tenant_id ?? 0);
+            $key = $spaceId . ':' . $tenantId;
+
+            if (! isset($grouped[$key])) {
+                $spaceLabel = trim((string) ($row->space_display_name ?? ''));
+                if ($spaceLabel === '') {
+                    $spaceLabel = trim((string) ($row->space_number ?? ''));
+                }
+                if ($spaceLabel === '') {
+                    $spaceLabel = trim((string) ($row->space_code ?? ''));
+                }
+
+                $tenantLabel = trim((string) ($row->tenant_short_name ?? ''));
+                if ($tenantLabel === '') {
+                    $tenantLabel = trim((string) ($row->tenant_name ?? ''));
+                }
+
+                $grouped[$key] = [
+                    'space_id' => $spaceId,
+                    'tenant_id' => $tenantId,
+                    'space_label' => $spaceLabel !== '' ? $spaceLabel : (string) ($row->source_place_code ?? ''),
+                    'tenant_label' => $tenantLabel !== '' ? $tenantLabel : '—',
+                    'days' => 0,
+                    'area_sqm' => 0.0,
+                    'rent_rate_fact' => null,
+                    'rent_amount' => 0.0,
+                    'management_fee' => 0.0,
+                    'utilities_amount' => 0.0,
+                    'electricity_amount' => 0.0,
+                    'adjustments' => 0.0,
+                    'total' => 0.0,
+                ];
+            }
+
+            $grouped[$key]['days'] += (int) ($row->days ?? 0);
+            $grouped[$key]['area_sqm'] += (float) ($row->accrual_area ?? $row->space_area ?? 0);
+            $grouped[$key]['rent_amount'] += (float) ($row->rent_amount ?? 0);
+            $grouped[$key]['management_fee'] += (float) ($row->management_fee ?? 0);
+            $grouped[$key]['utilities_amount'] += (float) ($row->utilities_amount ?? 0);
+            $grouped[$key]['electricity_amount'] += (float) ($row->electricity_amount ?? 0);
+            $grouped[$key]['total'] += (float) ($row->total_with_vat ?? 0);
+
+            if ($grouped[$key]['rent_rate_fact'] === null && $row->rent_rate !== null) {
+                $grouped[$key]['rent_rate_fact'] = (float) $row->rent_rate;
+            }
+        }
+
+        foreach ($grouped as $key => $data) {
+            $spaceId = (int) $data['space_id'];
+
+            if ($spaceId > 0) {
+                $state = $stateService->getSpaceStateForPeriod((int) $market->id, $period, $spaceId);
+                if ($state['rent_rate'] !== null) {
+                    $grouped[$key]['rent_rate_fact'] = $state['rent_rate'];
+                }
+
+                $grouped[$key]['electricity_amount'] += (float) ($electricityTotals[$spaceId] ?? 0);
+                $grouped[$key]['adjustments'] += (float) ($adjustmentTotals[$spaceId] ?? 0);
+            }
+        }
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="registry-' . $periodDate . '.csv"',
+        ];
+
+        $callback = static function () use ($grouped): void {
+            $out = fopen('php://output', 'w');
+            if (! $out) {
+                return;
+            }
+
+            fputs($out, "\xEF\xBB\xBF");
+
+            fputcsv($out, [
+                'Место',
+                'Арендатор',
+                'Дней',
+                'Площадь',
+                'Ставка (факт)',
+                'Аренда',
+                'Управление',
+                'Коммунальные',
+                'Электроэнергия',
+                'Корректировки',
+                'Итого',
+            ], ';');
+
+            foreach ($grouped as $row) {
+                fputcsv($out, [
+                    $row['space_label'],
+                    $row['tenant_label'],
+                    $row['days'],
+                    number_format((float) $row['area_sqm'], 2, ',', ' '),
+                    $row['rent_rate_fact'] !== null ? number_format((float) $row['rent_rate_fact'], 2, ',', ' ') : '',
+                    number_format((float) $row['rent_amount'], 2, ',', ' '),
+                    number_format((float) $row['management_fee'], 2, ',', ' '),
+                    number_format((float) $row['utilities_amount'], 2, ',', ' '),
+                    number_format((float) $row['electricity_amount'], 2, ',', ' '),
+                    number_format((float) $row['adjustments'], 2, ',', ' '),
+                    number_format((float) $row['total'], 2, ',', ' '),
+                ], ';');
+            }
+
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    })->name('filament.admin.operations.export');
 
     /**
      * Viewer карты рынка (рендер через Blade).

@@ -5,10 +5,13 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
+use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
+use App\Services\Operations\MarketPeriodResolver;
+use App\Services\Operations\OperationsStateService;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -245,9 +248,9 @@ class MarketSpaceResource extends Resource
                                     })
                                     ->nullable(),
 
-                                Forms\Components\Select::make('tenant_id')
-                                    ->label('Арендатор')
-                                    ->options(function ($get, ?MarketSpace $record) use ($user) {
+                    Forms\Components\Select::make('tenant_id')
+                        ->label('Арендатор')
+                        ->options(function ($get, ?MarketSpace $record) use ($user) {
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
                                         if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
@@ -263,15 +266,20 @@ class MarketSpaceResource extends Resource
                                             ->orderBy('name')
                                             ->pluck('name', 'id')
                                             ->all();
-                                    })
-                                    ->searchable()
-                                    ->preload()
-                                    ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
-                                    ->disabled(function ($get, ?MarketSpace $record) use ($user) {
-                                        if (! ((bool) $user && $user->isSuperAdmin())) {
-                                            return false;
-                                        }
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
+                        ->helperText('Смена арендатора фиксируется через операции. В редактировании место привязано через операции.')
+                        ->disabled(function ($get, ?MarketSpace $record) use ($user) {
+                            if ($record) {
+                                return true;
+                            }
+
+                            if (! ((bool) $user && $user->isSuperAdmin())) {
+                                return false;
+                            }
 
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
@@ -309,9 +317,9 @@ class MarketSpaceResource extends Resource
                                     ->hintIconTooltip('Заполняется импортом начислений и может уточняться вручную.')
                                     ->nullable(),
 
-                                Forms\Components\Select::make('type')
-                                    ->label('Тариф')
-                                    ->options(function ($get, ?MarketSpace $record) use ($user) {
+                    Forms\Components\Select::make('type')
+                        ->label('Тип места')
+                        ->options(function ($get, ?MarketSpace $record) use ($user) {
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
                                         if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
@@ -333,8 +341,8 @@ class MarketSpaceResource extends Resource
                                     ->preload()
                                     ->reactive()
                                     ->nullable()
-                                    ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Тариф/категория места для расчётов. Берётся из справочника “Типы мест”.'),
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Категория места для отчётности. Берётся из справочника “Типы мест”.'),
 
                                 Forms\Components\TextInput::make('area_sqm')
                                     ->label('Площадь, м²')
@@ -370,20 +378,57 @@ class MarketSpaceResource extends Resource
                             ])
                             ->columns(2),
 
-                        Section::make('Ставка аренды')
-                            ->description('Управленческая ставка (не начисления). История изменений хранится отдельно.')
-                            ->schema([
-                                Forms\Components\TextInput::make('rent_rate_value')
-                                    ->label('Ставка аренды')
-                                    ->numeric()
-                                    ->inputMode('decimal')
-                                    ->placeholder('Например: 1500'),
+                    Section::make('Ставка аренды')
+                        ->description('Управленческая ставка (не начисления). История изменений хранится отдельно.')
+                        ->schema([
+                            Forms\Components\Placeholder::make('rent_rate_fact')
+                                ->label('Ставка аренды (факт)')
+                                ->content(function (?MarketSpace $record): string {
+                                    if (! $record) {
+                                        return '—';
+                                    }
 
-                                Forms\Components\Select::make('rent_rate_unit')
-                                    ->label('Единица ставки')
-                                    ->options(static::rentRateUnitOptions())
-                                    ->placeholder('Не указано')
-                                    ->nullable(),
+                                    $market = Market::query()->find($record->market_id);
+                                    if (! $market) {
+                                        return '—';
+                                    }
+
+                                    $resolver = app(MarketPeriodResolver::class);
+                                    $periodInput = request()->query('period');
+                                    $period = $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null);
+
+                                    $stateService = app(OperationsStateService::class);
+                                    $state = $stateService->getSpaceStateForPeriod((int) $record->market_id, $period, (int) $record->id);
+                                    $rentRate = $state['rent_rate'];
+
+                                    if ($rentRate === null) {
+                                        $fallback = DB::table('tenant_accruals')
+                                            ->where('market_id', (int) $record->market_id)
+                                            ->where('market_space_id', (int) $record->id)
+                                            ->where('period', $period->toDateString())
+                                            ->value('rent_rate');
+
+                                        if ($fallback !== null) {
+                                            $rentRate = (float) $fallback;
+                                        }
+                                    }
+
+                                    return $rentRate !== null ? number_format($rentRate, 2, ',', ' ') : '—';
+                                }),
+
+                            Forms\Components\TextInput::make('rent_rate_value')
+                                ->label('Ставка аренды')
+                                ->numeric()
+                                ->inputMode('decimal')
+                                ->placeholder('Например: 1500')
+                                ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
+
+                            Forms\Components\Select::make('rent_rate_unit')
+                                ->label('Единица ставки')
+                                ->options(static::rentRateUnitOptions())
+                                ->placeholder('Не указано')
+                                ->nullable()
+                                ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
 
                                 Forms\Components\Placeholder::make('rent_rate_updated_at')
                                     ->label('Обновлено')
@@ -425,6 +470,18 @@ class MarketSpaceResource extends Resource
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?MarketSpace $record): HtmlString => static::renderRentRateHistory($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1),
+                    ]),
+                Tab::make('Операции')
+                    ->schema([
+                        Section::make('Операции по месту')
+                            ->schema([
+                                Forms\Components\Placeholder::make('operations')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderOperations($record))
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
@@ -555,6 +612,48 @@ class MarketSpaceResource extends Resource
         ])->render());
     }
 
+    private static function renderOperations(?MarketSpace $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">Операции появятся после сохранения торгового места.</div>');
+        }
+
+        if (! SchemaFacade::hasTable('operations')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">Таблица операций ещё не создана — выполните миграции.</div>');
+        }
+
+        $rows = DB::table('operations')
+            ->where('market_id', (int) $record->market_id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', (int) $record->id)
+            ->orderByDesc('effective_at')
+            ->limit(50)
+            ->get([
+                'effective_at',
+                'type',
+                'status',
+                'payload',
+            ]);
+
+        $items = $rows->map(function ($row): array {
+            $payload = is_array($row->payload) ? $row->payload : (json_decode((string) $row->payload, true) ?: []);
+
+            $labels = \App\Domain\Operations\OperationType::labels();
+
+            return [
+                'effective_at' => $row->effective_at ? (string) \Carbon\Carbon::parse($row->effective_at)->format('d.m.Y H:i') : '—',
+                'type' => $labels[$row->type] ?? (string) $row->type,
+                'status' => (string) $row->status,
+                'summary' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+        })->all();
+
+        return new HtmlString(view('filament.market-spaces.operations', [
+            'items' => $items,
+            'spaceId' => (int) $record->id,
+        ])->render());
+    }
+
     public static function table(Table $table): Table
     {
         $table = $table
@@ -587,9 +686,9 @@ class MarketSpaceResource extends Resource
                     ->searchable()
                     ->tooltip(fn (MarketSpace $record) => $record->number ?: null),
 
-                // "Тариф" — отдельная сущность от локации, по умолчанию прячем
+                // "Тип места" — отдельная сущность от локации, по умолчанию прячем
                 TextColumn::make('type')
-                    ->label('Тариф')
+                    ->label('Тип места')
                     ->formatStateUsing(fn (?string $state, MarketSpace $record) => static::resolveSpaceTypeLabel($record->market_id, $state))
                     ->sortable()
                     ->placeholder('—')
@@ -635,7 +734,7 @@ class MarketSpaceResource extends Resource
                     ]),
 
                 SelectFilter::make('type')
-                    ->label('Тариф')
+                    ->label('Тип места')
                     ->options(function () {
                         $user = Filament::auth()->user();
 
