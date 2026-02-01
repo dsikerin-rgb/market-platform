@@ -969,6 +969,8 @@
             shapesSvg.setAttribute('viewBox', '0 0 ' + canvas.width + ' ' + canvas.height);
 
             const parts = [];
+            const BORDER_COLOR = '#064e3b';
+            const BORDER_WIDTH_BASE = 2.5;
 
             const selected = selectedShapeId ? findShapeById(selectedShapeId) : null;
 
@@ -991,10 +993,36 @@
 
               if (!pts) continue;
 
-              const fill = s.fill_color || '#00A3FF';
-              const stroke = s.stroke_color || fill;
-              const fo = (typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12;
-              const sw = (typeof s.stroke_width === 'number') ? s.stroke_width : 1.5;
+              const metaValue = s.meta ?? null;
+              let meta = null;
+              if (metaValue && typeof metaValue === 'object') {
+                meta = metaValue;
+              } else if (typeof metaValue === 'string') {
+                try {
+                  meta = JSON.parse(metaValue);
+                } catch (e) {
+                  meta = null;
+                }
+              }
+
+              const isLinked = !!s.market_space_id;
+              const isImportedOverlay = Boolean(meta && meta.import_source);
+              const isNormalLinked = isLinked && !isImportedOverlay;
+
+              const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
+              const debtColors = {
+                green: '#22c55e',
+                orange: '#f59e0b',
+                red: '#dc2626',
+              };
+              const debtFill = debtStatus && debtColors[debtStatus] ? debtColors[debtStatus] : null;
+
+              const fill = isNormalLinked ? (debtFill ?? (s.fill_color || '#00A3FF')) : (s.fill_color || '#00A3FF');
+              const stroke = BORDER_COLOR;
+              const fo = isNormalLinked
+                ? (debtFill ? 0.5 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
+                : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
+              const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
 
@@ -1778,15 +1806,18 @@
               let title = 'Торговое место';
               let line1 = '';
               let line2 = '';
+              let line3 = '';
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
                 title = label ? ('Место: ' + escapeHtml(label)) : 'Торговое место';
                 line1 = space.area_sqm ? ('Площадь: ' + escapeHtml(space.area_sqm) + ' м²') : '';
                 line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
+                line3 = tenant?.debt_status_label ? ('Задолженность: ' + escapeHtml(tenant.debt_status_label)) : 'Задолженность: —';
               } else {
                 line1 = 'Место не привязано (разметка)';
                 line2 = '';
+                line3 = '';
               }
 
               let actions = '';
@@ -1825,6 +1856,7 @@
                 (shapeId ? '<div class="row muted">shape_id: ' + escapeHtml(String(shapeId)) + '</div>' : '') +
                 (CAN_EDIT && editMode ? '<div class="row muted">Выбрано: ' + escapeHtml(chosenLabel) + '</div>' : '') +
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
+                (line3 ? '<div class="row">' + line3 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
                 '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>' +
                 actions
