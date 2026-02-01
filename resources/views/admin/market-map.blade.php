@@ -1010,13 +1010,18 @@
               const isNormalLinked = isLinked && !isImportedOverlay;
 
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
-              const debtFill = debtStatus === 'red'
-                ? '#dc2626'
-                : (debtStatus === 'orange' ? '#f59e0b' : '#22c55e');
+              const debtColors = {
+                green: '#22c55e',
+                orange: '#f59e0b',
+                red: '#dc2626',
+              };
+              const debtFill = debtStatus && debtColors[debtStatus] ? debtColors[debtStatus] : null;
 
-              const fill = isNormalLinked ? debtFill : (s.fill_color || '#00A3FF');
+              const fill = isNormalLinked ? (debtFill ?? (s.fill_color || '#00A3FF')) : (s.fill_color || '#00A3FF');
               const stroke = BORDER_COLOR;
-              const fo = isNormalLinked ? 0.5 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
+              const fo = isNormalLinked
+                ? (debtFill ? 0.5 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
+                : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
               const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
