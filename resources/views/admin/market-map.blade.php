@@ -978,7 +978,7 @@
               const poly = Array.isArray(s.polygon) ? s.polygon : [];
               if (poly.length < 3) continue;
 
-              const pts = poly.map((p) => {
+              const viewportPoints = poly.map((p) => {
                 const x = (p && (p.x ?? p[0])) ?? null;
                 const y = (p && (p.y ?? p[1])) ?? null;
                 if (x === null || y === null) return null;
@@ -988,8 +988,12 @@
                 const vy = Array.isArray(v) ? v[1] : null;
 
                 if (vx === null || vy === null) return null;
-                return Number(vx).toFixed(2) + ',' + Number(vy).toFixed(2);
-              }).filter(Boolean).join(' ');
+                return { x: Number(vx), y: Number(vy) };
+              }).filter(Boolean);
+
+              const pts = viewportPoints
+                .map((p) => Number(p.x).toFixed(2) + ',' + Number(p.y).toFixed(2))
+                .join(' ');
 
               if (!pts) continue;
 
@@ -1020,7 +1024,7 @@
               const fill = isNormalLinked ? (debtFill ?? (s.fill_color || '#00A3FF')) : (s.fill_color || '#00A3FF');
               const stroke = BORDER_COLOR;
               const fo = isNormalLinked
-                ? (debtFill ? 0.5 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
+                ? (debtFill ? 0.7 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
                 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
               const sw = BORDER_WIDTH_BASE;
 
@@ -1035,6 +1039,42 @@
                 '" stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
+
+              const labelText = String(s.space_display_name || s.space_number || s.space_code || '').trim();
+              if (labelText && viewportPoints.length >= 3) {
+                let minX = Infinity;
+                let minY = Infinity;
+                let maxX = -Infinity;
+                let maxY = -Infinity;
+
+                for (const p of viewportPoints) {
+                  minX = Math.min(minX, p.x);
+                  minY = Math.min(minY, p.y);
+                  maxX = Math.max(maxX, p.x);
+                  maxY = Math.max(maxY, p.y);
+                }
+
+                const boxW = maxX - minX;
+                const boxH = maxY - minY;
+                const fontSize = 11;
+                const pad = 6;
+                const labelWidth = labelText.length * 6.5;
+                const labelHeight = fontSize + 2;
+
+                if (boxW >= labelWidth + pad * 2 && boxH >= labelHeight + pad * 2) {
+                  const cx = (minX + maxX) / 2;
+                  const cy = (minY + maxY) / 2;
+                  parts.push(
+                    '<text x="' + cx.toFixed(2) +
+                    '" y="' + cy.toFixed(2) +
+                    '" text-anchor="middle" dominant-baseline="middle"' +
+                    '" font-size="' + fontSize +
+                    '" fill="#0f172a" opacity="0.9">' +
+                    escapeHtml(labelText) +
+                    '</text>'
+                  );
+                }
+              }
             }
 
             if (polyDrawing && Array.isArray(polyDraft) && polyDraft.length > 0) {

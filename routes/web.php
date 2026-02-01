@@ -585,6 +585,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'is_active' => (bool) ($s->is_active ?? true),
                 'meta' => is_array($s->meta) ? $s->meta : [],
                 'debt_status' => $tenant?->debt_status,
+                'space_number' => $space?->number ? (string) $space->number : null,
+                'space_code' => $space?->code ? (string) $space->code : null,
+                'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
             ];
         })->values();
 
