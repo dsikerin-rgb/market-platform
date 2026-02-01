@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class MarketSpace extends Model
@@ -20,7 +23,12 @@ class MarketSpace extends Model
         'tenant_id',
         'number',
         'code',
+        'display_name',
+        'activity_type',
         'area_sqm',
+        'rent_rate_value',
+        'rent_rate_unit',
+        'rent_rate_updated_at',
         'type',
         'status',
         'is_active',
@@ -29,6 +37,8 @@ class MarketSpace extends Model
 
     protected $casts = [
         'area_sqm' => 'decimal:2',
+        'rent_rate_value' => 'decimal:2',
+        'rent_rate_updated_at' => 'datetime',
         'is_active' => 'boolean',
     ];
 
@@ -42,6 +52,45 @@ class MarketSpace extends Model
             // если код пустой — восстановим; если задан руками — не трогаем
             if (blank($space->code)) {
                 $space->ensureCode();
+            }
+        });
+
+        static::updating(function (self $space): void {
+            $now = now();
+            $userId = Auth::id();
+
+            if ($space->isDirty('tenant_id') && Schema::hasTable('market_space_tenant_histories')) {
+                DB::table('market_space_tenant_histories')->insert([
+                    'market_space_id' => $space->id,
+                    'old_tenant_id' => $space->getOriginal('tenant_id'),
+                    'new_tenant_id' => $space->tenant_id,
+                    'changed_at' => $now,
+                    'changed_by_user_id' => $userId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            $rentRateChanged = $space->isDirty('rent_rate_value') || $space->isDirty('rent_rate_unit');
+
+            if ($rentRateChanged && Schema::hasTable('market_space_rent_rate_histories')) {
+                $unit = $space->rent_rate_unit ?? $space->getOriginal('rent_rate_unit');
+
+                DB::table('market_space_rent_rate_histories')->insert([
+                    'market_space_id' => $space->id,
+                    'old_value' => $space->getOriginal('rent_rate_value'),
+                    'new_value' => $space->rent_rate_value,
+                    'unit' => $unit,
+                    'changed_at' => $now,
+                    'changed_by_user_id' => $userId,
+                    'note' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            if ($rentRateChanged && Schema::hasColumn('market_spaces', 'rent_rate_updated_at')) {
+                $space->rent_rate_updated_at = $now;
             }
         });
     }
