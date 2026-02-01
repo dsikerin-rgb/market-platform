@@ -1021,11 +1021,14 @@
               };
               const debtFill = debtStatus && debtColors[debtStatus] ? debtColors[debtStatus] : null;
 
-              const fill = isNormalLinked ? (debtFill ?? (s.fill_color || '#00A3FF')) : (s.fill_color || '#00A3FF');
+              const hasDebtFill = Boolean(isLinked && debtFill);
+              const fill = hasDebtFill ? debtFill : (isNormalLinked ? (s.fill_color || '#00A3FF') : (s.fill_color || '#00A3FF'));
               const stroke = BORDER_COLOR;
-              const fo = isNormalLinked
-                ? (debtFill ? 1 : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12))
-                : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
+              const fo = hasDebtFill
+                ? 1
+                : (isNormalLinked
+                  ? ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12)
+                  : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12));
               const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
