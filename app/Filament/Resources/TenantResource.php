@@ -107,6 +107,38 @@ class TenantResource extends Resource
                                     ->columnSpanFull(),
                             ]),
 
+                        Section::make('Статус задолженности')
+                            ->schema([
+                                Forms\Components\Placeholder::make('debt_status_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Select::make('debt_status')
+                                    ->label('Задолженность')
+                                    ->options(static::debtStatusOptions())
+                                    ->placeholder('Не указано')
+                                    ->nullable()
+                                    ->helperText('Временный ручной статус до интеграции с 1С. Оплата — до 30 календарных дней.'),
+
+                                Forms\Components\Textarea::make('debt_status_note')
+                                    ->label('Комментарий по задолженности')
+                                    ->nullable()
+                                    ->rows(3),
+
+                                Forms\Components\Placeholder::make('debt_status_updated_at')
+                                    ->label('Обновлено')
+                                    ->content(function (?Tenant $record): string {
+                                        if (! $record?->debt_status_updated_at) {
+                                            return '—';
+                                        }
+
+                                        return $record->debt_status_updated_at->format('d.m.Y H:i');
+                                    }),
+                            ])
+                            ->columns(2),
+
                         Section::make('Карточка арендатора')
                             ->schema([
                                 Forms\Components\Select::make('market_id')
@@ -219,6 +251,18 @@ class TenantResource extends Resource
                                     ->columnSpanFull(),
                             ]),
                     ]),
+
+                Tab::make('История аренды мест')
+                    ->schema([
+                        Section::make('История аренды мест')
+                            ->schema([
+                                Forms\Components\Placeholder::make('space_history')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderSpaceHistory($record))
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
             ]),
         ]);
     }
@@ -321,6 +365,13 @@ class TenantResource extends Resource
                     })
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('debt_status')
+                    ->label('Задолженность')
+                    ->formatStateUsing(fn (?string $state, Tenant $record) => $record->debt_status_label)
+                    ->badge()
+                    ->color(fn (?string $state) => static::debtStatusColor($state))
+                    ->sortable(),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
@@ -678,6 +729,115 @@ class TenantResource extends Resource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    private static function renderSpaceHistory(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">История появится после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('market_space_tenant_histories')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица истории аренды мест ещё не создана — выполните миграции.</div>');
+        }
+
+        $rows = DB::table('market_space_tenant_histories as h')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'h.market_space_id')
+            ->leftJoin('users as u', 'u.id', '=', 'h.changed_by_user_id')
+            ->where(function ($q) use ($record) {
+                $q->where('h.new_tenant_id', (int) $record->id)
+                    ->orWhere('h.old_tenant_id', (int) $record->id);
+            })
+            ->where('ms.market_id', (int) $record->market_id)
+            ->orderByDesc('h.changed_at')
+            ->limit(300)
+            ->get([
+                'h.changed_at',
+                'h.old_tenant_id',
+                'h.new_tenant_id',
+                'ms.display_name',
+                'ms.number',
+                'ms.code',
+                'u.name as user_name',
+            ]);
+
+        $items = $rows->map(function ($row) use ($record): array {
+            $displayName = trim((string) ($row->display_name ?? ''));
+            $number = trim((string) ($row->number ?? ''));
+            $code = trim((string) ($row->code ?? ''));
+
+            $spaceLabel = $displayName !== '' ? $displayName : ($number !== '' ? $number : ($code !== '' ? $code : '—'));
+
+            $event = ((int) $row->new_tenant_id === (int) $record->id) ? 'Привязан' : 'Отвязан';
+
+            return [
+                'changed_at' => $row->changed_at ? (string) \Carbon\Carbon::parse($row->changed_at)->format('d.m.Y H:i') : '—',
+                'space_label' => $spaceLabel,
+                'event' => $event,
+                'user_name' => $row->user_name ? (string) $row->user_name : '—',
+            ];
+        })->all();
+
+        return new HtmlString(view('filament.tenants.space-history', [
+            'items' => $items,
+        ])->render());
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function debtStatusOptions(): array
+    {
+        return Tenant::DEBT_STATUS_LABELS;
+    }
+
+    private static function debtStatusColor(?string $state): string
+    {
+        return match ($state) {
+            'green' => 'success',
+            'orange' => 'warning',
+            'red' => 'danger',
+            default => 'gray',
+        };
+    }
+
+    private static function debtStatusHex(?string $state): string
+    {
+        return match ($state) {
+            'green' => '#16a34a',
+            'orange' => '#f59e0b',
+            'red' => '#dc2626',
+            default => '#6b7280',
+        };
+    }
+
+    private static function renderDebtStatusSummary(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Статус появится после сохранения арендатора.</div>');
+        }
+
+        $label = $record->debt_status_label;
+        $color = static::debtStatusHex($record->debt_status);
+        $note = trim((string) ($record->debt_status_note ?? ''));
+        $noteHtml = $note !== ''
+            ? '<div style="margin-top:6px;opacity:.75;">Комментарий: ' . e($note) . '</div>'
+            : '';
+
+        $updatedAt = $record->debt_status_updated_at
+            ? $record->debt_status_updated_at->format('d.m.Y H:i')
+            : null;
+        $updatedHtml = $updatedAt
+            ? '<div style="margin-top:4px;opacity:.65;">Обновлено: ' . e($updatedAt) . '</div>'
+            : '';
+
+        $badge = '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid ' . e($color) . ';color:' . e($color) . ';font-weight:600;font-size:12px;">'
+            . e($label)
+            . '</span>';
+
+        return new HtmlString(
+            '<div style="font-size:13px;">' . $badge . $noteHtml . $updatedHtml . '</div>'
+        );
     }
 
     private static function renderSpaceStatusBadge(?string $status): string

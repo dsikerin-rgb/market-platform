@@ -530,6 +530,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         try {
             $rows = MarketSpaceMapShape::query()
+                ->with(['marketSpace.tenant'])
                 ->where('market_id', (int) $market->id)
                 ->where('page', $page)
                 ->where('version', $version)
@@ -560,7 +561,24 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ], 500);
         }
 
-        $items = $rows->map(static function (MarketSpaceMapShape $s): array {
+        $spaceIds = $rows->pluck('market_space_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $spacesById = $spaceIds->isNotEmpty()
+            ? MarketSpace::query()
+                ->with(['tenant:id,debt_status'])
+                ->where('market_id', (int) $market->id)
+                ->whereIn('id', $spaceIds)
+                ->get(['id', 'tenant_id', 'number', 'code', 'display_name'])
+                ->keyBy('id')
+            : collect();
+
+        $items = $rows->map(static function (MarketSpaceMapShape $s) use ($spacesById): array {
+            $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
+            $tenant = $space?->tenant;
+
             return [
                 'id' => (int) $s->id,
                 'market_space_id' => $s->market_space_id ? (int) $s->market_space_id : null,
@@ -580,6 +598,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'sort_order' => (int) ($s->sort_order ?? 0),
                 'is_active' => (bool) ($s->is_active ?? true),
                 'meta' => is_array($s->meta) ? $s->meta : [],
+                'debt_status' => $tenant?->debt_status,
+                'space_number' => $space?->number ? (string) $space->number : null,
+                'space_code' => $space?->code ? (string) $space->code : null,
+                'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
             ];
         })->values();
 
@@ -895,6 +917,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
                 'space' => $space ? [
                     'id' => (int) $space->id,
+                    'tenant_id' => $space->tenant_id ? (int) $space->tenant_id : null,
                     'number' => (string) ($space->number ?? ''),
                     'code' => (string) ($space->code ?? ''),
                     'area_sqm' => (string) ($space->area_sqm ?? ''),
@@ -904,7 +927,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'tenant' => $tenant ? [
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
+                    'debt_status' => $tenant->debt_status,
+                    'debt_status_label' => $tenant->debt_status_label,
                 ] : null,
+                'tenant_id' => $tenant?->id ? (int) $tenant->id : null,
 
                 'debt' => null,
                 'debt_overdue_days' => null,
