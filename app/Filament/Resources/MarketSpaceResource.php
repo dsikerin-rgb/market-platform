@@ -10,6 +10,8 @@ use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
+use App\Domain\Operations\OperationType;
+use App\Filament\Resources\OperationResource;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
 use Filament\Facades\Filament;
@@ -271,7 +273,7 @@ class MarketSpaceResource extends Resource
                         ->preload()
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
-                        ->helperText('Смена арендатора фиксируется через операции. В редактировании место привязано через операции.')
+                        ->helperText(fn (?MarketSpace $record) => static::tenantOperationHelper($record))
                         ->disabled(function ($get, ?MarketSpace $record) use ($user) {
                             if ($record) {
                                 return true;
@@ -382,39 +384,8 @@ class MarketSpaceResource extends Resource
                         ->description('Управленческая ставка (не начисления). История изменений хранится отдельно.')
                         ->schema([
                             Forms\Components\Placeholder::make('rent_rate_fact')
-                                ->label('Ставка аренды (факт)')
-                                ->content(function (?MarketSpace $record): string {
-                                    if (! $record) {
-                                        return '—';
-                                    }
-
-                                    $market = Market::query()->find($record->market_id);
-                                    if (! $market) {
-                                        return '—';
-                                    }
-
-                                    $resolver = app(MarketPeriodResolver::class);
-                                    $periodInput = request()->query('period');
-                                    $period = $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null);
-
-                                    $stateService = app(OperationsStateService::class);
-                                    $state = $stateService->getSpaceStateForPeriod((int) $record->market_id, $period, (int) $record->id);
-                                    $rentRate = $state['rent_rate'];
-
-                                    if ($rentRate === null) {
-                                        $fallback = DB::table('tenant_accruals')
-                                            ->where('market_id', (int) $record->market_id)
-                                            ->where('market_space_id', (int) $record->id)
-                                            ->where('period', $period->toDateString())
-                                            ->value('rent_rate');
-
-                                        if ($fallback !== null) {
-                                            $rentRate = (float) $fallback;
-                                        }
-                                    }
-
-                                    return $rentRate !== null ? number_format($rentRate, 2, ',', ' ') : '—';
-                                }),
+                                ->label('Ставка (rent_rate)')
+                                ->content(fn (?MarketSpace $record): HtmlString => static::rentRateFactHtml($record)),
 
                             Forms\Components\TextInput::make('rent_rate_value')
                                 ->label('Ставка аренды')
@@ -439,6 +410,11 @@ class MarketSpaceResource extends Resource
 
                                         return $record->rent_rate_updated_at->format('d.m.Y H:i');
                                     }),
+
+                                Forms\Components\Placeholder::make('rent_rate_action')
+                                    ->hiddenLabel()
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::rentRateOperationHelper($record))
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2),
 
@@ -506,6 +482,167 @@ class MarketSpaceResource extends Resource
     protected static function rentRateUnitLabel(?string $unit): string
     {
         return static::rentRateUnitOptions()[$unit] ?? '—';
+    }
+
+    private static function tenantOperationHelper(?MarketSpace $record): HtmlString
+    {
+        $text = 'Смена арендатора фиксируется через операции. В редактировании место привязано через операции.';
+
+        if (! $record || ! OperationResource::canCreate()) {
+            return new HtmlString('<div style="font-size:12px;opacity:.8;">' . e($text) . '</div>');
+        }
+
+        $url = static::operationCreateUrl($record, OperationType::TENANT_SWITCH, [
+            'from_tenant_id' => $record->tenant_id,
+            'focus' => 'to_tenant_id',
+        ]);
+
+        return new HtmlString(
+            '<div style="font-size:12px;opacity:.8;display:flex;gap:8px;align-items:center;">' .
+            '<span>' . e($text) . '</span>' .
+            '<a href="' . e($url) . '" title="Создать операцию: Смена арендатора" style="text-decoration:underline;">＋</a>' .
+            '</div>'
+        );
+    }
+
+    private static function rentRateOperationHelper(?MarketSpace $record): HtmlString
+    {
+        if (! $record || ! OperationResource::canCreate()) {
+            return new HtmlString('<div style="font-size:12px;opacity:.8;">Ставка меняется через операцию «Изменение ставки».</div>');
+        }
+
+        $period = static::resolveOperationPeriod($record);
+        $rentRate = static::resolveRentRateFact($record, $period);
+
+        $url = static::operationCreateUrl($record, OperationType::RENT_RATE_CHANGE, [
+            'from_rent_rate' => $rentRate,
+            'focus' => 'to_rent_rate',
+        ]);
+
+        return new HtmlString(
+            '<div style="font-size:12px;opacity:.85;display:flex;gap:8px;align-items:center;">' .
+            '<span>Ставка меняется через операцию «Изменение ставки».</span>' .
+            '<a href="' . e($url) . '" title="Создать операцию: Изменение ставки" style="text-decoration:underline;">＋</a>' .
+            '</div>'
+        );
+    }
+
+    private static function rentRateFactHtml(?MarketSpace $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('—');
+        }
+
+        $market = Market::query()->find($record->market_id);
+        if (! $market) {
+            return new HtmlString('—');
+        }
+
+        $period = static::resolveOperationPeriod($record);
+        $rentRate = static::resolveRentRateFact($record, $period);
+        $unitLabel = $record->rent_rate_unit ? static::rentRateUnitLabel($record->rent_rate_unit) : null;
+
+        $display = $rentRate !== null
+            ? number_format($rentRate, 2, ',', ' ') . ' ₽'
+            : 'Не задано';
+
+        $hint = $rentRate === null
+            ? 'Задаётся через операцию «Изменение ставки».'
+            : 'Хранится как rent_rate (управленческая ставка).';
+
+        $extra = '';
+        if ($unitLabel) {
+            $extra .= '<div style="margin-top:4px;opacity:.7;">Единица: ' . e($unitLabel) . '</div>';
+        }
+
+        $estimate = static::rentRateEstimateHtml($record, $period);
+
+        return new HtmlString(
+            '<div style="font-size:13px;">' .
+            '<div><strong>' . e($display) . '</strong></div>' .
+            '<div style="margin-top:4px;opacity:.7;">' . e($hint) . '</div>' .
+            $extra .
+            $estimate .
+            '</div>'
+        );
+    }
+
+    private static function rentRateEstimateHtml(MarketSpace $record, \Carbon\CarbonImmutable $period): string
+    {
+        $row = DB::table('tenant_accruals')
+            ->where('market_id', (int) $record->market_id)
+            ->where('market_space_id', (int) $record->id)
+            ->where('period', $period->toDateString())
+            ->select(['rent_amount', 'area_sqm'])
+            ->first();
+
+        if (! $row || ! $row->rent_amount || ! $row->area_sqm) {
+            return '';
+        }
+
+        $area = (float) $row->area_sqm;
+        if ($area <= 0) {
+            return '';
+        }
+
+        $value = (float) $row->rent_amount / $area;
+        $display = number_format($value, 2, ',', ' ');
+
+        return '<div style="margin-top:4px;opacity:.65;">Оценочно: ' . e($display) . ' ₽/м² за период (справочно).</div>';
+    }
+
+    private static function resolveOperationPeriod(MarketSpace $record): \Carbon\CarbonImmutable
+    {
+        $market = Market::query()->find($record->market_id);
+        $resolver = app(MarketPeriodResolver::class);
+        $periodInput = request()->query('period');
+
+        if ($market) {
+            return $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null);
+        }
+
+        return \Carbon\CarbonImmutable::now(config('app.timezone', 'UTC'))->startOfMonth();
+    }
+
+    private static function resolveRentRateFact(MarketSpace $record, \Carbon\CarbonImmutable $period): ?float
+    {
+        $stateService = app(OperationsStateService::class);
+        $state = $stateService->getSpaceStateForPeriod((int) $record->market_id, $period, (int) $record->id);
+        $rentRate = $state['rent_rate'];
+
+        if ($rentRate === null) {
+            $fallback = DB::table('tenant_accruals')
+                ->where('market_id', (int) $record->market_id)
+                ->where('market_space_id', (int) $record->id)
+                ->where('period', $period->toDateString())
+                ->value('rent_rate');
+
+            if ($fallback !== null) {
+                $rentRate = (float) $fallback;
+            }
+        }
+
+        return $rentRate !== null ? (float) $rentRate : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    private static function operationCreateUrl(MarketSpace $record, string $type, array $extra = []): string
+    {
+        $period = static::resolveOperationPeriod($record);
+
+        $params = array_merge([
+            'type' => $type,
+            'entity_type' => 'market_space',
+            'entity_id' => $record->id,
+            'market_space_id' => $record->id,
+            'market_id' => $record->market_id,
+            'period' => $period->toDateString(),
+            'return_url' => static::getUrl('edit', ['record' => $record]),
+        ], $extra);
+
+        return OperationResource::getUrl('create', $params);
     }
 
     private static function renderTenantHistory(?MarketSpace $record): HtmlString

@@ -51,6 +51,7 @@ final class OperationPayloadValidator
     {
         return [
             'market_space_id' => self::intOrNull($payload['market_space_id'] ?? null, true),
+            'from_rent_rate' => self::numericOrNull($payload['from_rent_rate'] ?? null),
             'rent_rate' => self::numericOrNull($payload['rent_rate'] ?? null, true),
             'currency' => self::stringOrNull($payload['currency'] ?? null),
             'unit' => self::stringOrNull($payload['unit'] ?? null),
