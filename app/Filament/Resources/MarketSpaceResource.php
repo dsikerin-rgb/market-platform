@@ -320,7 +320,7 @@ class MarketSpaceResource extends Resource
                         ->searchable()
                         ->preload()
                         ->reactive()
-                        ->required()
+                        ->nullable()
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('Тариф/категория места для расчётов. Берётся из справочника “Типы мест”.'),
 
