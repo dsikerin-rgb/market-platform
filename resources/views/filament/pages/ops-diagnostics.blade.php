@@ -155,6 +155,18 @@
 
         $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
         $telescopeEnabledUntilHumanLocal = $telescopeEnabledUntilHuman ?? null;
+
+        $sqliteBackupDefaultsLocal = $sqliteBackupDefaults ?? [
+            'compressAfterDays' => 2,
+            'deleteArchiveAfterDays' => 60,
+        ];
+        $sqliteBackupStatusLocal = $sqliteBackupStatus ?? [];
+        $sqliteBackupFilesLocal = $sqliteBackupFiles ?? [];
+        $sqliteBackupPreviewLocal = $sqliteBackupPreview ?? [
+            'compress' => [],
+            'deleteDuplicates' => [],
+            'deleteArchives' => [],
+        ];
     @endphp
 
     <div class="ops-page-grid">
@@ -323,6 +335,151 @@
                     >
                         Очистить Telescope (48ч)
                     </x-filament::button>
+                </div>
+            </x-filament::section>
+
+            {{-- Бэкапы SQLite --}}
+            <x-filament::section
+                heading="Бэкапы SQLite"
+                description="Файловые бэкапы для текущего окружения и ротация без обращения к БД."
+            >
+                <div style="display:grid; gap: 1.5rem;">
+                    <div class="ops-kv-wrap">
+                        <div class="ops-kv">
+                            <div class="ops-kv-row ops-kv-head">
+                                <div>Параметр</div>
+                                <div>Значение</div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">SQLite файл</div>
+                                <div class="ops-kv-val">
+                                    <div class="ops-inline-code">{{ $sqliteBackupStatusLocal['dbPath'] ?? '—' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Размер</div>
+                                <div class="ops-kv-val">
+                                    {{ $sqliteBackupStatusLocal['dbSizeHuman'] ?? '—' }}
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Изменён</div>
+                                <div class="ops-kv-val">
+                                    <span class="ops-inline-code">{{ $sqliteBackupStatusLocal['dbMtimeHuman'] ?? '—' }}</span>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Каталог бэкапов</div>
+                                <div class="ops-kv-val">
+                                    <div class="ops-inline-code">{{ $sqliteBackupStatusLocal['backupDir'] ?? '—' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Свободно / Всего</div>
+                                <div class="ops-kv-val">
+                                    {{ $sqliteBackupStatusLocal['diskFreeHuman'] ?? '—' }}
+                                    /
+                                    {{ $sqliteBackupStatusLocal['diskTotalHuman'] ?? '—' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <x-filament::actions
+                            :actions="$this->getSqliteBackupActions()"
+                            :alignment="'start'"
+                        />
+                    </div>
+
+                    <div style="display:grid; gap:.75rem;">
+                        <div class="ops-muted" style="font-size:.875rem;">
+                            Предпросмотр ротации (сжатие старше {{ $sqliteBackupDefaultsLocal['compressAfterDays'] }} дн.,
+                            удаление архивов старше {{ $sqliteBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.).
+                        </div>
+
+                        <div style="display:grid; gap:.75rem;">
+                            <div>
+                                <div class="ops-muted" style="font-weight:600;">Сжать (*.sqlite → *.sqlite.gz)</div>
+                                @if (! empty($sqliteBackupPreviewLocal['compress']))
+                                    <ul class="list-disc" style="padding-left: 1.25rem;">
+                                        @foreach ($sqliteBackupPreviewLocal['compress'] as $file)
+                                            <li class="ops-inline-code">{{ $file }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="ops-muted">Нет файлов для сжатия.</div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <div class="ops-muted" style="font-weight:600;">Удалить дубли (*.sqlite при наличии *.gz)</div>
+                                @if (! empty($sqliteBackupPreviewLocal['deleteDuplicates']))
+                                    <ul class="list-disc" style="padding-left: 1.25rem;">
+                                        @foreach ($sqliteBackupPreviewLocal['deleteDuplicates'] as $file)
+                                            <li class="ops-inline-code">{{ $file }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="ops-muted">Нет дублей для удаления.</div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <div class="ops-muted" style="font-weight:600;">Удалить архивы (*.sqlite.gz)</div>
+                                @if (! empty($sqliteBackupPreviewLocal['deleteArchives']))
+                                    <ul class="list-disc" style="padding-left: 1.25rem;">
+                                        @foreach ($sqliteBackupPreviewLocal['deleteArchives'] as $file)
+                                            <li class="ops-inline-code">{{ $file }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="ops-muted">Нет архивов для удаления.</div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                            Файлы в database/backups
+                        </div>
+                        <div class="ops-kv-wrap">
+                            <div class="ops-kv" style="min-width: 640px;">
+                                <div class="ops-kv-row ops-kv-head">
+                                    <div>Файл</div>
+                                    <div>Размер / Дата / Тип</div>
+                                </div>
+
+                                @forelse ($sqliteBackupFilesLocal as $file)
+                                    <div class="ops-kv-row">
+                                        <div class="ops-kv-key">
+                                            <span class="ops-inline-code">{{ $file['name'] }}</span>
+                                        </div>
+                                        <div class="ops-kv-val">
+                                            {{ $file['sizeHuman'] }}
+                                            ·
+                                            <span class="ops-inline-code">{{ $file['mtimeHuman'] }}</span>
+                                            ·
+                                            <x-filament::badge color="gray">
+                                                {{ $file['type'] === 'gz' ? 'gz' : 'sqlite' }}
+                                            </x-filament::badge>
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="ops-kv-row">
+                                        <div class="ops-kv-key">—</div>
+                                        <div class="ops-kv-val">Бэкапы ещё не создавались.</div>
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </x-filament::section>
         </div>
