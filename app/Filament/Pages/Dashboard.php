@@ -97,12 +97,22 @@ class Dashboard extends BaseDashboard
         $tz = $this->resolveMarketTimezone($marketId);
 
         $raw = session('dashboard_month');
+        $periodRaw = request()->query('period');
 
-        $month = (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
+        if (is_string($periodRaw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodRaw)) {
+            try {
+                $month = CarbonImmutable::createFromFormat('Y-m-d', $periodRaw, $tz)->format('Y-m');
+            } catch (\Throwable) {
+                $month = null;
+            }
+        }
+
+        $month = $month ?? ((is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
             ? $raw
-            : CarbonImmutable::now($tz)->format('Y-m');
+            : CarbonImmutable::now($tz)->format('Y-m'));
 
         session(['dashboard_month' => $month]);
+        session(['dashboard_period' => $month . '-01']);
 
         return [
             'month' => $month,
@@ -117,6 +127,14 @@ class Dashboard extends BaseDashboard
         $tz = $this->resolveMarketTimezone($marketId);
 
         $current = null;
+        $periodRaw = request()->query('period');
+        if (is_string($periodRaw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodRaw)) {
+            try {
+                $current = CarbonImmutable::createFromFormat('Y-m-d', $periodRaw, $tz)->format('Y-m');
+            } catch (\Throwable) {
+                $current = null;
+            }
+        }
 
         if (is_array($this->filters ?? null)) {
             $current = $this->filters['month'] ?? null;
@@ -130,6 +148,7 @@ class Dashboard extends BaseDashboard
 
         $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
         session(['dashboard_month' => $month]);
+        session(['dashboard_period' => $month . '-01']);
     }
 
     public function getHeading(): string
@@ -223,6 +242,7 @@ class Dashboard extends BaseDashboard
                                 : CarbonImmutable::now($tz)->format('Y-m');
 
                             session(['dashboard_month' => $value]);
+                            session(['dashboard_period' => $value . '-01']);
                         }),
                 ])
                 ->columns(1),
@@ -355,6 +375,31 @@ class Dashboard extends BaseDashboard
                 } catch (\Throwable) {
                     // ignore
                 }
+            }
+        }
+
+        if ($marketId > 0 && DbSchema::hasTable('operations') && DbSchema::hasColumn('operations', 'effective_month')) {
+            try {
+                $raw = DB::table('operations')
+                    ->where('market_id', $marketId)
+                    ->select('effective_month')
+                    ->distinct()
+                    ->orderBy('effective_month')
+                    ->pluck('effective_month')
+                    ->all();
+
+                foreach ($raw as $value) {
+                    if (! $value) {
+                        continue;
+                    }
+
+                    $ym = $this->normalizeYm($value);
+                    if ($ym) {
+                        $months[$ym] = true;
+                    }
+                }
+            } catch (\Throwable) {
+                // ignore
             }
         }
 

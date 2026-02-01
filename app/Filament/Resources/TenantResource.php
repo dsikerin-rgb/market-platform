@@ -251,6 +251,18 @@ class TenantResource extends Resource
                                     ->columnSpanFull(),
                             ]),
                     ]),
+
+                Tab::make('История аренды мест')
+                    ->schema([
+                        Section::make('История аренды мест')
+                            ->schema([
+                                Forms\Components\Placeholder::make('space_history')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderSpaceHistory($record))
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
             ]),
         ]);
     }
@@ -717,6 +729,58 @@ class TenantResource extends Resource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    private static function renderSpaceHistory(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">История появится после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('market_space_tenant_histories')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица истории аренды мест ещё не создана — выполните миграции.</div>');
+        }
+
+        $rows = DB::table('market_space_tenant_histories as h')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'h.market_space_id')
+            ->leftJoin('users as u', 'u.id', '=', 'h.changed_by_user_id')
+            ->where(function ($q) use ($record) {
+                $q->where('h.new_tenant_id', (int) $record->id)
+                    ->orWhere('h.old_tenant_id', (int) $record->id);
+            })
+            ->where('ms.market_id', (int) $record->market_id)
+            ->orderByDesc('h.changed_at')
+            ->limit(300)
+            ->get([
+                'h.changed_at',
+                'h.old_tenant_id',
+                'h.new_tenant_id',
+                'ms.display_name',
+                'ms.number',
+                'ms.code',
+                'u.name as user_name',
+            ]);
+
+        $items = $rows->map(function ($row) use ($record): array {
+            $displayName = trim((string) ($row->display_name ?? ''));
+            $number = trim((string) ($row->number ?? ''));
+            $code = trim((string) ($row->code ?? ''));
+
+            $spaceLabel = $displayName !== '' ? $displayName : ($number !== '' ? $number : ($code !== '' ? $code : '—'));
+
+            $event = ((int) $row->new_tenant_id === (int) $record->id) ? 'Привязан' : 'Отвязан';
+
+            return [
+                'changed_at' => $row->changed_at ? (string) \Carbon\Carbon::parse($row->changed_at)->format('d.m.Y H:i') : '—',
+                'space_label' => $spaceLabel,
+                'event' => $event,
+                'user_name' => $row->user_name ? (string) $row->user_name : '—',
+            ];
+        })->all();
+
+        return new HtmlString(view('filament.tenants.space-history', [
+            'items' => $items,
+        ])->render());
     }
 
     /**

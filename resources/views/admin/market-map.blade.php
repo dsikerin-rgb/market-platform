@@ -1867,11 +1867,16 @@
               const btns = [];
               const shapeId = hit.shape_id ? Number(hit.shape_id) : null;
               const hitSpaceId = hit.market_space_id ? Number(hit.market_space_id) : null;
+              const hitTenantId = hit?.tenant?.id ? Number(hit.tenant.id) : (hit?.tenant_id ? Number(hit.tenant_id) : null);
               const chosenId = getChosenSpaceId();
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
 
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
                 btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '">Открыть место</button>');
+              }
+
+              if (hitTenantId && Number.isFinite(hitTenantId) && hitTenantId > 0) {
+                btns.push('<button type="button" data-action="open-tenant" data-tenant-id="' + String(hitTenantId) + '">Открыть арендатора</button>');
               }
 
               if (CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
@@ -1920,6 +1925,13 @@
               const id = Number(t.getAttribute('data-space-id') || 0);
               if (!Number.isFinite(id) || id <= 0) return;
               window.open('/admin/market-spaces/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
+              return;
+            }
+
+            if (action === 'open-tenant') {
+              const id = Number(t.getAttribute('data-tenant-id') || 0);
+              if (!Number.isFinite(id) || id <= 0) return;
+              window.open('/admin/tenants/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
               return;
             }
 
