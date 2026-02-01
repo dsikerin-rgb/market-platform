@@ -1806,15 +1806,18 @@
               let title = 'Торговое место';
               let line1 = '';
               let line2 = '';
+              let line3 = '';
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
                 title = label ? ('Место: ' + escapeHtml(label)) : 'Торговое место';
                 line1 = space.area_sqm ? ('Площадь: ' + escapeHtml(space.area_sqm) + ' м²') : '';
                 line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
+                line3 = tenant?.debt_status_label ? ('Задолженность: ' + escapeHtml(tenant.debt_status_label)) : 'Задолженность: —';
               } else {
                 line1 = 'Место не привязано (разметка)';
                 line2 = '';
+                line3 = '';
               }
 
               let actions = '';
@@ -1853,6 +1856,7 @@
                 (shapeId ? '<div class="row muted">shape_id: ' + escapeHtml(String(shapeId)) + '</div>' : '') +
                 (CAN_EDIT && editMode ? '<div class="row muted">Выбрано: ' + escapeHtml(chosenLabel) + '</div>' : '') +
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
+                (line3 ? '<div class="row">' + line3 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
                 '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>' +
                 actions

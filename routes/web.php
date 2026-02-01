@@ -909,6 +909,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'tenant' => $tenant ? [
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
+                    'debt_status' => $tenant->debt_status,
+                    'debt_status_label' => $tenant->debt_status_label,
                 ] : null,
 
                 'debt' => null,
