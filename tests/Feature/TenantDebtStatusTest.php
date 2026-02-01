@@ -38,7 +38,7 @@ class TenantDebtStatusTest extends TestCase
         ]);
 
         $this->assertSame('green', $tenant->debt_status);
-        $this->assertSame('Без задолженности', $tenant->debt_status_label);
+        $this->assertSame('Нет задолженности', $tenant->debt_status_label);
         $this->assertSame('2025-01-01 10:00:00', $tenant->debt_status_updated_at?->format('Y-m-d H:i:s'));
 
         Carbon::setTestNow('2025-01-02 12:00:00');
