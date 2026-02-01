@@ -561,8 +561,22 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ], 500);
         }
 
-        $items = $rows->map(static function (MarketSpaceMapShape $s): array {
-            $space = $s->marketSpace;
+        $spaceIds = $rows->pluck('market_space_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $spacesById = $spaceIds->isNotEmpty()
+            ? MarketSpace::query()
+                ->with(['tenant:id,debt_status'])
+                ->where('market_id', (int) $market->id)
+                ->whereIn('id', $spaceIds)
+                ->get(['id', 'tenant_id', 'number', 'code', 'display_name'])
+                ->keyBy('id')
+            : collect();
+
+        $items = $rows->map(static function (MarketSpaceMapShape $s) use ($spacesById): array {
+            $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
 
             return [
