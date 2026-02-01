@@ -12,6 +12,12 @@ class Tenant extends Model
 {
     use HasFactory;
 
+    public const DEBT_STATUS_LABELS = [
+        'green' => 'Без задолженности',
+        'orange' => 'До 2 месяцев',
+        'red' => 'Более 3 месяцев',
+    ];
+
     /**
      * @var list<string>
      */
@@ -28,10 +34,14 @@ class Tenant extends Model
         'status',
         'is_active',
         'notes',
+        'debt_status',
+        'debt_status_note',
+        'debt_status_updated_at',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'debt_status_updated_at' => 'datetime',
     ];
 
     /**
@@ -42,6 +52,19 @@ class Tenant extends Model
     protected $appends = [
         'display_name',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Tenant $tenant): void {
+            if (! array_key_exists($tenant->debt_status, self::DEBT_STATUS_LABELS)) {
+                $tenant->debt_status = null;
+            }
+
+            if ($tenant->isDirty('debt_status')) {
+                $tenant->debt_status_updated_at = now();
+            }
+        });
+    }
 
     public function market(): BelongsTo
     {
@@ -80,6 +103,13 @@ class Tenant extends Model
         }
 
         return 'Арендатор';
+    }
+
+    public function getDebtStatusLabelAttribute(): string
+    {
+        $status = $this->debt_status;
+
+        return self::DEBT_STATUS_LABELS[$status] ?? 'Не указано';
     }
 
     /**
