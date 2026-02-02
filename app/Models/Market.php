@@ -54,4 +54,9 @@ class Market extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    public function holidays(): HasMany
+    {
+        return $this->hasMany(MarketHoliday::class);
+    }
 }

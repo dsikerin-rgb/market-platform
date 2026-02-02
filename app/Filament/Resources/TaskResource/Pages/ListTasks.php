@@ -114,11 +114,20 @@ class ListTasks extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
+        $actions = [
             Actions\CreateAction::make()
                 ->label('Создать')
                 ->icon('heroicon-o-plus'),
         ];
+
+        if (class_exists(Actions\Action::class)) {
+            $actions[] = Actions\Action::make('calendar')
+                ->label('Календарь')
+                ->icon('heroicon-o-calendar-days')
+                ->url(fn (): string => TaskResource::getUrl('calendar'));
+        }
+
+        return $actions;
     }
 
     /**
