@@ -30,7 +30,7 @@ class OperationResource extends Resource
     protected static ?string $modelLabel = 'Операция';
     protected static ?string $pluralModelLabel = 'Операции';
     protected static ?string $navigationLabel = 'Операции';
-    protected static \UnitEnum|string|null $navigationGroup = 'Управление';
+    protected static ?string $navigationGroup = 'Управление';
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     public static function form(Schema $schema): Schema
@@ -42,9 +42,34 @@ class OperationResource extends Resource
         $tz = $market ? (string) ($market->timezone ?: config('app.timezone', 'UTC')) : (string) config('app.timezone', 'UTC');
 
         $periodInput = request()->query('period');
+        $focus = (string) (request()->query('focus') ?? '');
+        $returnUrl = request()->query('return_url');
+        $spaceId = request()->query('market_space_id') ?? request()->query('entity_id');
+        $space = $spaceId ? MarketSpace::query()->find((int) $spaceId) : null;
+        $spaceLabel = $space?->display_name ?: ($space?->number ?: ($space?->code ?: null));
+        $contextHtml = null;
+
+        if ($spaceLabel || $returnUrl) {
+            $title = $spaceLabel ? ('Операция создаётся для места: <strong>' . e((string) $spaceLabel) . '</strong>') : 'Операция создаётся для места';
+            $back = $returnUrl ? ('<div style="margin-top:6px;"><a href="' . e((string) $returnUrl) . '" style="text-decoration:underline;">Вернуться к месту</a></div>') : '';
+            $contextHtml = new HtmlString('<div style="font-size:13px;opacity:.85;">' . $title . $back . '</div>');
+        }
         $period = $market ? $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null) : CarbonImmutable::now($tz)->startOfMonth();
 
+        $components = [];
+
+        if ($contextHtml) {
+            $components[] = Section::make('Контекст')
+                ->schema([
+                    Forms\Components\Placeholder::make('operation_context')
+                        ->hiddenLabel()
+                        ->content(fn () => $contextHtml),
+                ])
+                ->columnSpanFull();
+        }
+
         return $schema->components([
+            ...$components,
             Section::make('Основные параметры')
                 ->schema([
                     Forms\Components\Hidden::make('market_id')
@@ -151,7 +176,7 @@ class OperationResource extends Resource
                         ], true)),
 
                     Forms\Components\Select::make('payload.from_tenant_id')
-                        ->label('Предыдущий арендатор')
+                        ->label('Текущий арендатор')
                         ->options(fn () => Tenant::query()
                             ->where('market_id', $marketId)
                             ->orderBy('name')
@@ -160,6 +185,8 @@ class OperationResource extends Resource
                         ->searchable()
                         ->preload()
                         ->nullable()
+                        ->disabled()
+                        ->default(fn () => request()->query('from_tenant_id'))
                         ->visible(fn ($get) => $get('type') === OperationType::TENANT_SWITCH),
 
                     Forms\Components\Select::make('payload.to_tenant_id')
@@ -172,12 +199,22 @@ class OperationResource extends Resource
                         ->searchable()
                         ->preload()
                         ->nullable()
+                        ->extraInputAttributes($focus === 'to_tenant_id' ? ['autofocus' => true] : [])
                         ->visible(fn ($get) => $get('type') === OperationType::TENANT_SWITCH),
 
-                    Forms\Components\TextInput::make('payload.rent_rate')
-                        ->label('Ставка аренды (факт)')
+                    Forms\Components\TextInput::make('payload.from_rent_rate')
+                        ->label('Текущая ставка')
                         ->numeric()
                         ->inputMode('decimal')
+                        ->disabled()
+                        ->default(fn () => request()->query('from_rent_rate'))
+                        ->visible(fn ($get) => $get('type') === OperationType::RENT_RATE_CHANGE),
+
+                    Forms\Components\TextInput::make('payload.rent_rate')
+                        ->label('Новая ставка')
+                        ->numeric()
+                        ->inputMode('decimal')
+                        ->extraInputAttributes($focus === 'to_rent_rate' ? ['autofocus' => true] : [])
                         ->visible(fn ($get) => $get('type') === OperationType::RENT_RATE_CHANGE),
 
                     Forms\Components\Select::make('payload.unit')
