@@ -10,3 +10,15 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('tasks:send-reminders')->daily();
+
+Schedule::call(function () {
+    $from = now()->toDateString();
+    $to = now()->addDays(365)->toDateString();
+
+    Artisan::call('market:holidays:sync', [
+        '--from' => $from,
+        '--to' => $to,
+    ]);
+})->dailyAt('03:10');
+
+Schedule::command('market:holidays:notify')->everyThirtyMinutes();
