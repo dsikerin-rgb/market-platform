@@ -59,37 +59,91 @@ class TaskCalendarFilters
         ];
     }
 
+    /**
+     * Синхронизация календарных фильтров с табами страницы /admin/tasks?tab=...
+     * Табы: all|in_progress|my|coexecuting|observing|overdue|unassigned|urgent
+     */
+    public static function normalizeForTab(array $filters, ?string $tab): array
+    {
+        $tab = is_string($tab) && $tab !== '' ? $tab : 'all';
+
+        return match ($tab) {
+            'my' => array_merge($filters, [
+                'assigned' => true,
+                'observing' => false,
+                'coexecuting' => false,
+            ]),
+            'observing' => array_merge($filters, [
+                'assigned' => false,
+                'observing' => true,
+                'coexecuting' => false,
+            ]),
+            'coexecuting' => array_merge($filters, [
+                'assigned' => false,
+                'observing' => false,
+                'coexecuting' => true,
+            ]),
+            'overdue' => array_merge($filters, [
+                'overdue' => true,
+            ]),
+            default => $filters,
+        };
+    }
+
+    /**
+     * Применяем табы, которые не выражаются текущими фильтрами (in_progress/unassigned/urgent).
+     */
+    public static function applyTabToTaskQuery(Builder $query, ?string $tab, User $user): Builder
+    {
+        $tab = is_string($tab) && $tab !== '' ? $tab : 'all';
+
+        return match ($tab) {
+            'in_progress' => method_exists($query, 'inWork') ? $query->inWork() : $query,
+            'unassigned' => method_exists($query, 'unassigned') ? $query->unassigned() : $query->whereNull('assignee_id'),
+            'urgent' => method_exists($query, 'urgent') ? $query->urgent() : $query,
+            default => $query,
+        };
+    }
+
     public static function applyToTaskQuery(Builder $query, array $filters, User $user): Builder
     {
         $assigned = (bool) ($filters['assigned'] ?? false);
         $observing = (bool) ($filters['observing'] ?? false);
         $coexecuting = (bool) ($filters['coexecuting'] ?? false);
 
+        // Если ничего не выбрано — пусто (как и было)
         if (! $assigned && ! $observing && ! $coexecuting) {
             return $query->whereRaw('1 = 0');
         }
 
-        $userId = (int) $user->id;
+        // ✅ ВАЖНОЕ изменение:
+        // если все три включены (дефолт), то НЕ режем выборку по “типу участия”,
+        // оставляем все задачи, которые уже даёт TaskResource::getEloquentQuery().
+        $allInvolvementSelected = $assigned && $observing && $coexecuting;
 
-        $query->where(function (Builder $builder) use ($assigned, $observing, $coexecuting, $userId): void {
-            if ($assigned) {
-                $builder->orWhere('assignee_id', $userId);
-            }
+        if (! $allInvolvementSelected) {
+            $userId = (int) $user->id;
 
-            if ($observing) {
-                $builder->orWhere(function (Builder $inner) use ($userId): void {
-                    $inner->whereHas('observers', fn (Builder $q) => $q->whereKey($userId));
+            $query->where(function (Builder $builder) use ($assigned, $observing, $coexecuting, $userId): void {
+                if ($assigned) {
+                    $builder->orWhere('assignee_id', $userId);
+                }
 
-                    if (Task::supportsWatchers()) {
-                        $inner->orWhereHas('watchers', fn (Builder $q) => $q->whereKey($userId));
-                    }
-                });
-            }
+                if ($observing) {
+                    $builder->orWhere(function (Builder $inner) use ($userId): void {
+                        $inner->whereHas('observers', fn (Builder $q) => $q->whereKey($userId));
 
-            if ($coexecuting) {
-                $builder->orWhereHas('coexecutors', fn (Builder $q) => $q->whereKey($userId));
-            }
-        });
+                        if (Task::supportsWatchers()) {
+                            $inner->orWhereHas('watchers', fn (Builder $q) => $q->whereKey($userId));
+                        }
+                    });
+                }
+
+                if ($coexecuting) {
+                    $builder->orWhereHas('coexecutors', fn (Builder $q) => $q->whereKey($userId));
+                }
+            });
+        }
 
         $statuses = $filters['statuses'] ?? [];
         if (is_array($statuses) && ! empty($statuses)) {

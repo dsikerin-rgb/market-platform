@@ -31,9 +31,10 @@ class ListTasks extends ListRecords
         'viewMode'  => ['as' => 'view', 'except' => 'list'],
     ];
 
+    /** ✅ По умолчанию — «Все». */
     public ?string $activeTab = 'all';
 
-    /** list|calendar */
+    /** ✅ По умолчанию — список. list|calendar */
     public string $viewMode = 'list';
 
     public function mount(): void
@@ -47,7 +48,7 @@ class ListTasks extends ListRecords
 
     public function getTitle(): string
     {
-        return $this->viewMode === 'calendar' ? 'Календарь' : 'Задачи';
+        return $this->viewMode === 'calendar' ? 'Календарь задач' : 'Задачи';
     }
 
     public function getBreadcrumb(): string
@@ -62,6 +63,7 @@ class ListTasks extends ListRecords
 
     /**
      * В режиме calendar рендерим calendar.blade.php, оставаясь на /admin/tasks
+     * (главное: CreateAction остаётся в header actions этой страницы).
      */
     public function getView(): string
     {
@@ -80,9 +82,14 @@ class ListTasks extends ListRecords
             return $data;
         }
 
+        // Данные, которые ожидает calendar.blade.php
         return array_merge($data, $this->getCalendarViewData());
     }
 
+    /**
+     * Табы сверху (то, что ты назвал "фильтрами" на /admin/tasks).
+     * Это фильтры СПИСКА. Мы их не ломаем и не переиспользуем как календарные.
+     */
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
@@ -145,8 +152,9 @@ class ListTasks extends ListRecords
     }
 
     /**
-     * ✅ ВАЖНО: CreateAction остаётся тут — это и есть Filament CreateAction modal.
-     * Кнопки "Список" и "Календарь" показываем ВСЕГДА (так пользователи точно найдут календарь).
+     * ✅ CreateAction остаётся тут — это Filament CreateAction modal.
+     * ✅ Кнопки "Список" и "Календарь" показываем ВСЕГДА.
+     * ✅ Переключение делаем на /admin/tasks?view=calendar, сохраняя tab=...
      */
     protected function getHeaderActions(): array
     {
@@ -160,47 +168,40 @@ class ListTasks extends ListRecords
             return $actions;
         }
 
-        $listAction = Actions\Action::make('view_list')
+        $actions[] = Actions\Action::make('view_list')
             ->label('Список')
             ->icon('heroicon-o-list-bullet')
             ->url(fn (): string => $this->urlForView('list'))
             ->color($this->viewMode === 'list' ? 'primary' : 'gray');
 
-        $calendarAction = Actions\Action::make('view_calendar')
+        $actions[] = Actions\Action::make('view_calendar')
             ->label('Календарь')
             ->icon('heroicon-o-calendar-days')
             ->url(fn (): string => $this->urlForView('calendar'))
             ->color($this->viewMode === 'calendar' ? 'primary' : 'gray');
-
-        if (class_exists(Actions\ActionGroup::class)) {
-            $actions[] = Actions\ActionGroup::make([
-                $listAction,
-                $calendarAction,
-            ])->label('Вид');
-        } else {
-            $actions[] = $listAction;
-            $actions[] = $calendarAction;
-        }
 
         return $actions;
     }
 
     /**
      * URL переключения вида.
-     * Для list чистим календарные параметры (чтобы не таскать мусор в URL).
+     * - Сохраняем tab=... (и вообще все "не календарные" параметры).
+     * - Для list чистим календарные GET-фильтры, чтобы не тянуть мусор.
      */
     private function urlForView(string $mode): string
     {
         $query = request()->query();
 
-        unset($query['page']); // пагинация таблицы календарю не нужна
+        // пагинация таблицы календарю не нужна; и наоборот
+        unset($query['page']);
 
+        // Календарные фильтры (это НЕ табы). Их чистим при возврате в список.
         $calendarKeys = [
             'assigned',
             'observing',
             'coexecuting',
             'holidays',
-            'overdue',
+            'overdue',    // календарный чекбокс "Только просроченные" — НЕ таб overdue
             'status',
             'priority',
             'search',
@@ -217,11 +218,15 @@ class ListTasks extends ListRecords
             $query['view'] = 'calendar';
         }
 
+        // База — URL списка задач.
         $base = TaskResource::getUrl('index');
 
         return count($query) ? ($base . '?' . http_build_query($query)) : $base;
     }
 
+    /**
+     * Данные для calendar.blade.php
+     */
     private function getCalendarViewData(): array
     {
         $user = Filament::auth()->user();
@@ -238,6 +243,7 @@ class ListTasks extends ListRecords
                 ->whereNull('due_at')
                 ->orderByDesc('created_at');
 
+            // Если включено "просроченные" (календарный чекбокс) — задачи без дедлайна не показываем.
             if (! empty($filters['overdue'])) {
                 $query->whereRaw('1 = 0');
             }
@@ -264,6 +270,7 @@ class ListTasks extends ListRecords
             || (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
         );
 
+        // URL закрытия модалки праздника: сохраняем всё, кроме holiday_id
         $holidayCloseUrl = url()->current();
         $queryWithoutHoliday = Arr::except(request()->query(), ['holiday_id']);
         if (count($queryWithoutHoliday)) {
@@ -281,6 +288,10 @@ class ListTasks extends ListRecords
         ];
     }
 
+    /**
+     * Filament v4: Filament\Schemas\Components\Tabs\Tab
+     * Filament v3: Filament\Resources\Components\Tab
+     */
     protected static function resolveTabClass(): string
     {
         if (class_exists(\Filament\Schemas\Components\Tabs\Tab::class)) {
@@ -294,6 +305,9 @@ class ListTasks extends ListRecords
         throw new \RuntimeException('Filament Tab class not found for this version.');
     }
 
+    /**
+     * Безопасный конструктор табов: поддержка разных версий Filament и единый стиль.
+     */
     protected function makeTab(string $tabClass, string $label, ?callable $modifyQueryUsing = null): object
     {
         $tab = $tabClass::make($label);
