@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Tenant extends Model
 {
@@ -25,6 +26,7 @@ class Tenant extends Model
         'market_id',
         'name',
         'short_name',
+        'slug',
         'type',
         'inn',
         'ogrn',
@@ -84,6 +86,16 @@ class Tenant extends Model
     public function requests(): HasMany
     {
         return $this->hasMany(TenantRequest::class);
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(TenantDocument::class);
+    }
+
+    public function showcase(): HasOne
+    {
+        return $this->hasOne(TenantShowcase::class);
     }
 
     /**

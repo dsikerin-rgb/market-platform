@@ -35,6 +35,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'market_id',
+        'tenant_id',
     ];
 
     /**
@@ -63,6 +64,11 @@ class User extends Authenticatable implements FilamentUser
     public function market(): BelongsTo
     {
         return $this->belongsTo(Market::class);
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     public function isSuperAdmin(): bool
