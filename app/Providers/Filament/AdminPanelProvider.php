@@ -31,6 +31,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -121,6 +122,7 @@ class AdminPanelProvider extends PanelProvider
                 'Рынки',
                 'Рынок',
                 'Оперативная работа',
+                'Настройки',
                 'Ops',
             ])
 
@@ -140,6 +142,10 @@ class AdminPanelProvider extends PanelProvider
                 MarketSpacesStatusChartWidget::class,
                 ExpiringContractsWidget::class,
                 RecentTenantRequestsWidget::class,
+            ])
+
+            ->plugins([
+                FilamentFullCalendarPlugin::make(),
             ])
 
             // Блок с именем/ролью рядом с аватаром (после global search).

@@ -1,3 +1,11 @@
+@php
+    $fullCalendarCssPath = public_path('vendor/saade/filament-fullcalendar/filament-fullcalendar.css');
+@endphp
+
+@if (is_file($fullCalendarCssPath))
+    <link rel="stylesheet" href="{{ asset('vendor/saade/filament-fullcalendar/filament-fullcalendar.css') }}">
+@endif
+
 <style>
 /* === Маркер: можно выключить, поставив data-admin-overrides="0" на <html> === */
 html:not([data-admin-overrides="0"])::before{

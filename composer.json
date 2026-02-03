@@ -12,6 +12,7 @@
         "laravel/horizon": "^5.41",
         "laravel/telescope": "^5.16",
         "laravel/tinker": "^2.9",
+        "saade/filament-fullcalendar": "^4.0@beta",
         "spatie/laravel-permission": "^6.0"
     },
     "require-dev": {

@@ -1,5 +1,7 @@
 <?php
 
+# app/Filament/Resources/OperationResource.php
+
 declare(strict_types=1);
 
 namespace App\Filament\Resources;
@@ -10,12 +12,15 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Operation;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Operations\MarketPeriodResolver;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -30,31 +35,49 @@ class OperationResource extends Resource
     protected static ?string $modelLabel = 'Операция';
     protected static ?string $pluralModelLabel = 'Операции';
     protected static ?string $navigationLabel = 'Операции';
-    protected static ?string $navigationGroup = 'Управление';
+
+    // Filament v4 требует именно UnitEnum|string|null
+    protected static \UnitEnum|string|null $navigationGroup = 'Управление';
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
+
         $marketId = static::resolveMarketId();
         $market = $marketId > 0 ? Market::query()->find($marketId) : null;
+
         $resolver = app(MarketPeriodResolver::class);
-        $tz = $market ? (string) ($market->timezone ?: config('app.timezone', 'UTC')) : (string) config('app.timezone', 'UTC');
+
+        $tz = $market
+            ? (string) ($market->timezone ?: config('app.timezone', 'UTC'))
+            : (string) config('app.timezone', 'UTC');
 
         $periodInput = request()->query('period');
         $focus = (string) (request()->query('focus') ?? '');
         $returnUrl = request()->query('return_url');
+
         $spaceId = request()->query('market_space_id') ?? request()->query('entity_id');
         $space = $spaceId ? MarketSpace::query()->find((int) $spaceId) : null;
         $spaceLabel = $space?->display_name ?: ($space?->number ?: ($space?->code ?: null));
-        $contextHtml = null;
 
+        $contextHtml = null;
         if ($spaceLabel || $returnUrl) {
-            $title = $spaceLabel ? ('Операция создаётся для места: <strong>' . e((string) $spaceLabel) . '</strong>') : 'Операция создаётся для места';
-            $back = $returnUrl ? ('<div style="margin-top:6px;"><a href="' . e((string) $returnUrl) . '" style="text-decoration:underline;">Вернуться к месту</a></div>') : '';
+            $title = $spaceLabel
+                ? ('Операция создаётся для места: <strong>' . e((string) $spaceLabel) . '</strong>')
+                : 'Операция создаётся для места';
+
+            $back = $returnUrl
+                ? ('<div style="margin-top:6px;"><a href="' . e((string) $returnUrl) . '" style="text-decoration:underline;">Вернуться к месту</a></div>')
+                : '';
+
             $contextHtml = new HtmlString('<div style="font-size:13px;opacity:.85;">' . $title . $back . '</div>');
         }
-        $period = $market ? $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null) : CarbonImmutable::now($tz)->startOfMonth();
+
+        $period = $market
+            ? $resolver->resolveMarketPeriod($market, is_string($periodInput) ? $periodInput : null)
+            : CarbonImmutable::now($tz)->startOfMonth();
 
         $components = [];
 
@@ -63,73 +86,96 @@ class OperationResource extends Resource
                 ->schema([
                     Forms\Components\Placeholder::make('operation_context')
                         ->hiddenLabel()
-                        ->content(fn () => $contextHtml),
+                        ->content(fn (): HtmlString => $contextHtml),
                 ])
                 ->columnSpanFull();
         }
 
+        $typeSelect = Forms\Components\Select::make('type')
+            ->label('Тип операции')
+            ->options(OperationType::labels())
+            ->default(fn () => request()->query('type'))
+            ->required();
+
+        static::makeLive($typeSelect);
+
+        $entityTypeSelect = Forms\Components\Select::make('entity_type')
+            ->label('Объект')
+            ->options([
+                'market_space' => 'Торговое место',
+                'tenant' => 'Арендатор',
+                'contract' => 'Договор',
+                'market' => 'Рынок',
+            ])
+            ->default(fn () => request()->query('entity_type') ?: 'market_space')
+            ->required();
+
+        static::makeLive($entityTypeSelect);
+
+        if (method_exists($entityTypeSelect, 'afterStateUpdated')) {
+            $entityTypeSelect->afterStateUpdated(function (Set $set): void {
+                // при смене типа объекта сбрасываем выбранный entity_id
+                $set('entity_id', null);
+            });
+        }
+
+        $entityIdSelect = Forms\Components\Select::make('entity_id')
+            ->label('Объект')
+            ->options(function (Get $get) use ($marketId): array {
+                $entityType = (string) $get('entity_type');
+
+                if ($entityType === 'market_space') {
+                    return MarketSpace::query()
+                        ->where('market_id', $marketId)
+                        ->orderBy('number')
+                        ->pluck('number', 'id')
+                        ->all();
+                }
+
+                if ($entityType === 'tenant') {
+                    return Tenant::query()
+                        ->where('market_id', $marketId)
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all();
+                }
+
+                return [];
+            })
+            ->searchable()
+            ->preload()
+            ->nullable()
+            ->default(fn () => request()->query('entity_id'))
+            ->required(fn (Get $get): bool => (string) $get('entity_type') !== 'market')
+            ->visible(fn (Get $get): bool => (string) $get('entity_type') !== 'market');
+
+        $effectiveAt = Forms\Components\DateTimePicker::make('effective_at')
+            ->label('Дата вступления в силу')
+            ->helperText('Укажите дату и время в часовом поясе рынка.')
+            ->default(fn () => $period->startOfMonth())
+            ->seconds(false)
+            ->required();
+
+        if (method_exists($effectiveAt, 'timezone')) {
+            $effectiveAt->timezone($tz);
+        }
+
         return $schema->components([
             ...$components,
+
             Section::make('Основные параметры')
                 ->schema([
                     Forms\Components\Hidden::make('market_id')
                         ->default(fn () => $marketId)
                         ->dehydrated(true),
 
-                    Forms\Components\Select::make('type')
-                        ->label('Тип операции')
-                        ->options(OperationType::labels())
-                        ->default(fn () => request()->query('type'))
-                        ->required()
-                        ->reactive(),
+                    $typeSelect,
 
-                    Forms\Components\Select::make('entity_type')
-                        ->label('Объект')
-                        ->options([
-                            'market_space' => 'Торговое место',
-                            'tenant' => 'Арендатор',
-                            'contract' => 'Договор',
-                            'market' => 'Рынок',
-                        ])
-                        ->default(fn () => request()->query('entity_type') ?: 'market_space')
-                        ->reactive()
-                        ->required(),
+                    $entityTypeSelect,
 
-                    Forms\Components\Select::make('entity_id')
-                        ->label('ID объекта')
-                        ->options(function ($get) use ($marketId) {
-                            $entityType = $get('entity_type');
+                    $entityIdSelect,
 
-                            if ($entityType === 'market_space') {
-                                return MarketSpace::query()
-                                    ->where('market_id', $marketId)
-                                    ->orderBy('number')
-                                    ->pluck('number', 'id')
-                                    ->all();
-                            }
-
-                            if ($entityType === 'tenant') {
-                                return Tenant::query()
-                                    ->where('market_id', $marketId)
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id')
-                                    ->all();
-                            }
-
-                            return [];
-                        })
-                        ->searchable()
-                        ->preload()
-                        ->nullable()
-                        ->required(fn ($get) => $get('entity_type') !== 'market')
-                        ->default(fn () => request()->query('entity_id')),
-
-                    Forms\Components\DateTimePicker::make('effective_at')
-                        ->label('Дата вступления в силу')
-                        ->helperText('Укажите дату и время в часовом поясе рынка.')
-                        ->default(fn () => $period->startOfMonth()->format('Y-m-d 00:00:00'))
-                        ->seconds(false)
-                        ->required(),
+                    $effectiveAt,
 
                     Forms\Components\Select::make('status')
                         ->label('Статус')
@@ -160,14 +206,14 @@ class OperationResource extends Resource
                         ->searchable()
                         ->preload()
                         ->default(fn () => request()->query('entity_id'))
-                        ->required(fn ($get) => in_array($get('type'), [
+                        ->required(fn (Get $get): bool => in_array((string) $get('type'), [
                             OperationType::TENANT_SWITCH,
                             OperationType::RENT_RATE_CHANGE,
                             OperationType::SPACE_ATTRS_CHANGE,
                             OperationType::ELECTRICITY_INPUT,
                             OperationType::ACCRUAL_ADJUSTMENT,
                         ], true))
-                        ->visible(fn ($get) => in_array($get('type'), [
+                        ->visible(fn (Get $get): bool => in_array((string) $get('type'), [
                             OperationType::TENANT_SWITCH,
                             OperationType::RENT_RATE_CHANGE,
                             OperationType::SPACE_ATTRS_CHANGE,
@@ -187,7 +233,7 @@ class OperationResource extends Resource
                         ->nullable()
                         ->disabled()
                         ->default(fn () => request()->query('from_tenant_id'))
-                        ->visible(fn ($get) => $get('type') === OperationType::TENANT_SWITCH),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::TENANT_SWITCH),
 
                     Forms\Components\Select::make('payload.to_tenant_id')
                         ->label('Новый арендатор')
@@ -200,7 +246,7 @@ class OperationResource extends Resource
                         ->preload()
                         ->nullable()
                         ->extraInputAttributes($focus === 'to_tenant_id' ? ['autofocus' => true] : [])
-                        ->visible(fn ($get) => $get('type') === OperationType::TENANT_SWITCH),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::TENANT_SWITCH),
 
                     Forms\Components\TextInput::make('payload.from_rent_rate')
                         ->label('Текущая ставка')
@@ -208,14 +254,14 @@ class OperationResource extends Resource
                         ->inputMode('decimal')
                         ->disabled()
                         ->default(fn () => request()->query('from_rent_rate'))
-                        ->visible(fn ($get) => $get('type') === OperationType::RENT_RATE_CHANGE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE),
 
                     Forms\Components\TextInput::make('payload.rent_rate')
                         ->label('Новая ставка')
                         ->numeric()
                         ->inputMode('decimal')
                         ->extraInputAttributes($focus === 'to_rent_rate' ? ['autofocus' => true] : [])
-                        ->visible(fn ($get) => $get('type') === OperationType::RENT_RATE_CHANGE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE),
 
                     Forms\Components\Select::make('payload.unit')
                         ->label('Единица ставки')
@@ -224,17 +270,17 @@ class OperationResource extends Resource
                             'per_space_month' => 'за место в месяц',
                         ])
                         ->placeholder('Не указано')
-                        ->visible(fn ($get) => $get('type') === OperationType::RENT_RATE_CHANGE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE),
 
                     Forms\Components\TextInput::make('payload.area_sqm')
                         ->label('Площадь, м²')
                         ->numeric()
                         ->inputMode('decimal')
-                        ->visible(fn ($get) => $get('type') === OperationType::SPACE_ATTRS_CHANGE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::SPACE_ATTRS_CHANGE),
 
                     Forms\Components\TextInput::make('payload.activity_type')
                         ->label('Вид деятельности')
-                        ->visible(fn ($get) => $get('type') === OperationType::SPACE_ATTRS_CHANGE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::SPACE_ATTRS_CHANGE),
 
                     Forms\Components\Select::make('payload.location_id')
                         ->label('Локация')
@@ -244,24 +290,24 @@ class OperationResource extends Resource
                             ->distinct()
                             ->pluck('location_id', 'location_id')
                             ->all())
-                        ->visible(fn ($get) => $get('type') === OperationType::SPACE_ATTRS_CHANGE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::SPACE_ATTRS_CHANGE),
 
                     Forms\Components\TextInput::make('payload.amount')
                         ->label('Электроэнергия')
                         ->numeric()
                         ->inputMode('decimal')
-                        ->visible(fn ($get) => $get('type') === OperationType::ELECTRICITY_INPUT),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::ELECTRICITY_INPUT),
 
                     Forms\Components\TextInput::make('payload.amount_delta')
                         ->label('Корректировка (±)')
                         ->numeric()
                         ->inputMode('decimal')
-                        ->visible(fn ($get) => $get('type') === OperationType::ACCRUAL_ADJUSTMENT),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::ACCRUAL_ADJUSTMENT),
 
                     Forms\Components\Textarea::make('payload.reason')
                         ->label('Причина')
                         ->rows(2)
-                        ->visible(fn ($get) => in_array($get('type'), [
+                        ->visible(fn (Get $get): bool => in_array((string) $get('type'), [
                             OperationType::TENANT_SWITCH,
                             OperationType::ACCRUAL_ADJUSTMENT,
                         ], true)),
@@ -269,12 +315,12 @@ class OperationResource extends Resource
                     Forms\Components\TextInput::make('payload.period')
                         ->label('Период закрытия (YYYY-MM-01)')
                         ->default(fn () => $period->toDateString())
-                        ->visible(fn ($get) => $get('type') === OperationType::PERIOD_CLOSE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::PERIOD_CLOSE),
 
                     Forms\Components\Toggle::make('payload.closed')
                         ->label('Период закрыт')
                         ->default(true)
-                        ->visible(fn ($get) => $get('type') === OperationType::PERIOD_CLOSE),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::PERIOD_CLOSE),
                 ])
                 ->columns(2),
 
@@ -306,12 +352,26 @@ class OperationResource extends Resource
 
                 TextColumn::make('effective_at')
                     ->label('Дата/время')
-                    ->formatStateUsing(fn ($state) => $state ? CarbonImmutable::parse($state)->timezone($tz)->format('d.m.Y H:i') : '—')
+                    ->formatStateUsing(function ($state) use ($tz): string {
+                        if (! $state) {
+                            return '—';
+                        }
+
+                        try {
+                            if ($state instanceof \DateTimeInterface) {
+                                return CarbonImmutable::instance($state)->timezone($tz)->format('d.m.Y H:i');
+                            }
+
+                            return CarbonImmutable::parse((string) $state)->timezone($tz)->format('d.m.Y H:i');
+                        } catch (\Throwable) {
+                            return '—';
+                        }
+                    })
                     ->sortable(),
 
                 TextColumn::make('type')
                     ->label('Тип')
-                    ->formatStateUsing(fn (?string $state) => OperationType::labels()[$state] ?? $state)
+                    ->formatStateUsing(fn (?string $state): string => OperationType::labels()[$state] ?? (string) $state)
                     ->sortable(),
 
                 TextColumn::make('entity')
@@ -335,7 +395,7 @@ class OperationResource extends Resource
                 TextColumn::make('status')
                     ->label('Статус')
                     ->badge()
-                    ->color(fn (?string $state) => match ($state) {
+                    ->color(fn (?string $state): string => match ($state) {
                         'draft' => 'warning',
                         'applied' => 'success',
                         'canceled' => 'gray',
@@ -350,7 +410,8 @@ class OperationResource extends Resource
                             return '—';
                         }
 
-                        $user = \App\Models\User::query()->find($record->created_by);
+                        $user = User::query()->find((int) $record->created_by);
+
                         return $user?->name ?: '—';
                     }),
 
@@ -361,7 +422,7 @@ class OperationResource extends Resource
             ->filters([
                 SelectFilter::make('effective_month')
                     ->label('Период')
-                    ->options(fn () => static::periodOptions()),
+                    ->options(fn (): array => static::periodOptions()),
 
                 SelectFilter::make('type')
                     ->label('Тип')
@@ -414,7 +475,7 @@ class OperationResource extends Resource
         }
 
         if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
+            return $query->where('market_id', (int) $user->market_id);
         }
 
         return $query->whereRaw('1 = 0');
@@ -431,7 +492,7 @@ class OperationResource extends Resource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin());
+        return (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin'));
     }
 
     public static function canEdit($record): bool
@@ -442,11 +503,11 @@ class OperationResource extends Resource
             return false;
         }
 
-        if (! ($user->isSuperAdmin() || $user->isMarketAdmin())) {
+        if (! ($user->isSuperAdmin() || $user->hasRole('market-admin'))) {
             return false;
         }
 
-        return $record instanceof Operation && $record->status === 'draft';
+        return $record instanceof Operation && (string) $record->status === 'draft';
     }
 
     public static function canView($record): bool
@@ -461,7 +522,7 @@ class OperationResource extends Resource
             return true;
         }
 
-        return $record instanceof Operation && $record->market_id === $user->market_id;
+        return $record instanceof Operation && (int) $record->market_id === (int) $user->market_id;
     }
 
     public static function resolveMarketId(): int
@@ -494,6 +555,7 @@ class OperationResource extends Resource
         if ($marketId > 0) {
             $market = Market::query()->select(['id', 'timezone'])->find($marketId);
             $candidate = trim((string) ($market?->timezone ?? ''));
+
             if ($candidate !== '') {
                 $tz = $candidate;
             }
@@ -515,8 +577,12 @@ class OperationResource extends Resource
     {
         $marketId = static::resolveMarketId();
         $market = $marketId > 0 ? Market::query()->find($marketId) : null;
+
         $resolver = app(MarketPeriodResolver::class);
-        $tz = $market ? $resolver->marketNow($market)->getTimezone()->getName() : config('app.timezone', 'UTC');
+
+        $tz = $market
+            ? $resolver->marketNow($market)->getTimezone()->getName()
+            : (string) config('app.timezone', 'UTC');
 
         return $resolver->availablePeriods($marketId, $tz);
     }
@@ -529,7 +595,7 @@ class OperationResource extends Resource
             OperationType::TENANT_SWITCH => sprintf(
                 'Арендатор: %s → %s',
                 static::tenantLabel($payload['from_tenant_id'] ?? null),
-                static::tenantLabel($payload['to_tenant_id'] ?? null)
+                static::tenantLabel($payload['to_tenant_id'] ?? null),
             ),
             OperationType::RENT_RATE_CHANGE => 'Ставка: ' . (string) ($payload['rent_rate'] ?? '—'),
             OperationType::ELECTRICITY_INPUT => 'Электроэнергия: ' . (string) ($payload['amount'] ?? '—'),
@@ -543,11 +609,25 @@ class OperationResource extends Resource
     private static function tenantLabel(mixed $tenantId): string
     {
         $id = is_numeric($tenantId) ? (int) $tenantId : 0;
+
         if ($id <= 0) {
             return '—';
         }
 
         $tenant = Tenant::query()->find($id);
+
         return $tenant?->name ?: (string) $id;
+    }
+
+    private static function makeLive(object $component): void
+    {
+        if (method_exists($component, 'live')) {
+            $component->live();
+            return;
+        }
+
+        if (method_exists($component, 'reactive')) {
+            $component->reactive();
+        }
     }
 }

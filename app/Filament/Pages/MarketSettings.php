@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\Market;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -66,6 +67,8 @@ class MarketSettings extends Page
         'address' => null,
         'timezone' => null,
         'map_pdf_path' => null,
+        'holiday_default_notify_before_days' => 7,
+        'holiday_notification_recipient_user_ids' => [],
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -122,6 +125,13 @@ class MarketSettings extends Page
             'address' => $this->market->address,
             'timezone' => $this->market->timezone ?: config('app.timezone', 'Europe/Moscow'),
             'map_pdf_path' => isset($settings['map_pdf_path']) && is_string($settings['map_pdf_path']) ? $settings['map_pdf_path'] : null,
+            'holiday_default_notify_before_days' => is_numeric($settings['holiday_default_notify_before_days'] ?? null)
+                ? (int) $settings['holiday_default_notify_before_days']
+                : 7,
+            'holiday_notification_recipient_user_ids' => array_values(array_filter(
+                (array) ($settings['holiday_notification_recipient_user_ids'] ?? []),
+                static fn ($value): bool => is_numeric($value),
+            )),
         ]);
     }
 
@@ -174,32 +184,71 @@ class MarketSettings extends Page
                     ->columns(12),
 
                 Section::make('Карта рынка')
-    ->description('PDF-карта для просмотра с масштабированием и перемещением.')
-    ->schema([
-        Forms\Components\FileUpload::make('map_pdf_path')
-            ->label('Карта (PDF)')
-            ->helperText('Загрузите векторный PDF (рекомендуется). Файл хранится приватно.')
-            ->acceptedFileTypes(['application/pdf'])
-            ->disk('local')
-            ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
-            ->visibility('private')
-            ->preserveFilenames()
-            ->maxSize(20480)
-            ->disabled(fn (): bool => ! $this->canEditMarket)
-            ->columnSpan([
-                'default' => 12,
-                'lg' => 7,   // ✅ не на всю ширину
-            ]),
+                    ->description('PDF-карта для просмотра с масштабированием и перемещением.')
+                    ->schema([
+                        Forms\Components\FileUpload::make('map_pdf_path')
+                            ->label('Карта (PDF)')
+                            ->helperText('Загрузите векторный PDF (рекомендуется). Файл хранится приватно.')
+                            ->acceptedFileTypes(['application/pdf'])
+                            ->disk('local')
+                            ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
+                            ->visibility('private')
+                            ->preserveFilenames()
+                            ->maxSize(20480)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 7,   // ✅ не на всю ширину
+                            ]),
 
-        Forms\Components\Placeholder::make('market_map_open_button')
-            ->hiddenLabel()
-            ->content(fn (): HtmlString => $this->renderOpenMapButton())
-            ->columnSpan([
-                'default' => 12,
-                'lg' => 5,
-            ]),
-    ])
-    ->columns(12),
+                        Forms\Components\Placeholder::make('market_map_open_button')
+                            ->hiddenLabel()
+                            ->content(fn (): HtmlString => $this->renderOpenMapButton())
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 5,
+                            ]),
+                    ])
+                    ->columns(12),
+
+                Section::make('Праздники рынка')
+                    ->description('Настройки уведомлений о праздниках рынка.')
+                    ->schema([
+                        Forms\Components\TextInput::make('holiday_default_notify_before_days')
+                            ->label('Уведомлять за (дней)')
+                            ->numeric()
+                            ->minValue(0)
+                            ->helperText('Значение по умолчанию для новых праздников.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+
+                        Forms\Components\Select::make('holiday_notification_recipient_user_ids')
+                            ->label('Получатели уведомлений')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (): array {
+                                if (! $this->market) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->where('market_id', $this->market->id)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->all();
+                            })
+                            ->helperText('Если список пуст, уведомления получат market-admin.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 8,
+                            ]),
+                    ])
+                    ->columns(12),
             ]);
     }
 
@@ -230,6 +279,13 @@ class MarketSettings extends Page
         }
 
         $settings['map_pdf_path'] = $newMapPath;
+        $settings['holiday_default_notify_before_days'] = is_numeric($state['holiday_default_notify_before_days'] ?? null)
+            ? max(0, (int) $state['holiday_default_notify_before_days'])
+            : 7;
+        $settings['holiday_notification_recipient_user_ids'] = array_values(array_filter(
+            (array) ($state['holiday_notification_recipient_user_ids'] ?? []),
+            static fn ($value): bool => is_numeric($value),
+        ));
 
         $this->market->fill([
             'name' => (string) ($state['name'] ?? ''),
