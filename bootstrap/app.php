@@ -17,6 +17,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             SetLocale::class,
         ]);
+
+        $middleware->alias([
+            'cabinet.access' => \App\Http\Middleware\EnsureTenantCabinetAccess::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

@@ -7,6 +7,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Database\Seeders\TenantCabinetDemoSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -25,6 +26,7 @@ class DatabaseSeeder extends Seeder
             'market-manager',
             'market-operator',
             'merchant',
+            'merchant-user',
             'market-accountant',
             'market-hr',
             'market-maintenance',
@@ -87,5 +89,11 @@ class DatabaseSeeder extends Seeder
 
         // 6) На всякий случай — ещё раз сбросим кеш Spatie после сидов
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        if (env('SEED_TENANT_DEMO', false)) {
+            $this->call([
+                TenantCabinetDemoSeeder::class,
+            ]);
+        }
     }
 }
