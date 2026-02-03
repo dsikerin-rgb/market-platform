@@ -7,12 +7,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
-use App\Models\MarketHoliday;
-use App\Models\Task;
-use App\Support\TaskCalendarFilters;
-use Filament\Facades\Filament;
 use Filament\Resources\Pages\Page;
-use Illuminate\Support\Arr;
 
 class TaskCalendar extends Page
 {
@@ -20,51 +15,37 @@ class TaskCalendar extends Page
 
     protected static ?string $title = 'Календарь';
 
-    protected static string $view = 'filament.resources.task-resource.pages.calendar';
+    /**
+     * Filament v4: у базового класса $view — НЕ static.
+     * На случай если redirect не сработает (или отключат JS), оставим валидный view.
+     */
+    protected string $view = 'filament.resources.task-resource.pages.calendar';
 
-    protected function getViewData(): array
+    /**
+     * Доступ как у ресурса "Задачи". Если false — Filament вернёт 404.
+     */
+    public static function canAccess(array $parameters = []): bool
     {
-        $user = Filament::auth()->user();
-        $filters = TaskCalendarFilters::fromRequest();
+        return TaskResource::canViewAny();
+    }
 
-        $tasksWithoutDue = [];
+    /**
+     * Совместимость: старый URL /admin/tasks/calendar -> новый /admin/tasks?view=calendar
+     * Сохраняем query-параметры (date, filters, holiday_id, tab, и т.д.).
+     */
+    public function mount(): void
+    {
+        parent::mount();
 
-        if ($user) {
-            $query = TaskCalendarFilters::applyToTaskQuery(TaskResource::getEloquentQuery(), $filters, $user)
-                ->whereNull('due_at')
-                ->orderByDesc('created_at');
+        $query = request()->query();
+        $query['view'] = 'calendar';
 
-            if (! empty($filters['overdue'])) {
-                $query->whereRaw('1 = 0');
-            }
+        $target = TaskResource::getUrl('index');
 
-            $tasksWithoutDue = $query
-                ->limit(50)
-                ->get();
+        if (! empty($query)) {
+            $target .= '?' . http_build_query($query);
         }
 
-        $selectedHoliday = null;
-        $holidayId = request()->query('holiday_id');
-
-        if ($holidayId && $user) {
-            $selectedHoliday = MarketHoliday::query()
-                ->whereKey($holidayId)
-                ->when(! $user->isSuperAdmin(), fn ($query) => $query->where('market_id', $user->market_id))
-                ->first();
-        }
-
-        $canEditHoliday = (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin'));
-
-        return [
-            'filters' => $filters,
-            'statusOptions' => Task::STATUS_LABELS,
-            'priorityOptions' => Task::PRIORITY_LABELS,
-            'tasksWithoutDue' => $tasksWithoutDue,
-            'selectedHoliday' => $selectedHoliday,
-            'holidayCloseUrl' => url()->current() . (count(request()->except('holiday_id'))
-                ? '?' . http_build_query(Arr::except(request()->query(), ['holiday_id']))
-                : ''),
-            'canEditHoliday' => $canEditHoliday,
-        ];
+        $this->redirect($target);
     }
 }

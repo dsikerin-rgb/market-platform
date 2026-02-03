@@ -35,13 +35,12 @@ class TaskResource extends Resource
     protected static ?string $model = Task::class;
 
     protected static ?string $modelLabel = 'Задача';
-
     protected static ?string $pluralModelLabel = 'Задачи';
 
     protected static ?string $navigationLabel = 'Задачи';
 
+    // В Filament v4 base type: UnitEnum|string|null
     protected static \UnitEnum|string|null $navigationGroup = 'Оперативная работа';
-
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
     /**
@@ -1166,12 +1165,15 @@ class TaskResource extends Resource
 
     public static function getPages(): array
     {
-        return [
-            'index' => Pages\ListTasks::route('/'),
-            'create' => Pages\CreateTask::route('/create'),
-            'view' => Pages\ViewTask::route('/{record}'),
-            'edit' => Pages\EditTask::route('/{record}/edit'),
-            'calendar' => Pages\TaskCalendar::route('/calendar'),
+    return [
+        'index' => Pages\ListTasks::route('/'),
+        'create' => Pages\CreateTask::route('/create'),
+
+             // ВАЖНО: /calendar должен быть ДО /{record}
+              'calendar' => Pages\TaskCalendar::route('/calendar'),
+
+             'view' => Pages\ViewTask::route('/{record}'),
+             'edit' => Pages\EditTask::route('/{record}/edit'),
         ];
     }
 
@@ -1339,15 +1341,20 @@ class TaskResource extends Resource
             && $user->hasRole('market-admin');
     }
 
+    /**
+     * Super-admin selection: делаем чтение максимально совместимым (разные версии Filament/панелей).
+     */
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
-        $value = session("filament.{$panelId}.selected_market_id");
-
-        if (! filled($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
+        $value =
+            session("filament.{$panelId}.selected_market_id")
+            ?? session("filament_{$panelId}_market_id")
+            ?? session("filament.{$panelId}.market_id")
+            ?? session('filament.admin.selected_market_id')
+            ?? session('filament.admin.market_id')
+            ?? session('selected_market_id');
 
         return filled($value) ? (int) $value : null;
     }

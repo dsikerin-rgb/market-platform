@@ -7,10 +7,14 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
+use App\Models\MarketHoliday;
+use App\Models\Task;
+use App\Support\TaskCalendarFilters;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 
 class ListTasks extends ListRecords
 {
@@ -19,44 +23,72 @@ class ListTasks extends ListRecords
     protected static ?string $title = 'Задачи';
 
     /**
-     * ✅ Нужно, чтобы URL был вида /admin/tasks?tab=all, а не ?activeTab=...
-     * И чтобы дефолтный таб не попадал в URL (except).
+     * tab=... (вместо activeTab=...), и view=list|calendar.
+     * except убирает дефолт из URL.
      */
     protected array $queryString = [
         'activeTab' => ['as' => 'tab', 'except' => 'all'],
+        'viewMode'  => ['as' => 'view', 'except' => 'list'],
     ];
 
-    /**
-     * ✅ Жёстко задаём дефолт.
-     * Важно: Filament может инициализировать activeTab до вызова getDefaultActiveTab(),
-     * поэтому держим обе настройки.
-     */
     public ?string $activeTab = 'all';
+
+    /** list|calendar */
+    public string $viewMode = 'list';
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        if (! in_array($this->viewMode, ['list', 'calendar'], true)) {
+            $this->viewMode = 'list';
+        }
+    }
+
+    public function getTitle(): string
+    {
+        return $this->viewMode === 'calendar' ? 'Календарь' : 'Задачи';
+    }
 
     public function getBreadcrumb(): string
     {
-        return 'Задачи';
+        return $this->getTitle();
     }
 
-    /**
-     * ✅ По умолчанию — «Все».
-     */
     public function getDefaultActiveTab(): string|int|null
     {
         return 'all';
     }
 
     /**
-     * Быстрые “рабочие” срезы над таблицей.
-     * ✅ «Все» — самый левый.
+     * В режиме calendar рендерим calendar.blade.php, оставаясь на /admin/tasks
      */
+    public function getView(): string
+    {
+        if ($this->viewMode === 'calendar') {
+            return 'filament.resources.task-resource.pages.calendar';
+        }
+
+        return parent::getView();
+    }
+
+    protected function getViewData(): array
+    {
+        $data = parent::getViewData();
+
+        if ($this->viewMode !== 'calendar') {
+            return $data;
+        }
+
+        return array_merge($data, $this->getCalendarViewData());
+    }
+
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
 
         $user = Filament::auth()->user();
 
-        // Даже если пользователя нет — пусть будет один таб.
         if (! $user) {
             return [
                 'all' => $tabClass::make('Все'),
@@ -112,6 +144,10 @@ class ListTasks extends ListRecords
         ];
     }
 
+    /**
+     * ✅ ВАЖНО: CreateAction остаётся тут — это и есть Filament CreateAction modal.
+     * Кнопки "Список" и "Календарь" показываем ВСЕГДА (так пользователи точно найдут календарь).
+     */
     protected function getHeaderActions(): array
     {
         $actions = [
@@ -120,20 +156,131 @@ class ListTasks extends ListRecords
                 ->icon('heroicon-o-plus'),
         ];
 
-        if (class_exists(Actions\Action::class)) {
-            $actions[] = Actions\Action::make('calendar')
-                ->label('Календарь')
-                ->icon('heroicon-o-calendar-days')
-                ->url(fn (): string => TaskResource::getUrl('calendar'));
+        if (! class_exists(Actions\Action::class)) {
+            return $actions;
+        }
+
+        $listAction = Actions\Action::make('view_list')
+            ->label('Список')
+            ->icon('heroicon-o-list-bullet')
+            ->url(fn (): string => $this->urlForView('list'))
+            ->color($this->viewMode === 'list' ? 'primary' : 'gray');
+
+        $calendarAction = Actions\Action::make('view_calendar')
+            ->label('Календарь')
+            ->icon('heroicon-o-calendar-days')
+            ->url(fn (): string => $this->urlForView('calendar'))
+            ->color($this->viewMode === 'calendar' ? 'primary' : 'gray');
+
+        if (class_exists(Actions\ActionGroup::class)) {
+            $actions[] = Actions\ActionGroup::make([
+                $listAction,
+                $calendarAction,
+            ])->label('Вид');
+        } else {
+            $actions[] = $listAction;
+            $actions[] = $calendarAction;
         }
 
         return $actions;
     }
 
     /**
-     * Filament v4: Filament\Schemas\Components\Tabs\Tab
-     * Filament v3: Filament\Resources\Components\Tab
+     * URL переключения вида.
+     * Для list чистим календарные параметры (чтобы не таскать мусор в URL).
      */
+    private function urlForView(string $mode): string
+    {
+        $query = request()->query();
+
+        unset($query['page']); // пагинация таблицы календарю не нужна
+
+        $calendarKeys = [
+            'assigned',
+            'observing',
+            'coexecuting',
+            'holidays',
+            'overdue',
+            'status',
+            'priority',
+            'search',
+            'date',
+            'holiday_id',
+        ];
+
+        if ($mode === 'list') {
+            unset($query['view']);
+            foreach ($calendarKeys as $k) {
+                unset($query[$k]);
+            }
+        } else {
+            $query['view'] = 'calendar';
+        }
+
+        $base = TaskResource::getUrl('index');
+
+        return count($query) ? ($base . '?' . http_build_query($query)) : $base;
+    }
+
+    private function getCalendarViewData(): array
+    {
+        $user = Filament::auth()->user();
+        $filters = TaskCalendarFilters::fromRequest();
+
+        $tasksWithoutDue = [];
+
+        if ($user) {
+            $query = TaskCalendarFilters::applyToTaskQuery(
+                TaskResource::getEloquentQuery(),
+                $filters,
+                $user,
+            )
+                ->whereNull('due_at')
+                ->orderByDesc('created_at');
+
+            if (! empty($filters['overdue'])) {
+                $query->whereRaw('1 = 0');
+            }
+
+            $tasksWithoutDue = $query->limit(50)->get();
+        }
+
+        $isSuperAdmin = (bool) $user
+            && method_exists($user, 'isSuperAdmin')
+            && $user->isSuperAdmin();
+
+        $selectedHoliday = null;
+        $holidayId = request()->query('holiday_id');
+
+        if ($holidayId && $user) {
+            $selectedHoliday = MarketHoliday::query()
+                ->whereKey((int) $holidayId)
+                ->when(! $isSuperAdmin, fn ($q) => $q->where('market_id', (int) $user->market_id))
+                ->first();
+        }
+
+        $canEditHoliday = (bool) $user && (
+            $isSuperAdmin
+            || (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
+        );
+
+        $holidayCloseUrl = url()->current();
+        $queryWithoutHoliday = Arr::except(request()->query(), ['holiday_id']);
+        if (count($queryWithoutHoliday)) {
+            $holidayCloseUrl .= '?' . http_build_query($queryWithoutHoliday);
+        }
+
+        return [
+            'filters' => $filters,
+            'statusOptions' => Task::STATUS_LABELS,
+            'priorityOptions' => Task::PRIORITY_LABELS,
+            'tasksWithoutDue' => $tasksWithoutDue,
+            'selectedHoliday' => $selectedHoliday,
+            'holidayCloseUrl' => $holidayCloseUrl,
+            'canEditHoliday' => $canEditHoliday,
+        ];
+    }
+
     protected static function resolveTabClass(): string
     {
         if (class_exists(\Filament\Schemas\Components\Tabs\Tab::class)) {
@@ -147,9 +294,6 @@ class ListTasks extends ListRecords
         throw new \RuntimeException('Filament Tab class not found for this version.');
     }
 
-    /**
-     * Безопасный конструктор табов: поддержка разных версий Filament и единый стиль.
-     */
     protected function makeTab(string $tabClass, string $label, ?callable $modifyQueryUsing = null): object
     {
         $tab = $tabClass::make($label);

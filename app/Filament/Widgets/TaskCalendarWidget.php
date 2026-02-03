@@ -18,6 +18,23 @@ class TaskCalendarWidget extends FullCalendarWidget
 {
     protected int|string|array $columnSpan = 'full';
 
+    /**
+     * ВАЖНО:
+     * Встроенный CreateAction у FullCalendarWidget открывает модал без формы,
+     * если мы не описали schema/handle.
+     * Мы используем "Создать" из хедера страницы /admin/tasks (ListTasks),
+     * поэтому здесь кнопку "Создать" отключаем полностью.
+     */
+    protected function headerActions(): array
+    {
+        return [];
+    }
+
+    protected function modalActions(): array
+    {
+        return [];
+    }
+
     public function fetchEvents(array $fetchInfo): array
     {
         $user = Filament::auth()->user();
@@ -118,6 +135,11 @@ class TaskCalendarWidget extends FullCalendarWidget
             'firstDay' => 1,
             'initialView' => 'dayGridMonth',
             'initialDate' => $initialDate?->toDateString(),
+
+            // чуть более дружелюбные настройки отображения
+            'expandRows' => true,
+            'dayMaxEvents' => true,
+
             'headerToolbar' => [
                 'left' => 'prev,next today',
                 'center' => 'title',
