@@ -39,11 +39,14 @@ class TaskCalendarWidget extends FullCalendarWidget
     {
         $user = Filament::auth()->user();
 
-        if (! $user || $user->hasAnyRole(['merchant', 'merchant-user'])) {
+        if (! $user) {
             return [];
         }
 
-        $filters = TaskCalendarFilters::fromRequest();
+        if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['merchant', 'merchant-user'])) {
+            return [];
+        }
+
         $range = $this->resolveRange($fetchInfo);
 
         if (! $range) {
@@ -52,7 +55,25 @@ class TaskCalendarWidget extends FullCalendarWidget
 
         [$rangeStart, $rangeEnd] = $range;
 
-        $tasks = TaskCalendarFilters::applyToTaskQuery(TaskResource::getEloquentQuery(), $filters, $user)
+        // ✅ Уважаем табы /admin/tasks?tab=...
+        $tab = request()->query('tab');
+        $tab = is_string($tab) && $tab !== '' ? $tab : null;
+
+        // ✅ Берём фильтры из query + нормализуем под активный таб
+        $filters = TaskCalendarFilters::fromRequest();
+        $filters = TaskCalendarFilters::normalizeForTab($filters, $tab);
+
+        // ✅ Сначала — базовый доступный пользователю query (TaskResource::getEloquentQuery),
+        // затем — календарные фильтры, затем — табовые “срезы”
+        $query = TaskCalendarFilters::applyToTaskQuery(
+            TaskResource::getEloquentQuery(),
+            $filters,
+            $user
+        );
+
+        $query = TaskCalendarFilters::applyTabToTaskQuery($query, $tab, $user);
+
+        $tasks = $query
             ->whereNotNull('due_at')
             ->whereBetween('due_at', [$rangeStart, $rangeEnd])
             ->get();
@@ -68,7 +89,7 @@ class TaskCalendarWidget extends FullCalendarWidget
 
             $events[] = [
                 'id' => 'task-' . $task->id,
-                'title' => $task->title,
+                'title' => (string) $task->title,
                 'start' => $dueAt->toIso8601String(),
                 'end' => $dueAt->toIso8601String(),
                 'allDay' => $dueAt->format('H:i:s') === '00:00:00',
@@ -80,6 +101,7 @@ class TaskCalendarWidget extends FullCalendarWidget
             ];
         }
 
+        // Праздники рынка
         if (! empty($filters['holidays'])) {
             $holidayQuery = MarketHoliday::query();
             $marketId = TaskCalendarFilters::resolveMarketIdForUser($user);
@@ -118,6 +140,7 @@ class TaskCalendarWidget extends FullCalendarWidget
                     'start' => $start,
                     'end' => $end,
                     'allDay' => true,
+                    // сохраняем tab/view и остальные параметры
                     'url' => request()->fullUrlWithQuery(['holiday_id' => $holiday->id]),
                     'color' => '#7c3aed',
                 ];
@@ -129,7 +152,9 @@ class TaskCalendarWidget extends FullCalendarWidget
 
     protected function getOptions(): array
     {
-        $initialDate = TaskCalendarFilters::normalizeDate(request()->query(TaskCalendarFilters::PARAM_DATE));
+        $initialDate = TaskCalendarFilters::normalizeDate(
+            request()->query(TaskCalendarFilters::PARAM_DATE)
+        );
 
         return [
             'firstDay' => 1,
@@ -158,8 +183,8 @@ class TaskCalendarWidget extends FullCalendarWidget
         }
 
         try {
-            $startDate = CarbonImmutable::parse($start)->startOfDay();
-            $endDate = CarbonImmutable::parse($end)->endOfDay();
+            $startDate = CarbonImmutable::parse((string) $start)->startOfDay();
+            $endDate = CarbonImmutable::parse((string) $end)->endOfDay();
         } catch (\Throwable) {
             return null;
         }
