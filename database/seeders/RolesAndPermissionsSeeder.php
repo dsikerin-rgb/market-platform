@@ -59,6 +59,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'market-operator' => [],
             'market-accountant' => [],
             'merchant' => [],
+            'merchant-user' => [],
         ];
 
         foreach ($roles as $roleName => $rolePerms) {

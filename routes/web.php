@@ -5,6 +5,16 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\MarketRegistrationController;
+use App\Http\Controllers\Cabinet\AccrualsController;
+use App\Http\Controllers\Cabinet\CabinetAuthController;
+use App\Http\Controllers\Cabinet\CustomerChatController;
+use App\Http\Controllers\Cabinet\DashboardController;
+use App\Http\Controllers\Cabinet\DocumentsController;
+use App\Http\Controllers\Cabinet\PaymentsController;
+use App\Http\Controllers\Cabinet\PublicShowcaseController;
+use App\Http\Controllers\Cabinet\RequestsController;
+use App\Http\Controllers\Cabinet\ShowcaseController;
+use App\Http\Controllers\Cabinet\SpacesController;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -18,6 +28,40 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 Route::view('/', 'welcome')->name('home');
+
+Route::get('/login', function () {
+    return redirect()->route('cabinet.login');
+})->name('login');
+
+Route::prefix('cabinet')->group(function () {
+    Route::get('/login', [CabinetAuthController::class, 'showLogin'])->name('cabinet.login');
+    Route::post('/login', [CabinetAuthController::class, 'login'])->name('cabinet.login.submit');
+
+    Route::middleware(['auth', 'cabinet.access'])->group(function () {
+        Route::post('/logout', [CabinetAuthController::class, 'logout'])->name('cabinet.logout');
+
+        Route::get('/', DashboardController::class)->name('cabinet.dashboard');
+        Route::get('/accruals', [AccrualsController::class, 'index'])->name('cabinet.accruals');
+        Route::get('/payments', PaymentsController::class)->name('cabinet.payments');
+
+        Route::get('/requests', [RequestsController::class, 'index'])->name('cabinet.requests');
+        Route::get('/requests/create', [RequestsController::class, 'create'])->name('cabinet.requests.create');
+        Route::post('/requests', [RequestsController::class, 'store'])->name('cabinet.requests.store');
+        Route::get('/requests/{ticketId}', [RequestsController::class, 'show'])->name('cabinet.requests.show');
+        Route::post('/requests/{ticketId}/comment', [RequestsController::class, 'comment'])->name('cabinet.requests.comment');
+
+        Route::get('/documents', [DocumentsController::class, 'index'])->name('cabinet.documents');
+        Route::get('/documents/{documentId}/download', [DocumentsController::class, 'download'])->name('cabinet.documents.download');
+
+        Route::get('/spaces', SpacesController::class)->name('cabinet.spaces');
+        Route::get('/customer-chat', CustomerChatController::class)->name('cabinet.customer-chat');
+
+        Route::get('/showcase', [ShowcaseController::class, 'edit'])->name('cabinet.showcase.edit');
+        Route::post('/showcase', [ShowcaseController::class, 'update'])->name('cabinet.showcase.update');
+    });
+});
+
+Route::get('/v/{tenantSlug}', PublicShowcaseController::class)->name('cabinet.showcase.public');
 
 Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(function () {
     /**
