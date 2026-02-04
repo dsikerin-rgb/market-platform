@@ -1,73 +1,139 @@
-@props(['tenant', 'title' => null])
+@props(['tenant' => null, 'title' => null])
+
+@php
+    $viteHot      = file_exists(public_path('hot'));
+    $viteManifest = file_exists(public_path('build/manifest.json'));
+    $useVite      = $viteHot || $viteManifest;
+
+    $tenantName = data_get($tenant, 'display_name') ?: 'Арендатор';
+@endphp
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
     <title>{{ $title ?? 'Кабинет арендатора' }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    @if ($useVite)
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @else
+        {{-- FALLBACK: без сборки Vite (staging/demo/local без node) --}}
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            html, body { height: 100%; }
+            .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+            .tap { -webkit-tap-highlight-color: transparent; }
+        </style>
+    @endif
+
+    @stack('head')
 </head>
-<body class="bg-slate-50 text-slate-900">
-    <div class="min-h-screen flex flex-col">
-        <header class="bg-white border-b">
-            <div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-                <div>
-                    <p class="text-xs uppercase tracking-wide text-slate-400">Кабинет арендатора</p>
-                    <h1 class="text-lg font-semibold">{{ $tenant->display_name ?? 'Арендатор' }}</h1>
-                </div>
+
+<body class="bg-slate-100 text-slate-900 antialiased tap">
+<div class="min-h-screen">
+
+    {{-- Верхняя панель как в приложении --}}
+    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-slate-200">
+        <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+                <p class="text-[11px] font-semibold tracking-widest text-slate-400 uppercase">
+                    Кабинет арендатора
+                </p>
+                <h1 class="text-base font-semibold truncate">
+                    {{ $tenantName }}
+                </h1>
+            </div>
+
+            @if (\Illuminate\Support\Facades\Route::has('cabinet.logout') && auth()->check())
                 <form method="POST" action="{{ route('cabinet.logout') }}">
                     @csrf
-                    <button class="text-sm text-slate-500 hover:text-slate-700" type="submit">Выйти</button>
+                    <button
+                        type="submit"
+                        class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium
+                               text-slate-600 hover:text-slate-900 active:scale-[0.99] transition"
+                    >
+                        Выйти
+                    </button>
                 </form>
-            </div>
-        </header>
+            @endif
+        </div>
+    </header>
 
-        <main class="flex-1">
-            <div class="max-w-3xl mx-auto px-4 py-6 space-y-6">
-                @if(session('success'))
-                    <div class="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
-                        {{ session('success') }}
-                    </div>
-                @endif
+    {{-- Контент --}}
+    <main class="max-w-3xl mx-auto px-4 pt-5 pb-28">
+        <div class="space-y-4">
 
-                @if($errors->any())
-                    <div class="rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
-                        <ul class="list-disc list-inside space-y-1">
-                            @foreach($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
+            @if (session('success'))
+                <div class="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-900">
+                    {{ session('success') }}
+                </div>
+            @endif
 
-                {{ $slot }}
-            </div>
-        </main>
+            @if (session('error'))
+                <div class="rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-900">
+                    {{ session('error') }}
+                </div>
+            @endif
 
-        <nav class="bg-white border-t">
-            <div class="max-w-3xl mx-auto px-4 py-3 grid grid-cols-5 gap-2 text-xs text-center">
-                <a class="flex flex-col items-center gap-1 {{ request()->routeIs('cabinet.dashboard') ? 'text-slate-900' : 'text-slate-500' }}" href="{{ route('cabinet.dashboard') }}">
-                    <span class="text-lg">🏠</span>
+            @if ($errors->any())
+                <div class="rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-900">
+                    <ul class="list-disc list-inside space-y-1">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            {{ $slot }}
+        </div>
+    </main>
+
+    {{-- Нижняя навигация (как таббар) --}}
+    <nav class="fixed inset-x-0 bottom-0 z-30 bg-white/90 backdrop-blur border-t border-slate-200 safe-pb">
+        <div class="max-w-3xl mx-auto px-4 py-2">
+            <div class="grid grid-cols-5 gap-1 text-[11px] font-medium text-center">
+                @php
+                    $navItem = 'flex flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 transition active:scale-[0.99]';
+                    $navOn   = 'text-slate-900 bg-slate-100';
+                    $navOff  = 'text-slate-500 hover:text-slate-800';
+                @endphp
+
+                <a class="{{ $navItem }} {{ request()->routeIs('cabinet.dashboard') ? $navOn : $navOff }}"
+                   href="{{ route('cabinet.dashboard') }}">
+                    <span class="text-lg leading-none">🏠</span>
                     Главная
                 </a>
-                <a class="flex flex-col items-center gap-1 {{ request()->routeIs('cabinet.accruals') ? 'text-slate-900' : 'text-slate-500' }}" href="{{ route('cabinet.accruals') }}">
-                    <span class="text-lg">💳</span>
+
+                <a class="{{ $navItem }} {{ request()->routeIs('cabinet.accruals') ? $navOn : $navOff }}"
+                   href="{{ route('cabinet.accruals') }}">
+                    <span class="text-lg leading-none">💳</span>
                     Начисления
                 </a>
-                <a class="flex flex-col items-center gap-1 {{ request()->routeIs('cabinet.requests*') ? 'text-slate-900' : 'text-slate-500' }}" href="{{ route('cabinet.requests') }}">
-                    <span class="text-lg">🛠️</span>
+
+                <a class="{{ $navItem }} {{ request()->routeIs('cabinet.requests*') ? $navOn : $navOff }}"
+                   href="{{ route('cabinet.requests') }}">
+                    <span class="text-lg leading-none">🛠️</span>
                     Заявки
                 </a>
-                <a class="flex flex-col items-center gap-1 {{ request()->routeIs('cabinet.documents') ? 'text-slate-900' : 'text-slate-500' }}" href="{{ route('cabinet.documents') }}">
-                    <span class="text-lg">📄</span>
+
+                <a class="{{ $navItem }} {{ request()->routeIs('cabinet.documents') ? $navOn : $navOff }}"
+                   href="{{ route('cabinet.documents') }}">
+                    <span class="text-lg leading-none">📄</span>
                     Документы
                 </a>
-                <a class="flex flex-col items-center gap-1 {{ request()->routeIs('cabinet.showcase.*') ? 'text-slate-900' : 'text-slate-500' }}" href="{{ route('cabinet.showcase.edit') }}">
-                    <span class="text-lg">🛍️</span>
+
+                <a class="{{ $navItem }} {{ request()->routeIs('cabinet.showcase.*') ? $navOn : $navOff }}"
+                   href="{{ route('cabinet.showcase.edit') }}">
+                    <span class="text-lg leading-none">🛍️</span>
                     Витрина
                 </a>
             </div>
-        </nav>
-    </div>
+        </div>
+    </nav>
+
+</div>
 </body>
 </html>
