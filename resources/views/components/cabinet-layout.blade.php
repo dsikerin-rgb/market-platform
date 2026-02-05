@@ -5,7 +5,10 @@
     $viteManifest = file_exists(public_path('build/manifest.json'));
     $useVite      = $viteHot || $viteManifest;
 
-    $tenantName = data_get($tenant, 'display_name') ?: 'Арендатор';
+    // На layout не завязываем реальную привязку — только красивое имя для шапки.
+    $tenantName = data_get($tenant, 'display_name')
+        ?: data_get($tenant, 'name')
+        ?: 'Арендатор';
 @endphp
 
 <!DOCTYPE html>
@@ -14,6 +17,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#ffffff">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
     <title>{{ $title ?? 'Кабинет арендатора' }}</title>
 
     @if ($useVite)
@@ -34,7 +39,7 @@
 <body class="bg-slate-100 text-slate-900 antialiased tap">
 <div class="min-h-screen">
 
-    {{-- Верхняя панель как в приложении --}}
+    {{-- Верхняя панель --}}
     <header class="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-slate-200">
         <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
             <div class="min-w-0">
@@ -47,7 +52,8 @@
             </div>
 
             @if (\Illuminate\Support\Facades\Route::has('cabinet.logout') && auth()->check())
-                <form method="POST" action="{{ route('cabinet.logout') }}">
+                {{-- Важно: отключаем navigate/intercept, чтобы logout не ломался 419 --}}
+                <form method="POST" action="{{ route('cabinet.logout') }}" data-navigate="false">
                     @csrf
                     <button
                         type="submit"
@@ -91,7 +97,7 @@
         </div>
     </main>
 
-    {{-- Нижняя навигация (как таббар) --}}
+    {{-- Нижняя навигация (таббар) --}}
     <nav class="fixed inset-x-0 bottom-0 z-30 bg-white/90 backdrop-blur border-t border-slate-200 safe-pb">
         <div class="max-w-3xl mx-auto px-4 py-2">
             <div class="grid grid-cols-5 gap-1 text-[11px] font-medium text-center">

@@ -30,6 +30,7 @@ class CabinetAuthController extends Controller
                 ->withErrors(['email' => 'Неверный email или пароль.']);
         }
 
+        // на всякий случай фиксируем сессию после успешного входа
         $request->session()->regenerate();
 
         return redirect()->route('cabinet.dashboard');
@@ -37,11 +38,14 @@ class CabinetAuthController extends Controller
 
     public function logout(Request $request): RedirectResponse
     {
-        Auth::logout();
+        // выходим из guard web
+        Auth::guard('web')->logout();
 
+        // сбрасываем сессию и CSRF токен
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        // ВАЖНО: после выхода — в кабинетный login, не в общий /login
         return redirect()->route('cabinet.login');
     }
 }
