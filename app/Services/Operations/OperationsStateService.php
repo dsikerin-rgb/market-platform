@@ -15,15 +15,15 @@ final class OperationsStateService
      */
     public function getSpaceStateForPeriod(int $marketId, CarbonImmutable $period, int $marketSpaceId): array
     {
-        $month = $period->startOfMonth()->toDateString();
-        $periodEndUtc = $period->endOfMonth()->utc();
+        $periodStartUtc = $period->startOfMonth()->utc();
+        $periodEndUtc   = $period->endOfMonth()->utc();
 
         $tenantOp = Operation::query()
             ->where('market_id', $marketId)
             ->where('entity_type', 'market_space')
             ->where('entity_id', $marketSpaceId)
             ->where('type', OperationType::TENANT_SWITCH)
-            ->where('effective_at', '<=', $periodEndUtc->toDateTimeString())
+            ->where('effective_at', '<=', $periodEndUtc)
             ->orderByDesc('effective_at')
             ->first();
 
@@ -32,22 +32,28 @@ final class OperationsStateService
             ->where('entity_type', 'market_space')
             ->where('entity_id', $marketSpaceId)
             ->where('type', OperationType::RENT_RATE_CHANGE)
-            ->where('effective_at', '<=', $periodEndUtc->toDateTimeString())
+            ->where('effective_at', '<=', $periodEndUtc)
             ->orderByDesc('effective_at')
             ->first();
 
         $electricity = 0.0;
         $adjustments = 0.0;
 
-        $monthlyOps = Operation::query()
+        $ops = Operation::query()
             ->where('market_id', $marketId)
             ->where('entity_type', 'market_space')
             ->where('entity_id', $marketSpaceId)
-            ->where('effective_month', $month)
-            ->whereIn('type', [OperationType::ELECTRICITY_INPUT, OperationType::ACCRUAL_ADJUSTMENT])
+            ->whereBetween('effective_at', [
+                $periodStartUtc,
+                $periodEndUtc,
+            ])
+            ->whereIn('type', [
+                OperationType::ELECTRICITY_INPUT,
+                OperationType::ACCRUAL_ADJUSTMENT,
+            ])
             ->get();
 
-        foreach ($monthlyOps as $op) {
+        foreach ($ops as $op) {
             $payload = is_array($op->payload) ? $op->payload : [];
 
             if ($op->type === OperationType::ELECTRICITY_INPUT) {
@@ -60,8 +66,8 @@ final class OperationsStateService
         }
 
         return [
-            'tenant_id' => $tenantOp ? (int) ($tenantOp->payload['to_tenant_id'] ?? 0) ?: null : null,
-            'rent_rate' => $rentOp ? (float) ($rentOp->payload['rent_rate'] ?? 0) ?: null : null,
+            'tenant_id'   => $tenantOp ? (int) ($tenantOp->payload['to_tenant_id'] ?? 0) ?: null : null,
+            'rent_rate'   => $rentOp ? (float) ($rentOp->payload['rent_rate'] ?? 0) ?: null : null,
             'electricity' => $electricity,
             'adjustments' => $adjustments,
         ];
@@ -86,15 +92,23 @@ final class OperationsStateService
     /**
      * @return array<int, float>
      */
-    private function collectAmountBySpace(int $marketId, CarbonImmutable $period, string $type, string $payloadKey): array
-    {
-        $month = $period->startOfMonth()->toDateString();
+    private function collectAmountBySpace(
+        int $marketId,
+        CarbonImmutable $period,
+        string $type,
+        string $payloadKey
+    ): array {
+        $periodStartUtc = $period->startOfMonth()->utc();
+        $periodEndUtc   = $period->endOfMonth()->utc();
 
         $rows = Operation::query()
             ->where('market_id', $marketId)
             ->where('entity_type', 'market_space')
-            ->where('effective_month', $month)
             ->where('type', $type)
+            ->whereBetween('effective_at', [
+                $periodStartUtc,
+                $periodEndUtc,
+            ])
             ->get();
 
         $totals = [];
