@@ -1,6 +1,11 @@
 <?php
 
+# bootstrap/app.php
+
+declare(strict_types=1);
+
 use App\Http\Middleware\SetLocale;
+use App\Http\Middleware\SplitSessionCookieByPath;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,8 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware) {
-        // Применяем локаль для всего WEB-стека (включая Filament панель).
+    ->withMiddleware(function (Middleware $middleware): void {
+        /**
+         * ВАЖНО:
+         * должен выполниться ДО EncryptCookies и StartSession,
+         * поэтому регистрируем глобально.
+         */
+        $middleware->prepend(SplitSessionCookieByPath::class);
+
+        // Локаль не завязана на сессии — оставляем в web-стеке.
         $middleware->web(append: [
             SetLocale::class,
         ]);
@@ -22,7 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'cabinet.access' => \App\Http\Middleware\EnsureTenantCabinetAccess::class,
         ]);
     })
-    ->withExceptions(function (Exceptions $exceptions) {
+    ->withExceptions(function (Exceptions $exceptions): void {
         //
     })
     ->create();
