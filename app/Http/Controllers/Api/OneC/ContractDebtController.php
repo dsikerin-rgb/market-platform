@@ -38,14 +38,26 @@ class ContractDebtController extends Controller
             );
         }
 
-        // ⚠️ ВАЖНО:
-        // $integration->market_id — это рынок,
-        // из которого пришли данные 1С
+        /**
+         * Валидация входного payload
+         */
+        $validated = $request->validate([
+            'calculated_at' => ['required', 'date'],
+
+            'items' => ['required', 'array', 'min:1'],
+
+            'items.*.contract_external_id' => ['required', 'string', 'max:255'],
+            'items.*.tenant_external_id'   => ['required', 'string', 'max:255'],
+            'items.*.debt_amount'          => ['required', 'numeric'],
+            'items.*.currency'             => ['nullable', 'string', 'size:3'],
+        ]);
 
         return response()->json([
-            'status' => 'ok',
-            'market_id' => $integration->market_id,
-            'message' => 'Token accepted, ready to receive data',
+            'status'        => 'ok',
+            'market_id'     => $integration->market_id,
+            'items_count'   => count($validated['items']),
+            'calculated_at' => $validated['calculated_at'],
+            'message'       => 'Payload validated, ready for processing',
         ]);
     }
 
