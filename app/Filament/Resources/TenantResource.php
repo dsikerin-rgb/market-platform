@@ -572,7 +572,7 @@ class TenantResource extends Resource
             ? 'COALESCE(ms.display_name, ta.source_place_name)'
             : 'COALESCE(ta.source_place_name, "")';
 
-        $placeStatusExpr = $msHasStatus ? 'COALESCE(ms.status, "")' : '""';
+        $placeStatusExpr = $msHasStatus ? "COALESCE(ms.status, '')" : '""';
 
         $areaExprParts = [];
         if ($taHasArea) {
