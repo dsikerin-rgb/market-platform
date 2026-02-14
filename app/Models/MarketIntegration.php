@@ -1,10 +1,9 @@
 <?php
-# app/Models/MarketIntegration.php
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class MarketIntegration extends Model
 {
@@ -15,21 +14,20 @@ class MarketIntegration extends Model
     protected $fillable = [
         'market_id',
         'type',
-        'token_hash',
-        'is_active',
-        'meta',
+        'name',
+        'auth_token',
+        'status',
+        'last_sync_at',
     ];
 
     protected $casts = [
-        'is_active' => 'bool',
-        'meta' => 'array',
+        'last_sync_at' => 'datetime',
     ];
 
     /**
      * Типы интеграций.
-     * Сейчас нужен только 1C, но модель готова к расширению.
      */
-    public const TYPE_1C = '1c';
+    public const TYPE_1C = 'one_c';
 
     /**
      * Рынок, к которому привязана интеграция.
@@ -37,5 +35,29 @@ class MarketIntegration extends Model
     public function market()
     {
         return $this->belongsTo(Market::class);
+    }
+
+    /**
+     * Проверка активности интеграции.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
+    }
+
+    /**
+     * Проверка типа интеграции.
+     */
+    public function isOneC(): bool
+    {
+        return $this->type === self::TYPE_1C;
+    }
+
+    /**
+     * Валидация токена.
+     */
+    public function isValidToken(string $token): bool
+    {
+        return $this->auth_token === $token && $this->isActive();
     }
 }
