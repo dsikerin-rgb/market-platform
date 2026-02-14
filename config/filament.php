@@ -56,22 +56,24 @@ return [
     |--------------------------------------------------------------------------
     | System Route Prefix
     |--------------------------------------------------------------------------
+    |
+    | This is the prefix used for the system routes that Filament registers,
+    | such as the routes for downloading exports and failed import rows.
+    |
     */
 
     'system_route_prefix' => 'filament',
 
+
     /*
     |--------------------------------------------------------------------------
-    | AUTH — КРИТИЧЕСКИ ВАЖНО
+    | Authentication
     |--------------------------------------------------------------------------
-    |
-    | Без этого Filament не сохраняет сессию
-    | и всегда редиректит на /admin/login
-    |
     */
 
     'auth' => [
         'guard' => 'web',
     ],
+
 
 ];
