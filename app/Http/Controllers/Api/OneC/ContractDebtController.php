@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\OneC;
 
 use App\Http\Controllers\Controller;
+use App\Models\IntegrationExchange;
 use App\Models\MarketIntegration;
 use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +21,7 @@ use Throwable;
 class ContractDebtController extends Controller
 {
     private const ENDPOINT = '/api/1c/contract-debts';
+    private const ENTITY_TYPE = 'contract_debts';
 
     /**
      * Приём snapshot-ов задолженности из 1С.
@@ -31,10 +33,14 @@ class ContractDebtController extends Controller
     {
         $startedAt = now();
 
+        /** @var IntegrationExchange|null $exchange */
+        $exchange = null;
+
         try {
             $token = $this->extractBearerToken($request);
 
             if ($token === null) {
+                // IntegrationExchange не создаём — рынка ещё не знаем.
                 $this->writeImportLog([
                     'status' => 'auth_missing',
                     'endpoint' => self::ENDPOINT,
@@ -63,6 +69,7 @@ class ContractDebtController extends Controller
                 ->first();
 
             if (! $integration) {
+                // IntegrationExchange не создаём — рынка ещё не знаем (market_id связан с интеграцией).
                 $this->writeImportLog([
                     'status' => 'auth_invalid',
                     'endpoint' => self::ENDPOINT,
@@ -86,6 +93,28 @@ class ContractDebtController extends Controller
                 );
             }
 
+            $marketId = (int) $integration->market_id;
+
+            // Создаём каноническую запись обмена как можно раньше (до validate),
+            // чтобы даже validation_error/exception попадали в /admin/integration-exchanges.
+            $exchange = new IntegrationExchange();
+            $exchange->market_id = $marketId;
+            $exchange->direction = IntegrationExchange::DIRECTION_IN;
+            $exchange->entity_type = self::ENTITY_TYPE;
+            $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
+            $exchange->created_by = null; // входящий обмен из 1С — обычно без пользователя
+            $exchange->started_at = $startedAt;
+            $exchange->finished_at = null;
+            $exchange->payload = [
+                'endpoint' => self::ENDPOINT,
+                'market_integration_id' => (int) $integration->id,
+                'request_meta' => [
+                    'ip' => $request->ip(),
+                    'user_agent' => (string) $request->userAgent(),
+                ],
+            ];
+            $exchange->save();
+
             try {
                 $validated = $request->validate([
                     'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
@@ -107,17 +136,19 @@ class ContractDebtController extends Controller
                 ]);
             } catch (ValidationException $e) {
                 $items = $request->input('items');
+                $received = is_array($items) ? count($items) : 0;
+                $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
 
                 $this->writeImportLog([
                     'status' => 'validation_error',
                     'endpoint' => self::ENDPOINT,
                     'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                    'market_id' => (int) $integration->market_id,
+                    'market_id' => $marketId,
                     'integration_id' => (int) $integration->id,
-                    'received' => is_array($items) ? count($items) : 0,
+                    'received' => $received,
                     'inserted' => 0,
                     'skipped' => 0,
-                    'calculated_at' => is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null,
+                    'calculated_at' => $calculatedAt,
                     'error_message' => 'Validation failed',
                     'meta' => [
                         'errors' => $e->errors(),
@@ -125,11 +156,28 @@ class ContractDebtController extends Controller
                     ],
                 ]);
 
+                // фиксируем exchange = error
+                if ($exchange) {
+                    $exchange->status = IntegrationExchange::STATUS_ERROR;
+                    $exchange->error = 'Validation failed';
+                    $exchange->finished_at = now();
+                    $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                        'status' => 'validation_error',
+                        'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                        'calculated_at' => $calculatedAt,
+                        'received' => $received,
+                        'inserted' => 0,
+                        'skipped' => 0,
+                        'validation_errors' => $e->errors(),
+                        'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                    ]);
+                    $exchange->save();
+                }
+
                 throw $e; // Laravel сам вернёт 422
             }
 
             $now = now();
-            $marketId = (int) $integration->market_id;
             $calculatedAt = (string) $validated['calculated_at'];
 
             $rows = [];
@@ -237,6 +285,9 @@ class ContractDebtController extends Controller
                         }
                     } else {
                         // ИНН отсутствует — всё равно создаём арендатора (требование: автосоздание)
+                        $kpp = trim((string) ($item['kpp'] ?? ''));
+                        $tenantName = trim((string) ($item['tenant_name'] ?? ''));
+
                         $newTenant = new Tenant();
                         $newTenant->market_id = $marketId;
                         $newTenant->inn = null;
@@ -347,6 +398,8 @@ class ContractDebtController extends Controller
                 ];
             }
 
+            $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
+
             $this->writeImportLog([
                 'status' => 'ok',
                 'endpoint' => self::ENDPOINT,
@@ -357,7 +410,7 @@ class ContractDebtController extends Controller
                 'inserted' => $inserted,
                 'skipped' => $skipped,
                 'calculated_at' => $calculatedAt,
-                'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                'duration_ms' => $durationMs,
                 'meta' => [
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
@@ -366,9 +419,31 @@ class ContractDebtController extends Controller
                 ],
             ]);
 
+            // Финализируем exchange = ok
+            if ($exchange) {
+                $exchange->status = IntegrationExchange::STATUS_OK;
+                $exchange->finished_at = now();
+                $exchange->error = null;
+                $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                    'status' => 'ok',
+                    'http_status' => Response::HTTP_OK,
+                    'calculated_at' => $calculatedAt,
+                    'received' => count($validated['items']),
+                    'inserted' => $inserted,
+                    'skipped' => $skipped,
+                    'duration_ms' => $durationMs,
+                    'tenants_created' => $tenantsCreated,
+                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'warnings' => $response['warnings'] ?? null,
+                ]);
+                $exchange->save();
+            }
+
             return response()->json($response);
         } catch (Throwable $e) {
             $items = $request->input('items');
+
+            $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
 
             $this->writeImportLog([
                 'status' => 'exception',
@@ -384,6 +459,26 @@ class ContractDebtController extends Controller
                     'ip' => $request->ip(),
                 ],
             ]);
+
+            // Финализируем exchange = error (если успели создать)
+            if ($exchange) {
+                $exchange->status = IntegrationExchange::STATUS_ERROR;
+                $exchange->finished_at = now();
+                $exchange->error = $e->getMessage();
+
+                $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                    'status' => 'exception',
+                    'http_status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                    'received' => is_array($items) ? count($items) : 0,
+                    'inserted' => 0,
+                    'skipped' => 0,
+                    'calculated_at' => is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null,
+                    'duration_ms' => $durationMs,
+                    'exception_class' => $e::class,
+                ]);
+
+                $exchange->save();
+            }
 
             throw $e;
         }
