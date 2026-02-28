@@ -1,4 +1,7 @@
 <?php
+# app/Filament/Resources/IntegrationExchangeResource.php
+
+declare(strict_types=1);
 
 namespace App\Filament\Resources;
 
@@ -12,6 +15,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 
 class IntegrationExchangeResource extends Resource
 {
@@ -41,6 +45,38 @@ class IntegrationExchangeResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    private static function payloadInt(mixed $payload, string $key, int $default = 0): int
+    {
+        $value = Arr::get(is_array($payload) ? $payload : [], $key);
+
+        if ($value === null) {
+            return $default;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && trim($value) !== '' && is_numeric(trim($value))) {
+            return (int) trim($value);
+        }
+
+        return $default;
+    }
+
+    private static function payloadString(mixed $payload, string $key, ?string $default = null): ?string
+    {
+        $value = Arr::get(is_array($payload) ? $payload : [], $key);
+
+        if ($value === null) {
+            return $default;
+        }
+
+        $value = is_scalar($value) ? (string) $value : null;
+
+        return filled($value) ? $value : $default;
+    }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -48,10 +84,14 @@ class IntegrationExchangeResource extends Resource
 
         $components = [];
 
+        // Рынок
         if ((bool) $user && $user->isSuperAdmin()) {
             if (filled($selectedMarketId)) {
-                $components[] = Forms\Components\Hidden::make('market_id')
-                    ->default(fn () => (int) $selectedMarketId)
+                $components[] = Forms\Components\Select::make('market_id')
+                    ->label('Рынок')
+                    ->relationship('market', 'name')
+                    ->default((int) $selectedMarketId)
+                    ->disabled()
                     ->dehydrated(true);
             } else {
                 $components[] = Forms\Components\Select::make('market_id')
@@ -64,61 +104,86 @@ class IntegrationExchangeResource extends Resource
                     ->dehydrated(true);
             }
         } else {
-            $components[] = Forms\Components\Hidden::make('market_id')
+            $components[] = Forms\Components\Select::make('market_id')
+                ->label('Рынок')
+                ->relationship('market', 'name')
                 ->default(fn () => $user?->market_id)
+                ->disabled()
                 ->dehydrated(true);
         }
 
-        $formFields = [
-            Forms\Components\TextInput::make('direction')
-                ->label('Направление')
-                ->maxLength(255),
+        // Основные поля
+        $leftColumn = [
+            ...$components,
 
             Forms\Components\TextInput::make('entity_type')
                 ->label('Тип сущности')
+                ->maxLength(255),
+
+            Forms\Components\TextInput::make('direction')
+                ->label('Направление')
                 ->maxLength(255),
 
             Forms\Components\TextInput::make('status')
                 ->label('Статус')
                 ->maxLength(255),
 
+            Forms\Components\DateTimePicker::make('started_at')
+                ->label('Начато')
+                ->seconds(false),
+
+            Forms\Components\DateTimePicker::make('finished_at')
+                ->label('Завершено')
+                ->seconds(false),
+        ];
+
+        $rightColumn = [
+            Forms\Components\Textarea::make('payload')
+                ->label('Данные (JSON)')
+                ->rows(22)
+                ->extraAttributes([
+                    'style' => 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;',
+                ])
+                ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT))
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
+        ];
+
+        // Нижняя “полоса” на всю ширину — ошибка + file_path
+        $bottomRow = [
+            Forms\Components\Textarea::make('error')
+                ->label('Ошибка')
+                ->rows(6)
+                ->extraAttributes([
+                    'style' => 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;',
+                ]),
+
             Forms\Components\TextInput::make('file_path')
                 ->label('Файл')
                 ->maxLength(255),
 
-            Forms\Components\Textarea::make('payload')
-                ->label('Данные (JSON)')
-                ->rows(3)
-                ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
-
-            Forms\Components\Textarea::make('error')
-                ->label('Ошибка')
-                ->rows(3),
-
             Forms\Components\Hidden::make('created_by')
                 ->default(fn () => $user?->id)
                 ->dehydrated(true),
-
-            Forms\Components\DateTimePicker::make('started_at')
-                ->label('Начато'),
-
-            Forms\Components\DateTimePicker::make('finished_at')
-                ->label('Завершено'),
         ];
 
         if (class_exists(Forms\Components\Grid::class)) {
             return $schema->components([
+                // верх: 2 колонки
                 Forms\Components\Grid::make(2)->components([
-                    ...$components,
-                    ...$formFields,
+                    ...$leftColumn,
+                    ...$rightColumn,
+                ]),
+                // низ: 1 колонка (на всю ширину)
+                Forms\Components\Grid::make(1)->components([
+                    ...$bottomRow,
                 ]),
             ]);
         }
 
         return $schema->components([
-            ...$components,
-            ...$formFields,
+            ...$leftColumn,
+            ...$rightColumn,
+            ...$bottomRow,
         ]);
     }
 
@@ -134,37 +199,112 @@ class IntegrationExchangeResource extends Resource
                     ->searchable()
                     ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
 
-                TextColumn::make('direction')
-                    ->label('Направление')
-                    ->sortable()
-                    ->searchable(),
-
                 TextColumn::make('entity_type')
-                    ->label('Тип сущности')
+                    ->label('Сущность')
                     ->sortable()
-                    ->searchable(),
+                    ->searchable()
+                    ->badge()
+                    ->formatStateUsing(static function (?string $state): string {
+                        return match ($state) {
+                            'contract_debts' => 'Долги (1С)',
+                            default => (string) ($state ?: '—'),
+                        };
+                    }),
+
+                TextColumn::make('direction')
+                    ->label('Напр.')
+                    ->sortable()
+                    ->badge()
+                    ->formatStateUsing(static fn (?string $state): string => match ($state) {
+                        IntegrationExchange::DIRECTION_IN => 'IN',
+                        IntegrationExchange::DIRECTION_OUT => 'OUT',
+                        default => (string) ($state ?: '—'),
+                    }),
 
                 TextColumn::make('status')
                     ->label('Статус')
-                    ->sortable(),
+                    ->sortable()
+                    ->badge()
+                    ->formatStateUsing(static fn (?string $state): string => match ($state) {
+                        IntegrationExchange::STATUS_OK => 'OK',
+                        IntegrationExchange::STATUS_ERROR => 'ERROR',
+                        IntegrationExchange::STATUS_IN_PROGRESS => 'В работе',
+                        default => (string) ($state ?: '—'),
+                    }),
+
+                TextColumn::make('payload_counts')
+                    ->label('Счётчики')
+                    ->state(static function (IntegrationExchange $record): string {
+                        $p = $record->payload;
+
+                        $received = static::payloadInt($p, 'received', 0);
+                        $inserted = static::payloadInt($p, 'inserted', 0);
+                        $skipped = static::payloadInt($p, 'skipped', 0);
+
+                        $parts = [];
+                        if ($received > 0) {
+                            $parts[] = "R:{$received}";
+                        }
+                        if ($inserted > 0) {
+                            $parts[] = "I:{$inserted}";
+                        }
+                        if ($skipped > 0) {
+                            $parts[] = "S:{$skipped}";
+                        }
+
+                        return ! empty($parts) ? implode(' · ', $parts) : '—';
+                    }),
+
+                TextColumn::make('payload_calculated_at')
+                    ->label('Снимок')
+                    ->state(static function (IntegrationExchange $record): string {
+                        $p = $record->payload;
+                        $value = static::payloadString($p, 'calculated_at');
+
+                        return $value ?: '—';
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('started_at')
                     ->label('Начато')
                     ->dateTime()
                     ->sortable(),
 
-                TextColumn::make('finished_at')
-                    ->label('Завершено')
-                    ->dateTime()
-                    ->sortable(),
+                TextColumn::make('duration_ms')
+                    ->label('Длит.')
+                    ->state(static function (IntegrationExchange $record): string {
+                        $p = $record->payload;
+                        $ms = static::payloadInt($p, 'duration_ms', $record->duration_ms ?? 0);
+
+                        if ($ms <= 0) {
+                            return '—';
+                        }
+
+                        if ($ms >= 1000) {
+                            $sec = $ms / 1000;
+
+                            return rtrim(rtrim(number_format($sec, 1, '.', ''), '0'), '.') . ' c';
+                        }
+
+                        return $ms . ' мс';
+                    })
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->orderBy('started_at', $direction);
+                    }),
+
+                TextColumn::make('error')
+                    ->label('Ошибка')
+                    ->limit(60)
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 IconColumn::make('payload')
-                    ->label('Данные')
-                    ->boolean(fn ($state) => ! empty($state)),
+                    ->label('Payload')
+                    ->boolean(fn ($state) => ! empty($state))
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->recordUrl(fn (IntegrationExchange $record): ?string => static::canEdit($record)
-                ? static::getUrl('edit', ['record' => $record])
-                : null);
+            ->defaultSort('started_at', 'desc')
+            ->recordUrl(fn (IntegrationExchange $record): string => static::getUrl('edit', ['record' => $record]));
     }
 
     public static function getRelations(): array
@@ -225,6 +365,10 @@ class IntegrationExchangeResource extends Resource
 
         if (! $user) {
             return false;
+        }
+
+        if ($record instanceof IntegrationExchange && $record->direction === IntegrationExchange::DIRECTION_IN) {
+            return $user->isSuperAdmin();
         }
 
         if ($user->isSuperAdmin()) {
