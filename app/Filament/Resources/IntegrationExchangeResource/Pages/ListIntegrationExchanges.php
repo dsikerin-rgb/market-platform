@@ -37,7 +37,8 @@ class ListIntegrationExchanges extends ListRecords
                 ->modalHeading('Последние выгрузки 1С')
                 ->modalSubmitActionLabel('Закрыть')
                 ->modalCancelActionLabel('Отмена')
-                ->action(fn (): void => null)
+                // ВАЖНО: без ": void", иначе PHP 8.3 падает (void не может вернуть значение)
+                ->action(fn () => null)
                 ->modalContent(function (): HtmlString {
                     if (! Schema::hasTable('one_c_import_logs')) {
                         return new HtmlString(
