@@ -121,7 +121,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $periodMode = $this->detectPeriodMode('tenant_accruals', $marketCol, $periodCol, $marketId);
 
-        // Payable (строчно): COALESCE(total_with_vat, sum(parts))
+        // Payable (строчно): COALESCE(total_with_vat, total_amount, sum(parts))
         $payableRowExpr = $this->buildPayableRowExpression($cols);
 
         if ($payableRowExpr === null) {
@@ -318,6 +318,15 @@ class RevenueYearChartWidget extends ChartWidget
 
         $raw = $raw ?: session('dashboard_month');
 
+        // Если вдруг попал dashboard_period=Y-m-d
+        if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            try {
+                $raw = CarbonImmutable::createFromFormat('Y-m-d', $raw, $tz)->format('Y-m');
+            } catch (\Throwable) {
+                $raw = null;
+            }
+        }
+
         $ym = (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
             ? $raw
             : CarbonImmutable::now($tz)->format('Y-m');
@@ -479,7 +488,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         if ($mode === 'date') {
             $q->where($periodCol, '>=', $startTz->toDateString())
-              ->where($periodCol, '<', $endTz->toDateString());
+                ->where($periodCol, '<', $endTz->toDateString());
             return;
         }
 
@@ -488,19 +497,23 @@ class RevenueYearChartWidget extends ChartWidget
         $endUtc = $endTz->utc()->toDateTimeString();
 
         $q->where($periodCol, '>=', $startUtc)
-          ->where($periodCol, '<', $endUtc);
+            ->where($periodCol, '<', $endUtc);
     }
 
     /**
      * Строчное payable выражение:
-     * COALESCE(total_with_vat, rent + utilities + management_fee + ...)
+     * COALESCE(total_with_vat, total_amount, rent + utilities + management_fee + ...)
      */
     private function buildPayableRowExpression(array $columns): ?string
     {
-        $totalCol = $this->pickFirstExisting($columns, [
+        $totalWithVatCol = $this->pickFirstExisting($columns, [
             'total_with_vat',
-            'total_with_tax',
             'total_with_nds',
+            'total_vat',
+            'amount_with_vat',
+        ]);
+
+        $totalCol = $this->pickFirstExisting($columns, [
             'total_amount',
             'payable_total',
             'amount_total',
@@ -511,8 +524,8 @@ class RevenueYearChartWidget extends ChartWidget
 
         foreach ([
             'rent_amount',
-            'utility_amount',
             'utilities_amount',
+            'utility_amount',
             'management_fee',
             'management_fee_amount',
             'service_amount',
@@ -526,16 +539,23 @@ class RevenueYearChartWidget extends ChartWidget
             }
         }
 
-        $partsExpr = $parts !== [] ? implode(' + ', $parts) : null;
+        $partsExpr = $parts !== [] ? '(' . implode(' + ', $parts) . ')' : null;
 
-        if ($totalCol && $partsExpr) {
-            return 'COALESCE("' . $totalCol . '", (' . $partsExpr . '))';
+        $targets = [];
+        if ($totalWithVatCol) {
+            $targets[] = '"' . $totalWithVatCol . '"';
         }
-
         if ($totalCol) {
-            return 'COALESCE("' . $totalCol . '", 0)';
+            $targets[] = '"' . $totalCol . '"';
+        }
+        if ($partsExpr) {
+            $targets[] = $partsExpr;
         }
 
-        return $partsExpr ? '(' . $partsExpr . ')' : null;
+        if ($targets === []) {
+            return null;
+        }
+
+        return 'COALESCE(' . implode(', ', $targets) . ', 0)';
     }
 }
