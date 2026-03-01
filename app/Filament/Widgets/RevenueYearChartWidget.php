@@ -113,7 +113,7 @@ class RevenueYearChartWidget extends ChartWidget
         $cols = $meta['columns'];
 
         $marketCol = $this->pickFirstExisting($cols, ['market_id']);
-        $periodCol = $this->pickPeriodColumn($cols);
+        $periodCol = $this->pickFirstExisting($cols, ['period', 'period_ym', 'period_start', 'period_date', 'accrual_period', 'month']);
 
         if (! $marketCol || ! $periodCol) {
             return $this->emptyTwoSeriesChart($labels, count($months));
@@ -128,6 +128,7 @@ class RevenueYearChartWidget extends ChartWidget
             return $this->emptyTwoSeriesChart($labels, count($months));
         }
 
+        // Здесь payableRowExpr уже возвращает выражение "на строку", поэтому просто SUM(...)
         $payableSumExpr = 'COALESCE(SUM(' . $payableRowExpr . '), 0)';
 
         // Заполняемость: DISTINCT count(market_space_id) where payable > 0
@@ -412,18 +413,6 @@ class RevenueYearChartWidget extends ChartWidget
         return null;
     }
 
-    private function pickPeriodColumn(array $columns): ?string
-    {
-        return $this->pickFirstExisting($columns, [
-            'period',
-            'period_ym',
-            'period_start',
-            'period_date',
-            'accrual_period',
-            'month',
-        ]);
-    }
-
     /**
      * Определяем, как хранится period:
      * - ym_int: 202601
@@ -458,13 +447,11 @@ class RevenueYearChartWidget extends ChartWidget
                 return 'date';
             }
 
-            // есть время/таймзона
             if (preg_match('/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}/', $s)) {
                 return 'datetime';
             }
         }
 
-        // безопасный дефолт для Postgres/UTC-периодов
         return 'datetime';
     }
 
@@ -486,13 +473,25 @@ class RevenueYearChartWidget extends ChartWidget
             return;
         }
 
+        // Для PostgreSQL (и period как date/datetime) — фильтруем как в твоей проверке SQL:
+        // to_char(date_trunc('month', period::timestamp), 'YYYY-MM') = '2025-12'
+        if (DB::getDriverName() === 'pgsql') {
+            $col = '"' . str_replace('"', '""', $periodCol) . '"';
+
+            $q->whereRaw(
+                "to_char(date_trunc('month', {$col}::timestamp), 'YYYY-MM') = ?",
+                [$monthYm]
+            );
+
+            return;
+        }
+
         if ($mode === 'date') {
             $q->where($periodCol, '>=', $startTz->toDateString())
                 ->where($periodCol, '<', $endTz->toDateString());
             return;
         }
 
-        // datetime: критично для period типа "...17:00:00Z" (TZ Asia/Barnaul)
         $startUtc = $startTz->utc()->toDateTimeString();
         $endUtc = $endTz->utc()->toDateTimeString();
 
