@@ -1,4 +1,7 @@
 <?php
+# app/Models/TenantContract.php
+
+declare(strict_types=1);
 
 namespace App\Models;
 
@@ -14,6 +17,7 @@ class TenantContract extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'external_id',      // contract_external_id из 1С (ключ связки)
         'market_id',
         'tenant_id',
         'market_space_id',
