@@ -9,6 +9,8 @@ use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as DbSchema;
 
 class MarketSwitcherWidget extends Widget
 {
@@ -53,6 +55,20 @@ class MarketSwitcherWidget extends Widget
 
         $this->selectedMarketId = filled($value) ? (int) $value : null;
         $this->returnUrl = request()->fullUrl();
+
+        // Если рынок уже выбран, но месяц не задан/битый — выставим последний месяц с данными.
+        if ($this->selectedMarketId) {
+            $tz = $this->resolveMarketTimezone($this->selectedMarketId);
+            $fallbackMonth = $this->resolveLastMonthWithData($this->selectedMarketId, $tz);
+
+            $raw = session('dashboard_month');
+            $month = (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
+                ? $raw
+                : $fallbackMonth;
+
+            session(['dashboard_month' => $month]);
+            session(['dashboard_period' => $month . '-01']);
+        }
     }
 
     public function updatedSelectedMarketId(): void
@@ -69,24 +85,14 @@ class MarketSwitcherWidget extends Widget
         session(["filament_{$panelId}_market_id" => $value]);
         session(['filament.admin.selected_market_id' => $value]);
 
-        // 3) При смене рынка — дефолтим месяц на текущий месяц в TZ выбранного рынка
+        // 3) При смене рынка — выставляем “разумный” дефолт месяца:
+        // последний месяц, где реально есть данные (иначе пользователь видит нули и думает, что фильтр сломан).
         if ($value) {
-            $tz = (string) config('app.timezone', 'UTC');
-
-            $market = Market::query()->select(['id', 'timezone'])->find($value);
-            $candidate = trim((string) ($market?->timezone ?? ''));
-
-            if ($candidate !== '') {
-                $tz = $candidate;
-            }
-
-            try {
-                $month = CarbonImmutable::now($tz)->format('Y-m');
-            } catch (\Throwable) {
-                $month = CarbonImmutable::now((string) config('app.timezone', 'UTC'))->format('Y-m');
-            }
+            $tz = $this->resolveMarketTimezone($value);
+            $month = $this->resolveLastMonthWithData($value, $tz);
 
             session(['dashboard_month' => $month]);
+            session(['dashboard_period' => $month . '-01']);
         }
 
         $target = request()->headers->get('referer')
@@ -108,6 +114,9 @@ class MarketSwitcherWidget extends Widget
                 ->orderBy('name')
                 ->pluck('name', 'id')
                 ->all(),
+
+            // Текст лучше показывать отдельным абзацем/подсказкой с отступом (чинится в blade).
+            'appliesNote' => 'Применяется к данным панели (виджеты и списки ресурсов).',
         ];
     }
 
@@ -119,5 +128,150 @@ class MarketSwitcherWidget extends Widget
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
         return "filament.{$panelId}.selected_market_id";
+    }
+
+    private function resolveMarketTimezone(int $marketId): string
+    {
+        $tz = (string) config('app.timezone', 'UTC');
+
+        $market = Market::query()
+            ->select(['id', 'timezone'])
+            ->find($marketId);
+
+        $candidate = trim((string) ($market?->timezone ?? ''));
+
+        if ($candidate !== '') {
+            $tz = $candidate;
+        }
+
+        try {
+            CarbonImmutable::now($tz);
+        } catch (\Throwable) {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        return $tz;
+    }
+
+    /**
+     * Дефолт месяца для рынка:
+     * 1) последний месяц с данными в tenant_accruals
+     * 2) иначе — последний месяц в contract_debts.period (YYYY-MM)
+     * 3) иначе — operations.effective_month
+     * 4) иначе — текущий месяц
+     */
+    private function resolveLastMonthWithData(int $marketId, string $tz): string
+    {
+        $nowYm = CarbonImmutable::now($tz)->format('Y-m');
+
+        if ($marketId <= 0) {
+            return $nowYm;
+        }
+
+        if (DbSchema::hasTable('tenant_accruals') && DbSchema::hasColumn('tenant_accruals', 'market_id')) {
+            $periodCol = $this->pickFirstExistingAccrualPeriodColumn();
+
+            if ($periodCol) {
+                try {
+                    $v = DB::table('tenant_accruals')
+                        ->where('market_id', $marketId)
+                        ->orderByDesc($periodCol)
+                        ->value($periodCol);
+
+                    $ym = $this->normalizeYm($v, $tz);
+                    if ($ym) {
+                        return $ym;
+                    }
+                } catch (\Throwable) {
+                    // ignore
+                }
+            }
+        }
+
+        if (DbSchema::hasTable('contract_debts') && DbSchema::hasColumn('contract_debts', 'market_id') && DbSchema::hasColumn('contract_debts', 'period')) {
+            try {
+                $v = DB::table('contract_debts')
+                    ->where('market_id', $marketId)
+                    ->orderByDesc('period')
+                    ->value('period');
+
+                if (is_string($v) && preg_match('/^\d{4}-\d{2}$/', $v)) {
+                    return $v;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        if (DbSchema::hasTable('operations') && DbSchema::hasColumn('operations', 'effective_month') && DbSchema::hasColumn('operations', 'market_id')) {
+            try {
+                $v = DB::table('operations')
+                    ->where('market_id', $marketId)
+                    ->orderByDesc('effective_month')
+                    ->value('effective_month');
+
+                $ym = $this->normalizeYm($v, $tz);
+                if ($ym) {
+                    return $ym;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        return $nowYm;
+    }
+
+    private function pickFirstExistingAccrualPeriodColumn(): ?string
+    {
+        foreach ([
+            'period',
+            'period_ym',
+            'period_start',
+            'period_date',
+            'accrual_period',
+            'month',
+        ] as $col) {
+            if (DbSchema::hasColumn('tenant_accruals', $col)) {
+                return $col;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeYm(mixed $value, string $tz): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            try {
+                return CarbonImmutable::instance($value)->setTimezone($tz)->format('Y-m');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if (is_int($value) || (is_string($value) && preg_match('/^\d{6}$/', $value))) {
+            $s = (string) $value;
+
+            return substr($s, 0, 4) . '-' . substr($s, 4, 2);
+        }
+
+        if (is_string($value)) {
+            $value = trim($value);
+
+            if (preg_match('/^\d{4}-\d{2}$/', $value)) {
+                return $value;
+            }
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}/', $value)) {
+                try {
+                    return CarbonImmutable::parse($value)->setTimezone($tz)->format('Y-m');
+                } catch (\Throwable) {
+                    return substr($value, 0, 7);
+                }
+            }
+        }
+
+        return null;
     }
 }
