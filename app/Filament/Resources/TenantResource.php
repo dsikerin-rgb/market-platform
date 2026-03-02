@@ -386,7 +386,8 @@ class TenantResource extends Resource
             ])
             ->filters([
                 TernaryFilter::make('is_active')
-                    ->label('Активен'),
+                    ->label('Активен')
+                    ->default(true),
 
                 SelectFilter::make('status')
                     ->label('Статус договора')
