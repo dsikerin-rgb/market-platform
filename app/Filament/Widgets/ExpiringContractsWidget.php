@@ -18,15 +18,29 @@ class ExpiringContractsWidget extends BaseTableWidget
 {
     use InteractsWithPageFilters;
 
+    /**
+     * Важно: при смене pageFilters (отчётного месяца) Livewire пересобирает страницу.
+     * Lazy TableWidget может попасть в состояние, когда $table ещё не инициализирован,
+     * и Filament падает с:
+     * "Typed property Filament\Widgets\TableWidget::$table must not be accessed before initialization".
+     *
+     * Поэтому отключаем lazy для этого виджета — он должен строить таблицу сразу.
+     */
+    protected static bool $isLazy = false;
+
     protected static ?string $heading = 'Окончания договоров в выбранном месяце';
 
     protected int|string|array $columnSpan = 'full';
 
-    protected int $recordsPerPage = 10;
-
     private string $marketTimezone = 'UTC';
 
     private ?string $emptyStateNote = null;
+
+    // В Filament\TableWidget этот метод public — должен совпадать уровень доступа.
+    public function getTableRecordsPerPage(): int
+    {
+        return 10;
+    }
 
     protected function getTableQuery(): Builder
     {
@@ -56,23 +70,22 @@ class ExpiringContractsWidget extends BaseTableWidget
 
         $this->marketTimezone = $this->resolveTimezone($market?->timezone);
 
-        [$monthYm, $monthStartTz, $monthEndTz, $periodLabel] = $this->resolveMonthRange($this->marketTimezone);
+        [, $monthStartTz, $monthEndTz, $periodLabel] = $this->resolveMonthRange($this->marketTimezone);
 
-        // Границы месяца в TZ рынка → сравнение по UTC (timestamps в БД обычно UTC)
-        $monthStartUtc = $monthStartTz->utc();
-        $monthEndUtc = $monthEndTz->utc();
+        // ends_at — DATE, поэтому работаем по date-границам (без UTC-конверсий).
+        $monthStartDate = $monthStartTz->toDateString();
+        $monthEndDate = $monthEndTz->toDateString();
 
         $this->emptyStateNote = 'Период: ' . $periodLabel;
 
         $query = TenantContract::query()
             ->where('market_id', $marketId)
             ->whereNotNull('ends_at')
-            ->where('ends_at', '>=', $monthStartUtc)
-            ->where('ends_at', '<', $monthEndUtc)
+            ->where('ends_at', '>=', $monthStartDate)
+            ->where('ends_at', '<', $monthEndDate)
             ->orderBy('ends_at');
 
         // Обычно полезно фокусироваться на “живых” договорах.
-        // Если хочешь видеть любые статусы (в т.ч. archived/terminated), просто убери этот фильтр.
         $query->whereIn('status', ['active', 'paused']);
 
         return $query;
@@ -188,11 +201,7 @@ class ExpiringContractsWidget extends BaseTableWidget
     }
 
     /**
-     * Возвращает:
-     *  - YYYY-MM
-     *  - startOfMonth (TZ рынка)
-     *  - startOfNextMonth (TZ рынка)
-     *  - label "MM.YYYY (TZ: ...)"
+     * @return array{0:string,1:CarbonImmutable,2:CarbonImmutable,3:string}
      */
     private function resolveMonthRange(string $tz): array
     {

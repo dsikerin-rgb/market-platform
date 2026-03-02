@@ -1,4 +1,5 @@
 <?php
+# app/Models/Tenant.php
 
 namespace App\Models;
 
@@ -28,14 +29,28 @@ class Tenant extends Model
         'short_name',
         'slug',
         'type',
+
+        // идентификаторы / реквизиты
+        'external_id',   // наш/внешний код (legacy)
+        'one_c_uid',     // UUID из 1С (если есть)
         'inn',
+        'kpp',
         'ogrn',
+
+        // контакты
         'phone',
         'email',
         'contact_person',
+
+        // статус/активность
         'status',
         'is_active',
+
+        // данные/примечания
         'notes',
+        'one_c_data',
+
+        // долги
         'debt_status',
         'debt_status_note',
         'debt_status_updated_at',
@@ -44,6 +59,7 @@ class Tenant extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'debt_status_updated_at' => 'datetime',
+        'one_c_data' => 'array',
     ];
 
     /**

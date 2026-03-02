@@ -29,6 +29,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
@@ -147,6 +148,30 @@ class AdminPanelProvider extends PanelProvider
             ->plugins([
                 FilamentFullCalendarPlugin::make(),
             ])
+
+            // Кнопка слева от поля global search (в topbar). НЕ сдвигает контент дашборда вниз.
+            ->renderHook(
+                PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
+                function (): ?HtmlString {
+                    $user = Filament::auth()->user();
+
+                    if (! $user) {
+                        return null;
+                    }
+
+                    $url = url('/admin/market-map');
+
+                    return new HtmlString(
+                        '<div class="flex items-center mr-3">' .
+                            '<a href="' . e($url) . '" target="_blank" rel="noopener" ' .
+                                'class="fi-btn fi-btn-size-sm fi-btn-color-primary fi-color-primary" ' .
+                                'style="white-space:nowrap;">' .
+                                'Открыть карту' .
+                            '</a>' .
+                        '</div>'
+                    );
+                },
+            )
 
             // Блок с именем/ролью рядом с аватаром (после global search).
             ->renderHook(

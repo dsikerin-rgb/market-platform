@@ -19,21 +19,13 @@ class RevenueYearChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected ?string $heading = 'Выручка (начислено) и заполняемость за 13 месяцев';
+    protected ?string $heading = 'К оплате (начислено) и заполняемость за 13 месяцев';
 
-    /**
-     * Хотим 2/3 ширины на десктопе: при сетке Dashboard=3 колонки это будет ровно "2 колонки".
-     * На мобилке/планшете — пусть будет на всю ширину.
-     */
     protected int|string|array $columnSpan = [
         'default' => 'full',
         'lg' => 2,
     ];
 
-    /**
-     * ChartWidget::$maxHeight — НЕ static.
-     * Делаем виджет ниже.
-     */
     protected ?string $maxHeight = '320px';
 
     protected function getType(): string
@@ -51,19 +43,14 @@ class RevenueYearChartWidget extends ChartWidget
         );
     }
 
-    /**
-     * “Локация” под заголовком (как контекст/легенда).
-     */
     public function getDescription(): ?string
     {
         $user = Filament::auth()->user();
-
         if (! $user) {
             return null;
         }
 
         $marketId = $this->resolveMarketIdForWidget($user);
-
         if (! $marketId) {
             return null;
         }
@@ -101,12 +88,10 @@ class RevenueYearChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
+        // Конец окна = выбранный "отчётный месяц"
         [, $endMonthStart] = $this->resolveEndMonth($tz);
 
-        /**
-         * 13 месяцев (включая выбранный): стабильная генерация без дублей.
-         * Стартуем с (end - 12) и идём вперёд 13 шагов.
-         */
+        // 13 месяцев (включая выбранный)
         $months = [];
         $cursor = $endMonthStart->subMonths(12);
         for ($i = 0; $i < 13; $i++) {
@@ -128,57 +113,57 @@ class RevenueYearChartWidget extends ChartWidget
         $cols = $meta['columns'];
 
         $marketCol = $this->pickFirstExisting($cols, ['market_id']);
-        $periodCol = $this->pickPeriodColumn($cols);
+        $periodCol = $this->pickFirstExisting($cols, ['period', 'period_ym', 'period_start', 'period_date', 'accrual_period', 'month']);
 
         if (! $marketCol || ! $periodCol) {
             return $this->emptyTwoSeriesChart($labels, count($months));
         }
 
-        // Выручка: SUM(...)
-        $sumExpr = $this->buildPayableSumExpression($cols);
-        if ($sumExpr === null) {
+        $periodMode = $this->detectPeriodMode('tenant_accruals', $marketCol, $periodCol, $marketId);
+
+        // Payable (строчно): COALESCE(total_with_vat, total_amount, sum(parts))
+        $payableRowExpr = $this->buildPayableRowExpression($cols);
+
+        if ($payableRowExpr === null) {
             return $this->emptyTwoSeriesChart($labels, count($months));
         }
 
-        // Заполняемость: DISTINCT count(space_id) where payable > 0
+        // Здесь payableRowExpr уже возвращает выражение "на строку", поэтому просто SUM(...)
+        $payableSumExpr = 'COALESCE(SUM(' . $payableRowExpr . '), 0)';
+
+        // Заполняемость: DISTINCT count(market_space_id) where payable > 0
         $spaceCol = $this->pickFirstExisting($cols, ['market_space_id', 'space_id']);
-        $rentCol  = $this->pickFirstExisting($cols, ['rent_amount']);
-        $payableRowExpr = $this->buildPayableRowExpression($cols);
+        $canComputeOccupancy = (bool) $spaceCol && $totalSpaces > 0;
 
-        $canComputeOccupancy = (bool) $spaceCol && (bool) ($rentCol || $payableRowExpr);
-
-        $revenueData = [];
+        $payableData = [];
         $occupancyPctData = [];
 
         foreach ($months as $ym) {
-            $start = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
-            $end = $start->addMonth();
+            $startTz = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
+            $endTz = $startTz->addMonth();
 
-            // --- Revenue ---
-            $qRevenue = DB::table('tenant_accruals')->where($marketCol, $marketId);
-            $this->applyMonthFilter($qRevenue, $meta, $periodCol, $ym, $start, $end);
+            // --- Payable ---
+            $qPayable = DB::table('tenant_accruals')->where($marketCol, $marketId);
+            $this->applyMonthFilter($qPayable, $periodCol, $ym, $startTz, $endTz, $periodMode);
 
             try {
-                $v = $qRevenue->selectRaw($sumExpr . ' as v')->value('v');
-                $revenueData[] = (int) round(is_numeric($v) ? (float) $v : 0.0);
+                $v = $qPayable->selectRaw($payableSumExpr . ' as v')->value('v');
+                $payableData[] = (int) round(is_numeric($v) ? (float) $v : 0.0);
             } catch (\Throwable) {
-                $revenueData[] = 0;
+                $payableData[] = 0;
             }
 
             // --- Occupancy % ---
-            if (! $canComputeOccupancy || $totalSpaces <= 0) {
+            if (! $canComputeOccupancy) {
                 $occupancyPctData[] = 0.0;
                 continue;
             }
 
             $qOcc = DB::table('tenant_accruals')->where($marketCol, $marketId);
-            $this->applyMonthFilter($qOcc, $meta, $periodCol, $ym, $start, $end);
+            $this->applyMonthFilter($qOcc, $periodCol, $ym, $startTz, $endTz, $periodMode);
 
-            if ($rentCol) {
-                $qOcc->where($rentCol, '>', 0);
-            } else {
-                $qOcc->whereRaw('(' . $payableRowExpr . ') > 0');
-            }
+            // payable > 0 по той же логике, что и начислено
+            $qOcc->whereRaw('(' . $payableRowExpr . ') > 0');
 
             try {
                 $occupied = (int) $qOcc->distinct()->count($spaceCol);
@@ -194,8 +179,8 @@ class RevenueYearChartWidget extends ChartWidget
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'Начислено',
-                    'data' => $revenueData,
+                    'label' => 'К оплате (начислено)',
+                    'data' => $payableData,
                     'yAxisID' => 'y',
                     'tension' => 0.25,
                     'fill' => false,
@@ -220,65 +205,60 @@ class RevenueYearChartWidget extends ChartWidget
     }
 
     protected function getOptions(): array
-{
-    return [
-        'responsive' => true,
-        'maintainAspectRatio' => true,
-
-        // было очень плоско — делаем выше (подстройка):
-        // 2.2–2.4 = чуть выше, 1.8–2.0 = заметно выше (~+40%)
-        'aspectRatio' => 2.0,
-
-        'layout' => [
-            'padding' => 6,
-        ],
-        'plugins' => [
-            'legend' => [
-                'display' => true,
-                'labels' => [
-                    'boxWidth' => 10,
-                    'boxHeight' => 10,
-                    'padding' => 10,
-                    'font' => ['size' => 11],
+    {
+        return [
+            'responsive' => true,
+            'maintainAspectRatio' => true,
+            'aspectRatio' => 2.0,
+            'layout' => [
+                'padding' => 6,
+            ],
+            'plugins' => [
+                'legend' => [
+                    'display' => true,
+                    'labels' => [
+                        'boxWidth' => 10,
+                        'boxHeight' => 10,
+                        'padding' => 10,
+                        'font' => ['size' => 11],
+                    ],
+                ],
+                'tooltip' => [
+                    'mode' => 'index',
+                    'intersect' => false,
                 ],
             ],
-            'tooltip' => [
+            'interaction' => [
                 'mode' => 'index',
                 'intersect' => false,
             ],
-        ],
-        'interaction' => [
-            'mode' => 'index',
-            'intersect' => false,
-        ],
-        'scales' => [
-            'x' => [
-                'ticks' => [
-                    'font' => ['size' => 10],
-                    'autoSkip' => true,
-                    'maxTicksLimit' => 13,
-                    'maxRotation' => 0,
-                    'minRotation' => 0,
+            'scales' => [
+                'x' => [
+                    'ticks' => [
+                        'font' => ['size' => 10],
+                        'autoSkip' => true,
+                        'maxTicksLimit' => 13,
+                        'maxRotation' => 0,
+                        'minRotation' => 0,
+                    ],
+                    'grid' => ['display' => false],
                 ],
-                'grid' => ['display' => false],
+                'y' => [
+                    'beginAtZero' => true,
+                    'position' => 'left',
+                    'ticks' => ['font' => ['size' => 10]],
+                ],
+                'y1' => [
+                    'beginAtZero' => true,
+                    'position' => 'right',
+                    'min' => 0,
+                    'max' => 100,
+                    'grid' => ['drawOnChartArea' => false],
+                    'ticks' => ['font' => ['size' => 10]],
+                ],
             ],
-            'y' => [
-                'beginAtZero' => true,
-                'position' => 'left',
-                'ticks' => ['font' => ['size' => 10]],
-            ],
-            'y1' => [
-                'beginAtZero' => true,
-                'position' => 'right',
-                'min' => 0,
-                'max' => 100,
-                'grid' => ['drawOnChartArea' => false],
-                'ticks' => ['font' => ['size' => 10]],
-            ],
-        ],
-    ];
-}
-
+        ];
+    }
 
     private function resolveMarketIdForWidget($user): ?int
     {
@@ -327,15 +307,26 @@ class RevenueYearChartWidget extends ChartWidget
     {
         $raw = null;
 
+        // Filament page filters
         if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
             $raw = $this->pageFilters['month'] ?? null;
         }
 
+        // fallback
         if (! $raw && is_array($this->filters ?? null)) {
             $raw = $this->filters['month'] ?? null;
         }
 
         $raw = $raw ?: session('dashboard_month');
+
+        // Если вдруг попал dashboard_period=Y-m-d
+        if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
+            try {
+                $raw = CarbonImmutable::createFromFormat('Y-m-d', $raw, $tz)->format('Y-m');
+            } catch (\Throwable) {
+                $raw = null;
+            }
+        }
 
         $ym = (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
             ? $raw
@@ -360,9 +351,7 @@ class RevenueYearChartWidget extends ChartWidget
         return [
             'labels' => [$label],
             'datasets' => [
-                [
-                    'data' => [1],
-                ],
+                ['data' => [1]],
             ],
         ];
     }
@@ -373,7 +362,7 @@ class RevenueYearChartWidget extends ChartWidget
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'Начислено',
+                    'label' => 'К оплате (начислено)',
                     'data' => array_fill(0, $count, 0),
                     'yAxisID' => 'y',
                     'tension' => 0.25,
@@ -400,30 +389,6 @@ class RevenueYearChartWidget extends ChartWidget
 
     private function getTableMeta(string $table): array
     {
-        $columns = [];
-        $types = [];
-
-        try {
-            if (DB::getDriverName() === 'sqlite') {
-                $rows = DB::select('PRAGMA table_info(' . $table . ')');
-                foreach ($rows as $row) {
-                    $name = (string) ($row->name ?? '');
-                    if ($name === '') {
-                        continue;
-                    }
-                    $columns[] = $name;
-                    $types[$name] = strtoupper((string) ($row->type ?? ''));
-                }
-
-                return [
-                    'columns' => $columns,
-                    'types' => $types,
-                ];
-            }
-        } catch (\Throwable) {
-            // ignore
-        }
-
         try {
             $columns = Schema::getColumnListing($table);
         } catch (\Throwable) {
@@ -432,7 +397,6 @@ class RevenueYearChartWidget extends ChartWidget
 
         return [
             'columns' => $columns,
-            'types' => $types,
         ];
     }
 
@@ -449,90 +413,105 @@ class RevenueYearChartWidget extends ChartWidget
         return null;
     }
 
-    private function pickPeriodColumn(array $columns): ?string
+    /**
+     * Определяем, как хранится period:
+     * - ym_int: 202601
+     * - ym_string: "2026-01"
+     * - date: "2026-01-01"
+     * - datetime: "2025-12-31 17:00:00+00" / "...T17:00:00Z"
+     */
+    private function detectPeriodMode(string $table, string $marketCol, string $periodCol, int $marketId): string
     {
-        return $this->pickFirstExisting($columns, [
-            'period',
-            'period_ym',
-            'period_start',
-            'period_date',
-            'accrual_period',
-            'month',
-        ]);
+        try {
+            $sample = DB::table($table)
+                ->where($marketCol, $marketId)
+                ->whereNotNull($periodCol)
+                ->orderByDesc($periodCol)
+                ->value($periodCol);
+        } catch (\Throwable) {
+            $sample = null;
+        }
+
+        if (is_int($sample) || (is_string($sample) && preg_match('/^\d{6}$/', trim($sample)))) {
+            return 'ym_int';
+        }
+
+        if (is_string($sample)) {
+            $s = trim($sample);
+
+            if (preg_match('/^\d{4}-\d{2}$/', $s)) {
+                return 'ym_string';
+            }
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
+                return 'date';
+            }
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}/', $s)) {
+                return 'datetime';
+            }
+        }
+
+        return 'datetime';
     }
 
     private function applyMonthFilter(
         Builder $q,
-        array $meta,
         string $periodCol,
         string $monthYm,
-        CarbonImmutable $start,
-        CarbonImmutable $end
+        CarbonImmutable $startTz,
+        CarbonImmutable $endTz,
+        string $mode
     ): void {
-        $types = $meta['types'] ?? [];
-        $type = strtoupper((string) ($types[$periodCol] ?? ''));
-
-        $startDate = $start->toDateString();
-        $endDate = $end->toDateString();
-
-        if ($type !== '' && str_contains($type, 'INT')) {
-            $ymInt = (int) str_replace('-', '', $monthYm);
-            $q->where($periodCol, $ymInt);
+        if ($mode === 'ym_int') {
+            $q->where($periodCol, (int) str_replace('-', '', $monthYm));
             return;
         }
 
-        $lower = strtolower($periodCol);
-        if (
-            str_contains($type, 'DATE')
-            || str_contains($type, 'TIME')
-            || str_contains($lower, 'start')
-            || str_contains($lower, 'date')
-            || str_contains($lower, '_at')
-        ) {
-            $q->where($periodCol, '>=', $startDate)->where($periodCol, '<', $endDate);
+        if ($mode === 'ym_string') {
+            $q->where($periodCol, $monthYm);
             return;
         }
 
-        $q->where(function (Builder $qq) use ($periodCol, $monthYm, $startDate): void {
-            $qq->where($periodCol, $monthYm)->orWhere($periodCol, $startDate);
-        });
-    }
+        // Для PostgreSQL (и period как date/datetime) — фильтруем как в твоей проверке SQL:
+        // to_char(date_trunc('month', period::timestamp), 'YYYY-MM') = '2025-12'
+        if (DB::getDriverName() === 'pgsql') {
+            $col = '"' . str_replace('"', '""', $periodCol) . '"';
 
-    private function buildPayableSumExpression(array $columns): ?string
-    {
-        $totalCol = $this->pickFirstExisting($columns, [
-            'total_amount',
-            'payable_total',
-            'amount_total',
-            'total',
-        ]);
+            $q->whereRaw(
+                "to_char(date_trunc('month', {$col}::timestamp), 'YYYY-MM') = ?",
+                [$monthYm]
+            );
 
-        if ($totalCol) {
-            return 'COALESCE(SUM("' . $totalCol . '"), 0)';
+            return;
         }
 
-        $parts = [];
-
-        foreach ([
-            'rent_amount',
-            'utility_amount',
-            'utilities_amount',
-            'service_amount',
-            'services_amount',
-            'maintenance_amount',
-            'penalty_amount',
-            'penalties_amount',
-        ] as $col) {
-            if (in_array($col, $columns, true)) {
-                $parts[] = 'COALESCE(SUM("' . $col . '"), 0)';
-            }
+        if ($mode === 'date') {
+            $q->where($periodCol, '>=', $startTz->toDateString())
+                ->where($periodCol, '<', $endTz->toDateString());
+            return;
         }
 
-        return $parts === [] ? null : implode(' + ', $parts);
+        $startUtc = $startTz->utc()->toDateTimeString();
+        $endUtc = $endTz->utc()->toDateTimeString();
+
+        $q->where($periodCol, '>=', $startUtc)
+            ->where($periodCol, '<', $endUtc);
     }
 
+    /**
+     * Строчное payable выражение:
+     * COALESCE(total_with_vat, total_amount, rent + utilities + management_fee + ...)
+     */
     private function buildPayableRowExpression(array $columns): ?string
     {
+        $totalWithVatCol = $this->pickFirstExisting($columns, [
+            'total_with_vat',
+            'total_with_nds',
+            'total_vat',
+            'amount_with_vat',
+        ]);
+
         $totalCol = $this->pickFirstExisting($columns, [
             'total_amount',
             'payable_total',
@@ -540,16 +519,14 @@ class RevenueYearChartWidget extends ChartWidget
             'total',
         ]);
 
-        if ($totalCol) {
-            return 'COALESCE("' . $totalCol . '", 0)';
-        }
-
         $parts = [];
 
         foreach ([
             'rent_amount',
-            'utility_amount',
             'utilities_amount',
+            'utility_amount',
+            'management_fee',
+            'management_fee_amount',
             'service_amount',
             'services_amount',
             'maintenance_amount',
@@ -561,6 +538,23 @@ class RevenueYearChartWidget extends ChartWidget
             }
         }
 
-        return $parts === [] ? null : implode(' + ', $parts);
+        $partsExpr = $parts !== [] ? '(' . implode(' + ', $parts) . ')' : null;
+
+        $targets = [];
+        if ($totalWithVatCol) {
+            $targets[] = '"' . $totalWithVatCol . '"';
+        }
+        if ($totalCol) {
+            $targets[] = '"' . $totalCol . '"';
+        }
+        if ($partsExpr) {
+            $targets[] = $partsExpr;
+        }
+
+        if ($targets === []) {
+            return null;
+        }
+
+        return 'COALESCE(' . implode(', ', $targets) . ', 0)';
     }
 }

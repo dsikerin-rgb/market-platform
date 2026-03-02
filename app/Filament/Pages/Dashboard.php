@@ -60,7 +60,6 @@ class Dashboard extends BaseDashboard
      */
     public function mount(...$params): void
     {
-        // если у родителя есть mount — пробуем дать ему отработать (без риска свалить страницу)
         try {
             $parent = get_parent_class($this) ?: null;
 
@@ -96,20 +95,10 @@ class Dashboard extends BaseDashboard
         $marketId = $this->resolveMarketId();
         $tz = $this->resolveMarketTimezone($marketId);
 
-        $raw = session('dashboard_month');
-        $periodRaw = request()->query('period');
+        $month = $this->resolveMonthFromRequestPeriod($tz);
 
-        if (is_string($periodRaw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodRaw)) {
-            try {
-                $month = CarbonImmutable::createFromFormat('Y-m-d', $periodRaw, $tz)->format('Y-m');
-            } catch (\Throwable) {
-                $month = null;
-            }
-        }
-
-        $month = $month ?? ((is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
-            ? $raw
-            : CarbonImmutable::now($tz)->format('Y-m'));
+        // Если нет period=... в URL — берём из сессии, иначе дефолт = "последний месяц с данными"
+        $month = $month ?: $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
 
         session(['dashboard_month' => $month]);
         session(['dashboard_period' => $month . '-01']);
@@ -126,25 +115,14 @@ class Dashboard extends BaseDashboard
         $marketId = $this->resolveMarketId();
         $tz = $this->resolveMarketTimezone($marketId);
 
-        $current = null;
-        $periodRaw = request()->query('period');
-        if (is_string($periodRaw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodRaw)) {
-            try {
-                $current = CarbonImmutable::createFromFormat('Y-m-d', $periodRaw, $tz)->format('Y-m');
-            } catch (\Throwable) {
-                $current = null;
-            }
-        }
+        $current = $this->resolveMonthFromRequestPeriod($tz);
 
         if (is_array($this->filters ?? null)) {
-            $current = $this->filters['month'] ?? null;
+            $current = $this->filters['month'] ?? $current;
         }
 
-        $current = $current ?: session('dashboard_month');
-
-        $month = (is_string($current) && preg_match('/^\d{4}-\d{2}$/', $current))
-            ? $current
-            : CarbonImmutable::now($tz)->format('Y-m');
+        $fallback = $this->resolveLastMonthWithData($marketId, $tz);
+        $month = $this->resolveMonthOrFallback($current ?: session('dashboard_month'), $fallback);
 
         $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
         session(['dashboard_month' => $month]);
@@ -163,9 +141,6 @@ class Dashboard extends BaseDashboard
 
     /**
      * Filament 4: фильтры дашборда строятся через Schema.
-     *
-     * ВАЖНО: НЕ используем Grid внутри filtersForm, иначе на md/xl контейнер делится на колонки,
-     * и единственный фильтр попадает в узкую колонку (отсюда “скомкано в 1 см”).
      */
     public function filtersForm(Schema $schema): Schema
     {
@@ -177,18 +152,14 @@ class Dashboard extends BaseDashboard
 
         return $schema->schema([
             Section::make('Отчётный месяц')
-                ->description('Выберите месяц, за который показывать показатели на дашборде.')
+                ->description('Фильтр применяется к отчётным виджетам (начисления/отчётные показатели/история). Оперативные показатели “сейчас” от месяца не зависят.')
                 ->columnSpanFull()
                 ->extraAttributes([
-                    // якорь + inline-стили (перебивают большинство раскладок/сжатий на wide)
                     'class' => 'dashboard-period-filter',
                     'style' => implode(';', [
                         'width:100%',
-                        // визуально “как один блок”, но не полоса на всю страницу
                         'max-width:34rem',
-                        // ключ: нельзя схлопнуть
                         'min-width:18rem',
-                        // если где-то выше flex-строка — запрещаем сжатие
                         'flex:0 0 auto',
                     ]) . ';',
                 ])
@@ -201,45 +172,44 @@ class Dashboard extends BaseDashboard
                             $resolveTz()
                         ))
                         ->default(function () use ($resolveTz): string {
+                            $marketId = $this->resolveMarketId();
                             $tz = $resolveTz();
-                            $raw = session('dashboard_month');
 
-                            return (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw))
-                                ? $raw
-                                : CarbonImmutable::now($tz)->format('Y-m');
+                            $value = $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
+
+                            session(['dashboard_month' => $value]);
+                            session(['dashboard_period' => $value . '-01']);
+
+                            return $value;
                         })
                         ->native()
                         ->live()
                         ->columnSpanFull()
-                        ->extraFieldWrapperAttributes([
-                            'style' => 'width:100%;',
-                        ])
-                        ->extraAttributes([
-                            'style' => 'width:100%;',
-                        ])
+                        ->extraFieldWrapperAttributes(['style' => 'width:100%;'])
+                        ->extraAttributes(['style' => 'width:100%;'])
                         ->extraInputAttributes([
                             'style' => 'width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;',
                         ])
                         ->afterStateHydrated(function (Select $component, $state) use ($resolveTz): void {
+                            $marketId = $this->resolveMarketId();
                             $tz = $resolveTz();
-                            $fallback = (string) (session('dashboard_month') ?: CarbonImmutable::now($tz)->format('Y-m'));
 
-                            $value = (is_string($state) && preg_match('/^\d{4}-\d{2}$/', $state))
-                                ? $state
-                                : $fallback;
+                            $fallback = $this->resolveLastMonthWithData($marketId, $tz);
+                            $value = $this->resolveMonthOrFallback($state, $fallback);
 
                             if ($state !== $value) {
                                 $component->state($value);
                             }
 
                             session(['dashboard_month' => $value]);
+                            session(['dashboard_period' => $value . '-01']);
                         })
                         ->afterStateUpdated(function ($state) use ($resolveTz): void {
+                            $marketId = $this->resolveMarketId();
                             $tz = $resolveTz();
 
-                            $value = (is_string($state) && preg_match('/^\d{4}-\d{2}$/', $state))
-                                ? $state
-                                : CarbonImmutable::now($tz)->format('Y-m');
+                            $fallback = $this->resolveLastMonthWithData($marketId, $tz);
+                            $value = $this->resolveMonthOrFallback($state, $fallback);
 
                             session(['dashboard_month' => $value]);
                             session(['dashboard_period' => $value . '-01']);
@@ -345,10 +315,115 @@ class Dashboard extends BaseDashboard
         return $tz;
     }
 
+    private function resolveMonthFromRequestPeriod(string $tz): ?string
+    {
+        $periodRaw = request()->query('period');
+
+        if (! is_string($periodRaw) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $periodRaw)) {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::createFromFormat('Y-m-d', $periodRaw, $tz)->format('Y-m');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function resolveMonthFromSessionOrLastWithData(int $marketId, string $tz): string
+    {
+        $raw = session('dashboard_month');
+        $fallback = $this->resolveLastMonthWithData($marketId, $tz);
+
+        return $this->resolveMonthOrFallback($raw, $fallback);
+    }
+
+    private function resolveMonthOrFallback(mixed $candidate, string $fallbackYm): string
+    {
+        if (is_string($candidate) && preg_match('/^\d{4}-\d{2}$/', $candidate)) {
+            return $candidate;
+        }
+
+        return $fallbackYm;
+    }
+
+    /**
+     * Дефолт для дашборда:
+     * 1) последний месяц с данными в tenant_accruals (витрина начислений/график),
+     * 2) иначе — последний месяц в contract_debts (снимки долгов из 1С),
+     * 3) иначе — operations,
+     * 4) иначе — текущий месяц.
+     */
+    private function resolveLastMonthWithData(int $marketId, string $tz): string
+    {
+        $nowYm = CarbonImmutable::now($tz)->format('Y-m');
+
+        if ($marketId <= 0) {
+            return $nowYm;
+        }
+
+        // 1) tenant_accruals
+        if (DbSchema::hasTable('tenant_accruals') && DbSchema::hasColumn('tenant_accruals', 'market_id')) {
+            $periodCol = $this->pickFirstExistingAccrualPeriodColumn();
+
+            if ($periodCol) {
+                try {
+                    $v = DB::table('tenant_accruals')
+                        ->where('market_id', $marketId)
+                        ->orderByDesc($periodCol)
+                        ->value($periodCol);
+
+                    $ym = $this->normalizeYm($v, $tz);
+                    if ($ym) {
+                        return $ym;
+                    }
+                } catch (\Throwable) {
+                    // ignore
+                }
+            }
+        }
+
+        // 2) contract_debts (1С)
+        if (DbSchema::hasTable('contract_debts') && DbSchema::hasColumn('contract_debts', 'market_id')) {
+            try {
+                $v = DB::table('contract_debts')
+                    ->where('market_id', $marketId)
+                    ->orderByDesc('period')
+                    ->value('period');
+
+                if (is_string($v) && preg_match('/^\d{4}-\d{2}$/', $v)) {
+                    return $v;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        // 3) operations
+        if (DbSchema::hasTable('operations') && DbSchema::hasColumn('operations', 'effective_month')) {
+            try {
+                $v = DB::table('operations')
+                    ->where('market_id', $marketId)
+                    ->orderByDesc('effective_month')
+                    ->value('effective_month');
+
+                $ym = $this->normalizeYm($v, $tz);
+                if ($ym) {
+                    return $ym;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        return $nowYm;
+    }
+
     private function getMonthOptions(int $marketId, string $tz): array
     {
         $months = [];
 
+        // tenant_accruals
         if (
             $marketId > 0
             && DbSchema::hasTable('tenant_accruals')
@@ -367,7 +442,7 @@ class Dashboard extends BaseDashboard
                         ->all();
 
                     foreach ($raw as $value) {
-                        $ym = $this->normalizeYm($value);
+                        $ym = $this->normalizeYm($value, $tz);
                         if ($ym) {
                             $months[$ym] = true;
                         }
@@ -378,6 +453,33 @@ class Dashboard extends BaseDashboard
             }
         }
 
+        // contract_debts (1С)
+        if (
+            $marketId > 0
+            && DbSchema::hasTable('contract_debts')
+            && DbSchema::hasColumn('contract_debts', 'market_id')
+            && DbSchema::hasColumn('contract_debts', 'period')
+        ) {
+            try {
+                $raw = DB::table('contract_debts')
+                    ->where('market_id', $marketId)
+                    ->select('period')
+                    ->distinct()
+                    ->orderBy('period')
+                    ->pluck('period')
+                    ->all();
+
+                foreach ($raw as $value) {
+                    if (is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value)) {
+                        $months[$value] = true;
+                    }
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        // operations
         if ($marketId > 0 && DbSchema::hasTable('operations') && DbSchema::hasColumn('operations', 'effective_month')) {
             try {
                 $raw = DB::table('operations')
@@ -389,11 +491,7 @@ class Dashboard extends BaseDashboard
                     ->all();
 
                 foreach ($raw as $value) {
-                    if (! $value) {
-                        continue;
-                    }
-
-                    $ym = $this->normalizeYm($value);
+                    $ym = $this->normalizeYm($value, $tz);
                     if ($ym) {
                         $months[$ym] = true;
                     }
@@ -445,16 +543,36 @@ class Dashboard extends BaseDashboard
         return null;
     }
 
-    private function normalizeYm(mixed $value): ?string
+    private function normalizeYm(mixed $value, string $tz): ?string
     {
+        if ($value instanceof \DateTimeInterface) {
+            try {
+                return CarbonImmutable::instance($value)->setTimezone($tz)->format('Y-m');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
         if (is_int($value) || (is_string($value) && preg_match('/^\d{6}$/', $value))) {
             $s = (string) $value;
 
             return substr($s, 0, 4) . '-' . substr($s, 4, 2);
         }
 
-        if (is_string($value) && preg_match('/^\d{4}-\d{2}/', $value)) {
-            return substr($value, 0, 7);
+        if (is_string($value)) {
+            $value = trim($value);
+
+            if (preg_match('/^\d{4}-\d{2}$/', $value)) {
+                return $value;
+            }
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}/', $value)) {
+                try {
+                    return CarbonImmutable::parse($value)->setTimezone($tz)->format('Y-m');
+                } catch (\Throwable) {
+                    return substr($value, 0, 7);
+                }
+            }
         }
 
         return null;
