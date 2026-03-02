@@ -37,7 +37,8 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
 
         // Важно: во время некоторых artisan/composer стадий контейнер может ещё не иметь биндинга cache.
         // Поэтому флаг читаем только если cache уже доступен.
-        $opsEnabled = $isLocal || $this->isTemporarilyEnabledSafe();
+        $opsEnabled = ($isLocal || $this->isTemporarilyEnabledSafe())
+            && $this->hasSupportedTelescopeStorageDriver();
 
         if ($opsEnabled) {
             Telescope::startRecording();
@@ -123,6 +124,27 @@ class TelescopeServiceProvider extends TelescopeApplicationServiceProvider
         } catch (Throwable) {
             return false;
         }
+    }
+
+    /**
+     * Ensure Telescope storage driver is supported by current PHP extensions.
+     */
+    protected function hasSupportedTelescopeStorageDriver(): bool
+    {
+        $connection = (string) config(
+            'telescope.storage.database.connection',
+            (string) config('database.default')
+        );
+
+        $driver = (string) config("database.connections.{$connection}.driver", '');
+
+        return match ($driver) {
+            'pgsql' => extension_loaded('pdo_pgsql'),
+            'mysql' => extension_loaded('pdo_mysql'),
+            'sqlite' => extension_loaded('pdo_sqlite'),
+            'sqlsrv' => extension_loaded('pdo_sqlsrv') || extension_loaded('sqlsrv'),
+            default => true,
+        };
     }
 
     /**
