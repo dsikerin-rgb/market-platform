@@ -44,3 +44,11 @@ resources/css/filament/
 
 # local scratch / nested repo
 /market-platform/
+
+# Local recovery artifacts
+.recovery/
+*.dump
+*.patch
+*.conflict.php
+wip-conflicts.diff
+.env.backup.*
