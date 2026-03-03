@@ -203,6 +203,7 @@ class TenantResource extends BaseResource
 
                         Section::make('Расчеты по договорам')
                             ->description('Начислено, оплачено и долг по последнему снимку 1С.')
+                            ->collapsed()
                             ->schema([
                                 Forms\Components\Placeholder::make('payments_debt_summary')
                                     ->hiddenLabel()
