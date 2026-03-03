@@ -160,8 +160,7 @@ class TenantResource extends BaseResource
 
                 Tab::make('Торговые места')
                     ->schema([
-                        Section::make('Сводка по торговым местам')
-                            ->description('Ключевые суммы и показатели за месяц начислений по тем же местам, что в таблице ниже.')
+                        Section::make()
                             ->schema([
                                 Forms\Components\Placeholder::make('accruals_summary_view')
                                     ->hiddenLabel()
