@@ -6,16 +6,20 @@ use App\Filament\Resources\MarketSpaceTypeResource\Pages;
 use App\Models\MarketSpaceType;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class MarketSpaceTypeResource extends Resource
+class MarketSpaceTypeResource extends BaseResource
 {
+    
+
     protected static ?string $model = MarketSpaceType::class;
+
+    protected static ?string $recordTitleAttribute = 'name_ru';
 
     protected static ?string $modelLabel = 'Тип торгового места';
     protected static ?string $pluralModelLabel = 'Типы торговых мест';
@@ -46,6 +50,15 @@ class MarketSpaceTypeResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name_ru',
+            'code',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

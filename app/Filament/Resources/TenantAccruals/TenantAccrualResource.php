@@ -9,14 +9,18 @@ use App\Filament\Resources\TenantAccruals\Schemas\TenantAccrualForm;
 use App\Filament\Resources\TenantAccruals\Tables\TenantAccrualsTable;
 use App\Models\TenantAccrual;
 use Filament\Facades\Filament;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class TenantAccrualResource extends Resource
+class TenantAccrualResource extends BaseResource
 {
+    
+
     protected static ?string $model = TenantAccrual::class;
+
+    protected static ?string $recordTitleAttribute = 'source_place_name';
 
     protected static ?string $modelLabel = 'Начисление';
     protected static ?string $pluralModelLabel = 'Начисления';
@@ -57,6 +61,19 @@ class TenantAccrualResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'source_place_name',
+            'source_place_code',
+            'activity_type',
+            'tenant.name',
+            'marketSpace.number',
+            'market.name',
+            'period',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         return TenantAccrualForm::configure($schema);

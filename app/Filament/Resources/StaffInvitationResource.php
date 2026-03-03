@@ -6,16 +6,20 @@ use App\Filament\Resources\StaffInvitationResource\Pages;
 use App\Models\StaffInvitation;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class StaffInvitationResource extends Resource
+class StaffInvitationResource extends BaseResource
 {
+    
+
     protected static ?string $model = StaffInvitation::class;
+
+    protected static ?string $recordTitleAttribute = 'email';
 
     protected static ?string $modelLabel = 'Приглашение';
     protected static ?string $pluralModelLabel = 'Приглашения';
@@ -55,6 +59,15 @@ class StaffInvitationResource extends Resource
         return $isSuperAdmin || $isMarketAdmin;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'email',
+            'token_hash',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

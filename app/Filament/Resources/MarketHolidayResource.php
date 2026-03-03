@@ -9,7 +9,7 @@ use App\Models\MarketHoliday;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -17,9 +17,13 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class MarketHolidayResource extends Resource
+class MarketHolidayResource extends BaseResource
 {
+    
+
     protected static ?string $model = MarketHoliday::class;
+
+    protected static ?string $recordTitleAttribute = 'title';
 
     protected static ?string $modelLabel = 'Праздник рынка';
     protected static ?string $pluralModelLabel = 'Праздники рынка';
@@ -42,6 +46,15 @@ class MarketHolidayResource extends Resource
         return $user->hasRole('market-admin');
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'title',
+            'source',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

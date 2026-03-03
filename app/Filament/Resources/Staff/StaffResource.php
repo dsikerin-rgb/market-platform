@@ -10,13 +10,13 @@ use App\Filament\Resources\Staff\Tables\StaffTable;
 use App\Models\User;
 use BackedEnum;
 use Filament\Facades\Filament;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class StaffResource extends Resource
+class StaffResource extends BaseResource
 {
     protected static ?string $model = User::class;
 
@@ -66,6 +66,15 @@ class StaffResource extends Resource
         return (bool) $user && $user->can('staff.viewAny');
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name',
+            'email',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         return StaffForm::configure($schema);

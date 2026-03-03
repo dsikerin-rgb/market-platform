@@ -7,15 +7,19 @@ use App\Filament\Resources\TaskCommentResource\Pages;
 use App\Models\TaskComment;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class TaskCommentResource extends Resource
+class TaskCommentResource extends BaseResource
 {
+    
+
     protected static ?string $model = TaskComment::class;
+
+    protected static ?string $recordTitleAttribute = 'body';
 
     protected static ?string $modelLabel = 'Комментарий задачи';
     protected static ?string $pluralModelLabel = 'Комментарии задач';
@@ -42,6 +46,16 @@ class TaskCommentResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'body',
+            'task.title',
+            'author.name',
+            'task.market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

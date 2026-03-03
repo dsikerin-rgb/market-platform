@@ -7,15 +7,19 @@ use App\Filament\Resources\TaskWatcherResource\Pages;
 use App\Models\TaskWatcher;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class TaskWatcherResource extends Resource
+class TaskWatcherResource extends BaseResource
 {
+    
+
     protected static ?string $model = TaskWatcher::class;
+
+    protected static ?string $recordTitleAttribute = 'id';
 
     protected static ?string $modelLabel = 'Наблюдатель задачи';
     protected static ?string $pluralModelLabel = 'Наблюдатели задач';
@@ -42,6 +46,15 @@ class TaskWatcherResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'task.title',
+            'user.name',
+            'task.market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

@@ -10,7 +10,7 @@ use App\Models\Tenant;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -26,9 +26,10 @@ use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\HtmlString;
 use Throwable;
 
-class TenantResource extends Resource
+class TenantResource extends BaseResource
 {
     protected static ?string $model = Tenant::class;
+    protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $modelLabel = 'Арендатор';
     protected static ?string $pluralModelLabel = 'Арендаторы';
@@ -68,6 +69,19 @@ class TenantResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name',
+            'short_name',
+            'inn',
+            'phone',
+            'email',
+            'external_id',
+            'one_c_uid',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -283,7 +297,38 @@ class TenantResource extends Resource
                 TextColumn::make('name')
                     ->label('Арендатор')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(
+                        query: function (Builder $query, string $search): Builder {
+                            $search = trim($search);
+
+                            if ($search === '') {
+                                return $query;
+                            }
+
+                            $variants = array_values(array_unique(array_filter([
+                                $search,
+                                mb_strtolower($search, 'UTF-8'),
+                                mb_strtoupper($search, 'UTF-8'),
+                                mb_convert_case($search, MB_CASE_TITLE, 'UTF-8'),
+                            ], static fn ($value) => is_string($value) && $value !== '')));
+
+                            return $query->where(function (Builder $inner) use ($variants): void {
+                                foreach ($variants as $variant) {
+                                    $pattern = "%{$variant}%";
+
+                                    $inner
+                                        ->orWhere('tenants.name', 'like', $pattern)
+                                        ->orWhere('tenants.short_name', 'like', $pattern)
+                                        ->orWhere('tenants.inn', 'like', $pattern)
+                                        ->orWhere('tenants.phone', 'like', $pattern)
+                                        ->orWhere('tenants.email', 'like', $pattern)
+                                        ->orWhere('tenants.external_id', 'like', $pattern)
+                                        ->orWhere('tenants.one_c_uid', 'like', $pattern);
+                                }
+                            });
+                        },
+                    )
+                    ->forceSearchCaseInsensitive(false)
                     ->wrap()
                     ->description(function (Tenant $record): ?string {
                         $parts = [];
@@ -451,6 +496,60 @@ class TenantResource extends Resource
         }
 
         return static::withAccrualMetrics($query);
+    }
+
+    /**
+     * Global search in topbar.
+     * Avoid Filament default lower() flow for pgsql because Cyrillic case conversion
+     * may be inconsistent in current DB locale/collation.
+     */
+    protected static function applyGlobalSearchAttributeConstraints(Builder $query, string $search): void
+    {
+        $search = trim($search);
+
+        if ($search === '') {
+            return;
+        }
+
+        $terms = array_values(array_filter(
+            preg_split('/\s+/u', $search) ?: [],
+            static fn ($term) => is_string($term) && $term !== '',
+        ));
+
+        $columns = [
+            $query->qualifyColumn('name'),
+            $query->qualifyColumn('short_name'),
+            $query->qualifyColumn('inn'),
+            $query->qualifyColumn('phone'),
+            $query->qualifyColumn('email'),
+            $query->qualifyColumn('external_id'),
+            $query->qualifyColumn('one_c_uid'),
+        ];
+
+        foreach ($terms as $term) {
+            $variants = array_values(array_unique(array_filter([
+                $term,
+                mb_strtolower($term, 'UTF-8'),
+                mb_strtoupper($term, 'UTF-8'),
+                mb_convert_case($term, MB_CASE_TITLE, 'UTF-8'),
+            ], static fn ($value) => is_string($value) && $value !== '')));
+
+            $query->where(function (Builder $termQuery) use ($columns, $variants): void {
+                foreach ($variants as $variant) {
+                    $pattern = "%{$variant}%";
+
+                    $termQuery->orWhere(function (Builder $variantQuery) use ($columns, $pattern): void {
+                        foreach ($columns as $index => $column) {
+                            if ($index === 0) {
+                                $variantQuery->where($column, 'like', $pattern);
+                            } else {
+                                $variantQuery->orWhere($column, 'like', $pattern);
+                            }
+                        }
+                    });
+                }
+            });
+        }
     }
 
     protected static function withAccrualMetrics(Builder $query): Builder

@@ -5,15 +5,19 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\PermissionResource\Pages;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class PermissionResource extends Resource
+class PermissionResource extends BaseResource
 {
+    
+
     protected static ?string $model = \Spatie\Permission\Models\Permission::class;
+
+    protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $modelLabel = 'Право';
     protected static ?string $pluralModelLabel = 'Права';
@@ -35,6 +39,14 @@ class PermissionResource extends Resource
         return false;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name',
+            'guard_name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $nameField = Forms\Components\TextInput::make('name')

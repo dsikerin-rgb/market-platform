@@ -10,7 +10,7 @@ use App\Filament\Resources\MarketResource\Pages;
 use App\Models\Market;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -20,9 +20,13 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
-class MarketResource extends Resource
+class MarketResource extends BaseResource
 {
+    
+
     protected static ?string $model = Market::class;
+
+    protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $modelLabel = 'Рынок';
     protected static ?string $pluralModelLabel = 'Рынки';
@@ -39,6 +43,16 @@ class MarketResource extends Resource
         return (bool) $user && $user->can('markets.viewAny');
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name',
+            'code',
+            'address',
+            'slug',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
