@@ -160,26 +160,6 @@ class TenantResource extends BaseResource
 
                 Tab::make('Торговые места')
                     ->schema([
-                        Section::make()
-                            ->schema([
-                                Forms\Components\Placeholder::make('accruals_summary_view')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(function (?Tenant $record): HtmlString {
-                                        if (! $record) {
-                                            return new HtmlString('<div style="font-size:13px;opacity:.85;">Сводка появится после сохранения арендатора.</div>');
-                                        }
-
-                                        $summary = static::accrualSummaryData($record);
-                                        $summary['is_active'] = (bool) $record->is_active;
-
-                                        return new HtmlString(
-                                            view('filament.tenants.tenant-summary', ['summary' => $summary])->render()
-                                        );
-                                    })
-                                    ->columnSpanFull(),
-                            ]),
-
                         Section::make('Расчеты по договорам')
                             ->description('Начислено, оплачено и долг по последнему снимку 1С.')
                             ->schema([
