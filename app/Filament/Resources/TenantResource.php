@@ -883,34 +883,116 @@ class TenantResource extends BaseResource
             $periodLabel = (string) $lastPeriod;
         }
 
-        $contractStatsRows = collect();
-        if (DbSchema::hasTable('tenant_contracts')) {
-            $contractStatsRows = DB::table('tenant_contracts')
-                ->where('market_id', (int) $record->market_id)
-                ->where('tenant_id', (int) $record->id)
-                ->selectRaw('market_space_id, COUNT(*) as contracts_count, SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active_contracts_count')
-                ->groupBy('market_space_id')
-                ->get();
-        }
-
         $contractsBySpace = [];
         $contractsWithoutSpace = 0;
         $activeContractsWithoutSpace = 0;
-        foreach ($contractStatsRows as $stat) {
-            $spaceIdRaw = $stat->market_space_id;
-            $contractsCount = (int) ($stat->contracts_count ?? 0);
-            $activeContractsCount = (int) ($stat->active_contracts_count ?? 0);
+        if (DbSchema::hasTable('tenant_contracts')) {
+            $contractRows = DB::table('tenant_contracts')
+                ->where('market_id', (int) $record->market_id)
+                ->where('tenant_id', (int) $record->id)
+                ->orderByDesc('is_active')
+                ->orderByDesc('starts_at')
+                ->orderBy('id')
+                ->get([
+                    'id',
+                    'market_space_id',
+                    'number',
+                    'is_active',
+                ]);
 
-            if ($spaceIdRaw === null) {
-                $contractsWithoutSpace += $contractsCount;
-                $activeContractsWithoutSpace += $activeContractsCount;
-                continue;
+            foreach ($contractRows as $contractRow) {
+                $spaceIdRaw = $contractRow->market_space_id;
+                $isActive = (bool) ($contractRow->is_active ?? false);
+
+                if ($spaceIdRaw === null) {
+                    $contractsWithoutSpace++;
+                    if ($isActive) {
+                        $activeContractsWithoutSpace++;
+                    }
+                    continue;
+                }
+
+                $spaceId = (int) $spaceIdRaw;
+                if (! array_key_exists($spaceId, $contractsBySpace)) {
+                    $contractsBySpace[$spaceId] = [
+                        'contracts' => 0,
+                        'active' => 0,
+                        'items' => [],
+                    ];
+                }
+
+                $contractsBySpace[$spaceId]['contracts']++;
+                if ($isActive) {
+                    $contractsBySpace[$spaceId]['active']++;
+                }
+
+                if (count($contractsBySpace[$spaceId]['items']) < 3) {
+                    $number = trim((string) ($contractRow->number ?? ''));
+                    $contractsBySpace[$spaceId]['items'][] = [
+                        'id' => (int) $contractRow->id,
+                        'number' => $number !== '' ? $number : ('Договор #' . (int) $contractRow->id),
+                        'is_active' => $isActive,
+                    ];
+                }
             }
+        }
 
-            $contractsBySpace[(int) $spaceIdRaw] = [
-                'contracts' => $contractsCount,
-                'active' => $activeContractsCount,
-            ];
+        $mapLinksBySpace = [];
+        if (DbSchema::hasTable('market_space_map_shapes')) {
+            $spaceIds = $rows
+                ->pluck('market_space_id')
+                ->filter(static fn ($id) => $id !== null)
+                ->map(static fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+
+            if ($spaceIds->isNotEmpty()) {
+                $shapeRows = DB::table('market_space_map_shapes')
+                    ->where('market_id', (int) $record->market_id)
+                    ->whereIn('market_space_id', $spaceIds->all())
+                    ->where('is_active', true)
+                    ->orderByDesc('id')
+                    ->get([
+                        'market_space_id',
+                        'page',
+                        'version',
+                        'bbox_x1',
+                        'bbox_y1',
+                        'bbox_x2',
+                        'bbox_y2',
+                    ]);
+
+                foreach ($shapeRows as $shapeRow) {
+                    $spaceId = (int) ($shapeRow->market_space_id ?? 0);
+                    if ($spaceId <= 0 || array_key_exists($spaceId, $mapLinksBySpace)) {
+                        continue;
+                    }
+
+                    $params = [
+                        'market_space_id' => $spaceId,
+                        'page' => (int) ($shapeRow->page ?? 1),
+                        'version' => (int) ($shapeRow->version ?? 1),
+                    ];
+
+                    if (
+                        $shapeRow->bbox_x1 !== null
+                        && $shapeRow->bbox_y1 !== null
+                        && $shapeRow->bbox_x2 !== null
+                        && $shapeRow->bbox_y2 !== null
+                    ) {
+                        $params['bbox_x1'] = (float) $shapeRow->bbox_x1;
+                        $params['bbox_y1'] = (float) $shapeRow->bbox_y1;
+                        $params['bbox_x2'] = (float) $shapeRow->bbox_x2;
+                        $params['bbox_y2'] = (float) $shapeRow->bbox_y2;
+                    }
+
+                    try {
+                        $mapLinksBySpace[$spaceId] = route('filament.admin.market-map', $params);
+                    } catch (\Throwable) {
+                        // ignore: route might be unavailable in tests/CLI contexts
+                    }
+                }
+            }
         }
 
         $totalRent = 0.0;
@@ -932,9 +1014,34 @@ class TenantResource extends BaseResource
             $codeLabel = $code !== '' ? $code : '—';
             $contractStat = ($spaceId !== null && array_key_exists($spaceId, $contractsBySpace))
                 ? $contractsBySpace[$spaceId]
-                : ['contracts' => 0, 'active' => 0];
+                : ['contracts' => 0, 'active' => 0, 'items' => []];
             $contractsMappedTotal += (int) $contractStat['contracts'];
             $contractsMappedActiveTotal += (int) $contractStat['active'];
+
+            $contractCell = '—';
+            if ((int) $contractStat['contracts'] > 0) {
+                $links = [];
+                foreach ($contractStat['items'] as $contractItem) {
+                    $linkLabel = e((string) $contractItem['number']);
+                    if (($contractItem['is_active'] ?? false) === true) {
+                        $linkLabel .= ' <span class="tenant-spaces__active-dot" title="Активный договор">●</span>';
+                    }
+                    $links[] = '<a href="#tenant-contract-' . (int) $contractItem['id'] . '" class="tenant-spaces__contract-link">'
+                        . $linkLabel
+                        . '</a>';
+                }
+
+                $contractCell = implode(', ', $links);
+                if ((int) $contractStat['contracts'] > count($contractStat['items'])) {
+                    $left = (int) $contractStat['contracts'] - count($contractStat['items']);
+                    $contractCell .= ' <span class="tenant-spaces__more-contracts">+ ещё ' . e((string) $left) . '</span>';
+                }
+            }
+
+            $mapCell = '<span class="tenant-spaces__map-na">—</span>';
+            if ($spaceId !== null && array_key_exists($spaceId, $mapLinksBySpace)) {
+                $mapCell = '<a href="' . e((string) $mapLinksBySpace[$spaceId]) . '" target="_blank" rel="noopener" class="tenant-spaces__map-btn">Показать на карте</a>';
+            }
 
             $areaCell = '';
             if ($hasArea) {
@@ -951,8 +1058,8 @@ class TenantResource extends BaseResource
                     ' . $areaCell . '
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
-                    <td class="tenant-spaces__num">' . e((string) $contractStat['contracts']) . '</td>
-                    <td class="tenant-spaces__num">' . e((string) $contractStat['active']) . '</td>
+                    <td class="tenant-spaces__contracts">' . $contractCell . '</td>
+                    <td class="tenant-spaces__map">' . $mapCell . '</td>
                 </tr>
             ';
         }
@@ -1012,6 +1119,14 @@ class TenantResource extends BaseResource
 .tenant-spaces__code{font-weight:700;white-space:nowrap}
 .tenant-spaces__status{white-space:nowrap}
 .tenant-spaces__name{min-width:240px}
+.tenant-spaces__contracts{min-width:260px}
+.tenant-spaces__map{white-space:nowrap}
+.tenant-spaces__map-btn{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.10);font-size:12px;font-weight:700;text-decoration:none;color:inherit}
+.tenant-spaces__map-btn:hover{background:rgba(37,99,235,.16)}
+.tenant-spaces__map-na{opacity:.65}
+.tenant-spaces__contract-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.tenant-spaces__more-contracts{opacity:.75;font-size:12px;white-space:nowrap}
+.tenant-spaces__active-dot{color:rgba(16,185,129,.85);font-size:11px;vertical-align:middle}
 
 .tenant-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;border:1px solid rgba(0,0,0,.10);background:rgba(0,0,0,.04);font-size:12px;font-weight:700;line-height:1}
 .dark .tenant-badge{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
@@ -1036,8 +1151,8 @@ class TenantResource extends BaseResource
                     ' . $areaHeader . '
                     <th class="tenant-spaces__num">Аренда</th>
                     <th class="tenant-spaces__num">Итого с НДС</th>
-                    <th class="tenant-spaces__num">Договоров</th>
-                    <th class="tenant-spaces__num">Активных</th>
+                    <th>Договор</th>
+                    <th>Карта</th>
                 </tr>
             </thead>
             <tbody>
@@ -1155,7 +1270,7 @@ class TenantResource extends BaseResource
                 : '<span class="tenant-contracts__off-badge">Неактивен</span>';
 
             $tableRows .= '
-                <tr>
+                <tr id="tenant-contract-' . (int) $row->id . '">
                     <td>' . $spaceCell . '</td>
                     <td class="tenant-contracts__number">' . e((string) ($row->number ?? '—')) . '</td>
                     <td>' . e($periodLabel) . '</td>
@@ -1186,6 +1301,7 @@ class TenantResource extends BaseResource
 .tenant-contracts tbody td{padding:10px 12px;vertical-align:top;border-top:1px solid rgba(0,0,0,.08)}
 .dark .tenant-contracts tbody td{border-top-color:rgba(255,255,255,.10)}
 .tenant-contracts tbody tr:first-child td{border-top:none}
+.tenant-contracts tbody tr:target td{background:rgba(37,99,235,.10)}
 .tenant-contracts__num{text-align:right;white-space:nowrap}
 .tenant-contracts__number{font-weight:700;white-space:nowrap}
 
