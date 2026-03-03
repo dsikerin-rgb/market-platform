@@ -1089,6 +1089,15 @@ class TenantResource extends BaseResource
         $totalArea = 0.0;
         $contractsMappedTotal = 0;
         $contractsMappedActiveTotal = 0;
+        $contractsTabBaseUrl = '?tab=dogovory::data::tab';
+        try {
+            $contractsTabBaseUrl = static::getUrl('edit', [
+                'record' => (int) $record->id,
+                'tab' => 'dogovory::data::tab',
+            ]);
+        } catch (\Throwable) {
+            // keep relative fallback
+        }
 
         $tableRows = '';
         foreach ($rows as $r) {
@@ -1100,6 +1109,23 @@ class TenantResource extends BaseResource
             $spaceId = isset($r->market_space_id) ? (int) $r->market_space_id : null;
 
             $codeLabel = $code !== '' ? $code : '—';
+            $nameLabel = trim($name) !== '' ? $name : '—';
+            $spaceUrl = null;
+            if ($spaceId !== null && $spaceId > 0) {
+                try {
+                    $spaceUrl = route('filament.admin.resources.market-spaces.edit', ['record' => $spaceId]);
+                } catch (\Throwable) {
+                    $spaceUrl = null;
+                }
+            }
+
+            $codeCell = $spaceUrl
+                ? '<a href="' . e($spaceUrl) . '" class="tenant-spaces__space-link">' . e($codeLabel) . '</a>'
+                : e($codeLabel);
+            $nameCell = $spaceUrl
+                ? '<a href="' . e($spaceUrl) . '" class="tenant-spaces__space-link">' . e($nameLabel) . '</a>'
+                : e($nameLabel);
+
             $contractStat = ($spaceId !== null && array_key_exists($spaceId, $contractsBySpace))
                 ? $contractsBySpace[$spaceId]
                 : ['contracts' => 0, 'active' => 0, 'items' => []];
@@ -1125,7 +1151,7 @@ class TenantResource extends BaseResource
                     if (($contractItem['is_active'] ?? false) === true) {
                         $linkLabel .= ' <span class="tenant-spaces__active-dot" title="Активный договор">●</span>';
                     }
-                    $links[] = '<a href="?tab=dogovory::data::tab#tenant-contract-' . (int) $contractItem['id'] . '" class="tenant-spaces__contract-link">'
+                    $links[] = '<a href="' . e($contractsTabBaseUrl) . '#tenant-contract-' . (int) $contractItem['id'] . '" class="tenant-spaces__contract-link">'
                         . $linkLabel
                         . '</a>';
                 }
@@ -1151,8 +1177,8 @@ class TenantResource extends BaseResource
 
             $tableRows .= '
                 <tr>
-                    <td class="tenant-spaces__code">' . e($codeLabel) . '</td>
-                    <td class="tenant-spaces__name">' . e($name) . '</td>
+                    <td class="tenant-spaces__code">' . $codeCell . '</td>
+                    <td class="tenant-spaces__name">' . $nameCell . '</td>
                     ' . $areaCell . '
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
@@ -1235,6 +1261,7 @@ class TenantResource extends BaseResource
 .tenant-spaces__num{text-align:right;white-space:nowrap}
 .tenant-spaces__code{font-weight:700;white-space:nowrap}
 .tenant-spaces__name{min-width:240px}
+.tenant-spaces__space-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
 .tenant-spaces__contracts{min-width:260px}
 .tenant-spaces__map{white-space:nowrap}
 .tenant-spaces__map-btn{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.10);font-size:12px;font-weight:700;text-decoration:none;color:inherit}
