@@ -84,6 +84,29 @@
             opacity: .75;
             margin-bottom: 6px;
         }
+        .tenant-summary__label-with-help {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tenant-summary__help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(0,0,0,.20);
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: help;
+            opacity: .85;
+            user-select: none;
+        }
+        .dark .tenant-summary__help-icon {
+            border-color: rgba(255,255,255,.25);
+        }
 
         .tenant-summary__value {
             font-weight: 700;
@@ -184,17 +207,26 @@
         <div class="tenant-summary__grid">
             {{-- Primary: payment for last period --}}
             <div class="tenant-summary__card tenant-summary__span-12">
-                <div class="tenant-summary__label">К оплате за {{ $lastPeriodLabel }}</div>
+                <div class="tenant-summary__label tenant-summary__label-with-help">
+                    <span>К оплате за {{ $lastPeriodLabel }}</span>
+                    <span class="tenant-summary__help-icon" title="Сумма начислений арендатора за выбранный период (с НДС) по данным tenant_accruals." aria-label="Подсказка: сумма к оплате">?</span>
+                </div>
                 <div class="tenant-summary__value tenant-summary__value--xl">{{ $formatRub($sumLast) }}</div>
 
                 {{-- No duplicate "Период" here: it's already in the badge --}}
                 <div class="tenant-summary__inline-kpis">
                     <div class="tenant-summary__inline-kpi">
-                        <span>Мест за период</span>
+                        <span>
+                            Торговых мест с начислениями
+                            <span class="tenant-summary__help-icon" title="Количество уникальных торговых мест, по которым есть начисления в выбранном периоде." aria-label="Подсказка: торговых мест с начислениями">?</span>
+                        </span>
                         <span>{{ $formatInt($spacesLast) }}</span>
                     </div>
                     <div class="tenant-summary__inline-kpi">
-                        <span>Начислений за период</span>
+                        <span>
+                            Строк начислений
+                            <span class="tenant-summary__help-icon" title="Количество строк начислений за период. На одно торговое место может приходиться несколько строк." aria-label="Подсказка: строк начислений">?</span>
+                        </span>
                         <span>{{ $formatInt($countPeriod) }}</span>
                     </div>
                 </div>
