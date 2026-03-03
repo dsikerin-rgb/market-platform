@@ -69,6 +69,8 @@ class MarketSettings extends Page
         'map_pdf_path' => null,
         'holiday_default_notify_before_days' => 7,
         'holiday_notification_recipient_user_ids' => [],
+        'request_notification_recipient_user_ids' => [],
+        'request_repair_notification_recipient_user_ids' => [],
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -130,6 +132,14 @@ class MarketSettings extends Page
                 : 7,
             'holiday_notification_recipient_user_ids' => array_values(array_filter(
                 (array) ($settings['holiday_notification_recipient_user_ids'] ?? []),
+                static fn ($value): bool => is_numeric($value),
+            )),
+            'request_notification_recipient_user_ids' => array_values(array_filter(
+                (array) ($settings['request_notification_recipient_user_ids'] ?? []),
+                static fn ($value): bool => is_numeric($value),
+            )),
+            'request_repair_notification_recipient_user_ids' => array_values(array_filter(
+                (array) ($settings['request_repair_notification_recipient_user_ids'] ?? []),
                 static fn ($value): bool => is_numeric($value),
             )),
         ]);
@@ -249,6 +259,57 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12),
+
+                Section::make('Обращения и чат')
+                    ->description('Получатели уведомлений о новых сообщениях от арендаторов.')
+                    ->schema([
+                        Forms\Components\Select::make('request_notification_recipient_user_ids')
+                            ->label('Получатели обращений (общие)')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (): array {
+                                if (! $this->market) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->where('market_id', $this->market->id)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->all();
+                            })
+                            ->helperText('Если список пуст, общие уведомления не отправляются.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+
+                        Forms\Components\Select::make('request_repair_notification_recipient_user_ids')
+                            ->label('Получатели ремонта/обслуживания')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (): array {
+                                if (! $this->market) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->where('market_id', $this->market->id)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->all();
+                            })
+                            ->helperText('Приоритетный список для категории "repair".')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                    ])
+                    ->columns(12),
             ]);
     }
 
@@ -284,6 +345,14 @@ class MarketSettings extends Page
             : 7;
         $settings['holiday_notification_recipient_user_ids'] = array_values(array_filter(
             (array) ($state['holiday_notification_recipient_user_ids'] ?? []),
+            static fn ($value): bool => is_numeric($value),
+        ));
+        $settings['request_notification_recipient_user_ids'] = array_values(array_filter(
+            (array) ($state['request_notification_recipient_user_ids'] ?? []),
+            static fn ($value): bool => is_numeric($value),
+        ));
+        $settings['request_repair_notification_recipient_user_ids'] = array_values(array_filter(
+            (array) ($state['request_repair_notification_recipient_user_ids'] ?? []),
             static fn ($value): bool => is_numeric($value),
         ));
 

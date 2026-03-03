@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\TicketChatNotificationRouter;
 use Filament\Notifications\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -34,24 +35,20 @@ class Ticket extends Model
     protected static function booted(): void
     {
         static::created(function (self $ticket): void {
-            // Автосоздание Task из части категорий тикетов.
             $categories = (array) config('tasks.auto_create_from_ticket_categories', []);
 
-            if (! $ticket->category || ! in_array($ticket->category, $categories, true)) {
-                return;
+            if ($ticket->category && in_array($ticket->category, $categories, true)) {
+                Task::create([
+                    'market_id' => $ticket->market_id,
+                    'title' => "Заявка #{$ticket->id}: {$ticket->subject}",
+                    'description' => $ticket->description,
+                    'status' => Task::STATUS_NEW,
+                    'priority' => $ticket->priority ?? Task::PRIORITY_NORMAL,
+                    'source_type' => $ticket::class,
+                    'source_id' => $ticket->id,
+                ]);
             }
 
-            Task::create([
-                'market_id' => $ticket->market_id,
-                'title' => "Заявка #{$ticket->id}: {$ticket->subject}",
-                'description' => $ticket->description,
-                'status' => Task::STATUS_NEW,
-                'priority' => $ticket->priority ?? Task::PRIORITY_NORMAL,
-                'source_type' => $ticket::class,
-                'source_id' => $ticket->id,
-            ]);
-
-            // Если тикет уже создан с исполнителем — уведомим.
             if (! empty($ticket->assigned_to)) {
                 $assignee = User::query()->find($ticket->assigned_to);
 
@@ -64,10 +61,18 @@ class Ticket extends Model
                     );
                 }
             }
+
+            $actor = auth()->user();
+            if ($actor instanceof User) {
+                try {
+                    app(TicketChatNotificationRouter::class)->notifyOnTicketCreated($ticket, $actor);
+                } catch (\Throwable) {
+                    // Notification failures must not break business flow.
+                }
+            }
         });
 
         static::updated(function (self $ticket): void {
-            // 1) Назначили/поменяли исполнителя.
             if ($ticket->wasChanged('assigned_to')) {
                 $newAssigneeId = $ticket->assigned_to;
 
@@ -85,7 +90,6 @@ class Ticket extends Model
                 }
             }
 
-            // 2) Изменили статус.
             if ($ticket->wasChanged('status')) {
                 $assignee = $ticket->user()->first();
 
@@ -124,7 +128,6 @@ class Ticket extends Model
 
     protected static function getFilamentTicketUrl(self $ticket): ?string
     {
-        // 1) Если есть Resource — идём туда (идеальный вариант).
         $resourceClass = \App\Filament\Resources\TicketResource::class;
 
         if (class_exists($resourceClass) && method_exists($resourceClass, 'getUrl')) {
@@ -135,14 +138,11 @@ class Ticket extends Model
             }
         }
 
-        // 2) Fallback: у вас есть Page "Обращения" — ведём на неё.
         $pageClass = \App\Filament\Pages\Requests::class;
 
         if (class_exists($pageClass) && method_exists($pageClass, 'getUrl')) {
             try {
                 $baseUrl = (string) $pageClass::getUrl();
-
-                // Параметр может пригодиться, если позже добавим фильтр/поиск по ticket_id на странице.
                 $separator = str_contains($baseUrl, '?') ? '&' : '?';
 
                 return $baseUrl . $separator . 'ticket_id=' . $ticket->id;
