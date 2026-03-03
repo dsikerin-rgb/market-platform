@@ -1029,7 +1029,7 @@ class TenantResource extends BaseResource
                     if (($contractItem['is_active'] ?? false) === true) {
                         $linkLabel .= ' <span class="tenant-spaces__active-dot" title="Активный договор">●</span>';
                     }
-                    $links[] = '<a href="#tenant-contract-' . (int) $contractItem['id'] . '" class="tenant-spaces__contract-link">'
+                    $links[] = '<a href="?tab=dogovory::data::tab#tenant-contract-' . (int) $contractItem['id'] . '" class="tenant-spaces__contract-link">'
                         . $linkLabel
                         . '</a>';
                 }
@@ -1230,6 +1230,7 @@ class TenantResource extends BaseResource
         $contractsTotal = $rows->count();
         $activeTotal = $rows->filter(static fn ($row): bool => (bool) ($row->is_active ?? false))->count();
         $withoutSpaceTotal = $rows->whereNull('market_space_id')->count();
+        $canManageContracts = static::canManageTenantContracts($record);
 
         $tableRows = '';
         foreach ($rows as $row) {
@@ -1238,9 +1239,19 @@ class TenantResource extends BaseResource
             $code = trim((string) ($row->space_code ?? ''));
 
             $spaceLabel = $displayName !== '' ? $displayName : ($number !== '' ? $number : ($code !== '' ? $code : 'Не привязано'));
-            $spaceCell = $row->market_space_id
-                ? e($spaceLabel)
-                : '<span class="tenant-contracts__warn-badge">Не привязано</span>';
+            $spaceCell = '<span class="tenant-contracts__warn-badge">Не привязано</span>';
+            if ($row->market_space_id) {
+                $spaceEditUrl = null;
+                try {
+                    $spaceEditUrl = route('filament.admin.resources.market-spaces.edit', ['record' => (int) $row->market_space_id]);
+                } catch (\Throwable) {
+                    $spaceEditUrl = null;
+                }
+
+                $spaceCell = $spaceEditUrl
+                    ? '<a href="' . e($spaceEditUrl) . '" class="tenant-contracts__space-link">' . e($spaceLabel) . '</a>'
+                    : e($spaceLabel);
+            }
 
             $startsAt = null;
             if (filled($row->starts_at)) {
@@ -1272,6 +1283,22 @@ class TenantResource extends BaseResource
                 ? '<span class="tenant-contracts__ok-badge">Активен</span>'
                 : '<span class="tenant-contracts__off-badge">Неактивен</span>';
 
+            $deleteCell = '—';
+            if ($canManageContracts) {
+                $deleteUrl = route('filament.admin.tenants.contracts.delete', [
+                    'tenant' => (int) $record->id,
+                    'contract' => (int) $row->id,
+                ]);
+
+                $deleteCell = '<button type="submit"'
+                    . ' class="tenant-contracts__delete-btn"'
+                    . ' formmethod="POST"'
+                    . ' formaction="' . e($deleteUrl) . '"'
+                    . ' formnovalidate'
+                    . ' onclick="return confirm(\'Удалить договор ' . e((string) ($row->number ?? '#' . (int) $row->id)) . '?\');"'
+                    . '>Удалить</button>';
+            }
+
             $tableRows .= '
                 <tr id="tenant-contract-' . (int) $row->id . '">
                     <td>' . $spaceCell . '</td>
@@ -1280,6 +1307,7 @@ class TenantResource extends BaseResource
                     <td>' . static::renderContractStatusBadge((string) ($row->status ?? '')) . '</td>
                     <td class="tenant-contracts__num">' . $rentCell . '</td>
                     <td>' . $activeBadge . '</td>
+                    <td>' . $deleteCell . '</td>
                 </tr>
             ';
         }
@@ -1307,6 +1335,7 @@ class TenantResource extends BaseResource
 .tenant-contracts tbody tr:target td{background:rgba(37,99,235,.10)}
 .tenant-contracts__num{text-align:right;white-space:nowrap}
 .tenant-contracts__number{font-weight:700;white-space:nowrap}
+.tenant-contracts__space-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
 
 .tenant-contracts__warn-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.10);font-size:12px;font-weight:700}
 .tenant-contracts__ok-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.10);font-size:12px;font-weight:700}
@@ -1314,6 +1343,8 @@ class TenantResource extends BaseResource
 .tenant-contracts__status-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(0,0,0,.16);background:rgba(0,0,0,.04);font-size:12px;font-weight:700}
 .tenant-contracts__status-badge--success{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.10)}
 .tenant-contracts__status-badge--warning{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12)}
+.tenant-contracts__delete-btn{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(220,38,38,.35);background:rgba(220,38,38,.10);font-size:12px;font-weight:700;cursor:pointer}
+.tenant-contracts__delete-btn:hover{background:rgba(220,38,38,.16)}
 </style>';
 
         $meta = [
@@ -1338,6 +1369,7 @@ class TenantResource extends BaseResource
                     <th>Статус договора</th>
                     <th class="tenant-contracts__num">Аренда в месяц</th>
                     <th>Активность</th>
+                    <th>Действия</th>
                 </tr>
             </thead>
             <tbody>
@@ -1656,6 +1688,21 @@ class TenantResource extends BaseResource
         } catch (Throwable) {
             return false;
         }
+    }
+
+    private static function canManageTenantContracts(Tenant $record): bool
+    {
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
+            && (int) ($user->market_id ?? 0) === (int) $record->market_id;
     }
 
     public static function canViewAny(): bool

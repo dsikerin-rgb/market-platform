@@ -18,6 +18,7 @@ use App\Http\Controllers\Cabinet\SpacesController;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Models\TenantContract;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Http\Request;
@@ -64,6 +65,34 @@ Route::prefix('cabinet')->group(function () {
 Route::get('/v/{tenantSlug}', PublicShowcaseController::class)->name('cabinet.showcase.public');
 
 Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(function () {
+    Route::match(['POST', 'PUT', 'PATCH', 'DELETE'], '/admin/tenants/{tenant}/contracts/{contract}/delete', function (Request $request, int $tenant, int $contract) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $contractModel = TenantContract::query()
+            ->whereKey($contract)
+            ->where('tenant_id', $tenant)
+            ->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $contractModel->market_id;
+        abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
+
+        $number = trim((string) ($contractModel->number ?? ''));
+        $label = $number !== '' ? $number : ('#' . (int) $contractModel->id);
+
+        try {
+            $contractModel->delete();
+        } catch (\Throwable) {
+            return back()->withErrors([
+                'contract_delete' => 'Не удалось удалить договор ' . $label . '. Возможно, на него уже ссылаются начисления.',
+            ]);
+        }
+
+        return back()->with('status', 'Договор ' . $label . ' удалён.');
+    })->name('filament.admin.tenants.contracts.delete');
+
     /**
      * Переключатель рынка для super-admin (используется в topbar-user-info.blade.php).
      * Сохраняет выбранный market_id в сессии.
