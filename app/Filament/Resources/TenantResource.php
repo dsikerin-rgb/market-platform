@@ -234,9 +234,12 @@ class TenantResource extends BaseResource
                                     ->content(fn (?Tenant $record) => static::renderSpacesLastPeriod($record))
                                     ->columnSpanFull(),
                             ]),
+                    ]),
 
-                        Section::make('Договоры по торговым местам')
-                            ->description('Каждый договор должен быть привязан к конкретному торговому месту.')
+                Tab::make('Договоры')
+                    ->schema([
+                        Section::make('Договоры')
+                            ->description('Реестр договоров арендатора с привязкой к торговым местам.')
                             ->schema([
                                 Forms\Components\Placeholder::make('contracts_by_spaces')
                                     ->hiddenLabel()
