@@ -812,7 +812,6 @@ class TenantResource extends BaseResource
 
         $taHasArea = static::hasColumn('tenant_accruals', 'area_sqm');
 
-        $msHasStatus = static::hasColumn('market_spaces', 'status');
         $msHasDisplayName = static::hasColumn('market_spaces', 'display_name');
         $msHasCode = static::hasColumn('market_spaces', 'code');
         $msHasNumber = static::hasColumn('market_spaces', 'number');
@@ -827,8 +826,6 @@ class TenantResource extends BaseResource
         $placeNameExpr = $msHasDisplayName
             ? 'COALESCE(ms.display_name, ta.source_place_name)'
             : "COALESCE(ta.source_place_name, '')";
-
-        $placeStatusExpr = $msHasStatus ? "COALESCE(ms.status, '')" : '';
 
         $areaExprParts = [];
         if ($taHasArea) {
@@ -847,7 +844,6 @@ class TenantResource extends BaseResource
             'ta.market_space_id as market_space_id',
             "{$placeCodeExpr} as place_code",
             "{$placeNameExpr} as place_name",
-            "{$placeStatusExpr} as place_status",
         ];
 
         if ($hasArea) {
@@ -870,7 +866,6 @@ class TenantResource extends BaseResource
                 ...($msHasCode ? ['ms.code'] : []),
                 ...($msHasNumber ? ['ms.number'] : []),
                 ...($msHasDisplayName ? ['ms.display_name'] : []),
-                ...($msHasStatus ? ['ms.status'] : []),
             ])
             ->orderByRaw($placeCodeExpr . ' ASC')
             ->limit(500)
@@ -1008,7 +1003,6 @@ class TenantResource extends BaseResource
 
             $code = trim((string) ($r->place_code ?? ''));
             $name = (string) ($r->place_name ?? '');
-            $status = (string) ($r->place_status ?? '');
             $spaceId = isset($r->market_space_id) ? (int) $r->market_space_id : null;
 
             $codeLabel = $code !== '' ? $code : '—';
@@ -1054,7 +1048,6 @@ class TenantResource extends BaseResource
                 <tr>
                     <td class="tenant-spaces__code">' . e($codeLabel) . '</td>
                     <td class="tenant-spaces__name">' . e($name) . '</td>
-                    <td class="tenant-spaces__status">' . static::renderSpaceStatusBadge($status) . '</td>
                     ' . $areaCell . '
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
@@ -1065,7 +1058,7 @@ class TenantResource extends BaseResource
         }
 
         $areaHeader = $hasArea ? '<th class="tenant-spaces__num">Площадь</th>' : '';
-        $colspan = $hasArea ? 8 : 7;
+        $colspan = $hasArea ? 7 : 6;
 
         $summaryCards = [
             ['label' => 'Месяц начислений', 'value' => $periodLabel],
@@ -1122,7 +1115,6 @@ class TenantResource extends BaseResource
 
 .tenant-spaces__num{text-align:right;white-space:nowrap}
 .tenant-spaces__code{font-weight:700;white-space:nowrap}
-.tenant-spaces__status{white-space:nowrap}
 .tenant-spaces__name{min-width:240px}
 .tenant-spaces__contracts{min-width:260px}
 .tenant-spaces__map{white-space:nowrap}
@@ -1133,12 +1125,6 @@ class TenantResource extends BaseResource
 .tenant-spaces__more-contracts{opacity:.75;font-size:12px;white-space:nowrap}
 .tenant-spaces__active-dot{color:rgba(16,185,129,.85);font-size:11px;vertical-align:middle}
 
-.tenant-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;border:1px solid rgba(0,0,0,.10);background:rgba(0,0,0,.04);font-size:12px;font-weight:700;line-height:1}
-.dark .tenant-badge{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
-.tenant-badge--success{border-color:rgba(16,185,129,.30);background:rgba(16,185,129,.10)}
-.dark .tenant-badge--success{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.12)}
-.tenant-badge--warning{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12)}
-.dark .tenant-badge--warning{border-color:rgba(245,158,11,.40);background:rgba(245,158,11,.14)}
 </style>';
 
         $html = $style . '
@@ -1152,7 +1138,6 @@ class TenantResource extends BaseResource
                 <tr>
                     <th>Место</th>
                     <th>Название</th>
-                    <th>Статус</th>
                     ' . $areaHeader . '
                     <th class="tenant-spaces__num">Аренда</th>
                     <th class="tenant-spaces__num">Итого с НДС</th>
@@ -1626,30 +1611,6 @@ class TenantResource extends BaseResource
         return new HtmlString(
             '<div style="font-size:13px;">' . $badge . $noteHtml . $updatedHtml . '</div>'
         );
-    }
-
-    private static function renderSpaceStatusBadge(?string $status): string
-    {
-        $s = trim((string) $status);
-
-        if ($s === '') {
-            return '<span class="tenant-badge">—</span>';
-        }
-
-        $label = match ($s) {
-            'occupied' => 'Занято',
-            'free' => 'Свободно',
-            'reserved' => 'Бронь',
-            default => $s,
-        };
-
-        $class = match ($s) {
-            'occupied' => 'tenant-badge tenant-badge--success',
-            'reserved' => 'tenant-badge tenant-badge--warning',
-            default => 'tenant-badge',
-        };
-
-        return '<span class="' . e($class) . '">' . e($label) . '</span>';
     }
 
     private static function formatRub(float $value): string
