@@ -160,7 +160,8 @@ class TenantResource extends BaseResource
 
                 Tab::make('Торговые места')
                     ->schema([
-                        Section::make('Финансы')
+                        Section::make('Сводка по торговым местам')
+                            ->description('Ключевые суммы и показатели за месяц начислений по тем же местам, что в таблице ниже.')
                             ->schema([
                                 Forms\Components\Placeholder::make('accruals_summary_view')
                                     ->hiddenLabel()
@@ -180,8 +181,8 @@ class TenantResource extends BaseResource
                                     ->columnSpanFull(),
                             ]),
 
-                        Section::make('Оплаты и долг')
-                            ->description('По последнему снимку 1С (contract_debts).')
+                        Section::make('Расчеты по договорам')
+                            ->description('Начислено, оплачено и долг по последнему снимку 1С.')
                             ->schema([
                                 Forms\Components\Placeholder::make('payments_debt_summary')
                                     ->hiddenLabel()
@@ -190,7 +191,8 @@ class TenantResource extends BaseResource
                                     ->columnSpanFull(),
                             ]),
 
-                        Section::make('Статус задолженности')
+                        Section::make('Контроль задолженности')
+                            ->description('Оперативный комментарий менеджера по текущему состоянию расчетов.')
                             ->schema([
                                 Forms\Components\Placeholder::make('debt_status_summary')
                                     ->hiddenLabel()
@@ -223,7 +225,7 @@ class TenantResource extends BaseResource
                             ->columns(2),
 
                         Section::make('Торговые места')
-                            ->description('Текущая картина по местам за последний месяц начислений: сколько мест занято арендатором и какие суммы начислены.')
+                            ->description('Детализация по каждому месту: начисления, договор и быстрый переход на карту.')
                             ->schema([
                                 Forms\Components\Placeholder::make('spaces_last_period')
                                     ->hiddenLabel()
