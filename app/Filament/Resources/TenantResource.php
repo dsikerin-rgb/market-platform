@@ -210,6 +210,17 @@ class TenantResource extends BaseResource
                                     ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
                                     ->columnSpanFull(),
                             ]),
+
+                        Section::make('История аренды мест')
+                            ->description('Последние изменения привязки мест к арендатору.')
+                            ->collapsed()
+                            ->schema([
+                                Forms\Components\Placeholder::make('space_history_recent')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderSpaceHistory($record, 30))
+                                    ->columnSpanFull(),
+                            ]),
                     ]),
 
                 Tab::make('Договоры')
@@ -268,17 +279,6 @@ class TenantResource extends BaseResource
                             ]),
                     ]),
 
-                Tab::make('История аренды мест')
-                    ->schema([
-                        Section::make('История аренды мест')
-                            ->schema([
-                                Forms\Components\Placeholder::make('space_history')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderSpaceHistory($record))
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
             ]),
         ]);
     }
@@ -1539,7 +1539,7 @@ class TenantResource extends BaseResource
         return '<span class="' . e($class) . '">' . e($label) . '</span>';
     }
 
-    private static function renderSpaceHistory(?Tenant $record): HtmlString
+    private static function renderSpaceHistory(?Tenant $record, int $limit = 300): HtmlString
     {
         if (! $record) {
             return new HtmlString('<div style="font-size:13px;opacity:.85;">История появится после сохранения арендатора.</div>');
@@ -1558,7 +1558,7 @@ class TenantResource extends BaseResource
             })
             ->where('ms.market_id', (int) $record->market_id)
             ->orderByDesc('h.changed_at')
-            ->limit(300)
+            ->limit(max(1, $limit))
             ->get([
                 'h.changed_at',
                 'h.old_tenant_id',
