@@ -102,61 +102,6 @@ class TenantResource extends BaseResource
             $tabs->tabs([
                 Tab::make('Основное')
                     ->schema([
-                        Section::make('Сводка')
-                            ->description('Ключевые показатели по начислениям (берём из tenant_accruals).')
-                            ->schema([
-                                // KPI-сводку рендерим через Blade partial, чтобы получить нормальную иерархию (бейджи/карточки),
-                                // а не "анкетный" вид Placeholder’ов.
-                                Forms\Components\Placeholder::make('accruals_summary_view')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(function (?Tenant $record): HtmlString {
-                                        if (! $record) {
-                                            return new HtmlString('<div style="font-size:13px;opacity:.85;">Сводка появится после сохранения арендатора.</div>');
-                                        }
-
-                                        $summary = static::accrualSummaryData($record);
-                                        $summary['is_active'] = (bool) $record->is_active;
-
-                                        return new HtmlString(
-                                            view('filament.tenants.tenant-summary', ['summary' => $summary])->render()
-                                        );
-                                    })
-                                    ->columnSpanFull(),
-                            ]),
-
-                        Section::make('Статус задолженности')
-                            ->schema([
-                                Forms\Components\Placeholder::make('debt_status_summary')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
-                                    ->columnSpanFull(),
-
-                                Forms\Components\Select::make('debt_status')
-                                    ->label('Задолженность')
-                                    ->options(static::debtStatusOptions())
-                                    ->placeholder('Не указано')
-                                    ->nullable()
-                                    ->helperText('Временный ручной статус до интеграции с 1С. Оплата — до 30 календарных дней.'),
-
-                                Forms\Components\Textarea::make('debt_status_note')
-                                    ->label('Комментарий по задолженности')
-                                    ->nullable()
-                                    ->rows(3),
-
-                                Forms\Components\Placeholder::make('debt_status_updated_at')
-                                    ->label('Обновлено')
-                                    ->content(function (?Tenant $record): string {
-                                        if (! $record?->debt_status_updated_at) {
-                                            return '—';
-                                        }
-
-                                        return $record->debt_status_updated_at->format('d.m.Y H:i');
-                                    }),
-                            ])
-                            ->columns(2),
-
                         Section::make('Карточка арендатора')
                             ->schema([
                                 Forms\Components\Select::make('market_id')
@@ -214,9 +159,74 @@ class TenantResource extends BaseResource
                             ->columns(2),
                     ]),
 
-                Tab::make('Площади')
+                Tab::make('Финансы')
                     ->schema([
-                        Section::make('Арендуемые площади')
+                        Section::make()
+                            ->schema([
+                                Forms\Components\Placeholder::make('accruals_summary_view')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(function (?Tenant $record): HtmlString {
+                                        if (! $record) {
+                                            return new HtmlString('<div style="font-size:13px;opacity:.85;">Сводка появится после сохранения арендатора.</div>');
+                                        }
+
+                                        $summary = static::accrualSummaryData($record);
+                                        $summary['is_active'] = (bool) $record->is_active;
+
+                                        return new HtmlString(
+                                            view('filament.tenants.tenant-summary', ['summary' => $summary])->render()
+                                        );
+                                    })
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Оплаты и долг')
+                            ->description('По последнему снимку 1С (contract_debts).')
+                            ->schema([
+                                Forms\Components\Placeholder::make('payments_debt_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Статус задолженности')
+                            ->schema([
+                                Forms\Components\Placeholder::make('debt_status_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Select::make('debt_status')
+                                    ->label('Задолженность')
+                                    ->options(static::debtStatusOptions())
+                                    ->placeholder('Не указано')
+                                    ->nullable()
+                                    ->helperText('Временный ручной статус до интеграции с 1С. Оплата — до 30 календарных дней.'),
+
+                                Forms\Components\Textarea::make('debt_status_note')
+                                    ->label('Комментарий по задолженности')
+                                    ->nullable()
+                                    ->rows(3),
+
+                                Forms\Components\Placeholder::make('debt_status_updated_at')
+                                    ->label('Обновлено')
+                                    ->content(function (?Tenant $record): string {
+                                        if (! $record?->debt_status_updated_at) {
+                                            return '—';
+                                        }
+
+                                        return $record->debt_status_updated_at->format('d.m.Y H:i');
+                                    }),
+                            ])
+                            ->columns(2),
+                    ]),
+
+                Tab::make('Торговые места')
+                    ->schema([
+                        Section::make('Торговые места')
                             ->description('Список мест по последнему периоду начислений. Это “истина” для финансов, даже если market_spaces.tenant_id не проставлен.')
                             ->schema([
                                 Forms\Components\Placeholder::make('spaces_last_period')
@@ -718,10 +728,17 @@ class TenantResource extends BaseResource
         $sumAll = (float) ((clone $base)->selectRaw('COALESCE(SUM(total_with_vat), 0) as s')->value('s') ?? 0);
 
         $sumLast = 0.0;
+        $countLast = 0;
         $spacesLast = 0;
         $withoutSpace = 0;
 
         if ($lastPeriod) {
+            $countLast = (int) (DB::table('tenant_accruals')
+                ->where('market_id', (int) $record->market_id)
+                ->where('tenant_id', (int) $record->id)
+                ->where('period', $lastPeriod)
+                ->count());
+
             $sumLast = (float) (DB::table('tenant_accruals')
                 ->where('market_id', (int) $record->market_id)
                 ->where('tenant_id', (int) $record->id)
@@ -760,6 +777,7 @@ class TenantResource extends BaseResource
             'last_period_label' => $lastPeriodLabel,
             'sum_all' => $sumAll,
             'sum_last' => $sumLast,
+            'count_last_period' => $countLast,
             'spaces_last' => $spacesLast,
             'without_space' => $withoutSpace,
         ];
@@ -1039,6 +1057,114 @@ class TenantResource extends BaseResource
             'red' => '#dc2626',
             default => '#6b7280',
         };
+    }
+
+    private static function renderPaymentsDebtSummary(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Данные появятся после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет таблицы contract_debts — данные об оплатах недоступны.</div>');
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+
+        $base = DB::table('contract_debts')
+            ->where('tenant_id', (int) $record->id);
+
+        if ($hasMarketId) {
+            $base->where('market_id', (int) $record->market_id);
+        }
+
+        $snapshotLabel = null;
+        if ($hasCalculatedAt) {
+            $latest = (clone $base)->max('calculated_at');
+            if ($latest) {
+                $base->where('calculated_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasCreatedAt) {
+            $latest = (clone $base)->max('created_at');
+            if ($latest) {
+                $base->where('created_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasPeriod) {
+            $latest = (clone $base)->max('period');
+            if ($latest) {
+                $base->where('period', $latest);
+                $snapshotLabel = (string) $latest;
+            }
+        }
+
+        $rows = (int) (clone $base)->count();
+        if ($rows === 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет данных об оплатах по этому арендатору.</div>');
+        }
+
+        $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
+        $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
+        $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
+        $hasContractExternalId = static::hasColumn('contract_debts', 'contract_external_id');
+
+        $accrued = $hasAccrued ? (float) ((clone $base)->sum('accrued_amount') ?? 0) : null;
+        $paid = $hasPaid ? (float) ((clone $base)->sum('paid_amount') ?? 0) : null;
+        $debt = $hasDebt ? (float) ((clone $base)->sum('debt_amount') ?? 0) : null;
+
+        if ($debt === null && $accrued !== null && $paid !== null) {
+            $debt = $accrued - $paid;
+        }
+
+        $contractsCount = $hasContractExternalId
+            ? (int) ((clone $base)->distinct('contract_external_id')->count('contract_external_id') ?? 0)
+            : null;
+
+        $cards = [
+            ['title' => 'Начислено', 'value' => $accrued !== null ? static::formatRub($accrued) : '—'],
+            ['title' => 'Оплачено', 'value' => $paid !== null ? static::formatRub($paid) : '—'],
+            ['title' => 'Долг', 'value' => $debt !== null ? static::formatRub($debt) : '—'],
+        ];
+
+        $cardsHtml = '';
+        foreach ($cards as $card) {
+            $cardsHtml .= '<div style="border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;">'
+                . '<div style="font-size:12px;opacity:.75;line-height:1.2;">' . e($card['title']) . '</div>'
+                . '<div style="margin-top:4px;font-size:24px;font-weight:700;line-height:1.15;">' . e($card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $meta = [];
+        if ($snapshotLabel !== null) {
+            $meta[] = 'Снимок: <strong>' . e($snapshotLabel) . '</strong>';
+        }
+        $meta[] = 'Строк: <strong>' . e((string) $rows) . '</strong>';
+        if ($contractsCount !== null) {
+            $meta[] = 'Договоров: <strong>' . e((string) $contractsCount) . '</strong>';
+        }
+
+        $metaHtml = '<div style="margin-bottom:10px;font-size:12px;opacity:.78;">' . implode(' • ', $meta) . '</div>';
+
+        return new HtmlString(
+            '<div>'
+                . $metaHtml
+                . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'
+                    . $cardsHtml
+                . '</div>'
+            . '</div>'
+        );
     }
 
     private static function renderDebtStatusSummary(?Tenant $record): HtmlString

@@ -9,8 +9,8 @@
 
     $spacesLast   = (int) ($summary['spaces_last'] ?? 0);
     $sumLast      = (float) ($summary['sum_last'] ?? 0);
+    $countPeriod  = (int) ($summary['count_last_period'] ?? 0);
     $countAll     = (int) ($summary['count'] ?? 0);
-    $sumAll       = (float) ($summary['sum_all'] ?? 0);
     $withoutSpace = (int) ($summary['without_space'] ?? 0);
 
     $isActive = $summary['is_active'] ?? null;
@@ -27,10 +27,6 @@
         return number_format($value, 0, ',', ' ');
     };
 
-    $dataQualityTitle = $withoutSpace > 0 ? 'Есть строки без привязки' : 'Все строки привязаны';
-    $dataQualityHint = $withoutSpace > 0
-        ? ('Без market_space_id: ' . $formatInt($withoutSpace) . ' — финансы учтены, но место не определено.')
-        : 'Можно строить “Площади” по начислениям без оговорок.';
 @endphp
 
 @once
@@ -188,10 +184,6 @@
             <span class="tenant-summary__badge tenant-summary__badge--warning">
                 Есть строки без привязки: <strong>{{ $formatInt($withoutSpace) }}</strong>
             </span>
-        @else
-            <span class="tenant-summary__badge tenant-summary__badge--success">
-                Все строки привязаны
-            </span>
         @endif
 
         @if ($isActive === true)
@@ -216,8 +208,8 @@
     @else
         <div class="tenant-summary__grid">
             {{-- Primary: payment for last period --}}
-            <div class="tenant-summary__card tenant-summary__span-6">
-                <div class="tenant-summary__label">Итого к оплате за период (с НДС)</div>
+            <div class="tenant-summary__card tenant-summary__span-12">
+                <div class="tenant-summary__label">К оплате за {{ $lastPeriodLabel }}</div>
                 <div class="tenant-summary__value tenant-summary__value--xl">{{ $formatRub($sumLast) }}</div>
 
                 {{-- No duplicate "Период" here: it's already in the badge --}}
@@ -227,27 +219,12 @@
                         <span>{{ $formatInt($spacesLast) }}</span>
                     </div>
                     <div class="tenant-summary__inline-kpi">
-                        <span>Строк за всё время</span>
-                        <span>{{ $formatInt($countAll) }}</span>
+                        <span>Начислений за период</span>
+                        <span>{{ $formatInt($countPeriod) }}</span>
                     </div>
                 </div>
-
-                <div class="tenant-summary__hint">Источник: tenant_accruals (финансовая “истина”).</div>
             </div>
 
-            {{-- Total all-time --}}
-            <div class="tenant-summary__card tenant-summary__span-3">
-                <div class="tenant-summary__label">Сумма начислений за всё время</div>
-                <div class="tenant-summary__value">{{ $formatRub($sumAll) }}</div>
-                <div class="tenant-summary__hint">Накопительно</div>
-            </div>
-
-            {{-- Data quality --}}
-            <div class="tenant-summary__card tenant-summary__span-3">
-                <div class="tenant-summary__label">Качество данных</div>
-                <div class="tenant-summary__value">{{ $dataQualityTitle }}</div>
-                <div class="tenant-summary__hint">{{ $dataQualityHint }}</div>
-            </div>
         </div>
     @endif
 </div>
