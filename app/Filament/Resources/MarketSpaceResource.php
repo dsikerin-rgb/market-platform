@@ -16,7 +16,7 @@ use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -30,9 +30,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
 
-class MarketSpaceResource extends Resource
+class MarketSpaceResource extends BaseResource
 {
+    
+
     protected static ?string $model = MarketSpace::class;
+
+    protected static ?string $recordTitleAttribute = 'number';
 
     protected static ?string $modelLabel = 'Торговое место';
     protected static ?string $pluralModelLabel = 'Торговые места';
@@ -136,6 +140,17 @@ class MarketSpaceResource extends Resource
         };
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'number',
+            'display_name',
+            'activity_type',
+            'location.name',
+            'tenant.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

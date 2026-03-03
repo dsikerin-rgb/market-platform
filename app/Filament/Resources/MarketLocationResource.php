@@ -7,16 +7,20 @@ use App\Models\MarketLocation;
 use App\Models\MarketLocationType;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class MarketLocationResource extends Resource
+class MarketLocationResource extends BaseResource
 {
+    
+
     protected static ?string $model = MarketLocation::class;
+
+    protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $modelLabel = 'Локация';
     protected static ?string $pluralModelLabel = 'Локации рынка';
@@ -55,6 +59,16 @@ class MarketLocationResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name',
+            'locationType.name_ru',
+            'parent.name',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

@@ -8,12 +8,12 @@ use App\Filament\Resources\Roles\Pages\ListRoles;
 use App\Filament\Resources\Roles\Schemas\RoleForm;
 use App\Filament\Resources\Roles\Tables\RolesTable;
 use Filament\Facades\Filament;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class RoleResource extends Resource
+class RoleResource extends BaseResource
 {
     protected static ?string $model = \Spatie\Permission\Models\Role::class;
 
@@ -34,6 +34,15 @@ class RoleResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'name',
+            'label_ru',
+            'guard_name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         return RoleForm::configure($schema);

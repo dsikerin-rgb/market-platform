@@ -6,16 +6,20 @@ use App\Filament\Resources\ReportResource\Pages;
 use App\Models\Report;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class ReportResource extends Resource
+class ReportResource extends BaseResource
 {
+    
+
     protected static ?string $model = Report::class;
+
+    protected static ?string $recordTitleAttribute = 'type';
 
     protected static ?string $modelLabel = 'Отчёт';
     protected static ?string $pluralModelLabel = 'Отчёты';
@@ -42,6 +46,15 @@ class ReportResource extends Resource
         return filled($value) ? (int) $value : null;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'type',
+            'schedule_rule',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

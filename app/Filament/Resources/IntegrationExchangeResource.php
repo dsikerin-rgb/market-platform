@@ -9,7 +9,7 @@ use App\Filament\Resources\IntegrationExchangeResource\Pages;
 use App\Models\IntegrationExchange;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -17,9 +17,13 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 
-class IntegrationExchangeResource extends Resource
+class IntegrationExchangeResource extends BaseResource
 {
+    
+
     protected static ?string $model = IntegrationExchange::class;
+
+    protected static ?string $recordTitleAttribute = 'entity_type';
 
     protected static ?string $modelLabel = 'Обмен интеграции';
     protected static ?string $pluralModelLabel = 'Обмены интеграций';
@@ -77,6 +81,17 @@ class IntegrationExchangeResource extends Resource
         return filled($value) ? $value : $default;
     }
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'entity_type',
+            'direction',
+            'status',
+            'error',
+            'market.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

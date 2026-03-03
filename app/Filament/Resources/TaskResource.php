@@ -15,7 +15,7 @@ use App\Models\TaskParticipant;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
-class TaskResource extends Resource
+class TaskResource extends BaseResource
 {
     protected static ?string $model = Task::class;
 
@@ -48,6 +48,16 @@ class TaskResource extends Resource
      */
     protected static ?string $recordTitleAttribute = 'title';
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'title',
+            'description',
+            'market.name',
+            'assignee.name',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();

@@ -17,7 +17,7 @@ use App\Services\Operations\MarketPeriodResolver;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Resources\Resource;
+use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -28,9 +28,13 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 
-class OperationResource extends Resource
+class OperationResource extends BaseResource
 {
+    
+
     protected static ?string $model = Operation::class;
+
+    protected static ?string $recordTitleAttribute = 'type';
 
     protected static ?string $modelLabel = 'Операция';
     protected static ?string $pluralModelLabel = 'Операции';
@@ -41,6 +45,16 @@ class OperationResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
 
+    
+    public static function getGloballySearchableAttributes(): array
+    {
+        return [
+            'type',
+            'entity_type',
+            'status',
+            'effective_month',
+        ];
+    }
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
