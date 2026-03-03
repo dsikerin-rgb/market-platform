@@ -1182,9 +1182,6 @@ class TenantResource extends BaseResource
             $summaryCards[] = ['label' => 'Оплачено (снимок)', 'value' => static::formatRub($paymentsTotalPaid)];
             $summaryCards[] = ['label' => 'Долг (снимок)', 'value' => static::formatRub($paymentsTotalDebt)];
         }
-        $summaryCards[] = ['label' => 'Договоров с привязкой', 'value' => (string) $contractsMappedTotal];
-        $summaryCards[] = ['label' => 'Активных договоров', 'value' => (string) $contractsMappedActiveTotal];
-
         $summaryHtml = '';
         foreach ($summaryCards as $card) {
             $summaryHtml .= '<div class="tenant-spaces__summary-card">'
