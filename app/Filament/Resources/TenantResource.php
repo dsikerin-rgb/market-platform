@@ -190,8 +190,7 @@ class TenantResource extends BaseResource
                                     ->columnSpanFull(),
                             ]),
 
-                        Section::make('Контроль задолженности')
-                            ->description('Оперативный комментарий менеджера по текущему состоянию расчетов.')
+                        Section::make()
                             ->schema([
                                 Forms\Components\Placeholder::make('debt_status_summary')
                                     ->hiddenLabel()
