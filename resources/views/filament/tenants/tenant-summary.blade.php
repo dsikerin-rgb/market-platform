@@ -13,9 +13,6 @@
     $countAll     = (int) ($summary['count'] ?? 0);
     $withoutSpace = (int) ($summary['without_space'] ?? 0);
 
-    $isActive = $summary['is_active'] ?? null;
-    $isActiveLabel = $isActive === null ? '—' : ($isActive ? 'Активен' : 'Неактивен');
-
     $formatRub = static function (float $value): string {
         $v = round($value, 2);
         $s = number_format($v, 2, ',', ' ');
@@ -52,15 +49,6 @@
         .dark .tenant-summary__badge {
             border-color: rgba(255,255,255,.12);
             background: rgba(255,255,255,.04);
-        }
-
-        .tenant-summary__badge--success {
-            border-color: rgba(16,185,129,.30);
-            background: rgba(16,185,129,.10);
-        }
-        .dark .tenant-summary__badge--success {
-            border-color: rgba(16,185,129,.35);
-            background: rgba(16,185,129,.12);
         }
 
         .tenant-summary__badge--warning {
@@ -186,19 +174,6 @@
             </span>
         @endif
 
-        @if ($isActive === true)
-            <span class="tenant-summary__badge tenant-summary__badge--success">
-                Статус: <strong>{{ $isActiveLabel }}</strong>
-            </span>
-        @elseif ($isActive === false)
-            <span class="tenant-summary__badge">
-                Статус: <strong>{{ $isActiveLabel }}</strong>
-            </span>
-        @else
-            <span class="tenant-summary__badge">
-                Статус: <strong>{{ $isActiveLabel }}</strong>
-            </span>
-        @endif
     </div>
 
     @if ($countAll <= 0)
