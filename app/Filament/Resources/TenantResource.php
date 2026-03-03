@@ -192,6 +192,15 @@ class TenantResource extends BaseResource
 
                 Tab::make('Торговые места')
                     ->schema([
+                        Section::make()
+                            ->schema([
+                                Forms\Components\Placeholder::make('spaces_last_period')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record) => static::renderSpacesLastPeriod($record))
+                                    ->columnSpanFull(),
+                            ]),
+
                         Section::make('Расчеты по договорам')
                             ->description('Начислено, оплачено и долг по последнему снимку 1С.')
                             ->schema([
@@ -199,15 +208,6 @@ class TenantResource extends BaseResource
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
-                                    ->columnSpanFull(),
-                            ]),
-
-                        Section::make()
-                            ->schema([
-                                Forms\Components\Placeholder::make('spaces_last_period')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record) => static::renderSpacesLastPeriod($record))
                                     ->columnSpanFull(),
                             ]),
                     ]),
