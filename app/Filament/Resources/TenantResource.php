@@ -158,9 +158,9 @@ class TenantResource extends BaseResource
                             ->columns(2),
                     ]),
 
-                Tab::make('Финансы')
+                Tab::make('Торговые места')
                     ->schema([
-                        Section::make()
+                        Section::make('Финансы')
                             ->schema([
                                 Forms\Components\Placeholder::make('accruals_summary_view')
                                     ->hiddenLabel()
@@ -221,10 +221,7 @@ class TenantResource extends BaseResource
                                     }),
                             ])
                             ->columns(2),
-                    ]),
 
-                Tab::make('Торговые места')
-                    ->schema([
                         Section::make('Торговые места')
                             ->description('Текущая картина по местам за последний месяц начислений: сколько мест занято арендатором и какие суммы начислены.')
                             ->schema([
