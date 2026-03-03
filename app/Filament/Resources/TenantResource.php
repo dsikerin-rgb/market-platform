@@ -829,7 +829,6 @@ class TenantResource extends BaseResource
             $selectParts[] = 'COALESCE(' . implode(', ', $areaExprParts) . ', 0) as area_sqm';
         }
 
-        $selectParts[] = 'COALESCE(SUM(ta.rent_amount), 0) as rent_sum';
         $selectParts[] = 'COALESCE(SUM(ta.total_with_vat), 0) as total_with_vat_sum';
 
         $rows = DB::table('tenant_accruals as ta')
@@ -1084,7 +1083,6 @@ class TenantResource extends BaseResource
             }
         }
 
-        $totalRent = 0.0;
         $totalWithVat = 0.0;
         $totalArea = 0.0;
         $contractsMappedTotal = 0;
@@ -1101,7 +1099,6 @@ class TenantResource extends BaseResource
 
         $tableRows = '';
         foreach ($rows as $r) {
-            $totalRent += (float) $r->rent_sum;
             $totalWithVat += (float) $r->total_with_vat_sum;
 
             $code = trim((string) ($r->place_code ?? ''));
@@ -1180,7 +1177,6 @@ class TenantResource extends BaseResource
                     <td class="tenant-spaces__code">' . $codeCell . '</td>
                     <td class="tenant-spaces__name">' . $nameCell . '</td>
                     ' . $areaCell . '
-                    <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
                     <td class="tenant-spaces__num">' . $paidCell . '</td>
                     <td class="tenant-spaces__num">' . $debtCell . '</td>
@@ -1191,7 +1187,7 @@ class TenantResource extends BaseResource
         }
 
         $areaHeader = $hasArea ? '<th class="tenant-spaces__num">Площадь</th>' : '';
-        $colspan = $hasArea ? 9 : 8;
+        $colspan = $hasArea ? 8 : 7;
 
         $summaryCards = [
             ['label' => 'Месяц начислений', 'value' => $periodLabel],
@@ -1202,7 +1198,6 @@ class TenantResource extends BaseResource
             $summaryCards[] = ['label' => 'Площадь', 'value' => static::formatArea($totalArea)];
         }
 
-        $summaryCards[] = ['label' => 'Итого аренда', 'value' => static::formatRub($totalRent)];
         $summaryCards[] = ['label' => 'Итого с НДС', 'value' => static::formatRub($totalWithVat)];
         if ($hasPaymentsData) {
             $summaryCards[] = ['label' => 'Оплачено (снимок)', 'value' => static::formatRub($paymentsTotalPaid)];
@@ -1286,7 +1281,6 @@ class TenantResource extends BaseResource
                     <th>Место</th>
                     <th>Название</th>
                     ' . $areaHeader . '
-                    <th class="tenant-spaces__num">Аренда</th>
                     <th class="tenant-spaces__num">Итого с НДС</th>
                     <th class="tenant-spaces__num">Оплачено</th>
                     <th class="tenant-spaces__num">Долг</th>
