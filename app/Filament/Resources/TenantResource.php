@@ -888,7 +888,7 @@ class TenantResource extends BaseResource
             $contractStatsRows = DB::table('tenant_contracts')
                 ->where('market_id', (int) $record->market_id)
                 ->where('tenant_id', (int) $record->id)
-                ->selectRaw('market_space_id, COUNT(*) as contracts_count, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_contracts_count')
+                ->selectRaw('market_space_id, COUNT(*) as contracts_count, SUM(CASE WHEN is_active THEN 1 ELSE 0 END) as active_contracts_count')
                 ->groupBy('market_space_id')
                 ->get();
         }
@@ -1110,7 +1110,7 @@ class TenantResource extends BaseResource
         }
 
         $contractsTotal = $rows->count();
-        $activeTotal = $rows->where('is_active', 1)->count();
+        $activeTotal = $rows->filter(static fn ($row): bool => (bool) ($row->is_active ?? false))->count();
         $withoutSpaceTotal = $rows->whereNull('market_space_id')->count();
 
         $tableRows = '';
