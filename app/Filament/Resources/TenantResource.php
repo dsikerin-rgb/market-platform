@@ -156,21 +156,8 @@ class TenantResource extends BaseResource
                                     ->default(true),
                             ])
                             ->columns(2),
-                    ]),
 
-                Tab::make('Торговые места')
-                    ->schema([
-                        Section::make('Расчеты по договорам')
-                            ->description('Начислено, оплачено и долг по последнему снимку 1С.')
-                            ->schema([
-                                Forms\Components\Placeholder::make('payments_debt_summary')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
-                                    ->columnSpanFull(),
-                            ]),
-
-                        Section::make()
+                        Section::make('Задолженность (ручной статус)')
                             ->schema([
                                 Forms\Components\Placeholder::make('debt_status_summary')
                                     ->hiddenLabel()
@@ -201,6 +188,19 @@ class TenantResource extends BaseResource
                                     }),
                             ])
                             ->columns(2),
+                    ]),
+
+                Tab::make('Торговые места')
+                    ->schema([
+                        Section::make('Расчеты по договорам')
+                            ->description('Начислено, оплачено и долг по последнему снимку 1С.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('payments_debt_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
+                                    ->columnSpanFull(),
+                            ]),
 
                         Section::make('Торговые места')
                             ->description('Детализация по каждому месту: начисления, договор и быстрый переход на карту.')
