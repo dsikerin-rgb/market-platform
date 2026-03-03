@@ -202,8 +202,7 @@ class TenantResource extends BaseResource
                                     ->columnSpanFull(),
                             ]),
 
-                        Section::make('Торговые места')
-                            ->description('Детализация по каждому месту: начисления, договор и быстрый переход на карту.')
+                        Section::make()
                             ->schema([
                                 Forms\Components\Placeholder::make('spaces_last_period')
                                     ->hiddenLabel()
