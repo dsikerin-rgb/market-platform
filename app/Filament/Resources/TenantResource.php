@@ -859,21 +859,28 @@ class TenantResource extends BaseResource
         }
 
         $contractsBySpace = [];
+        $contractExternalToSpace = [];
         $contractsWithoutSpace = 0;
         $activeContractsWithoutSpace = 0;
         if (DbSchema::hasTable('tenant_contracts')) {
+            $tcHasExternalId = static::hasColumn('tenant_contracts', 'external_id');
+            $tcSelect = [
+                'id',
+                'market_space_id',
+                'number',
+                'is_active',
+            ];
+            if ($tcHasExternalId) {
+                $tcSelect[] = 'external_id';
+            }
+
             $contractRows = DB::table('tenant_contracts')
                 ->where('market_id', (int) $record->market_id)
                 ->where('tenant_id', (int) $record->id)
                 ->orderByDesc('is_active')
                 ->orderByDesc('starts_at')
                 ->orderBy('id')
-                ->get([
-                    'id',
-                    'market_space_id',
-                    'number',
-                    'is_active',
-                ]);
+                ->get($tcSelect);
 
             foreach ($contractRows as $contractRow) {
                 $spaceIdRaw = $contractRow->market_space_id;
@@ -909,6 +916,114 @@ class TenantResource extends BaseResource
                         'is_active' => $isActive,
                     ];
                 }
+
+                $externalId = trim((string) ($contractRow->external_id ?? ''));
+                if ($externalId !== '') {
+                    $contractExternalToSpace[$externalId] = $spaceId;
+                }
+            }
+        }
+
+        $paymentsBySpace = [];
+        $paymentsSnapshotLabel = null;
+        $paymentsRowsCount = 0;
+        $paymentsUnmappedContracts = 0;
+        $paymentsUnmappedPaid = 0.0;
+        $paymentsUnmappedDebt = 0.0;
+        $paymentsTotalPaid = 0.0;
+        $paymentsTotalDebt = 0.0;
+        $hasPaymentsData = false;
+
+        if (
+            DbSchema::hasTable('contract_debts')
+            && static::hasColumn('contract_debts', 'tenant_id')
+            && static::hasColumn('contract_debts', 'contract_external_id')
+        ) {
+            $cdHasMarketId = static::hasColumn('contract_debts', 'market_id');
+            $cdHasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+            $cdHasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+            $cdHasPeriod = static::hasColumn('contract_debts', 'period');
+            $cdHasPaid = static::hasColumn('contract_debts', 'paid_amount');
+            $cdHasDebt = static::hasColumn('contract_debts', 'debt_amount');
+
+            $debtsBase = DB::table('contract_debts')
+                ->where('tenant_id', (int) $record->id);
+
+            if ($cdHasMarketId) {
+                $debtsBase->where('market_id', (int) $record->market_id);
+            }
+
+            if ($cdHasCalculatedAt) {
+                $latest = (clone $debtsBase)->max('calculated_at');
+                if ($latest) {
+                    $debtsBase->where('calculated_at', $latest);
+                    try {
+                        $paymentsSnapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                    } catch (\Throwable) {
+                        $paymentsSnapshotLabel = (string) $latest;
+                    }
+                }
+            } elseif ($cdHasCreatedAt) {
+                $latest = (clone $debtsBase)->max('created_at');
+                if ($latest) {
+                    $debtsBase->where('created_at', $latest);
+                    try {
+                        $paymentsSnapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                    } catch (\Throwable) {
+                        $paymentsSnapshotLabel = (string) $latest;
+                    }
+                }
+            } elseif ($cdHasPeriod) {
+                $latest = (clone $debtsBase)->max('period');
+                if ($latest) {
+                    $debtsBase->where('period', $latest);
+                    $paymentsSnapshotLabel = (string) $latest;
+                }
+            }
+
+            $debtsSelect = ['contract_external_id'];
+            if ($cdHasPaid) {
+                $debtsSelect[] = 'paid_amount';
+            }
+            if ($cdHasDebt) {
+                $debtsSelect[] = 'debt_amount';
+            }
+
+            $debtRows = (clone $debtsBase)->get($debtsSelect);
+            $paymentsRowsCount = $debtRows->count();
+            $hasPaymentsData = $paymentsRowsCount > 0;
+
+            foreach ($debtRows as $debtRow) {
+                $externalId = trim((string) ($debtRow->contract_external_id ?? ''));
+                if ($externalId === '') {
+                    continue;
+                }
+
+                $paid = (float) ($debtRow->paid_amount ?? 0);
+                $debt = (float) ($debtRow->debt_amount ?? 0);
+
+                $paymentsTotalPaid += $paid;
+                $paymentsTotalDebt += $debt;
+
+                if (! array_key_exists($externalId, $contractExternalToSpace)) {
+                    $paymentsUnmappedContracts++;
+                    $paymentsUnmappedPaid += $paid;
+                    $paymentsUnmappedDebt += $debt;
+                    continue;
+                }
+
+                $spaceId = (int) $contractExternalToSpace[$externalId];
+                if (! array_key_exists($spaceId, $paymentsBySpace)) {
+                    $paymentsBySpace[$spaceId] = [
+                        'paid' => 0.0,
+                        'debt' => 0.0,
+                        'rows' => 0,
+                    ];
+                }
+
+                $paymentsBySpace[$spaceId]['paid'] += $paid;
+                $paymentsBySpace[$spaceId]['debt'] += $debt;
+                $paymentsBySpace[$spaceId]['rows']++;
             }
         }
 
@@ -992,6 +1107,17 @@ class TenantResource extends BaseResource
             $contractsMappedTotal += (int) $contractStat['contracts'];
             $contractsMappedActiveTotal += (int) $contractStat['active'];
 
+            $paymentStat = ($spaceId !== null && array_key_exists($spaceId, $paymentsBySpace))
+                ? $paymentsBySpace[$spaceId]
+                : null;
+
+            $paidCell = $hasPaymentsData
+                ? e(static::formatRub((float) ($paymentStat['paid'] ?? 0.0)))
+                : '—';
+            $debtCell = $hasPaymentsData
+                ? e(static::formatRub((float) ($paymentStat['debt'] ?? 0.0)))
+                : '—';
+
             $contractCell = '—';
             if ((int) $contractStat['contracts'] > 0) {
                 $links = [];
@@ -1031,6 +1157,8 @@ class TenantResource extends BaseResource
                     ' . $areaCell . '
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
+                    <td class="tenant-spaces__num">' . $paidCell . '</td>
+                    <td class="tenant-spaces__num">' . $debtCell . '</td>
                     <td class="tenant-spaces__contracts">' . $contractCell . '</td>
                     <td class="tenant-spaces__map">' . $mapCell . '</td>
                 </tr>
@@ -1038,7 +1166,7 @@ class TenantResource extends BaseResource
         }
 
         $areaHeader = $hasArea ? '<th class="tenant-spaces__num">Площадь</th>' : '';
-        $colspan = $hasArea ? 7 : 6;
+        $colspan = $hasArea ? 9 : 8;
 
         $summaryCards = [
             ['label' => 'Месяц начислений', 'value' => $periodLabel],
@@ -1051,6 +1179,10 @@ class TenantResource extends BaseResource
 
         $summaryCards[] = ['label' => 'Итого аренда', 'value' => static::formatRub($totalRent)];
         $summaryCards[] = ['label' => 'Итого с НДС', 'value' => static::formatRub($totalWithVat)];
+        if ($hasPaymentsData) {
+            $summaryCards[] = ['label' => 'Оплачено (снимок)', 'value' => static::formatRub($paymentsTotalPaid)];
+            $summaryCards[] = ['label' => 'Долг (снимок)', 'value' => static::formatRub($paymentsTotalDebt)];
+        }
         $summaryCards[] = ['label' => 'Договоров с привязкой', 'value' => (string) $contractsMappedTotal];
         $summaryCards[] = ['label' => 'Активных договоров', 'value' => (string) $contractsMappedActiveTotal];
 
@@ -1071,6 +1203,16 @@ class TenantResource extends BaseResource
                 . '</strong>). Их нужно привязать к месту.</div>';
         }
 
+        if ($hasPaymentsData && $paymentsUnmappedContracts > 0) {
+            $warn .= '<div class="tenant-spaces__warn">Часть оплат/долгов не разложена по местам: договоров без привязки <strong>'
+                . e((string) $paymentsUnmappedContracts)
+                . '</strong>, оплачено <strong>'
+                . e(static::formatRub($paymentsUnmappedPaid))
+                . '</strong>, долг <strong>'
+                . e(static::formatRub($paymentsUnmappedDebt))
+                . '</strong>.</div>';
+        }
+
         $style = '
 <style>
 .tenant-spaces{display:flex;flex-direction:column;gap:12px}
@@ -1079,6 +1221,7 @@ class TenantResource extends BaseResource
 .dark .tenant-spaces__summary-card{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
 .tenant-spaces__summary-label{font-size:12px;opacity:.72;line-height:1.2}
 .tenant-spaces__summary-value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2}
+.tenant-spaces__snapshot{font-size:12px;opacity:.75}
 .tenant-spaces__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
 .dark .tenant-spaces__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
 
@@ -1110,6 +1253,7 @@ class TenantResource extends BaseResource
         $html = $style . '
 <div class="tenant-spaces">
     <div class="tenant-spaces__summary">' . $summaryHtml . '</div>
+    ' . ($paymentsSnapshotLabel ? '<div class="tenant-spaces__snapshot">Снимок оплат 1С: <strong>' . e($paymentsSnapshotLabel) . '</strong></div>' : '') . '
     ' . $warn . '
 
     <div class="tenant-spaces__table-wrap">
@@ -1121,6 +1265,8 @@ class TenantResource extends BaseResource
                     ' . $areaHeader . '
                     <th class="tenant-spaces__num">Аренда</th>
                     <th class="tenant-spaces__num">Итого с НДС</th>
+                    <th class="tenant-spaces__num">Оплачено</th>
+                    <th class="tenant-spaces__num">Долг</th>
                     <th>Договор</th>
                     <th>Карта</th>
                 </tr>
