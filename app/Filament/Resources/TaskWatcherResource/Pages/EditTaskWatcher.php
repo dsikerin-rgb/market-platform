@@ -4,9 +4,9 @@ namespace App\Filament\Resources\TaskWatcherResource\Pages;
 
 use App\Filament\Resources\TaskWatcherResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditTaskWatcher extends EditRecord
+class EditTaskWatcher extends BaseEditRecord
 {
     protected static string $resource = TaskWatcherResource::class;
 

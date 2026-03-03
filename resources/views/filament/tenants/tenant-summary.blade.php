@@ -9,12 +9,9 @@
 
     $spacesLast   = (int) ($summary['spaces_last'] ?? 0);
     $sumLast      = (float) ($summary['sum_last'] ?? 0);
+    $countPeriod  = (int) ($summary['count_last_period'] ?? 0);
     $countAll     = (int) ($summary['count'] ?? 0);
-    $sumAll       = (float) ($summary['sum_all'] ?? 0);
     $withoutSpace = (int) ($summary['without_space'] ?? 0);
-
-    $isActive = $summary['is_active'] ?? null;
-    $isActiveLabel = $isActive === null ? '—' : ($isActive ? 'Активен' : 'Неактивен');
 
     $formatRub = static function (float $value): string {
         $v = round($value, 2);
@@ -27,10 +24,6 @@
         return number_format($value, 0, ',', ' ');
     };
 
-    $dataQualityTitle = $withoutSpace > 0 ? 'Есть строки без привязки' : 'Все строки привязаны';
-    $dataQualityHint = $withoutSpace > 0
-        ? ('Без market_space_id: ' . $formatInt($withoutSpace) . ' — финансы учтены, но место не определено.')
-        : 'Можно строить “Площади” по начислениям без оговорок.';
 @endphp
 
 @once
@@ -56,15 +49,6 @@
         .dark .tenant-summary__badge {
             border-color: rgba(255,255,255,.12);
             background: rgba(255,255,255,.04);
-        }
-
-        .tenant-summary__badge--success {
-            border-color: rgba(16,185,129,.30);
-            background: rgba(16,185,129,.10);
-        }
-        .dark .tenant-summary__badge--success {
-            border-color: rgba(16,185,129,.35);
-            background: rgba(16,185,129,.12);
         }
 
         .tenant-summary__badge--warning {
@@ -99,6 +83,29 @@
             font-size: 12px;
             opacity: .75;
             margin-bottom: 6px;
+        }
+        .tenant-summary__label-with-help {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tenant-summary__help-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(0,0,0,.20);
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: help;
+            opacity: .85;
+            user-select: none;
+        }
+        .dark .tenant-summary__help-icon {
+            border-color: rgba(255,255,255,.25);
         }
 
         .tenant-summary__value {
@@ -181,32 +188,15 @@
 <div class="tenant-summary">
     <div class="tenant-summary__badges">
         <span class="tenant-summary__badge">
-            Период: <strong>{{ $lastPeriodLabel }}</strong>
+            Месяц начислений: <strong>{{ $lastPeriodLabel }}</strong>
         </span>
 
         @if ($withoutSpace > 0)
             <span class="tenant-summary__badge tenant-summary__badge--warning">
                 Есть строки без привязки: <strong>{{ $formatInt($withoutSpace) }}</strong>
             </span>
-        @else
-            <span class="tenant-summary__badge tenant-summary__badge--success">
-                Все строки привязаны
-            </span>
         @endif
 
-        @if ($isActive === true)
-            <span class="tenant-summary__badge tenant-summary__badge--success">
-                Статус: <strong>{{ $isActiveLabel }}</strong>
-            </span>
-        @elseif ($isActive === false)
-            <span class="tenant-summary__badge">
-                Статус: <strong>{{ $isActiveLabel }}</strong>
-            </span>
-        @else
-            <span class="tenant-summary__badge">
-                Статус: <strong>{{ $isActiveLabel }}</strong>
-            </span>
-        @endif
     </div>
 
     @if ($countAll <= 0)
@@ -216,38 +206,32 @@
     @else
         <div class="tenant-summary__grid">
             {{-- Primary: payment for last period --}}
-            <div class="tenant-summary__card tenant-summary__span-6">
-                <div class="tenant-summary__label">Итого к оплате за период (с НДС)</div>
+            <div class="tenant-summary__card tenant-summary__span-12">
+                <div class="tenant-summary__label tenant-summary__label-with-help">
+                    <span>К оплате за месяц {{ $lastPeriodLabel }}</span>
+                    <span class="tenant-summary__help-icon" title="Сумма начислений арендатора за выбранный месяц (с НДС) по данным tenant_accruals." aria-label="Подсказка: сумма к оплате">?</span>
+                </div>
                 <div class="tenant-summary__value tenant-summary__value--xl">{{ $formatRub($sumLast) }}</div>
 
                 {{-- No duplicate "Период" here: it's already in the badge --}}
                 <div class="tenant-summary__inline-kpis">
                     <div class="tenant-summary__inline-kpi">
-                        <span>Мест за период</span>
+                        <span>
+                            Торговых мест с начислениями
+                            <span class="tenant-summary__help-icon" title="Количество уникальных торговых мест, по которым есть начисления в выбранном месяце." aria-label="Подсказка: торговых мест с начислениями">?</span>
+                        </span>
                         <span>{{ $formatInt($spacesLast) }}</span>
                     </div>
                     <div class="tenant-summary__inline-kpi">
-                        <span>Строк за всё время</span>
-                        <span>{{ $formatInt($countAll) }}</span>
+                        <span>
+                            Строк начислений
+                            <span class="tenant-summary__help-icon" title="Количество строк начислений за месяц. На одно торговое место может приходиться несколько строк." aria-label="Подсказка: строк начислений">?</span>
+                        </span>
+                        <span>{{ $formatInt($countPeriod) }}</span>
                     </div>
                 </div>
-
-                <div class="tenant-summary__hint">Источник: tenant_accruals (финансовая “истина”).</div>
             </div>
 
-            {{-- Total all-time --}}
-            <div class="tenant-summary__card tenant-summary__span-3">
-                <div class="tenant-summary__label">Сумма начислений за всё время</div>
-                <div class="tenant-summary__value">{{ $formatRub($sumAll) }}</div>
-                <div class="tenant-summary__hint">Накопительно</div>
-            </div>
-
-            {{-- Data quality --}}
-            <div class="tenant-summary__card tenant-summary__span-3">
-                <div class="tenant-summary__label">Качество данных</div>
-                <div class="tenant-summary__value">{{ $dataQualityTitle }}</div>
-                <div class="tenant-summary__hint">{{ $dataQualityHint }}</div>
-            </div>
         </div>
     @endif
 </div>

@@ -18,6 +18,7 @@ class TenantRequest extends Model
         'tenant_id',
         'market_space_id',
         'tenant_contract_id',
+        'ticket_id',
         'subject',
         'description',
         'category',
@@ -71,6 +72,11 @@ class TenantRequest extends Model
     public function contract(): BelongsTo
     {
         return $this->belongsTo(TenantContract::class, 'tenant_contract_id');
+    }
+
+    public function ticket(): BelongsTo
+    {
+        return $this->belongsTo(Ticket::class);
     }
 
     public function createdBy(): BelongsTo

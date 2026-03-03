@@ -5,10 +5,10 @@ namespace App\Filament\Resources\Staff\Pages;
 use App\Filament\Resources\Staff\StaffResource;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 use Spatie\Permission\Models\Role;
 
-class EditStaff extends EditRecord
+class EditStaff extends BaseEditRecord
 {
     protected static string $resource = StaffResource::class;
 

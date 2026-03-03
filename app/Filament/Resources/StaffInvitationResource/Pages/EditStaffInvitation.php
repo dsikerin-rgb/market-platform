@@ -4,9 +4,9 @@ namespace App\Filament\Resources\StaffInvitationResource\Pages;
 
 use App\Filament\Resources\StaffInvitationResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditStaffInvitation extends EditRecord
+class EditStaffInvitation extends BaseEditRecord
 {
     protected static string $resource = StaffInvitationResource::class;
 

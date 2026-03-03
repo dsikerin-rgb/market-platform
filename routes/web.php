@@ -18,6 +18,10 @@ use App\Http\Controllers\Cabinet\SpacesController;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Models\Tenant;
+use App\Models\TenantContract;
+use App\Models\Ticket;
+use App\Models\TicketComment;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Http\Request;
@@ -64,6 +68,100 @@ Route::prefix('cabinet')->group(function () {
 Route::get('/v/{tenantSlug}', PublicShowcaseController::class)->name('cabinet.showcase.public');
 
 Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(function () {
+    Route::match(['POST', 'PUT', 'PATCH', 'DELETE'], '/admin/tenants/{tenant}/contracts/{contract}/delete', function (Request $request, int $tenant, int $contract) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $contractModel = TenantContract::query()
+            ->whereKey($contract)
+            ->where('tenant_id', $tenant)
+            ->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $contractModel->market_id;
+        abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
+
+        $number = trim((string) ($contractModel->number ?? ''));
+        $label = $number !== '' ? $number : ('#' . (int) $contractModel->id);
+
+        try {
+            $contractModel->delete();
+        } catch (\Throwable) {
+            return back()->withErrors([
+                'contract_delete' => 'Не удалось удалить договор ' . $label . '. Возможно, на него уже ссылаются начисления.',
+            ]);
+        }
+
+        return back()->with('status', 'Договор ' . $label . ' удалён.');
+    })->name('filament.admin.tenants.contracts.delete');
+
+    Route::post('/admin/requests/start', function (Request $request) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $validated = $request->validate([
+            'tenant_id' => ['required', 'integer', 'exists:tenants,id'],
+            'subject' => ['required', 'string', 'max:255'],
+            'description' => ['required', 'string'],
+            'category' => ['nullable', 'string', 'in:repair,cleaning,payment,other'],
+            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
+        ]);
+
+        $tenant = Tenant::query()->whereKey((int) $validated['tenant_id'])->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $tenant->market_id;
+        abort_unless($isSuperAdmin || $sameMarket, 403);
+
+        $ticket = Ticket::query()->create([
+            'market_id' => (int) $tenant->market_id,
+            'tenant_id' => (int) $tenant->id,
+            'subject' => trim((string) $validated['subject']),
+            'description' => trim((string) $validated['description']),
+            'category' => (string) ($validated['category'] ?? 'other'),
+            'priority' => (string) ($validated['priority'] ?? 'normal'),
+            'status' => 'new',
+        ]);
+
+        return redirect()
+            ->to(url('/admin/requests?' . http_build_query([
+                'tenant_id' => (int) $tenant->id,
+                'ticket_id' => (int) $ticket->id,
+            ])))
+            ->with('status', 'Диалог с арендатором создан.');
+    })->name('filament.admin.requests.start');
+
+    Route::post('/admin/requests/{ticket}/comment', function (Request $request, int $ticket) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $ticketModel = Ticket::query()->whereKey($ticket)->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
+        abort_unless($isSuperAdmin || $sameMarket, 403);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string'],
+        ]);
+
+        TicketComment::query()->create([
+            'ticket_id' => (int) $ticketModel->id,
+            'user_id' => (int) $user->id,
+            'body' => trim((string) $validated['body']),
+        ]);
+
+        $ticketModel->touch();
+
+        return redirect()
+            ->to(url('/admin/requests?' . http_build_query([
+                'tenant_id' => (int) ($ticketModel->tenant_id ?? 0),
+                'ticket_id' => (int) $ticketModel->id,
+            ])))
+            ->with('status', 'Сообщение добавлено.');
+    })->name('filament.admin.requests.comment');
+
     /**
      * Переключатель рынка для super-admin (используется в topbar-user-info.blade.php).
      * Сохраняет выбранный market_id в сессии.

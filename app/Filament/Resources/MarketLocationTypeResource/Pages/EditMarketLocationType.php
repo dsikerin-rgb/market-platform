@@ -4,9 +4,9 @@ namespace App\Filament\Resources\MarketLocationTypeResource\Pages;
 
 use App\Filament\Resources\MarketLocationTypeResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditMarketLocationType extends EditRecord
+class EditMarketLocationType extends BaseEditRecord
 {
     protected static string $resource = MarketLocationTypeResource::class;
 

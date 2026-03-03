@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateMarketSpace extends CreateRecord
+class CreateMarketSpace extends BaseCreateRecord
 {
     protected static string $resource = MarketSpaceResource::class;
 

@@ -4,10 +4,10 @@ namespace App\Filament\Resources\Staff\Pages;
 
 use App\Filament\Resources\Staff\StaffResource;
 use Filament\Facades\Filament;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 use Spatie\Permission\Models\Role;
 
-class CreateStaff extends CreateRecord
+class CreateStaff extends BaseCreateRecord
 {
     protected static string $resource = StaffResource::class;
 

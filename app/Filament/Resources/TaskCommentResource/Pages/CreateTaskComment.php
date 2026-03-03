@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\TaskCommentResource\Pages;
 
 use App\Filament\Resources\TaskCommentResource;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateTaskComment extends CreateRecord
+class CreateTaskComment extends BaseCreateRecord
 {
     protected static string $resource = TaskCommentResource::class;
 

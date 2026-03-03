@@ -2,17 +2,18 @@
 
 namespace App\Filament\Resources\TenantResource\RelationManagers;
 
-use App\Models\MarketSpace;
-use App\Models\TenantContract;
+use App\Models\TenantRequest;
+use App\Models\Ticket;
+use App\Models\TicketComment;
 use Filament\Facades\Filament;
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema as DbSchema;
 
 class RequestsRelationManager extends RelationManager
 {
@@ -22,51 +23,28 @@ class RequestsRelationManager extends RelationManager
 
     protected static ?string $recordTitleAttribute = 'subject';
 
+    protected static ?bool $hasTenantRequestTicketIdColumn = null;
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            Forms\Components\Hidden::make('market_id')
-                ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->market_id)
-                ->dehydrated(true),
-
-            Forms\Components\Hidden::make('tenant_id')
-                ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->id)
-                ->dehydrated(true),
-
-            Forms\Components\Hidden::make('created_by_user_id')
-                ->default(fn () => Filament::auth()->id())
-                ->dehydrated(true),
-
             Forms\Components\TextInput::make('subject')
                 ->label('Тема')
                 ->required()
                 ->maxLength(255),
-
             Forms\Components\Textarea::make('description')
                 ->label('Описание обращения')
                 ->required(),
-
             Forms\Components\Select::make('category')
                 ->label('Категория')
                 ->options([
                     'maintenance' => 'Обслуживание и ремонт',
-                    'payment' => 'Оплата и расчёты',
-                    'documents' => 'Документы и отчётность',
+                    'payment' => 'Оплата и расчеты',
+                    'documents' => 'Документы и отчетность',
                     'technical' => 'Технические вопросы',
                     'other' => 'Другое',
                 ])
                 ->default('other'),
-
-            Forms\Components\Select::make('priority')
-                ->label('Приоритет')
-                ->options([
-                    'low' => 'Низкий',
-                    'normal' => 'Обычный',
-                    'high' => 'Высокий',
-                    'urgent' => 'Критичный',
-                ])
-                ->default('normal'),
-
             Forms\Components\Select::make('status')
                 ->label('Статус')
                 ->options([
@@ -76,94 +54,69 @@ class RequestsRelationManager extends RelationManager
                     'closed' => 'Закрыто',
                 ])
                 ->default('new'),
-
-            Forms\Components\Select::make('market_space_id')
-                ->label('Торговое место')
-                ->options(function (RelationManager $livewire) {
-                    $marketId = $livewire->getOwnerRecord()->market_id;
-
-                    return MarketSpace::query()
-                        ->where('market_id', $marketId)
-                        ->orderBy('number')
-                        ->pluck('number', 'id')
-                        ->toArray();
-                })
-                ->searchable()
-                ->preload()
-                ->nullable(),
-
-            Forms\Components\Select::make('tenant_contract_id')
-                ->label('Договор')
-                ->options(function (RelationManager $livewire) {
-                    $owner = $livewire->getOwnerRecord();
-
-                    return TenantContract::query()
-                        ->where('tenant_id', $owner->id)
-                        ->where('market_id', $owner->market_id)
-                        ->orderBy('number')
-                        ->pluck('number', 'id')
-                        ->toArray();
-                })
-                ->searchable()
-                ->preload()
-                ->nullable(),
-
-            Forms\Components\Textarea::make('internal_notes')
-                ->label('Внутренние комментарии')
-                ->columnSpanFull()
-                ->nullable(),
-
-            Forms\Components\Toggle::make('is_active')
-                ->label('Активно')
-                ->default(true),
         ]);
     }
 
     public function table(Table $table): Table
     {
-        // Header Create (чтобы была кнопка добавления)
         $headerActions = [];
 
-        if (class_exists(\Filament\Actions\CreateAction::class)) {
-            $headerActions[] = \Filament\Actions\CreateAction::make()->label('Добавить обращение');
-        } elseif (class_exists(\Filament\Tables\Actions\CreateAction::class)) {
-            $headerActions[] = \Filament\Tables\Actions\CreateAction::make()->label('Добавить обращение');
-        }
+        if (class_exists(\Filament\Actions\Action::class)) {
+            $action = \Filament\Actions\Action::make('quick_chat')
+                ->label('Написать арендатору')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('primary')
+                ->modalHeading('Чат с арендатором')
+                ->modalSubmitActionLabel('Отправить')
+                ->form([
+                    Forms\Components\Textarea::make('body')
+                        ->label('Сообщение')
+                        ->rows(4)
+                        ->required()
+                        ->placeholder('Напишите сообщение арендатору...'),
+                ])
+                ->action(fn (array $data) => $this->sendOwnerChatMessage($data));
 
-        // Row actions (совместимо с твоей версией, где Tables\Actions\EditAction нет)
-        $rowActions = [];
-
-        if (class_exists(\Filament\Actions\EditAction::class)) {
-            $rowActions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
-        } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $rowActions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
-        }
-
-        if (class_exists(\Filament\Actions\DeleteAction::class)) {
-            $rowActions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
-        } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-            $rowActions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
-        }
-
-        // Bulk delete
-        $bulkActions = [];
-        $deleteBulk = null;
-
-        if (class_exists(\Filament\Tables\Actions\DeleteBulkAction::class)) {
-            $deleteBulk = \Filament\Tables\Actions\DeleteBulkAction::make()->label('Удалить выбранные');
-        } elseif (class_exists(\Filament\Actions\DeleteBulkAction::class)) {
-            $deleteBulk = \Filament\Actions\DeleteBulkAction::make()->label('Удалить выбранные');
-        }
-
-        if ($deleteBulk) {
-            if (class_exists(\Filament\Tables\Actions\BulkActionGroup::class)) {
-                $bulkActions[] = \Filament\Tables\Actions\BulkActionGroup::make([$deleteBulk]);
-            } else {
-                $bulkActions[] = $deleteBulk;
+            if (method_exists($action, 'slideOver')) {
+                $action->slideOver();
             }
+            if (method_exists($action, 'modalContent')) {
+                $action->modalContent(fn () => view('filament.tenants.request-chat', $this->buildOwnerChatViewData()));
+            }
+
+            $headerActions[] = $action;
+        } elseif (class_exists(\Filament\Tables\Actions\Action::class)) {
+            $action = \Filament\Tables\Actions\Action::make('quick_chat')
+                ->label('Написать арендатору')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('primary')
+                ->modalHeading('Чат с арендатором')
+                ->modalSubmitActionLabel('Отправить')
+                ->form([
+                    Forms\Components\Textarea::make('body')
+                        ->label('Сообщение')
+                        ->rows(4)
+                        ->required()
+                        ->placeholder('Напишите сообщение арендатору...'),
+                ])
+                ->action(fn (array $data) => $this->sendOwnerChatMessage($data));
+
+            if (method_exists($action, 'slideOver')) {
+                $action->slideOver();
+            }
+            if (method_exists($action, 'modalContent')) {
+                $action->modalContent(fn () => view('filament.tenants.request-chat', $this->buildOwnerChatViewData()));
+            }
+
+            $headerActions[] = $action;
         }
 
-        $user = Filament::auth()->user();
+        $rowActions = [];
+        if (class_exists(\Filament\Tables\Actions\Action::class)) {
+            $rowActions[] = $this->buildTableChatAction();
+        } elseif (class_exists(\Filament\Actions\Action::class)) {
+            $rowActions[] = $this->buildGenericChatAction();
+        }
 
         $table = $table
             ->columns([
@@ -171,28 +124,16 @@ class RequestsRelationManager extends RelationManager
                     ->label('Тема')
                     ->sortable()
                     ->searchable(),
-
                 TextColumn::make('category')
                     ->label('Категория')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'maintenance' => 'Обслуживание и ремонт',
-                        'payment' => 'Оплата и расчёты',
-                        'documents' => 'Документы и отчётность',
+                        'payment' => 'Оплата и расчеты',
+                        'documents' => 'Документы и отчетность',
                         'technical' => 'Технические вопросы',
                         'other' => 'Другое',
                         default => $state,
                     }),
-
-                TextColumn::make('priority')
-                    ->label('Приоритет')
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'low' => 'Низкий',
-                        'normal' => 'Обычный',
-                        'high' => 'Высокий',
-                        'urgent' => 'Критичный',
-                        default => $state,
-                    }),
-
                 TextColumn::make('status')
                     ->label('Статус')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
@@ -202,53 +143,36 @@ class RequestsRelationManager extends RelationManager
                         'closed' => 'Закрыто',
                         default => $state,
                     }),
-
-                TextColumn::make('marketSpace.number')
-                    ->label('Место')
-                    ->sortable()
-                    ->searchable(),
-
+                TextColumn::make('ticket_id')
+                    ->label('Чат')
+                    ->visible(fn (): bool => static::hasTenantRequestTicketIdColumn())
+                    ->formatStateUsing(fn ($state): string => $state ? ('#' . (int) $state) : 'не начат'),
                 TextColumn::make('created_at')
                     ->label('Создано')
                     ->dateTime()
                     ->sortable(),
-
-                TextColumn::make('resolved_at')
-                    ->label('Решено')
-                    ->dateTime(),
-
-                TextColumn::make('closed_at')
-                    ->label('Закрыто')
-                    ->dateTime(),
-
-                IconColumn::make('is_active')
-                    ->label('Активно')
-                    ->boolean(),
             ])
             ->headerActions($headerActions)
-            ->emptyStateActions($headerActions);
+            ->emptyStateHeading('Обращений пока нет')
+            ->emptyStateDescription('Нажмите "Написать арендатору", чтобы начать диалог.')
+            ->emptyStateActions([]);
 
         if (! empty($rowActions)) {
             $table = $table->actions($rowActions);
         }
 
-        if (! empty($bulkActions)) {
-            $table = $table->bulkActions($bulkActions);
-        }
-
         return $table;
     }
 
-    /**
-     * В твоей версии parent::getTableQuery() может вернуть null,
-     * поэтому берём query из relationship.
-     */
     public function getTableQuery(): Builder
     {
         $user = Filament::auth()->user();
 
         /** @var Builder $query */
-        $query = $this->getRelationship()->getQuery();
+        $query = $this->getRelationship()->getQuery()->with('createdBy');
+        if (static::hasTenantRequestTicketIdColumn()) {
+            $query->with('ticket');
+        }
 
         if (! $user) {
             return $query->whereRaw('1 = 0');
@@ -264,4 +188,394 @@ class RequestsRelationManager extends RelationManager
 
         return $query->whereRaw('1 = 0');
     }
+
+    protected function buildTableChatAction(): \Filament\Tables\Actions\Action
+    {
+        $action = \Filament\Tables\Actions\Action::make('chat')
+            ->label('Чат')
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->modalHeading('Переписка')
+            ->modalSubmitActionLabel('Отправить')
+            ->form([
+                Forms\Components\Textarea::make('body')
+                    ->label('Сообщение')
+                    ->rows(4)
+                    ->placeholder('Напишите сообщение арендатору...')
+                    ->nullable(),
+            ])
+            ->action(fn ($record, array $data) => $this->sendChatMessage($record, $data));
+
+        if (method_exists($action, 'slideOver')) {
+            $action->slideOver();
+        }
+        if (method_exists($action, 'modalContent')) {
+            $action->modalContent(fn ($record) => $record instanceof TenantRequest
+                ? view('filament.tenants.request-chat', $this->buildChatViewData($record))
+                : null
+            );
+        }
+
+        return $action;
+    }
+
+    protected function buildGenericChatAction(): \Filament\Actions\Action
+    {
+        $action = \Filament\Actions\Action::make('chat')
+            ->label('Чат')
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->modalHeading('Переписка')
+            ->modalSubmitActionLabel('Отправить')
+            ->form([
+                Forms\Components\Textarea::make('body')
+                    ->label('Сообщение')
+                    ->rows(4)
+                    ->placeholder('Напишите сообщение арендатору...')
+                    ->nullable(),
+            ])
+            ->action(fn ($record, array $data) => $this->sendChatMessage($record, $data));
+
+        if (method_exists($action, 'slideOver')) {
+            $action->slideOver();
+        }
+        if (method_exists($action, 'modalContent')) {
+            $action->modalContent(fn ($record) => $record instanceof TenantRequest
+                ? view('filament.tenants.request-chat', $this->buildChatViewData($record))
+                : null
+            );
+        }
+
+        return $action;
+    }
+
+    protected function buildOwnerChatViewData(): array
+    {
+        $request = $this->findOwnerConversationRequest(forSend: false);
+        if (! $request) {
+            return [
+                'request' => null,
+                'ticket' => null,
+                'messages' => [],
+            ];
+        }
+
+        return $this->buildChatViewData($request);
+    }
+
+    protected function buildChatViewData(TenantRequest $request): array
+    {
+        $request->loadMissing('createdBy');
+
+        $ticket = null;
+        if (static::hasTenantRequestTicketIdColumn()) {
+            $ticketId = (int) ($request->ticket_id ?? 0);
+            if ($ticketId > 0) {
+                $ticket = Ticket::query()->find($ticketId);
+            }
+        } else {
+            $ticket = $this->findFallbackTicketForRequest($request);
+        }
+
+        return [
+            'request' => $request,
+            'ticket' => $ticket,
+            'messages' => $this->buildChatMessages($request, $ticket),
+        ];
+    }
+
+    protected function buildChatMessages(TenantRequest $request, ?Ticket $ticket): array
+    {
+        $messages = [];
+        $authUserId = (int) (Filament::auth()->id() ?? 0);
+        $tenantId = (int) ($request->tenant_id ?? 0);
+
+        $initialBody = trim((string) ($request->description ?? ''));
+        if ($initialBody !== '') {
+            $initialAuthorId = (int) ($request->created_by_user_id ?? 0);
+            $initialAuthorName = trim((string) ($request->createdBy?->name ?? ''));
+            if ($initialAuthorName === '') {
+                $initialAuthorName = $initialAuthorId > 0 ? ('Пользователь #' . $initialAuthorId) : 'Система';
+            }
+
+            $messages[] = [
+                'author' => $initialAuthorName,
+                'time' => $request->created_at?->format('d.m.Y H:i') ?? '—',
+                'body' => $initialBody,
+                'is_mine' => $authUserId > 0 && $initialAuthorId > 0 && $initialAuthorId === $authUserId,
+                'is_tenant_side' => false,
+            ];
+        }
+
+        if (! $ticket) {
+            return $messages;
+        }
+
+        $comments = TicketComment::query()
+            ->with('user:id,name,tenant_id')
+            ->where('ticket_id', (int) $ticket->id)
+            ->orderBy('created_at')
+            ->limit(300)
+            ->get();
+
+        foreach ($comments as $comment) {
+            $authorId = (int) ($comment->user_id ?? 0);
+            $authorName = trim((string) ($comment->user?->name ?? ''));
+            if ($authorName === '') {
+                $authorName = $authorId > 0 ? ('Пользователь #' . $authorId) : 'Пользователь';
+            }
+
+            $messages[] = [
+                'author' => $authorName,
+                'time' => $comment->created_at?->format('d.m.Y H:i') ?? '—',
+                'body' => (string) ($comment->body ?? ''),
+                'is_mine' => $authUserId > 0 && $authorId === $authUserId,
+                'is_tenant_side' => (int) ($comment->user?->tenant_id ?? 0) === $tenantId,
+            ];
+        }
+
+        return $messages;
+    }
+
+    protected function sendOwnerChatMessage(array $data): void
+    {
+        $body = trim((string) ($data['body'] ?? ''));
+        if ($body === '') {
+            Notification::make()
+                ->warning()
+                ->title('Введите текст сообщения')
+                ->send();
+
+            return;
+        }
+
+        $request = $this->findOwnerConversationRequest(forSend: true);
+        if (! $request) {
+            $owner = $this->getOwnerRecord();
+            $authId = Filament::auth()->id();
+
+            if (! $owner) {
+                Notification::make()
+                    ->danger()
+                    ->title('Не удалось определить арендатора')
+                    ->send();
+
+                return;
+            }
+
+            $subject = static::resolveSubject('', $body);
+
+            $ticket = Ticket::query()->create([
+                'market_id' => (int) $owner->market_id,
+                'tenant_id' => (int) $owner->id,
+                'subject' => $subject,
+                'description' => $body,
+                'category' => 'other',
+                'priority' => 'normal',
+                'status' => 'new',
+            ]);
+
+            TenantRequest::query()->create([
+                'market_id' => (int) $owner->market_id,
+                'tenant_id' => (int) $owner->id,
+                'subject' => $subject,
+                'description' => $body,
+                'category' => 'other',
+                'priority' => 'normal',
+                'status' => 'new',
+                'created_by_user_id' => $authId ? (int) $authId : null,
+                'is_active' => true,
+            ] + (static::hasTenantRequestTicketIdColumn() ? ['ticket_id' => (int) $ticket->id] : []));
+
+            Notification::make()
+                ->success()
+                ->title('Сообщение отправлено')
+                ->send();
+
+            return;
+        }
+
+        $this->sendChatMessage($request, ['body' => $body]);
+    }
+
+    protected function sendChatMessage(mixed $record, array $data): void
+    {
+        if (! $record instanceof TenantRequest) {
+            return;
+        }
+
+        $body = trim((string) ($data['body'] ?? ''));
+        if ($body === '') {
+            Notification::make()
+                ->warning()
+                ->title('Введите текст сообщения')
+                ->send();
+
+            return;
+        }
+
+        $userId = (int) (Filament::auth()->id() ?? 0);
+        if ($userId <= 0) {
+            Notification::make()
+                ->danger()
+                ->title('Не удалось определить пользователя')
+                ->send();
+
+            return;
+        }
+
+        $ticket = $this->ensureTicketForRequest($record);
+        if (! $ticket) {
+            Notification::make()
+                ->danger()
+                ->title('Не удалось создать чат')
+                ->send();
+
+            return;
+        }
+
+        TicketComment::query()->create([
+            'ticket_id' => (int) $ticket->id,
+            'user_id' => $userId,
+            'body' => $body,
+        ]);
+
+        if ((string) $ticket->status === 'new') {
+            $ticket->status = 'in_progress';
+            $ticket->save();
+        }
+
+        if ((string) $record->status === 'new') {
+            $record->status = 'in_progress';
+            $record->save();
+        }
+
+        Notification::make()
+            ->success()
+            ->title('Сообщение отправлено')
+            ->send();
+    }
+
+    protected function ensureTicketForRequest(TenantRequest $request): ?Ticket
+    {
+        if (static::hasTenantRequestTicketIdColumn()) {
+            $ticketId = (int) ($request->ticket_id ?? 0);
+            if ($ticketId > 0) {
+                $ticket = Ticket::query()->find($ticketId);
+                if ($ticket) {
+                    return $ticket;
+                }
+            }
+        } else {
+            $existing = $this->findFallbackTicketForRequest($request);
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        $ticket = Ticket::query()->create([
+            'market_id' => (int) $request->market_id,
+            'tenant_id' => (int) $request->tenant_id,
+            'subject' => (string) $request->subject,
+            'description' => (string) $request->description,
+            'category' => static::mapRequestCategoryToTicket($request->category),
+            'priority' => 'normal',
+            'status' => static::mapRequestStatusToTicket($request->status),
+        ]);
+
+        if (static::hasTenantRequestTicketIdColumn()) {
+            $request->ticket_id = (int) $ticket->id;
+            $request->save();
+        }
+
+        return $ticket;
+    }
+
+    protected function findFallbackTicketForRequest(TenantRequest $request): ?Ticket
+    {
+        return Ticket::query()
+            ->where('market_id', (int) $request->market_id)
+            ->where('tenant_id', (int) $request->tenant_id)
+            ->where('subject', (string) $request->subject)
+            ->where('description', (string) $request->description)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    protected function findOwnerConversationRequest(bool $forSend): ?TenantRequest
+    {
+        $owner = $this->getOwnerRecord();
+        if (! $owner) {
+            return null;
+        }
+
+        $base = TenantRequest::query()
+            ->where('market_id', (int) $owner->market_id)
+            ->where('tenant_id', (int) $owner->id);
+
+        $open = (clone $base)
+            ->whereIn('status', ['new', 'in_progress'])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($open) {
+            return $open;
+        }
+
+        if ($forSend) {
+            return null;
+        }
+
+        return (clone $base)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    protected static function mapRequestCategoryToTicket(?string $category): string
+    {
+        return match ($category) {
+            'maintenance' => 'repair',
+            'payment' => 'payment',
+            default => 'other',
+        };
+    }
+
+    protected static function mapRequestStatusToTicket(?string $status): string
+    {
+        return match ($status) {
+            'in_progress' => 'in_progress',
+            'resolved' => 'resolved',
+            'closed' => 'closed',
+            default => 'new',
+        };
+    }
+
+    protected static function resolveSubject(string $subject, string $description): string
+    {
+        $subject = trim($subject);
+        if ($subject !== '') {
+            return mb_substr($subject, 0, 255, 'UTF-8');
+        }
+
+        $description = trim(preg_replace('/\s+/u', ' ', $description) ?? '');
+        if ($description === '') {
+            return 'Обращение';
+        }
+
+        return mb_substr($description, 0, 255, 'UTF-8');
+    }
+
+    protected static function hasTenantRequestTicketIdColumn(): bool
+    {
+        if (static::$hasTenantRequestTicketIdColumn !== null) {
+            return static::$hasTenantRequestTicketIdColumn;
+        }
+
+        try {
+            static::$hasTenantRequestTicketIdColumn = DbSchema::hasColumn('tenant_requests', 'ticket_id');
+        } catch (\Throwable) {
+            static::$hasTenantRequestTicketIdColumn = false;
+        }
+
+        return static::$hasTenantRequestTicketIdColumn;
+    }
 }
+

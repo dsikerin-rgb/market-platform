@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\StaffInvitationResource\Pages;
 
 use App\Filament\Resources\StaffInvitationResource;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateStaffInvitation extends CreateRecord
+class CreateStaffInvitation extends BaseCreateRecord
 {
     protected static string $resource = StaffInvitationResource::class;
 

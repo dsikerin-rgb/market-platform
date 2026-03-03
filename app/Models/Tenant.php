@@ -14,6 +14,11 @@ class Tenant extends Model
 {
     use HasFactory;
 
+    private const TYPE_LLC = 'llc';
+    private const TYPE_SOLE_TRADER = 'sole_trader';
+    private const TYPE_SELF_EMPLOYED = 'self_employed';
+    private const TYPE_INDIVIDUAL = 'individual';
+
     public const DEBT_STATUS_LABELS = [
         'green' => 'Нет задолженности',
         'orange' => 'Задолженность до 3 месяцев',
@@ -52,7 +57,6 @@ class Tenant extends Model
 
         // долги
         'debt_status',
-        'debt_status_note',
         'debt_status_updated_at',
     ];
 
@@ -74,6 +78,11 @@ class Tenant extends Model
     protected static function booted(): void
     {
         static::saving(function (Tenant $tenant): void {
+            $inferredType = self::inferTypeFromRequisites($tenant);
+            if ($inferredType !== null) {
+                $tenant->type = $inferredType;
+            }
+
             if (! array_key_exists($tenant->debt_status, self::DEBT_STATUS_LABELS)) {
                 $tenant->debt_status = null;
             }
@@ -82,6 +91,62 @@ class Tenant extends Model
                 $tenant->debt_status_updated_at = now();
             }
         });
+    }
+
+    private static function inferTypeFromRequisites(self $tenant): ?string
+    {
+        $name = mb_strtoupper(trim((string) ($tenant->name ?? '')), 'UTF-8');
+        $shortName = mb_strtoupper(trim((string) ($tenant->short_name ?? '')), 'UTF-8');
+        $source = trim($name . ' ' . $shortName);
+
+        $inn = preg_replace('/\D+/u', '', (string) ($tenant->inn ?? '')) ?? '';
+        $ogrn = preg_replace('/\D+/u', '', (string) ($tenant->ogrn ?? '')) ?? '';
+
+        if (self::containsAny($source, ['САМОЗАНЯТ'])) {
+            return self::TYPE_SELF_EMPLOYED;
+        }
+
+        if (self::containsAny($source, [' ИП', 'ИП ', 'ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ'])) {
+            return self::TYPE_SOLE_TRADER;
+        }
+
+        if (strlen($ogrn) === 15) {
+            return self::TYPE_SOLE_TRADER;
+        }
+
+        if (strlen($ogrn) === 13) {
+            return self::TYPE_LLC;
+        }
+
+        if (strlen($inn) === 10) {
+            return self::TYPE_LLC;
+        }
+
+        if (strlen($inn) === 12) {
+            return self::containsAny($source, [' ИП', 'ИП '])
+                ? self::TYPE_SOLE_TRADER
+                : self::TYPE_INDIVIDUAL;
+        }
+
+        if (preg_match('/\b(ООО|АО|ПАО|ЗАО|ОАО|НАО)\b/u', $source) === 1) {
+            return self::TYPE_LLC;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, string> $needles
+     */
+    private static function containsAny(string $haystack, array $needles): bool
+    {
+        foreach ($needles as $needle) {
+            if ($needle !== '' && str_contains($haystack, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function market(): BelongsTo

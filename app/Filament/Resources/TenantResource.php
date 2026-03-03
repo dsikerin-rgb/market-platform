@@ -4,7 +4,6 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
-use App\Filament\Resources\TenantResource\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
 use Carbon\Carbon;
@@ -44,6 +43,9 @@ class TenantResource extends BaseResource
 
     /** @var array<string, array<string, mixed>> */
     private static array $accrualSummaryCache = [];
+
+    /** @var array<string, array{mode:string,status:?string,label:string,updated_at:?string,source:?string}> */
+    private static array $resolvedDebtStatusCache = [];
 
     /**
      * Группа динамическая:
@@ -102,67 +104,12 @@ class TenantResource extends BaseResource
             $tabs->tabs([
                 Tab::make('Основное')
                     ->schema([
-                        Section::make('Сводка')
-                            ->description('Ключевые показатели по начислениям (берём из tenant_accruals).')
-                            ->schema([
-                                // KPI-сводку рендерим через Blade partial, чтобы получить нормальную иерархию (бейджи/карточки),
-                                // а не "анкетный" вид Placeholder’ов.
-                                Forms\Components\Placeholder::make('accruals_summary_view')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(function (?Tenant $record): HtmlString {
-                                        if (! $record) {
-                                            return new HtmlString('<div style="font-size:13px;opacity:.85;">Сводка появится после сохранения арендатора.</div>');
-                                        }
-
-                                        $summary = static::accrualSummaryData($record);
-                                        $summary['is_active'] = (bool) $record->is_active;
-
-                                        return new HtmlString(
-                                            view('filament.tenants.tenant-summary', ['summary' => $summary])->render()
-                                        );
-                                    })
-                                    ->columnSpanFull(),
-                            ]),
-
-                        Section::make('Статус задолженности')
-                            ->schema([
-                                Forms\Components\Placeholder::make('debt_status_summary')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
-                                    ->columnSpanFull(),
-
-                                Forms\Components\Select::make('debt_status')
-                                    ->label('Задолженность')
-                                    ->options(static::debtStatusOptions())
-                                    ->placeholder('Не указано')
-                                    ->nullable()
-                                    ->helperText('Временный ручной статус до интеграции с 1С. Оплата — до 30 календарных дней.'),
-
-                                Forms\Components\Textarea::make('debt_status_note')
-                                    ->label('Комментарий по задолженности')
-                                    ->nullable()
-                                    ->rows(3),
-
-                                Forms\Components\Placeholder::make('debt_status_updated_at')
-                                    ->label('Обновлено')
-                                    ->content(function (?Tenant $record): string {
-                                        if (! $record?->debt_status_updated_at) {
-                                            return '—';
-                                        }
-
-                                        return $record->debt_status_updated_at->format('d.m.Y H:i');
-                                    }),
-                            ])
-                            ->columns(2),
-
                         Section::make('Карточка арендатора')
                             ->schema([
                                 Forms\Components\Select::make('market_id')
                                     ->label('Рынок')
                                     ->relationship('market', 'name')
-                                    ->required()
+                                    ->required(fn () => (bool) $user && $user->isSuperAdmin())
                                     ->searchable()
                                     ->preload()
                                     ->default(function () use ($user) {
@@ -176,8 +123,20 @@ class TenantResource extends BaseResource
 
                                         return $user->market_id;
                                     })
-                                    ->disabled(fn () => (bool) $user && ! $user->isSuperAdmin())
-                                    ->dehydrated(true),
+                                    ->visible(fn () => (bool) $user && $user->isSuperAdmin())
+                                    ->dehydrated(fn () => (bool) $user && $user->isSuperAdmin()),
+
+                                Forms\Components\Hidden::make('market_id')
+                                    ->default(function () use ($user) {
+                                        if (! $user) {
+                                            return null;
+                                        }
+
+                                        return $user->isSuperAdmin()
+                                            ? (static::selectedMarketIdFromSession() ?: null)
+                                            : $user->market_id;
+                                    })
+                                    ->dehydrated(fn () => (bool) $user && ! $user->isSuperAdmin()),
 
                                 Forms\Components\TextInput::make('name')
                                     ->label('Название арендатора')
@@ -188,41 +147,85 @@ class TenantResource extends BaseResource
                                     ->label('Краткое название / вывеска')
                                     ->maxLength(255),
 
-                                Forms\Components\Select::make('type')
-                                    ->label('Тип арендатора')
-                                    ->options([
-                                        'llc' => 'ООО',
-                                        'sole_trader' => 'ИП',
-                                        'self_employed' => 'Самозанятый',
-                                        'individual' => 'Физическое лицо',
-                                    ])
-                                    ->nullable(),
-
-                                Forms\Components\Select::make('status')
-                                    ->label('Статус договора')
-                                    ->options([
-                                        'active' => 'В аренде',
-                                        'paused' => 'Приостановлено',
-                                        'finished' => 'Завершён договор',
-                                    ])
-                                    ->nullable(),
 
                                 Forms\Components\Toggle::make('is_active')
                                     ->label('Активен')
                                     ->default(true),
+
+                                Forms\Components\Textarea::make('notes')
+                                    ->label('Примечания')
+                                    ->rows(4)
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2),
+
+                        Section::make('Задолженность')
+                            ->schema([
+                                Forms\Components\Placeholder::make('debt_status_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Select::make('debt_status')
+                                    ->label('Задолженность')
+                                    ->options(static::debtStatusOptions())
+                                    ->native(false)
+                                    ->placeholder('Автоматически (из 1С)')
+                                    ->nullable()
+                                    ->helperText('По умолчанию — автоматически из 1С (последний снимок в contract_debts). Выберите вручную только как временный override.')
+                                    ->columnSpan(1),
+
+                            ])
+                            ->columns([
+                                'default' => 1,
+                                'md' => 2,
+                            ]),
                     ]),
 
-                Tab::make('Площади')
+                Tab::make('Торговые места')
                     ->schema([
-                        Section::make('Арендуемые площади')
-                            ->description('Список мест по последнему периоду начислений. Это “истина” для финансов, даже если market_spaces.tenant_id не проставлен.')
+                        Section::make()
                             ->schema([
                                 Forms\Components\Placeholder::make('spaces_last_period')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record) => static::renderSpacesLastPeriod($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Расчеты по договорам')
+                            ->description('Начислено, оплачено и долг по последнему снимку 1С.')
+                            ->collapsed()
+                            ->schema([
+                                Forms\Components\Placeholder::make('payments_debt_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('История аренды мест')
+                            ->description('Последние изменения привязки мест к арендатору.')
+                            ->collapsed()
+                            ->schema([
+                                Forms\Components\Placeholder::make('space_history_recent')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderSpaceHistory($record, 30))
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
+
+                Tab::make('Договоры')
+                    ->schema([
+                        Section::make('Договоры')
+                            ->description('Реестр договоров арендатора с привязкой к торговым местам.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('contracts_by_spaces')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderContractsBySpaces($record))
                                     ->columnSpanFull(),
                             ]),
                     ]),
@@ -259,28 +262,7 @@ class TenantResource extends BaseResource
                             ->columns(2),
                     ]),
 
-                Tab::make('Примечания')
-                    ->schema([
-                        Section::make('Примечания')
-                            ->schema([
-                                Forms\Components\Textarea::make('notes')
-                                    ->hiddenLabel()
-                                    ->rows(6)
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
 
-                Tab::make('История аренды мест')
-                    ->schema([
-                        Section::make('История аренды мест')
-                            ->schema([
-                                Forms\Components\Placeholder::make('space_history')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderSpaceHistory($record))
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
             ]),
         ]);
     }
@@ -419,10 +401,10 @@ class TenantResource extends BaseResource
 
                 TextColumn::make('debt_status')
                     ->label('Задолженность')
-                    ->formatStateUsing(fn (?string $state, Tenant $record) => $record->debt_status_label)
+                    ->formatStateUsing(fn (?string $state, Tenant $record) => static::resolveDebtStatusForDisplay($record)['label'])
                     ->badge()
-                    ->color(fn (?string $state) => static::debtStatusColor($state))
-                    ->sortable(),
+                    ->color(fn (?string $state, Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
+                    ->description(fn (?string $state, Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)'),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
@@ -591,7 +573,6 @@ class TenantResource extends BaseResource
     public static function getRelations(): array
     {
         return [
-            ContractsRelationManager::class,
             RequestsRelationManager::class,
         ];
     }
@@ -718,10 +699,17 @@ class TenantResource extends BaseResource
         $sumAll = (float) ((clone $base)->selectRaw('COALESCE(SUM(total_with_vat), 0) as s')->value('s') ?? 0);
 
         $sumLast = 0.0;
+        $countLast = 0;
         $spacesLast = 0;
         $withoutSpace = 0;
 
         if ($lastPeriod) {
+            $countLast = (int) (DB::table('tenant_accruals')
+                ->where('market_id', (int) $record->market_id)
+                ->where('tenant_id', (int) $record->id)
+                ->where('period', $lastPeriod)
+                ->count());
+
             $sumLast = (float) (DB::table('tenant_accruals')
                 ->where('market_id', (int) $record->market_id)
                 ->where('tenant_id', (int) $record->id)
@@ -760,6 +748,7 @@ class TenantResource extends BaseResource
             'last_period_label' => $lastPeriodLabel,
             'sum_all' => $sumAll,
             'sum_last' => $sumLast,
+            'count_last_period' => $countLast,
             'spaces_last' => $spacesLast,
             'without_space' => $withoutSpace,
         ];
@@ -786,7 +775,6 @@ class TenantResource extends BaseResource
 
         $taHasArea = static::hasColumn('tenant_accruals', 'area_sqm');
 
-        $msHasStatus = static::hasColumn('market_spaces', 'status');
         $msHasDisplayName = static::hasColumn('market_spaces', 'display_name');
         $msHasCode = static::hasColumn('market_spaces', 'code');
         $msHasNumber = static::hasColumn('market_spaces', 'number');
@@ -801,8 +789,6 @@ class TenantResource extends BaseResource
         $placeNameExpr = $msHasDisplayName
             ? 'COALESCE(ms.display_name, ta.source_place_name)'
             : "COALESCE(ta.source_place_name, '')";
-
-        $placeStatusExpr = $msHasStatus ? "COALESCE(ms.status, '')" : '';
 
         $areaExprParts = [];
         if ($taHasArea) {
@@ -821,14 +807,12 @@ class TenantResource extends BaseResource
             'ta.market_space_id as market_space_id',
             "{$placeCodeExpr} as place_code",
             "{$placeNameExpr} as place_name",
-            "{$placeStatusExpr} as place_status",
         ];
 
         if ($hasArea) {
             $selectParts[] = 'COALESCE(' . implode(', ', $areaExprParts) . ', 0) as area_sqm';
         }
 
-        $selectParts[] = 'COALESCE(SUM(ta.rent_amount), 0) as rent_sum';
         $selectParts[] = 'COALESCE(SUM(ta.total_with_vat), 0) as total_with_vat_sum';
 
         $rows = DB::table('tenant_accruals as ta')
@@ -844,28 +828,326 @@ class TenantResource extends BaseResource
                 ...($msHasCode ? ['ms.code'] : []),
                 ...($msHasNumber ? ['ms.number'] : []),
                 ...($msHasDisplayName ? ['ms.display_name'] : []),
-                ...($msHasStatus ? ['ms.status'] : []),
             ])
             ->orderByRaw($placeCodeExpr . ' ASC')
             ->limit(500)
             ->get();
 
-        $periodLabel = Carbon::parse((string) $lastPeriod)->format('Y-m');
+        $periodLabel = '—';
+        try {
+            $periodLabel = Carbon::parse((string) $lastPeriod)->format('Y-m');
+        } catch (\Throwable) {
+            $periodLabel = (string) $lastPeriod;
+        }
 
-        $totalRent = 0.0;
+        $contractsBySpace = [];
+        $contractExternalToSpace = [];
+        $contractsWithoutSpace = 0;
+        $activeContractsWithoutSpace = 0;
+        if (DbSchema::hasTable('tenant_contracts')) {
+            $tcHasExternalId = static::hasColumn('tenant_contracts', 'external_id');
+            $tcSelect = [
+                'id',
+                'market_space_id',
+                'number',
+                'is_active',
+            ];
+            if ($tcHasExternalId) {
+                $tcSelect[] = 'external_id';
+            }
+
+            $contractRows = DB::table('tenant_contracts')
+                ->where('market_id', (int) $record->market_id)
+                ->where('tenant_id', (int) $record->id)
+                ->orderByDesc('is_active')
+                ->orderByDesc('starts_at')
+                ->orderBy('id')
+                ->get($tcSelect);
+
+            foreach ($contractRows as $contractRow) {
+                $spaceIdRaw = $contractRow->market_space_id;
+                $isActive = (bool) ($contractRow->is_active ?? false);
+
+                if ($spaceIdRaw === null) {
+                    $contractsWithoutSpace++;
+                    if ($isActive) {
+                        $activeContractsWithoutSpace++;
+                    }
+                    continue;
+                }
+
+                $spaceId = (int) $spaceIdRaw;
+                if (! array_key_exists($spaceId, $contractsBySpace)) {
+                    $contractsBySpace[$spaceId] = [
+                        'contracts' => 0,
+                        'active' => 0,
+                        'items' => [],
+                    ];
+                }
+
+                $contractsBySpace[$spaceId]['contracts']++;
+                if ($isActive) {
+                    $contractsBySpace[$spaceId]['active']++;
+                }
+
+                if (count($contractsBySpace[$spaceId]['items']) < 3) {
+                    $number = trim((string) ($contractRow->number ?? ''));
+                    $contractsBySpace[$spaceId]['items'][] = [
+                        'id' => (int) $contractRow->id,
+                        'number' => $number !== '' ? $number : ('Договор #' . (int) $contractRow->id),
+                        'is_active' => $isActive,
+                    ];
+                }
+
+                $externalId = trim((string) ($contractRow->external_id ?? ''));
+                if ($externalId !== '') {
+                    $contractExternalToSpace[$externalId] = $spaceId;
+                }
+            }
+        }
+
+        $paymentsBySpace = [];
+        $paymentsSnapshotLabel = null;
+        $paymentsRowsCount = 0;
+        $paymentsUnmappedContracts = 0;
+        $paymentsUnmappedPaid = 0.0;
+        $paymentsUnmappedDebt = 0.0;
+        $paymentsTotalPaid = 0.0;
+        $paymentsTotalDebt = 0.0;
+        $hasPaymentsData = false;
+
+        if (
+            DbSchema::hasTable('contract_debts')
+            && static::hasColumn('contract_debts', 'tenant_id')
+            && static::hasColumn('contract_debts', 'contract_external_id')
+        ) {
+            $cdHasMarketId = static::hasColumn('contract_debts', 'market_id');
+            $cdHasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+            $cdHasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+            $cdHasPeriod = static::hasColumn('contract_debts', 'period');
+            $cdHasPaid = static::hasColumn('contract_debts', 'paid_amount');
+            $cdHasDebt = static::hasColumn('contract_debts', 'debt_amount');
+
+            $debtsBase = DB::table('contract_debts')
+                ->where('tenant_id', (int) $record->id);
+
+            if ($cdHasMarketId) {
+                $debtsBase->where('market_id', (int) $record->market_id);
+            }
+
+            if ($cdHasCalculatedAt) {
+                $latest = (clone $debtsBase)->max('calculated_at');
+                if ($latest) {
+                    $debtsBase->where('calculated_at', $latest);
+                    try {
+                        $paymentsSnapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                    } catch (\Throwable) {
+                        $paymentsSnapshotLabel = (string) $latest;
+                    }
+                }
+            } elseif ($cdHasCreatedAt) {
+                $latest = (clone $debtsBase)->max('created_at');
+                if ($latest) {
+                    $debtsBase->where('created_at', $latest);
+                    try {
+                        $paymentsSnapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                    } catch (\Throwable) {
+                        $paymentsSnapshotLabel = (string) $latest;
+                    }
+                }
+            } elseif ($cdHasPeriod) {
+                $latest = (clone $debtsBase)->max('period');
+                if ($latest) {
+                    $debtsBase->where('period', $latest);
+                    $paymentsSnapshotLabel = (string) $latest;
+                }
+            }
+
+            $debtsSelect = ['contract_external_id'];
+            if ($cdHasPaid) {
+                $debtsSelect[] = 'paid_amount';
+            }
+            if ($cdHasDebt) {
+                $debtsSelect[] = 'debt_amount';
+            }
+
+            $debtRows = (clone $debtsBase)->get($debtsSelect);
+            $paymentsRowsCount = $debtRows->count();
+            $hasPaymentsData = $paymentsRowsCount > 0;
+
+            foreach ($debtRows as $debtRow) {
+                $externalId = trim((string) ($debtRow->contract_external_id ?? ''));
+                if ($externalId === '') {
+                    continue;
+                }
+
+                $paid = (float) ($debtRow->paid_amount ?? 0);
+                $debt = (float) ($debtRow->debt_amount ?? 0);
+
+                $paymentsTotalPaid += $paid;
+                $paymentsTotalDebt += $debt;
+
+                if (! array_key_exists($externalId, $contractExternalToSpace)) {
+                    $paymentsUnmappedContracts++;
+                    $paymentsUnmappedPaid += $paid;
+                    $paymentsUnmappedDebt += $debt;
+                    continue;
+                }
+
+                $spaceId = (int) $contractExternalToSpace[$externalId];
+                if (! array_key_exists($spaceId, $paymentsBySpace)) {
+                    $paymentsBySpace[$spaceId] = [
+                        'paid' => 0.0,
+                        'debt' => 0.0,
+                        'rows' => 0,
+                    ];
+                }
+
+                $paymentsBySpace[$spaceId]['paid'] += $paid;
+                $paymentsBySpace[$spaceId]['debt'] += $debt;
+                $paymentsBySpace[$spaceId]['rows']++;
+            }
+        }
+
+        $mapLinksBySpace = [];
+        if (DbSchema::hasTable('market_space_map_shapes')) {
+            $spaceIds = $rows
+                ->pluck('market_space_id')
+                ->filter(static fn ($id) => $id !== null)
+                ->map(static fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+
+            if ($spaceIds->isNotEmpty()) {
+                $shapeRows = DB::table('market_space_map_shapes')
+                    ->where('market_id', (int) $record->market_id)
+                    ->whereIn('market_space_id', $spaceIds->all())
+                    ->where('is_active', true)
+                    ->orderByDesc('id')
+                    ->get([
+                        'market_space_id',
+                        'page',
+                        'version',
+                        'bbox_x1',
+                        'bbox_y1',
+                        'bbox_x2',
+                        'bbox_y2',
+                    ]);
+
+                foreach ($shapeRows as $shapeRow) {
+                    $spaceId = (int) ($shapeRow->market_space_id ?? 0);
+                    if ($spaceId <= 0 || array_key_exists($spaceId, $mapLinksBySpace)) {
+                        continue;
+                    }
+
+                    $params = [
+                        'market_space_id' => $spaceId,
+                        'page' => (int) ($shapeRow->page ?? 1),
+                        'version' => (int) ($shapeRow->version ?? 1),
+                    ];
+
+                    if (
+                        $shapeRow->bbox_x1 !== null
+                        && $shapeRow->bbox_y1 !== null
+                        && $shapeRow->bbox_x2 !== null
+                        && $shapeRow->bbox_y2 !== null
+                    ) {
+                        $params['bbox_x1'] = (float) $shapeRow->bbox_x1;
+                        $params['bbox_y1'] = (float) $shapeRow->bbox_y1;
+                        $params['bbox_x2'] = (float) $shapeRow->bbox_x2;
+                        $params['bbox_y2'] = (float) $shapeRow->bbox_y2;
+                    }
+
+                    try {
+                        $mapLinksBySpace[$spaceId] = route('filament.admin.market-map', $params);
+                    } catch (\Throwable) {
+                        // ignore: route might be unavailable in tests/CLI contexts
+                    }
+                }
+            }
+        }
+
         $totalWithVat = 0.0;
         $totalArea = 0.0;
+        $contractsMappedTotal = 0;
+        $contractsMappedActiveTotal = 0;
+        $contractsTabBaseUrl = '?tab=dogovory::data::tab';
+        try {
+            $contractsTabBaseUrl = static::getUrl('edit', [
+                'record' => (int) $record->id,
+                'tab' => 'dogovory::data::tab',
+            ]);
+        } catch (\Throwable) {
+            // keep relative fallback
+        }
 
         $tableRows = '';
         foreach ($rows as $r) {
-            $totalRent += (float) $r->rent_sum;
             $totalWithVat += (float) $r->total_with_vat_sum;
 
             $code = trim((string) ($r->place_code ?? ''));
             $name = (string) ($r->place_name ?? '');
-            $status = (string) ($r->place_status ?? '');
+            $spaceId = isset($r->market_space_id) ? (int) $r->market_space_id : null;
 
             $codeLabel = $code !== '' ? $code : '—';
+            $nameLabel = trim($name) !== '' ? $name : '—';
+            $spaceUrl = null;
+            if ($spaceId !== null && $spaceId > 0) {
+                try {
+                    $spaceUrl = route('filament.admin.resources.market-spaces.edit', ['record' => $spaceId]);
+                } catch (\Throwable) {
+                    $spaceUrl = null;
+                }
+            }
+
+            $codeCell = $spaceUrl
+                ? '<a href="' . e($spaceUrl) . '" class="tenant-spaces__space-link">' . e($codeLabel) . '</a>'
+                : e($codeLabel);
+            $nameCell = $spaceUrl
+                ? '<a href="' . e($spaceUrl) . '" class="tenant-spaces__space-link">' . e($nameLabel) . '</a>'
+                : e($nameLabel);
+
+            $contractStat = ($spaceId !== null && array_key_exists($spaceId, $contractsBySpace))
+                ? $contractsBySpace[$spaceId]
+                : ['contracts' => 0, 'active' => 0, 'items' => []];
+            $contractsMappedTotal += (int) $contractStat['contracts'];
+            $contractsMappedActiveTotal += (int) $contractStat['active'];
+
+            $paymentStat = ($spaceId !== null && array_key_exists($spaceId, $paymentsBySpace))
+                ? $paymentsBySpace[$spaceId]
+                : null;
+
+            $paidCell = $hasPaymentsData
+                ? e(static::formatRub((float) ($paymentStat['paid'] ?? 0.0)))
+                : '—';
+            $debtCell = $hasPaymentsData
+                ? e(static::formatRub((float) ($paymentStat['debt'] ?? 0.0)))
+                : '—';
+
+            $contractCell = '—';
+            if ((int) $contractStat['contracts'] > 0) {
+                $links = [];
+                foreach ($contractStat['items'] as $contractItem) {
+                    $linkLabel = e((string) $contractItem['number']);
+                    if (($contractItem['is_active'] ?? false) === true) {
+                        $linkLabel .= ' <span class="tenant-spaces__active-dot" title="Активный договор">●</span>';
+                    }
+                    $links[] = '<a href="' . e($contractsTabBaseUrl) . '#tenant-contract-' . (int) $contractItem['id'] . '" class="tenant-spaces__contract-link">'
+                        . $linkLabel
+                        . '</a>';
+                }
+
+                $contractCell = implode(', ', $links);
+                if ((int) $contractStat['contracts'] > count($contractStat['items'])) {
+                    $left = (int) $contractStat['contracts'] - count($contractStat['items']);
+                    $contractCell .= ' <span class="tenant-spaces__more-contracts">+ ещё ' . e((string) $left) . '</span>';
+                }
+            }
+
+            $mapCell = '<span class="tenant-spaces__map-na">—</span>';
+            if ($spaceId !== null && array_key_exists($spaceId, $mapLinksBySpace)) {
+                $mapCell = '<a href="' . e((string) $mapLinksBySpace[$spaceId]) . '" target="_blank" rel="noopener" class="tenant-spaces__map-btn">Показать на карте</a>';
+            }
 
             $areaCell = '';
             if ($hasArea) {
@@ -876,40 +1158,73 @@ class TenantResource extends BaseResource
 
             $tableRows .= '
                 <tr>
-                    <td class="tenant-spaces__code">' . e($codeLabel) . '</td>
-                    <td class="tenant-spaces__name">' . e($name) . '</td>
-                    <td class="tenant-spaces__status">' . static::renderSpaceStatusBadge($status) . '</td>
+                    <td class="tenant-spaces__code">' . $codeCell . '</td>
+                    <td class="tenant-spaces__name">' . $nameCell . '</td>
                     ' . $areaCell . '
-                    <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
+                    <td class="tenant-spaces__num">' . $paidCell . '</td>
+                    <td class="tenant-spaces__num">' . $debtCell . '</td>
+                    <td class="tenant-spaces__contracts">' . $contractCell . '</td>
+                    <td class="tenant-spaces__map">' . $mapCell . '</td>
                 </tr>
             ';
         }
 
         $areaHeader = $hasArea ? '<th class="tenant-spaces__num">Площадь</th>' : '';
-        $colspan = $hasArea ? 6 : 5;
+        $colspan = $hasArea ? 8 : 7;
 
-        $meta = [
-            '<span>Период: <strong>' . e($periodLabel) . '</strong></span>',
-            '<span class="tenant-spaces__dot">•</span>',
-            '<span>Мест: <strong>' . e((string) $rows->count()) . '</strong></span>',
+        $summaryCards = [
+            ['label' => 'Месяц начислений', 'value' => $periodLabel],
+            ['label' => 'Торговых мест', 'value' => (string) $rows->count()],
         ];
 
         if ($hasArea) {
-            $meta[] = '<span class="tenant-spaces__dot">•</span>';
-            $meta[] = '<span>Площадь: <strong>' . e(static::formatArea($totalArea)) . '</strong></span>';
+            $summaryCards[] = ['label' => 'Площадь', 'value' => static::formatArea($totalArea)];
         }
 
-        $meta[] = '<span class="tenant-spaces__dot">•</span>';
-        $meta[] = '<span>Итого аренда: <strong>' . e(static::formatRub($totalRent)) . '</strong></span>';
-        $meta[] = '<span class="tenant-spaces__dot">•</span>';
-        $meta[] = '<span>Итого с НДС: <strong>' . e(static::formatRub($totalWithVat)) . '</strong></span>';
+        $summaryCards[] = ['label' => 'Итого с НДС', 'value' => static::formatRub($totalWithVat)];
+        if ($hasPaymentsData) {
+            $summaryCards[] = ['label' => 'Оплачено (снимок)', 'value' => static::formatRub($paymentsTotalPaid)];
+            $summaryCards[] = ['label' => 'Долг (снимок)', 'value' => static::formatRub($paymentsTotalDebt)];
+        }
+        $summaryHtml = '';
+        foreach ($summaryCards as $card) {
+            $summaryHtml .= '<div class="tenant-spaces__summary-card">'
+                . '<div class="tenant-spaces__summary-label">' . e((string) $card['label']) . '</div>'
+                . '<div class="tenant-spaces__summary-value">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $warn = '';
+        if ($contractsWithoutSpace > 0) {
+            $warn = '<div class="tenant-spaces__warn">Есть договоры без привязки к торговому месту: <strong>'
+                . e((string) $contractsWithoutSpace)
+                . '</strong> (активных: <strong>'
+                . e((string) $activeContractsWithoutSpace)
+                . '</strong>). Их нужно привязать к месту.</div>';
+        }
+
+        if ($hasPaymentsData && $paymentsUnmappedContracts > 0) {
+            $warn .= '<div class="tenant-spaces__warn">Часть оплат/долгов не разложена по местам: договоров без привязки <strong>'
+                . e((string) $paymentsUnmappedContracts)
+                . '</strong>, оплачено <strong>'
+                . e(static::formatRub($paymentsUnmappedPaid))
+                . '</strong>, долг <strong>'
+                . e(static::formatRub($paymentsUnmappedDebt))
+                . '</strong>.</div>';
+        }
 
         $style = '
 <style>
 .tenant-spaces{display:flex;flex-direction:column;gap:12px}
-.tenant-spaces__meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;line-height:1.35;opacity:.92}
-.tenant-spaces__dot{opacity:.55}
+.tenant-spaces__summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.tenant-spaces__summary-card{border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;background:rgba(0,0,0,.02)}
+.dark .tenant-spaces__summary-card{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
+.tenant-spaces__summary-label{font-size:12px;opacity:.72;line-height:1.2}
+.tenant-spaces__summary-value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2}
+.tenant-spaces__snapshot{font-size:12px;opacity:.75}
+.tenant-spaces__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
+.dark .tenant-spaces__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
 
 .tenant-spaces__table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(0,0,0,.10)}
 .dark .tenant-spaces__table-wrap{border-color:rgba(255,255,255,.12)}
@@ -924,20 +1239,24 @@ class TenantResource extends BaseResource
 
 .tenant-spaces__num{text-align:right;white-space:nowrap}
 .tenant-spaces__code{font-weight:700;white-space:nowrap}
-.tenant-spaces__status{white-space:nowrap}
 .tenant-spaces__name{min-width:240px}
+.tenant-spaces__space-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.tenant-spaces__contracts{min-width:260px}
+.tenant-spaces__map{white-space:nowrap}
+.tenant-spaces__map-btn{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(37,99,235,.35);background:rgba(37,99,235,.10);font-size:12px;font-weight:700;text-decoration:none;color:inherit}
+.tenant-spaces__map-btn:hover{background:rgba(37,99,235,.16)}
+.tenant-spaces__map-na{opacity:.65}
+.tenant-spaces__contract-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.tenant-spaces__more-contracts{opacity:.75;font-size:12px;white-space:nowrap}
+.tenant-spaces__active-dot{color:rgba(16,185,129,.85);font-size:11px;vertical-align:middle}
 
-.tenant-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;border:1px solid rgba(0,0,0,.10);background:rgba(0,0,0,.04);font-size:12px;font-weight:700;line-height:1}
-.dark .tenant-badge{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
-.tenant-badge--success{border-color:rgba(16,185,129,.30);background:rgba(16,185,129,.10)}
-.dark .tenant-badge--success{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.12)}
-.tenant-badge--warning{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.12)}
-.dark .tenant-badge--warning{border-color:rgba(245,158,11,.40);background:rgba(245,158,11,.14)}
 </style>';
 
         $html = $style . '
 <div class="tenant-spaces">
-    <div class="tenant-spaces__meta">' . implode('', $meta) . '</div>
+    <div class="tenant-spaces__summary">' . $summaryHtml . '</div>
+    ' . ($paymentsSnapshotLabel ? '<div class="tenant-spaces__snapshot">Снимок оплат 1С: <strong>' . e($paymentsSnapshotLabel) . '</strong></div>' : '') . '
+    ' . $warn . '
 
     <div class="tenant-spaces__table-wrap">
         <table>
@@ -945,10 +1264,12 @@ class TenantResource extends BaseResource
                 <tr>
                     <th>Место</th>
                     <th>Название</th>
-                    <th>Статус</th>
                     ' . $areaHeader . '
-                    <th class="tenant-spaces__num">Аренда</th>
                     <th class="tenant-spaces__num">Итого с НДС</th>
+                    <th class="tenant-spaces__num">Оплачено</th>
+                    <th class="tenant-spaces__num">Долг</th>
+                    <th>Договор</th>
+                    <th>Карта</th>
                 </tr>
             </thead>
             <tbody>
@@ -961,7 +1282,248 @@ class TenantResource extends BaseResource
         return new HtmlString($html);
     }
 
-    private static function renderSpaceHistory(?Tenant $record): HtmlString
+    private static function renderContractsBySpaces(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Список договоров появится после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('tenant_contracts')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица договоров ещё не создана.</div>');
+        }
+
+        $msHasDisplayName = static::hasColumn('market_spaces', 'display_name');
+        $msHasNumber = static::hasColumn('market_spaces', 'number');
+        $msHasCode = static::hasColumn('market_spaces', 'code');
+
+        $select = [
+            'tc.id',
+            'tc.market_space_id',
+            'tc.number',
+            'tc.status',
+            'tc.starts_at',
+            'tc.ends_at',
+            'tc.monthly_rent',
+            'tc.currency',
+            'tc.is_active',
+        ];
+
+        if ($msHasDisplayName) {
+            $select[] = 'ms.display_name as space_display_name';
+        }
+        if ($msHasNumber) {
+            $select[] = 'ms.number as space_number';
+        }
+        if ($msHasCode) {
+            $select[] = 'ms.code as space_code';
+        }
+
+        $query = DB::table('tenant_contracts as tc')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('tc.market_id', (int) $record->market_id)
+            ->where('tc.tenant_id', (int) $record->id);
+
+        if ($msHasNumber) {
+            $query->orderBy('ms.number');
+        } elseif ($msHasCode) {
+            $query->orderBy('ms.code');
+        } else {
+            $query->orderBy('tc.market_space_id');
+        }
+
+        $rows = $query
+            ->orderByDesc('tc.starts_at')
+            ->orderBy('tc.id')
+            ->limit(500)
+            ->get($select);
+
+        if ($rows->isEmpty()) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет договоров.</div>');
+        }
+
+        $contractsTotal = $rows->count();
+        $activeTotal = $rows->filter(static fn ($row): bool => (bool) ($row->is_active ?? false))->count();
+        $withoutSpaceTotal = $rows->whereNull('market_space_id')->count();
+        $canManageContracts = static::canManageTenantContracts($record);
+
+        $tableRows = '';
+        foreach ($rows as $row) {
+            $displayName = trim((string) ($row->space_display_name ?? ''));
+            $number = trim((string) ($row->space_number ?? ''));
+            $code = trim((string) ($row->space_code ?? ''));
+
+            $spaceLabel = $displayName !== '' ? $displayName : ($number !== '' ? $number : ($code !== '' ? $code : 'Не привязано'));
+            $spaceCell = '<span class="tenant-contracts__warn-badge">Не привязано</span>';
+            if ($row->market_space_id) {
+                $spaceEditUrl = null;
+                try {
+                    $spaceEditUrl = route('filament.admin.resources.market-spaces.edit', ['record' => (int) $row->market_space_id]);
+                } catch (\Throwable) {
+                    $spaceEditUrl = null;
+                }
+
+                $spaceCell = $spaceEditUrl
+                    ? '<a href="' . e($spaceEditUrl) . '" class="tenant-contracts__space-link">' . e($spaceLabel) . '</a>'
+                    : e($spaceLabel);
+            }
+
+            $startsAt = null;
+            if (filled($row->starts_at)) {
+                try {
+                    $startsAt = Carbon::parse((string) $row->starts_at)->format('d.m.Y');
+                } catch (\Throwable) {
+                    $startsAt = (string) $row->starts_at;
+                }
+            }
+
+            $endsAt = null;
+            if (filled($row->ends_at)) {
+                try {
+                    $endsAt = Carbon::parse((string) $row->ends_at)->format('d.m.Y');
+                } catch (\Throwable) {
+                    $endsAt = (string) $row->ends_at;
+                }
+            }
+
+            $periodLabel = ($startsAt ?? '—') . ' - ' . ($endsAt ?? 'без срока');
+
+            $rentValue = filled($row->monthly_rent)
+                ? static::formatRub((float) $row->monthly_rent)
+                : '—';
+            $currency = trim((string) ($row->currency ?? ''));
+            $rentCell = $rentValue . ($currency !== '' ? ' ' . e($currency) : '');
+
+            $activeBadge = (bool) $row->is_active
+                ? '<span class="tenant-contracts__ok-badge">Активен</span>'
+                : '<span class="tenant-contracts__off-badge">Неактивен</span>';
+
+            $deleteCell = '—';
+            if ($canManageContracts) {
+                $deleteUrl = route('filament.admin.tenants.contracts.delete', [
+                    'tenant' => (int) $record->id,
+                    'contract' => (int) $row->id,
+                ]);
+
+                $deleteCell = '<button type="submit"'
+                    . ' class="tenant-contracts__delete-btn"'
+                    . ' formmethod="POST"'
+                    . ' formaction="' . e($deleteUrl) . '"'
+                    . ' formnovalidate'
+                    . ' onclick="return confirm(\'Удалить договор ' . e((string) ($row->number ?? '#' . (int) $row->id)) . '?\');"'
+                    . '>Удалить</button>';
+            }
+
+            $tableRows .= '
+                <tr id="tenant-contract-' . (int) $row->id . '">
+                    <td>' . $spaceCell . '</td>
+                    <td class="tenant-contracts__number">' . e((string) ($row->number ?? '—')) . '</td>
+                    <td>' . e($periodLabel) . '</td>
+                    <td>' . static::renderContractStatusBadge((string) ($row->status ?? '')) . '</td>
+                    <td class="tenant-contracts__num">' . $rentCell . '</td>
+                    <td>' . $activeBadge . '</td>
+                    <td>' . $deleteCell . '</td>
+                </tr>
+            ';
+        }
+
+        $warn = $withoutSpaceTotal > 0
+            ? '<div class="tenant-contracts__warn">Найдены договоры без торгового места: <strong>' . e((string) $withoutSpaceTotal) . '</strong>. Их нужно привязать, иначе данные по месту будут неполными.</div>'
+            : '';
+
+        $style = '
+<style>
+.tenant-contracts{display:flex;flex-direction:column;gap:12px}
+.tenant-contracts__meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;line-height:1.35;opacity:.92}
+.tenant-contracts__dot{opacity:.55}
+.tenant-contracts__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
+.dark .tenant-contracts__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
+
+.tenant-contracts__table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(0,0,0,.10)}
+.dark .tenant-contracts__table-wrap{border-color:rgba(255,255,255,.12)}
+.tenant-contracts table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.tenant-contracts thead th{padding:10px 12px;font-weight:700;white-space:nowrap;text-align:left;border-bottom:1px solid rgba(0,0,0,.08);background:rgba(0,0,0,.03)}
+.dark .tenant-contracts thead th{border-bottom-color:rgba(255,255,255,.10);background:rgba(255,255,255,.04)}
+.tenant-contracts tbody td{padding:10px 12px;vertical-align:top;border-top:1px solid rgba(0,0,0,.08)}
+.dark .tenant-contracts tbody td{border-top-color:rgba(255,255,255,.10)}
+.tenant-contracts tbody tr:first-child td{border-top:none}
+.tenant-contracts tbody tr:target td{background:rgba(37,99,235,.10)}
+.tenant-contracts__num{text-align:right;white-space:nowrap}
+.tenant-contracts__number{font-weight:700;white-space:nowrap}
+.tenant-contracts__space-link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+.tenant-contracts__warn-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.10);font-size:12px;font-weight:700}
+.tenant-contracts__ok-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.10);font-size:12px;font-weight:700}
+.tenant-contracts__off-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(0,0,0,.16);background:rgba(0,0,0,.04);font-size:12px;font-weight:700}
+.tenant-contracts__status-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(0,0,0,.16);background:rgba(0,0,0,.04);font-size:12px;font-weight:700}
+.tenant-contracts__status-badge--success{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.10)}
+.tenant-contracts__status-badge--warning{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12)}
+.tenant-contracts__delete-btn{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;border:1px solid rgba(220,38,38,.35);background:rgba(220,38,38,.10);font-size:12px;font-weight:700;cursor:pointer}
+.tenant-contracts__delete-btn:hover{background:rgba(220,38,38,.16)}
+</style>';
+
+        $meta = [
+            '<span>Всего договоров: <strong>' . e((string) $contractsTotal) . '</strong></span>',
+            '<span class="tenant-contracts__dot">•</span>',
+            '<span>Активных: <strong>' . e((string) $activeTotal) . '</strong></span>',
+            '<span class="tenant-contracts__dot">•</span>',
+            '<span>Без привязки к месту: <strong>' . e((string) $withoutSpaceTotal) . '</strong></span>',
+        ];
+
+        $html = $style . '
+<div class="tenant-contracts">
+    <div class="tenant-contracts__meta">' . implode('', $meta) . '</div>
+    ' . $warn . '
+    <div class="tenant-contracts__table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Торговое место</th>
+                    <th>Номер договора</th>
+                    <th>Срок действия</th>
+                    <th>Статус договора</th>
+                    <th class="tenant-contracts__num">Аренда в месяц</th>
+                    <th>Активность</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                ' . $tableRows . '
+            </tbody>
+        </table>
+    </div>
+</div>';
+
+        return new HtmlString($html);
+    }
+
+    private static function renderContractStatusBadge(?string $status): string
+    {
+        $s = trim((string) $status);
+
+        if ($s === '') {
+            return '<span class="tenant-contracts__status-badge">—</span>';
+        }
+
+        $label = match ($s) {
+            'draft' => 'Черновик',
+            'active' => 'Активен',
+            'paused' => 'Приостановлен',
+            'terminated' => 'Расторгнут',
+            'archived' => 'Архив',
+            default => $s,
+        };
+
+        $class = match ($s) {
+            'active' => 'tenant-contracts__status-badge tenant-contracts__status-badge--success',
+            'paused' => 'tenant-contracts__status-badge tenant-contracts__status-badge--warning',
+            'terminated', 'archived' => 'tenant-contracts__status-badge',
+            default => 'tenant-contracts__status-badge',
+        };
+
+        return '<span class="' . e($class) . '">' . e($label) . '</span>';
+    }
+
+    private static function renderSpaceHistory(?Tenant $record, int $limit = 300): HtmlString
     {
         if (! $record) {
             return new HtmlString('<div style="font-size:13px;opacity:.85;">История появится после сохранения арендатора.</div>');
@@ -980,7 +1542,7 @@ class TenantResource extends BaseResource
             })
             ->where('ms.market_id', (int) $record->market_id)
             ->orderByDesc('h.changed_at')
-            ->limit(300)
+            ->limit(max(1, $limit))
             ->get([
                 'h.changed_at',
                 'h.old_tenant_id',
@@ -1018,7 +1580,7 @@ class TenantResource extends BaseResource
      */
     private static function debtStatusOptions(): array
     {
-        return Tenant::DEBT_STATUS_LABELS;
+        return ['' => 'Автоматически (из 1С)'] + Tenant::DEBT_STATUS_LABELS;
     }
 
     private static function debtStatusColor(?string $state): string
@@ -1041,57 +1603,318 @@ class TenantResource extends BaseResource
         };
     }
 
+    private static function renderPaymentsDebtSummary(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Данные появятся после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет таблицы contract_debts — данные об оплатах недоступны.</div>');
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+
+        $base = DB::table('contract_debts')
+            ->where('tenant_id', (int) $record->id);
+
+        if ($hasMarketId) {
+            $base->where('market_id', (int) $record->market_id);
+        }
+
+        $snapshotLabel = null;
+        if ($hasCalculatedAt) {
+            $latest = (clone $base)->max('calculated_at');
+            if ($latest) {
+                $base->where('calculated_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasCreatedAt) {
+            $latest = (clone $base)->max('created_at');
+            if ($latest) {
+                $base->where('created_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasPeriod) {
+            $latest = (clone $base)->max('period');
+            if ($latest) {
+                $base->where('period', $latest);
+                $snapshotLabel = (string) $latest;
+            }
+        }
+
+        $rows = (int) (clone $base)->count();
+        if ($rows === 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет данных об оплатах по этому арендатору.</div>');
+        }
+
+        $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
+        $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
+        $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
+        $hasContractExternalId = static::hasColumn('contract_debts', 'contract_external_id');
+
+        $accrued = $hasAccrued ? (float) ((clone $base)->sum('accrued_amount') ?? 0) : null;
+        $paid = $hasPaid ? (float) ((clone $base)->sum('paid_amount') ?? 0) : null;
+        $debt = $hasDebt ? (float) ((clone $base)->sum('debt_amount') ?? 0) : null;
+
+        if ($debt === null && $accrued !== null && $paid !== null) {
+            $debt = $accrued - $paid;
+        }
+
+        $contractsCount = $hasContractExternalId
+            ? (int) ((clone $base)->distinct('contract_external_id')->count('contract_external_id') ?? 0)
+            : null;
+
+        $cards = [
+            ['title' => 'Начислено', 'value' => $accrued !== null ? static::formatRub($accrued) : '—'],
+            ['title' => 'Оплачено', 'value' => $paid !== null ? static::formatRub($paid) : '—'],
+            ['title' => 'Долг', 'value' => $debt !== null ? static::formatRub($debt) : '—'],
+        ];
+
+        $cardsHtml = '';
+        foreach ($cards as $card) {
+            $cardsHtml .= '<div style="border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;">'
+                . '<div style="font-size:12px;opacity:.75;line-height:1.2;">' . e($card['title']) . '</div>'
+                . '<div style="margin-top:4px;font-size:24px;font-weight:700;line-height:1.15;">' . e($card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $meta = [];
+        if ($snapshotLabel !== null) {
+            $meta[] = 'Снимок: <strong>' . e($snapshotLabel) . '</strong>';
+        }
+        $meta[] = 'Строк: <strong>' . e((string) $rows) . '</strong>';
+        if ($contractsCount !== null) {
+            $meta[] = 'Договоров: <strong>' . e((string) $contractsCount) . '</strong>';
+        }
+
+        $metaHtml = '<div style="margin-bottom:10px;font-size:12px;opacity:.78;">' . implode(' • ', $meta) . '</div>';
+
+        return new HtmlString(
+            '<div>'
+                . $metaHtml
+                . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'
+                    . $cardsHtml
+                . '</div>'
+            . '</div>'
+        );
+    }
+
     private static function renderDebtStatusSummary(?Tenant $record): HtmlString
     {
         if (! $record) {
             return new HtmlString('<div style="font-size:13px;opacity:.85;">Статус появится после сохранения арендатора.</div>');
         }
 
-        $label = $record->debt_status_label;
-        $color = static::debtStatusHex($record->debt_status);
-        $note = trim((string) ($record->debt_status_note ?? ''));
-        $noteHtml = $note !== ''
-            ? '<div style="margin-top:6px;opacity:.75;">Комментарий: ' . e($note) . '</div>'
-            : '';
+        $resolved = static::resolveDebtStatusForDisplay($record);
+        $label = $resolved['label'];
+        $color = static::debtStatusHex($resolved['status']);
 
-        $updatedAt = $record->debt_status_updated_at
-            ? $record->debt_status_updated_at->format('d.m.Y H:i')
-            : null;
-        $updatedHtml = $updatedAt
-            ? '<div style="margin-top:4px;opacity:.65;">Обновлено: ' . e($updatedAt) . '</div>'
-            : '';
+        $metaParts = [];
+        $metaParts[] = $resolved['mode'] === 'manual' ? 'Режим: вручную' : 'Режим: автоматически (1С)';
+
+        if (filled($resolved['updated_at'])) {
+            $metaParts[] = 'Обновлено: ' . e((string) $resolved['updated_at']);
+        }
+
+        if (filled($resolved['source'])) {
+            $metaParts[] = e((string) $resolved['source']);
+        }
+
+        $metaHtml = $metaParts === []
+            ? ''
+            : '<div style="margin-top:4px;opacity:.65;">' . implode(' • ', $metaParts) . '</div>';
 
         $badge = '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid ' . e($color) . ';color:' . e($color) . ';font-weight:600;font-size:12px;">'
             . e($label)
             . '</span>';
 
         return new HtmlString(
-            '<div style="font-size:13px;">' . $badge . $noteHtml . $updatedHtml . '</div>'
+            '<div style="font-size:13px;">' . $badge . $metaHtml . '</div>'
         );
     }
 
-    private static function renderSpaceStatusBadge(?string $status): string
+    /**
+     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string}
+     */
+    private static function resolveDebtStatusForDisplay(?Tenant $record): array
     {
-        $s = trim((string) $status);
-
-        if ($s === '') {
-            return '<span class="tenant-badge">—</span>';
+        if (! $record) {
+            return [
+                'mode' => 'auto',
+                'status' => null,
+                'label' => 'Автоматически: нет данных',
+                'updated_at' => null,
+                'source' => null,
+            ];
         }
 
-        $label = match ($s) {
-            'occupied' => 'Занято',
-            'free' => 'Свободно',
-            'reserved' => 'Бронь',
-            default => $s,
-        };
+        $cacheKey = (int) $record->market_id . ':' . (int) $record->id . ':' . ((string) ($record->updated_at ?? ''));
+        if (isset(self::$resolvedDebtStatusCache[$cacheKey])) {
+            return self::$resolvedDebtStatusCache[$cacheKey];
+        }
 
-        $class = match ($s) {
-            'occupied' => 'tenant-badge tenant-badge--success',
-            'reserved' => 'tenant-badge tenant-badge--warning',
-            default => 'tenant-badge',
-        };
+        $manual = trim((string) ($record->debt_status ?? ''));
+        if ($manual !== '' && array_key_exists($manual, Tenant::DEBT_STATUS_LABELS)) {
+            return self::$resolvedDebtStatusCache[$cacheKey] = [
+                'mode' => 'manual',
+                'status' => $manual,
+                'label' => Tenant::DEBT_STATUS_LABELS[$manual],
+                'updated_at' => $record->debt_status_updated_at?->format('d.m.Y H:i'),
+                'source' => null,
+            ];
+        }
 
-        return '<span class="' . e($class) . '">' . e($label) . '</span>';
+        $auto = static::resolveAutoDebtStatus($record);
+        if ($auto['status'] !== null) {
+            return self::$resolvedDebtStatusCache[$cacheKey] = [
+                'mode' => 'auto',
+                'status' => $auto['status'],
+                'label' => Tenant::DEBT_STATUS_LABELS[$auto['status']] ?? 'Автоматически',
+                'updated_at' => $auto['snapshot_label'],
+                'source' => 'Источник: contract_debts',
+            ];
+        }
+
+        return self::$resolvedDebtStatusCache[$cacheKey] = [
+            'mode' => 'auto',
+            'status' => null,
+            'label' => 'Автоматически: нет данных',
+            'updated_at' => $auto['snapshot_label'],
+            'source' => $auto['reason'],
+        ];
+    }
+
+    /**
+     * @return array{status:?string,snapshot_label:?string,reason:?string}
+     */
+    private static function resolveAutoDebtStatus(Tenant $record): array
+    {
+        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+            return ['status' => null, 'snapshot_label' => null, 'reason' => 'Данные 1С недоступны'];
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+        $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
+        $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
+        $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
+
+        $base = DB::table('contract_debts')->where('tenant_id', (int) $record->id);
+        if ($hasMarketId) {
+            $base->where('market_id', (int) $record->market_id);
+        }
+
+        $snapshotLabel = null;
+        if ($hasCalculatedAt) {
+            $latest = (clone $base)->max('calculated_at');
+            if ($latest) {
+                $base->where('calculated_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasCreatedAt) {
+            $latest = (clone $base)->max('created_at');
+            if ($latest) {
+                $base->where('created_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasPeriod) {
+            $latest = (clone $base)->max('period');
+            if ($latest) {
+                $base->where('period', $latest);
+                $snapshotLabel = (string) $latest;
+            }
+        }
+
+        $fields = [];
+        if ($hasDebt) {
+            $fields[] = 'debt_amount';
+        }
+        if ($hasAccrued) {
+            $fields[] = 'accrued_amount';
+        }
+        if ($hasPaid) {
+            $fields[] = 'paid_amount';
+        }
+        if ($hasPeriod) {
+            $fields[] = 'period';
+        }
+
+        if ($fields === []) {
+            return ['status' => null, 'snapshot_label' => $snapshotLabel, 'reason' => 'В 1С нет полей для расчёта долга'];
+        }
+
+        $rows = (clone $base)->get($fields);
+        if ($rows->isEmpty()) {
+            return ['status' => null, 'snapshot_label' => $snapshotLabel, 'reason' => 'Нет данных 1С по арендатору'];
+        }
+
+        $totalDebt = 0.0;
+        $oldestDebtPeriod = null;
+        $currentMonth = Carbon::now()->startOfMonth();
+
+        foreach ($rows as $row) {
+            $rowDebt = 0.0;
+
+            if ($hasDebt) {
+                $rowDebt = (float) ($row->debt_amount ?? 0);
+            } elseif ($hasAccrued || $hasPaid) {
+                $rowDebt = (float) ($row->accrued_amount ?? 0) - (float) ($row->paid_amount ?? 0);
+            }
+
+            $totalDebt += $rowDebt;
+
+            if ($rowDebt > 0.009 && $hasPeriod) {
+                $rawPeriod = trim((string) ($row->period ?? ''));
+                if (preg_match('/^\d{4}-\d{2}/', $rawPeriod) === 1) {
+                    try {
+                        $period = Carbon::createFromFormat('Y-m-d', substr($rawPeriod, 0, 7) . '-01')->startOfMonth();
+                        if (! $oldestDebtPeriod || $period->lt($oldestDebtPeriod)) {
+                            $oldestDebtPeriod = $period;
+                        }
+                    } catch (Throwable) {
+                        // ignore parsing problems for malformed source period
+                    }
+                }
+            }
+        }
+
+        if ($totalDebt <= 0.009) {
+            return ['status' => 'green', 'snapshot_label' => $snapshotLabel, 'reason' => null];
+        }
+
+        if (! $oldestDebtPeriod) {
+            return ['status' => 'orange', 'snapshot_label' => $snapshotLabel, 'reason' => null];
+        }
+
+        $monthsOverdue = $oldestDebtPeriod->diffInMonths($currentMonth);
+
+        return [
+            'status' => $monthsOverdue >= 3 ? 'red' : 'orange',
+            'snapshot_label' => $snapshotLabel,
+            'reason' => null,
+        ];
     }
 
     private static function formatRub(float $value): string
@@ -1132,6 +1955,21 @@ class TenantResource extends BaseResource
         } catch (Throwable) {
             return false;
         }
+    }
+
+    private static function canManageTenantContracts(Tenant $record): bool
+    {
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        return (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
+            && (int) ($user->market_id ?? 0) === (int) $record->market_id;
     }
 
     public static function canViewAny(): bool
