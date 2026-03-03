@@ -4,7 +4,6 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
-use App\Filament\Resources\TenantResource\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
 use Carbon\Carbon;
@@ -227,12 +226,22 @@ class TenantResource extends BaseResource
                 Tab::make('Торговые места')
                     ->schema([
                         Section::make('Торговые места')
-                            ->description('Список мест по последнему периоду начислений. Это “истина” для финансов, даже если market_spaces.tenant_id не проставлен.')
+                            ->description('Текущая картина по местам за последний месяц начислений: сколько мест занято арендатором и какие суммы начислены.')
                             ->schema([
                                 Forms\Components\Placeholder::make('spaces_last_period')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record) => static::renderSpacesLastPeriod($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Договоры по торговым местам')
+                            ->description('Каждый договор должен быть привязан к конкретному торговому месту.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('contracts_by_spaces')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderContractsBySpaces($record))
                                     ->columnSpanFull(),
                             ]),
                     ]),
@@ -601,7 +610,6 @@ class TenantResource extends BaseResource
     public static function getRelations(): array
     {
         return [
-            ContractsRelationManager::class,
             RequestsRelationManager::class,
         ];
     }
@@ -868,11 +876,48 @@ class TenantResource extends BaseResource
             ->limit(500)
             ->get();
 
-        $periodLabel = Carbon::parse((string) $lastPeriod)->format('Y-m');
+        $periodLabel = '—';
+        try {
+            $periodLabel = Carbon::parse((string) $lastPeriod)->format('Y-m');
+        } catch (\Throwable) {
+            $periodLabel = (string) $lastPeriod;
+        }
+
+        $contractStatsRows = collect();
+        if (DbSchema::hasTable('tenant_contracts')) {
+            $contractStatsRows = DB::table('tenant_contracts')
+                ->where('market_id', (int) $record->market_id)
+                ->where('tenant_id', (int) $record->id)
+                ->selectRaw('market_space_id, COUNT(*) as contracts_count, SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_contracts_count')
+                ->groupBy('market_space_id')
+                ->get();
+        }
+
+        $contractsBySpace = [];
+        $contractsWithoutSpace = 0;
+        $activeContractsWithoutSpace = 0;
+        foreach ($contractStatsRows as $stat) {
+            $spaceIdRaw = $stat->market_space_id;
+            $contractsCount = (int) ($stat->contracts_count ?? 0);
+            $activeContractsCount = (int) ($stat->active_contracts_count ?? 0);
+
+            if ($spaceIdRaw === null) {
+                $contractsWithoutSpace += $contractsCount;
+                $activeContractsWithoutSpace += $activeContractsCount;
+                continue;
+            }
+
+            $contractsBySpace[(int) $spaceIdRaw] = [
+                'contracts' => $contractsCount,
+                'active' => $activeContractsCount,
+            ];
+        }
 
         $totalRent = 0.0;
         $totalWithVat = 0.0;
         $totalArea = 0.0;
+        $contractsMappedTotal = 0;
+        $contractsMappedActiveTotal = 0;
 
         $tableRows = '';
         foreach ($rows as $r) {
@@ -882,8 +927,14 @@ class TenantResource extends BaseResource
             $code = trim((string) ($r->place_code ?? ''));
             $name = (string) ($r->place_name ?? '');
             $status = (string) ($r->place_status ?? '');
+            $spaceId = isset($r->market_space_id) ? (int) $r->market_space_id : null;
 
             $codeLabel = $code !== '' ? $code : '—';
+            $contractStat = ($spaceId !== null && array_key_exists($spaceId, $contractsBySpace))
+                ? $contractsBySpace[$spaceId]
+                : ['contracts' => 0, 'active' => 0];
+            $contractsMappedTotal += (int) $contractStat['contracts'];
+            $contractsMappedActiveTotal += (int) $contractStat['active'];
 
             $areaCell = '';
             if ($hasArea) {
@@ -900,15 +951,17 @@ class TenantResource extends BaseResource
                     ' . $areaCell . '
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->rent_sum)) . '</td>
                     <td class="tenant-spaces__num">' . e(static::formatRub((float) $r->total_with_vat_sum)) . '</td>
+                    <td class="tenant-spaces__num">' . e((string) $contractStat['contracts']) . '</td>
+                    <td class="tenant-spaces__num">' . e((string) $contractStat['active']) . '</td>
                 </tr>
             ';
         }
 
         $areaHeader = $hasArea ? '<th class="tenant-spaces__num">Площадь</th>' : '';
-        $colspan = $hasArea ? 6 : 5;
+        $colspan = $hasArea ? 8 : 7;
 
         $meta = [
-            '<span>Период: <strong>' . e($periodLabel) . '</strong></span>',
+            '<span>Месяц начислений: <strong>' . e($periodLabel) . '</strong></span>',
             '<span class="tenant-spaces__dot">•</span>',
             '<span>Мест: <strong>' . e((string) $rows->count()) . '</strong></span>',
         ];
@@ -922,12 +975,27 @@ class TenantResource extends BaseResource
         $meta[] = '<span>Итого аренда: <strong>' . e(static::formatRub($totalRent)) . '</strong></span>';
         $meta[] = '<span class="tenant-spaces__dot">•</span>';
         $meta[] = '<span>Итого с НДС: <strong>' . e(static::formatRub($totalWithVat)) . '</strong></span>';
+        $meta[] = '<span class="tenant-spaces__dot">•</span>';
+        $meta[] = '<span>Договоров с привязкой к месту: <strong>' . e((string) $contractsMappedTotal) . '</strong></span>';
+        $meta[] = '<span class="tenant-spaces__dot">•</span>';
+        $meta[] = '<span>Активных договоров: <strong>' . e((string) $contractsMappedActiveTotal) . '</strong></span>';
+
+        $warn = '';
+        if ($contractsWithoutSpace > 0) {
+            $warn = '<div class="tenant-spaces__warn">Есть договоры без привязки к торговому месту: <strong>'
+                . e((string) $contractsWithoutSpace)
+                . '</strong> (активных: <strong>'
+                . e((string) $activeContractsWithoutSpace)
+                . '</strong>). Их нужно привязать к месту.</div>';
+        }
 
         $style = '
 <style>
 .tenant-spaces{display:flex;flex-direction:column;gap:12px}
 .tenant-spaces__meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;line-height:1.35;opacity:.92}
 .tenant-spaces__dot{opacity:.55}
+.tenant-spaces__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
+.dark .tenant-spaces__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
 
 .tenant-spaces__table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(0,0,0,.10)}
 .dark .tenant-spaces__table-wrap{border-color:rgba(255,255,255,.12)}
@@ -956,6 +1024,7 @@ class TenantResource extends BaseResource
         $html = $style . '
 <div class="tenant-spaces">
     <div class="tenant-spaces__meta">' . implode('', $meta) . '</div>
+    ' . $warn . '
 
     <div class="tenant-spaces__table-wrap">
         <table>
@@ -967,6 +1036,8 @@ class TenantResource extends BaseResource
                     ' . $areaHeader . '
                     <th class="tenant-spaces__num">Аренда</th>
                     <th class="tenant-spaces__num">Итого с НДС</th>
+                    <th class="tenant-spaces__num">Договоров</th>
+                    <th class="tenant-spaces__num">Активных</th>
                 </tr>
             </thead>
             <tbody>
@@ -977,6 +1048,214 @@ class TenantResource extends BaseResource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    private static function renderContractsBySpaces(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Список договоров появится после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('tenant_contracts')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица договоров ещё не создана.</div>');
+        }
+
+        $msHasDisplayName = static::hasColumn('market_spaces', 'display_name');
+        $msHasNumber = static::hasColumn('market_spaces', 'number');
+        $msHasCode = static::hasColumn('market_spaces', 'code');
+
+        $select = [
+            'tc.id',
+            'tc.market_space_id',
+            'tc.number',
+            'tc.status',
+            'tc.starts_at',
+            'tc.ends_at',
+            'tc.monthly_rent',
+            'tc.currency',
+            'tc.is_active',
+        ];
+
+        if ($msHasDisplayName) {
+            $select[] = 'ms.display_name as space_display_name';
+        }
+        if ($msHasNumber) {
+            $select[] = 'ms.number as space_number';
+        }
+        if ($msHasCode) {
+            $select[] = 'ms.code as space_code';
+        }
+
+        $query = DB::table('tenant_contracts as tc')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('tc.market_id', (int) $record->market_id)
+            ->where('tc.tenant_id', (int) $record->id);
+
+        if ($msHasNumber) {
+            $query->orderBy('ms.number');
+        } elseif ($msHasCode) {
+            $query->orderBy('ms.code');
+        } else {
+            $query->orderBy('tc.market_space_id');
+        }
+
+        $rows = $query
+            ->orderByDesc('tc.starts_at')
+            ->orderBy('tc.id')
+            ->limit(500)
+            ->get($select);
+
+        if ($rows->isEmpty()) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет договоров.</div>');
+        }
+
+        $contractsTotal = $rows->count();
+        $activeTotal = $rows->where('is_active', 1)->count();
+        $withoutSpaceTotal = $rows->whereNull('market_space_id')->count();
+
+        $tableRows = '';
+        foreach ($rows as $row) {
+            $displayName = trim((string) ($row->space_display_name ?? ''));
+            $number = trim((string) ($row->space_number ?? ''));
+            $code = trim((string) ($row->space_code ?? ''));
+
+            $spaceLabel = $displayName !== '' ? $displayName : ($number !== '' ? $number : ($code !== '' ? $code : 'Не привязано'));
+            $spaceCell = $row->market_space_id
+                ? e($spaceLabel)
+                : '<span class="tenant-contracts__warn-badge">Не привязано</span>';
+
+            $startsAt = null;
+            if (filled($row->starts_at)) {
+                try {
+                    $startsAt = Carbon::parse((string) $row->starts_at)->format('d.m.Y');
+                } catch (\Throwable) {
+                    $startsAt = (string) $row->starts_at;
+                }
+            }
+
+            $endsAt = null;
+            if (filled($row->ends_at)) {
+                try {
+                    $endsAt = Carbon::parse((string) $row->ends_at)->format('d.m.Y');
+                } catch (\Throwable) {
+                    $endsAt = (string) $row->ends_at;
+                }
+            }
+
+            $periodLabel = ($startsAt ?? '—') . ' - ' . ($endsAt ?? 'без срока');
+
+            $rentValue = filled($row->monthly_rent)
+                ? static::formatRub((float) $row->monthly_rent)
+                : '—';
+            $currency = trim((string) ($row->currency ?? ''));
+            $rentCell = $rentValue . ($currency !== '' ? ' ' . e($currency) : '');
+
+            $activeBadge = (bool) $row->is_active
+                ? '<span class="tenant-contracts__ok-badge">Активен</span>'
+                : '<span class="tenant-contracts__off-badge">Неактивен</span>';
+
+            $tableRows .= '
+                <tr>
+                    <td>' . $spaceCell . '</td>
+                    <td class="tenant-contracts__number">' . e((string) ($row->number ?? '—')) . '</td>
+                    <td>' . e($periodLabel) . '</td>
+                    <td>' . static::renderContractStatusBadge((string) ($row->status ?? '')) . '</td>
+                    <td class="tenant-contracts__num">' . $rentCell . '</td>
+                    <td>' . $activeBadge . '</td>
+                </tr>
+            ';
+        }
+
+        $warn = $withoutSpaceTotal > 0
+            ? '<div class="tenant-contracts__warn">Найдены договоры без торгового места: <strong>' . e((string) $withoutSpaceTotal) . '</strong>. Их нужно привязать, иначе данные по месту будут неполными.</div>'
+            : '';
+
+        $style = '
+<style>
+.tenant-contracts{display:flex;flex-direction:column;gap:12px}
+.tenant-contracts__meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;line-height:1.35;opacity:.92}
+.tenant-contracts__dot{opacity:.55}
+.tenant-contracts__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
+.dark .tenant-contracts__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
+
+.tenant-contracts__table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(0,0,0,.10)}
+.dark .tenant-contracts__table-wrap{border-color:rgba(255,255,255,.12)}
+.tenant-contracts table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.tenant-contracts thead th{padding:10px 12px;font-weight:700;white-space:nowrap;text-align:left;border-bottom:1px solid rgba(0,0,0,.08);background:rgba(0,0,0,.03)}
+.dark .tenant-contracts thead th{border-bottom-color:rgba(255,255,255,.10);background:rgba(255,255,255,.04)}
+.tenant-contracts tbody td{padding:10px 12px;vertical-align:top;border-top:1px solid rgba(0,0,0,.08)}
+.dark .tenant-contracts tbody td{border-top-color:rgba(255,255,255,.10)}
+.tenant-contracts tbody tr:first-child td{border-top:none}
+.tenant-contracts__num{text-align:right;white-space:nowrap}
+.tenant-contracts__number{font-weight:700;white-space:nowrap}
+
+.tenant-contracts__warn-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.10);font-size:12px;font-weight:700}
+.tenant-contracts__ok-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(16,185,129,.35);background:rgba(16,185,129,.10);font-size:12px;font-weight:700}
+.tenant-contracts__off-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(0,0,0,.16);background:rgba(0,0,0,.04);font-size:12px;font-weight:700}
+.tenant-contracts__status-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(0,0,0,.16);background:rgba(0,0,0,.04);font-size:12px;font-weight:700}
+.tenant-contracts__status-badge--success{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.10)}
+.tenant-contracts__status-badge--warning{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.12)}
+</style>';
+
+        $meta = [
+            '<span>Всего договоров: <strong>' . e((string) $contractsTotal) . '</strong></span>',
+            '<span class="tenant-contracts__dot">•</span>',
+            '<span>Активных: <strong>' . e((string) $activeTotal) . '</strong></span>',
+            '<span class="tenant-contracts__dot">•</span>',
+            '<span>Без привязки к месту: <strong>' . e((string) $withoutSpaceTotal) . '</strong></span>',
+        ];
+
+        $html = $style . '
+<div class="tenant-contracts">
+    <div class="tenant-contracts__meta">' . implode('', $meta) . '</div>
+    ' . $warn . '
+    <div class="tenant-contracts__table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Торговое место</th>
+                    <th>Номер договора</th>
+                    <th>Срок действия</th>
+                    <th>Статус договора</th>
+                    <th class="tenant-contracts__num">Аренда в месяц</th>
+                    <th>Активность</th>
+                </tr>
+            </thead>
+            <tbody>
+                ' . $tableRows . '
+            </tbody>
+        </table>
+    </div>
+</div>';
+
+        return new HtmlString($html);
+    }
+
+    private static function renderContractStatusBadge(?string $status): string
+    {
+        $s = trim((string) $status);
+
+        if ($s === '') {
+            return '<span class="tenant-contracts__status-badge">—</span>';
+        }
+
+        $label = match ($s) {
+            'draft' => 'Черновик',
+            'active' => 'Активен',
+            'paused' => 'Приостановлен',
+            'terminated' => 'Расторгнут',
+            'archived' => 'Архив',
+            default => $s,
+        };
+
+        $class = match ($s) {
+            'active' => 'tenant-contracts__status-badge tenant-contracts__status-badge--success',
+            'paused' => 'tenant-contracts__status-badge tenant-contracts__status-badge--warning',
+            'terminated', 'archived' => 'tenant-contracts__status-badge',
+            default => 'tenant-contracts__status-badge',
+        };
+
+        return '<span class="' . e($class) . '">' . e($label) . '</span>';
     }
 
     private static function renderSpaceHistory(?Tenant $record): HtmlString
