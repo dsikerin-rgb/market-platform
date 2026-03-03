@@ -11,6 +11,9 @@ use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -21,6 +24,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\HtmlString;
@@ -285,6 +289,8 @@ class TenantResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
+        $toolbarActions = static::tenantToolbarActions();
+
         return $table
             ->columns([
                 TextColumn::make('market.name')
@@ -455,7 +461,131 @@ class TenantResource extends BaseResource
                     ]),
             ])
             ->defaultSort('accruals_total_with_vat_sum', 'desc')
+            ->toolbarActions($toolbarActions)
             ->recordUrl(fn (Tenant $record): string => static::getUrl('edit', ['record' => $record]));
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private static function tenantToolbarActions(): array
+    {
+        if (! class_exists(BulkAction::class)) {
+            return [];
+        }
+
+        $bulkEdit = BulkAction::make('bulk_edit')
+            ->label('Массовое редактирование')
+            ->icon('heroicon-o-pencil-square')
+            ->color('warning')
+            ->requiresConfirmation()
+            ->deselectRecordsAfterCompletion()
+            ->successNotificationTitle('Изменения применены к выбранным арендаторам')
+            ->form([
+                Forms\Components\Select::make('is_active_mode')
+                    ->label('Активность')
+                    ->options([
+                        '' => 'Без изменений',
+                        '1' => 'Сделать активными',
+                        '0' => 'Сделать неактивными',
+                    ])
+                    ->default(''),
+
+                Forms\Components\Select::make('type_mode')
+                    ->label('Тип')
+                    ->options([
+                        '' => 'Без изменений',
+                        'llc' => 'ООО',
+                        'sole_trader' => 'ИП',
+                        'self_employed' => 'Самозанятый',
+                        'individual' => 'Физическое лицо',
+                        '__clear' => 'Очистить тип',
+                    ])
+                    ->default(''),
+
+                Forms\Components\Select::make('status_mode')
+                    ->label('Статус договора')
+                    ->options([
+                        '' => 'Без изменений',
+                        'active' => 'В аренде',
+                        'paused' => 'Приостановлено',
+                        'finished' => 'Завершён договор',
+                        '__clear' => 'Очистить статус',
+                    ])
+                    ->default(''),
+
+                Forms\Components\Textarea::make('notes_append')
+                    ->label('Добавить примечание')
+                    ->rows(3)
+                    ->helperText('Текст будет добавлен в конец текущего примечания каждого выбранного арендатора.'),
+            ])
+            ->action(function (array $data, EloquentCollection $records): void {
+                $updates = [];
+
+                $isActiveMode = (string) ($data['is_active_mode'] ?? '');
+                if ($isActiveMode !== '') {
+                    $updates['is_active'] = $isActiveMode === '1';
+                }
+
+                $typeMode = (string) ($data['type_mode'] ?? '');
+                if ($typeMode === '__clear') {
+                    $updates['type'] = null;
+                } elseif ($typeMode !== '') {
+                    $updates['type'] = $typeMode;
+                }
+
+                $statusMode = (string) ($data['status_mode'] ?? '');
+                if ($statusMode === '__clear') {
+                    $updates['status'] = null;
+                } elseif ($statusMode !== '') {
+                    $updates['status'] = $statusMode;
+                }
+
+                $notesAppend = trim((string) ($data['notes_append'] ?? ''));
+
+                if (($updates === []) && ($notesAppend === '')) {
+                    return;
+                }
+
+                DB::transaction(function () use ($records, $updates, $notesAppend): void {
+                    /** @var Tenant $tenant */
+                    foreach ($records as $tenant) {
+                        $payload = $updates;
+
+                        if ($notesAppend !== '') {
+                            $current = trim((string) ($tenant->notes ?? ''));
+                            $payload['notes'] = $current === ''
+                                ? $notesAppend
+                                : ($current . PHP_EOL . $notesAppend);
+                        }
+
+                        if ($payload === []) {
+                            continue;
+                        }
+
+                        $tenant->fill($payload);
+                        $tenant->save();
+                    }
+                });
+            });
+
+        $bulkDelete = null;
+        if (class_exists(DeleteBulkAction::class)) {
+            $bulkDelete = DeleteBulkAction::make()
+                ->label('Массовое удаление')
+                ->requiresConfirmation();
+        }
+
+        $actions = [$bulkEdit];
+        if ($bulkDelete) {
+            $actions[] = $bulkDelete;
+        }
+
+        if (class_exists(BulkActionGroup::class)) {
+            return [BulkActionGroup::make($actions)];
+        }
+
+        return $actions;
     }
 
     public static function getRelations(): array
