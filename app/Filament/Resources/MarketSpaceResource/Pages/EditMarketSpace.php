@@ -6,9 +6,9 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Models\MarketSpaceMapShape;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Schema;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditMarketSpace extends EditRecord
+class EditMarketSpace extends BaseEditRecord
 {
     protected static string $resource = MarketSpaceResource::class;
 

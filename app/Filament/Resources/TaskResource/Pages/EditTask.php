@@ -10,7 +10,7 @@ use App\Filament\Resources\TaskResource;
 use App\Models\Task;
 use Filament\Actions;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 use Filament\Schemas\Components\Flex;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Size;
@@ -18,7 +18,7 @@ use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 
-class EditTask extends EditRecord
+class EditTask extends BaseEditRecord
 {
     protected static string $resource = TaskResource::class;
 

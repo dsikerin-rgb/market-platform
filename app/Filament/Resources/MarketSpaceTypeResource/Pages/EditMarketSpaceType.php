@@ -4,9 +4,9 @@ namespace App\Filament\Resources\MarketSpaceTypeResource\Pages;
 
 use App\Filament\Resources\MarketSpaceTypeResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditMarketSpaceType extends EditRecord
+class EditMarketSpaceType extends BaseEditRecord
 {
     protected static string $resource = MarketSpaceTypeResource::class;
 

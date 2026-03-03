@@ -4,9 +4,9 @@ namespace App\Filament\Resources\OperationResource\Pages;
 
 use App\Filament\Resources\OperationResource;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateOperation extends CreateRecord
+class CreateOperation extends BaseCreateRecord
 {
     protected static string $resource = OperationResource::class;
 

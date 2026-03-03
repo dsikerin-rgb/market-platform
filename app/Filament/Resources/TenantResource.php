@@ -44,6 +44,9 @@ class TenantResource extends BaseResource
     /** @var array<string, array<string, mixed>> */
     private static array $accrualSummaryCache = [];
 
+    /** @var array<string, array{mode:string,status:?string,label:string,updated_at:?string,source:?string}> */
+    private static array $resolvedDebtStatusCache = [];
+
     /**
      * Группа динамическая:
      * - super-admin видит "Рынки"
@@ -106,7 +109,7 @@ class TenantResource extends BaseResource
                                 Forms\Components\Select::make('market_id')
                                     ->label('Рынок')
                                     ->relationship('market', 'name')
-                                    ->required()
+                                    ->required(fn () => (bool) $user && $user->isSuperAdmin())
                                     ->searchable()
                                     ->preload()
                                     ->default(function () use ($user) {
@@ -120,8 +123,20 @@ class TenantResource extends BaseResource
 
                                         return $user->market_id;
                                     })
-                                    ->disabled(fn () => (bool) $user && ! $user->isSuperAdmin())
-                                    ->dehydrated(true),
+                                    ->visible(fn () => (bool) $user && $user->isSuperAdmin())
+                                    ->dehydrated(fn () => (bool) $user && $user->isSuperAdmin()),
+
+                                Forms\Components\Hidden::make('market_id')
+                                    ->default(function () use ($user) {
+                                        if (! $user) {
+                                            return null;
+                                        }
+
+                                        return $user->isSuperAdmin()
+                                            ? (static::selectedMarketIdFromSession() ?: null)
+                                            : $user->market_id;
+                                    })
+                                    ->dehydrated(fn () => (bool) $user && ! $user->isSuperAdmin()),
 
                                 Forms\Components\TextInput::make('name')
                                     ->label('Название арендатора')
@@ -132,32 +147,19 @@ class TenantResource extends BaseResource
                                     ->label('Краткое название / вывеска')
                                     ->maxLength(255),
 
-                                Forms\Components\Select::make('type')
-                                    ->label('Тип арендатора')
-                                    ->options([
-                                        'llc' => 'ООО',
-                                        'sole_trader' => 'ИП',
-                                        'self_employed' => 'Самозанятый',
-                                        'individual' => 'Физическое лицо',
-                                    ])
-                                    ->nullable(),
-
-                                Forms\Components\Select::make('status')
-                                    ->label('Статус договора')
-                                    ->options([
-                                        'active' => 'В аренде',
-                                        'paused' => 'Приостановлено',
-                                        'finished' => 'Завершён договор',
-                                    ])
-                                    ->nullable(),
 
                                 Forms\Components\Toggle::make('is_active')
                                     ->label('Активен')
                                     ->default(true),
+
+                                Forms\Components\Textarea::make('notes')
+                                    ->label('Примечания')
+                                    ->rows(4)
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2),
 
-                        Section::make('Задолженность (ручной статус)')
+                        Section::make('Задолженность')
                             ->schema([
                                 Forms\Components\Placeholder::make('debt_status_summary')
                                     ->hiddenLabel()
@@ -168,26 +170,17 @@ class TenantResource extends BaseResource
                                 Forms\Components\Select::make('debt_status')
                                     ->label('Задолженность')
                                     ->options(static::debtStatusOptions())
-                                    ->placeholder('Не указано')
+                                    ->native(false)
+                                    ->placeholder('Автоматически (из 1С)')
                                     ->nullable()
-                                    ->helperText('Временный ручной статус до интеграции с 1С. Оплата — до 30 календарных дней.'),
+                                    ->helperText('По умолчанию — автоматически из 1С (последний снимок в contract_debts). Выберите вручную только как временный override.')
+                                    ->columnSpan(1),
 
-                                Forms\Components\Textarea::make('debt_status_note')
-                                    ->label('Комментарий по задолженности')
-                                    ->nullable()
-                                    ->rows(3),
-
-                                Forms\Components\Placeholder::make('debt_status_updated_at')
-                                    ->label('Обновлено')
-                                    ->content(function (?Tenant $record): string {
-                                        if (! $record?->debt_status_updated_at) {
-                                            return '—';
-                                        }
-
-                                        return $record->debt_status_updated_at->format('d.m.Y H:i');
-                                    }),
                             ])
-                            ->columns(2),
+                            ->columns([
+                                'default' => 1,
+                                'md' => 2,
+                            ]),
                     ]),
 
                 Tab::make('Торговые места')
@@ -269,16 +262,6 @@ class TenantResource extends BaseResource
                             ->columns(2),
                     ]),
 
-                Tab::make('Примечания')
-                    ->schema([
-                        Section::make('Примечания')
-                            ->schema([
-                                Forms\Components\Textarea::make('notes')
-                                    ->hiddenLabel()
-                                    ->rows(6)
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
 
             ]),
         ]);
@@ -418,10 +401,10 @@ class TenantResource extends BaseResource
 
                 TextColumn::make('debt_status')
                     ->label('Задолженность')
-                    ->formatStateUsing(fn (?string $state, Tenant $record) => $record->debt_status_label)
+                    ->formatStateUsing(fn (?string $state, Tenant $record) => static::resolveDebtStatusForDisplay($record)['label'])
                     ->badge()
-                    ->color(fn (?string $state) => static::debtStatusColor($state))
-                    ->sortable(),
+                    ->color(fn (?string $state, Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
+                    ->description(fn (?string $state, Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)'),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
@@ -1597,7 +1580,7 @@ class TenantResource extends BaseResource
      */
     private static function debtStatusOptions(): array
     {
-        return Tenant::DEBT_STATUS_LABELS;
+        return ['' => 'Автоматически (из 1С)'] + Tenant::DEBT_STATUS_LABELS;
     }
 
     private static function debtStatusColor(?string $state): string
@@ -1734,27 +1717,204 @@ class TenantResource extends BaseResource
             return new HtmlString('<div style="font-size:13px;opacity:.85;">Статус появится после сохранения арендатора.</div>');
         }
 
-        $label = $record->debt_status_label;
-        $color = static::debtStatusHex($record->debt_status);
-        $note = trim((string) ($record->debt_status_note ?? ''));
-        $noteHtml = $note !== ''
-            ? '<div style="margin-top:6px;opacity:.75;">Комментарий: ' . e($note) . '</div>'
-            : '';
+        $resolved = static::resolveDebtStatusForDisplay($record);
+        $label = $resolved['label'];
+        $color = static::debtStatusHex($resolved['status']);
 
-        $updatedAt = $record->debt_status_updated_at
-            ? $record->debt_status_updated_at->format('d.m.Y H:i')
-            : null;
-        $updatedHtml = $updatedAt
-            ? '<div style="margin-top:4px;opacity:.65;">Обновлено: ' . e($updatedAt) . '</div>'
-            : '';
+        $metaParts = [];
+        $metaParts[] = $resolved['mode'] === 'manual' ? 'Режим: вручную' : 'Режим: автоматически (1С)';
+
+        if (filled($resolved['updated_at'])) {
+            $metaParts[] = 'Обновлено: ' . e((string) $resolved['updated_at']);
+        }
+
+        if (filled($resolved['source'])) {
+            $metaParts[] = e((string) $resolved['source']);
+        }
+
+        $metaHtml = $metaParts === []
+            ? ''
+            : '<div style="margin-top:4px;opacity:.65;">' . implode(' • ', $metaParts) . '</div>';
 
         $badge = '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid ' . e($color) . ';color:' . e($color) . ';font-weight:600;font-size:12px;">'
             . e($label)
             . '</span>';
 
         return new HtmlString(
-            '<div style="font-size:13px;">' . $badge . $noteHtml . $updatedHtml . '</div>'
+            '<div style="font-size:13px;">' . $badge . $metaHtml . '</div>'
         );
+    }
+
+    /**
+     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string}
+     */
+    private static function resolveDebtStatusForDisplay(?Tenant $record): array
+    {
+        if (! $record) {
+            return [
+                'mode' => 'auto',
+                'status' => null,
+                'label' => 'Автоматически: нет данных',
+                'updated_at' => null,
+                'source' => null,
+            ];
+        }
+
+        $cacheKey = (int) $record->market_id . ':' . (int) $record->id . ':' . ((string) ($record->updated_at ?? ''));
+        if (isset(self::$resolvedDebtStatusCache[$cacheKey])) {
+            return self::$resolvedDebtStatusCache[$cacheKey];
+        }
+
+        $manual = trim((string) ($record->debt_status ?? ''));
+        if ($manual !== '' && array_key_exists($manual, Tenant::DEBT_STATUS_LABELS)) {
+            return self::$resolvedDebtStatusCache[$cacheKey] = [
+                'mode' => 'manual',
+                'status' => $manual,
+                'label' => Tenant::DEBT_STATUS_LABELS[$manual],
+                'updated_at' => $record->debt_status_updated_at?->format('d.m.Y H:i'),
+                'source' => null,
+            ];
+        }
+
+        $auto = static::resolveAutoDebtStatus($record);
+        if ($auto['status'] !== null) {
+            return self::$resolvedDebtStatusCache[$cacheKey] = [
+                'mode' => 'auto',
+                'status' => $auto['status'],
+                'label' => Tenant::DEBT_STATUS_LABELS[$auto['status']] ?? 'Автоматически',
+                'updated_at' => $auto['snapshot_label'],
+                'source' => 'Источник: contract_debts',
+            ];
+        }
+
+        return self::$resolvedDebtStatusCache[$cacheKey] = [
+            'mode' => 'auto',
+            'status' => null,
+            'label' => 'Автоматически: нет данных',
+            'updated_at' => $auto['snapshot_label'],
+            'source' => $auto['reason'],
+        ];
+    }
+
+    /**
+     * @return array{status:?string,snapshot_label:?string,reason:?string}
+     */
+    private static function resolveAutoDebtStatus(Tenant $record): array
+    {
+        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+            return ['status' => null, 'snapshot_label' => null, 'reason' => 'Данные 1С недоступны'];
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+        $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
+        $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
+        $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
+
+        $base = DB::table('contract_debts')->where('tenant_id', (int) $record->id);
+        if ($hasMarketId) {
+            $base->where('market_id', (int) $record->market_id);
+        }
+
+        $snapshotLabel = null;
+        if ($hasCalculatedAt) {
+            $latest = (clone $base)->max('calculated_at');
+            if ($latest) {
+                $base->where('calculated_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasCreatedAt) {
+            $latest = (clone $base)->max('created_at');
+            if ($latest) {
+                $base->where('created_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
+                } catch (Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasPeriod) {
+            $latest = (clone $base)->max('period');
+            if ($latest) {
+                $base->where('period', $latest);
+                $snapshotLabel = (string) $latest;
+            }
+        }
+
+        $fields = [];
+        if ($hasDebt) {
+            $fields[] = 'debt_amount';
+        }
+        if ($hasAccrued) {
+            $fields[] = 'accrued_amount';
+        }
+        if ($hasPaid) {
+            $fields[] = 'paid_amount';
+        }
+        if ($hasPeriod) {
+            $fields[] = 'period';
+        }
+
+        if ($fields === []) {
+            return ['status' => null, 'snapshot_label' => $snapshotLabel, 'reason' => 'В 1С нет полей для расчёта долга'];
+        }
+
+        $rows = (clone $base)->get($fields);
+        if ($rows->isEmpty()) {
+            return ['status' => null, 'snapshot_label' => $snapshotLabel, 'reason' => 'Нет данных 1С по арендатору'];
+        }
+
+        $totalDebt = 0.0;
+        $oldestDebtPeriod = null;
+        $currentMonth = Carbon::now()->startOfMonth();
+
+        foreach ($rows as $row) {
+            $rowDebt = 0.0;
+
+            if ($hasDebt) {
+                $rowDebt = (float) ($row->debt_amount ?? 0);
+            } elseif ($hasAccrued || $hasPaid) {
+                $rowDebt = (float) ($row->accrued_amount ?? 0) - (float) ($row->paid_amount ?? 0);
+            }
+
+            $totalDebt += $rowDebt;
+
+            if ($rowDebt > 0.009 && $hasPeriod) {
+                $rawPeriod = trim((string) ($row->period ?? ''));
+                if (preg_match('/^\d{4}-\d{2}/', $rawPeriod) === 1) {
+                    try {
+                        $period = Carbon::createFromFormat('Y-m-d', substr($rawPeriod, 0, 7) . '-01')->startOfMonth();
+                        if (! $oldestDebtPeriod || $period->lt($oldestDebtPeriod)) {
+                            $oldestDebtPeriod = $period;
+                        }
+                    } catch (Throwable) {
+                        // ignore parsing problems for malformed source period
+                    }
+                }
+            }
+        }
+
+        if ($totalDebt <= 0.009) {
+            return ['status' => 'green', 'snapshot_label' => $snapshotLabel, 'reason' => null];
+        }
+
+        if (! $oldestDebtPeriod) {
+            return ['status' => 'orange', 'snapshot_label' => $snapshotLabel, 'reason' => null];
+        }
+
+        $monthsOverdue = $oldestDebtPeriod->diffInMonths($currentMonth);
+
+        return [
+            'status' => $monthsOverdue >= 3 ? 'red' : 'orange',
+            'snapshot_label' => $snapshotLabel,
+            'reason' => null,
+        ];
     }
 
     private static function formatRub(float $value): string

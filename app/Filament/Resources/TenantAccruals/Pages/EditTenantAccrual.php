@@ -5,9 +5,9 @@ namespace App\Filament\Resources\TenantAccruals\Pages;
 
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditTenantAccrual extends EditRecord
+class EditTenantAccrual extends BaseEditRecord
 {
     protected static string $resource = TenantAccrualResource::class;
 

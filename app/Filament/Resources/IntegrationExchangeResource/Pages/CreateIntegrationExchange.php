@@ -8,9 +8,9 @@ namespace App\Filament\Resources\IntegrationExchangeResource\Pages;
 
 use App\Filament\Resources\IntegrationExchangeResource;
 use Filament\Facades\Filament;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateIntegrationExchange extends CreateRecord
+class CreateIntegrationExchange extends BaseCreateRecord
 {
     protected static string $resource = IntegrationExchangeResource::class;
 

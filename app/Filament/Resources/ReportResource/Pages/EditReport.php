@@ -4,9 +4,9 @@ namespace App\Filament\Resources\ReportResource\Pages;
 
 use App\Filament\Resources\ReportResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditReport extends EditRecord
+class EditReport extends BaseEditRecord
 {
     protected static string $resource = ReportResource::class;
 

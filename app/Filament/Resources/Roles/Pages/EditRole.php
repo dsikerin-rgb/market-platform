@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\Roles\Pages;
 
 use App\Filament\Resources\Roles\RoleResource;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditRole extends EditRecord
+class EditRole extends BaseEditRecord
 {
     protected static string $resource = RoleResource::class;
 

@@ -9,10 +9,10 @@ namespace App\Filament\Resources\IntegrationExchangeResource\Pages;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Models\IntegrationExchange;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 use Filament\Support\Enums\Width;
 
-class EditIntegrationExchange extends EditRecord
+class EditIntegrationExchange extends BaseEditRecord
 {
     protected static string $resource = IntegrationExchangeResource::class;
 

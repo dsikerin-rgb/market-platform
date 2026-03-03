@@ -8,9 +8,9 @@ namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
 use App\Models\Task;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateTask extends CreateRecord
+class CreateTask extends BaseCreateRecord
 {
     protected static string $resource = TaskResource::class;
 

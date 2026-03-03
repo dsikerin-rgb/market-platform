@@ -162,4 +162,22 @@ html:not([data-admin-overrides="0"]) .fi-dashboard-page .choices__inner{
     width: 100% !important;
   }
 }
+
+/* ====================================================================== */
+/* === Sticky form actions: semi-transparent bar behind Save/Cancel     === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-sc-actions.fi-sticky .fi-ac{
+  background: rgba(255, 255, 255, 0.78) !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+html:not([data-admin-overrides="0"]).dark .fi-sc-actions.fi-sticky .fi-ac,
+html:not([data-admin-overrides="0"]) .dark .fi-sc-actions.fi-sticky .fi-ac{
+  background: rgba(17, 24, 39, 0.74) !important;
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34) !important;
+}
 </style>

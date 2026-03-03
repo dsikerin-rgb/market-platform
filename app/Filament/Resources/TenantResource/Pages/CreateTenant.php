@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\TenantResource\Pages;
 
 use App\Filament\Resources\TenantResource;
-use Filament\Resources\Pages\CreateRecord;
+use App\Filament\Resources\Pages\BaseCreateRecord;
 
-class CreateTenant extends CreateRecord
+class CreateTenant extends BaseCreateRecord
 {
     protected static string $resource = TenantResource::class;
 

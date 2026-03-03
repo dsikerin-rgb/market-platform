@@ -4,9 +4,9 @@ namespace App\Filament\Resources\TaskCommentResource\Pages;
 
 use App\Filament\Resources\TaskCommentResource;
 use Filament\Actions;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditTaskComment extends EditRecord
+class EditTaskComment extends BaseEditRecord
 {
     protected static string $resource = TaskCommentResource::class;
 

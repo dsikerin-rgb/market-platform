@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\OperationResource\Pages;
 
 use App\Filament\Resources\OperationResource;
-use Filament\Resources\Pages\EditRecord;
+use App\Filament\Resources\Pages\BaseEditRecord;
 
-class EditOperation extends EditRecord
+class EditOperation extends BaseEditRecord
 {
     protected static string $resource = OperationResource::class;
 
