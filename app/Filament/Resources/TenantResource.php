@@ -1070,25 +1070,27 @@ class TenantResource extends BaseResource
         $areaHeader = $hasArea ? '<th class="tenant-spaces__num">Площадь</th>' : '';
         $colspan = $hasArea ? 8 : 7;
 
-        $meta = [
-            '<span>Месяц начислений: <strong>' . e($periodLabel) . '</strong></span>',
-            '<span class="tenant-spaces__dot">•</span>',
-            '<span>Мест: <strong>' . e((string) $rows->count()) . '</strong></span>',
+        $summaryCards = [
+            ['label' => 'Месяц начислений', 'value' => $periodLabel],
+            ['label' => 'Торговых мест', 'value' => (string) $rows->count()],
         ];
 
         if ($hasArea) {
-            $meta[] = '<span class="tenant-spaces__dot">•</span>';
-            $meta[] = '<span>Площадь: <strong>' . e(static::formatArea($totalArea)) . '</strong></span>';
+            $summaryCards[] = ['label' => 'Площадь', 'value' => static::formatArea($totalArea)];
         }
 
-        $meta[] = '<span class="tenant-spaces__dot">•</span>';
-        $meta[] = '<span>Итого аренда: <strong>' . e(static::formatRub($totalRent)) . '</strong></span>';
-        $meta[] = '<span class="tenant-spaces__dot">•</span>';
-        $meta[] = '<span>Итого с НДС: <strong>' . e(static::formatRub($totalWithVat)) . '</strong></span>';
-        $meta[] = '<span class="tenant-spaces__dot">•</span>';
-        $meta[] = '<span>Договоров с привязкой к месту: <strong>' . e((string) $contractsMappedTotal) . '</strong></span>';
-        $meta[] = '<span class="tenant-spaces__dot">•</span>';
-        $meta[] = '<span>Активных договоров: <strong>' . e((string) $contractsMappedActiveTotal) . '</strong></span>';
+        $summaryCards[] = ['label' => 'Итого аренда', 'value' => static::formatRub($totalRent)];
+        $summaryCards[] = ['label' => 'Итого с НДС', 'value' => static::formatRub($totalWithVat)];
+        $summaryCards[] = ['label' => 'Договоров с привязкой', 'value' => (string) $contractsMappedTotal];
+        $summaryCards[] = ['label' => 'Активных договоров', 'value' => (string) $contractsMappedActiveTotal];
+
+        $summaryHtml = '';
+        foreach ($summaryCards as $card) {
+            $summaryHtml .= '<div class="tenant-spaces__summary-card">'
+                . '<div class="tenant-spaces__summary-label">' . e((string) $card['label']) . '</div>'
+                . '<div class="tenant-spaces__summary-value">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
 
         $warn = '';
         if ($contractsWithoutSpace > 0) {
@@ -1102,8 +1104,11 @@ class TenantResource extends BaseResource
         $style = '
 <style>
 .tenant-spaces{display:flex;flex-direction:column;gap:12px}
-.tenant-spaces__meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px;line-height:1.35;opacity:.92}
-.tenant-spaces__dot{opacity:.55}
+.tenant-spaces__summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.tenant-spaces__summary-card{border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;background:rgba(0,0,0,.02)}
+.dark .tenant-spaces__summary-card{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
+.tenant-spaces__summary-label{font-size:12px;opacity:.72;line-height:1.2}
+.tenant-spaces__summary-value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2}
 .tenant-spaces__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
 .dark .tenant-spaces__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
 
@@ -1141,7 +1146,7 @@ class TenantResource extends BaseResource
 
         $html = $style . '
 <div class="tenant-spaces">
-    <div class="tenant-spaces__meta">' . implode('', $meta) . '</div>
+    <div class="tenant-spaces__summary">' . $summaryHtml . '</div>
     ' . $warn . '
 
     <div class="tenant-spaces__table-wrap">
