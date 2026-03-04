@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Market Platform scheduler every minute (prod)
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=market-schedule.service
+
+[Install]
+WantedBy=timers.target
+

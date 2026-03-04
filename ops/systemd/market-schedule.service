@@ -1,0 +1,16 @@
+[Unit]
+Description=Market Platform Scheduler (prod)
+After=network.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/market/current
+ExecStart=/usr/bin/php artisan schedule:run
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+Environment=APP_ENV=production
+Environment=APP_DEBUG=false
+

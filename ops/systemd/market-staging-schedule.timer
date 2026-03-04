@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Market Platform scheduler every minute (staging)
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+Persistent=true
+Unit=market-staging-schedule.service
+
+[Install]
+WantedBy=timers.target
+
