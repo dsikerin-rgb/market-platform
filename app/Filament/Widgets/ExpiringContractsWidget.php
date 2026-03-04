@@ -152,7 +152,7 @@ class ExpiringContractsWidget extends BaseTableWidget
                     $today = CarbonImmutable::now($tz)->startOfDay();
                     $ends = CarbonImmutable::parse($record->ends_at)->setTimezone($tz)->startOfDay();
 
-                    return $today->diffInDays($ends, false);
+                    return (int) $today->diffInDays($ends, false);
                 }),
         ];
     }

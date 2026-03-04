@@ -132,7 +132,7 @@ class RecentTenantRequestsWidget extends BaseTableWidget
                     $created = CarbonImmutable::parse($record->created_at)->setTimezone($tz)->startOfDay();
 
                     // Положительное число дней, сколько заявка "в работе"
-                    return max($created->diffInDays($today), 0);
+                    return max((int) $created->diffInDays($today), 0);
                 }),
         ];
     }
