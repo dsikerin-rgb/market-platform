@@ -45,6 +45,34 @@
             gap: 16px;
         }
 
+        .ms-nav-details {
+            border-radius: 12px;
+            border: 1px solid rgba(156, 163, 175, .25);
+            background: rgba(255, 255, 255, .40);
+            padding: 8px 10px;
+        }
+        .dark .ms-nav-details {
+            border-color: rgba(55, 65, 81, .8);
+            background: rgba(17, 24, 39, .25);
+        }
+        .ms-nav-summary {
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 650;
+            user-select: none;
+            list-style: none;
+        }
+        .ms-nav-summary::-webkit-details-marker { display: none; }
+        .ms-nav-summary::before {
+            content: "▸";
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform .16s ease;
+        }
+        .ms-nav-details[open] .ms-nav-summary::before {
+            transform: rotate(90deg);
+        }
+
         .ms-nav-group {
             border-radius: 12px;
             border: 1px solid rgba(156,163,175,.22);
@@ -117,7 +145,7 @@
         .dark .ms-icon { color: rgba(156,163,175,1); }
     </style>
 
-    <div class="mx-auto max-w-6xl ms-page" style="display:flex; flex-direction:column; gap:24px;">
+    <div class="mx-auto max-w-7xl ms-page" style="display:flex; flex-direction:column; gap:24px;">
 
         @if (empty($market))
             <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
@@ -139,12 +167,12 @@
                 </div>
             </div>
         @else
-            <div class="grid grid-cols-1 lg:grid-cols-3" style="gap:40px 32px;">
+            <div class="grid grid-cols-1 lg:grid-cols-4" style="gap:32px 24px;">
 
                 {{-- Левая колонка: форма --}}
-                <div class="min-w-0 lg:col-span-2">
+                <div class="min-w-0 lg:col-span-3">
                     <form wire:submit.prevent="save" style="display:flex; flex-direction:column; gap:16px;">
-                        <div class="mx-auto w-full max-w-2xl" style="display:flex; flex-direction:column; gap:16px;">
+                        <div class="w-full" style="display:flex; flex-direction:column; gap:16px;">
                             {{ $this->form }}
 
                             {{-- Панель сохранения --}}
@@ -187,9 +215,11 @@
                 {{-- Правая колонка: навигация --}}
                 <div class="min-w-0 self-start lg:col-span-1">
                     <x-filament::section>
-                        <x-slot name="heading">Навигация</x-slot>
+                        <x-slot name="heading">Быстрые ссылки</x-slot>
 
-                        <div class="ms-nav">
+                        <details class="ms-nav-details">
+                            <summary class="ms-nav-summary">Показать разделы</summary>
+                            <div class="ms-nav" style="margin-top: 12px;">
 
                             @if (! empty($marketsUrl))
                                 <div class="ms-nav-group">
@@ -274,7 +304,8 @@
                                 </div>
                             @endif
 
-                        </div>
+                            </div>
+                        </details>
                     </x-filament::section>
                 </div>
 

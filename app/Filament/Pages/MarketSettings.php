@@ -174,7 +174,8 @@ class MarketSettings extends Page
             ->statePath('data')
             ->model($this->market)
             ->components([
-                Section::make()
+                Section::make('Профиль рынка')
+                    ->description('Основные реквизиты и часовой пояс рынка.')
                     ->schema([
                         Forms\Components\TextInput::make('name')
                             ->label('Название рынка')
@@ -211,7 +212,8 @@ class MarketSettings extends Page
                                 'lg' => 4,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->icon('heroicon-o-identification'),
 
                 Section::make('Карта рынка')
                     ->description('PDF-карта для просмотра с масштабированием и перемещением.')
@@ -239,7 +241,10 @@ class MarketSettings extends Page
                                 'lg' => 5,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->icon('heroicon-o-map')
+                    ->collapsible()
+                    ->collapsed(),
 
                 Section::make('Праздники рынка')
                     ->description('Настройки уведомлений о праздниках рынка.')
@@ -278,7 +283,9 @@ class MarketSettings extends Page
                                 'lg' => 8,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->icon('heroicon-o-calendar-days')
+                    ->collapsible(),
 
                 Section::make('Обращения и чат')
                     ->description('Получатели уведомлений о новых сообщениях от арендаторов.')
@@ -329,7 +336,9 @@ class MarketSettings extends Page
                                 'lg' => 6,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->icon('heroicon-o-chat-bubble-left-right')
+                    ->collapsible(),
 
                 Section::make('Каналы уведомлений')
                     ->description('Каналы доставки по темам. Telegram начнет работать после подключения транспорта.')
@@ -385,7 +394,10 @@ class MarketSettings extends Page
                                 'lg' => 6,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->icon('heroicon-o-bell-alert')
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 
