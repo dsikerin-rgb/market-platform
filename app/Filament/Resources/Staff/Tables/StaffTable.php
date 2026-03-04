@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Staff\Tables;
 
+use App\Support\RoleScenarioCatalog;
 use Filament\Facades\Filament;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -73,6 +74,7 @@ class StaffTable
                 Tables\Columns\TextColumn::make('roles.name')
                     ->label('Роли')
                     ->badge()
+                    ->formatStateUsing(fn (?string $state): string => RoleScenarioCatalog::labelForSlug((string) $state, (string) $state))
                     ->separator(', ')
                     ->toggleable(),
             ])

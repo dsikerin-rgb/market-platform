@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Roles\Tables;
 
+use App\Support\RoleScenarioCatalog;
 use Filament\Tables;
 use Filament\Tables\Table;
 
@@ -10,14 +11,6 @@ class RolesTable
     public static function configure(Table $table): Table
     {
         $systemRoles = ['super-admin', 'market-admin', 'merchant'];
-
-        $labels = [
-            'super-admin' => 'Супер-администратор',
-            'market-admin' => 'Администратор рынка',
-            'market-manager' => 'Менеджер рынка',
-            'market-operator' => 'Оператор рынка',
-            'merchant' => 'Арендатор',
-        ];
 
         $recordActions = [];
 
@@ -42,16 +35,27 @@ class RolesTable
             ->columns([
                 Tables\Columns\TextColumn::make('label_ru')
                     ->label('Название')
-                    ->formatStateUsing(fn ($state, $record) => $state ?: ($labels[$record->name] ?? $record->name))
+                    ->formatStateUsing(fn ($state, $record) => $state ?: RoleScenarioCatalog::labelForSlug((string) $record->name, (string) $record->name))
                     ->searchable()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('name')
                     ->label('Код роли')
-                    ->formatStateUsing(fn (?string $state) => $labels[$state] ?? $state)
                     ->searchable()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                Tables\Columns\TextColumn::make('role_profile')
+                    ->label('Профиль')
+                    ->getStateUsing(fn ($record) => RoleScenarioCatalog::descriptionForSlug((string) $record->name) ?? 'Кастомный профиль')
+                    ->wrap()
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('notification_topics')
+                    ->label('Сценарии уведомлений')
+                    ->getStateUsing(fn ($record) => RoleScenarioCatalog::topicSummaryForSlug((string) $record->name))
+                    ->wrap()
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('guard_name')
                     ->label('Guard')
