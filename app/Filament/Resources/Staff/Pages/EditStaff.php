@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Staff\Pages;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\Staff\StaffResource;
 use App\Notifications\TelegramTestNotification;
+use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -55,6 +56,37 @@ class EditStaff extends BaseEditRecord
         $user = Filament::auth()->user();
 
         return [
+            Action::make('telegram_connect_link')
+                ->label('Telegram link')
+                ->icon('heroicon-o-link')
+                ->color('gray')
+                ->tooltip('Generate one-time /start token for this user')
+                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->action(function (): void {
+                    $payload = app(TelegramChatLinkService::class)->issue($this->record, 20);
+
+                    $deepLink = trim((string) ($payload['deep_link'] ?? ''));
+                    $command = trim((string) ($payload['command'] ?? ''));
+                    $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
+
+                    $bodyParts = [];
+                    if ($deepLink !== '') {
+                        $bodyParts[] = 'Link: ' . $deepLink;
+                    }
+                    if ($command !== '') {
+                        $bodyParts[] = 'Command: ' . $command;
+                    }
+                    if ($expiresAt !== '') {
+                        $bodyParts[] = 'Expires at: ' . $expiresAt;
+                    }
+
+                    Notification::make()
+                        ->title('Telegram connect token generated')
+                        ->body(implode("\n", $bodyParts))
+                        ->success()
+                        ->send();
+                }),
+
             Action::make('telegram_test')
                 ->label('Telegram test')
                 ->icon('heroicon-o-paper-airplane')
