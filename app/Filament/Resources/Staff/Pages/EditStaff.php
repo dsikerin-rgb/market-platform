@@ -6,17 +6,24 @@ use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\Staff\StaffResource;
 use App\Notifications\TelegramConnectLinkNotification;
 use App\Notifications\TelegramTestNotification;
+use App\Support\QrCodeDataUriGenerator;
 use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
 
 class EditStaff extends BaseEditRecord
 {
     protected static string $resource = StaffResource::class;
+
+    /**
+     * @var array{token:string,expires_at:string,command:string,deep_link:?string,share_link:?string,qr_svg_data_uri:?string}|null
+     */
+    public ?array $telegramConnectModalPayload = null;
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
@@ -65,6 +72,13 @@ class EditStaff extends BaseEditRecord
                 ->modalHeading('Ссылка подключения Telegram')
                 ->modalSubmitActionLabel('Сгенерировать')
                 ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->fillForm(function (): array {
+                    $this->telegramConnectModalPayload = $this->issueTelegramConnectPayload();
+
+                    return [
+                        'delivery_channels' => $this->defaultTelegramConnectDeliveryChannels(),
+                    ];
+                })
                 ->form([
                     \Filament\Forms\Components\CheckboxList::make('delivery_channels')
                         ->label('Отправить сотруднику')
@@ -72,20 +86,21 @@ class EditStaff extends BaseEditRecord
                         ->default(fn (): array => $this->defaultTelegramConnectDeliveryChannels())
                         ->columns(1)
                         ->helperText('Ссылка всё равно будет показана в уведомлении после генерации.'),
+
+                    \Filament\Forms\Components\Placeholder::make('telegram_connect_qr_preview')
+                        ->label('Быстрое подключение (QR)')
+                        ->content(fn () => $this->telegramConnectQrPreviewHtml()),
                 ])
                 ->action(function (array $data): void {
-                    $payload = app(TelegramChatLinkService::class)->issue($this->record, 20);
+                    $payload = is_array($this->telegramConnectModalPayload)
+                        ? $this->telegramConnectModalPayload
+                        : $this->issueTelegramConnectPayload();
 
                     $deepLink = trim((string) ($payload['deep_link'] ?? ''));
                     $command = trim((string) ($payload['command'] ?? ''));
                     $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
                     $recipientLabel = $this->telegramConnectRecipientLabel();
-                    $shareLink = '';
-                    if ($deepLink !== '') {
-                        $shareText = 'Подключите Telegram в Market Platform';
-                        $shareLink = 'https://t.me/share/url?url=' . rawurlencode($deepLink)
-                            . '&text=' . rawurlencode($shareText);
-                    }
+                    $shareLink = trim((string) ($payload['share_link'] ?? ''));
 
                     $requestedChannelsRaw = is_array($data['delivery_channels'] ?? null)
                         ? $data['delivery_channels']
@@ -152,6 +167,7 @@ class EditStaff extends BaseEditRecord
                     }
 
                     $feedback->send();
+                    $this->telegramConnectModalPayload = null;
                 }),
 
             Action::make('telegram_binding_info')
@@ -264,6 +280,68 @@ class EditStaff extends BaseEditRecord
                 ->label('Удалить сотрудника')
                 ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
         ];
+    }
+
+    /**
+     * @return array{token:string,expires_at:string,command:string,deep_link:?string,share_link:?string,qr_svg_data_uri:?string}
+     */
+    private function issueTelegramConnectPayload(): array
+    {
+        $payload = app(TelegramChatLinkService::class)->issue($this->record, 20);
+
+        $deepLink = trim((string) ($payload['deep_link'] ?? ''));
+        $shareLink = null;
+        if ($deepLink !== '') {
+            $shareText = 'Подключите Telegram в Market Platform';
+            $shareLink = 'https://t.me/share/url?url=' . rawurlencode($deepLink)
+                . '&text=' . rawurlencode($shareText);
+        }
+
+        $payload['share_link'] = $shareLink;
+        $payload['qr_svg_data_uri'] = $deepLink !== ''
+            ? app(QrCodeDataUriGenerator::class)->generateSvgDataUri($deepLink)
+            : null;
+
+        return $payload;
+    }
+
+    private function telegramConnectQrPreviewHtml(): HtmlString
+    {
+        $payload = is_array($this->telegramConnectModalPayload)
+            ? $this->telegramConnectModalPayload
+            : $this->issueTelegramConnectPayload();
+
+        $this->telegramConnectModalPayload = $payload;
+
+        $deepLink = trim((string) ($payload['deep_link'] ?? ''));
+        $command = trim((string) ($payload['command'] ?? ''));
+        $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
+        $qrDataUri = trim((string) ($payload['qr_svg_data_uri'] ?? ''));
+
+        $html = '<div class="space-y-2 text-sm">';
+
+        if ($deepLink !== '') {
+            $html .= '<div>Ссылка: <a href="' . e($deepLink) . '" target="_blank" rel="noopener noreferrer" class="underline">' . e($deepLink) . '</a></div>';
+        }
+
+        if ($command !== '') {
+            $html .= '<div>Команда: <code class="rounded bg-gray-100 px-1 py-0.5 dark:bg-gray-800">' . e($command) . '</code></div>';
+        }
+
+        if ($expiresAt !== '') {
+            $html .= '<div class="text-gray-500 dark:text-gray-400">Действует до: ' . e($expiresAt) . '</div>';
+        }
+
+        if ($qrDataUri !== '') {
+            $html .= '<div class="pt-1"><div class="mb-1 text-gray-500 dark:text-gray-400">Сканируйте камерой телефона:</div>'
+                . '<div class="inline-flex rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-950">'
+                . '<img src="' . e($qrDataUri) . '" alt="QR-код подключения Telegram" class="h-36 w-36" loading="lazy" />'
+                . '</div></div>';
+        }
+
+        $html .= '</div>';
+
+        return new HtmlString($html);
     }
 
     /**
