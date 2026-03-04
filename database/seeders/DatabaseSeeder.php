@@ -22,12 +22,14 @@ class DatabaseSeeder extends Seeder
         // 3) Базовые роли системы (создаём всегда, в любых окружениях)
         $roles = [
             'super-admin',
+            'market-owner',
             'market-admin',
             'market-manager',
             'market-operator',
             'merchant',
             'merchant-user',
             'market-accountant',
+            'market-finance',
             'market-hr',
             'market-maintenance',
             'market-engineer',
@@ -35,6 +37,7 @@ class DatabaseSeeder extends Seeder
             'market-security',
             'market-guard',
             'market-marketing',
+            'market-advertising',
             'market-support',
             'staff',
             'tenant',

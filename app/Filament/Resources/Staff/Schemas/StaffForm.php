@@ -2,11 +2,15 @@
 
 namespace App\Filament\Resources\Staff\Schemas;
 
+use App\Support\RoleScenarioCatalog;
+use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 class StaffForm
 {
@@ -147,9 +151,88 @@ class StaffForm
                     $key = "roles.{$slug}";
                     $translated = __($key);
 
-                    return $translated !== $key ? $translated : $name;
+                    if ($translated !== $key) {
+                        return $translated;
+                    }
+
+                    return RoleScenarioCatalog::labelForSlug($slug, $name);
                 })
-                ->helperText('Роли определяют доступ сотрудника в системе.'),
+                ->helperText('Роли определяют доступ сотрудника и типовые сценарии уведомлений.'),
+
+            Forms\Components\Placeholder::make('roles_profile_hint')
+                ->hiddenLabel()
+                ->content(function ($get): HtmlString {
+                    $roleIds = array_values(array_filter(
+                        (array) ($get('roles') ?? []),
+                        static fn ($value): bool => is_numeric($value)
+                    ));
+
+                    if ($roleIds === []) {
+                        return new HtmlString(
+                            '<div class="text-sm text-gray-500">Выберите роль, чтобы увидеть описание профиля и рекомендуемые сценарии уведомлений.</div>'
+                        );
+                    }
+
+                    $roleNames = Role::query()
+                        ->whereIn('id', $roleIds)
+                        ->orderBy('name')
+                        ->pluck('name')
+                        ->all();
+
+                    if ($roleNames === []) {
+                        return new HtmlString('<div class="text-sm text-gray-500">Роли не выбраны.</div>');
+                    }
+
+                    $rows = [];
+                    foreach ($roleNames as $roleName) {
+                        $slug = Str::of((string) $roleName)
+                            ->trim()
+                            ->lower()
+                            ->replace('_', '-')
+                            ->replace(' ', '-')
+                            ->replace('--', '-')
+                            ->toString();
+
+                        $label = e(RoleScenarioCatalog::labelForSlug($slug, (string) $roleName));
+                        $description = e(RoleScenarioCatalog::descriptionForSlug($slug) ?? 'Кастомная роль без преднастроенного профиля.');
+                        $topics = e(RoleScenarioCatalog::topicSummaryForSlug($slug));
+
+                        $rows[] = '<div class="text-sm leading-6">'
+                            . '<strong>' . $label . '</strong>'
+                            . '<div class="text-gray-500">' . $description . '</div>'
+                            . '<div class="text-gray-500">Сценарии уведомлений: ' . $topics . '</div>'
+                            . '</div>';
+                    }
+
+                    return new HtmlString(implode('<div class="h-2"></div>', $rows));
+                }),
+
+            Forms\Components\Section::make('Уведомления')
+                ->description('Для super-admin и market-admin личные настройки доступны всегда. Для остальных можно назначить правила централизованно.')
+                ->schema([
+                    Forms\Components\Toggle::make('notification_preferences.self_manage')
+                        ->label('Разрешить личные настройки')
+                        ->helperText('Пользователь сможет сам менять свои каналы и события в кабинете.')
+                        ->default(false),
+
+                    Forms\Components\CheckboxList::make('notification_preferences.channels')
+                        ->label('Каналы доставки (назначение администратором)')
+                        ->options(UserNotificationPreferences::channelLabels())
+                        ->columns(3)
+                        ->helperText('Если пусто, применяются стандартные каналы по доступным контактам.')
+                        ->columnSpanFull(),
+
+                    Forms\Components\CheckboxList::make('notification_preferences.topics')
+                        ->label('События (назначение администратором)')
+                        ->options(UserNotificationPreferences::topicLabels())
+                        ->default(UserNotificationPreferences::TOPICS)
+                        ->columns(2)
+                        ->helperText('Если пусто, пользователь не получает уведомления по темам.')
+                        ->columnSpanFull(),
+                ])
+                ->columns(1)
+                ->collapsible()
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin())),
         ]);
     }
 }
