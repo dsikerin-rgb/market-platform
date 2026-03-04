@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\Staff\Schemas;
 
+use App\Models\User;
 use App\Support\RoleScenarioCatalog;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
@@ -17,6 +19,13 @@ class StaffForm
     public static function configure(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
+        $canSeePasswordFields = function (string $operation = 'edit', ?User $record = null) use ($user): bool {
+            return static::canEditPasswordFields(
+                operation: $operation,
+                actor: $user,
+                record: $record,
+            );
+        };
 
         $marketSelect = Forms\Components\Select::make('market_id')
             ->label('Рынок')
@@ -32,38 +41,8 @@ class StaffForm
 
         $marketHidden = Forms\Components\Hidden::make('market_id')
             ->default(fn () => $user?->market_id)
-            ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
-            ->dehydrated(true);
-
-        $nameEmail = [];
-
-        if (class_exists(\Filament\Forms\Components\Grid::class)) {
-            $nameEmail[] = \Filament\Forms\Components\Grid::make(2)->schema([
-                Forms\Components\TextInput::make('name')
-                    ->label('Имя / ФИО')
-                    ->required()
-                    ->maxLength(255),
-
-                Forms\Components\TextInput::make('email')
-                    ->label('Email')
-                    ->email()
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(ignoreRecord: true),
-            ]);
-        } else {
-            $nameEmail[] = Forms\Components\TextInput::make('name')
-                ->label('Имя / ФИО')
-                ->required()
-                ->maxLength(255);
-
-            $nameEmail[] = Forms\Components\TextInput::make('email')
-                ->label('Email')
-                ->email()
-                ->required()
-                ->maxLength(255)
-                ->unique(ignoreRecord: true);
-        }
+                ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
+                ->dehydrated(true);
 
         $passwordPair = [];
 
@@ -75,6 +54,7 @@ class StaffForm
                     ->revealable()
                     ->minLength(8)
                     ->required(fn (string $operation) => $operation === 'create')
+                    ->visible($canSeePasswordFields)
                     ->dehydrated(fn ($state) => filled($state))
                     ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null),
 
@@ -84,6 +64,7 @@ class StaffForm
                     ->revealable()
                     ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
                     ->same('password')
+                    ->visible($canSeePasswordFields)
                     ->dehydrated(false),
             ]);
         } else {
@@ -93,6 +74,7 @@ class StaffForm
                 ->revealable()
                 ->minLength(8)
                 ->required(fn (string $operation) => $operation === 'create')
+                ->visible($canSeePasswordFields)
                 ->dehydrated(fn ($state) => filled($state))
                 ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null);
 
@@ -102,6 +84,7 @@ class StaffForm
                 ->revealable()
                 ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
                 ->same('password')
+                ->visible($canSeePasswordFields)
                 ->dehydrated(false);
         }
 
@@ -109,129 +92,166 @@ class StaffForm
             $marketSelect,
             $marketHidden,
 
-            ...$nameEmail,
+            Section::make('Основные данные')
+                ->schema([
+                    Forms\Components\TextInput::make('name')
+                        ->label('Имя / ФИО')
+                        ->required()
+                        ->maxLength(255),
 
-            Forms\Components\TextInput::make('telegram_chat_id')
-                ->label('Telegram (chat_id)')
-                ->placeholder('например: 123456789')
-                ->helperText('Нужен для доставки уведомлений в Telegram.')
-                ->maxLength(32)
-                ->regex('/^-?\d+$/')
-                ->validationMessages([
-                    'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
+                    Forms\Components\TextInput::make('email')
+                        ->label('Email')
+                        ->email()
+                        ->required()
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true),
                 ])
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null),
+                ->columns(2),
 
-            Forms\Components\Placeholder::make('telegram_chat_id_help')
-                ->label('Как получить chat_id')
-                ->content(new HtmlString(
-                    '<div class="text-sm text-gray-500 space-y-2">'
-                    . '<a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ring-1 ring-gray-300 hover:bg-gray-50 dark:ring-gray-700 dark:hover:bg-white/5">Открыть @userinfobot</a>'
-                    . '<div>1) Откройте бота и отправьте команду <code>/start</code>.</div>'
-                    . '<div>2) Скопируйте значение <code>chat_id</code> из ответа.</div>'
-                    . '<div>3) Вставьте <code>chat_id</code> в поле выше и сохраните пользователя.</div>'
-                    . '</div>'
-                )),
+            Section::make('Роли и доступ')
+                ->description('Определяет права сотрудника и его рабочий сценарий.')
+                ->schema([
+                    Forms\Components\Select::make('roles')
+                        ->label('Роли')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->relationship(
+                            name: 'roles',
+                            titleAttribute: 'name',
+                            modifyQueryUsing: function ($query) use ($user) {
+                                // сотрудникам не показываем "арендатор" (это другой тип пользователя)
+                                $query->where('name', '!=', 'merchant');
 
-            ...$passwordPair,
+                                // market-admin не должен видеть/назначать super-admin
+                                if (! $user || ! $user->isSuperAdmin()) {
+                                    $query->where('name', '!=', 'super-admin');
+                                }
 
-            Forms\Components\Select::make('roles')
-                ->label('Роли')
-                ->multiple()
-                ->preload()
-                ->searchable()
-                ->relationship(
-                    name: 'roles',
-                    titleAttribute: 'name',
-                    modifyQueryUsing: function ($query) use ($user) {
-                        // сотрудникам не показываем "арендатор" (это другой тип пользователя)
-                        $query->where('name', '!=', 'merchant');
+                                return $query;
+                            },
+                        )
+                        ->getOptionLabelFromRecordUsing(function ($record) {
+                            $name = (string) ($record->name ?? '');
 
-                        // market-admin не должен видеть/назначать super-admin
-                        if (! $user || ! $user->isSuperAdmin()) {
-                            $query->where('name', '!=', 'super-admin');
-                        }
+                            if ($name === '') {
+                                return '—';
+                            }
 
-                        return $query;
-                    },
-                )
-                ->getOptionLabelFromRecordUsing(function ($record) {
-                    $name = (string) ($record->name ?? '');
+                            // Нормализуем на всякий случай (если роль вдруг будет с пробелами/underscore)
+                            $slug = Str::of($name)
+                                ->trim()
+                                ->lower()
+                                ->replace('_', '-')
+                                ->replace(' ', '-')
+                                ->replace('--', '-')
+                                ->toString();
 
-                    if ($name === '') {
-                        return '—';
-                    }
+                            $key = "roles.{$slug}";
+                            $translated = __($key);
 
-                    // Нормализуем на всякий случай (если роль вдруг будет с пробелами/underscore)
-                    $slug = Str::of($name)
-                        ->trim()
-                        ->lower()
-                        ->replace('_', '-')
-                        ->replace(' ', '-')
-                        ->replace('--', '-')
-                        ->toString();
+                            if ($translated !== $key) {
+                                return $translated;
+                            }
 
-                    $key = "roles.{$slug}";
-                    $translated = __($key);
+                            return RoleScenarioCatalog::labelForSlug($slug, $name);
+                        })
+                        ->helperText('Роли определяют доступ сотрудника.'),
+                ])
+                ->columns(1),
 
-                    if ($translated !== $key) {
-                        return $translated;
-                    }
+            Section::make('Профиль роли')
+                ->schema([
+                    Forms\Components\Placeholder::make('roles_profile_hint')
+                        ->hiddenLabel()
+                        ->content(function ($get): HtmlString {
+                            $roleIds = array_values(array_filter(
+                                (array) ($get('roles') ?? []),
+                                static fn ($value): bool => is_numeric($value)
+                            ));
 
-                    return RoleScenarioCatalog::labelForSlug($slug, $name);
-                })
-                ->helperText('Роли определяют доступ сотрудника и типовые сценарии уведомлений.'),
+                            if ($roleIds === []) {
+                                return new HtmlString(
+                                    '<div class="text-sm text-gray-500">Выберите роль, чтобы увидеть описание и рекомендуемые сценарии уведомлений.</div>'
+                                );
+                            }
 
-            Forms\Components\Placeholder::make('roles_profile_hint')
-                ->hiddenLabel()
-                ->content(function ($get): HtmlString {
-                    $roleIds = array_values(array_filter(
-                        (array) ($get('roles') ?? []),
-                        static fn ($value): bool => is_numeric($value)
-                    ));
+                            $roleNames = Role::query()
+                                ->whereIn('id', $roleIds)
+                                ->orderBy('name')
+                                ->pluck('name')
+                                ->all();
 
-                    if ($roleIds === []) {
-                        return new HtmlString(
-                            '<div class="text-sm text-gray-500">Выберите роль, чтобы увидеть описание профиля и рекомендуемые сценарии уведомлений.</div>'
-                        );
-                    }
+                            if ($roleNames === []) {
+                                return new HtmlString('<div class="text-sm text-gray-500">Роли не выбраны.</div>');
+                            }
 
-                    $roleNames = Role::query()
-                        ->whereIn('id', $roleIds)
-                        ->orderBy('name')
-                        ->pluck('name')
-                        ->all();
+                            $rows = [];
+                            foreach ($roleNames as $roleName) {
+                                $slug = Str::of((string) $roleName)
+                                    ->trim()
+                                    ->lower()
+                                    ->replace('_', '-')
+                                    ->replace(' ', '-')
+                                    ->replace('--', '-')
+                                    ->toString();
 
-                    if ($roleNames === []) {
-                        return new HtmlString('<div class="text-sm text-gray-500">Роли не выбраны.</div>');
-                    }
+                                $label = e(RoleScenarioCatalog::labelForSlug($slug, (string) $roleName));
+                                $description = e(RoleScenarioCatalog::descriptionForSlug($slug) ?? 'Кастомная роль без преднастроенного профиля.');
+                                $topics = e(RoleScenarioCatalog::topicSummaryForSlug($slug));
 
-                    $rows = [];
-                    foreach ($roleNames as $roleName) {
-                        $slug = Str::of((string) $roleName)
-                            ->trim()
-                            ->lower()
-                            ->replace('_', '-')
-                            ->replace(' ', '-')
-                            ->replace('--', '-')
-                            ->toString();
+                                $rows[] = '<div class="text-sm leading-6">'
+                                    . '<strong>' . $label . '</strong>'
+                                    . '<div class="text-gray-500">' . $description . '</div>'
+                                    . '<div class="text-gray-500">Сценарии уведомлений: ' . $topics . '</div>'
+                                    . '</div>';
+                            }
 
-                        $label = e(RoleScenarioCatalog::labelForSlug($slug, (string) $roleName));
-                        $description = e(RoleScenarioCatalog::descriptionForSlug($slug) ?? 'Кастомная роль без преднастроенного профиля.');
-                        $topics = e(RoleScenarioCatalog::topicSummaryForSlug($slug));
+                            return new HtmlString(implode('<div class="h-2"></div>', $rows));
+                        }),
+                ])
+                ->collapsible()
+                ->collapsed(),
 
-                        $rows[] = '<div class="text-sm leading-6">'
-                            . '<strong>' . $label . '</strong>'
-                            . '<div class="text-gray-500">' . $description . '</div>'
-                            . '<div class="text-gray-500">Сценарии уведомлений: ' . $topics . '</div>'
-                            . '</div>';
-                    }
+            Section::make('Пароль')
+                ->description('Оставьте пустым, если менять пароль не нужно.')
+                ->schema([
+                    ...$passwordPair,
+                ])
+                ->collapsible()
+                ->collapsed()
+                ->visible($canSeePasswordFields),
 
-                    return new HtmlString(implode('<div class="h-2"></div>', $rows));
-                }),
+            Section::make('Telegram')
+                ->schema([
+                    Forms\Components\TextInput::make('telegram_chat_id')
+                        ->label('Telegram (chat_id)')
+                        ->placeholder('например: 123456789')
+                        ->helperText('Используется для доставки уведомлений в Telegram.')
+                        ->maxLength(32)
+                        ->regex('/^-?\d+$/')
+                        ->validationMessages([
+                            'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
+                        ])
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null),
 
-            \Filament\Schemas\Components\Section::make('Уведомления')
-                ->description('Для super-admin и market-admin личные настройки доступны всегда. Для остальных можно назначить правила централизованно.')
+                    Forms\Components\Placeholder::make('telegram_chat_id_help')
+                        ->label('Как получить chat_id')
+                        ->content(new HtmlString(
+                            '<div class="text-sm text-gray-500 space-y-2">'
+                            . '<a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ring-1 ring-gray-300 hover:bg-gray-50 dark:ring-gray-700 dark:hover:bg-white/5">Открыть @userinfobot</a>'
+                            . '<div>1) Откройте бота и отправьте команду <code>/start</code>.</div>'
+                            . '<div>2) Скопируйте значение <code>chat_id</code> из ответа.</div>'
+                            . '<div>3) Вставьте <code>chat_id</code> в поле выше и сохраните пользователя.</div>'
+                            . '</div>'
+                        )),
+                ])
+                ->columns(1)
+                ->collapsible()
+                ->collapsed(),
+
+            Section::make('Уведомления')
+                ->description('Централизованные настройки каналов и событий.')
                 ->schema([
                     Forms\Components\Toggle::make('notification_preferences.self_manage')
                         ->label('Разрешить личные настройки')
@@ -255,7 +275,37 @@ class StaffForm
                 ])
                 ->columns(1)
                 ->collapsible()
+                ->collapsed()
                 ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin())),
         ]);
+    }
+
+    private static function canEditPasswordFields(string $operation, mixed $actor, mixed $record): bool
+    {
+        if ($operation === 'create') {
+            return true;
+        }
+
+        if (! $actor instanceof User) {
+            return false;
+        }
+
+        if ($actor->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $record instanceof User) {
+            return true;
+        }
+
+        if (! $actor->isMarketAdmin()) {
+            return true;
+        }
+
+        if ((int) $actor->id === (int) $record->id) {
+            return true;
+        }
+
+        return ! $record->hasRole('market-admin');
     }
 }

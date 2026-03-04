@@ -13,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
 
@@ -24,6 +25,18 @@ class EditStaff extends BaseEditRecord
      * @var array{token:string,expires_at:string,command:string,deep_link:?string,share_link:?string,qr_svg_data_uri:?string}|null
      */
     public ?array $telegramConnectModalPayload = null;
+
+    public function getTitle(): string|Htmlable
+    {
+        $name = trim((string) ($this->record?->name ?? ''));
+
+        return $name !== '' ? $name : 'Карточка сотрудника';
+    }
+
+    public function getBreadcrumb(): string
+    {
+        return 'Карточка сотрудника';
+    }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
@@ -54,6 +67,10 @@ class EditStaff extends BaseEditRecord
             $data = $this->normalizeNotificationPreferences($data);
         } else {
             unset($data['notification_preferences']);
+        }
+
+        if (! $this->canManagePasswordFields($user)) {
+            unset($data['password'], $data['password_confirmation']);
         }
 
         return $data;
@@ -450,5 +467,26 @@ class EditStaff extends BaseEditRecord
         );
 
         return $data;
+    }
+
+    private function canManagePasswordFields(mixed $actor): bool
+    {
+        if (! $actor || ! $this->record) {
+            return false;
+        }
+
+        if (method_exists($actor, 'isSuperAdmin') && $actor->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! method_exists($actor, 'isMarketAdmin') || ! $actor->isMarketAdmin()) {
+            return true;
+        }
+
+        if ((int) $actor->id === (int) $this->record->id) {
+            return true;
+        }
+
+        return ! $this->record->hasRole('market-admin');
     }
 }
