@@ -239,7 +239,9 @@ class MarketSettings extends Page
                                 'lg' => 5,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
 
                 Section::make('Праздники рынка')
                     ->description('Настройки уведомлений о праздниках рынка.')
@@ -278,7 +280,9 @@ class MarketSettings extends Page
                                 'lg' => 8,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
 
                 Section::make('Обращения и чат')
                     ->description('Получатели уведомлений о новых сообщениях от арендаторов.')
@@ -329,7 +333,9 @@ class MarketSettings extends Page
                                 'lg' => 6,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
 
                 Section::make('Каналы уведомлений')
                     ->description('Каналы доставки по темам. Telegram начнет работать после подключения транспорта.')
@@ -385,7 +391,9 @@ class MarketSettings extends Page
                                 'lg' => 6,
                             ]),
                     ])
-                    ->columns(12),
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 
