@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\User;
+use App\Support\QrCodeDataUriGenerator;
 use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
@@ -37,7 +38,7 @@ class UserNotificationSettings extends Page
     public ?User $currentUser = null;
 
     /**
-     * @var array{token:string,expires_at:string,command:string,deep_link:?string,bot_username:?string}|null
+     * @var array{token:string,expires_at:string,command:string,deep_link:?string,bot_username:?string,qr_svg_data_uri:?string}|null
      */
     public ?array $telegramLinkData = null;
 
@@ -91,11 +92,17 @@ class UserNotificationSettings extends Page
             return;
         }
 
-        $this->telegramLinkData = app(TelegramChatLinkService::class)->issue($user, 20);
+        $payload = app(TelegramChatLinkService::class)->issue($user, 20);
+        $deepLink = trim((string) ($payload['deep_link'] ?? ''));
+        $payload['qr_svg_data_uri'] = $deepLink !== ''
+            ? app(QrCodeDataUriGenerator::class)->generateSvgDataUri($deepLink)
+            : null;
+
+        $this->telegramLinkData = $payload;
 
         Notification::make()
             ->title('Ссылка подключения Telegram создана')
-            ->body('Откройте бота и отправьте команду /start из блока ниже.')
+            ->body('Откройте бота, отсканируйте QR-код или отправьте команду /start из блока ниже.')
             ->success()
             ->send();
     }
