@@ -6,7 +6,7 @@ namespace App\Notifications;
 
 use App\Models\Ticket;
 use App\Support\NotificationChannelResolver;
-use Filament\Notifications\Actions\Action;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -93,4 +93,3 @@ class TicketChatNotification extends Notification implements ShouldQueue
         return $mail;
     }
 }
-
