@@ -10,9 +10,12 @@ use App\Support\QrCodeDataUriGenerator;
 use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
+use Filament\Forms;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
 
@@ -50,7 +53,11 @@ class EditStaff extends BaseEditRecord
             }
         }
 
-        if ($user->isSuperAdmin() || $user->isMarketAdmin()) {
+        if (! $this->canManagePasswordFields()) {
+            unset($data['password'], $data['password_confirmation']);
+        }
+
+        if (($user->isSuperAdmin() || $user->isMarketAdmin()) && array_key_exists('notification_preferences', $data)) {
             $data = $this->normalizeNotificationPreferences($data);
         } else {
             unset($data['notification_preferences']);
@@ -64,6 +71,180 @@ class EditStaff extends BaseEditRecord
         $user = Filament::auth()->user();
 
         return [
+            Action::make('password_settings')
+                ->label('Пароль')
+                ->icon('heroicon-o-key')
+                ->color('gray')
+                ->modalHeading('Смена пароля')
+                ->modalSubmitActionLabel('Сохранить')
+                ->visible(fn (): bool => $this->canManagePasswordFields())
+                ->fillForm(fn (): array => [
+                    'password' => null,
+                    'password_confirmation' => null,
+                ])
+                ->form([
+                    Forms\Components\Grid::make(2)
+                        ->schema([
+                            Forms\Components\TextInput::make('password')
+                                ->label('Новый пароль')
+                                ->password()
+                                ->revealable()
+                                ->minLength(8)
+                                ->required()
+                                ->dehydrated(false),
+                            Forms\Components\TextInput::make('password_confirmation')
+                                ->label('Подтверждение пароля')
+                                ->password()
+                                ->revealable()
+                                ->required()
+                                ->same('password')
+                                ->dehydrated(false),
+                        ]),
+                ])
+                ->action(function (array $data): void {
+                    $plainPassword = trim((string) ($data['password'] ?? ''));
+                    if ($plainPassword === '') {
+                        Notification::make()
+                            ->title('Пароль не изменен')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    $this->record->forceFill([
+                        'password' => Hash::make($plainPassword),
+                    ])->save();
+
+                    Notification::make()
+                        ->title('Пароль обновлен')
+                        ->success()
+                        ->send();
+                }),
+
+            Action::make('telegram_settings')
+                ->label('Настройки Telegram')
+                ->icon('heroicon-o-chat-bubble-left-right')
+                ->color('gray')
+                ->modalHeading('Telegram')
+                ->modalSubmitActionLabel('Сохранить')
+                ->visible(false)
+                ->fillForm(fn (): array => [
+                    'telegram_chat_id' => $this->record->telegram_chat_id,
+                ])
+                ->form([
+                    Forms\Components\TextInput::make('telegram_chat_id')
+                        ->label('Telegram (chat_id)')
+                        ->placeholder('например: 123456789')
+                        ->helperText('Нужен для доставки уведомлений в Telegram.')
+                        ->maxLength(32)
+                        ->regex('/^-?\d+$/')
+                        ->validationMessages([
+                            'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
+                        ]),
+                ])
+                ->action(function (array $data): void {
+                    $chatId = trim((string) ($data['telegram_chat_id'] ?? ''));
+                    $chatId = $chatId !== '' ? $chatId : null;
+
+                    $payload = ['telegram_chat_id' => $chatId];
+                    if ($chatId === null) {
+                        $payload['telegram_profile'] = null;
+                        $payload['telegram_linked_at'] = null;
+                    }
+
+                    $this->record->forceFill($payload)->save();
+
+                    Notification::make()
+                        ->title($chatId === null
+                            ? 'Telegram (chat_id) очищен'
+                            : 'Telegram (chat_id) сохранен')
+                        ->success()
+                        ->send();
+                }),
+
+            Action::make('notification_settings')
+                ->label('Уведомления')
+                ->icon('heroicon-o-bell')
+                ->color('gray')
+                ->modalHeading('Настройки уведомлений')
+                ->modalSubmitActionLabel('Сохранить')
+                ->modalWidth('3xl')
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->fillForm(fn (): array => $this->notificationPreferencesFormState())
+                ->form([
+                    Forms\Components\Section::make('Личные настройки')
+                        ->schema([
+                            Forms\Components\Toggle::make('notification_preferences.self_manage')
+                                ->label('Разрешить личные настройки')
+                                ->helperText('Пользователь сможет сам менять свои каналы и события в кабинете.')
+                                ->default(false),
+                        ]),
+                    Forms\Components\Section::make('Каналы доставки')
+                        ->schema([
+                            Forms\Components\CheckboxList::make('notification_preferences.channels')
+                                ->label('Назначаются администратором')
+                                ->options(UserNotificationPreferences::channelLabels())
+                                ->columns(3),
+                        ]),
+                    Forms\Components\Section::make('События')
+                        ->schema([
+                            Forms\Components\CheckboxList::make('notification_preferences.topics')
+                                ->label('Назначаются администратором')
+                                ->options(UserNotificationPreferences::topicLabels())
+                                ->columns(2),
+                        ]),
+                ])
+                ->action(function (array $data): void {
+                    $payload = [
+                        'roles' => $this->record->roles()->pluck('id')->all(),
+                        'notification_preferences' => is_array($data['notification_preferences'] ?? null)
+                            ? $data['notification_preferences']
+                            : [],
+                    ];
+
+                    $normalized = $this->normalizeNotificationPreferences($payload);
+
+                    $this->record->forceFill([
+                        'notification_preferences' => $normalized['notification_preferences'] ?? [],
+                    ])->save();
+
+                    Notification::make()
+                        ->title('Настройки уведомлений сохранены')
+                        ->success()
+                        ->send();
+                }),
+
+            ActionGroup::make([
+                Action::make('telegram_block_settings')
+                    ->label('Настройки')
+                    ->icon('heroicon-o-cog-6-tooth')
+                    ->action(fn (): mixed => $this->mountAction('telegram_settings')),
+                Action::make('telegram_block_connect')
+                    ->label('Telegram ссылка')
+                    ->icon('heroicon-o-link')
+                    ->action(fn (): mixed => $this->mountAction('telegram_connect_link')),
+                Action::make('telegram_block_binding')
+                    ->label('Проверить привязку')
+                    ->icon('heroicon-o-identification')
+                    ->action(fn (): mixed => $this->mountAction('telegram_binding_info')),
+                Action::make('telegram_block_test')
+                    ->label('Telegram тест')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                    ->action(fn (): mixed => $this->mountAction('telegram_test')),
+                Action::make('telegram_block_reset')
+                    ->label('Сбросить Telegram')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                    ->action(fn (): mixed => $this->mountAction('telegram_unlink')),
+            ])
+                ->label('Telegram')
+                ->icon('heroicon-o-chat-bubble-left-right')
+                ->color('gray')
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin())),
+
             Action::make('telegram_connect_link')
                 ->label('Telegram ссылка')
                 ->icon('heroicon-o-link')
@@ -71,7 +252,7 @@ class EditStaff extends BaseEditRecord
                 ->tooltip('Сгенерировать одноразовую ссылку /start для сотрудника')
                 ->modalHeading('Ссылка подключения Telegram')
                 ->modalSubmitActionLabel('Сгенерировать')
-                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->visible(false)
                 ->fillForm(function (): array {
                     $this->telegramConnectModalPayload = $this->issueTelegramConnectPayload();
 
@@ -168,7 +349,7 @@ class EditStaff extends BaseEditRecord
                 ->icon('heroicon-o-identification')
                 ->color('gray')
                 ->tooltip('Показать, какой Telegram-аккаунт привязан к сотруднику')
-                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->visible(false)
                 ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
                 ->action(function (): void {
                     $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
@@ -211,7 +392,7 @@ class EditStaff extends BaseEditRecord
                 ->requiresConfirmation()
                 ->modalHeading('Сбросить привязку Telegram?')
                 ->modalDescription('Будут очищены chat_id и информация о связанном Telegram-аккаунте.')
-                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->visible(false)
                 ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
                 ->action(function (): void {
                     $this->record->forceFill([
@@ -237,7 +418,7 @@ class EditStaff extends BaseEditRecord
                 ->requiresConfirmation()
                 ->modalHeading('Отправить Telegram тест')
                 ->modalDescription('Тестовое сообщение будет отправлено по chat_id сотрудника.')
-                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->visible(false)
                 ->action(function (): void {
                     $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
                     if ($chatId === '') {
@@ -418,6 +599,54 @@ class EditStaff extends BaseEditRecord
             'mail' => 'email',
             default => $channel,
         };
+    }
+
+    private function canManagePasswordFields(): bool
+    {
+        $actor = Filament::auth()->user();
+
+        if (! $actor) {
+            return false;
+        }
+
+        if ($actor->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $actor->isMarketAdmin()) {
+            return false;
+        }
+
+        if (! method_exists($this->record, 'hasRole')) {
+            return false;
+        }
+
+        if ($this->record->hasRole('super-admin')) {
+            return false;
+        }
+
+        if ((int) $this->record->id === (int) $actor->id) {
+            return true;
+        }
+
+        return ! $this->record->hasRole('market-admin');
+    }
+
+    private function notificationPreferencesFormState(): array
+    {
+        $raw = (array) ($this->record->notification_preferences ?? []);
+        $normalized = app(UserNotificationPreferences::class)->normalizeForStorage(
+            $raw,
+            (bool) ($raw['self_manage'] ?? false),
+        );
+
+        return [
+            'notification_preferences' => [
+                'self_manage' => (bool) ($normalized['self_manage'] ?? false),
+                'channels' => array_values((array) ($normalized['channels'] ?? [])),
+                'topics' => array_values((array) ($normalized['topics'] ?? [])),
+            ],
+        ];
     }
 
     private function normalizeNotificationPreferences(array $data): array

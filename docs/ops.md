@@ -377,3 +377,53 @@ sudo tail -n 200 /var/log/nginx/access.log
 
 * Меню — UX (видимость ограничена `super-admin`).
 * Доступ — security (должен быть ограничен gate `viewHorizon`, иначе это баг).
+
+---
+
+## 11) Scheduler + Calendar Task Automation
+
+This project uses Laravel scheduler for calendar automation. Horizon alone is not enough.
+
+Scheduled commands:
+
+* `market:holidays:sync` (daily)
+* `market:calendar:generate-sanitary` (daily)
+* `market:calendar:generate-tasks` (every 30 minutes, idempotent)
+* `market:holidays:notify` (every 30 minutes)
+* `tasks:send-reminders` (daily)
+
+Systemd units are versioned in repository:
+
+* `ops/systemd/market-schedule.service`
+* `ops/systemd/market-schedule.timer`
+* `ops/systemd/market-staging-schedule.service`
+* `ops/systemd/market-staging-schedule.timer`
+
+Install/refresh (prod example):
+
+```bash
+sudo cp ops/systemd/market-schedule.service /etc/systemd/system/
+sudo cp ops/systemd/market-schedule.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now market-schedule.timer
+sudo systemctl status market-schedule.timer --no-pager
+```
+
+Install/refresh (staging example):
+
+```bash
+sudo cp ops/systemd/market-staging-schedule.service /etc/systemd/system/
+sudo cp ops/systemd/market-staging-schedule.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now market-staging-schedule.timer
+sudo systemctl status market-staging-schedule.timer --no-pager
+```
+
+Manual safe bootstrap before first run:
+
+```bash
+php artisan market:system-agent:init --all --dry-run
+php artisan market:system-agent:init --all --execute
+php artisan market:calendar:generate-tasks --dry-run
+php artisan market:calendar:generate-tasks
+```
