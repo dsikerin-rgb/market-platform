@@ -330,7 +330,7 @@ class EditStaff extends BaseEditRecord
         if ($qrDataUri !== '') {
             $html .= '<div class="pt-1"><div class="mb-1 text-gray-500 dark:text-gray-400">Сканируйте камерой телефона:</div>'
                 . '<div class="inline-flex rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-950">'
-                . '<img src="' . e($qrDataUri) . '" alt="QR-код подключения Telegram" class="h-36 w-36" loading="lazy" />'
+                . '<img src="' . e($qrDataUri) . '" alt="QR-код подключения Telegram" style="width: 220px; height: 220px; max-width: 100%; display: block;" loading="lazy" />'
                 . '</div></div>';
         }
 
