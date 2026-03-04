@@ -207,7 +207,7 @@ class StaffForm
                     return new HtmlString(implode('<div class="h-2"></div>', $rows));
                 }),
 
-            Forms\Components\Section::make('Уведомления')
+            \Filament\Schemas\Components\Section::make('Уведомления')
                 ->description('Для super-admin и market-admin личные настройки доступны всегда. Для остальных можно назначить правила централизованно.')
                 ->schema([
                     Forms\Components\Toggle::make('notification_preferences.self_manage')
