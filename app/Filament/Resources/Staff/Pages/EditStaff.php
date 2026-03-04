@@ -15,6 +15,8 @@ use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
@@ -83,7 +85,7 @@ class EditStaff extends BaseEditRecord
                     'password_confirmation' => null,
                 ])
                 ->form([
-                    Forms\Components\Grid::make(2)
+                    Grid::make(2)
                         ->schema([
                             Forms\Components\TextInput::make('password')
                                 ->label('Новый пароль')
@@ -173,21 +175,21 @@ class EditStaff extends BaseEditRecord
                 ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
                 ->fillForm(fn (): array => $this->notificationPreferencesFormState())
                 ->form([
-                    Forms\Components\Section::make('Личные настройки')
+                    Section::make('Личные настройки')
                         ->schema([
                             Forms\Components\Toggle::make('notification_preferences.self_manage')
                                 ->label('Разрешить личные настройки')
                                 ->helperText('Пользователь сможет сам менять свои каналы и события в кабинете.')
                                 ->default(false),
                         ]),
-                    Forms\Components\Section::make('Каналы доставки')
+                    Section::make('Каналы доставки')
                         ->schema([
                             Forms\Components\CheckboxList::make('notification_preferences.channels')
                                 ->label('Назначаются администратором')
                                 ->options(UserNotificationPreferences::channelLabels())
                                 ->columns(3),
                         ]),
-                    Forms\Components\Section::make('События')
+                    Section::make('События')
                         ->schema([
                             Forms\Components\CheckboxList::make('notification_preferences.topics')
                                 ->label('Назначаются администратором')
