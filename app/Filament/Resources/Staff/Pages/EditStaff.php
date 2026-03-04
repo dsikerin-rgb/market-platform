@@ -59,6 +59,10 @@ class EditStaff extends BaseEditRecord
                 ->label('Telegram test')
                 ->icon('heroicon-o-paper-airplane')
                 ->color('gray')
+                ->tooltip(fn (): string => blank($this->record->telegram_chat_id)
+                    ? 'Fill Telegram (chat_id) first'
+                    : 'Send test message to Telegram')
+                ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
                 ->requiresConfirmation()
                 ->modalHeading('Send Telegram test')
                 ->modalDescription('A test message will be sent to the staff member chat_id.')
