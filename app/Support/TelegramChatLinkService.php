@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 class TelegramChatLinkService
 {
     private const CACHE_KEY_PREFIX = 'telegram:link:';
+    private const USER_TOKEN_KEY_PREFIX = 'telegram:link:user:';
     private const TOKEN_PREFIX = 'mplink_';
 
     /**
@@ -22,11 +23,20 @@ class TelegramChatLinkService
         $token = self::TOKEN_PREFIX . Str::lower(Str::random(32));
         $expiresAt = now()->addMinutes($ttlMinutes);
 
+        $previousToken = Cache::get($this->userTokenCacheKey((int) $user->id));
+        if (is_string($previousToken) && $previousToken !== '') {
+            Cache::forget($this->cacheKey($previousToken));
+        }
+
         Cache::put(
             $this->cacheKey($token),
-            ['user_id' => (int) $user->id],
+            [
+                'user_id' => (int) $user->id,
+                'issued_at' => now()->toDateTimeString(),
+            ],
             $expiresAt
         );
+        Cache::put($this->userTokenCacheKey((int) $user->id), $token, $expiresAt);
 
         $botUsername = $this->botUsername();
         $deepLink = $botUsername !== null
@@ -64,6 +74,12 @@ class TelegramChatLinkService
             return null;
         }
 
+        $currentToken = Cache::get($this->userTokenCacheKey((int) $userId));
+        if (is_string($currentToken) && $currentToken !== '' && $currentToken !== $token) {
+            return null;
+        }
+        Cache::forget($this->userTokenCacheKey((int) $userId));
+
         $user = User::query()->find((int) $userId);
         if (! $user instanceof User) {
             return null;
@@ -90,6 +106,11 @@ class TelegramChatLinkService
     private function cacheKey(string $token): string
     {
         return self::CACHE_KEY_PREFIX . $token;
+    }
+
+    private function userTokenCacheKey(int $userId): string
+    {
+        return self::USER_TOKEN_KEY_PREFIX . $userId;
     }
 
     /**

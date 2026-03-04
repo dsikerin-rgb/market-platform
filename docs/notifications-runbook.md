@@ -19,8 +19,10 @@ This runbook covers notification delivery health checks and Telegram delivery va
 1. Open staff user card and verify `Telegram (chat_id)` is filled.
 2. In staff card, use:
    - `Telegram link` to generate one-time `/start <token>`
+   - choose delivery channels (`bell` and/or `email`) in the same action
    - `Проверить привязку` to see linked Telegram account metadata
    - `Сбросить Telegram` if wrong account was linked
+   - each new token invalidates the previous token for the same user
 3. Use `Telegram тест` action in staff edit page.
 4. Verify delivery stats:
    - `php artisan notifications:audit --hours=1 --limit=10`
@@ -40,7 +42,8 @@ This runbook covers notification delivery health checks and Telegram delivery va
    - `TELEGRAM_ENABLED=true`
    - `TELEGRAM_BOT_TOKEN=...`
 3. Re-run `Telegram test` from staff page.
-4. Check Laravel logs for `Telegram API error`.
+4. For connect-link action, verify selected channel delivery in `notifications:audit` (mail/database).
+5. Check Laravel logs for `Telegram API error`.
 
 ## Self-link flow (user cabinet)
 

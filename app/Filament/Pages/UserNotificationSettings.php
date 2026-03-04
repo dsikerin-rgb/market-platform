@@ -83,8 +83,8 @@ class UserNotificationSettings extends Page
 
         if (! (bool) config('services.telegram.enabled', false)) {
             Notification::make()
-                ->title('Telegram is disabled')
-                ->body('Enable Telegram transport in environment settings first.')
+                ->title('Telegram отключен')
+                ->body('Сначала включите Telegram-транспорт в настройках окружения.')
                 ->warning()
                 ->send();
 
@@ -94,8 +94,8 @@ class UserNotificationSettings extends Page
         $this->telegramLinkData = app(TelegramChatLinkService::class)->issue($user, 20);
 
         Notification::make()
-            ->title('Connection link generated')
-            ->body('Open the bot and send the generated /start command.')
+            ->title('Ссылка подключения Telegram создана')
+            ->body('Откройте бота и отправьте команду /start из блока ниже.')
             ->success()
             ->send();
     }

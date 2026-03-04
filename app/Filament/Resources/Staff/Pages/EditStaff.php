@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Staff\Pages;
 
 use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\Staff\StaffResource;
+use App\Notifications\TelegramConnectLinkNotification;
 use App\Notifications\TelegramTestNotification;
 use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
@@ -61,13 +62,24 @@ class EditStaff extends BaseEditRecord
                 ->icon('heroicon-o-link')
                 ->color('gray')
                 ->tooltip('Сгенерировать одноразовую ссылку /start для сотрудника')
+                ->modalHeading('Ссылка подключения Telegram')
+                ->modalSubmitActionLabel('Сгенерировать')
                 ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
-                ->action(function (): void {
+                ->form([
+                    \Filament\Forms\Components\CheckboxList::make('delivery_channels')
+                        ->label('Отправить сотруднику')
+                        ->options(fn (): array => $this->telegramConnectDeliveryOptions())
+                        ->default(fn (): array => $this->defaultTelegramConnectDeliveryChannels())
+                        ->columns(1)
+                        ->helperText('Ссылка всё равно будет показана в уведомлении после генерации.'),
+                ])
+                ->action(function (array $data): void {
                     $payload = app(TelegramChatLinkService::class)->issue($this->record, 20);
 
                     $deepLink = trim((string) ($payload['deep_link'] ?? ''));
                     $command = trim((string) ($payload['command'] ?? ''));
                     $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
+                    $recipientLabel = $this->telegramConnectRecipientLabel();
                     $shareLink = '';
                     if ($deepLink !== '') {
                         $shareText = 'Подключите Telegram в Market Platform';
@@ -75,7 +87,34 @@ class EditStaff extends BaseEditRecord
                             . '&text=' . rawurlencode($shareText);
                     }
 
+                    $requestedChannelsRaw = is_array($data['delivery_channels'] ?? null)
+                        ? $data['delivery_channels']
+                        : [];
+                    $deliveryChannels = $this->normalizeTelegramConnectDeliveryChannels($requestedChannelsRaw);
+                    $mailRequested = in_array('mail', $requestedChannelsRaw, true);
+                    $mailMissing = $mailRequested && blank($this->record->email);
+                    $deliveryFailed = false;
+
+                    if ($deliveryChannels !== []) {
+                        try {
+                            $actorName = trim((string) (Filament::auth()->user()?->name ?? 'Система'));
+                            $this->record->notify(new TelegramConnectLinkNotification(
+                                recipientLabel: $recipientLabel,
+                                issuedBy: $actorName,
+                                deepLink: $deepLink,
+                                command: $command,
+                                expiresAt: $expiresAt !== '' ? $expiresAt : null,
+                                shareLink: $shareLink !== '' ? $shareLink : null,
+                                channels: $deliveryChannels,
+                            ));
+                        } catch (\Throwable $e) {
+                            report($e);
+                            $deliveryFailed = true;
+                        }
+                    }
+
                     $bodyParts = [];
+                    $bodyParts[] = 'Получатель: ' . $recipientLabel;
                     if ($deepLink !== '') {
                         $bodyParts[] = 'Ссылка: ' . $deepLink;
                     }
@@ -88,12 +127,31 @@ class EditStaff extends BaseEditRecord
                     if ($shareLink !== '') {
                         $bodyParts[] = 'Поделиться: ' . $shareLink;
                     }
+                    if ($deliveryChannels !== []) {
+                        $bodyParts[] = 'Доставлено по каналам: ' . implode(', ', array_map(
+                            fn (string $channel): string => $this->telegramConnectChannelLabel($channel),
+                            $deliveryChannels,
+                        ));
+                    } else {
+                        $bodyParts[] = 'Автоотправка не выбрана, передайте ссылку вручную.';
+                    }
+                    if ($mailMissing) {
+                        $bodyParts[] = 'Канал Email пропущен: у сотрудника не заполнен email.';
+                    }
 
-                    Notification::make()
-                        ->title('Токен подключения Telegram сгенерирован')
-                        ->body(implode("\n", $bodyParts))
-                        ->success()
-                        ->send();
+                    $feedback = Notification::make()
+                        ->title($deliveryFailed
+                            ? 'Ссылка сгенерирована, но автоотправка завершилась с ошибкой'
+                            : 'Ссылка подключения Telegram сгенерирована')
+                        ->body(implode("\n", $bodyParts));
+
+                    if ($deliveryFailed) {
+                        $feedback->warning();
+                    } else {
+                        $feedback->success();
+                    }
+
+                    $feedback->send();
                 }),
 
             Action::make('telegram_binding_info')
@@ -206,6 +264,87 @@ class EditStaff extends BaseEditRecord
                 ->label('Удалить сотрудника')
                 ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function telegramConnectDeliveryOptions(): array
+    {
+        $options = [
+            'database' => 'Внутреннее уведомление (колокольчик)',
+        ];
+
+        $email = trim((string) ($this->record->email ?? ''));
+        if ($email !== '') {
+            $options['mail'] = 'Email сотрудника (' . $email . ')';
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function defaultTelegramConnectDeliveryChannels(): array
+    {
+        return array_keys($this->telegramConnectDeliveryOptions());
+    }
+
+    /**
+     * @param  mixed  $rawChannels
+     * @return list<string>
+     */
+    private function normalizeTelegramConnectDeliveryChannels(mixed $rawChannels): array
+    {
+        if (! is_array($rawChannels)) {
+            return [];
+        }
+
+        $allowed = array_keys($this->telegramConnectDeliveryOptions());
+        $channels = [];
+
+        foreach ($rawChannels as $channel) {
+            if (! is_string($channel)) {
+                continue;
+            }
+
+            $channel = trim($channel);
+            if ($channel === '' || ! in_array($channel, $allowed, true)) {
+                continue;
+            }
+
+            $channels[] = $channel;
+        }
+
+        return array_values(array_unique($channels));
+    }
+
+    private function telegramConnectRecipientLabel(): string
+    {
+        $name = trim((string) ($this->record->name ?? ''));
+        $email = trim((string) ($this->record->email ?? ''));
+
+        if ($name !== '' && $email !== '') {
+            return $name . ' <' . $email . '>';
+        }
+        if ($name !== '') {
+            return $name;
+        }
+        if ($email !== '') {
+            return $email;
+        }
+
+        return 'ID #' . (int) ($this->record->id ?? 0);
+    }
+
+    private function telegramConnectChannelLabel(string $channel): string
+    {
+        return match ($channel) {
+            'database' => 'колокольчик',
+            'mail' => 'email',
+            default => $channel,
+        };
     }
 
     private function normalizeNotificationPreferences(array $data): array
