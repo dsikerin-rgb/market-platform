@@ -2,11 +2,14 @@
 
 namespace App\Filament\Resources\Staff\Pages;
 
+use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\Staff\StaffResource;
+use App\Notifications\TelegramTestNotification;
 use App\Support\UserNotificationPreferences;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
-use App\Filament\Resources\Pages\BaseEditRecord;
+use Filament\Notifications\Notification;
 use Spatie\Permission\Models\Role;
 
 class EditStaff extends BaseEditRecord
@@ -21,11 +24,11 @@ class EditStaff extends BaseEditRecord
             return $data;
         }
 
-        // Рыночные роли никогда не меняют рынок сотрудника
+        // Market-level roles must not change employee market assignment.
         if (! $user->isSuperAdmin()) {
             $data['market_id'] = $this->record->market_id;
 
-            // Нельзя назначить super-admin через подмену запроса
+            // Prevent assigning super-admin via forged request payload.
             if (isset($data['roles']) && is_array($data['roles'])) {
                 $superAdminRoleId = Role::query()->where('name', 'super-admin')->value('id');
 
@@ -52,6 +55,45 @@ class EditStaff extends BaseEditRecord
         $user = Filament::auth()->user();
 
         return [
+            Action::make('telegram_test')
+                ->label('Telegram test')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalHeading('Send Telegram test')
+                ->modalDescription('A test message will be sent to the staff member chat_id.')
+                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->action(function (): void {
+                    $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
+                    if ($chatId === '') {
+                        Notification::make()
+                            ->title('Telegram chat_id is empty')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    try {
+                        $actorName = trim((string) (Filament::auth()->user()?->name ?? 'System'));
+                        $this->record->notify(new TelegramTestNotification($actorName));
+
+                        Notification::make()
+                            ->title('Telegram test sent')
+                            ->body('Check Telegram for the target user.')
+                            ->success()
+                            ->send();
+                    } catch (\Throwable $e) {
+                        report($e);
+
+                        Notification::make()
+                            ->title('Telegram send failed')
+                            ->body('Check bot token and chat_id settings.')
+                            ->danger()
+                            ->send();
+                    }
+                }),
+
             DeleteAction::make()
                 ->label('Удалить сотрудника')
                 ->visible(fn () => (bool) $user && $user->isSuperAdmin()),

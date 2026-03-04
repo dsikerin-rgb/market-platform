@@ -31,9 +31,12 @@ class AuditNotifications extends Command
         $marketId = $this->option('market');
         $marketId = is_numeric($marketId) ? (int) $marketId : null;
 
-        $from = now()->subHours($hours);
+        $to = now();
+        $from = (clone $to)->subHours($hours);
 
-        $base = NotificationDelivery::query()->where('created_at', '>=', $from);
+        $base = NotificationDelivery::query()
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<=', $to);
         if ($marketId !== null) {
             $base->where('market_id', $marketId);
         }
@@ -44,6 +47,7 @@ class AuditNotifications extends Command
 
         $this->line('--- Notifications Audit ---');
         $this->line('Window: last ' . $hours . 'h');
+        $this->line('Range: ' . $from->toDateTimeString() . ' .. ' . $to->toDateTimeString());
         $this->line('Scope: ' . ($marketId !== null ? "market_id={$marketId}" : 'all markets'));
         $this->line("Total: {$total} | sent: {$sent} | failed: {$failed}");
         $this->newLine();
@@ -101,6 +105,7 @@ class AuditNotifications extends Command
         if (Schema::hasTable('failed_jobs')) {
             $failedJobs = DB::table('failed_jobs')
                 ->where('failed_at', '>=', $from)
+                ->where('failed_at', '<=', $to)
                 ->count();
 
             $this->line("Queue failed jobs in same window: {$failedJobs}");
@@ -109,4 +114,3 @@ class AuditNotifications extends Command
         return Command::SUCCESS;
     }
 }
-
