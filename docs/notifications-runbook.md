@@ -28,6 +28,7 @@ This runbook covers notification delivery health checks and Telegram delivery va
    - `php artisan notifications:audit --hours=1 --limit=10`
 5. Verify health check:
    - `php artisan notifications:health-check --hours=1`
+   - check lines: `telegram_enabled=...` and `telegram_config=OK`
 
 ## Expected audit output
 
@@ -44,6 +45,14 @@ This runbook covers notification delivery health checks and Telegram delivery va
 3. Re-run `Telegram test` from staff page.
 4. For connect-link action, verify selected channel delivery in `notifications:audit` (mail/database).
 5. Check Laravel logs for `Telegram API error`.
+6. Run health check and verify Telegram config:
+   - `php artisan notifications:health-check --hours=1`
+   - if `telegram_config=ALERT`, fix:
+     - `TELEGRAM_ENABLED=true`
+     - `TELEGRAM_BOT_TOKEN=...`
+     - `TELEGRAM_BOT_USERNAME=market_tasks_notify_bot`
+     - `TELEGRAM_API_BASE=https://api.telegram.org`
+     - then `php artisan optimize:clear`
 
 ## Self-link flow (user cabinet)
 
