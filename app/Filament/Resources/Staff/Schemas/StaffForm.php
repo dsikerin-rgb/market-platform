@@ -85,7 +85,8 @@ class StaffForm
                     ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
                     ->same('password')
                     ->dehydrated(false),
-            ]);
+            ])
+                ->visible(fn (string $operation): bool => $operation === 'create');
         } else {
             $passwordPair[] = Forms\Components\TextInput::make('password')
                 ->label('Пароль')
@@ -94,7 +95,8 @@ class StaffForm
                 ->minLength(8)
                 ->required(fn (string $operation) => $operation === 'create')
                 ->dehydrated(fn ($state) => filled($state))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null);
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
+                ->visible(fn (string $operation): bool => $operation === 'create');
 
             $passwordPair[] = Forms\Components\TextInput::make('password_confirmation')
                 ->label('Подтверждение пароля')
@@ -102,7 +104,8 @@ class StaffForm
                 ->revealable()
                 ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
                 ->same('password')
-                ->dehydrated(false);
+                ->dehydrated(false)
+                ->visible(fn (string $operation): bool => $operation === 'create');
         }
 
         return $schema->components([
@@ -120,7 +123,8 @@ class StaffForm
                 ->validationMessages([
                     'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
                 ])
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null),
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                ->visible(fn (string $operation): bool => $operation === 'create'),
 
             Forms\Components\Placeholder::make('telegram_chat_id_help')
                 ->label('Как получить chat_id')
@@ -131,7 +135,8 @@ class StaffForm
                     . '<div>2) Скопируйте значение <code>chat_id</code> из ответа.</div>'
                     . '<div>3) Вставьте <code>chat_id</code> в поле выше и сохраните пользователя.</div>'
                     . '</div>'
-                )),
+                ))
+                ->visible(false),
 
             ...$passwordPair,
 
@@ -228,7 +233,8 @@ class StaffForm
                     }
 
                     return new HtmlString(implode('<div class="h-2"></div>', $rows));
-                }),
+                })
+                ->visible(false),
 
             \Filament\Schemas\Components\Section::make('Уведомления')
                 ->description('Для super-admin и market-admin личные настройки доступны всегда. Для остальных можно назначить правила централизованно.')
@@ -255,7 +261,9 @@ class StaffForm
                 ])
                 ->columns(1)
                 ->collapsible()
-                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin())),
+                ->visible(fn (string $operation): bool => $operation === 'create'
+                    && (bool) $user
+                    && ($user->isSuperAdmin() || $user->isMarketAdmin())),
         ]);
     }
 }
