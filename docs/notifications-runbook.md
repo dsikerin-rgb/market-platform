@@ -17,10 +17,14 @@ This runbook covers notification delivery health checks and Telegram delivery va
 ## Delivery verification
 
 1. Open staff user card and verify `Telegram (chat_id)` is filled.
-2. Use `Telegram test` action in staff edit page.
-3. Verify delivery stats:
+2. In staff card, use:
+   - `Telegram link` to generate one-time `/start <token>`
+   - `Проверить привязку` to see linked Telegram account metadata
+   - `Сбросить Telegram` if wrong account was linked
+3. Use `Telegram тест` action in staff edit page.
+4. Verify delivery stats:
    - `php artisan notifications:audit --hours=1 --limit=10`
-4. Verify health check:
+5. Verify health check:
    - `php artisan notifications:health-check --hours=1`
 
 ## Expected audit output

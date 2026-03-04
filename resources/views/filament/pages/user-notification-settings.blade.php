@@ -8,6 +8,26 @@
                         <p class="text-sm text-green-600 dark:text-green-400">
                             Подключено (chat_id: {{ $currentUser->telegram_chat_id }})
                         </p>
+                        @php
+                            $telegramProfile = is_array($currentUser?->telegram_profile ?? null) ? $currentUser->telegram_profile : [];
+                            $telegramUsername = trim((string) ($telegramProfile['username'] ?? ''));
+                            $telegramFirstName = trim((string) ($telegramProfile['first_name'] ?? ''));
+                            $telegramLastName = trim((string) ($telegramProfile['last_name'] ?? ''));
+                            $telegramDisplayName = trim($telegramFirstName . ' ' . $telegramLastName);
+                        @endphp
+                        @if ($telegramUsername !== '' || $telegramDisplayName !== '')
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                @if ($telegramDisplayName !== '')
+                                    {{ $telegramDisplayName }}
+                                @endif
+                                @if ($telegramUsername !== '')
+                                    @if ($telegramDisplayName !== '')
+                                        ·
+                                    @endif
+                                    {{ '@' . $telegramUsername }}
+                                @endif
+                            </p>
+                        @endif
                     @else
                         <p class="text-sm text-gray-500">Не подключено</p>
                     @endif

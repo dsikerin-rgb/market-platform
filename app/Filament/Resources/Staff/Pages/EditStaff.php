@@ -57,10 +57,10 @@ class EditStaff extends BaseEditRecord
 
         return [
             Action::make('telegram_connect_link')
-                ->label('Telegram link')
+                ->label('Telegram ссылка')
                 ->icon('heroicon-o-link')
                 ->color('gray')
-                ->tooltip('Generate one-time /start token for this user')
+                ->tooltip('Сгенерировать одноразовую ссылку /start для сотрудника')
                 ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
                 ->action(function (): void {
                     $payload = app(TelegramChatLinkService::class)->issue($this->record, 20);
@@ -68,42 +68,114 @@ class EditStaff extends BaseEditRecord
                     $deepLink = trim((string) ($payload['deep_link'] ?? ''));
                     $command = trim((string) ($payload['command'] ?? ''));
                     $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
+                    $shareLink = '';
+                    if ($deepLink !== '') {
+                        $shareText = 'Подключите Telegram в Market Platform';
+                        $shareLink = 'https://t.me/share/url?url=' . rawurlencode($deepLink)
+                            . '&text=' . rawurlencode($shareText);
+                    }
 
                     $bodyParts = [];
                     if ($deepLink !== '') {
-                        $bodyParts[] = 'Link: ' . $deepLink;
+                        $bodyParts[] = 'Ссылка: ' . $deepLink;
                     }
                     if ($command !== '') {
-                        $bodyParts[] = 'Command: ' . $command;
+                        $bodyParts[] = 'Команда: ' . $command;
                     }
                     if ($expiresAt !== '') {
-                        $bodyParts[] = 'Expires at: ' . $expiresAt;
+                        $bodyParts[] = 'Действует до: ' . $expiresAt;
+                    }
+                    if ($shareLink !== '') {
+                        $bodyParts[] = 'Поделиться: ' . $shareLink;
                     }
 
                     Notification::make()
-                        ->title('Telegram connect token generated')
+                        ->title('Токен подключения Telegram сгенерирован')
                         ->body(implode("\n", $bodyParts))
                         ->success()
                         ->send();
                 }),
 
+            Action::make('telegram_binding_info')
+                ->label('Проверить привязку')
+                ->icon('heroicon-o-identification')
+                ->color('gray')
+                ->tooltip('Показать, какой Telegram-аккаунт привязан к сотруднику')
+                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                ->action(function (): void {
+                    $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
+                    $profile = is_array($this->record->telegram_profile ?? null)
+                        ? $this->record->telegram_profile
+                        : [];
+                    $username = trim((string) ($profile['username'] ?? ''));
+                    $firstName = trim((string) ($profile['first_name'] ?? ''));
+                    $lastName = trim((string) ($profile['last_name'] ?? ''));
+                    $displayName = trim($firstName . ' ' . $lastName);
+                    $telegramUserId = trim((string) ($profile['id'] ?? ''));
+                    $linkedAt = $this->record->telegram_linked_at?->format('Y-m-d H:i:s');
+
+                    $lines = ['chat_id: ' . $chatId];
+                    if ($username !== '') {
+                        $lines[] = 'Аккаунт: @' . $username;
+                    }
+                    if ($displayName !== '') {
+                        $lines[] = 'Имя в Telegram: ' . $displayName;
+                    }
+                    if ($telegramUserId !== '') {
+                        $lines[] = 'Telegram user id: ' . $telegramUserId;
+                    }
+                    if ($linkedAt !== null) {
+                        $lines[] = 'Привязано: ' . $linkedAt;
+                    }
+
+                    Notification::make()
+                        ->title('Текущая Telegram-привязка')
+                        ->body(implode("\n", $lines))
+                        ->success()
+                        ->send();
+                }),
+
+            Action::make('telegram_unlink')
+                ->label('Сбросить Telegram')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->tooltip('Очистить Telegram-привязку сотрудника')
+                ->requiresConfirmation()
+                ->modalHeading('Сбросить привязку Telegram?')
+                ->modalDescription('Будут очищены chat_id и информация о связанном Telegram-аккаунте.')
+                ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                ->action(function (): void {
+                    $this->record->forceFill([
+                        'telegram_chat_id' => null,
+                        'telegram_profile' => null,
+                        'telegram_linked_at' => null,
+                    ])->save();
+
+                    Notification::make()
+                        ->title('Telegram-привязка сброшена')
+                        ->success()
+                        ->send();
+                }),
+
             Action::make('telegram_test')
-                ->label('Telegram test')
+                ->label('Telegram тест')
                 ->icon('heroicon-o-paper-airplane')
                 ->color('gray')
                 ->tooltip(fn (): string => blank($this->record->telegram_chat_id)
-                    ? 'Fill Telegram (chat_id) first'
-                    : 'Send test message to Telegram')
+                    ? 'Сначала заполните Telegram (chat_id)'
+                    : 'Отправить тестовое сообщение в Telegram')
                 ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
                 ->requiresConfirmation()
-                ->modalHeading('Send Telegram test')
-                ->modalDescription('A test message will be sent to the staff member chat_id.')
+                ->modalHeading('Отправить Telegram тест')
+                ->modalDescription('Тестовое сообщение будет отправлено по chat_id сотрудника.')
                 ->visible(fn () => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
                 ->action(function (): void {
                     $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
                     if ($chatId === '') {
                         Notification::make()
-                            ->title('Telegram chat_id is empty')
+                            ->title('У сотрудника не заполнен Telegram (chat_id)')
                             ->warning()
                             ->send();
 
@@ -115,16 +187,16 @@ class EditStaff extends BaseEditRecord
                         $this->record->notify(new TelegramTestNotification($actorName));
 
                         Notification::make()
-                            ->title('Telegram test sent')
-                            ->body('Check Telegram for the target user.')
+                            ->title('Тестовое сообщение отправлено')
+                            ->body('Проверьте Telegram у выбранного сотрудника.')
                             ->success()
                             ->send();
                     } catch (\Throwable $e) {
                         report($e);
 
                         Notification::make()
-                            ->title('Telegram send failed')
-                            ->body('Check bot token and chat_id settings.')
+                            ->title('Не удалось отправить в Telegram')
+                            ->body('Проверьте токен бота и chat_id сотрудника.')
                             ->danger()
                             ->send();
                     }

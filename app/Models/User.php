@@ -37,6 +37,8 @@ class User extends Authenticatable implements FilamentUser
         'market_id',
         'tenant_id',
         'telegram_chat_id',
+        'telegram_profile',
+        'telegram_linked_at',
         'notification_preferences',
     ];
 
@@ -60,6 +62,8 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'telegram_profile' => 'array',
+            'telegram_linked_at' => 'datetime',
             'notification_preferences' => 'array',
         ];
     }
