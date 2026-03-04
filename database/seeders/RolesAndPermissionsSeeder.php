@@ -57,7 +57,18 @@ class RolesAndPermissionsSeeder extends Seeder
             // Остальные пока пустые/минимальные — чтобы не выдать лишнего автоматически
             'market-manager' => [],
             'market-operator' => [],
+            'market-owner' => [],
             'market-accountant' => [],
+            'market-finance' => [],
+            'market-maintenance' => [],
+            'market-engineer' => [],
+            'market-it' => [],
+            'market-security' => [],
+            'market-guard' => [],
+            'market-marketing' => [],
+            'market-advertising' => [],
+            'market-support' => [],
+            'market-hr' => [],
             'merchant' => [],
             'merchant-user' => [],
         ];

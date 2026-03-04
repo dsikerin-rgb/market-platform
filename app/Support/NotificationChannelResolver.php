@@ -16,7 +16,25 @@ class NotificationChannelResolver
      */
     public function resolve(object $notifiable, string $topic = 'default', ?int $marketId = null): array
     {
+        if ($notifiable instanceof User) {
+            $preferences = app(UserNotificationPreferences::class);
+
+            if (! $preferences->isTopicEnabled($notifiable, $topic)) {
+                return [];
+            }
+        }
+
         $channels = $this->preferredChannels($notifiable);
+
+        if ($notifiable instanceof User) {
+            $preferences = app(UserNotificationPreferences::class);
+            $override = $preferences->channelsOverride($notifiable);
+
+            if ($override !== null) {
+                $channels = array_values(array_intersect($channels, $override));
+            }
+        }
+
         $channels = $this->applyMarketPolicy($channels, $topic, $marketId);
 
         // Telegram transport is not connected yet.
@@ -111,4 +129,3 @@ class NotificationChannelResolver
         )));
     }
 }
-

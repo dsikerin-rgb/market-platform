@@ -2,20 +2,17 @@
 
 namespace App\Filament\Resources\Roles\Schemas;
 
+use App\Support\RoleScenarioCatalog;
 use Filament\Forms;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 class RoleForm
 {
     public static function configure(Schema $schema): Schema
     {
         // Системные коды ролей (в БД) → человеко-читаемые названия (в UI)
-        $roleOptions = [
-            'super-admin' => 'Супер-администратор',
-            'market-admin' => 'Администратор рынка',
-            'market-manager' => 'Менеджер рынка',
-            'market-operator' => 'Оператор рынка',
-            'merchant' => 'Арендатор',
+        $roleOptions = RoleScenarioCatalog::options() + [
             '__custom' => 'Другая (ввести вручную)',
         ];
 
@@ -66,6 +63,31 @@ class RoleForm
             ->relationship('permissions', 'name')
             ->helperText('Добавьте права, которые должна предоставлять роль.');
 
+        $profileField = Forms\Components\Placeholder::make('role_profile_preview')
+            ->label('Профиль роли')
+            ->content(function ($get): HtmlString {
+                $selected = (string) ($get('name') ?? '');
+                $slug = $selected === '__custom'
+                    ? trim((string) ($get('name_custom') ?? ''))
+                    : $selected;
+
+                if ($slug === '') {
+                    return new HtmlString('<span class="text-sm text-gray-500">Выберите роль, чтобы увидеть описание профиля.</span>');
+                }
+
+                $label = e(RoleScenarioCatalog::labelForSlug($slug, $slug));
+                $description = e(RoleScenarioCatalog::descriptionForSlug($slug) ?? 'Кастомная роль без преднастроенного профиля.');
+                $topics = e(RoleScenarioCatalog::topicSummaryForSlug($slug));
+
+                return new HtmlString(
+                    '<div class="text-sm leading-6">'
+                    . '<strong>' . $label . '</strong>'
+                    . '<div class="text-gray-500">' . $description . '</div>'
+                    . '<div class="text-gray-500">Сценарии уведомлений: ' . $topics . '</div>'
+                    . '</div>'
+                );
+            });
+
         // Если есть Grid — делаем аккуратную раскладку как в UI (в одну строку/блок)
         if (class_exists(\Filament\Forms\Components\Grid::class)) {
             return $schema->components([
@@ -74,6 +96,7 @@ class RoleForm
                     $customNameField,
                     $labelField,
                 ]),
+                $profileField,
                 $permissionsField,
                 $guardField,
             ]);
@@ -83,6 +106,7 @@ class RoleForm
             $nameField,
             $customNameField,
             $labelField,
+            $profileField,
             $permissionsField,
             $guardField,
         ]);
