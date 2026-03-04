@@ -85,7 +85,7 @@ class EditStaff extends BaseEditRecord
                         ->options(fn (): array => $this->telegramConnectDeliveryOptions())
                         ->default(fn (): array => $this->defaultTelegramConnectDeliveryChannels())
                         ->columns(1)
-                        ->helperText('Ссылка всё равно будет показана в уведомлении после генерации.'),
+                        ->helperText('Ссылка и QR показаны в блоке ниже.'),
 
                     \Filament\Forms\Components\Placeholder::make('telegram_connect_qr_preview')
                         ->label('Быстрое подключение (QR)')
@@ -128,19 +128,9 @@ class EditStaff extends BaseEditRecord
                         }
                     }
 
-                    $bodyParts = [];
-                    $bodyParts[] = 'Получатель: ' . $recipientLabel;
-                    if ($deepLink !== '') {
-                        $bodyParts[] = 'Ссылка: ' . $deepLink;
-                    }
-                    if ($command !== '') {
-                        $bodyParts[] = 'Команда: ' . $command;
-                    }
+                    $bodyParts = ['Получатель: ' . $recipientLabel];
                     if ($expiresAt !== '') {
                         $bodyParts[] = 'Действует до: ' . $expiresAt;
-                    }
-                    if ($shareLink !== '') {
-                        $bodyParts[] = 'Поделиться: ' . $shareLink;
                     }
                     if ($deliveryChannels !== []) {
                         $bodyParts[] = 'Доставлено по каналам: ' . implode(', ', array_map(
@@ -152,6 +142,9 @@ class EditStaff extends BaseEditRecord
                     }
                     if ($mailMissing) {
                         $bodyParts[] = 'Канал Email пропущен: у сотрудника не заполнен email.';
+                    }
+                    if ($deepLink === '') {
+                        $bodyParts[] = 'QR недоступен: проверьте TELEGRAM_BOT_USERNAME и очистите кэш конфигурации.';
                     }
 
                     $feedback = Notification::make()
@@ -322,6 +315,8 @@ class EditStaff extends BaseEditRecord
 
         if ($deepLink !== '') {
             $html .= '<div>Ссылка: <a href="' . e($deepLink) . '" target="_blank" rel="noopener noreferrer" class="underline">' . e($deepLink) . '</a></div>';
+        } else {
+            $html .= '<div class="text-amber-600 dark:text-amber-400">QR и deeplink недоступны: не задан TELEGRAM_BOT_USERNAME.</div>';
         }
 
         if ($command !== '') {
