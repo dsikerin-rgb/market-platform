@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Staff\Schemas;
 
 use App\Support\RoleScenarioCatalog;
+use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Schema;
@@ -205,6 +206,33 @@ class StaffForm
 
                     return new HtmlString(implode('<div class="h-2"></div>', $rows));
                 }),
+
+            Forms\Components\Section::make('Уведомления')
+                ->description('Для super-admin и market-admin личные настройки доступны всегда. Для остальных можно назначить правила централизованно.')
+                ->schema([
+                    Forms\Components\Toggle::make('notification_preferences.self_manage')
+                        ->label('Разрешить личные настройки')
+                        ->helperText('Пользователь сможет сам менять свои каналы и события в кабинете.')
+                        ->default(false),
+
+                    Forms\Components\CheckboxList::make('notification_preferences.channels')
+                        ->label('Каналы доставки (назначение администратором)')
+                        ->options(UserNotificationPreferences::channelLabels())
+                        ->columns(3)
+                        ->helperText('Если пусто, применяются стандартные каналы по доступным контактам.')
+                        ->columnSpanFull(),
+
+                    Forms\Components\CheckboxList::make('notification_preferences.topics')
+                        ->label('События (назначение администратором)')
+                        ->options(UserNotificationPreferences::topicLabels())
+                        ->default(UserNotificationPreferences::TOPICS)
+                        ->columns(2)
+                        ->helperText('Если пусто, пользователь не получает уведомления по темам.')
+                        ->columnSpanFull(),
+                ])
+                ->columns(1)
+                ->collapsible()
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin())),
         ]);
     }
 }

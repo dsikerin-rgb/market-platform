@@ -36,6 +36,8 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'market_id',
         'tenant_id',
+        'telegram_chat_id',
+        'notification_preferences',
     ];
 
     /**
@@ -58,6 +60,7 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'notification_preferences' => 'array',
         ];
     }
 
@@ -79,6 +82,17 @@ class User extends Authenticatable implements FilamentUser
     public function isMarketAdmin(): bool
     {
         return $this->hasRole('market-admin');
+    }
+
+    public function canSelfManageNotificationPreferences(): bool
+    {
+        if ($this->isSuperAdmin() || $this->isMarketAdmin()) {
+            return true;
+        }
+
+        $raw = (array) ($this->notification_preferences ?? []);
+
+        return (bool) ($raw['self_manage'] ?? false);
     }
 
     /**

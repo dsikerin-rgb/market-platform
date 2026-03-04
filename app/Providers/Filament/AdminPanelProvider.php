@@ -9,6 +9,7 @@ use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Pages\Requests;
+use App\Filament\Pages\UserNotificationSettings;
 use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
@@ -57,6 +58,12 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotificationsPolling('30s')
 
             ->userMenuItems([
+                'notification_settings' => MenuItem::make()
+                    ->label('Кабинет уведомлений')
+                    ->icon('heroicon-o-bell-alert')
+                    ->url(fn (): string => UserNotificationSettings::getUrl())
+                    ->visible(fn (): bool => (bool) Filament::auth()->user()),
+
                 'horizon' => MenuItem::make()
                     ->label('Horizon (очереди)')
                     ->url(fn (): string => Route::has('horizon.index')
@@ -134,6 +141,7 @@ class AdminPanelProvider extends PanelProvider
                 MarketSettings::class,
                 Requests::class,
                 OpsDiagnostics::class,
+                UserNotificationSettings::class,
             ])
 
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
