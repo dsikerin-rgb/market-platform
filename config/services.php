@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'telegram' => [
+        'enabled' => (bool) env('TELEGRAM_ENABLED', false),
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+        'api_base' => env('TELEGRAM_API_BASE', 'https://api.telegram.org'),
+        'timeout' => (int) env('TELEGRAM_HTTP_TIMEOUT', 10),
+    ],
+
 ];
