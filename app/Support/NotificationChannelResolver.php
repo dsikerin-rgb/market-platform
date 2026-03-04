@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Models\Market;
 use App\Models\User;
+use App\Notifications\Channels\TelegramChannel;
 
 class NotificationChannelResolver
 {
@@ -37,13 +38,13 @@ class NotificationChannelResolver
 
         $channels = $this->applyMarketPolicy($channels, $topic, $marketId);
 
-        // Telegram transport is not connected yet.
-        $channels = array_values(array_filter(
-            $channels,
-            static fn (string $channel): bool => $channel !== 'telegram'
-        ));
+        $channels = $this->applyTransportAvailability($channels);
 
-        return $channels !== [] ? $channels : ['database'];
+        if ($channels === []) {
+            return ['database'];
+        }
+
+        return $this->mapChannelsToLaravelDrivers($channels);
     }
 
     /**
@@ -64,6 +65,24 @@ class NotificationChannelResolver
         }
 
         return array_values(array_unique($channels));
+    }
+
+    /**
+     * @param  list<string>  $channels
+     * @return list<string>
+     */
+    private function applyTransportAvailability(array $channels): array
+    {
+        return array_values(array_filter(
+            $channels,
+            function (string $channel): bool {
+                if ($channel !== 'telegram') {
+                    return true;
+                }
+
+                return $this->isTelegramEnabled();
+            }
+        ));
     }
 
     /**
@@ -127,5 +146,28 @@ class NotificationChannelResolver
             array_map(static fn ($ch) => is_string($ch) ? trim(mb_strtolower($ch)) : '', $channels),
             static fn (string $ch): bool => in_array($ch, self::SUPPORTED, true),
         )));
+    }
+
+    private function isTelegramEnabled(): bool
+    {
+        if (! (bool) config('services.telegram.enabled', false)) {
+            return false;
+        }
+
+        return trim((string) config('services.telegram.bot_token', '')) !== '';
+    }
+
+    /**
+     * @param  list<string>  $channels
+     * @return list<string>
+     */
+    private function mapChannelsToLaravelDrivers(array $channels): array
+    {
+        return array_values(array_map(
+            static fn (string $channel): string => $channel === 'telegram'
+                ? TelegramChannel::class
+                : $channel,
+            $channels,
+        ));
     }
 }

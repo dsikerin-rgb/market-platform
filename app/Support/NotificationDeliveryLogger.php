@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\NotificationDelivery;
+use App\Notifications\Channels\TelegramChannel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Events\NotificationFailed;
 use Illuminate\Notifications\Events\NotificationSent;
@@ -20,7 +21,7 @@ class NotificationDeliveryLogger
             NotificationDelivery::query()->create([
                 'notification_id' => $this->extractNotificationId($event->notification),
                 'notification_type' => $event->notification::class,
-                'channel' => (string) $event->channel,
+                'channel' => $this->normalizeChannel($event->channel),
                 'status' => NotificationDelivery::STATUS_SENT,
                 'notifiable_type' => $event->notifiable::class,
                 'notifiable_id' => $this->extractNumericId($event->notifiable),
@@ -39,7 +40,7 @@ class NotificationDeliveryLogger
             NotificationDelivery::query()->create([
                 'notification_id' => $this->extractNotificationId($event->notification),
                 'notification_type' => $event->notification::class,
-                'channel' => (string) $event->channel,
+                'channel' => $this->normalizeChannel($event->channel),
                 'status' => NotificationDelivery::STATUS_FAILED,
                 'notifiable_type' => $event->notifiable::class,
                 'notifiable_id' => $this->extractNumericId($event->notifiable),
@@ -151,5 +152,26 @@ class NotificationDeliveryLogger
 
         return mb_substr($value, 0, $max - 3) . '...';
     }
-}
 
+    private function normalizeChannel(mixed $channel): string
+    {
+        $value = is_string($channel) ? trim($channel) : '';
+        if ($value === '') {
+            return 'unknown';
+        }
+
+        if ($value === TelegramChannel::class || str_ends_with($value, '\\TelegramChannel')) {
+            return 'telegram';
+        }
+
+        if (str_ends_with($value, '\\MailChannel')) {
+            return 'mail';
+        }
+
+        if (str_ends_with($value, '\\DatabaseChannel')) {
+            return 'database';
+        }
+
+        return $value;
+    }
+}

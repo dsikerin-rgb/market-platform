@@ -10,7 +10,7 @@ class TelegramWebhookController
 {
     public function __invoke(Request $request)
     {
-        $expected = (string) env('TELEGRAM_WEBHOOK_SECRET', '');
+        $expected = (string) config('services.telegram.webhook_secret', '');
 
         if ($expected !== '' && $request->header('X-Telegram-Bot-Api-Secret-Token') !== $expected) {
             return response()->json(['ok' => false, 'error' => 'forbidden'], 403);
@@ -19,7 +19,7 @@ class TelegramWebhookController
         $update = $request->all();
         Log::info('telegram.webhook', $update);
 
-        $token = (string) env('TELEGRAM_BOT_TOKEN', '');
+        $token = (string) config('services.telegram.bot_token', '');
 
         $message = $update['message'] ?? $update['edited_message'] ?? null;
         $chatId  = $message['chat']['id'] ?? null;
