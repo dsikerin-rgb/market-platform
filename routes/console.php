@@ -22,3 +22,7 @@ Schedule::call(function () {
 })->dailyAt('03:10');
 
 Schedule::command('market:holidays:notify')->everyThirtyMinutes();
+
+Schedule::command('notifications:health-check --hours=1 --notify')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping();
