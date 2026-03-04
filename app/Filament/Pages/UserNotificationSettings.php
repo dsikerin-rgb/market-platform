@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\User;
+use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -34,6 +35,11 @@ class UserNotificationSettings extends Page
     public bool $canSelfManage = false;
 
     public ?User $currentUser = null;
+
+    /**
+     * @var array{token:string,expires_at:string,command:string,deep_link:?string,bot_username:?string}|null
+     */
+    public ?array $telegramLinkData = null;
 
     public static function canAccess(): bool
     {
@@ -68,6 +74,39 @@ class UserNotificationSettings extends Page
             'channels' => $channels,
             'topics' => $topics,
         ]);
+    }
+
+    public function generateTelegramConnectLink(): void
+    {
+        $user = Filament::auth()->user();
+        abort_unless($user instanceof User, 403);
+
+        if (! (bool) config('services.telegram.enabled', false)) {
+            Notification::make()
+                ->title('Telegram is disabled')
+                ->body('Enable Telegram transport in environment settings first.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->telegramLinkData = app(TelegramChatLinkService::class)->issue($user, 20);
+
+        Notification::make()
+            ->title('Connection link generated')
+            ->body('Open the bot and send the generated /start command.')
+            ->success()
+            ->send();
+    }
+
+    public function refreshTelegramStatus(): void
+    {
+        if (! $this->currentUser instanceof User) {
+            return;
+        }
+
+        $this->currentUser = $this->currentUser->fresh();
     }
 
     public function form(Schema $schema): Schema
