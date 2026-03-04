@@ -110,6 +110,29 @@ class StaffForm
             $marketHidden,
 
             ...$nameEmail,
+
+            Forms\Components\TextInput::make('telegram_chat_id')
+                ->label('Telegram (chat_id)')
+                ->placeholder('например: 123456789')
+                ->helperText('Нужен для доставки уведомлений в Telegram.')
+                ->maxLength(32)
+                ->regex('/^-?\d+$/')
+                ->validationMessages([
+                    'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
+                ])
+                ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null),
+
+            Forms\Components\Placeholder::make('telegram_chat_id_help')
+                ->label('Как получить chat_id')
+                ->content(new HtmlString(
+                    '<div class="text-sm text-gray-500 space-y-2">'
+                    . '<a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ring-1 ring-gray-300 hover:bg-gray-50 dark:ring-gray-700 dark:hover:bg-white/5">Открыть @userinfobot</a>'
+                    . '<div>1) Откройте бота и отправьте команду <code>/start</code>.</div>'
+                    . '<div>2) Скопируйте значение <code>chat_id</code> из ответа.</div>'
+                    . '<div>3) Вставьте <code>chat_id</code> в поле выше и сохраните пользователя.</div>'
+                    . '</div>'
+                )),
+
             ...$passwordPair,
 
             Forms\Components\Select::make('roles')
