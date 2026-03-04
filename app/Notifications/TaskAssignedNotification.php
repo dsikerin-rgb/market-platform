@@ -7,10 +7,12 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Models\Task;
+use App\Support\NotificationChannelResolver;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification as LaravelNotification;
 
 class TaskAssignedNotification extends LaravelNotification implements ShouldQueue
@@ -23,7 +25,11 @@ class TaskAssignedNotification extends LaravelNotification implements ShouldQueu
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return app(NotificationChannelResolver::class)->resolve(
+            $notifiable,
+            'tasks',
+            (int) $this->task->market_id,
+        );
     }
 
     /**
@@ -63,5 +69,16 @@ class TaskAssignedNotification extends LaravelNotification implements ShouldQueu
         return [
             'task_id' => $this->task->getKey(),
         ];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $taskId = (int) $this->task->getKey();
+        $url = url("/admin/tasks/{$taskId}/edit");
+
+        return (new MailMessage())
+            ->subject('Назначена новая задача')
+            ->line('Задача: ' . (string) $this->task->title)
+            ->action('Открыть задачу', $url);
     }
 }
