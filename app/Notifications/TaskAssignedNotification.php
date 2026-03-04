@@ -9,10 +9,14 @@ namespace App\Notifications;
 use App\Models\Task;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification as LaravelNotification;
 
-class TaskAssignedNotification extends LaravelNotification
+class TaskAssignedNotification extends LaravelNotification implements ShouldQueue
 {
+    use Queueable;
+
     public function __construct(private readonly Task $task)
     {
     }

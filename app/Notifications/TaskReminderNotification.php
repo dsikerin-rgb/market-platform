@@ -4,10 +4,14 @@
 namespace App\Notifications;
 
 use App\Models\Task;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class TaskReminderNotification extends Notification
+class TaskReminderNotification extends Notification implements ShouldQueue
 {
+    use Queueable;
+
     public const TYPE_DUE_SOON = 'due_soon';
     public const TYPE_OVERDUE = 'overdue';
 

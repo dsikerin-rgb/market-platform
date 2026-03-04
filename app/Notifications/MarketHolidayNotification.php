@@ -5,10 +5,14 @@ namespace App\Notifications;
 use App\Filament\Resources\TaskResource;
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class MarketHolidayNotification extends Notification
+class MarketHolidayNotification extends Notification implements ShouldQueue
 {
+    use Queueable;
+
     public function __construct(
         private readonly MarketHoliday $holiday,
         private readonly Market $market
