@@ -5,8 +5,10 @@ namespace App\Notifications;
 use App\Filament\Resources\TaskResource;
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Support\NotificationChannelResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class MarketHolidayNotification extends Notification implements ShouldQueue
@@ -21,7 +23,11 @@ class MarketHolidayNotification extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return app(NotificationChannelResolver::class)->resolve(
+            $notifiable,
+            'calendar',
+            (int) $this->market->id,
+        );
     }
 
     /**
@@ -53,5 +59,25 @@ class MarketHolidayNotification extends Notification implements ShouldQueue
                 'holidays' => 1,
             ]),
         ];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $start = $this->holiday->starts_at?->toDateString() ?? 'n/a';
+        $end = $this->holiday->ends_at?->toDateString();
+
+        $range = $end && $end !== $start
+            ? "{$start} - {$end}"
+            : $start;
+
+        return (new MailMessage())
+            ->subject('Событие календаря рынка: ' . (string) $this->holiday->title)
+            ->line('Рынок: ' . (string) $this->market->name)
+            ->line('Событие: ' . (string) $this->holiday->title)
+            ->line('Дата: ' . $range)
+            ->action('Открыть календарь', TaskResource::getUrl('calendar', [
+                'date' => $start,
+                'holidays' => 1,
+            ]));
     }
 }

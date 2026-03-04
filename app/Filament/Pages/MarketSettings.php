@@ -71,6 +71,11 @@ class MarketSettings extends Page
         'holiday_notification_recipient_user_ids' => [],
         'request_notification_recipient_user_ids' => [],
         'request_repair_notification_recipient_user_ids' => [],
+        'notification_channels_calendar' => ['database'],
+        'notification_channels_requests' => ['database'],
+        'notification_channels_messages' => ['database'],
+        'notification_channels_tasks' => ['database'],
+        'notification_channels_reminders' => ['database'],
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -142,6 +147,21 @@ class MarketSettings extends Page
                 (array) ($settings['request_repair_notification_recipient_user_ids'] ?? []),
                 static fn ($value): bool => is_numeric($value),
             )),
+            'notification_channels_calendar' => $this->normalizeNotificationChannels(
+                $settings['notification_channels_calendar'] ?? ['database']
+            ),
+            'notification_channels_requests' => $this->normalizeNotificationChannels(
+                $settings['notification_channels_requests'] ?? ['database']
+            ),
+            'notification_channels_messages' => $this->normalizeNotificationChannels(
+                $settings['notification_channels_messages'] ?? ['database']
+            ),
+            'notification_channels_tasks' => $this->normalizeNotificationChannels(
+                $settings['notification_channels_tasks'] ?? ['database']
+            ),
+            'notification_channels_reminders' => $this->normalizeNotificationChannels(
+                $settings['notification_channels_reminders'] ?? ['database']
+            ),
         ]);
     }
 
@@ -310,6 +330,62 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12),
+
+                Section::make('Каналы уведомлений')
+                    ->description('Каналы доставки по темам. Telegram начнет работать после подключения транспорта.')
+                    ->schema([
+                        Forms\Components\Select::make('notification_channels_calendar')
+                            ->label('Календарь')
+                            ->multiple()
+                            ->options(fn (): array => $this->notificationChannelOptions())
+                            ->helperText('Уведомления о праздниках и санитарных днях.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\Select::make('notification_channels_requests')
+                            ->label('Обращения')
+                            ->multiple()
+                            ->options(fn (): array => $this->notificationChannelOptions())
+                            ->helperText('Новые обращения арендаторов.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\Select::make('notification_channels_messages')
+                            ->label('Сообщения')
+                            ->multiple()
+                            ->options(fn (): array => $this->notificationChannelOptions())
+                            ->helperText('Ответы в чатах и диалогах.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\Select::make('notification_channels_tasks')
+                            ->label('Назначение задач')
+                            ->multiple()
+                            ->options(fn (): array => $this->notificationChannelOptions())
+                            ->helperText('Новые задачи для сотрудника.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\Select::make('notification_channels_reminders')
+                            ->label('Напоминания по задачам')
+                            ->multiple()
+                            ->options(fn (): array => $this->notificationChannelOptions())
+                            ->helperText('Просроченные и приближающиеся сроки задач.')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                    ])
+                    ->columns(12),
             ]);
     }
 
@@ -355,6 +431,21 @@ class MarketSettings extends Page
             (array) ($state['request_repair_notification_recipient_user_ids'] ?? []),
             static fn ($value): bool => is_numeric($value),
         ));
+        $settings['notification_channels_calendar'] = $this->normalizeNotificationChannels(
+            $state['notification_channels_calendar'] ?? ['database']
+        );
+        $settings['notification_channels_requests'] = $this->normalizeNotificationChannels(
+            $state['notification_channels_requests'] ?? ['database']
+        );
+        $settings['notification_channels_messages'] = $this->normalizeNotificationChannels(
+            $state['notification_channels_messages'] ?? ['database']
+        );
+        $settings['notification_channels_tasks'] = $this->normalizeNotificationChannels(
+            $state['notification_channels_tasks'] ?? ['database']
+        );
+        $settings['notification_channels_reminders'] = $this->normalizeNotificationChannels(
+            $state['notification_channels_reminders'] ?? ['database']
+        );
 
         $this->market->fill([
             'name' => (string) ($state['name'] ?? ''),
@@ -438,6 +529,38 @@ class MarketSettings extends Page
         }
 
         return filled($value) ? (int) $value : null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function notificationChannelOptions(): array
+    {
+        return [
+            'database' => 'В кабинете',
+            'mail' => 'Email',
+            'telegram' => 'Telegram',
+        ];
+    }
+
+    /**
+     * @param mixed $channels
+     * @return list<string>
+     */
+    protected function normalizeNotificationChannels(mixed $channels): array
+    {
+        if (! is_array($channels)) {
+            return ['database'];
+        }
+
+        $allowed = ['database', 'mail', 'telegram'];
+
+        $normalized = array_values(array_unique(array_filter(
+            array_map(static fn ($channel) => is_string($channel) ? trim(mb_strtolower($channel)) : '', $channels),
+            static fn (string $channel): bool => in_array($channel, $allowed, true),
+        )));
+
+        return $normalized === [] ? ['database'] : $normalized;
     }
 
     protected function fillQuickLinks(): void
