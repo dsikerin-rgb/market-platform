@@ -38,6 +38,13 @@ This runbook covers notification delivery health checks and Telegram delivery va
 3. Re-run `Telegram test` from staff page.
 4. Check Laravel logs for `Telegram API error`.
 
+## Self-link flow (user cabinet)
+
+1. Open `Profile -> Notification settings`.
+2. Click `Connect Telegram`.
+3. Send generated command `/start <token>` to bot.
+4. Click `Refresh status` in page and confirm `Telegram connected`.
+
 ## Operational hygiene
 
 Keep app working tree clean on servers:
