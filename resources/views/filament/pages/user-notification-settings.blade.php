@@ -61,6 +61,22 @@
                     <div>2. Отправьте команду боту:</div>
                     <pre class="overflow-x-auto rounded bg-gray-100 px-2 py-1 dark:bg-gray-800">{{ $telegramLinkData['command'] }}</pre>
 
+                    @if (! empty($telegramLinkData['qr_svg_data_uri']))
+                        <div class="pt-1">
+                            <div class="mb-2 text-sm text-gray-600 dark:text-gray-300">
+                                Или отсканируйте QR-код камерой телефона:
+                            </div>
+                            <div class="inline-flex rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-950">
+                                <img
+                                    src="{{ $telegramLinkData['qr_svg_data_uri'] }}"
+                                    alt="QR-код для подключения Telegram"
+                                    class="h-40 w-40"
+                                    loading="lazy"
+                                />
+                            </div>
+                        </div>
+                    @endif
+
                     <div class="text-gray-500 dark:text-gray-400">
                         Ссылка действует до {{ $telegramLinkData['expires_at'] }}.
                     </div>

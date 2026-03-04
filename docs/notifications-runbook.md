@@ -49,7 +49,7 @@ This runbook covers notification delivery health checks and Telegram delivery va
 
 1. Open `Profile -> Notification settings`.
 2. Click `Connect Telegram`.
-3. Send generated command `/start <token>` to bot.
+3. Open bot via generated link, or scan QR code from the page, or send command `/start <token>`.
 4. Click `Refresh status` in page and confirm `Telegram connected`.
 
 ## Operational hygiene
