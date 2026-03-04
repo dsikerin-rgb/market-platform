@@ -6,10 +6,8 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketHolidayResource\Pages;
 use App\Models\MarketHoliday;
-use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -19,15 +17,13 @@ use Illuminate\Database\Eloquent\Builder;
 
 class MarketHolidayResource extends BaseResource
 {
-    
-
     protected static ?string $model = MarketHoliday::class;
 
     protected static ?string $recordTitleAttribute = 'title';
 
-    protected static ?string $modelLabel = 'Праздник рынка';
-    protected static ?string $pluralModelLabel = 'Праздники рынка';
-    protected static ?string $navigationLabel = 'Праздники рынка';
+    protected static ?string $modelLabel = 'Событие календаря';
+    protected static ?string $pluralModelLabel = 'Календарь';
+    protected static ?string $navigationLabel = 'Календарь';
     protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-calendar-days';
 
@@ -46,7 +42,6 @@ class MarketHolidayResource extends BaseResource
         return $user->hasRole('market-admin');
     }
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -55,6 +50,7 @@ class MarketHolidayResource extends BaseResource
             'market.name',
         ];
     }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -87,6 +83,10 @@ class MarketHolidayResource extends BaseResource
             Section::make()
                 ->schema([
                     ...$marketField,
+
+                    Forms\Components\Hidden::make('audience_scope')
+                        ->default('staff')
+                        ->dehydrated(true),
 
                     Forms\Components\TextInput::make('title')
                         ->label('Название')
@@ -124,6 +124,8 @@ class MarketHolidayResource extends BaseResource
         $user = Filament::auth()->user();
 
         $table = $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => static::scopeUpcoming($query))
+            ->defaultSort('starts_at', 'asc')
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок')
@@ -133,6 +135,13 @@ class MarketHolidayResource extends BaseResource
 
                 TextColumn::make('title')
                     ->label('Название')
+                    ->html()
+                    ->formatStateUsing(function ($state, MarketHoliday $record): string {
+                        $title = e((string) $state);
+                        $color = static::isNationalHoliday($record) ? '#ef4444' : 'inherit';
+
+                        return "<span style=\"color: {$color}; font-weight: 600;\">{$title}</span>";
+                    })
                     ->sortable()
                     ->searchable(),
 
@@ -158,6 +167,11 @@ class MarketHolidayResource extends BaseResource
                 TextColumn::make('source')
                     ->label('Источник')
                     ->sortable(),
+
+                TextColumn::make('audience_scope')
+                    ->label('Аудитория')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordUrl(fn (MarketHoliday $record): ?string => static::canEdit($record)
                 ? static::getUrl('edit', ['record' => $record])
@@ -166,15 +180,31 @@ class MarketHolidayResource extends BaseResource
         $actions = [];
 
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+            $actions[] = \Filament\Actions\EditAction::make()
+                ->label('')
+                ->icon('heroicon-o-pencil-square')
+                ->tooltip('Редактировать')
+                ->iconButton();
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+            $actions[] = \Filament\Tables\Actions\EditAction::make()
+                ->label('')
+                ->icon('heroicon-o-pencil-square')
+                ->tooltip('Редактировать')
+                ->iconButton();
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
+            $actions[] = \Filament\Actions\DeleteAction::make()
+                ->label('')
+                ->icon('heroicon-o-trash')
+                ->tooltip('Удалить')
+                ->iconButton();
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
+            $actions[] = \Filament\Tables\Actions\DeleteAction::make()
+                ->label('')
+                ->icon('heroicon-o-trash')
+                ->tooltip('Удалить')
+                ->iconButton();
         }
 
         if (! empty($actions)) {
@@ -262,7 +292,6 @@ class MarketHolidayResource extends BaseResource
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
         $value = session("filament.{$panelId}.selected_market_id");
 
         if (! filled($value)) {
@@ -270,5 +299,27 @@ class MarketHolidayResource extends BaseResource
         }
 
         return filled($value) ? (int) $value : null;
+    }
+
+    public static function scopeUpcoming(Builder $query): Builder
+    {
+        $today = now()->toDateString();
+
+        return $query->where(function (Builder $q) use ($today): void {
+            $q->where(function (Builder $sub) use ($today): void {
+                $sub->whereNull('ends_at')
+                    ->whereDate('starts_at', '>=', $today);
+            })->orWhere(function (Builder $sub) use ($today): void {
+                $sub->whereNotNull('ends_at')
+                    ->whereDate('ends_at', '>=', $today);
+            });
+        });
+    }
+
+    public static function isNationalHoliday(MarketHoliday $record): bool
+    {
+        $source = mb_strtolower(trim((string) ($record->source ?? '')), 'UTF-8');
+
+        return in_array($source, ['national_holiday', 'file'], true);
     }
 }
