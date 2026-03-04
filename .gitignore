@@ -52,3 +52,8 @@ resources/css/filament/
 *.conflict.php
 wip-conflicts.diff
 .env.backup.*
+
+# server-side temporary backup artifacts
+.env.backup_*
+.env.backup_queue_*
+/notify
