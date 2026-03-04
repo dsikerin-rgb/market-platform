@@ -42,7 +42,10 @@ class TelegramChatLinkService
         ];
     }
 
-    public function consumeAndLink(string $token, string $chatId): ?User
+    /**
+     * @param array<string, mixed> $telegramFrom
+     */
+    public function consumeAndLink(string $token, string $chatId, array $telegramFrom = []): ?User
     {
         $token = trim($token);
         $chatId = trim($chatId);
@@ -66,8 +69,12 @@ class TelegramChatLinkService
             return null;
         }
 
+        $profile = $this->normalizeTelegramProfile($telegramFrom);
+
         $user->forceFill([
             'telegram_chat_id' => $chatId,
+            'telegram_profile' => $profile !== [] ? $profile : null,
+            'telegram_linked_at' => now(),
         ])->save();
 
         return $user;
@@ -84,5 +91,41 @@ class TelegramChatLinkService
     {
         return self::CACHE_KEY_PREFIX . $token;
     }
-}
 
+    /**
+     * @param array<string, mixed> $telegramFrom
+     * @return array<string, string>
+     */
+    private function normalizeTelegramProfile(array $telegramFrom): array
+    {
+        if ($telegramFrom === []) {
+            return [];
+        }
+
+        $profile = [];
+
+        if (isset($telegramFrom['id']) && is_scalar($telegramFrom['id'])) {
+            $profile['id'] = (string) $telegramFrom['id'];
+        }
+        if (isset($telegramFrom['username']) && is_scalar($telegramFrom['username'])) {
+            $username = ltrim(trim((string) $telegramFrom['username']), '@');
+            if ($username !== '') {
+                $profile['username'] = $username;
+            }
+        }
+        if (isset($telegramFrom['first_name']) && is_scalar($telegramFrom['first_name'])) {
+            $firstName = trim((string) $telegramFrom['first_name']);
+            if ($firstName !== '') {
+                $profile['first_name'] = $firstName;
+            }
+        }
+        if (isset($telegramFrom['last_name']) && is_scalar($telegramFrom['last_name'])) {
+            $lastName = trim((string) $telegramFrom['last_name']);
+            if ($lastName !== '') {
+                $profile['last_name'] = $lastName;
+            }
+        }
+
+        return $profile;
+    }
+}

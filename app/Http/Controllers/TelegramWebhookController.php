@@ -41,12 +41,13 @@ class TelegramWebhookController
         }
 
         if ($command === '/start' && $argument !== '') {
-            $linkedUser = $chatLinkService->consumeAndLink($argument, (string) $chatId);
+            $telegramFrom = is_array($message['from'] ?? null) ? $message['from'] : [];
+            $linkedUser = $chatLinkService->consumeAndLink($argument, (string) $chatId, $telegramFrom);
             if ($linkedUser !== null) {
                 $this->sendMessage(
                     token: $token,
                     chatId: (string) $chatId,
-                    text: "Telegram connected to user:\n{$linkedUser->name}\n\nNotifications can be delivered to this chat."
+                    text: "Telegram подключен к пользователю:\n{$linkedUser->name}\n\nУведомления могут приходить в этот чат."
                 );
 
                 return response()->json(['ok' => true]);
@@ -55,7 +56,7 @@ class TelegramWebhookController
             $this->sendMessage(
                 token: $token,
                 chatId: (string) $chatId,
-                text: "Link is invalid or expired.\n\nGenerate a new link in notification settings and try again."
+                text: "Ссылка недействительна или устарела.\n\nСгенерируйте новую ссылку в настройках уведомлений и попробуйте снова."
             );
 
             return response()->json(['ok' => true]);
@@ -64,7 +65,7 @@ class TelegramWebhookController
         $this->sendMessage(
             token: $token,
             chatId: (string) $chatId,
-            text: "Your telegram_chat_id:\n{$chatId}\n\nCopy and paste it into user profile in admin panel."
+            text: "Ваш telegram_chat_id:\n{$chatId}\n\nСкопируйте и вставьте в профиль пользователя в админ-панели."
         );
 
         return response()->json(['ok' => true]);
