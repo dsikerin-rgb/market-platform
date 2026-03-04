@@ -7,8 +7,7 @@ namespace App\Support;
 use App\Models\Market;
 use App\Models\Ticket;
 use App\Models\User;
-use Filament\Notifications\Actions\Action;
-use Filament\Notifications\Notification;
+use App\Notifications\TicketChatNotification;
 use Illuminate\Support\Collection;
 
 class TicketChatNotificationRouter
@@ -32,6 +31,8 @@ class TicketChatNotificationRouter
 
         foreach ($recipients as $recipient) {
             $this->send(
+                ticket: $ticket,
+                eventType: TicketChatNotification::EVENT_REQUEST_CREATED,
                 recipient: $recipient,
                 title: $title,
                 body: $body,
@@ -59,6 +60,8 @@ class TicketChatNotificationRouter
 
         foreach ($recipients as $recipient) {
             $this->send(
+                ticket: $ticket,
+                eventType: TicketChatNotification::EVENT_MESSAGE_CREATED,
                 recipient: $recipient,
                 title: $title,
                 body: $body,
@@ -196,21 +199,21 @@ class TicketChatNotificationRouter
         return $adminUrl;
     }
 
-    private function send(User $recipient, string $title, string $body, ?string $url = null): void
+    private function send(
+        Ticket $ticket,
+        string $eventType,
+        User $recipient,
+        string $title,
+        string $body,
+        ?string $url = null
+    ): void
     {
-        $notification = Notification::make()
-            ->title($title)
-            ->body($body);
-
-        if (filled($url)) {
-            $notification->actions([
-                Action::make('open')
-                    ->label('Открыть')
-                    ->url((string) $url)
-                    ->markAsRead(),
-            ]);
-        }
-
-        $notification->sendToDatabase($recipient);
+        $recipient->notify(new TicketChatNotification(
+            ticket: $ticket,
+            eventType: $eventType,
+            title: $title,
+            body: $body,
+            url: $url,
+        ));
     }
 }
