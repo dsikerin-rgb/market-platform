@@ -6,7 +6,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Support\TicketChatNotificationRouter;
-use Filament\Notifications\Actions\Action;
+use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
