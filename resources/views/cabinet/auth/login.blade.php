@@ -3,147 +3,85 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#0f172a">
     <title>Вход в кабинет арендатора</title>
 
-    @php($hasViteManifest = file_exists(public_path('build/manifest.json')))
-    @php($hasViteHot = file_exists(public_path('hot')))
-    @if ($hasViteManifest || $hasViteHot)
+    @php
+        $hasViteManifest = file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot'));
+    @endphp
+    @if ($hasViteManifest)
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @else
         <script src="https://cdn.tailwindcss.com"></script>
-        <style>
-            html, body { height: 100%; }
-        </style>
     @endif
 </head>
-
-<body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
-    <div class="relative min-h-screen overflow-hidden">
-        <div class="pointer-events-none absolute -top-24 -left-16 h-80 w-80 rounded-full bg-sky-200/50 blur-3xl"></div>
-        <div class="pointer-events-none absolute -bottom-24 -right-16 h-96 w-96 rounded-full bg-indigo-200/40 blur-3xl"></div>
-
-        <main class="relative mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-8 sm:px-6 lg:px-8">
-            <div class="grid w-full gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-                <section class="hidden rounded-3xl border border-slate-200/80 bg-white/80 p-8 shadow-sm backdrop-blur lg:block">
-                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{{ $marketName ?? config('app.name', 'Market Platform') }}</p>
-                    <h1 class="mt-3 text-3xl font-semibold leading-tight">Кабинет арендатора</h1>
-                    <p class="mt-4 max-w-md text-sm leading-6 text-slate-600">
-                        Следите за начислениями, документами и обращениями в одном окне.
-                        Используйте учётные данные, выданные администратором рынка.
-                    </p>
-
-                    <div class="mt-8 space-y-3 text-sm text-slate-700">
-                        <div class="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                            <span class="mt-0.5 inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-                            <span>Актуальные начисления и оплаты по вашему арендному месту.</span>
-                        </div>
-                        <div class="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                            <span class="mt-0.5 inline-block h-2.5 w-2.5 rounded-full bg-sky-500"></span>
-                            <span>Переписка с управляющей компанией и история обращений.</span>
-                        </div>
-                        <div class="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
-                            <span class="mt-0.5 inline-block h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
-                            <span>Документы и договоры в одном месте без бумажной рутины.</span>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-                    <div class="space-y-1">
-                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $marketName ?? config('app.name', 'Market Platform') }}</p>
-                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Вход</p>
-                        <h2 class="text-2xl font-semibold">Авторизация</h2>
-                        <p class="text-sm text-slate-500">Введите email и пароль вашего аккаунта арендатора.</p>
-                    </div>
-
-                    @if (session('status'))
-                        <div class="mt-5 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                            {{ session('status') }}
-                        </div>
-                    @endif
-
-                    @if ($errors->any())
-                        <div class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                            <ul class="list-disc space-y-1 pl-5">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    @endif
-
-                    <form method="POST" action="{{ route('cabinet.login.submit') }}" class="mt-6 space-y-5" novalidate>
-                        @csrf
-
-                        <label class="block">
-                            <span class="mb-1.5 block text-sm font-medium text-slate-700">Email</span>
-                            <input
-                                class="w-full rounded-xl border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:ring-sky-500"
-                                type="email"
-                                name="email"
-                                value="{{ old('email') }}"
-                                autocomplete="email"
-                                inputmode="email"
-                                placeholder="name@example.com"
-                                required
-                            >
-                        </label>
-
-                        <label class="block">
-                            <span class="mb-1.5 block text-sm font-medium text-slate-700">Пароль</span>
-                            <div class="relative">
-                                <input
-                                    id="password"
-                                    class="w-full rounded-xl border-slate-300 bg-white px-4 py-2.5 pr-24 text-sm text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:ring-sky-500"
-                                    type="password"
-                                    name="password"
-                                    autocomplete="current-password"
-                                    placeholder="Введите пароль"
-                                    required
-                                >
-                                <button
-                                    type="button"
-                                    id="toggle-password"
-                                    class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                                    aria-controls="password"
-                                    aria-label="Показать пароль"
-                                >
-                                    Показать
-                                </button>
-                            </div>
-                        </label>
-
-                        <label class="inline-flex items-center gap-2.5 text-sm text-slate-600">
-                            <input type="checkbox" name="remember" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
-                            Запомнить меня на этом устройстве
-                        </label>
-
-                        <button
-                            class="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-                            type="submit"
-                        >
-                            Войти в кабинет
-                        </button>
-                    </form>
-                </section>
+<body class="min-h-screen bg-gradient-to-b from-sky-100 via-slate-100 to-slate-200 text-slate-900">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md rounded-[2rem] border border-white/80 bg-white/90 backdrop-blur shadow-[0_20px_60px_rgba(15,23,42,0.18)] overflow-hidden">
+            <div class="bg-slate-900 px-5 py-5 text-white">
+                <p class="text-[11px] uppercase tracking-[0.14em] text-slate-300">Личный кабинет</p>
+                <h1 class="mt-1 text-xl font-semibold leading-tight">
+                    {{ $marketName ?? config('app.name', 'Market Platform') }}
+                </h1>
+                <p class="mt-1 text-sm text-slate-300">Вход для арендаторов и сотрудников арендатора</p>
             </div>
-        </main>
+
+            <div class="p-5 space-y-4">
+                @if (session('status'))
+                    <div class="rounded-2xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-900">
+                        {{ session('status') }}
+                    </div>
+                @endif
+
+                @if ($errors->any())
+                    <div class="rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
+                        <ul class="list-disc list-inside space-y-1">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                <form method="POST" action="{{ route('cabinet.login.submit') }}" class="space-y-4">
+                    @csrf
+
+                    <label class="block">
+                        <span class="text-sm font-medium text-slate-700">Email</span>
+                        <input
+                            class="mt-1.5 w-full rounded-2xl border-slate-200 bg-white/80 px-4 py-3 text-base focus:border-slate-400 focus:ring-slate-300"
+                            type="email"
+                            name="email"
+                            value="{{ old('email') }}"
+                            autocomplete="email"
+                            placeholder="name@example.com"
+                            required
+                        >
+                    </label>
+
+                    <label class="block">
+                        <span class="text-sm font-medium text-slate-700">Пароль</span>
+                        <input
+                            class="mt-1.5 w-full rounded-2xl border-slate-200 bg-white/80 px-4 py-3 text-base focus:border-slate-400 focus:ring-slate-300"
+                            type="password"
+                            name="password"
+                            autocomplete="current-password"
+                            placeholder="Введите пароль"
+                            required
+                        >
+                    </label>
+
+                    <label class="flex items-center gap-2 text-sm text-slate-500">
+                        <input type="checkbox" name="remember" class="rounded border-slate-300">
+                        Запомнить меня
+                    </label>
+
+                    <button class="w-full rounded-2xl bg-slate-900 text-white py-3 text-sm font-semibold" type="submit">
+                        Войти
+                    </button>
+                </form>
+            </div>
+        </div>
     </div>
-
-    <script>
-        (function () {
-            const input = document.getElementById('password');
-            const button = document.getElementById('toggle-password');
-            if (!input || !button) return;
-
-            button.addEventListener('click', function () {
-                const isPassword = input.getAttribute('type') === 'password';
-                input.setAttribute('type', isPassword ? 'text' : 'password');
-                button.textContent = isPassword ? 'Скрыть' : 'Показать';
-                button.setAttribute('aria-label', isPassword ? 'Скрыть пароль' : 'Показать пароль');
-            });
-        })();
-    </script>
 </body>
 </html>

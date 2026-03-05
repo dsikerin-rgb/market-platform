@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Cabinet;
 
 use App\Http\Controllers\Controller;
+use App\Models\MarketSpace;
+use App\Models\TenantDocument;
 use App\Models\TenantAccrual;
+use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -35,11 +38,29 @@ class DashboardController extends Controller
                 ->sum('total_with_vat');
         }
 
+        $openRequestsCount = Ticket::query()
+            ->where('tenant_id', $tenant->id)
+            ->when($tenant->market_id, fn ($query) => $query->where('market_id', $tenant->market_id))
+            ->whereNotIn('status', ['resolved', 'closed'])
+            ->count();
+
+        $documentsCount = TenantDocument::query()
+            ->where('tenant_id', $tenant->id)
+            ->count();
+
+        $spacesCount = MarketSpace::query()
+            ->where('tenant_id', $tenant->id)
+            ->when($tenant->market_id, fn ($query) => $query->where('market_id', $tenant->market_id))
+            ->count();
+
         return view('cabinet.dashboard', [
             'tenant' => $tenant,
             'totalDebt' => $totalDebt,
             'monthAccruals' => $monthAccruals,
             'latestPeriod' => $latestPeriod,
+            'openRequestsCount' => $openRequestsCount,
+            'documentsCount' => $documentsCount,
+            'spacesCount' => $spacesCount,
         ]);
     }
 }

@@ -19,6 +19,7 @@ class ShowcaseController extends Controller
             $tenant->slug = $this->makeUniqueSlug($tenant->display_name ?: $tenant->name ?: 'tenant-' . $tenant->id, $tenant->id);
             $tenant->save();
         }
+
         $showcase = TenantShowcase::query()->where('tenant_id', $tenant->id)->first();
 
         return view('cabinet.showcase.edit', [

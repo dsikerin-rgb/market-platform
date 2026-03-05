@@ -75,7 +75,7 @@ class RequestsController extends Controller
 
         return redirect()
             ->route('cabinet.requests.show', $ticket->id)
-            ->with('success', 'Заявка создана. Администрация скоро ответит.');
+            ->with('success', 'Обращение создано. Администрация скоро ответит.');
     }
 
     public function show(Request $request, int $ticketId): View
