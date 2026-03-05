@@ -53,12 +53,12 @@
                 </h1>
             </div>
 
-            @if (\Illuminate\Support\Facades\Route::has('cabinet.logout') && auth()->check())
-                <form method="POST" action="{{ route('cabinet.logout') }}" data-navigate="false">
+            @if (auth()->check() && (\Illuminate\Support\Facades\Route::has('cabinet.logout') || \Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit')))
+                <form method="POST" action="{{ ($isImpersonation && \Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit')) ? route('cabinet.impersonation.exit') : route('cabinet.logout') }}" data-navigate="false">
                     @csrf
                     <button
                         type="submit"
-                        class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 active:scale-[0.99] transition"
+                        class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium {{ $isImpersonation ? 'text-amber-700 hover:text-amber-900' : 'text-slate-600 hover:text-slate-900' }} active:scale-[0.99] transition"
                     >
                         Выйти
                     </button>
@@ -150,8 +150,8 @@
 
                 <a class="{{ $navItem }} {{ request()->routeIs('cabinet.requests*') ? $navOn : $navOff }}"
                    href="{{ route('cabinet.requests') }}">
-                    <span class="text-lg leading-none">🛠️</span>
-                    Заявки
+                    <span class="text-lg leading-none">💬</span>
+                    Общение
                 </a>
 
                 <a class="{{ $navItem }} {{ request()->routeIs('cabinet.documents') ? $navOn : $navOff }}"
@@ -172,4 +172,3 @@
 </div>
 </body>
 </html>
-
