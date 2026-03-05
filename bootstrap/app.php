@@ -31,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'cabinet.access' => \App\Http\Middleware\EnsureTenantCabinetAccess::class,
+            'marketplace.buyer' => \App\Http\Middleware\EnsureMarketplaceBuyerAccess::class,
+            'marketplace.ready' => \App\Http\Middleware\EnsureMarketplaceSchemaReady::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

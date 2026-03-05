@@ -26,6 +26,7 @@ class MarketHoliday extends Model
         'notify_at',
         'notified_at',
         'source',
+        'cover_image',
         'audience_scope',
         'audience_payload',
     ];

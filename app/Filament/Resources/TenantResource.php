@@ -255,7 +255,9 @@ class TenantResource extends BaseResource
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record): HtmlString => static::renderContactsStaffBySpaces($record))
                                     ->columnSpanFull(),
-                            ]),
+                            ])
+                            ->collapsible()
+                            ->collapsed(),
                     ]),
 
                 Tab::make('Реквизиты')
@@ -603,6 +605,8 @@ class TenantResource extends BaseResource
                     ->columns(3)
                     ->helperText('Сотрудники арендатора смогут входить в кабинет по своим логинам и паролям.'),
             ])
+            ->collapsible()
+            ->collapsed()
             ->columns(2);
     }
 

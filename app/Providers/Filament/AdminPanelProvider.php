@@ -168,14 +168,20 @@ class AdminPanelProvider extends PanelProvider
                         return null;
                     }
 
-                    $url = url('/admin/market-map');
+                    $mapUrl = url('/admin/market-map');
+                    $marketplaceUrl = route('marketplace.entry');
 
                     return new HtmlString(
                         '<div class="flex items-center mr-3">' .
-                            '<a href="' . e($url) . '" target="_blank" rel="noopener" ' .
+                            '<a href="' . e($mapUrl) . '" target="_blank" rel="noopener" ' .
                                 'class="fi-btn fi-btn-size-sm fi-btn-color-primary fi-color-primary" ' .
                                 'style="white-space:nowrap;">' .
-                                'Показатьть на карте' .
+                                '&#1050;&#1072;&#1088;&#1090;&#1072;' .
+                            '</a>' .
+                            '<a href="' . e($marketplaceUrl) . '" target="_blank" rel="noopener" ' .
+                                'class="fi-btn fi-btn-size-sm fi-btn-color-gray ml-2" ' .
+                                'style="white-space:nowrap;margin-left:8px;">' .
+                                '&#1052;&#1072;&#1088;&#1082;&#1077;&#1090;&#1087;&#1083;&#1077;&#1081;&#1089;' .
                             '</a>' .
                         '</div>'
                     );

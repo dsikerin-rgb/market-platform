@@ -8,6 +8,7 @@ use App\Models\TenantDocument;
 use App\Models\TenantAccrual;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
@@ -17,7 +18,7 @@ class DashboardController extends Controller
     {
         $tenant = $request->user()->tenant;
         $allowedSpaceIds = $request->user()->allowedTenantSpaceIds();
-        $ticketHasSpaceColumn = Schema::hasColumn('tickets', 'market_space_id');
+        $ticketHasSpaceColumn = $this->supportsTicketSpaceColumn();
 
         $accrualsQuery = TenantAccrual::query()
             ->where('tenant_id', $tenant->id)
@@ -78,5 +79,24 @@ class DashboardController extends Controller
             'documentsCount' => $documentsCount,
             'spacesCount' => $spacesCount,
         ]);
+    }
+
+    private function supportsTicketSpaceColumn(): bool
+    {
+        try {
+            if (! Schema::hasColumn('tickets', 'market_space_id')) {
+                return false;
+            }
+
+            DB::table('tickets')
+                ->select('id')
+                ->whereNull('market_space_id')
+                ->limit(1)
+                ->get();
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

@@ -318,6 +318,12 @@
                                         <span>Праздники рынка</span>
                                     </label>
 
+                                    <input type="hidden" name="promotions" value="0">
+                                    <label class="tc-check">
+                                        <input type="checkbox" name="promotions" value="1" @checked($filters['promotions'] ?? true)>
+                                        <span>Акции рынка</span>
+                                    </label>
+
                                     <input type="hidden" name="overdue" value="0">
                                     <label class="tc-check">
                                         <input type="checkbox" name="overdue" value="1" @checked($filters['overdue'])>

@@ -59,4 +59,24 @@ class Market extends Model
     {
         return $this->hasMany(MarketHoliday::class);
     }
+
+    public function marketplaceCategories(): HasMany
+    {
+        return $this->hasMany(MarketplaceCategory::class);
+    }
+
+    public function marketplaceProducts(): HasMany
+    {
+        return $this->hasMany(MarketplaceProduct::class);
+    }
+
+    public function marketplaceAnnouncements(): HasMany
+    {
+        return $this->hasMany(MarketplaceAnnouncement::class);
+    }
+
+    public function marketplaceChats(): HasMany
+    {
+        return $this->hasMany(MarketplaceChat::class);
+    }
 }

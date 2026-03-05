@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
@@ -86,6 +87,21 @@ class User extends Authenticatable implements FilamentUser
             ->withTimestamps();
     }
 
+    public function marketplaceFavorites(): HasMany
+    {
+        return $this->hasMany(MarketplaceFavorite::class, 'buyer_user_id');
+    }
+
+    public function marketplaceBuyerChats(): HasMany
+    {
+        return $this->hasMany(MarketplaceChat::class, 'buyer_user_id');
+    }
+
+    public function marketplaceChatMessages(): HasMany
+    {
+        return $this->hasMany(MarketplaceChatMessage::class, 'sender_user_id');
+    }
+
     /**
      * @return list<int>
      */
@@ -98,14 +114,18 @@ class User extends Authenticatable implements FilamentUser
 
         $scoped = [];
         if (Schema::hasTable('tenant_user_market_spaces')) {
-            $scoped = $this->tenantSpaces()
-                ->select('market_spaces.id')
-                ->where('market_spaces.tenant_id', $tenantId)
-                ->pluck('market_spaces.id')
-                ->map(static fn ($id): int => (int) $id)
-                ->filter(static fn (int $id): bool => $id > 0)
-                ->values()
-                ->all();
+            try {
+                $scoped = $this->tenantSpaces()
+                    ->select('market_spaces.id')
+                    ->where('market_spaces.tenant_id', $tenantId)
+                    ->pluck('market_spaces.id')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->filter(static fn (int $id): bool => $id > 0)
+                    ->values()
+                    ->all();
+            } catch (\Throwable) {
+                $scoped = [];
+            }
         }
 
         if ($scoped !== []) {
@@ -130,6 +150,11 @@ class User extends Authenticatable implements FilamentUser
     public function isMarketAdmin(): bool
     {
         return $this->hasRole('market-admin');
+    }
+
+    public function isBuyer(): bool
+    {
+        return method_exists($this, 'hasRole') && $this->hasRole('buyer');
     }
 
     public function canSelfManageNotificationPreferences(): bool
@@ -165,6 +190,10 @@ class User extends Authenticatable implements FilamentUser
             }
 
             if (method_exists($this, 'hasAnyRole') && $this->hasAnyRole(['merchant', 'merchant-user'])) {
+                return false;
+            }
+
+            if (method_exists($this, 'hasRole') && $this->hasRole('buyer')) {
                 return false;
             }
 

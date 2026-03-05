@@ -119,6 +119,11 @@ class TaskCalendarWidget extends FullCalendarWidget
                         ->whereNull('ends_at')
                         ->whereDate('starts_at', '>=', $rangeStart->toDateString())
                         ->orWhereDate('ends_at', '>=', $rangeStart->toDateString());
+                })
+                ->where(function ($query): void {
+                    $query
+                        ->whereNull('source')
+                        ->orWhereNotIn('source', ['promotion', 'promo']);
                 });
 
             $holidays = $holidayQuery->get();
@@ -136,13 +141,57 @@ class TaskCalendarWidget extends FullCalendarWidget
 
                 $events[] = [
                     'id' => 'holiday-' . $holiday->id,
-                    'title' => '🎉 ' . $holiday->title,
+                    'title' => 'Праздник: ' . $holiday->title,
                     'start' => $start,
                     'end' => $end,
                     'allDay' => true,
-                    // сохраняем tab/view и остальные параметры
                     'url' => request()->fullUrlWithQuery(['holiday_id' => $holiday->id]),
                     'color' => '#7c3aed',
+                ];
+            }
+        }
+
+        if (! empty($filters['promotions'])) {
+            $promotionQuery = MarketHoliday::query();
+            $marketId = TaskCalendarFilters::resolveMarketIdForUser($user);
+
+            if ($marketId) {
+                $promotionQuery->where('market_id', $marketId);
+            } else {
+                $promotionQuery->whereRaw('1 = 0');
+            }
+
+            $promotionQuery
+                ->whereDate('starts_at', '<=', $rangeEnd->toDateString())
+                ->where(function ($query) use ($rangeStart): void {
+                    $query
+                        ->whereNull('ends_at')
+                        ->whereDate('starts_at', '>=', $rangeStart->toDateString())
+                        ->orWhereDate('ends_at', '>=', $rangeStart->toDateString());
+                })
+                ->whereIn('source', ['promotion', 'promo']);
+
+            $promotions = $promotionQuery->get();
+
+            foreach ($promotions as $promotion) {
+                $start = $promotion->starts_at?->toDateString();
+
+                if (! $start) {
+                    continue;
+                }
+
+                $end = $promotion->ends_at
+                    ? $promotion->ends_at->copy()->addDay()->toDateString()
+                    : $promotion->starts_at->copy()->addDay()->toDateString();
+
+                $events[] = [
+                    'id' => 'promotion-' . $promotion->id,
+                    'title' => 'Акция: ' . $promotion->title,
+                    'start' => $start,
+                    'end' => $end,
+                    'allDay' => true,
+                    'url' => request()->fullUrlWithQuery(['holiday_id' => $promotion->id]),
+                    'color' => '#0284c7',
                 ];
             }
         }

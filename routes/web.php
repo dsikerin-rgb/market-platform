@@ -18,6 +18,16 @@ use App\Http\Controllers\Cabinet\RequestsController;
 use App\Http\Controllers\Cabinet\ShowcaseController;
 use App\Http\Controllers\Cabinet\SpacesController;
 use App\Http\Controllers\Cabinet\TelegramConnectController;
+use App\Http\Controllers\Marketplace\AnnouncementController as MarketplaceAnnouncementController;
+use App\Http\Controllers\Marketplace\BuyerAuthController as MarketplaceBuyerAuthController;
+use App\Http\Controllers\Marketplace\BuyerCabinetController as MarketplaceBuyerCabinetController;
+use App\Http\Controllers\Marketplace\BuyerChatController as MarketplaceBuyerChatController;
+use App\Http\Controllers\Marketplace\BuyerFavoriteController as MarketplaceBuyerFavoriteController;
+use App\Http\Controllers\Marketplace\CatalogController as MarketplaceCatalogController;
+use App\Http\Controllers\Marketplace\HomeController as MarketplaceHomeController;
+use App\Http\Controllers\Marketplace\MapController as MarketplaceMapController;
+use App\Http\Controllers\Marketplace\ProductController as MarketplaceProductController;
+use App\Http\Controllers\Marketplace\StoreController as MarketplaceStoreController;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -33,6 +43,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use App\Services\Marketplace\MarketplaceContextService;
 
 Route::view('/', 'welcome')->name('home');
 
@@ -68,6 +79,7 @@ Route::prefix('cabinet')->group(function () {
         Route::get('/spaces', SpacesController::class)->name('cabinet.spaces');
         Route::post('/spaces/staff', [SpacesController::class, 'storeStaff'])->name('cabinet.spaces.staff.store');
         Route::get('/customer-chat', CustomerChatController::class)->name('cabinet.customer-chat');
+        Route::post('/customer-chat/{chatId}/send', [CustomerChatController::class, 'send'])->name('cabinet.customer-chat.send');
         Route::post('/telegram/connect', TelegramConnectController::class)->name('cabinet.telegram.connect');
 
         Route::get('/showcase', [ShowcaseController::class, 'edit'])->name('cabinet.showcase.edit');
@@ -1442,4 +1454,44 @@ Route::middleware('guest')->group(function () {
 
     Route::post('/register/market', [MarketRegistrationController::class, 'store'])
         ->name('market.register.store');
+});
+
+Route::get('/marketplace', function (MarketplaceContextService $context) {
+    $market = $context->resolveMarket();
+
+    abort_unless($market, 404);
+    $marketSlug = filled($market->slug) ? (string) $market->slug : (string) $market->id;
+
+    return redirect()->route('marketplace.home', ['marketSlug' => $marketSlug]);
+})->name('marketplace.entry');
+
+Route::prefix('/m/{marketSlug}')->middleware('marketplace.ready')->group(function () {
+    Route::get('/', MarketplaceHomeController::class)->name('marketplace.home');
+    Route::get('/catalog', [MarketplaceCatalogController::class, 'index'])->name('marketplace.catalog');
+    Route::get('/product/{productSlug}', [MarketplaceProductController::class, 'show'])->name('marketplace.product.show');
+    Route::get('/store/{tenantSlug}', [MarketplaceStoreController::class, 'show'])->name('marketplace.store.show');
+    Route::post('/store/{tenantSlug}/review', [MarketplaceStoreController::class, 'submitReview'])->name('marketplace.store.review');
+    Route::get('/map', MarketplaceMapController::class)->name('marketplace.map');
+    Route::get('/announcements', [MarketplaceAnnouncementController::class, 'index'])->name('marketplace.announcements');
+    Route::get('/announcement/{announcementSlug}', [MarketplaceAnnouncementController::class, 'show'])->name('marketplace.announcement.show');
+
+    Route::get('/login', [MarketplaceBuyerAuthController::class, 'showLogin'])->name('marketplace.login');
+    Route::post('/login', [MarketplaceBuyerAuthController::class, 'login'])->name('marketplace.login.submit');
+    Route::get('/register', [MarketplaceBuyerAuthController::class, 'showRegister'])->name('marketplace.register');
+    Route::post('/register', [MarketplaceBuyerAuthController::class, 'register'])->name('marketplace.register.submit');
+
+    Route::middleware(['auth', 'marketplace.buyer'])->group(function () {
+        Route::post('/logout', [MarketplaceBuyerAuthController::class, 'logout'])->name('marketplace.logout');
+
+        Route::post('/favorite/{productSlug}/toggle', [MarketplaceBuyerFavoriteController::class, 'toggle'])
+            ->name('marketplace.favorite.toggle');
+
+        Route::get('/buyer', [MarketplaceBuyerCabinetController::class, 'dashboard'])->name('marketplace.buyer.dashboard');
+        Route::get('/buyer/favorites', [MarketplaceBuyerCabinetController::class, 'favorites'])->name('marketplace.buyer.favorites');
+
+        Route::get('/buyer/chats', [MarketplaceBuyerChatController::class, 'index'])->name('marketplace.buyer.chats');
+        Route::get('/buyer/chats/{chatId}', [MarketplaceBuyerChatController::class, 'show'])->name('marketplace.buyer.chat.show');
+        Route::post('/buyer/chats/{chatId}/send', [MarketplaceBuyerChatController::class, 'send'])->name('marketplace.buyer.chat.send');
+        Route::post('/store/{tenantSlug}/chat/start', [MarketplaceBuyerChatController::class, 'start'])->name('marketplace.buyer.chat.start');
+    });
 });
