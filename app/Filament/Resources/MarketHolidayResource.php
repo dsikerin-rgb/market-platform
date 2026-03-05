@@ -16,6 +16,9 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class MarketHolidayResource extends BaseResource
 {
@@ -105,6 +108,7 @@ class MarketHolidayResource extends BaseResource
                         ->options([
                             'national_holiday' => 'Государственный праздник',
                             'sanitary_auto' => 'Санитарный день',
+                            'promotion' => 'Акция',
                             'market_event' => 'Мероприятие рынка',
                             'maintenance' => 'Технические работы',
                             'other' => 'Другое',
@@ -115,6 +119,39 @@ class MarketHolidayResource extends BaseResource
                         ->preload()
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('От типа зависит набор сценариев и ответственных ролей.'),
+
+                    Forms\Components\FileUpload::make('cover_image')
+                        ->label('Изображение события')
+                        ->image()
+                        ->imageEditor()
+                        ->disk('public')
+                        ->directory('market-holidays/events')
+                        ->visibility('public')
+                        ->maxSize(5120)
+                        ->columnSpan(2),
+
+                    Forms\Components\Placeholder::make('cover_image_preview')
+                        ->label('Превью фона')
+                        ->content(function (Get $get): HtmlString {
+                            $raw = trim((string) ($get('cover_image') ?? ''));
+
+                            if ($raw === '') {
+                                return new HtmlString('<span style="color:#94a3b8;">Изображение не загружено</span>');
+                            }
+
+                            $url = Str::startsWith($raw, ['http://', 'https://', 'data:', '/'])
+                                ? $raw
+                                : Storage::disk('public')->url($raw);
+
+                            $safeUrl = e($url);
+
+                            return new HtmlString(
+                                '<div style="width:100%;max-width:560px;border:1px solid rgba(148,163,184,.25);border-radius:14px;overflow:hidden;background:#f8fafc;">'
+                                . '<img src="' . $safeUrl . '" alt="Preview" style="display:block;width:100%;height:220px;object-fit:cover;">'
+                                . '</div>'
+                            );
+                        })
+                        ->columnSpan(2),
 
                     Forms\Components\DatePicker::make('starts_at')
                         ->label('Дата начала')
@@ -243,7 +280,9 @@ class MarketHolidayResource extends BaseResource
                     ->html()
                     ->formatStateUsing(function ($state, MarketHoliday $record): string {
                         $title = e((string) $state);
-                        $color = static::isNationalHoliday($record) ? '#ef4444' : 'inherit';
+                        $color = static::isNationalHoliday($record)
+                            ? '#ef4444'
+                            : (static::isPromotion($record) ? '#0284c7' : 'inherit');
 
                         return "<span style=\"color: {$color}; font-weight: 600;\">{$title}</span>";
                     })
@@ -426,5 +465,12 @@ class MarketHolidayResource extends BaseResource
         $source = mb_strtolower(trim((string) ($record->source ?? '')), 'UTF-8');
 
         return in_array($source, ['national_holiday', 'file'], true);
+    }
+
+    public static function isPromotion(MarketHoliday $record): bool
+    {
+        $source = mb_strtolower(trim((string) ($record->source ?? '')), 'UTF-8');
+
+        return in_array($source, ['promotion', 'promo'], true);
     }
 }

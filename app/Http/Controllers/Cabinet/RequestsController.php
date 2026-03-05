@@ -11,6 +11,7 @@ use App\Models\TicketComment;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
@@ -31,7 +32,7 @@ class RequestsController extends Controller
     {
         $tenant = $request->user()->tenant;
         $allowedSpaceIds = $request->user()->allowedTenantSpaceIds();
-        $ticketHasSpaceColumn = Schema::hasColumn('tickets', 'market_space_id');
+        $ticketHasSpaceColumn = $this->supportsTicketSpaceColumn();
 
         $tickets = Ticket::query()
             ->where('tenant_id', $tenant->id)
@@ -70,7 +71,7 @@ class RequestsController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $tenant = $request->user()->tenant;
-        $ticketHasSpaceColumn = Schema::hasColumn('tickets', 'market_space_id');
+        $ticketHasSpaceColumn = $this->supportsTicketSpaceColumn();
 
         $validated = $request->validate([
             'subject' => ['required', 'string', 'max:255'],
@@ -120,7 +121,7 @@ class RequestsController extends Controller
     public function show(Request $request, int $ticketId): View
     {
         $tenant = $request->user()->tenant;
-        $ticketHasSpaceColumn = Schema::hasColumn('tickets', 'market_space_id');
+        $ticketHasSpaceColumn = $this->supportsTicketSpaceColumn();
 
         $ticket = Ticket::query()
             ->where('tenant_id', $tenant->id)
@@ -264,5 +265,24 @@ class RequestsController extends Controller
             ->whereHas('roles', fn ($query) => $query->where('name', 'market-admin'))
             ->orderBy('id')
             ->value('id') ?? 0) ?: null;
+    }
+
+    private function supportsTicketSpaceColumn(): bool
+    {
+        try {
+            if (! Schema::hasColumn('tickets', 'market_space_id')) {
+                return false;
+            }
+
+            DB::table('tickets')
+                ->select('id')
+                ->whereNull('market_space_id')
+                ->limit(1)
+                ->get();
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

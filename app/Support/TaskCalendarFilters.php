@@ -16,6 +16,7 @@ class TaskCalendarFilters
     public const PARAM_OBSERVING = 'observing';
     public const PARAM_COEXECUTING = 'coexecuting';
     public const PARAM_HOLIDAYS = 'holidays';
+    public const PARAM_PROMOTIONS = 'promotions';
     public const PARAM_STATUSES = 'status';
     public const PARAM_PRIORITIES = 'priority';
     public const PARAM_SEARCH = 'search';
@@ -28,6 +29,7 @@ class TaskCalendarFilters
      *   observing: bool,
      *   coexecuting: bool,
      *   holidays: bool,
+     *   promotions: bool,
      *   statuses: list<string>,
      *   priorities: list<string>,
      *   search: string,
@@ -51,6 +53,7 @@ class TaskCalendarFilters
             'observing' => static::booleanFromQuery(self::PARAM_OBSERVING, true),
             'coexecuting' => static::booleanFromQuery(self::PARAM_COEXECUTING, true),
             'holidays' => static::booleanFromQuery(self::PARAM_HOLIDAYS, true),
+            'promotions' => static::booleanFromQuery(self::PARAM_PROMOTIONS, true),
             'statuses' => $statuses,
             'priorities' => $priorities,
             'search' => trim((string) request()->query(self::PARAM_SEARCH, '')),

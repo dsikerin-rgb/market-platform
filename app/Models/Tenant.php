@@ -205,6 +205,16 @@ class Tenant extends Model
         return $this->hasMany(TenantSpaceShowcase::class);
     }
 
+    public function marketplaceProducts(): HasMany
+    {
+        return $this->hasMany(MarketplaceProduct::class);
+    }
+
+    public function marketplaceChats(): HasMany
+    {
+        return $this->hasMany(MarketplaceChat::class);
+    }
+
     /**
      * Каноническое имя для UI:
      * short_name (если есть) -> name -> "Арендатор"

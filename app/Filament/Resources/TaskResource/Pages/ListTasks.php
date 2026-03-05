@@ -201,6 +201,7 @@ class ListTasks extends ListRecords
             'observing',
             'coexecuting',
             'holidays',
+            'promotions',
             'overdue',    // календарный чекбокс "Только просроченные" — НЕ таб overdue
             'status',
             'priority',

@@ -77,7 +77,7 @@
                                                         text-decoration: none;
                                                         line-height: 1.3;
                                                         font-size: 12px;
-                                                        color: {{ $event['is_holiday'] ? '#ef4444' : 'inherit' }};
+                                                        color: {{ ($event['is_holiday'] ?? false) ? '#ef4444' : (($event['is_promotion'] ?? false) ? '#0284c7' : 'inherit') }};
                                                     "
                                                     title="{{ $event['title'] }}"
                                                 >
@@ -92,7 +92,7 @@
                                                         padding: 6px 8px;
                                                         line-height: 1.3;
                                                         font-size: 12px;
-                                                        color: {{ $event['is_holiday'] ? '#ef4444' : 'inherit' }};
+                                                        color: {{ ($event['is_holiday'] ?? false) ? '#ef4444' : (($event['is_promotion'] ?? false) ? '#0284c7' : 'inherit') }};
                                                     "
                                                     title="{{ $event['title'] }}"
                                                 >

@@ -176,6 +176,7 @@ class ListMarketHolidays extends ListRecords
                         'id' => (int) $event->id,
                         'title' => (string) $event->title,
                         'is_holiday' => MarketHolidayResource::isNationalHoliday($event),
+                        'is_promotion' => MarketHolidayResource::isPromotion($event),
                         'url' => MarketHolidayResource::canEdit($event)
                             ? MarketHolidayResource::getUrl('edit', ['record' => $event])
                             : null,
