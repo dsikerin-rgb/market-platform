@@ -24,6 +24,7 @@ class Ticket extends Model
     protected $fillable = [
         'market_id',
         'tenant_id',
+        'market_space_id',
         'subject',
         'description',
         'category',
@@ -162,6 +163,11 @@ class Ticket extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function marketSpace(): BelongsTo
+    {
+        return $this->belongsTo(MarketSpace::class);
     }
 
     public function user(): BelongsTo

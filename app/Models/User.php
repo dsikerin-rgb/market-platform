@@ -4,10 +4,13 @@ namespace App\Models;
 
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements FilamentUser
@@ -77,6 +80,48 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(Tenant::class);
     }
 
+    public function tenantSpaces(): BelongsToMany
+    {
+        return $this->belongsToMany(MarketSpace::class, 'tenant_user_market_spaces', 'user_id', 'market_space_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function allowedTenantSpaceIds(): array
+    {
+        $tenantId = (int) ($this->tenant_id ?? 0);
+        if ($tenantId <= 0) {
+            return [];
+        }
+
+        $scoped = [];
+        if (Schema::hasTable('tenant_user_market_spaces')) {
+            $scoped = $this->tenantSpaces()
+                ->select('market_spaces.id')
+                ->where('market_spaces.tenant_id', $tenantId)
+                ->pluck('market_spaces.id')
+                ->map(static fn ($id): int => (int) $id)
+                ->filter(static fn (int $id): bool => $id > 0)
+                ->values()
+                ->all();
+        }
+
+        if ($scoped !== []) {
+            return $scoped;
+        }
+
+        return MarketSpace::query()
+            ->where('tenant_id', $tenantId)
+            ->when((int) ($this->market_id ?? 0) > 0, fn (Builder $query): Builder => $query->where('market_id', (int) $this->market_id))
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->hasRole('super-admin');
@@ -108,21 +153,30 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if ($panel->getId() === 'admin') {
+            // Explicit admin roles always win, even if a legacy merchant role is also present.
+            if ($this->hasAnyRole([
+                'super-admin',
+                'market-admin',
+                'market-manager',
+                'market-operator',
+            ])) {
+                return true;
+            }
+
+            if (method_exists($this, 'hasAnyRole') && $this->hasAnyRole(['merchant', 'merchant-user'])) {
+                return false;
+            }
+
+            return app()->environment('local');
+        }
+
         if (method_exists($this, 'hasAnyRole') && $this->hasAnyRole(['merchant', 'merchant-user'])) {
             return false;
         }
 
         if (app()->environment('local')) {
             return true;
-        }
-
-        if ($panel->getId() === 'admin') {
-            return $this->hasAnyRole([
-                'super-admin',
-                'market-admin',
-                'market-manager',
-                'market-operator',
-            ]);
         }
 
         return false;

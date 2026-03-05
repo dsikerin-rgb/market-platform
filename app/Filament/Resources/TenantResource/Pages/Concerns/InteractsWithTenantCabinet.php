@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\TenantResource\Pages\Concerns;
 
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantShowcase;
 use App\Models\User;
@@ -103,6 +104,9 @@ trait InteractsWithTenantCabinet
                 'name' => (string) ($item->name ?? ''),
                 'email' => (string) ($item->email ?? ''),
                 'password' => '',
+                'space_ids' => $item->relationLoaded('tenantSpaces')
+                    ? $item->tenantSpaces->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all()
+                    : [],
             ])
             ->values()
             ->all();
@@ -216,7 +220,7 @@ trait InteractsWithTenantCabinet
 
     /**
      * @param  array<int, array<string, mixed>>  $rows
-     * @return array<int, array{id:?int,name:string,email:string,password:string}>
+     * @return array<int, array{id:?int,name:string,email:string,password:string,space_ids:list<int>}>
      */
     protected function normalizeAdditionalCabinetUsers(array $rows): array
     {
@@ -231,8 +235,15 @@ trait InteractsWithTenantCabinet
             $name = trim((string) ($row['name'] ?? ''));
             $email = Str::lower(trim((string) ($row['email'] ?? '')));
             $password = trim((string) ($row['password'] ?? ''));
+            $spaceIds = collect(is_array($row['space_ids'] ?? null) ? $row['space_ids'] : [])
+                ->filter(static fn ($id): bool => is_numeric($id))
+                ->map(static fn ($id): int => (int) $id)
+                ->filter(static fn (int $id): bool => $id > 0)
+                ->unique()
+                ->values()
+                ->all();
 
-            if ($id === null && $name === '' && $email === '' && $password === '') {
+            if ($id === null && $name === '' && $email === '' && $password === '' && $spaceIds === []) {
                 continue;
             }
 
@@ -241,6 +252,7 @@ trait InteractsWithTenantCabinet
                 'name' => $name,
                 'email' => $email,
                 'password' => $password,
+                'space_ids' => $spaceIds,
             ];
         }
 
@@ -248,12 +260,20 @@ trait InteractsWithTenantCabinet
     }
 
     /**
-     * @param  array<int, array{id:?int,name:string,email:string,password:string}>  $rows
+     * @param  array<int, array{id:?int,name:string,email:string,password:string,space_ids:list<int>}>  $rows
      */
     protected function validateAdditionalCabinetUsers(array $rows, ?Tenant $tenant, ?User $primaryUser): void
     {
         $seenEmails = [];
         $primaryEmail = Str::lower(trim((string) ($primaryUser?->email ?? '')));
+        $allowedSpaceIds = $tenant
+            ? MarketSpace::query()
+                ->where('tenant_id', (int) $tenant->id)
+                ->pluck('id')
+                ->map(static fn ($id): int => (int) $id)
+                ->values()
+                ->all()
+            : [];
 
         if ($primaryEmail !== '') {
             $seenEmails[$primaryEmail] = true;
@@ -325,16 +345,43 @@ trait InteractsWithTenantCabinet
                     ]);
                 }
             }
+
+            $spaceIds = collect(is_array($row['space_ids'] ?? null) ? $row['space_ids'] : [])
+                ->filter(static fn ($value): bool => is_numeric($value))
+                ->map(static fn ($value): int => (int) $value)
+                ->filter(static fn (int $value): bool => $value > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($tenant && $spaceIds !== []) {
+                $invalid = collect($spaceIds)
+                    ->reject(static fn (int $spaceId): bool => in_array($spaceId, $allowedSpaceIds, true))
+                    ->values()
+                    ->all();
+
+                if ($invalid !== []) {
+                    throw ValidationException::withMessages([
+                        'cabinet_additional_users.' . $index . '.space_ids' => 'Выбраны недопустимые торговые места для этого арендатора.',
+                    ]);
+                }
+            }
         }
     }
 
     /**
-     * @param  array<int, array{id:?int,name:string,email:string,password:string}>  $rows
+     * @param  array<int, array{id:?int,name:string,email:string,password:string,space_ids:list<int>}>  $rows
      */
     protected function syncAdditionalCabinetUsers(Tenant $tenant, array $rows, ?int $primaryId): void
     {
         $existing = $this->resolveAdditionalCabinetUsers($tenant, $primaryId)->get()->keyBy('id');
         $keepIds = [];
+        $allowedSpaceIds = MarketSpace::query()
+            ->where('tenant_id', (int) $tenant->id)
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->values()
+            ->all();
 
         foreach ($rows as $row) {
             if (! is_array($row)) {
@@ -345,6 +392,13 @@ trait InteractsWithTenantCabinet
             $email = Str::lower(trim((string) ($row['email'] ?? '')));
             $name = trim((string) ($row['name'] ?? ''));
             $password = trim((string) ($row['password'] ?? ''));
+            $spaceIds = collect(is_array($row['space_ids'] ?? null) ? $row['space_ids'] : [])
+                ->filter(static fn ($value): bool => is_numeric($value))
+                ->map(static fn ($value): int => (int) $value)
+                ->filter(static fn (int $value): bool => $value > 0 && in_array($value, $allowedSpaceIds, true))
+                ->unique()
+                ->values()
+                ->all();
 
             if ($email === '') {
                 continue;
@@ -373,6 +427,7 @@ trait InteractsWithTenantCabinet
 
             $cabinetUser->save();
             $this->ensureCabinetUserRole($cabinetUser, 'merchant-user');
+            $cabinetUser->tenantSpaces()->sync($spaceIds);
 
             $keepIds[] = (int) $cabinetUser->id;
         }
@@ -387,6 +442,7 @@ trait InteractsWithTenantCabinet
     protected function resolveAdditionalCabinetUsers(Tenant $tenant, ?int $primaryId): Builder
     {
         $query = $this->cabinetUsersQuery($tenant)
+            ->with(['tenantSpaces:id'])
             ->orderBy('id');
 
         if ($primaryId && $primaryId > 0) {
@@ -419,4 +475,3 @@ trait InteractsWithTenantCabinet
         return $trimmed === '' ? null : $trimmed;
     }
 }
-
