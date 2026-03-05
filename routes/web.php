@@ -17,6 +17,7 @@ use App\Http\Controllers\Cabinet\PublicShowcaseController;
 use App\Http\Controllers\Cabinet\RequestsController;
 use App\Http\Controllers\Cabinet\ShowcaseController;
 use App\Http\Controllers\Cabinet\SpacesController;
+use App\Http\Controllers\Cabinet\TelegramConnectController;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -65,7 +66,9 @@ Route::prefix('cabinet')->group(function () {
         Route::get('/documents/{documentId}/download', [DocumentsController::class, 'download'])->name('cabinet.documents.download');
 
         Route::get('/spaces', SpacesController::class)->name('cabinet.spaces');
+        Route::post('/spaces/staff', [SpacesController::class, 'storeStaff'])->name('cabinet.spaces.staff.store');
         Route::get('/customer-chat', CustomerChatController::class)->name('cabinet.customer-chat');
+        Route::post('/telegram/connect', TelegramConnectController::class)->name('cabinet.telegram.connect');
 
         Route::get('/showcase', [ShowcaseController::class, 'edit'])->name('cabinet.showcase.edit');
         Route::post('/showcase', [ShowcaseController::class, 'update'])->name('cabinet.showcase.update');
