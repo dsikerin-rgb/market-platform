@@ -3,6 +3,7 @@
 
 namespace App\Models;
 
+use App\Services\Cabinet\TenantCabinetUserService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -91,6 +92,16 @@ class Tenant extends Model
                 $tenant->debt_status_updated_at = now();
             }
         });
+
+        static::created(function (Tenant $tenant): void {
+            try {
+                /** @var TenantCabinetUserService $cabinetUsers */
+                $cabinetUsers = app(TenantCabinetUserService::class);
+                $cabinetUsers->ensurePrimaryUser($tenant);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
     }
 
     private static function inferTypeFromRequisites(self $tenant): ?string
@@ -157,6 +168,11 @@ class Tenant extends Model
     public function spaces(): HasMany
     {
         return $this->hasMany(MarketSpace::class, 'tenant_id');
+    }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
     }
 
     public function contracts(): HasMany

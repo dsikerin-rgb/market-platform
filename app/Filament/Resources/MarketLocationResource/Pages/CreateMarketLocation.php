@@ -12,11 +12,6 @@ class CreateMarketLocation extends BaseCreateRecord
 
     protected static ?string $title = 'Создать локацию';
 
-    public function getBreadcrumb(): string
-    {
-        return 'Создать локацию';
-    }
-
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $user = Filament::auth()->user();

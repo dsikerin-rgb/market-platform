@@ -10,9 +10,4 @@ class CreateReportRun extends BaseCreateRecord
     protected static string $resource = ReportRunResource::class;
 
     protected static ?string $title = 'Создать запуск отчёта';
-
-    public function getBreadcrumb(): string
-    {
-        return 'Создать запуск отчёта';
-    }
 }

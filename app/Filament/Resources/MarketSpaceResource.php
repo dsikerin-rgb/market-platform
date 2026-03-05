@@ -7,13 +7,13 @@ use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\Market;
 use App\Models\MarketSpace;
-use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use App\Domain\Operations\OperationType;
 use App\Filament\Resources\OperationResource;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -186,6 +186,24 @@ class MarketSpaceResource extends BaseResource
         $tabs = Tabs::make('market_space_tabs')
             ->columnSpanFull();
 
+        $makeSpaceAttrsOperationAction = function (?MarketSpace $record, string $actionName, string $focus, string $tooltip): ?Action {
+            if (! $record || ! OperationResource::canCreate()) {
+                return null;
+            }
+
+            $url = static::operationCreateUrl($record, OperationType::SPACE_ATTRS_CHANGE, [
+                'focus' => $focus,
+            ]);
+
+            return Action::make($actionName)
+                ->label('')
+                ->tooltip($tooltip)
+                ->icon('heroicon-m-plus')
+                ->color('gray')
+                ->iconButton()
+                ->url($url);
+        };
+
         // Безопасно: если в вашей версии Filament нет этого метода — просто пропускаем.
         if (method_exists($tabs, 'persistTabInQueryString')) {
             $tabs->persistTabInQueryString();
@@ -196,40 +214,7 @@ class MarketSpaceResource extends BaseResource
             $tabs->tabs([
                 Tab::make('Основное')
                     ->schema([
-                        Section::make('Карта')
-                            ->schema([
-                                Forms\Components\Placeholder::make('map_status')
-                                    ->hiddenLabel()
-                                    ->content(function (?MarketSpace $record): HtmlString {
-                                        if (! $record) {
-                                            return new HtmlString('');
-                                        }
-
-                                        $isMapLinked = false;
-
-                                        if (SchemaFacade::hasTable('market_space_map_shapes')) {
-                                            $isMapLinked = MarketSpaceMapShape::query()
-                                                ->where('market_id', (int) $record->market_id)
-                                                ->where('market_space_id', (int) $record->id)
-                                                ->where('is_active', true)
-                                                ->exists();
-                                        }
-
-                                        $statusText = $isMapLinked
-                                            ? 'Торговое место привязано к карте.'
-                                            : 'Торговое место не привязано к объектам карты.';
-
-                                        return new HtmlString(view('admin.market-space-edit', [
-                                            'isMapLinked' => $isMapLinked,
-                                            'statusText' => $statusText,
-                                        ])->render());
-                                    })
-                                    ->visible(fn (?MarketSpace $record): bool => (bool) $record),
-                            ])
-                            ->columns(1),
-
-                        Section::make('Основные данные')
-                            ->description('Заполни основные параметры торгового места. Подсказки доступны при наведении на иконку вопроса.')
+                        Section::make()
                             ->schema([
                                 Forms\Components\Select::make('location_id')
                                     ->label('Локация')
@@ -252,6 +237,15 @@ class MarketSpaceResource extends BaseResource
                                     })
                                     ->searchable()
                                     ->preload()
+                                    ->suffixAction(
+                                        fn (?MarketSpace $record): ?Action => $makeSpaceAttrsOperationAction(
+                                            $record,
+                                            'location_change_operation',
+                                            'location_id',
+                                            'Изменить локацию через операцию'
+                                        ),
+                                        isInline: true,
+                                    )
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Физическая зона рынка: павильоны, острова, уличная торговля и т.д.')
                                     ->disabled(function ($get, ?MarketSpace $record) use ($user) {
@@ -286,9 +280,29 @@ class MarketSpaceResource extends BaseResource
                         })
                         ->searchable()
                         ->preload()
+                        ->suffixAction(
+                            function (?MarketSpace $record): ?Action {
+                                if (! $record || ! OperationResource::canCreate()) {
+                                    return null;
+                                }
+
+                                $url = static::operationCreateUrl($record, OperationType::TENANT_SWITCH, [
+                                    'from_tenant_id' => $record->tenant_id,
+                                    'focus' => 'to_tenant_id',
+                                ]);
+
+                                return Action::make('tenant_switch_operation')
+                                    ->label('')
+                                    ->tooltip('Сменить арендатора через операцию')
+                                    ->icon('heroicon-m-plus')
+                                    ->color('gray')
+                                    ->iconButton()
+                                    ->url($url);
+                            },
+                            isInline: true,
+                        )
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
-                        ->helperText(fn (?MarketSpace $record) => static::tenantOperationHelper($record))
                         ->disabled(function ($get, ?MarketSpace $record) use ($user) {
                             if ($record) {
                                 return true;
@@ -330,6 +344,15 @@ class MarketSpaceResource extends BaseResource
                                     ->label('Вид деятельности')
                                     ->maxLength(255)
                                     ->placeholder('Например: аптека / электро / мясо')
+                                    ->suffixAction(
+                                        fn (?MarketSpace $record): ?Action => $makeSpaceAttrsOperationAction(
+                                            $record,
+                                            'activity_type_change_operation',
+                                            'activity_type',
+                                            'Изменить вид деятельности через операцию'
+                                        ),
+                                        isInline: true,
+                                    )
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Заполняется импортом начислений и может уточняться вручную.')
                                     ->nullable(),
@@ -366,6 +389,16 @@ class MarketSpaceResource extends BaseResource
                                     ->numeric()
                                     ->inputMode('decimal')
                                     ->placeholder('Например: 48')
+                                    ->suffix('м²')
+                                    ->suffixAction(
+                                        fn (?MarketSpace $record): ?Action => $makeSpaceAttrsOperationAction(
+                                            $record,
+                                            'area_change_operation',
+                                            'area_sqm',
+                                            'Изменить площадь через операцию'
+                                        ),
+                                        isInline: true,
+                                    )
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
 
@@ -393,10 +426,12 @@ class MarketSpaceResource extends BaseResource
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Если выключить — место скрывается из большинства сценариев, но данные остаются в системе.'),
                             ])
-                            ->columns(2),
+                            ->columns([
+                                'default' => 1,
+                                'md' => 2,
+                            ]),
 
                     Section::make('Ставка аренды')
-                        ->description('Управленческая ставка (не начисления). История изменений хранится отдельно.')
                         ->schema([
                             Forms\Components\Placeholder::make('rent_rate_fact')
                                 ->label('Ставка (rent_rate)')
@@ -407,6 +442,30 @@ class MarketSpaceResource extends BaseResource
                                 ->numeric()
                                 ->inputMode('decimal')
                                 ->placeholder('Например: 1500')
+                                ->suffixAction(
+                                    function (?MarketSpace $record): ?Action {
+                                        if (! $record || ! OperationResource::canCreate()) {
+                                            return null;
+                                        }
+
+                                        $period = static::resolveOperationPeriod($record);
+                                        $rentRate = static::resolveRentRateFact($record, $period);
+
+                                        $url = static::operationCreateUrl($record, OperationType::RENT_RATE_CHANGE, [
+                                            'from_rent_rate' => $rentRate,
+                                            'focus' => 'to_rent_rate',
+                                        ]);
+
+                                        return Action::make('rent_rate_change_operation')
+                                            ->label('')
+                                            ->tooltip('Изменить ставку через операцию')
+                                            ->icon('heroicon-m-plus')
+                                            ->color('gray')
+                                            ->iconButton()
+                                            ->url($url);
+                                    },
+                                    isInline: true,
+                                )
                                 ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
 
                             Forms\Components\Select::make('rent_rate_unit')
@@ -426,22 +485,25 @@ class MarketSpaceResource extends BaseResource
                                         return $record->rent_rate_updated_at->format('d.m.Y H:i');
                                     }),
 
-                                Forms\Components\Placeholder::make('rent_rate_action')
-                                    ->hiddenLabel()
-                                    ->content(fn (?MarketSpace $record): HtmlString => static::rentRateOperationHelper($record))
-                                    ->columnSpanFull(),
                             ])
-                            ->columns(2),
+                            ->columns([
+                                'default' => 1,
+                                'md' => 2,
+                            ])
+                            ->collapsible(),
 
                         Section::make('Примечания')
                             ->schema([
                                 Forms\Components\Textarea::make('notes')
-                                    ->label('Примечания')
-                                    ->rows(4)
+                                    ->hiddenLabel()
+                                    ->rows(3)
+                                    ->placeholder('Добавьте комментарий по торговому месту…')
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Свободный комментарий. Это поле не должно перетираться импортом.')
                                     ->columnSpanFull(),
-                            ]),
+                            ])
+                            ->collapsible()
+                            ->collapsed(),
                     ]),
                 Tab::make('История')
                     ->schema([
@@ -499,49 +561,6 @@ class MarketSpaceResource extends BaseResource
         return static::rentRateUnitOptions()[$unit] ?? '—';
     }
 
-    private static function tenantOperationHelper(?MarketSpace $record): HtmlString
-    {
-        $text = 'Смена арендатора фиксируется через операции. В редактировании место привязано через операции.';
-
-        if (! $record || ! OperationResource::canCreate()) {
-            return new HtmlString('<div style="font-size:12px;opacity:.8;">' . e($text) . '</div>');
-        }
-
-        $url = static::operationCreateUrl($record, OperationType::TENANT_SWITCH, [
-            'from_tenant_id' => $record->tenant_id,
-            'focus' => 'to_tenant_id',
-        ]);
-
-        return new HtmlString(
-            '<div style="font-size:12px;opacity:.8;display:flex;gap:8px;align-items:center;">' .
-            '<span>' . e($text) . '</span>' .
-            '<a href="' . e($url) . '" title="Создать операцию: Смена арендатора" style="text-decoration:underline;">＋</a>' .
-            '</div>'
-        );
-    }
-
-    private static function rentRateOperationHelper(?MarketSpace $record): HtmlString
-    {
-        if (! $record || ! OperationResource::canCreate()) {
-            return new HtmlString('<div style="font-size:12px;opacity:.8;">Ставка меняется через операцию «Изменение ставки».</div>');
-        }
-
-        $period = static::resolveOperationPeriod($record);
-        $rentRate = static::resolveRentRateFact($record, $period);
-
-        $url = static::operationCreateUrl($record, OperationType::RENT_RATE_CHANGE, [
-            'from_rent_rate' => $rentRate,
-            'focus' => 'to_rent_rate',
-        ]);
-
-        return new HtmlString(
-            '<div style="font-size:12px;opacity:.85;display:flex;gap:8px;align-items:center;">' .
-            '<span>Ставка меняется через операцию «Изменение ставки».</span>' .
-            '<a href="' . e($url) . '" title="Создать операцию: Изменение ставки" style="text-decoration:underline;">＋</a>' .
-            '</div>'
-        );
-    }
-
     private static function rentRateFactHtml(?MarketSpace $record): HtmlString
     {
         if (! $record) {
@@ -561,10 +580,6 @@ class MarketSpaceResource extends BaseResource
             ? number_format($rentRate, 2, ',', ' ') . ' ₽'
             : 'Не задано';
 
-        $hint = $rentRate === null
-            ? 'Задаётся через операцию «Изменение ставки».'
-            : 'Хранится как rent_rate (управленческая ставка).';
-
         $extra = '';
         if ($unitLabel) {
             $extra .= '<div style="margin-top:4px;opacity:.7;">Единица: ' . e($unitLabel) . '</div>';
@@ -575,7 +590,6 @@ class MarketSpaceResource extends BaseResource
         return new HtmlString(
             '<div style="font-size:13px;">' .
             '<div><strong>' . e($display) . '</strong></div>' .
-            '<div style="margin-top:4px;opacity:.7;">' . e($hint) . '</div>' .
             $extra .
             $estimate .
             '</div>'

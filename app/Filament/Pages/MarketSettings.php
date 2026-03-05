@@ -174,8 +174,7 @@ class MarketSettings extends Page
             ->statePath('data')
             ->model($this->market)
             ->components([
-                Section::make('Профиль рынка')
-                    ->description('Основные реквизиты и часовой пояс рынка.')
+                Section::make()
                     ->schema([
                         Forms\Components\TextInput::make('name')
                             ->label('Название рынка')
@@ -212,8 +211,7 @@ class MarketSettings extends Page
                                 'lg' => 4,
                             ]),
                     ])
-                    ->columns(12)
-                    ->icon('heroicon-o-identification'),
+                    ->columns(12),
 
                 Section::make('Карта рынка')
                     ->description('PDF-карта для просмотра с масштабированием и перемещением.')
@@ -242,7 +240,6 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12)
-                    ->icon('heroicon-o-map')
                     ->collapsible()
                     ->collapsed(),
 
@@ -284,8 +281,8 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12)
-                    ->icon('heroicon-o-calendar-days')
-                    ->collapsible(),
+                    ->collapsible()
+                    ->collapsed(),
 
                 Section::make('Обращения и чат')
                     ->description('Получатели уведомлений о новых сообщениях от арендаторов.')
@@ -337,8 +334,8 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12)
-                    ->icon('heroicon-o-chat-bubble-left-right')
-                    ->collapsible(),
+                    ->collapsible()
+                    ->collapsed(),
 
                 Section::make('Каналы уведомлений')
                     ->description('Каналы доставки по темам. Telegram начнет работать после подключения транспорта.')
@@ -395,7 +392,6 @@ class MarketSettings extends Page
                             ]),
                     ])
                     ->columns(12)
-                    ->icon('heroicon-o-bell-alert')
                     ->collapsible()
                     ->collapsed(),
             ]);
@@ -670,7 +666,7 @@ class MarketSettings extends Page
             'class="fi-btn fi-btn-color-primary fi-btn-size-md" ' .
             'style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;' .
             'padding:.55rem .95rem;border-radius:.75rem;font-weight:600;text-decoration:none;">' .
-                '<span class="fi-btn-label">Открыть карту</span>' .
+                '<span class="fi-btn-label">Показатьть на карте</span>' .
             '</a>'
         );
     }

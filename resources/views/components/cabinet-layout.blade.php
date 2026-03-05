@@ -1,11 +1,13 @@
 @props(['tenant' => null, 'title' => null])
 
 @php
-    $viteHot      = file_exists(public_path('hot'));
+    $viteHot = file_exists(public_path('hot'));
     $viteManifest = file_exists(public_path('build/manifest.json'));
-    $useVite      = $viteHot || $viteManifest;
+    $useVite = $viteHot || $viteManifest;
+    $impersonation = session(\App\Services\Cabinet\TenantImpersonationService::SESSION_KEY);
+    $isImpersonation = is_array($impersonation) && ! empty($impersonation['impersonator_user_id']);
 
-    // На layout не завязываем реальную привязку — только красивое имя для шапки.
+    // На layout не завязываем реальную привязку, только имя для шапки.
     $tenantName = data_get($tenant, 'display_name')
         ?: data_get($tenant, 'name')
         ?: 'Арендатор';
@@ -51,14 +53,12 @@
                 </h1>
             </div>
 
-            @if (\Illuminate\Support\Facades\Route::has('cabinet.logout') && auth()->check())
-                {{-- Важно: отключаем navigate/intercept, чтобы logout не ломался 419 --}}
-                <form method="POST" action="{{ route('cabinet.logout') }}" data-navigate="false">
+            @if (auth()->check() && (\Illuminate\Support\Facades\Route::has('cabinet.logout') || \Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit')))
+                <form method="POST" action="{{ ($isImpersonation && \Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit')) ? route('cabinet.impersonation.exit') : route('cabinet.logout') }}" data-navigate="false">
                     @csrf
                     <button
                         type="submit"
-                        class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium
-                               text-slate-600 hover:text-slate-900 active:scale-[0.99] transition"
+                        class="inline-flex items-center justify-center rounded-xl px-3 py-2 text-sm font-medium {{ $isImpersonation ? 'text-amber-700 hover:text-amber-900' : 'text-slate-600 hover:text-slate-900' }} active:scale-[0.99] transition"
                     >
                         Выйти
                     </button>
@@ -66,6 +66,35 @@
             @endif
         </div>
     </header>
+
+    @if ($isImpersonation)
+        <div class="max-w-3xl mx-auto px-4 pt-4">
+            <div class="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="font-semibold">
+                            Вы вошли как арендатор: {{ $impersonation['tenant_name'] ?? $tenantName }}
+                        </div>
+                        <div class="text-amber-800/80">
+                            Через администратора: {{ $impersonation['impersonator_name'] ?? ('#' . ($impersonation['impersonator_user_id'] ?? '')) }}
+                        </div>
+                    </div>
+
+                    @if (\Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit'))
+                        <form method="POST" action="{{ route('cabinet.impersonation.exit') }}" data-navigate="false">
+                            @csrf
+                            <button
+                                type="submit"
+                                class="inline-flex items-center justify-center rounded-xl bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                            >
+                                Вернуться в админку
+                            </button>
+                        </form>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
 
     {{-- Контент --}}
     <main class="max-w-3xl mx-auto px-4 pt-5 pb-28">
@@ -97,14 +126,14 @@
         </div>
     </main>
 
-    {{-- Нижняя навигация (таббар) --}}
+    {{-- Нижняя навигация --}}
     <nav class="fixed inset-x-0 bottom-0 z-30 bg-white/90 backdrop-blur border-t border-slate-200 safe-pb">
         <div class="max-w-3xl mx-auto px-4 py-2">
             <div class="grid grid-cols-5 gap-1 text-[11px] font-medium text-center">
                 @php
                     $navItem = 'flex flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 transition active:scale-[0.99]';
-                    $navOn   = 'text-slate-900 bg-slate-100';
-                    $navOff  = 'text-slate-500 hover:text-slate-800';
+                    $navOn = 'text-slate-900 bg-slate-100';
+                    $navOff = 'text-slate-500 hover:text-slate-800';
                 @endphp
 
                 <a class="{{ $navItem }} {{ request()->routeIs('cabinet.dashboard') ? $navOn : $navOff }}"
@@ -121,8 +150,8 @@
 
                 <a class="{{ $navItem }} {{ request()->routeIs('cabinet.requests*') ? $navOn : $navOff }}"
                    href="{{ route('cabinet.requests') }}">
-                    <span class="text-lg leading-none">🛠️</span>
-                    Заявки
+                    <span class="text-lg leading-none">💬</span>
+                    Общение
                 </a>
 
                 <a class="{{ $navItem }} {{ request()->routeIs('cabinet.documents') ? $navOn : $navOff }}"

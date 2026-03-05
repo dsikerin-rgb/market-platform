@@ -10,9 +10,4 @@ class CreateStaffInvitation extends BaseCreateRecord
     protected static string $resource = StaffInvitationResource::class;
 
     protected static ?string $title = 'Создать приглашение';
-
-    public function getBreadcrumb(): string
-    {
-        return 'Создать приглашение';
-    }
 }

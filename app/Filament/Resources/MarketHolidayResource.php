@@ -6,9 +6,11 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketHolidayResource\Pages;
 use App\Models\MarketHoliday;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -71,6 +73,8 @@ class MarketHolidayResource extends BaseResource
                     ->searchable()
                     ->preload()
                     ->reactive()
+                    ->hintIcon('heroicon-m-question-mark-circle')
+                    ->hintIconTooltip('Выберите рынок, чтобы корректно подставить ответственных в сценариях.')
                     ->dehydrated(true);
             }
         } else {
@@ -80,7 +84,7 @@ class MarketHolidayResource extends BaseResource
         }
 
         return $schema->components([
-            Section::make()
+            Section::make('Событие')
                 ->schema([
                     ...$marketField,
 
@@ -89,9 +93,28 @@ class MarketHolidayResource extends BaseResource
                         ->dehydrated(true),
 
                     Forms\Components\TextInput::make('title')
-                        ->label('Название')
+                        ->label('Название события')
                         ->required()
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Короткое название события, которое увидят сотрудники в календаре и уведомлениях.')
+                        ->columnSpan(2),
+
+                    Forms\Components\Select::make('source')
+                        ->label('Тип события')
+                        ->options([
+                            'national_holiday' => 'Государственный праздник',
+                            'sanitary_auto' => 'Санитарный день',
+                            'market_event' => 'Мероприятие рынка',
+                            'maintenance' => 'Технические работы',
+                            'other' => 'Другое',
+                        ])
+                        ->default('market_event')
+                        ->required()
+                        ->searchable()
+                        ->preload()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('От типа зависит набор сценариев и ответственных ролей.'),
 
                     Forms\Components\DatePicker::make('starts_at')
                         ->label('Дата начала')
@@ -99,7 +122,8 @@ class MarketHolidayResource extends BaseResource
 
                     Forms\Components\DatePicker::make('ends_at')
                         ->label('Дата окончания')
-                        ->helperText('Можно оставить пустым для одного дня.'),
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Можно оставить пустым для события на один день.'),
 
                     Forms\Components\Toggle::make('all_day')
                         ->label('Весь день')
@@ -108,14 +132,95 @@ class MarketHolidayResource extends BaseResource
                     Forms\Components\TextInput::make('notify_before_days')
                         ->label('Уведомить за (дней)')
                         ->numeric()
-                        ->helperText('Если не задано, используется настройка рынка.'),
+                        ->minValue(0)
+                        ->maxValue(90)
+                        ->suffix('дн.')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Если пусто, используется настройка рынка.'),
 
                     Forms\Components\Textarea::make('description')
                         ->label('Описание')
+                        ->rows(4)
+                        ->columnSpanFull(),
+                ])
+                ->columns(3)
+                ->columnSpanFull(),
+
+            Section::make('Сценарии автоматизации')
+                ->description('Система может автоматически создавать и обновлять задачи подготовки по этому событию.')
+                ->schema([
+                    Forms\Components\Toggle::make('audience_payload.scenarios.enabled_tasks')
+                        ->label('Автоматически ставить задачи')
+                        ->default(true)
+                        ->inline(false),
+
+                    Forms\Components\Toggle::make('audience_payload.scenarios.communication_plan')
+                        ->label('Формировать план информирования')
+                        ->default(true)
+                        ->inline(false)
+                        ->visible(fn (Get $get): bool => (string) $get('source') !== 'sanitary_auto'),
+
+                    Forms\Components\Toggle::make('audience_payload.scenarios.ad_materials')
+                        ->label('Подготовить рекламные материалы')
+                        ->default(true)
+                        ->inline(false)
+                        ->visible(fn (Get $get): bool => (string) $get('source') !== 'sanitary_auto'),
+
+                    Forms\Components\Toggle::make('audience_payload.scenarios.auto_ai_drafts')
+                        ->label('Черновики текстов автоматически (AI)')
+                        ->default(true)
+                        ->inline(false)
+                        ->visible(fn (Get $get): bool => (bool) $get('audience_payload.scenarios.ad_materials')),
+
+                    Forms\Components\TextInput::make('audience_payload.scenarios.lead_days')
+                        ->label('Горизонт подготовки')
+                        ->numeric()
+                        ->minValue(1)
+                        ->maxValue(30)
+                        ->suffix('дн.')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Через сколько дней до события создавать/обновлять сценарные задачи. Если пусто — берется notify_before_days.'),
+
+                    Forms\Components\CheckboxList::make('audience_payload.scenarios.channels')
+                        ->label('Каналы коммуникации')
+                        ->options([
+                            'in_app' => 'В кабинете',
+                            'email' => 'Email',
+                            'telegram' => 'Telegram',
+                            'sms' => 'SMS',
+                            'vk' => 'VK',
+                            'media' => 'СМИ',
+                        ])
+                        ->columns(3)
+                        ->columnSpanFull(),
+
+                    Forms\Components\Select::make('audience_payload.scenarios.responsible_user_ids')
+                        ->label('Ответственные сотрудники (опционально)')
+                        ->options(function (Get $get): array {
+                            $marketId = $get('market_id');
+
+                            if (! is_numeric($marketId) || (int) $marketId <= 0) {
+                                return [];
+                            }
+
+                            return User::query()
+                                ->where('market_id', (int) $marketId)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all();
+                        })
+                        ->multiple()
+                        ->searchable()
+                        ->preload()
+                        ->columnSpanFull(),
+
+                    Forms\Components\Textarea::make('audience_payload.scenarios.note')
+                        ->label('Комментарий к сценарию')
                         ->rows(3)
                         ->columnSpanFull(),
                 ])
-                ->columns(2),
+                ->columns(2)
+                ->collapsible(),
         ]);
     }
 

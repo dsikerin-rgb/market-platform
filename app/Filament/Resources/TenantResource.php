@@ -7,6 +7,7 @@ use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
 use Carbon\Carbon;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -258,6 +259,125 @@ class TenantResource extends BaseResource
                                 Forms\Components\TextInput::make('ogrn')
                                     ->label('ОГРН / ОГРНИП')
                                     ->maxLength(20),
+                            ])
+                            ->columns(2),
+                    ]),
+
+                Tab::make('Кабинет')
+                    ->schema([
+                        Section::make('Доступ в кабинет арендатора')
+                            ->schema([
+                                Forms\Components\TextInput::make('cabinet_user_name')
+                                    ->label('Имя пользователя кабинета')
+                                    ->maxLength(255)
+                                    ->placeholder('Например: ИП Иванов И.И.'),
+
+                                Forms\Components\TextInput::make('cabinet_user_email')
+                                    ->label('Логин (email)')
+                                    ->email()
+                                    ->maxLength(255)
+                                    ->placeholder('tenant@example.com'),
+
+                                Forms\Components\TextInput::make('cabinet_user_password')
+                                    ->label('Новый пароль')
+                                    ->password()
+                                    ->revealable()
+                                    ->minLength(8)
+                                    ->maxLength(255)
+                                    ->helperText('Для существующего аккаунта оставьте пустым, если пароль менять не нужно.'),
+
+                                Forms\Components\Repeater::make('cabinet_additional_users')
+                                    ->label('Доп. пользователи кабинета')
+                                    ->columnSpanFull()
+                                    ->defaultItems(0)
+                                    ->addActionLabel('Добавить сотрудника')
+                                    ->reorderable(false)
+                                    ->collapsible()
+                                    ->collapsed()
+                                    ->itemLabel(function (array $state): ?string {
+                                        $name = trim((string) ($state['name'] ?? ''));
+                                        $email = trim((string) ($state['email'] ?? ''));
+
+                                        if ($name !== '' && $email !== '') {
+                                            return $name . ' (' . $email . ')';
+                                        }
+
+                                        if ($email !== '') {
+                                            return $email;
+                                        }
+
+                                        if ($name !== '') {
+                                            return $name;
+                                        }
+
+                                        return 'Новый сотрудник';
+                                    })
+                                    ->schema([
+                                        Forms\Components\Hidden::make('id')
+                                            ->dehydrated(true),
+
+                                        Forms\Components\TextInput::make('name')
+                                            ->label('Имя сотрудника')
+                                            ->maxLength(255)
+                                            ->placeholder('Например: Менеджер точки'),
+
+                                        Forms\Components\TextInput::make('email')
+                                            ->label('Логин (email)')
+                                            ->email()
+                                            ->maxLength(255)
+                                            ->placeholder('employee@example.com'),
+
+                                        Forms\Components\TextInput::make('password')
+                                            ->label('Новый пароль')
+                                            ->password()
+                                            ->revealable()
+                                            ->maxLength(255)
+                                            ->minLength(8)
+                                            ->suffixAction(
+                                                Action::make('generateAdditionalCabinetUserPassword')
+                                                    ->label('')
+                                                    ->tooltip('Сгенерировать пароль')
+                                                    ->icon('heroicon-m-sparkles')
+                                                    ->color('gray')
+                                                    ->iconButton()
+                                                    ->action(function (\Filament\Schemas\Components\Utilities\Set $set): void {
+                                                        $set(
+                                                            'password',
+                                                            \Illuminate\Support\Str::password(length: 12, letters: true, numbers: true, symbols: false, spaces: false),
+                                                        );
+                                                    }),
+                                                isInline: true,
+                                            )
+                                            ->helperText('Можно ввести пароль вручную или сгенерировать кнопкой.')
+                                            ->dehydrated(true),
+                                    ])
+                                    ->columns(3)
+                                    ->helperText('Сотрудники арендатора смогут входить в кабинет по своим логинам и паролям.'),
+                            ])
+                            ->columns(2),
+
+                        Section::make('Витрина арендатора')
+                            ->schema([
+                                Forms\Components\TextInput::make('showcase_title')
+                                    ->label('Заголовок витрины')
+                                    ->maxLength(255),
+
+                                Forms\Components\TextInput::make('showcase_phone')
+                                    ->label('Телефон для витрины')
+                                    ->maxLength(50),
+
+                                Forms\Components\TextInput::make('showcase_telegram')
+                                    ->label('Telegram / ссылка')
+                                    ->maxLength(255),
+
+                                Forms\Components\TextInput::make('showcase_website')
+                                    ->label('Сайт')
+                                    ->maxLength(255),
+
+                                Forms\Components\Textarea::make('showcase_description')
+                                    ->label('Описание витрины')
+                                    ->rows(4)
+                                    ->columnSpanFull(),
                             ])
                             ->columns(2),
                     ]),

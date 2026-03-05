@@ -10,11 +10,11 @@ class EditMarketLocation extends BaseEditRecord
 {
     protected static string $resource = MarketLocationResource::class;
 
-    protected static ?string $title = 'Редактирование локации';
+    protected static ?string $title = 'Локация';
 
     public function getBreadcrumb(): string
     {
-        return 'Редактирование локации';
+        return 'Локация';
     }
 
     protected function mutateFormDataBeforeSave(array $data): array

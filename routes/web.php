@@ -5,8 +5,10 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\MarketRegistrationController;
+use App\Http\Controllers\Admin\TenantCabinetImpersonationController;
 use App\Http\Controllers\Cabinet\AccrualsController;
 use App\Http\Controllers\Cabinet\CabinetAuthController;
+use App\Http\Controllers\Cabinet\CabinetImpersonationController;
 use App\Http\Controllers\Cabinet\CustomerChatController;
 use App\Http\Controllers\Cabinet\DashboardController;
 use App\Http\Controllers\Cabinet\DocumentsController;
@@ -40,9 +42,14 @@ Route::get('/login', function () {
 Route::prefix('cabinet')->group(function () {
     Route::get('/login', [CabinetAuthController::class, 'showLogin'])->name('cabinet.login');
     Route::post('/login', [CabinetAuthController::class, 'login'])->name('cabinet.login.submit');
+    Route::middleware('auth')
+        ->get('/impersonate/{token}', [CabinetImpersonationController::class, 'consume'])
+        ->name('cabinet.impersonate.consume');
 
     Route::middleware(['auth', 'cabinet.access'])->group(function () {
         Route::post('/logout', [CabinetAuthController::class, 'logout'])->name('cabinet.logout');
+        Route::post('/impersonation/exit', [CabinetImpersonationController::class, 'exit'])
+            ->name('cabinet.impersonation.exit');
 
         Route::get('/', DashboardController::class)->name('cabinet.dashboard');
         Route::get('/accruals', [AccrualsController::class, 'index'])->name('cabinet.accruals');
@@ -68,6 +75,9 @@ Route::prefix('cabinet')->group(function () {
 Route::get('/v/{tenantSlug}', PublicShowcaseController::class)->name('cabinet.showcase.public');
 
 Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(function () {
+    Route::post('/admin/tenants/{tenant}/cabinet-impersonate', [TenantCabinetImpersonationController::class, 'issue'])
+        ->name('filament.admin.tenants.cabinet-impersonate');
+
     Route::match(['POST', 'PUT', 'PATCH', 'DELETE'], '/admin/tenants/{tenant}/contracts/{contract}/delete', function (Request $request, int $tenant, int $contract) {
         $user = Filament::auth()->user();
         abort_unless($user, 403);

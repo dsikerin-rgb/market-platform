@@ -10,9 +10,4 @@ class CreateMarketSpace extends BaseCreateRecord
     protected static string $resource = MarketSpaceResource::class;
 
     protected static ?string $title = 'Создать торговое место';
-
-    public function getBreadcrumb(): string
-    {
-        return 'Создать торговое место';
-    }
 }

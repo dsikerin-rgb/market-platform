@@ -1,7 +1,10 @@
 <x-cabinet-layout :tenant="$tenant" title="Мои заявки">
-    <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">Мои заявки</h2>
-        <a class="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm" href="{{ route('cabinet.requests.create') }}">Создать</a>
+    <div class="flex items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold">Общение</h2>
+        <div class="flex items-center gap-2">
+            <a class="rounded-xl bg-slate-100 text-slate-700 px-3 py-2 text-sm border border-slate-200" href="{{ route('cabinet.customer-chat') }}">Покупатели</a>
+            <a class="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm" href="{{ route('cabinet.requests.create') }}">Обращение в УК</a>
+        </div>
     </div>
 
     <div class="space-y-3">

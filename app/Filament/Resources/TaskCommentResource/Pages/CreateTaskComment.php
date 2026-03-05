@@ -10,9 +10,4 @@ class CreateTaskComment extends BaseCreateRecord
     protected static string $resource = TaskCommentResource::class;
 
     protected static ?string $title = 'Создать комментарий';
-
-    public function getBreadcrumb(): string
-    {
-        return 'Создать комментарий';
-    }
 }

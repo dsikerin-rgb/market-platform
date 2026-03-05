@@ -10,9 +10,4 @@ class CreateTaskWatcher extends BaseCreateRecord
     protected static string $resource = TaskWatcherResource::class;
 
     protected static ?string $title = 'Добавить наблюдателя';
-
-    public function getBreadcrumb(): string
-    {
-        return 'Добавить наблюдателя';
-    }
 }
