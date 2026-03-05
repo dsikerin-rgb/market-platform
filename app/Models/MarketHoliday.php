@@ -26,6 +26,8 @@ class MarketHoliday extends Model
         'notify_at',
         'notified_at',
         'source',
+        'audience_scope',
+        'audience_payload',
     ];
 
     protected $casts = [
@@ -36,6 +38,7 @@ class MarketHoliday extends Model
         'notify_before_days' => 'integer',
         'notify_at' => 'datetime',
         'notified_at' => 'datetime',
+        'audience_payload' => 'array',
     ];
 
     protected static function booted(): void

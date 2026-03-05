@@ -10,11 +10,11 @@ class EditMarket extends BaseEditRecord
 {
     protected static string $resource = MarketResource::class;
 
-    protected static ?string $title = 'Редактирование рынка';
+    protected static ?string $title = 'Рынок';
 
     public function getBreadcrumb(): string
     {
-        return 'Редактирование рынка';
+        return 'Рынок';
     }
 
     protected function getHeaderActions(): array

@@ -23,6 +23,7 @@ final class OperationsStateService
             ->where('entity_type', 'market_space')
             ->where('entity_id', $marketSpaceId)
             ->where('type', OperationType::TENANT_SWITCH)
+            ->where('status', 'applied')
             ->where('effective_at', '<=', $periodEndUtc)
             ->orderByDesc('effective_at')
             ->first();
@@ -32,6 +33,7 @@ final class OperationsStateService
             ->where('entity_type', 'market_space')
             ->where('entity_id', $marketSpaceId)
             ->where('type', OperationType::RENT_RATE_CHANGE)
+            ->where('status', 'applied')
             ->where('effective_at', '<=', $periodEndUtc)
             ->orderByDesc('effective_at')
             ->first();
@@ -43,6 +45,7 @@ final class OperationsStateService
             ->where('market_id', $marketId)
             ->where('entity_type', 'market_space')
             ->where('entity_id', $marketSpaceId)
+            ->where('status', 'applied')
             ->whereBetween('effective_at', [
                 $periodStartUtc,
                 $periodEndUtc,
@@ -105,6 +108,7 @@ final class OperationsStateService
             ->where('market_id', $marketId)
             ->where('entity_type', 'market_space')
             ->where('type', $type)
+            ->where('status', 'applied')
             ->whereBetween('effective_at', [
                 $periodStartUtc,
                 $periodEndUtc,

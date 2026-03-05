@@ -9,6 +9,7 @@ namespace App\Filament\Resources;
 use App\Domain\Operations\OperationType;
 use App\Filament\Resources\OperationResource\Pages;
 use App\Models\Market;
+use App\Models\MarketLocation;
 use App\Models\MarketSpace;
 use App\Models\Operation;
 use App\Models\Tenant;
@@ -109,59 +110,29 @@ class OperationResource extends BaseResource
             ->label('Тип операции')
             ->options(OperationType::labels())
             ->default(fn () => request()->query('type'))
+            ->hintIcon('heroicon-m-question-mark-circle')
+            ->hintIconTooltip('Выберите действие. Для карточки торгового места используйте операции по месту.')
             ->required();
 
         static::makeLive($typeSelect);
 
-        $entityTypeSelect = Forms\Components\Select::make('entity_type')
-            ->label('Объект')
-            ->options([
-                'market_space' => 'Торговое место',
-                'tenant' => 'Арендатор',
-                'contract' => 'Договор',
-                'market' => 'Рынок',
-            ])
-            ->default(fn () => request()->query('entity_type') ?: 'market_space')
-            ->required();
+        if (method_exists($typeSelect, 'afterStateUpdated')) {
+            $typeSelect->afterStateUpdated(function (Set $set, $state): void {
+                $isPeriodClose = (string) $state === OperationType::PERIOD_CLOSE;
 
-        static::makeLive($entityTypeSelect);
+                $set('entity_type', $isPeriodClose ? 'market' : 'market_space');
 
-        if (method_exists($entityTypeSelect, 'afterStateUpdated')) {
-            $entityTypeSelect->afterStateUpdated(function (Set $set): void {
-                // при смене типа объекта сбрасываем выбранный entity_id
-                $set('entity_id', null);
+                if ($isPeriodClose) {
+                    $set('entity_id', null);
+                    $set('payload.market_space_id', null);
+                    $set('payload.from_tenant_id', null);
+                    $set('payload.to_tenant_id', null);
+                    $set('payload.from_rent_rate', null);
+                    $set('payload.rent_rate', null);
+                    $set('payload.unit', null);
+                }
             });
         }
-
-        $entityIdSelect = Forms\Components\Select::make('entity_id')
-            ->label('Объект')
-            ->options(function (Get $get) use ($marketId): array {
-                $entityType = (string) $get('entity_type');
-
-                if ($entityType === 'market_space') {
-                    return MarketSpace::query()
-                        ->where('market_id', $marketId)
-                        ->orderBy('number')
-                        ->pluck('number', 'id')
-                        ->all();
-                }
-
-                if ($entityType === 'tenant') {
-                    return Tenant::query()
-                        ->where('market_id', $marketId)
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->all();
-                }
-
-                return [];
-            })
-            ->searchable()
-            ->preload()
-            ->nullable()
-            ->default(fn () => request()->query('entity_id'))
-            ->required(fn (Get $get): bool => (string) $get('entity_type') !== 'market')
-            ->visible(fn (Get $get): bool => (string) $get('entity_type') !== 'market');
 
         $effectiveAt = Forms\Components\DateTimePicker::make('effective_at')
             ->label('Дата вступления в силу')
@@ -174,67 +145,120 @@ class OperationResource extends BaseResource
             $effectiveAt->timezone($tz);
         }
 
+        $syncMarketSpaceContext = function (Set $set, mixed $state) use ($marketId): void {
+            $spaceId = is_numeric($state) ? (int) $state : 0;
+
+            if ($spaceId <= 0) {
+                $set('entity_id', null);
+                $set('payload.from_tenant_id', null);
+                $set('payload.from_rent_rate', null);
+                return;
+            }
+
+            $space = MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->whereKey($spaceId)
+                ->first(['id', 'tenant_id', 'rent_rate_value', 'rent_rate_unit']);
+
+            if (! $space) {
+                $set('entity_id', null);
+                $set('payload.from_tenant_id', null);
+                $set('payload.from_rent_rate', null);
+                return;
+            }
+
+            $set('entity_id', (int) $space->id);
+            $set('payload.from_tenant_id', $space->tenant_id ? (int) $space->tenant_id : null);
+            $set('payload.from_rent_rate', $space->rent_rate_value !== null ? (float) $space->rent_rate_value : null);
+
+            if (filled($space->rent_rate_unit)) {
+                $set('payload.unit', (string) $space->rent_rate_unit);
+            }
+        };
+
+        $marketSpaceSelect = Forms\Components\Select::make('payload.market_space_id')
+            ->label('Торговое место')
+            ->options(function () use ($marketId): array {
+                return MarketSpace::query()
+                    ->where('market_id', $marketId)
+                    ->orderBy('number')
+                    ->get(['id', 'number', 'display_name'])
+                    ->mapWithKeys(function (MarketSpace $space): array {
+                        $number = trim((string) ($space->number ?? ''));
+                        $displayName = trim((string) ($space->display_name ?? ''));
+                        $label = $number !== ''
+                            ? $number . ($displayName !== '' ? ' — ' . $displayName : '')
+                            : ($displayName !== '' ? $displayName : (string) $space->id);
+
+                        return [(int) $space->id => $label];
+                    })
+                    ->all();
+            })
+            ->searchable()
+            ->preload()
+            ->default(function () {
+                $requestEntityId = request()->query('entity_id');
+
+                return is_numeric($requestEntityId) ? (int) $requestEntityId : null;
+            })
+            ->required(fn (Get $get): bool => (string) $get('type') !== OperationType::PERIOD_CLOSE)
+            ->visible(fn (Get $get): bool => (string) $get('type') !== OperationType::PERIOD_CLOSE)
+            ->hintIcon('heroicon-m-question-mark-circle')
+            ->hintIconTooltip('Выбор места, к которому применяется операция.')
+            ->afterStateUpdated(fn (Set $set, $state) => $syncMarketSpaceContext($set, $state));
+
+        if (method_exists($marketSpaceSelect, 'afterStateHydrated')) {
+            $marketSpaceSelect->afterStateHydrated(function (Get $get, Set $set, $state) use ($syncMarketSpaceContext): void {
+                if (filled($state)) {
+                    $syncMarketSpaceContext($set, $state);
+                    return;
+                }
+
+                $entityId = $get('entity_id');
+                if (filled($entityId)) {
+                    $set('payload.market_space_id', (int) $entityId);
+                    $syncMarketSpaceContext($set, $entityId);
+                }
+            });
+        }
+
         return $schema->components([
             ...$components,
 
-            Section::make('Основные параметры')
+            Section::make('Что меняем')
                 ->schema([
                     Forms\Components\Hidden::make('market_id')
                         ->default(fn () => $marketId)
                         ->dehydrated(true),
 
+                    Forms\Components\Hidden::make('entity_type')
+                        ->default(function () {
+                            $requestedType = (string) (request()->query('type') ?? '');
+
+                            return $requestedType === OperationType::PERIOD_CLOSE
+                                ? 'market'
+                                : 'market_space';
+                        })
+                        ->dehydrated(true),
+
+                    Forms\Components\Hidden::make('entity_id')
+                        ->default(function () {
+                            $requestEntityId = request()->query('entity_id');
+
+                            return is_numeric($requestEntityId) ? (int) $requestEntityId : null;
+                        })
+                        ->dehydrated(true),
+
                     $typeSelect,
 
-                    $entityTypeSelect,
-
-                    $entityIdSelect,
+                    $marketSpaceSelect,
 
                     $effectiveAt,
-
-                    Forms\Components\Select::make('status')
-                        ->label('Статус')
-                        ->options([
-                            'draft' => 'Черновик',
-                            'applied' => 'Применено',
-                            'canceled' => 'Отменено',
-                        ])
-                        ->default('applied')
-                        ->required(),
-
-                    Forms\Components\Textarea::make('comment')
-                        ->label('Комментарий')
-                        ->rows(3)
-                        ->nullable(),
                 ])
                 ->columns(2),
 
-            Section::make('Данные операции')
+            Section::make('Параметры операции')
                 ->schema([
-                    Forms\Components\Select::make('payload.market_space_id')
-                        ->label('Торговое место')
-                        ->options(fn () => MarketSpace::query()
-                            ->where('market_id', $marketId)
-                            ->orderBy('number')
-                            ->pluck('number', 'id')
-                            ->all())
-                        ->searchable()
-                        ->preload()
-                        ->default(fn () => request()->query('entity_id'))
-                        ->required(fn (Get $get): bool => in_array((string) $get('type'), [
-                            OperationType::TENANT_SWITCH,
-                            OperationType::RENT_RATE_CHANGE,
-                            OperationType::SPACE_ATTRS_CHANGE,
-                            OperationType::ELECTRICITY_INPUT,
-                            OperationType::ACCRUAL_ADJUSTMENT,
-                        ], true))
-                        ->visible(fn (Get $get): bool => in_array((string) $get('type'), [
-                            OperationType::TENANT_SWITCH,
-                            OperationType::RENT_RATE_CHANGE,
-                            OperationType::SPACE_ATTRS_CHANGE,
-                            OperationType::ELECTRICITY_INPUT,
-                            OperationType::ACCRUAL_ADJUSTMENT,
-                        ], true)),
-
                     Forms\Components\Select::make('payload.from_tenant_id')
                         ->label('Текущий арендатор')
                         ->options(fn () => Tenant::query()
@@ -247,6 +271,8 @@ class OperationResource extends BaseResource
                         ->nullable()
                         ->disabled()
                         ->default(fn () => request()->query('from_tenant_id'))
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Справочное поле. Подставляется автоматически из карточки места.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::TENANT_SWITCH),
 
                     Forms\Components\Select::make('payload.to_tenant_id')
@@ -258,7 +284,9 @@ class OperationResource extends BaseResource
                             ->all())
                         ->searchable()
                         ->preload()
-                        ->nullable()
+                        ->required(fn (Get $get): bool => (string) $get('type') === OperationType::TENANT_SWITCH)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('После сохранения и статуса "Применено" место будет закреплено за выбранным арендатором.')
                         ->extraInputAttributes($focus === 'to_tenant_id' ? ['autofocus' => true] : [])
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::TENANT_SWITCH),
 
@@ -268,12 +296,17 @@ class OperationResource extends BaseResource
                         ->inputMode('decimal')
                         ->disabled()
                         ->default(fn () => request()->query('from_rent_rate'))
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Справочное значение текущей ставки на дату операции.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE),
 
                     Forms\Components\TextInput::make('payload.rent_rate')
                         ->label('Новая ставка')
                         ->numeric()
                         ->inputMode('decimal')
+                        ->required(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Новое значение ставки. Применяется после сохранения операции со статусом "Применено".')
                         ->extraInputAttributes($focus === 'to_rent_rate' ? ['autofocus' => true] : [])
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE),
 
@@ -284,43 +317,61 @@ class OperationResource extends BaseResource
                             'per_space_month' => 'за место в месяц',
                         ])
                         ->placeholder('Не указано')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Если не указать, сохранится текущее значение из карточки места.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::RENT_RATE_CHANGE),
 
                     Forms\Components\TextInput::make('payload.area_sqm')
                         ->label('Площадь, м²')
                         ->numeric()
                         ->inputMode('decimal')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Изменение характеристик места. Оставьте пустым, если площадь не меняется.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::SPACE_ATTRS_CHANGE),
 
                     Forms\Components\TextInput::make('payload.activity_type')
                         ->label('Вид деятельности')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Новый вид деятельности для карточки торгового места.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::SPACE_ATTRS_CHANGE),
 
                     Forms\Components\Select::make('payload.location_id')
                         ->label('Локация')
-                        ->options(fn () => MarketSpace::query()
+                        ->options(fn () => MarketLocation::query()
                             ->where('market_id', $marketId)
-                            ->whereNotNull('location_id')
-                            ->distinct()
-                            ->pluck('location_id', 'location_id')
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
                             ->all())
+                        ->searchable()
+                        ->preload()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Новая локация торгового места.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::SPACE_ATTRS_CHANGE),
 
                     Forms\Components\TextInput::make('payload.amount')
-                        ->label('Электроэнергия')
+                        ->label('Электроэнергия, ₽')
                         ->numeric()
                         ->inputMode('decimal')
+                        ->required(fn (Get $get): bool => (string) $get('type') === OperationType::ELECTRICITY_INPUT)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Ручной ввод значения электроэнергии за период.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::ELECTRICITY_INPUT),
 
                     Forms\Components\TextInput::make('payload.amount_delta')
                         ->label('Корректировка (±)')
                         ->numeric()
                         ->inputMode('decimal')
+                        ->required(fn (Get $get): bool => (string) $get('type') === OperationType::ACCRUAL_ADJUSTMENT)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Положительное значение увеличит сумму, отрицательное уменьшит.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::ACCRUAL_ADJUSTMENT),
 
                     Forms\Components\Textarea::make('payload.reason')
                         ->label('Причина')
                         ->rows(2)
+                        ->placeholder('Кратко укажите причину изменения…')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Причина фиксируется в payload операции для аудита.')
                         ->visible(fn (Get $get): bool => in_array((string) $get('type'), [
                             OperationType::TENANT_SWITCH,
                             OperationType::ACCRUAL_ADJUSTMENT,
@@ -329,27 +380,60 @@ class OperationResource extends BaseResource
                     Forms\Components\TextInput::make('payload.period')
                         ->label('Период закрытия (YYYY-MM-01)')
                         ->default(fn () => $period->toDateString())
+                        ->required(fn (Get $get): bool => (string) $get('type') === OperationType::PERIOD_CLOSE)
+                        ->rule('date_format:Y-m-d')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Период, который нужно закрыть. Формат: YYYY-MM-01.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::PERIOD_CLOSE),
 
                     Forms\Components\Toggle::make('payload.closed')
                         ->label('Период закрыт')
                         ->default(true)
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Включите, чтобы зафиксировать закрытие выбранного периода.')
                         ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::PERIOD_CLOSE),
                 ])
                 ->columns(2),
 
-            Section::make('Подсказка')
+            Section::make('Применение')
+                ->schema([
+                    Forms\Components\Select::make('status')
+                        ->label('Статус применения')
+                        ->options([
+                            'draft' => 'Черновик',
+                            'applied' => 'Применено',
+                            'canceled' => 'Отменено',
+                        ])
+                        ->default('applied')
+                        ->required()
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Только статус "Применено" влияет на фактическое состояние места.'),
+
+                    Forms\Components\Textarea::make('comment')
+                        ->label('Комментарий')
+                        ->rows(3)
+                        ->placeholder('Комментарий для команды и истории изменений…')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Необязательное поле. Удобно для аудита и пояснений.')
+                        ->nullable(),
+                ])
+                ->columns(2)
+                ->collapsible(),
+
+            Section::make('Как это работает')
                 ->schema([
                     Forms\Components\Placeholder::make('help')
                         ->hiddenLabel()
                         ->content(fn (): HtmlString => new HtmlString(
                             '<div style="font-size:13px;opacity:.8;">' .
-                            'Операции фиксируют изменения по датам и не перетирают историю. ' .
-                            'Если нужно отменить действие — создайте компенсирующую операцию.' .
+                            '1С остается источником финансовой истины. Операции используются как управленческий слой для карточки места и сценариев работы. ' .
+                            'Для отмены используйте компенсирующую операцию, а не ручное переписывание истории.' .
                             '</div>'
                         )),
                 ])
-                ->columnSpanFull(),
+                ->columnSpanFull()
+                ->collapsible()
+                ->collapsed(),
         ]);
     }
 

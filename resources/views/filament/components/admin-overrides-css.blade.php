@@ -180,4 +180,28 @@ html:not([data-admin-overrides="0"]) .dark .fi-sc-actions.fi-sticky .fi-ac{
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34) !important;
 }
+
+/* ====================================================================== */
+/* === Form helper question icons: use neutral (non-accent) color       === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-fo-field-label-ctn .fi-sc-icon.fi-color{
+  color: rgba(107, 114, 128, 0.62) !important; /* neutral + semi-transparent */
+}
+
+html:not([data-admin-overrides="0"]).dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color,
+html:not([data-admin-overrides="0"]) .dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color{
+  color: rgba(156, 163, 175, 0.68) !important; /* neutral + semi-transparent */
+}
+
+html:not([data-admin-overrides="0"]) .fi-fo-field-label-ctn .fi-sc-icon.fi-color:hover,
+html:not([data-admin-overrides="0"]) .fi-fo-field-label-ctn .fi-sc-icon.fi-color:focus{
+  color: var(--gray-600) !important;
+}
+
+html:not([data-admin-overrides="0"]).dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color:hover,
+html:not([data-admin-overrides="0"]).dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color:focus,
+html:not([data-admin-overrides="0"]) .dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color:hover,
+html:not([data-admin-overrides="0"]) .dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color:focus{
+  color: var(--gray-300) !important;
+}
 </style>

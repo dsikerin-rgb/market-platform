@@ -666,7 +666,7 @@ class MarketSettings extends Page
             'class="fi-btn fi-btn-color-primary fi-btn-size-md" ' .
             'style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;' .
             'padding:.55rem .95rem;border-radius:.75rem;font-weight:600;text-decoration:none;">' .
-                '<span class="fi-btn-label">Открыть карту</span>' .
+                '<span class="fi-btn-label">Показатьть на карте</span>' .
             '</a>'
         );
     }
