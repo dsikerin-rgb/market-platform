@@ -70,26 +70,34 @@
                 <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $market->slug]) }}">Все анонсы</a>
             </div>
             <div class="mp-grid">
-                @foreach($announcements as $announcement)
-                    <article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+                @foreach($announcements->take(4) as $announcement)
+                    @php($hasImage = filled($announcement->cover_image_url))
+                    <article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;{{ $hasImage ? 'padding:0;overflow:hidden;display:block;' : 'padding:12px;display:flex;flex-direction:column;gap:8px;' }}">
                         @if($announcement->cover_image_url)
-                            <div style="height:146px;border-radius:10px;overflow:hidden;border:1px solid #d9e6f7;position:relative;">
+                            <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
+                               style="height:220px;overflow:hidden;position:relative;display:block;">
                                 <img src="{{ $announcement->cover_image_url }}" alt="{{ $announcement->title }}" style="width:100%;height:100%;object-fit:cover;">
-                                @if($announcement->starts_at)
-                                    <span style="position:absolute;right:10px;bottom:10px;color:#fff;font-weight:800;font-size:22px;line-height:1;padding:8px 11px;border-radius:8px;background:rgba(17,32,59,.35);backdrop-filter:blur(3px);">
-                                        {{ optional($announcement->starts_at)->format('d.m') }}
+                                @php($startDate = optional($announcement->starts_at)->format('d.m'))
+                                @php($endDate = optional($announcement->ends_at)->format('d.m'))
+                                @php($fallbackDate = optional($announcement->published_at)->format('d.m') ?: optional($announcement->created_at)->format('d.m'))
+                                @php($dateLabel = ((string) $announcement->kind === 'promo' && filled($startDate) && filled($endDate)) ? ($startDate . ' - ' . $endDate) : ($startDate ?: $fallbackDate))
+                                @if(filled($dateLabel))
+                                    <span style="position:absolute;right:10px;bottom:10px;color:#fff;padding:8px 11px;border-radius:8px;background:rgba(17,32,59,.42);backdrop-filter:blur(3px);display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:82%;">
+                                        <span style="font-weight:800;font-size:22px;line-height:1;">{{ $dateLabel }}</span>
+                                        <span style="font-weight:700;font-size:16px;line-height:1.2;text-align:right;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ $announcement->title }}</span>
                                     </span>
                                 @endif
-                            </div>
-                        @endif
-                        <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
-                           style="font-size:18px;font-weight:800;line-height:1.25;">
-                            {{ $announcement->title }}
-                        </a>
-                        @if(filled($announcement->excerpt))
-                            <p class="mp-muted" style="margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
-                                {{ $announcement->excerpt }}
-                            </p>
+                            </a>
+                        @else
+                            <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
+                               style="font-size:18px;font-weight:800;line-height:1.25;">
+                                {{ $announcement->title }}
+                            </a>
+                            @if(filled($announcement->excerpt))
+                                <p class="mp-muted" style="margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+                                    {{ $announcement->excerpt }}
+                                </p>
+                            @endif
                         @endif
                     </article>
                 @endforeach

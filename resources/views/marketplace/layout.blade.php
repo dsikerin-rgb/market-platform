@@ -231,7 +231,7 @@
         <div class="mp-top-line">
             <a href="{{ route('marketplace.home', ['marketSlug' => $marketRouteKey]) }}" class="mp-logo">
                 <span class="mp-logo-dot"></span>
-                <span class="mp-logo-label">Маркетплейс Экоярмарки</span>
+                <span class="mp-logo-label">МАРКЕТПЛЕЙС ЭКОЯРМАРКИ</span>
             </a>
             <div class="mp-actions">
                 <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">🗺 <span>Карта</span></a>
