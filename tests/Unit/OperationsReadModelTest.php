@@ -30,6 +30,16 @@ class OperationsReadModelTest extends TestCase
             'status' => 'occupied',
         ]);
 
+        $tenantA = \App\Models\Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО А',
+        ]);
+
+        $tenantB = \App\Models\Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Б',
+        ]);
+
         Operation::create([
             'market_id' => $market->id,
             'entity_type' => 'market_space',
@@ -41,7 +51,7 @@ class OperationsReadModelTest extends TestCase
             'payload' => [
                 'market_space_id' => $space->id,
                 'from_tenant_id' => null,
-                'to_tenant_id' => 12,
+                'to_tenant_id' => $tenantA->id,
             ],
         ]);
 
@@ -55,8 +65,8 @@ class OperationsReadModelTest extends TestCase
             'status' => 'applied',
             'payload' => [
                 'market_space_id' => $space->id,
-                'from_tenant_id' => 12,
-                'to_tenant_id' => 15,
+                'from_tenant_id' => $tenantA->id,
+                'to_tenant_id' => $tenantB->id,
             ],
         ]);
 
@@ -64,7 +74,7 @@ class OperationsReadModelTest extends TestCase
         $period = CarbonImmutable::create(2025, 12, 1, 0, 0, 0, 'Europe/Moscow');
         $state = $service->getSpaceStateForPeriod((int) $market->id, $period, (int) $space->id);
 
-        $this->assertSame(12, $state['tenant_id']);
+        $this->assertSame($tenantA->id, $state['tenant_id']);
     }
 
     public function test_electricity_is_summed_within_period(): void
@@ -113,5 +123,67 @@ class OperationsReadModelTest extends TestCase
         $state = $service->getSpaceStateForPeriod((int) $market->id, $period, (int) $space->id);
 
         $this->assertSame(150.0, $state['electricity']);
+    }
+
+    public function test_read_model_ignores_non_applied_operations(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'C-3',
+            'status' => 'occupied',
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::ELECTRICITY_INPUT,
+            'effective_at' => '2026-01-05 00:00:00',
+            'effective_tz' => 'Europe/Moscow',
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'amount' => 100,
+            ],
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::ELECTRICITY_INPUT,
+            'effective_at' => '2026-01-10 00:00:00',
+            'effective_tz' => 'Europe/Moscow',
+            'status' => 'draft',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'amount' => 500,
+            ],
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::ELECTRICITY_INPUT,
+            'effective_at' => '2026-01-15 00:00:00',
+            'effective_tz' => 'Europe/Moscow',
+            'status' => 'canceled',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'amount' => 900,
+            ],
+        ]);
+
+        $service = app(OperationsStateService::class);
+        $period = CarbonImmutable::create(2026, 1, 1, 0, 0, 0, 'Europe/Moscow');
+        $state = $service->getSpaceStateForPeriod((int) $market->id, $period, (int) $space->id);
+
+        $this->assertSame(100.0, $state['electricity']);
     }
 }

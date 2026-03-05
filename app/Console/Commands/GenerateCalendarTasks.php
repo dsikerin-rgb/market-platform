@@ -167,22 +167,51 @@ class GenerateCalendarTasks extends Command
         $source = strtolower(trim((string) ($holiday->source ?? '')));
         $dateLabel = $holiday->starts_at?->format('Y-m-d') ?? 'n/a';
         $notifyDays = is_numeric($holiday->notify_before_days) ? max(0, (int) $holiday->notify_before_days) : 7;
+        $scenarioConfig = $this->holidayScenarioConfig($holiday);
+
+        $tasksEnabled = $this->configBool($scenarioConfig, 'enabled_tasks', true);
+        if (! $tasksEnabled) {
+            return [];
+        }
+
+        $leadDays = $this->configInt($scenarioConfig, 'lead_days');
+        if ($leadDays === null) {
+            $leadDays = max(1, min(7, $notifyDays > 0 ? $notifyDays : 7));
+        }
+
+        $explicitRecipients = array_values(array_unique(array_merge(
+            $this->configuredHolidayRecipients((array) ($market->settings ?? [])),
+            $this->configIntList($scenarioConfig, 'responsible_user_ids'),
+        )));
+
+        $channels = $this->configStringList($scenarioConfig, 'channels');
+        $channelsText = $channels !== [] ? implode(', ', $channels) : 'СМИ, рассылка, Telegram, SMS, VK';
+        $scenarioNote = trim((string) ($scenarioConfig['note'] ?? ''));
+        $communicationPlanEnabled = $this->configBool($scenarioConfig, 'communication_plan', true);
+        $adMaterialsEnabled = $this->configBool($scenarioConfig, 'ad_materials', true);
+        $autoAiDraftsEnabled = $this->configBool($scenarioConfig, 'auto_ai_drafts', true);
 
         if ($source === 'sanitary_auto') {
             $dueAt = $holiday->starts_at?->copy()->subDay()->setTime(12, 0);
+            $descriptionLines = [
+                'calendar_scenario=sanitary_day_preparation',
+                "Событие календаря: {$holiday->title}",
+                '',
+                'Чек-лист:',
+                '- Проверить график уборки и доступ подрядчиков.',
+                '- Подготовить уведомление арендаторам по ограничениям на дату.',
+                '- Назначить ответственных по зонам и контрольный обход.',
+            ];
+
+            if ($scenarioNote !== '') {
+                $descriptionLines[] = '';
+                $descriptionLines[] = 'Комментарий: ' . $scenarioNote;
+            }
 
             return [[
                 'key' => 'sanitary_day_preparation',
                 'title' => "Санитарный день {$dateLabel}: подготовка рынка",
-                'description' => implode("\n", [
-                    'calendar_scenario=sanitary_day_preparation',
-                    "Событие календаря: {$holiday->title}",
-                    '',
-                    'Чек-лист:',
-                    '- Проверить график уборки и доступ подрядчиков.',
-                    '- Подготовить уведомление арендаторам по ограничениям на дату.',
-                    '- Назначить ответственных по зонам и контрольный обход.',
-                ]),
+                'description' => implode("\n", $descriptionLines),
                 'priority' => Task::PRIORITY_HIGH,
                 'due_at' => $dueAt,
                 'roles' => [
@@ -191,37 +220,84 @@ class GenerateCalendarTasks extends Command
                     'market-manager',
                     'market-admin',
                 ],
-                'explicit_user_ids' => [],
+                'explicit_user_ids' => $explicitRecipients,
             ]];
         }
 
-        $leadDays = max(1, min(7, $notifyDays > 0 ? $notifyDays : 7));
+        $scenarios = [];
         $dueAt = $holiday->starts_at?->copy()->subDays($leadDays)->setTime(12, 0);
 
-        return [[
-            'key' => 'holiday_communications',
-            'title' => "{$holiday->title}: план информирования и подготовки",
-            'description' => implode("\n", [
+        if ($communicationPlanEnabled) {
+            $descriptionLines = [
                 'calendar_scenario=holiday_communications',
                 "Событие календаря: {$holiday->title}",
                 '',
                 'Подготовить коммуникационный план:',
                 '- Информирование арендаторов.',
                 '- Информирование покупателей.',
-                '- Каналы: СМИ, рассылка, Telegram, SMS, VK.',
+                '- Каналы: ' . $channelsText . '.',
                 '- Ответственные и сроки публикаций.',
-            ]),
-            'priority' => Task::PRIORITY_NORMAL,
-            'due_at' => $dueAt,
-            'roles' => [
-                'market-marketing',
-                'market-advertising',
-                'market-manager',
-                'market-owner',
-                'market-admin',
-            ],
-            'explicit_user_ids' => $this->configuredHolidayRecipients((array) ($market->settings ?? [])),
-        ]];
+            ];
+
+            if ($scenarioNote !== '') {
+                $descriptionLines[] = '';
+                $descriptionLines[] = 'Комментарий: ' . $scenarioNote;
+            }
+
+            $scenarios[] = [
+                'key' => 'holiday_communications',
+                'title' => "{$holiday->title}: план информирования и подготовки",
+                'description' => implode("\n", $descriptionLines),
+                'priority' => Task::PRIORITY_NORMAL,
+                'due_at' => $dueAt,
+                'roles' => [
+                    'market-marketing',
+                    'market-advertising',
+                    'market-manager',
+                    'market-owner',
+                    'market-admin',
+                ],
+                'explicit_user_ids' => $explicitRecipients,
+            ];
+        }
+
+        if ($adMaterialsEnabled) {
+            $materialsDueAt = $holiday->starts_at?->copy()->subDays(max(1, $leadDays + 1))->setTime(12, 0);
+            $descriptionLines = [
+                'calendar_scenario=holiday_ad_materials',
+                "Событие календаря: {$holiday->title}",
+                '',
+                'Подготовить пакет материалов:',
+                '- короткий анонс для Telegram/VK/портала;',
+                '- текст для рассылки и SMS;',
+                '- тезисы для объявлений на территории рынка.',
+            ];
+
+            if ($autoAiDraftsEnabled) {
+                $descriptionLines[] = '- Сформировать AI-черновики для согласования.';
+            }
+
+            if ($scenarioNote !== '') {
+                $descriptionLines[] = '';
+                $descriptionLines[] = 'Комментарий: ' . $scenarioNote;
+            }
+
+            $scenarios[] = [
+                'key' => 'holiday_ad_materials',
+                'title' => "{$holiday->title}: подготовка рекламных материалов",
+                'description' => implode("\n", $descriptionLines),
+                'priority' => Task::PRIORITY_NORMAL,
+                'due_at' => $materialsDueAt,
+                'roles' => [
+                    'market-marketing',
+                    'market-advertising',
+                    'market-admin',
+                ],
+                'explicit_user_ids' => $explicitRecipients,
+            ];
+        }
+
+        return $scenarios;
     }
 
     /**
@@ -237,9 +313,77 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param array{key:string,title:string,description:string,priority:string,due_at:?Carbon,roles:list<string>,explicit_user_ids:list<int>} $scenario
-     * @return array{created:int,updated:int,linked:int,skipped:int}
+     * @return array<string,mixed>
      */
+    private function holidayScenarioConfig(MarketHoliday $holiday): array
+    {
+        $payload = is_array($holiday->audience_payload ?? null) ? $holiday->audience_payload : [];
+        $scenarios = $payload['scenarios'] ?? [];
+
+        return is_array($scenarios) ? $scenarios : [];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function configBool(array $config, string $key, bool $default): bool
+    {
+        if (! array_key_exists($key, $config)) {
+            return $default;
+        }
+
+        return (bool) $config[$key];
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     */
+    private function configInt(array $config, string $key): ?int
+    {
+        $value = $config[$key] ?? null;
+
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return max(0, (int) $value);
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return list<int>
+     */
+    private function configIntList(array $config, string $key): array
+    {
+        $raw = $config[$key] ?? [];
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(static fn ($value): int => is_numeric($value) ? (int) $value : 0, $raw),
+            static fn (int $value): bool => $value > 0,
+        ));
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return list<string>
+     */
+    private function configStringList(array $config, string $key): array
+    {
+        $raw = $config[$key] ?? [];
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(static fn ($value): string => trim((string) $value), $raw),
+            static fn (string $value): bool => $value !== '',
+        ));
+    }
     private function processScenario(
         MarketHoliday $holiday,
         Market $market,

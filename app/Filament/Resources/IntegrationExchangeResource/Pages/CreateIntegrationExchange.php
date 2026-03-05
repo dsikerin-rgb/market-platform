@@ -16,11 +16,6 @@ class CreateIntegrationExchange extends BaseCreateRecord
 
     protected static ?string $title = 'Создать обмен интеграции';
 
-    public function getBreadcrumb(): string
-    {
-        return 'Создать обмен';
-    }
-
     /**
      * Ручное создание обменов оставляем только super-admin.
      * Для остальных журнал должен быть “только чтение”.

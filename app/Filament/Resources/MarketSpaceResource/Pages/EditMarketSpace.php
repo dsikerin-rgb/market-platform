@@ -12,11 +12,11 @@ class EditMarketSpace extends BaseEditRecord
 {
     protected static string $resource = MarketSpaceResource::class;
 
-    protected static ?string $title = 'Редактирование торгового места';
+    protected static ?string $title = 'Торговое место';
 
     public function getBreadcrumb(): string
     {
-        return 'Редактирование торгового места';
+        return 'Торговое место';
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
@@ -106,7 +106,7 @@ class EditMarketSpace extends BaseEditRecord
 
         if (class_exists(\Filament\Actions\Action::class)) {
             $openMapAction = \Filament\Actions\Action::make('openMap')
-                ->label('Перейти на карту')
+                ->label('Открыть карту')
                 ->disabled(! $isMapLinked);
 
             if ($mapUrl) {
@@ -122,7 +122,7 @@ class EditMarketSpace extends BaseEditRecord
             }
         } elseif (class_exists(\Filament\Pages\Actions\Action::class)) {
             $openMapAction = \Filament\Pages\Actions\Action::make('openMap')
-                ->label('Перейти на карту')
+                ->label('Открыть карту')
                 ->disabled(! $isMapLinked);
 
             if ($mapUrl) {
@@ -151,3 +151,4 @@ class EditMarketSpace extends BaseEditRecord
         return $actions;
     }
 }
+

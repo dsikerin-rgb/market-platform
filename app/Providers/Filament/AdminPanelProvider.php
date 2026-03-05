@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\Login as AdminLogin;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\OpsDiagnostics;
@@ -50,7 +51,7 @@ class AdminPanelProvider extends PanelProvider
             // ->viteTheme() подменяет тему Filament целиком, и если theme.css не включает базовые стили Filament,
             // получаются "огромные" элементы и разваленная вёрстка.
 
-            ->login()
+            ->login(AdminLogin::class)
             ->passwordReset()
             ->profile()
 
@@ -174,7 +175,7 @@ class AdminPanelProvider extends PanelProvider
                             '<a href="' . e($url) . '" target="_blank" rel="noopener" ' .
                                 'class="fi-btn fi-btn-size-sm fi-btn-color-primary fi-color-primary" ' .
                                 'style="white-space:nowrap;">' .
-                                'Открыть карту' .
+                                'Показатьть на карте' .
                             '</a>' .
                         '</div>'
                     );

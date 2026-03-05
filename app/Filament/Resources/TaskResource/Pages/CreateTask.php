@@ -19,11 +19,6 @@ class CreateTask extends BaseCreateRecord
     // Убираем кнопку "Create & create another"
     protected static bool $canCreateAnother = false;
 
-    public function getBreadcrumb(): string
-    {
-        return 'Создать задачу';
-    }
-
     // После создания — сразу в список задач
     protected function getRedirectUrl(): string
     {

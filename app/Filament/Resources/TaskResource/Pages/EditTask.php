@@ -52,7 +52,7 @@ class EditTask extends BaseEditRecord
 
     public function getBreadcrumb(): string
     {
-        return 'Редактирование';
+        return 'Задача';
     }
 
     /**

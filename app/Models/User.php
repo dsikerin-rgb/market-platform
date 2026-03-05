@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -109,12 +108,14 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        // Локально пускаем всех, чтобы не мешать разработке
+        if (method_exists($this, 'hasAnyRole') && $this->hasAnyRole(['merchant', 'merchant-user'])) {
+            return false;
+        }
+
         if (app()->environment('local')) {
             return true;
         }
 
-        // Для admin-панели — роли управления рынком (super-admin всегда проходит)
         if ($panel->getId() === 'admin') {
             return $this->hasAnyRole([
                 'super-admin',

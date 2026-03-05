@@ -3,9 +3,12 @@
 namespace App\Filament\Resources\TenantResource\Pages;
 
 use App\Filament\Resources\TenantResource;
+use App\Filament\Resources\TenantResource\Pages\Concerns\InteractsWithTenantCabinet;
 use App\Models\TenantRequest;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Models\User;
+use App\Services\Cabinet\TenantImpersonationService;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use App\Filament\Resources\Pages\BaseEditRecord;
@@ -14,18 +17,46 @@ use Illuminate\Support\Facades\Schema as DbSchema;
 
 class EditTenant extends BaseEditRecord
 {
+    use InteractsWithTenantCabinet;
+
     protected static string $resource = TenantResource::class;
 
     public function getTitle(): string|Htmlable
     {
         $name = trim((string) ($this->record?->name ?? ''));
 
-        return $name !== '' ? $name : 'Редактирование арендатора';
+        return $name !== '' ? $name : 'Арендатор';
     }
 
     public function getBreadcrumb(): string
     {
-        return 'Редактирование арендатора';
+        return 'Арендатор';
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        return array_merge($data, $this->buildCabinetFormData($this->record));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $this->cabinetPayload = $this->pullCabinetPayloadFromForm($data);
+        $this->validateCabinetPayload($this->cabinetPayload, $this->record);
+
+        return $data;
+    }
+
+    protected function afterSave(): void
+    {
+        $this->syncCabinetPayload($this->record, $this->cabinetPayload);
     }
 
     protected function getHeaderActions(): array
@@ -53,10 +84,75 @@ class EditTenant extends BaseEditRecord
         }
 
         return [
+            Actions\Action::make('cabinet_impersonate')
+                ->label('Войти в кабинет')
+                ->icon('heroicon-o-arrow-right-on-rectangle')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalHeading('Войти в кабинет арендатора?')
+                ->modalDescription('Откроется кабинет арендатора в текущей сессии. Возврат в админку доступен из шапки кабинета.')
+                ->visible(fn (): bool => $this->canImpersonateCabinet())
+                ->action(function () {
+                    $service = app(TenantImpersonationService::class);
+                    $impersonator = \Filament\Facades\Filament::auth()->user();
+
+                    if (! $impersonator instanceof User) {
+                        abort(403);
+                    }
+
+                    if (! $service->canIssue($impersonator, $this->record)) {
+                        $reason = $service->isCrossMarketDenied($impersonator, $this->record)
+                            ? 'cross_market_denied'
+                            : 'forbidden_role';
+                        $service->recordDenied($impersonator, $this->record, request(), $reason);
+
+                        Notification::make()
+                            ->danger()
+                            ->title('Недостаточно прав для входа в кабинет арендатора')
+                            ->send();
+                        abort(403);
+                    }
+
+                    $cabinetUser = $service->resolveCabinetUser($this->record);
+                    if (! $cabinetUser) {
+                        $service->recordDenied($impersonator, $this->record, request(), 'cabinet_user_missing');
+
+                        Notification::make()
+                            ->warning()
+                            ->title('Не найден пользователь кабинета арендатора')
+                            ->body('Создайте логин на вкладке «Кабинет», затем повторите вход.')
+                            ->send();
+
+                        return redirect()->to(url('/admin/tenants/' . (int) $this->record->id . '/edit?tab=kabinet::data::tab'));
+                    }
+
+                    $url = $service->issue($impersonator, $this->record, $cabinetUser, request());
+
+                    return redirect()->to($url);
+                }),
             $chatAction,
             Actions\DeleteAction::make()
                 ->label('Удалить арендатора'),
         ];
+    }
+
+    protected function canImpersonateCabinet(): bool
+    {
+        $user = \Filament\Facades\Filament::auth()->user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $user->hasRole('market-admin')) {
+            return false;
+        }
+
+        return (int) ($user->market_id ?? 0) === (int) ($this->record->market_id ?? 0);
     }
 
     protected function buildHeaderChatViewData(): array
@@ -337,3 +433,4 @@ class EditTenant extends BaseEditRecord
         }
     }
 }
+
