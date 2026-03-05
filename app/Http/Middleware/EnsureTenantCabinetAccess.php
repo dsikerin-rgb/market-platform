@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTenantCabinetAccess
@@ -16,28 +17,53 @@ class EnsureTenantCabinetAccess
         $user = $request->user();
 
         if (! $user) {
-            abort(403);
+            return redirect()->route('cabinet.login');
         }
 
         $hasRoleAccess = method_exists($user, 'hasAnyRole')
             && $user->hasAnyRole(['merchant', 'merchant-user']);
 
         if (! $hasRoleAccess) {
-            abort(403);
+            if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole([
+                'super-admin',
+                'market-admin',
+                'market-manager',
+                'market-operator',
+            ])) {
+                return redirect('/admin');
+            }
+
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('cabinet.login');
         }
 
         if (! $user->tenant_id) {
-            abort(403);
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('cabinet.login');
         }
 
         $tenant = $user->tenant;
 
         if (! $tenant) {
-            abort(403);
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('cabinet.login');
         }
 
         if ($user->market_id && $tenant->market_id && $user->market_id !== $tenant->market_id) {
-            abort(403);
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('cabinet.login');
         }
 
         return $next($request);

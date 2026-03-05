@@ -12,6 +12,7 @@ class AccrualsController extends Controller
     public function index(Request $request): View
     {
         $tenant = $request->user()->tenant;
+        $allowedSpaceIds = $request->user()->allowedTenantSpaceIds();
 
         $month = $request->string('month')->toString();
         $onlyDebt = $request->boolean('only_debt');
@@ -19,6 +20,9 @@ class AccrualsController extends Controller
         $query = TenantAccrual::query()
             ->where('tenant_id', $tenant->id)
             ->when($tenant->market_id, fn ($builder) => $builder->where('market_id', $tenant->market_id))
+            ->when($allowedSpaceIds !== [], fn ($builder) => $builder->where(function ($q) use ($allowedSpaceIds): void {
+                $q->whereNull('market_space_id')->orWhereIn('market_space_id', $allowedSpaceIds);
+            }))
             ->orderByDesc('period');
 
         if ($month !== '') {
@@ -37,6 +41,9 @@ class AccrualsController extends Controller
         $availableMonths = TenantAccrual::query()
             ->where('tenant_id', $tenant->id)
             ->when($tenant->market_id, fn ($builder) => $builder->where('market_id', $tenant->market_id))
+            ->when($allowedSpaceIds !== [], fn ($builder) => $builder->where(function ($q) use ($allowedSpaceIds): void {
+                $q->whereNull('market_space_id')->orWhereIn('market_space_id', $allowedSpaceIds);
+            }))
             ->orderByDesc('period')
             ->pluck('period')
             ->map(fn ($period) => $period->format('Y-m'))

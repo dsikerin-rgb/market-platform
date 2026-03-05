@@ -16,7 +16,7 @@
                 </div>
             </div>
             <div class="flex justify-end">
-                <div class="max-w-[85%] rounded-2xl bg-slate-900 text-white px-3 py-2.5 text-sm">
+                <div class="max-w-[85%] rounded-2xl bg-sky-600 text-white px-3 py-2.5 text-sm">
                     Добрый день! Да, сегодня поступление. Подходите на место Э-980/1.
                 </div>
             </div>

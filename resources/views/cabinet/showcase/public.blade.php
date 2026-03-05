@@ -66,6 +66,30 @@
             </p>
         </header>
 
+        @if(($spaces ?? collect())->isNotEmpty())
+            <section class="bg-white rounded-2xl p-4 border shadow-sm space-y-2">
+                <h2 class="text-base font-semibold">Торговое место</h2>
+                <form method="GET" action="{{ request()->url() }}">
+                    <select
+                        name="space_id"
+                        class="w-full rounded-xl border-slate-200 px-3 py-2 text-sm"
+                        onchange="this.form.submit()"
+                    >
+                        <option value="">Все торговые места</option>
+                        @foreach($spaces as $space)
+                            @php
+                                $spaceLabel = trim((string) ($space->code ?: $space->number ?: $space->display_name ?: ('#' . $space->id)));
+                                $spaceName = trim((string) ($space->display_name ?? ''));
+                            @endphp
+                            <option value="{{ $space->id }}" @selected((int) ($selectedSpaceId ?? 0) === (int) $space->id)>
+                                {{ $spaceLabel }}{{ $spaceName !== '' ? ' · ' . $spaceName : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </form>
+            </section>
+        @endif
+
         @if($photos->isNotEmpty())
             <section aria-label="Фотографии витрины" class="grid grid-cols-2 gap-3">
                 @foreach($photos as $photo)
@@ -125,7 +149,7 @@
         <div class="text-center">
             @if($telegramLink)
                 <a
-                    class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-medium"
+                    class="inline-flex items-center justify-center rounded-xl bg-sky-600 text-white px-4 py-2 text-sm font-medium"
                     href="{{ $telegramLink }}"
                     target="_blank"
                     rel="noreferrer noopener"
@@ -138,6 +162,33 @@
                 </div>
             @endif
         </div>
+
+        <section class="bg-white rounded-2xl p-4 border shadow-sm space-y-3">
+            <h2 class="text-base font-semibold">Отзывы покупателей</h2>
+
+            @php
+                $reviewsList = collect($reviews ?? []);
+            @endphp
+
+            @if($reviewsList->isEmpty())
+                <div class="text-sm text-slate-500">Пока нет отзывов.</div>
+            @else
+                <div class="space-y-3">
+                    @foreach($reviewsList as $review)
+                        <article class="rounded-xl border border-slate-200 p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="text-sm font-medium text-slate-900">{{ $review->reviewer_name ?: 'Покупатель' }}</div>
+                                <div class="text-amber-500 text-sm">
+                                    {{ str_repeat('★', max(1, min(5, (int) $review->rating))) }}
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-slate-700 whitespace-pre-line">{{ (string) $review->review_text }}</p>
+                            <p class="mt-2 text-xs text-slate-400">{{ $review->created_at?->format('d.m.Y H:i') }}</p>
+                        </article>
+                    @endforeach
+                </div>
+            @endif
+        </section>
     </div>
 </body>
 </html>

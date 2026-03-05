@@ -129,8 +129,11 @@ class TicketChatNotificationRouter
 
         $settings = (array) ($market->settings ?? []);
         $categoryRecipientIds = null;
-        if ((string) ($ticket->category ?? '') === 'repair') {
+        $ticketCategory = (string) ($ticket->category ?? '');
+        if ($ticketCategory === 'repair') {
             $categoryRecipientIds = $settings['request_repair_notification_recipient_user_ids'] ?? null;
+        } elseif ($ticketCategory === 'help') {
+            $categoryRecipientIds = $settings['request_help_notification_recipient_user_ids'] ?? null;
         }
 
         $recipientIds = $categoryRecipientIds

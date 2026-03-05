@@ -190,9 +190,19 @@ class Tenant extends Model
         return $this->hasMany(TenantDocument::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(TenantReview::class);
+    }
+
     public function showcase(): HasOne
     {
         return $this->hasOne(TenantShowcase::class);
+    }
+
+    public function spaceShowcases(): HasMany
+    {
+        return $this->hasMany(TenantSpaceShowcase::class);
     }
 
     /**

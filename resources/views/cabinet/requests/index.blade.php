@@ -5,7 +5,7 @@
                 <h2 class="text-base font-semibold text-slate-900">Обращения в управляющую компанию</h2>
                 <p class="text-xs text-slate-500 mt-1">Создавайте обращения и отслеживайте ответы.</p>
             </div>
-            <a class="shrink-0 rounded-2xl bg-slate-900 text-white px-4 py-2.5 text-xs font-semibold" href="{{ route('cabinet.requests.create') }}">
+            <a class="shrink-0 rounded-2xl bg-sky-600 text-white px-4 py-2.5 text-xs font-semibold" href="{{ route('cabinet.requests.create') }}">
                 Новое
             </a>
         </div>
@@ -24,10 +24,16 @@
                         <p class="text-sm font-semibold text-slate-900 break-words">{{ (string) $ticket->subject }}</p>
                         <div class="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                             <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{{ $categories[$ticket->category] ?? 'Другое' }}</span>
+                            @if($ticket->marketSpace)
+                                @php
+                                    $spaceTitle = trim((string) ($ticket->marketSpace->code ?: $ticket->marketSpace->number ?: $ticket->marketSpace->display_name ?: ('#' . $ticket->marketSpace->id)));
+                                @endphp
+                                <span class="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">{{ $spaceTitle }}</span>
+                            @endif
                             <span class="text-slate-400">{{ $ticket->created_at?->format('d.m.Y H:i') }}</span>
                         </div>
                     </div>
-                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium bg-slate-900 text-white">
+                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium bg-sky-600 text-white">
                         {{ (string) $ticket->status }}
                     </span>
                 </div>

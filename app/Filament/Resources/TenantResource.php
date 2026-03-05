@@ -245,6 +245,17 @@ class TenantResource extends BaseResource
                                     ->label('Контактное лицо'),
                             ])
                             ->columns(2),
+
+                        static::cabinetAccessSection(),
+
+                        Section::make('Сотрудники по торговым местам')
+                            ->schema([
+                                Forms\Components\Placeholder::make('contacts_staff_by_spaces')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderContactsStaffBySpaces($record))
+                                    ->columnSpanFull(),
+                            ]),
                     ]),
 
                 Tab::make('Реквизиты')
@@ -265,97 +276,6 @@ class TenantResource extends BaseResource
 
                 Tab::make('Кабинет')
                     ->schema([
-                        Section::make('Доступ в кабинет арендатора')
-                            ->schema([
-                                Forms\Components\TextInput::make('cabinet_user_name')
-                                    ->label('Имя пользователя кабинета')
-                                    ->maxLength(255)
-                                    ->placeholder('Например: ИП Иванов И.И.'),
-
-                                Forms\Components\TextInput::make('cabinet_user_email')
-                                    ->label('Логин (email)')
-                                    ->email()
-                                    ->maxLength(255)
-                                    ->placeholder('tenant@example.com'),
-
-                                Forms\Components\TextInput::make('cabinet_user_password')
-                                    ->label('Новый пароль')
-                                    ->password()
-                                    ->revealable()
-                                    ->minLength(8)
-                                    ->maxLength(255)
-                                    ->helperText('Для существующего аккаунта оставьте пустым, если пароль менять не нужно.'),
-
-                                Forms\Components\Repeater::make('cabinet_additional_users')
-                                    ->label('Доп. пользователи кабинета')
-                                    ->columnSpanFull()
-                                    ->defaultItems(0)
-                                    ->addActionLabel('Добавить сотрудника')
-                                    ->reorderable(false)
-                                    ->collapsible()
-                                    ->collapsed()
-                                    ->itemLabel(function (array $state): ?string {
-                                        $name = trim((string) ($state['name'] ?? ''));
-                                        $email = trim((string) ($state['email'] ?? ''));
-
-                                        if ($name !== '' && $email !== '') {
-                                            return $name . ' (' . $email . ')';
-                                        }
-
-                                        if ($email !== '') {
-                                            return $email;
-                                        }
-
-                                        if ($name !== '') {
-                                            return $name;
-                                        }
-
-                                        return 'Новый сотрудник';
-                                    })
-                                    ->schema([
-                                        Forms\Components\Hidden::make('id')
-                                            ->dehydrated(true),
-
-                                        Forms\Components\TextInput::make('name')
-                                            ->label('Имя сотрудника')
-                                            ->maxLength(255)
-                                            ->placeholder('Например: Менеджер точки'),
-
-                                        Forms\Components\TextInput::make('email')
-                                            ->label('Логин (email)')
-                                            ->email()
-                                            ->maxLength(255)
-                                            ->placeholder('employee@example.com'),
-
-                                        Forms\Components\TextInput::make('password')
-                                            ->label('Новый пароль')
-                                            ->password()
-                                            ->revealable()
-                                            ->maxLength(255)
-                                            ->minLength(8)
-                                            ->suffixAction(
-                                                Action::make('generateAdditionalCabinetUserPassword')
-                                                    ->label('')
-                                                    ->tooltip('Сгенерировать пароль')
-                                                    ->icon('heroicon-m-sparkles')
-                                                    ->color('gray')
-                                                    ->iconButton()
-                                                    ->action(function (\Filament\Schemas\Components\Utilities\Set $set): void {
-                                                        $set(
-                                                            'password',
-                                                            \Illuminate\Support\Str::password(length: 12, letters: true, numbers: true, symbols: false, spaces: false),
-                                                        );
-                                                    }),
-                                                isInline: true,
-                                            )
-                                            ->helperText('Можно ввести пароль вручную или сгенерировать кнопкой.')
-                                            ->dehydrated(true),
-                                    ])
-                                    ->columns(3)
-                                    ->helperText('Сотрудники арендатора смогут входить в кабинет по своим логинам и паролям.'),
-                            ])
-                            ->columns(2),
-
                         Section::make('Витрина арендатора')
                             ->schema([
                                 Forms\Components\TextInput::make('showcase_title')
@@ -565,6 +485,125 @@ class TenantResource extends BaseResource
             ->defaultSort('accruals_total_with_vat_sum', 'desc')
             ->toolbarActions($toolbarActions)
             ->recordUrl(fn (Tenant $record): string => static::getUrl('edit', ['record' => $record]));
+    }
+
+    private static function cabinetAccessSection(): Section
+    {
+        return Section::make('Доступ в кабинет арендатора')
+            ->schema([
+                Forms\Components\TextInput::make('cabinet_user_name')
+                    ->label('Имя пользователя кабинета')
+                    ->maxLength(255)
+                    ->placeholder('Например: ИП Иванов И.И.'),
+
+                Forms\Components\TextInput::make('cabinet_user_email')
+                    ->label('Логин (email)')
+                    ->email()
+                    ->maxLength(255)
+                    ->placeholder('tenant@example.com'),
+
+                Forms\Components\TextInput::make('cabinet_user_password')
+                    ->label('Новый пароль')
+                    ->password()
+                    ->revealable()
+                    ->minLength(8)
+                    ->maxLength(255)
+                    ->helperText('Для существующего аккаунта оставьте пустым, если пароль менять не нужно.'),
+
+                Forms\Components\Repeater::make('cabinet_additional_users')
+                    ->label('Доп. пользователи кабинета')
+                    ->columnSpanFull()
+                    ->defaultItems(0)
+                    ->addActionLabel('Добавить сотрудника')
+                    ->reorderable(false)
+                    ->collapsible()
+                    ->collapsed()
+                    ->itemLabel(function (array $state): ?string {
+                        $name = trim((string) ($state['name'] ?? ''));
+                        $email = trim((string) ($state['email'] ?? ''));
+
+                        if ($name !== '' && $email !== '') {
+                            return $name . ' (' . $email . ')';
+                        }
+
+                        if ($email !== '') {
+                            return $email;
+                        }
+
+                        if ($name !== '') {
+                            return $name;
+                        }
+
+                        return 'Новый сотрудник';
+                    })
+                    ->schema([
+                        Forms\Components\Hidden::make('id')
+                            ->dehydrated(true),
+
+                        Forms\Components\TextInput::make('name')
+                            ->label('Имя сотрудника')
+                            ->maxLength(255)
+                            ->placeholder('Например: Менеджер точки'),
+
+                        Forms\Components\TextInput::make('email')
+                            ->label('Логин (email)')
+                            ->email()
+                            ->maxLength(255)
+                            ->placeholder('employee@example.com'),
+
+                        Forms\Components\Select::make('space_ids')
+                            ->label('Торговые места')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (?Tenant $record): array {
+                                if (! $record) {
+                                    return [];
+                                }
+
+                                return \App\Models\MarketSpace::query()
+                                    ->where('tenant_id', (int) $record->id)
+                                    ->when((int) ($record->market_id ?? 0) > 0, fn ($query) => $query->where('market_id', (int) $record->market_id))
+                                    ->orderByRaw('COALESCE(code, number, display_name) asc')
+                                    ->get(['id', 'code', 'number', 'display_name'])
+                                    ->mapWithKeys(static function ($space): array {
+                                        $label = trim((string) ($space->code ?: $space->number ?: $space->display_name ?: ('#' . $space->id)));
+                                        $name = trim((string) ($space->display_name ?? ''));
+
+                                        return [(int) $space->id => $name !== '' ? ($label . ' · ' . $name) : $label];
+                                    })
+                                    ->all();
+                            })
+                            ->helperText('Если не выбрано ни одного места, сотрудник видит все места арендатора.'),
+
+                        Forms\Components\TextInput::make('password')
+                            ->label('Новый пароль')
+                            ->password()
+                            ->revealable()
+                            ->maxLength(255)
+                            ->minLength(8)
+                            ->suffixAction(
+                                Action::make('generateAdditionalCabinetUserPassword')
+                                    ->label('')
+                                    ->tooltip('Сгенерировать пароль')
+                                    ->icon('heroicon-m-sparkles')
+                                    ->color('gray')
+                                    ->iconButton()
+                                    ->action(function (\Filament\Schemas\Components\Utilities\Set $set): void {
+                                        $set(
+                                            'password',
+                                            \Illuminate\Support\Str::password(length: 12, letters: true, numbers: true, symbols: false, spaces: false),
+                                        );
+                                    }),
+                                isInline: true,
+                            )
+                            ->helperText('Можно ввести пароль вручную или сгенерировать кнопкой.')
+                            ->dehydrated(true),
+                    ])
+                    ->columns(3)
+                    ->helperText('Сотрудники арендатора смогут входить в кабинет по своим логинам и паролям.'),
+            ])
+            ->columns(2);
     }
 
     /**
@@ -1397,6 +1436,173 @@ class TenantResource extends BaseResource
             </tbody>
         </table>
     </div>
+</div>';
+
+        return new HtmlString($html);
+    }
+
+    private static function renderContactsStaffBySpaces(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Список сотрудников появится после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('market_spaces') || ! DbSchema::hasTable('users')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Данные сотрудников недоступны.</div>');
+        }
+
+        $spaces = DB::table('market_spaces')
+            ->where('tenant_id', (int) $record->id)
+            ->where('market_id', (int) $record->market_id)
+            ->orderByRaw('COALESCE(code, number, display_name, id::text) ASC')
+            ->get(['id', 'code', 'number', 'display_name']);
+
+        if ($spaces->isEmpty()) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">У арендатора нет торговых мест.</div>');
+        }
+
+        $cabinetTabUrl = url('/admin/tenants/' . (int) $record->id . '/edit?tab=kabinet::data::tab');
+
+        $usersQuery = DB::table('users')
+            ->where('tenant_id', (int) $record->id)
+            ->select(['id', 'name', 'email']);
+
+        if (static::hasColumn('users', 'market_id')) {
+            $usersQuery->where(function ($query) use ($record): void {
+                $query->where('market_id', (int) $record->market_id)
+                    ->orWhereNull('market_id');
+            });
+        }
+
+        $users = $usersQuery->orderBy('name')->orderBy('id')->get();
+        if ($users->isEmpty()) {
+            return new HtmlString(
+                '<div style="font-size:13px;opacity:.85;">Сотрудников арендатора пока нет. '
+                . '<a href="' . e($cabinetTabUrl) . '" style="text-decoration:underline;text-underline-offset:2px;">Добавить на вкладке «Кабинет»</a>.'
+                . '</div>'
+            );
+        }
+
+        $spaceIds = $spaces->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        $scopedSpaceIdsByUser = [];
+        if (DbSchema::hasTable('tenant_user_market_spaces')) {
+            $pivotRows = DB::table('tenant_user_market_spaces')
+                ->whereIn('user_id', $users->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all())
+                ->whereIn('market_space_id', $spaceIds)
+                ->get(['user_id', 'market_space_id']);
+
+            foreach ($pivotRows as $pivotRow) {
+                $userId = (int) ($pivotRow->user_id ?? 0);
+                $spaceId = (int) ($pivotRow->market_space_id ?? 0);
+                if ($userId <= 0 || $spaceId <= 0) {
+                    continue;
+                }
+
+                if (! isset($scopedSpaceIdsByUser[$userId])) {
+                    $scopedSpaceIdsByUser[$userId] = [];
+                }
+                $scopedSpaceIdsByUser[$userId][$spaceId] = true;
+            }
+        }
+
+        $staffBySpace = [];
+        foreach ($users as $user) {
+            $userId = (int) ($user->id ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
+
+            $name = trim((string) ($user->name ?? ''));
+            $email = trim((string) ($user->email ?? ''));
+            $label = $name !== '' ? $name : ($email !== '' ? $email : ('Пользователь #' . $userId));
+
+            $scopedIds = isset($scopedSpaceIdsByUser[$userId]) ? array_keys($scopedSpaceIdsByUser[$userId]) : [];
+            $allSpaces = $scopedIds === [];
+            $effectiveIds = $allSpaces ? $spaceIds : $scopedIds;
+
+            foreach ($effectiveIds as $spaceId) {
+                $spaceId = (int) $spaceId;
+                if ($spaceId <= 0) {
+                    continue;
+                }
+
+                if (! isset($staffBySpace[$spaceId])) {
+                    $staffBySpace[$spaceId] = [];
+                }
+
+                $staffBySpace[$spaceId][] = [
+                    'id' => $userId,
+                    'label' => $label,
+                    'all_spaces' => $allSpaces,
+                ];
+            }
+        }
+
+        $cards = '';
+        foreach ($spaces as $space) {
+            $spaceId = (int) ($space->id ?? 0);
+            if ($spaceId <= 0) {
+                continue;
+            }
+
+            $code = trim((string) ($space->code ?? ''));
+            $number = trim((string) ($space->number ?? ''));
+            $name = trim((string) ($space->display_name ?? ''));
+            $spaceLabel = $code !== '' ? $code : ($number !== '' ? $number : ('#' . $spaceId));
+            if ($name !== '') {
+                $spaceLabel .= ' · ' . $name;
+            }
+
+            $members = $staffBySpace[$spaceId] ?? [];
+            $membersHtml = '';
+            if ($members === []) {
+                $membersHtml = '<div class="tenant-contact-staff__empty">Сотрудники не назначены.</div>';
+            } else {
+                foreach ($members as $member) {
+                    $membersHtml .= '<div class="tenant-contact-staff__member">'
+                        . '<a href="' . e($cabinetTabUrl) . '#cabinet-user-' . (int) ($member['id'] ?? 0) . '" class="tenant-contact-staff__member-link">'
+                        . e((string) $member['label'])
+                        . '</a>'
+                        . (! empty($member['all_spaces']) ? ' <span class="tenant-contact-staff__note">(все места)</span>' : '')
+                        . '</div>';
+                }
+            }
+
+            $cards .= '<div class="tenant-contact-staff__card">'
+                . '<div class="tenant-contact-staff__space">' . e($spaceLabel) . '</div>'
+                . '<div class="tenant-contact-staff__members">' . $membersHtml . '</div>'
+                . '</div>';
+        }
+
+        $style = '
+<style>
+.tenant-contact-staff{display:flex;flex-direction:column;gap:10px}
+.tenant-contact-staff__head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tenant-contact-staff__hint{font-size:12px;opacity:.75}
+.tenant-contact-staff__action{font-size:12px;text-decoration:underline;text-underline-offset:2px}
+.tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.tenant-contact-staff__card{border:1px solid rgba(14,165,233,.30);border-radius:10px;padding:8px 10px;background:rgba(14,165,233,.07)}
+.dark .tenant-contact-staff__card{border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.10)}
+.tenant-contact-staff__space{font-size:12px;font-weight:700;line-height:1.3}
+.tenant-contact-staff__members{margin-top:6px;display:flex;flex-direction:column;gap:4px}
+.tenant-contact-staff__member{font-size:12px;line-height:1.35}
+.tenant-contact-staff__member-link{text-decoration:underline;text-underline-offset:2px}
+.tenant-contact-staff__note{opacity:.75;font-size:11px}
+.tenant-contact-staff__empty{font-size:12px;opacity:.78}
+</style>';
+
+        $html = $style . '
+<div class="tenant-contact-staff">
+    <div class="tenant-contact-staff__head">
+        <div class="tenant-contact-staff__hint">Настройка сотрудников и привязок к местам выполняется на вкладке «Кабинет».</div>
+        <a href="' . e($cabinetTabUrl) . '" class="tenant-contact-staff__action">Управлять сотрудниками</a>
+    </div>
+    <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Нет данных.</div>') . '</div>
 </div>';
 
         return new HtmlString($html);

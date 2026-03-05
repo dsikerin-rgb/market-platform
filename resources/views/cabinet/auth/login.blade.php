@@ -15,10 +15,10 @@
         <script src="https://cdn.tailwindcss.com"></script>
     @endif
 </head>
-<body class="min-h-screen bg-gradient-to-b from-sky-100 via-slate-100 to-slate-200 text-slate-900">
+<body class="min-h-screen bg-gradient-to-b from-sky-100 via-slate-100 to-slate-200 text-slate-900" data-device="mobile">
     <div class="min-h-screen flex items-center justify-center p-4">
         <div class="w-full max-w-md rounded-[2rem] border border-white/80 bg-white/90 backdrop-blur shadow-[0_20px_60px_rgba(15,23,42,0.18)] overflow-hidden">
-            <div class="bg-slate-900 px-5 py-5 text-white">
+            <div class="bg-sky-600 px-5 py-5 text-white">
                 <p class="text-[11px] uppercase tracking-[0.14em] text-slate-300">Личный кабинет</p>
                 <h1 class="mt-1 text-xl font-semibold leading-tight">
                     {{ $marketName ?? config('app.name', 'Market Platform') }}
@@ -76,12 +76,30 @@
                         Запомнить меня
                     </label>
 
-                    <button class="w-full rounded-2xl bg-slate-900 text-white py-3 text-sm font-semibold" type="submit">
+                    <button class="w-full rounded-2xl bg-sky-600 text-white py-3 text-sm font-semibold" type="submit">
                         Войти
                     </button>
                 </form>
             </div>
         </div>
     </div>
+    <script>
+        (function () {
+            function resolveDevice() {
+                const width = window.innerWidth || document.documentElement.clientWidth || 0;
+                if (width <= 767) return 'mobile';
+                if (width <= 1199) return 'tablet';
+                return 'desktop';
+            }
+
+            function applyDeviceFlag() {
+                document.body.dataset.device = resolveDevice();
+            }
+
+            applyDeviceFlag();
+            window.addEventListener('resize', applyDeviceFlag, { passive: true });
+            window.addEventListener('orientationchange', applyDeviceFlag, { passive: true });
+        })();
+    </script>
 </body>
 </html>

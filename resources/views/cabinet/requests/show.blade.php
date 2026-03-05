@@ -4,8 +4,14 @@
             <div>
                 <p class="text-xs text-slate-500">{{ $categories[$ticket->category] ?? 'Другое' }}</p>
                 <h2 class="text-lg font-semibold text-slate-900">{{ (string) $ticket->subject }}</h2>
+                @if($ticket->marketSpace)
+                    @php
+                        $spaceTitle = trim((string) ($ticket->marketSpace->code ?: $ticket->marketSpace->number ?: $ticket->marketSpace->display_name ?: ('#' . $ticket->marketSpace->id)));
+                    @endphp
+                    <p class="mt-1 text-xs text-sky-700">Место: {{ $spaceTitle }}</p>
+                @endif
             </div>
-            <span class="rounded-full px-2.5 py-1 text-xs font-medium bg-slate-900 text-white">{{ (string) $ticket->status }}</span>
+            <span class="rounded-full px-2.5 py-1 text-xs font-medium bg-sky-600 text-white">{{ (string) $ticket->status }}</span>
         </div>
         <p class="text-sm text-slate-700">{{ (string) $ticket->description }}</p>
         <p class="text-xs text-slate-400">Создано {{ $ticket->created_at?->format('d.m.Y H:i') }}</p>
@@ -32,7 +38,7 @@
                 $mine = (int) ($comment->user_id ?? 0) === (int) auth()->id();
             @endphp
             <article class="flex {{ $mine ? 'justify-end' : 'justify-start' }}">
-                <div class="max-w-[88%] rounded-2xl px-3.5 py-3 border {{ $mine ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-800 border-slate-200' }}">
+                <div class="max-w-[88%] rounded-2xl px-3.5 py-3 border {{ $mine ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-800 border-slate-200' }}">
                     <p class="text-[11px] {{ $mine ? 'text-slate-300' : 'text-slate-500' }}">
                         {{ $comment->user?->name ?? 'Администрация' }} · {{ $comment->created_at?->format('d.m.Y H:i') }}
                     </p>
@@ -56,6 +62,6 @@
             <span class="text-sm text-slate-600">Вложения (до 3 файлов)</span>
             <input class="mt-1.5 w-full text-sm" type="file" name="attachments[]" multiple>
         </label>
-        <button class="w-full rounded-2xl bg-slate-900 text-white py-3 text-sm font-semibold" type="submit">Отправить</button>
+        <button class="w-full rounded-2xl bg-sky-600 text-white py-3 text-sm font-semibold" type="submit">Отправить</button>
     </form>
 </x-cabinet-layout>

@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -156,5 +158,26 @@ class MarketSpace extends Model
         // ВАЖНО: whereColumn ломает eager-loading в sqlite (отдельный запрос к market_space_types
         // не может ссылаться на market_spaces.market_id).
         return $this->belongsTo(MarketSpaceType::class, 'type', 'code');
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(TenantReview::class);
+    }
+
+    public function showcaseProfiles(): HasMany
+    {
+        return $this->hasMany(TenantSpaceShowcase::class);
+    }
+
+    public function cabinetUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'tenant_user_market_spaces', 'market_space_id', 'user_id')
+            ->withTimestamps();
     }
 }

@@ -25,13 +25,13 @@
                 Показать только начисления с долгом
             </label>
 
-            <button class="w-full rounded-2xl bg-slate-900 text-white py-3 text-sm font-semibold" type="submit">
+            <button class="w-full rounded-2xl bg-sky-600 text-white py-3 text-sm font-semibold" type="submit">
                 Применить
             </button>
         </form>
     </section>
 
-    <section class="rounded-2xl bg-slate-900 text-white px-4 py-3">
+    <section class="rounded-2xl bg-sky-600 text-white px-4 py-3">
         <p class="text-xs text-slate-300">Сумма по выбранным начислениям</p>
         <p class="mt-1 text-xl font-semibold">{{ number_format($sumWithVat, 0, '.', ' ') }} ₽</p>
     </section>

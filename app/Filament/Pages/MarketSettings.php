@@ -71,6 +71,7 @@ class MarketSettings extends Page
         'holiday_notification_recipient_user_ids' => [],
         'request_notification_recipient_user_ids' => [],
         'request_repair_notification_recipient_user_ids' => [],
+        'request_help_notification_recipient_user_ids' => [],
         'notification_channels_calendar' => ['database'],
         'notification_channels_requests' => ['database'],
         'notification_channels_messages' => ['database'],
@@ -145,6 +146,10 @@ class MarketSettings extends Page
             )),
             'request_repair_notification_recipient_user_ids' => array_values(array_filter(
                 (array) ($settings['request_repair_notification_recipient_user_ids'] ?? []),
+                static fn ($value): bool => is_numeric($value),
+            )),
+            'request_help_notification_recipient_user_ids' => array_values(array_filter(
+                (array) ($settings['request_help_notification_recipient_user_ids'] ?? []),
                 static fn ($value): bool => is_numeric($value),
             )),
             'notification_channels_calendar' => $this->normalizeNotificationChannels(
@@ -307,7 +312,7 @@ class MarketSettings extends Page
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
-                                'lg' => 6,
+                                'lg' => 4,
                             ]),
 
                         Forms\Components\Select::make('request_repair_notification_recipient_user_ids')
@@ -330,7 +335,30 @@ class MarketSettings extends Page
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
-                                'lg' => 6,
+                                'lg' => 4,
+                            ]),
+
+                        Forms\Components\Select::make('request_help_notification_recipient_user_ids')
+                            ->label('Получатели поддержки (Помощь)')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->options(function (): array {
+                                if (! $this->market) {
+                                    return [];
+                                }
+
+                                return User::query()
+                                    ->where('market_id', $this->market->id)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->all();
+                            })
+                            ->helperText('Приоритетный список для категории "help".')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
                             ]),
                     ])
                     ->columns(12)
@@ -437,6 +465,10 @@ class MarketSettings extends Page
         ));
         $settings['request_repair_notification_recipient_user_ids'] = array_values(array_filter(
             (array) ($state['request_repair_notification_recipient_user_ids'] ?? []),
+            static fn ($value): bool => is_numeric($value),
+        ));
+        $settings['request_help_notification_recipient_user_ids'] = array_values(array_filter(
+            (array) ($state['request_help_notification_recipient_user_ids'] ?? []),
             static fn ($value): bool => is_numeric($value),
         ));
         $settings['notification_channels_calendar'] = $this->normalizeNotificationChannels(
