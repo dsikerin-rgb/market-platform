@@ -67,7 +67,13 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .mp-actions { display: flex; align-items: center; gap: 8px; }
+        .mp-top-search-inline {
+            flex: 1 1 auto;
+            min-width: 280px;
+            margin: 0 8px;
+        }
+        .mp-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .mp-inline-form { margin: 0; }
         .mp-btn {
             border: 1px solid var(--line);
             background: var(--surface);
@@ -88,7 +94,7 @@
             color: #fff;
         }
         .mp-search-row {
-            display: grid;
+            display: none;
             grid-template-columns: 1fr auto;
             gap: 10px;
             align-items: center;
@@ -111,12 +117,19 @@
             color: var(--text);
             background: transparent;
         }
+        .mp-cats-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0 0;
+        }
         .mp-cats {
             display: flex;
             gap: 8px;
             overflow: auto;
-            padding: 10px 2px 2px;
-            margin: 10px 0 0;
+            padding: 2px 2px 2px;
+            margin: 0;
+            flex: 1 1 auto;
             scrollbar-width: thin;
         }
         .mp-cat {
@@ -210,7 +223,10 @@
         @media (max-width: 820px) {
             .mp-shell { padding: 12px 12px 96px; }
             .mp-top { position: static; padding: 12px; border-radius: 16px; }
-            .mp-search-row { grid-template-columns: 1fr; }
+            .mp-top-line { flex-wrap: wrap; margin-bottom: 8px; }
+            .mp-top-search-inline { order: 3; flex-basis: 100%; min-width: 0; margin: 0; }
+            .mp-logo { order: 1; }
+            .mp-actions { order: 2; margin-left: auto; }
             .mp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .mp-actions .mp-btn span { display: none; }
             .mp-actions .mp-btn { padding: 9px 10px; }
@@ -220,6 +236,8 @@
             .mp-grid { grid-template-columns: 1fr; }
             .mp-market-chip { max-width: 38vw; }
             .mp-logo-label { max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .mp-cats-wrap { gap: 8px; }
+            .mp-cats-wrap > .mp-btn { padding: 8px 10px; }
         }
     </style>
     @stack('head')
@@ -233,6 +251,10 @@
                 <span class="mp-logo-dot"></span>
                 <span class="mp-logo-label">МАРКЕТПЛЕЙС ЭКОЯРМАРКИ</span>
             </a>
+            <form class="mp-search mp-top-search-inline" method="get" action="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey]) }}">
+                <input type="text" name="q" value="{{ request('q') }}" placeholder="&#1055;&#1086;&#1080;&#1089;&#1082;">
+                <button class="mp-btn mp-btn-brand" type="submit">&#1053;&#1072;&#1081;&#1090;&#1080;</button>
+            </form>
             <div class="mp-actions">
                 <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">🗺 <span>Карта</span></a>
                 <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $marketRouteKey]) }}">📢 <span>Анонсы</span></a>
@@ -263,12 +285,15 @@
             @endif
         </div>
         @if(isset($topCategories) && $topCategories->count() > 0)
-            <div class="mp-cats">
-                @foreach($topCategories as $cat)
-                    <a class="mp-cat" href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey, 'category' => $cat->slug]) }}">
-                        {{ $cat->icon ? $cat->icon . ' ' : '' }}{{ $cat->name }}
-                    </a>
-                @endforeach
+            <div class="mp-cats-wrap">
+                <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey]) }}">Каталог</a>
+                <div class="mp-cats">
+                    @foreach($topCategories as $cat)
+                        <a class="mp-cat" href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey, 'category' => $cat->slug]) }}">
+                            {{ $cat->name }}
+                        </a>
+                    @endforeach
+                </div>
             </div>
         @endif
     </header>

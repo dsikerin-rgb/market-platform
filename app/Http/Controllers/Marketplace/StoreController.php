@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\TenantReview;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class StoreController extends BaseMarketplaceController
@@ -21,6 +22,8 @@ class StoreController extends BaseMarketplaceController
         $spaces = $tenant->spaces()
             ->orderByRaw('COALESCE(code, number, display_name) asc')
             ->get(['id', 'code', 'number', 'display_name', 'activity_type']);
+
+        $hasReviewSpaceColumn = Schema::hasColumn('tenant_reviews', 'market_space_id');
 
         $selectedSpaceId = (int) $request->integer('space_id', 0);
         if ($selectedSpaceId > 0 && ! $spaces->contains('id', $selectedSpaceId)) {
@@ -46,7 +49,7 @@ class StoreController extends BaseMarketplaceController
         $reviews = TenantReview::query()
             ->where('tenant_id', (int) $tenant->id)
             ->where('status', 'published')
-            ->when($selectedSpaceId > 0, function ($query) use ($selectedSpaceId): void {
+            ->when($hasReviewSpaceColumn && $selectedSpaceId > 0, function ($query) use ($selectedSpaceId): void {
                 $query->where(function ($inner) use ($selectedSpaceId): void {
                     $inner->whereNull('market_space_id')->orWhere('market_space_id', $selectedSpaceId);
                 });
@@ -109,16 +112,21 @@ class StoreController extends BaseMarketplaceController
             $reviewerName = trim((string) ($request->user()->name ?? ''));
         }
 
-        TenantReview::query()->create([
+        $payload = [
             'market_id' => (int) $market->id,
             'tenant_id' => (int) $tenant->id,
-            'market_space_id' => $marketSpaceId > 0 ? $marketSpaceId : null,
             'rating' => (int) $validated['rating'],
             'reviewer_name' => $reviewerName !== '' ? $reviewerName : null,
             'reviewer_contact' => trim((string) ($validated['reviewer_contact'] ?? '')) ?: null,
             'review_text' => trim((string) $validated['review_text']),
             'status' => 'published',
-        ]);
+        ];
+
+        if (Schema::hasColumn('tenant_reviews', 'market_space_id')) {
+            $payload['market_space_id'] = $marketSpaceId > 0 ? $marketSpaceId : null;
+        }
+
+        TenantReview::query()->create($payload);
 
         return back()->with('success', 'Спасибо, отзыв опубликован.');
     }
@@ -130,10 +138,9 @@ class StoreController extends BaseMarketplaceController
             ->where(function ($query) use ($tenantRouteKey): void {
                 $query->where('slug', $tenantRouteKey);
                 if (is_numeric($tenantRouteKey)) {
-                    $query->orWhereKey((int) $tenantRouteKey);
+                    $query->orWhere('id', (int) $tenantRouteKey);
                 }
             })
             ->firstOrFail();
     }
 }
-

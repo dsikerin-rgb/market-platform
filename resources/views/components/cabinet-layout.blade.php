@@ -23,7 +23,6 @@
     $authUser = auth()->user();
     $authUserName = is_object($authUser) ? trim((string) ($authUser->name ?? '')) : '';
     $showAuthUserName = $authUserName !== '' && mb_strtolower($authUserName) !== mb_strtolower($tenantName);
-    $telegramLinked = is_object($authUser) && filled($authUser->telegram_chat_id ?? null);
     if ($authUser && (int) ($authUser->tenant_id ?? 0) > 0) {
         try {
             $seenAt = (string) session('cabinet.communication_seen_at', '1970-01-01 00:00:00');
@@ -172,9 +171,7 @@
                             @if ($showAuthUserName)
                                 <p class="mt-1 text-sm text-slate-700 truncate">{{ $authUserName }}</p>
                             @endif
-                            <p class="text-xs text-slate-500">
-                                {{ $title ?? 'Кабинет арендатора' }}
-                            </p>
+                            
                         @else
                             <h1 class="text-base font-semibold leading-tight truncate">
                                 {{ $title ?? 'Кабинет арендатора' }}
@@ -184,17 +181,6 @@
 
                     @if (auth()->check() && (\Illuminate\Support\Facades\Route::has('cabinet.logout') || \Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit')))
                         <div class="shrink-0 flex items-center gap-2">
-                            @if (\Illuminate\Support\Facades\Route::has('cabinet.telegram.connect'))
-                                <form method="POST" action="{{ route('cabinet.telegram.connect') }}" data-navigate="false">
-                                    @csrf
-                                    <button
-                                        type="submit"
-                                        class="inline-flex h-10 w-10 items-center justify-center rounded-xl border {{ $telegramLinked ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-sky-300 bg-sky-50 text-sky-700' }} text-sm font-bold"
-                                        aria-label="{{ $telegramLinked ? 'Telegram подключен' : 'Подключить Telegram' }}"
-                                        title="{{ $telegramLinked ? 'Telegram уже подключен. Нажмите, чтобы перепривязать.' : 'Подключить Telegram' }}"
-                                    >TG</button>
-                                </form>
-                            @endif
                             @if (\Illuminate\Support\Facades\Route::has('cabinet.requests.create'))
                                 <a
                                     href="{{ route('cabinet.requests.create', ['category' => 'help']) }}"
@@ -264,19 +250,7 @@
                     </div>
                 @endif
 
-                @if (auth()->check() && ! $telegramLinked && \Illuminate\Support\Facades\Route::has('cabinet.telegram.connect'))
-                    <div class="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                        <div class="flex items-center justify-between gap-3">
-                            <p>Подключите Telegram для уведомлений в один шаг.</p>
-                            <form method="POST" action="{{ route('cabinet.telegram.connect') }}" data-navigate="false">
-                                @csrf
-                                <button type="submit" class="inline-flex items-center rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white">
-                                    Подключить
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                @endif
+                
 
                 {{ $slot }}
             </div>

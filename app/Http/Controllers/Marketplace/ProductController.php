@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Marketplace;
 use App\Models\MarketplaceProduct;
 use App\Models\TenantReview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class ProductController extends BaseMarketplaceController
@@ -28,15 +29,20 @@ class ProductController extends BaseMarketplaceController
 
         $product->increment('views_count');
 
+        $hasReviewSpaceColumn = Schema::hasColumn('tenant_reviews', 'market_space_id');
+
         $reviews = TenantReview::query()
             ->where('tenant_id', (int) $product->tenant_id)
             ->where('status', 'published')
-            ->when((int) ($product->market_space_id ?? 0) > 0, function ($query) use ($product): void {
+            ->when(
+                $hasReviewSpaceColumn && (int) ($product->market_space_id ?? 0) > 0,
+                function ($query) use ($product): void {
                 $query->where(function ($inner) use ($product): void {
                     $inner->whereNull('market_space_id')
                         ->orWhere('market_space_id', (int) $product->market_space_id);
                 });
-            })
+            },
+            )
             ->latest('created_at')
             ->limit(20)
             ->get();
@@ -75,4 +81,3 @@ class ProductController extends BaseMarketplaceController
         ));
     }
 }
-

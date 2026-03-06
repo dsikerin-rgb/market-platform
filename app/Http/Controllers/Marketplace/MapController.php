@@ -77,11 +77,38 @@ class MapController extends BaseMarketplaceController
                 ->get(['id', 'tenant_id', 'display_name', 'number', 'code', 'status']);
         }
 
+        $mapShapes = $shapes->map(static function (MarketSpaceMapShape $shape): array {
+            $tenant = $shape->marketSpace?->tenant;
+            $tenantRouteKey = filled($tenant?->slug ?? null)
+                ? (string) $tenant->slug
+                : (filled($tenant?->id ?? null) ? (string) $tenant->id : null);
+
+            $spaceLabel = trim((string) (
+                $shape->marketSpace?->display_name
+                ?: ($shape->marketSpace?->number ?: $shape->marketSpace?->code)
+            ));
+
+            $tenantLabel = trim((string) (
+                $tenant?->short_name
+                ?: ($tenant?->name ?? '')
+            ));
+
+            return [
+                'id' => (int) $shape->id,
+                'space_id' => (int) ($shape->market_space_id ?? 0),
+                'polygon' => is_array($shape->polygon) ? $shape->polygon : [],
+                'tenant_key' => $tenantRouteKey,
+                'space_label' => $spaceLabel,
+                'tenant_label' => $tenantLabel,
+            ];
+        })->values();
+
         return view('marketplace.map.index', array_merge(
             $this->sharedViewData($request, $market),
             [
                 'shapes' => $shapes,
                 'spaces' => $spaces,
+                'mapShapes' => $mapShapes,
                 'version' => $version,
                 'page' => $page,
             ],
