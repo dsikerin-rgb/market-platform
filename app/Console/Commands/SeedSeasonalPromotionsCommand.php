@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Support\MarketplaceAnnouncementImageCatalog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -53,7 +54,9 @@ class SeedSeasonalPromotionsCommand extends Command
                     'notify_before_days' => (int) ($template['notify_before_days'] ?? 7),
                     'source' => 'promotion',
                 ];
-                $templateImage = $useImages ? trim((string) ($template['image'] ?? '')) : '';
+                $templateImage = $useImages
+                    ? trim((string) (MarketplaceAnnouncementImageCatalog::pathForTitle((string) $template['title']) ?? ($template['image'] ?? '')))
+                    : '';
                 $overwriteImages = (bool) $this->option('overwrite-images');
 
                 if ($overwrite) {
@@ -256,4 +259,3 @@ class SeedSeasonalPromotionsCommand extends Command
         ];
     }
 }
-

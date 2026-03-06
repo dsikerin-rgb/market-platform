@@ -11,6 +11,7 @@ use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
+use App\Support\MarketplaceAnnouncementImageCatalog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -158,7 +159,12 @@ class MarketplaceBootstrapCommand extends Command
                 })
                 ->first();
 
-            $coverImage = $this->normalizeCoverImage($holiday->cover_image);
+            $coverImage = $this->normalizeCoverImage(
+                MarketplaceAnnouncementImageCatalog::resolveCoverImage(
+                    (string) ($holiday->title ?? ''),
+                    $holiday->cover_image,
+                )
+            );
 
             $payload = [
                 'author_user_id' => null,
