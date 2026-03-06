@@ -6,12 +6,8 @@
     @php($tenantRouteKey = filled($product->tenant->slug ?? null) ? (string) $product->tenant->slug : (string) $product->tenant->id)
     <section class="mp-card" style="display:grid;grid-template-columns:1.1fr .9fr;gap:16px;">
         <div style="background:#eef4fb;border:1px solid #d7e7f8;border-radius:14px;overflow:hidden;min-height:320px;">
-            @php
-                $images = is_array($product->images ?? null) ? $product->images : [];
-                $firstImage = $images[0] ?? null;
-            @endphp
-            @if($firstImage)
-                <img src="{{ $firstImage }}" alt="{{ $product->title }}" style="width:100%;height:100%;object-fit:cover;">
+            @if(is_array($product->images ?? null) && !empty($product->images[0]))
+                <img src="{{ $product->images[0] }}" alt="{{ $product->title }}" style="width:100%;height:100%;object-fit:cover;">
             @else
                 <div style="height:100%;display:grid;place-items:center;color:#6e84a6;font-weight:700;">Фото отсутствует</div>
             @endif

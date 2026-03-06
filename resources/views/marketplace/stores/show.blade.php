@@ -4,30 +4,29 @@
 
 @section('content')
     @php($tenantRouteKey = filled($tenant->slug ?? null) ? (string) $tenant->slug : (string) $tenant->id)
+
     <section class="mp-card">
         <div class="mp-page-head">
             <div>
                 <h1 class="mp-page-title">{{ $tenant->display_name ?? $tenant->name }}</h1>
-                <p class="mp-page-sub">{{ $showcase->description ?? 'Публичная витрина арендатора. Вы можете выбрать торговое место и написать продавцу.' }}</p>
+                <p class="mp-page-sub">{{ $showcase->description ?? 'Публичная витрина продавца. Выберите торговое место и свяжитесь с продавцом.' }}</p>
             </div>
-            @if($reviewStats['count'] > 0)
-                <span class="mp-badge">★ {{ number_format((float) $reviewStats['avg'], 1, ',', ' ') }} ({{ $reviewStats['count'] }})</span>
+            @if(($reviewStats['count'] ?? 0) > 0)
+                <span class="mp-badge">★ {{ number_format((float) ($reviewStats['avg'] ?? 0), 1, ',', ' ') }} ({{ $reviewStats['count'] }})</span>
             @endif
         </div>
 
         <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;">
-            <form method="get" action="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $tenantRouteKey]) }}"
+            <form method="get"
+                  action="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $tenantRouteKey]) }}"
                   style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
                 <label style="display:flex;flex-direction:column;gap:6px;min-width:260px;">
                     <span class="mp-muted">Торговое место</span>
                     <select name="space_id" style="border:1px solid #cbdcf3;border-radius:12px;padding:10px 12px;">
                         <option value="0">Все места</option>
                         @foreach($spaces as $space)
-                            @php
-                                $spaceLabel = trim((string) ($space->display_name ?: ($space->number ?: $space->code)));
-                            @endphp
                             <option value="{{ $space->id }}" {{ $selectedSpaceId === (int) $space->id ? 'selected' : '' }}>
-                                {{ $spaceLabel !== '' ? $spaceLabel : ('#' . $space->id) }}
+                                {{ trim((string) ($space->display_name ?: ($space->number ?: $space->code))) ?: ('#' . $space->id) }}
                             </option>
                         @endforeach
                     </select>
@@ -76,7 +75,8 @@
             </div>
         </div>
 
-        <form method="post" action="{{ route('marketplace.store.review', ['marketSlug' => $market->slug, 'tenantSlug' => $tenantRouteKey]) }}"
+        <form method="post"
+              action="{{ route('marketplace.store.review', ['marketSlug' => $market->slug, 'tenantSlug' => $tenantRouteKey]) }}"
               style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:14px;">
             @csrf
             <input type="hidden" name="market_space_id" value="{{ $selectedSpaceId > 0 ? $selectedSpaceId : '' }}">
@@ -99,6 +99,7 @@
                 </select>
             </label>
             <button class="mp-btn mp-btn-brand" type="submit">Отправить отзыв</button>
+
             <label style="grid-column:1/-1;display:flex;flex-direction:column;gap:6px;">
                 <span class="mp-muted">Текст отзыва</span>
                 <textarea name="review_text" rows="4" required
@@ -128,7 +129,9 @@
 
     <style>
         @media (max-width: 980px) {
-            form[action*="/review"] { grid-template-columns: 1fr !important; }
+            form[action*="/review"] {
+                grid-template-columns: 1fr !important;
+            }
         }
     </style>
 @endsection
