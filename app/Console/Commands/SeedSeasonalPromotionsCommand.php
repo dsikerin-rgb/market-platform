@@ -15,6 +15,7 @@ class SeedSeasonalPromotionsCommand extends Command
     protected $signature = 'market:holidays:seed-promotions
         {--market= : Market id or slug}
         {--overwrite : Update existing promotions with same title/date}
+        {--overwrite-images : Overwrite existing cover_image values when used with --overwrite}
         {--no-images : Create promotions without external photo urls}';
 
     protected $description = 'Seed seasonal promo events for the next month';
@@ -51,19 +52,33 @@ class SeedSeasonalPromotionsCommand extends Command
                     'description' => (string) $template['description'],
                     'notify_before_days' => (int) ($template['notify_before_days'] ?? 7),
                     'source' => 'promotion',
-                    'cover_image' => $useImages ? (string) ($template['image'] ?? '') : null,
                 ];
+                $templateImage = $useImages ? trim((string) ($template['image'] ?? '')) : '';
+                $overwriteImages = (bool) $this->option('overwrite-images');
 
                 if ($overwrite) {
-                    MarketHoliday::query()->updateOrCreate(
-                        [
-                            'market_id' => (int) $market->id,
-                            'title' => (string) $template['title'],
-                            'starts_at' => $start->toDateString(),
-                            'source' => 'promotion',
-                        ],
-                        $payload,
-                    );
+                    $existing = MarketHoliday::query()
+                        ->where('market_id', (int) $market->id)
+                        ->where('title', (string) $template['title'])
+                        ->whereDate('starts_at', $start->toDateString())
+                        ->where('source', 'promotion')
+                        ->first();
+
+                    if ($existing) {
+                        $updatePayload = $payload;
+
+                        if ($templateImage !== '' && ($overwriteImages || blank($existing->cover_image))) {
+                            $updatePayload['cover_image'] = $templateImage;
+                        }
+
+                        $existing->fill($updatePayload)->save();
+                    } else {
+                        if ($templateImage !== '') {
+                            $payload['cover_image'] = $templateImage;
+                        }
+
+                        MarketHoliday::query()->create($payload);
+                    }
                 } else {
                     $exists = MarketHoliday::query()
                         ->where('market_id', (int) $market->id)
@@ -74,6 +89,10 @@ class SeedSeasonalPromotionsCommand extends Command
 
                     if ($exists) {
                         continue;
+                    }
+
+                    if ($templateImage !== '') {
+                        $payload['cover_image'] = $templateImage;
                     }
 
                     MarketHoliday::query()->create($payload);
