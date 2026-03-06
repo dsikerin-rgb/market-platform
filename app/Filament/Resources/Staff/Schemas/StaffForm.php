@@ -254,7 +254,7 @@ class StaffForm
                     Forms\Components\CheckboxList::make('notification_preferences.topics')
                         ->label('События (назначение администратором)')
                         ->options(UserNotificationPreferences::topicLabels())
-                        ->default(UserNotificationPreferences::TOPICS)
+                        ->default(UserNotificationPreferences::defaultTopicsForRoleNames([]))
                         ->columns(2)
                         ->helperText('Если пусто, пользователь не получает уведомления по темам.')
                         ->columnSpanFull(),

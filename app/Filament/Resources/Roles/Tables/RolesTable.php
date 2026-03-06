@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Roles\Tables;
 
+use App\Support\PermissionDisplayCatalog;
 use App\Support\RoleScenarioCatalog;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -20,7 +21,6 @@ class RolesTable
             $recordActions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
         }
 
-        // Delete action — только если роль НЕ системная
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
             $recordActions[] = \Filament\Actions\DeleteAction::make()
                 ->label('Удалить')
@@ -63,6 +63,7 @@ class RolesTable
 
                 Tables\Columns\TextColumn::make('permissions.name')
                     ->label('Права')
+                    ->formatStateUsing(fn (string $state): string => PermissionDisplayCatalog::label($state))
                     ->badge()
                     ->separator(', '),
 
@@ -76,7 +77,6 @@ class RolesTable
                 //
             ])
             ->recordActions($recordActions)
-            // массовое удаление отключаем (слишком рискованно для ролей)
             ->toolbarActions([]);
     }
 }

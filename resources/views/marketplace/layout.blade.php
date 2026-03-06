@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Маркетплейс') - {{ $market->name ?? 'Экоярмарка' }}</title>
+    <title>@yield('title', $marketplaceBrandName) - {{ $market->name ?? 'Экоярмарка' }}</title>
     <style>
         :root {
             --bg: #f3f6fb;
@@ -44,28 +44,14 @@
         .mp-logo {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            font-weight: 900;
-            letter-spacing: .2px;
+            gap: 10px;
+            min-width: 0;
         }
-        .mp-logo-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--brand), var(--brand-2));
-            box-shadow: 12px 0 0 #14c566, 6px -10px 0 #ff4f7a;
-            margin-right: 16px;
-        }
-        .mp-market-chip {
-            padding: 8px 12px;
-            border-radius: 999px;
-            font-size: 13px;
-            background: #e7f5ff;
-            border: 1px solid #b8dffd;
-            white-space: nowrap;
-            max-width: 55vw;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .mp-logo img {
+            display: block;
+            width: 220px;
+            max-width: 100%;
+            height: auto;
         }
         .mp-top-search-inline {
             flex: 1 1 auto;
@@ -234,8 +220,7 @@
         }
         @media (max-width: 560px) {
             .mp-grid { grid-template-columns: 1fr; }
-            .mp-market-chip { max-width: 38vw; }
-            .mp-logo-label { max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .mp-logo img { width: 186px; }
             .mp-cats-wrap { gap: 8px; }
             .mp-cats-wrap > .mp-btn { padding: 8px 10px; }
         }
@@ -247,27 +232,26 @@
 <div class="mp-shell">
     <header class="mp-top">
         <div class="mp-top-line">
-            <a href="{{ route('marketplace.home', ['marketSlug' => $marketRouteKey]) }}" class="mp-logo">
-                <span class="mp-logo-dot"></span>
-                <span class="mp-logo-label">МАРКЕТПЛЕЙС ЭКОЯРМАРКИ</span>
+            <a href="{{ route('marketplace.home', ['marketSlug' => $marketRouteKey]) }}" class="mp-logo" aria-label="{{ $marketplaceBrandName }}">
+                <img src="{{ $marketplaceLogoUrl }}" alt="{{ $marketplaceBrandName }}">
             </a>
             <form class="mp-search mp-top-search-inline" method="get" action="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey]) }}">
-                <input type="text" name="q" value="{{ request('q') }}" placeholder="&#1055;&#1086;&#1080;&#1089;&#1082;">
-                <button class="mp-btn mp-btn-brand" type="submit">&#1053;&#1072;&#1081;&#1090;&#1080;</button>
+                <input type="text" name="q" value="{{ request('q') }}" placeholder="Поиск товаров, магазинов, предложений">
+                <button class="mp-btn mp-btn-brand" type="submit">Найти</button>
             </form>
             <div class="mp-actions">
-                <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">🗺 <span>Карта</span></a>
-                <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $marketRouteKey]) }}">📢 <span>Анонсы</span></a>
+                <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">&#128506; <span>Карта</span></a>
+                <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $marketRouteKey]) }}">&#128227; <span>Анонсы</span></a>
                 @if($marketplaceCurrentUserIsBuyer)
                     <a class="mp-btn" href="{{ route('marketplace.buyer.chats', ['marketSlug' => $marketRouteKey]) }}">
-                        💬 <span>Чаты{{ $marketplaceChatUnreadCount > 0 ? ' (' . $marketplaceChatUnreadCount . ')' : '' }}</span>
+                        &#128172; <span>Чаты{{ $marketplaceChatUnreadCount > 0 ? ' (' . $marketplaceChatUnreadCount . ')' : '' }}</span>
                     </a>
                     <a class="mp-btn mp-btn-brand" href="{{ route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]) }}">
-                        👤 <span>Кабинет</span>
+                        &#128100; <span>Кабинет</span>
                     </a>
                 @else
                     <a class="mp-btn mp-btn-brand" href="{{ route('marketplace.login', ['marketSlug' => $marketRouteKey]) }}">
-                        👤 <span>Войти</span>
+                        &#128100; <span>Войти</span>
                     </a>
                 @endif
             </div>

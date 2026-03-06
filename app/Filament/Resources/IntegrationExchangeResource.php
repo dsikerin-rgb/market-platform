@@ -25,6 +25,12 @@ class IntegrationExchangeResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'entity_type';
 
+    protected static ?string $navigationLabel = 'Журнал интеграций';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-arrows-right-left';
+
+    protected static ?int $navigationSort = 90;
+
     protected static ?string $modelLabel = 'Обмен интеграции';
     protected static ?string $pluralModelLabel = 'Обмены интеграций';
 
@@ -36,7 +42,18 @@ class IntegrationExchangeResource extends BaseResource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canViewAny();
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return $user->isSuperAdmin() ? 'Ops' : 'Рынок';
     }
 
     protected static function selectedMarketIdFromSession(): ?int
@@ -371,7 +388,7 @@ class IntegrationExchangeResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return (bool) $user && $user->isSuperAdmin();
     }
 
     public static function canEdit($record): bool
@@ -401,10 +418,6 @@ class IntegrationExchangeResource extends BaseResource
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return $user->isSuperAdmin();
     }
 }

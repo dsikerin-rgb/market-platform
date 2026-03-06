@@ -110,6 +110,11 @@ class MarketSettings extends Page
         return static::shouldRegisterNavigation();
     }
 
+    public static function getNavigationItems(): array
+    {
+        return [];
+    }
+
     public function mount(): void
     {
         $user = Filament::auth()->user();

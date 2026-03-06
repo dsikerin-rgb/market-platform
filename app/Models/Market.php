@@ -75,6 +75,11 @@ class Market extends Model
         return $this->hasMany(MarketplaceAnnouncement::class);
     }
 
+    public function marketplaceSlides(): HasMany
+    {
+        return $this->hasMany(MarketplaceSlide::class);
+    }
+
     public function marketplaceChats(): HasMany
     {
         return $this->hasMany(MarketplaceChat::class);

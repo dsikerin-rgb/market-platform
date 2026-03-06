@@ -65,10 +65,10 @@ class UserNotificationSettings extends Page
 
         $topics = array_key_exists('topics', $raw)
             ? $preferences->normalizeTopics($raw['topics'])
-            : UserNotificationPreferences::TOPICS;
+            : UserNotificationPreferences::defaultTopicsForUser($user);
 
         if ($topics === []) {
-            $topics = UserNotificationPreferences::TOPICS;
+            $topics = UserNotificationPreferences::defaultTopicsForUser($user);
         }
 
         $this->form->fill([
@@ -123,25 +123,31 @@ class UserNotificationSettings extends Page
             ->components([
                 Section::make('Уведомления и сообщения')
                     ->description($this->canSelfManage
-                        ? 'Выберите каналы доставки и события, которые хотите получать.'
-                        : 'Настройки назначаются администратором рынка. Вы можете просматривать текущие параметры.')
+                        ? 'Настройте каналы доставки и выберите события, по которым хотите получать сообщения.'
+                        : 'Параметры назначаются администратором. На этой странице можно посмотреть текущую конфигурацию и статус Telegram.')
                     ->schema([
-                        Forms\Components\CheckboxList::make('channels')
-                            ->label('Каналы доставки')
-                            ->options(UserNotificationPreferences::channelLabels())
-                            ->columns(3)
-                            ->required($this->canSelfManage)
-                            ->disabled(! $this->canSelfManage)
-                            ->helperText('Email работает при заполненном email, Telegram — при подключенном chat_id.')
-                            ->columnSpanFull(),
-
-                        Forms\Components\CheckboxList::make('topics')
-                            ->label('События')
-                            ->options(UserNotificationPreferences::topicLabels())
-                            ->columns(2)
-                            ->required($this->canSelfManage)
-                            ->disabled(! $this->canSelfManage)
-                            ->columnSpanFull(),
+                        Section::make('Каналы доставки')
+                            ->description('Кабинет даёт уведомления в колокольчике. Email работает при заполненном email. Telegram станет доступен после привязки chat_id.')
+                            ->schema([
+                                Forms\Components\CheckboxList::make('channels')
+                                    ->label('')
+                                    ->options(UserNotificationPreferences::channelLabels())
+                                    ->columns(3)
+                                    ->required($this->canSelfManage)
+                                    ->disabled(! $this->canSelfManage)
+                                    ->columnSpanFull(),
+                            ]),
+                        Section::make('События')
+                            ->description($this->securityTopicHelper())
+                            ->schema([
+                                Forms\Components\CheckboxList::make('topics')
+                                    ->label('')
+                                    ->options(UserNotificationPreferences::topicLabels())
+                                    ->columns(2)
+                                    ->required($this->canSelfManage)
+                                    ->disabled(! $this->canSelfManage)
+                                    ->columnSpanFull(),
+                            ]),
                     ])
                     ->columns(1),
             ]);
@@ -166,7 +172,7 @@ class UserNotificationSettings extends Page
             'self_manage' => $selfManage,
             'channels' => $state['channels'] ?? [],
             'topics' => $state['topics'] ?? [],
-        ], $selfManage);
+        ], $selfManage, UserNotificationPreferences::defaultTopicsForUser($user));
 
         if ($normalized['channels'] === [] || $normalized['topics'] === []) {
             Notification::make()
@@ -187,5 +193,44 @@ class UserNotificationSettings extends Page
             ->body('Настройки уведомлений обновлены.')
             ->success()
             ->send();
+    }
+
+    public function securityTopicHelper(): string
+    {
+        if (! $this->currentUser instanceof User) {
+            return 'Тема "Безопасность и входы" отвечает за уведомления о входах в админку.';
+        }
+
+        if ($this->currentUser->isSuperAdmin()) {
+            return 'Для super-admin эта тема показывает, кто входит в админку. Рекомендуется оставить хотя бы канал "В кабинете" включённым.';
+        }
+
+        return 'Для обычных пользователей эта тема уведомляет о входе в админку под их учётной записью. По умолчанию она выключена и включается вручную.';
+    }
+
+    /**
+     * @return list<array{title:string,body:string}>
+     */
+    public function helperCards(): array
+    {
+        $cards = [
+            [
+                'title' => 'Как работает безопасность',
+                'body' => $this->securityTopicHelper(),
+            ],
+            [
+                'title' => 'Каналы доставки',
+                'body' => 'В кабинете уведомления появляются сразу. Email зависит от заполненного адреса. Telegram требует привязки аккаунта к вашему профилю.',
+            ],
+        ];
+
+        if ($this->canSelfManage) {
+            $cards[] = [
+                'title' => 'Когда применять изменения',
+                'body' => 'Изменения вступают в силу сразу после сохранения. Если включаете Telegram впервые, сначала привяжите чат и затем обновите статус.',
+            ];
+        }
+
+        return $cards;
     }
 }

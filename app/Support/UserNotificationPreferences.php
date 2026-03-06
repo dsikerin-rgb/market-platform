@@ -8,6 +8,8 @@ use App\Models\User;
 
 class UserNotificationPreferences
 {
+    public const TOPIC_SECURITY = 'security';
+
     /**
      * @var list<string>
      */
@@ -17,6 +19,7 @@ class UserNotificationPreferences
         'messages',
         'tasks',
         'reminders',
+        self::TOPIC_SECURITY,
     ];
 
     /**
@@ -39,7 +42,29 @@ class UserNotificationPreferences
             'messages' => 'Сообщения',
             'tasks' => 'Назначения задач',
             'reminders' => 'Напоминания',
+            self::TOPIC_SECURITY => 'Безопасность и входы',
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function defaultTopicsForUser(User $user): array
+    {
+        return $user->isSuperAdmin()
+            ? self::TOPICS
+            : array_values(array_diff(self::TOPICS, [self::TOPIC_SECURITY]));
+    }
+
+    /**
+     * @param list<string> $roleNames
+     * @return list<string>
+     */
+    public static function defaultTopicsForRoleNames(array $roleNames): array
+    {
+        return in_array('super-admin', $roleNames, true)
+            ? self::TOPICS
+            : array_values(array_diff(self::TOPICS, [self::TOPIC_SECURITY]));
     }
 
     /**
@@ -90,7 +115,7 @@ class UserNotificationPreferences
         $raw = (array) ($user->notification_preferences ?? []);
 
         if (! array_key_exists('topics', $raw)) {
-            return true;
+            return in_array($topic, self::defaultTopicsForUser($user), true);
         }
 
         $topics = $this->normalizeTopics($raw['topics']);
@@ -103,14 +128,16 @@ class UserNotificationPreferences
      */
     public function normalizeForStorage(
         mixed $value,
-        bool $fallbackSelfManage = false
+        bool $fallbackSelfManage = false,
+        ?array $defaultTopics = null,
     ): array {
         $raw = is_array($value) ? $value : [];
+        $defaultTopics ??= self::TOPICS;
 
         return [
             'self_manage' => (bool) ($raw['self_manage'] ?? $fallbackSelfManage),
             'channels' => $this->normalizeChannels($raw['channels'] ?? []),
-            'topics' => $this->normalizeTopics($raw['topics'] ?? self::TOPICS),
+            'topics' => $this->normalizeTopics($raw['topics'] ?? $defaultTopics),
         ];
     }
 
