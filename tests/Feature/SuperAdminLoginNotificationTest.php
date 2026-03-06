@@ -83,6 +83,52 @@ class SuperAdminLoginNotificationTest extends TestCase
         Notification::assertNotSentTo($actor, UserLoggedInNotification::class);
     }
 
+    public function test_super_admin_receives_notification_for_filament_livewire_login_request(): void
+    {
+        Notification::fake();
+        config([
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = Market::query()->create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('market-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'super-admin-livewire@example.test',
+            'telegram_chat_id' => '123456',
+            'notification_preferences' => [
+                'self_manage' => true,
+                'channels' => ['database', 'telegram'],
+                'topics' => UserNotificationPreferences::TOPICS,
+            ],
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        $actor = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'staff-livewire@example.test',
+        ]);
+        $actor->assignRole('market-admin');
+
+        $this->app->instance('request', Request::create('/livewire/update', 'POST', server: [
+            'REMOTE_ADDR' => '203.0.113.14',
+            'HTTP_USER_AGENT' => 'PHPUnit Livewire Login Test',
+            'HTTP_REFERER' => 'https://market.example.test/admin/login',
+        ]));
+
+        Event::dispatch(new Login('web', $actor, false));
+
+        Notification::assertSentTo($superAdmin, UserLoggedInNotification::class);
+    }
+
     public function test_regular_user_can_receive_notification_about_login_to_own_account_when_security_enabled(): void
     {
         Notification::fake();

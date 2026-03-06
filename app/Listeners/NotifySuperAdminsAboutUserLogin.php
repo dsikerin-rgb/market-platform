@@ -7,6 +7,7 @@ namespace App\Listeners;
 use App\Models\User;
 use App\Notifications\UserLoggedInNotification;
 use App\Support\UserNotificationPreferences;
+use Filament\Facades\Filament;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Http\Request;
 
@@ -66,11 +67,31 @@ class NotifySuperAdminsAboutUserLogin
     {
         $path = trim($this->request->path(), '/');
 
-        if ($path === '') {
+        if ($path !== '' && ($path === 'admin' || str_starts_with($path, 'admin/'))) {
+            return true;
+        }
+
+        $routeName = (string) ($this->request->route()?->getName() ?? '');
+
+        if ($routeName !== '' && str_starts_with($routeName, 'filament.admin.')) {
+            return true;
+        }
+
+        $panelPath = trim((string) (Filament::getPanel('admin')?->getPath() ?? 'admin'), '/');
+
+        if ($panelPath === '') {
             return false;
         }
 
-        return $path === 'admin' || str_starts_with($path, 'admin/');
+        $referer = trim((string) $this->request->headers->get('referer', ''));
+
+        if ($referer === '') {
+            return false;
+        }
+
+        $refererPath = trim((string) parse_url($referer, PHP_URL_PATH), '/');
+
+        return $refererPath === $panelPath || str_starts_with($refererPath, $panelPath . '/');
     }
 
     private function canReceiveSecurityNotifications(User $user): bool
