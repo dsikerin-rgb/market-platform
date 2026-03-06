@@ -129,6 +129,52 @@ class SuperAdminLoginNotificationTest extends TestCase
         Notification::assertSentTo($superAdmin, UserLoggedInNotification::class);
     }
 
+    public function test_duplicate_login_events_produce_only_one_notification(): void
+    {
+        Notification::fake();
+        config([
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = Market::query()->create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('market-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'super-admin-dedupe@example.test',
+            'telegram_chat_id' => '123456',
+            'notification_preferences' => [
+                'self_manage' => true,
+                'channels' => ['database', 'telegram'],
+                'topics' => UserNotificationPreferences::TOPICS,
+            ],
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        $actor = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'staff-dedupe@example.test',
+        ]);
+        $actor->assignRole('market-admin');
+
+        $this->app->instance('request', Request::create('/livewire/update', 'POST', server: [
+            'REMOTE_ADDR' => '203.0.113.15',
+            'HTTP_USER_AGENT' => 'PHPUnit Duplicate Login Test',
+            'HTTP_REFERER' => 'https://market.example.test/admin/login',
+        ]));
+
+        Event::dispatch(new Login('web', $actor, false));
+        Event::dispatch(new Login('web', $actor, false));
+
+        Notification::assertSentToTimes($superAdmin, UserLoggedInNotification::class, 1);
+    }
     public function test_regular_user_can_receive_notification_about_login_to_own_account_when_security_enabled(): void
     {
         Notification::fake();
