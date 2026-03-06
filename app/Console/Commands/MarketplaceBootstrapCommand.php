@@ -119,10 +119,13 @@ class MarketplaceBootstrapCommand extends Command
 
         $count = 0;
         foreach ($holidays as $holiday) {
+            $source = $this->canonicalHolidaySource((string) ($holiday->source ?? ''));
+            $rawSource = trim((string) ($holiday->source ?? ''));
+
             $slugBase = trim(sprintf(
                 '%s-%s-%s',
                 (string) ($holiday->title ?? 'event'),
-                (string) ($holiday->source ?? 'event'),
+                $source,
                 optional($holiday->starts_at)->format('Y-m-d') ?? 'date',
             ));
             $slug = Str::slug($slugBase);
@@ -130,21 +133,58 @@ class MarketplaceBootstrapCommand extends Command
                 $slug = 'event-' . (int) $holiday->id;
             }
 
-            MarketplaceAnnouncement::query()->updateOrCreate(
-                ['market_id' => (int) $market->id, 'slug' => $slug],
-                [
-                    'author_user_id' => null,
-                    'kind' => $this->mapHolidayKind((string) ($holiday->source ?? 'event')),
-                    'title' => trim((string) ($holiday->title ?? 'Событие ярмарки')),
-                    'excerpt' => Str::limit(trim((string) ($holiday->description ?? '')), 220),
-                    'content' => trim((string) ($holiday->description ?? '')),
-                    'cover_image' => $this->normalizeCoverImage($holiday->cover_image),
-                    'starts_at' => $holiday->starts_at,
-                    'ends_at' => $holiday->ends_at,
-                    'is_active' => true,
-                    'published_at' => $holiday->starts_at ?? now(),
-                ],
-            );
+            $legacySlug = null;
+            if ($rawSource !== '' && $rawSource !== $source) {
+                $legacySlugBase = trim(sprintf(
+                    '%s-%s-%s',
+                    (string) ($holiday->title ?? 'event'),
+                    $rawSource,
+                    optional($holiday->starts_at)->format('Y-m-d') ?? 'date',
+                ));
+                $legacySlug = Str::slug($legacySlugBase);
+                if ($legacySlug === '') {
+                    $legacySlug = null;
+                }
+            }
+
+            $existing = MarketplaceAnnouncement::query()
+                ->where('market_id', (int) $market->id)
+                ->where(function ($query) use ($slug, $legacySlug): void {
+                    $query->where('slug', $slug);
+
+                    if ($legacySlug !== null && $legacySlug !== $slug) {
+                        $query->orWhere('slug', $legacySlug);
+                    }
+                })
+                ->first();
+
+            $coverImage = $this->normalizeCoverImage($holiday->cover_image);
+
+            $payload = [
+                'author_user_id' => null,
+                'kind' => $this->mapHolidayKind($source),
+                'title' => trim((string) ($holiday->title ?? 'Market event')),
+                'excerpt' => Str::limit(trim((string) ($holiday->description ?? '')), 220),
+                'content' => trim((string) ($holiday->description ?? '')),
+                'starts_at' => $holiday->starts_at,
+                'ends_at' => $holiday->ends_at,
+                'is_active' => true,
+                'published_at' => $holiday->starts_at ?? now(),
+            ];
+
+            if ($coverImage !== null) {
+                $payload['cover_image'] = $coverImage;
+            }
+
+            if ($existing) {
+                $payload['slug'] = $slug;
+                $existing->fill($payload)->save();
+            } else {
+                $payload['market_id'] = (int) $market->id;
+                $payload['slug'] = $slug;
+                MarketplaceAnnouncement::query()->create($payload);
+            }
+
             $count++;
         }
 
@@ -243,14 +283,36 @@ class MarketplaceBootstrapCommand extends Command
         return round(max(50.0, $price), 2);
     }
 
-    private function mapHolidayKind(string $source): string
+    private function canonicalHolidaySource(string $source): string
     {
         $normalized = Str::lower(trim($source));
 
+        if ($normalized === '') {
+            return 'event';
+        }
+
+        if (str_contains($normalized, 'promo')) {
+            return 'promotion';
+        }
+
+        if (str_contains($normalized, 'sanitary')) {
+            return 'sanitary_auto';
+        }
+
+        if ($normalized === 'file' || $normalized === 'holiday' || str_contains($normalized, 'holiday')) {
+            return 'national_holiday';
+        }
+
+        return $normalized;
+    }
+    private function mapHolidayKind(string $source): string
+    {
+        $normalized = $this->canonicalHolidaySource($source);
+
         return match (true) {
             str_contains($normalized, 'sanitary') => 'sanitary_day',
-            str_contains($normalized, 'holiday') => 'holiday',
-            str_contains($normalized, 'promo') => 'promo',
+            str_contains($normalized, 'holiday') || $normalized === 'file' => 'holiday',
+            str_contains($normalized, 'promo') || $normalized === 'promotion' => 'promo',
             default => 'event',
         };
     }
