@@ -10,6 +10,7 @@ use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class NotifySuperAdminsAboutUserLogin
 {
@@ -27,6 +28,10 @@ class NotifySuperAdminsAboutUserLogin
         }
 
         if (! $this->isAdminPanelLoginRequest()) {
+            return;
+        }
+
+        if ($this->isDuplicateLoginNotification($actor)) {
             return;
         }
 
@@ -92,6 +97,23 @@ class NotifySuperAdminsAboutUserLogin
         $refererPath = trim((string) parse_url($referer, PHP_URL_PATH), '/');
 
         return $refererPath === $panelPath || str_starts_with($refererPath, $panelPath . '/');
+    }
+
+    private function isDuplicateLoginNotification(User $actor): bool
+    {
+        $parts = [
+            'login-notify',
+            (string) $actor->getKey(),
+            trim((string) ($this->request->ip() ?? '')),
+            trim((string) ($this->request->userAgent() ?? '')),
+            trim((string) $this->request->headers->get('referer', '')),
+            trim((string) $this->request->path()),
+            (string) floor(time() / 5),
+        ];
+
+        $key = 'auth:' . sha1(implode('|', $parts));
+
+        return ! Cache::add($key, true, now()->addSeconds(5));
     }
 
     private function canReceiveSecurityNotifications(User $user): bool
