@@ -677,7 +677,8 @@ class EditStaff extends BaseEditRecord
 
         $data['notification_preferences'] = $preferences->normalizeForStorage(
             $raw,
-            (bool) $raw['self_manage']
+            (bool) $raw['self_manage'],
+            UserNotificationPreferences::defaultTopicsForRoleNames($roleNames)
         );
 
         return $data;

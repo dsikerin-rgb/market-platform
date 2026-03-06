@@ -8,8 +8,10 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\Login as AdminLogin;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MarketSettings;
+use App\Filament\Pages\MarketplaceSettings;
 use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Pages\Requests;
+use App\Filament\Pages\SettingsHub;
 use App\Filament\Pages\UserNotificationSettings;
 use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
@@ -139,7 +141,9 @@ class AdminPanelProvider extends PanelProvider
 
             ->pages([
                 Dashboard::class,
+                SettingsHub::class,
                 MarketSettings::class,
+                MarketplaceSettings::class,
                 Requests::class,
                 OpsDiagnostics::class,
                 UserNotificationSettings::class,

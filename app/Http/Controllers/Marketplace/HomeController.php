@@ -6,9 +6,12 @@ namespace App\Http\Controllers\Marketplace;
 
 use App\Models\MarketplaceAnnouncement;
 use App\Models\MarketplaceProduct;
+use App\Models\MarketplaceSlide;
 use App\Models\Tenant;
+use App\Support\MarketplaceDefaultSlideCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class HomeController extends BaseMarketplaceController
@@ -98,6 +101,44 @@ class HomeController extends BaseMarketplaceController
             ->limit(12)
             ->get(['id', 'name', 'short_name', 'slug']);
 
+        $marketplaceSettings = $this->resolveMarketplaceSettings($market);
+        $legacySiteMergeEnabled = (bool) ($marketplaceSettings['legacy_site_merge_enabled'] ?? true);
+        $publicAddress = trim((string) ($marketplaceSettings['public_address'] ?? ''));
+        $publicPhone = trim((string) ($marketplaceSettings['public_phone'] ?? ''));
+        $publicEmail = trim((string) ($marketplaceSettings['public_email'] ?? ''));
+        $infoSlides = [];
+
+        if ((bool) ($marketplaceSettings['slider_enabled'] ?? true)) {
+            if (Schema::hasTable('marketplace_slides')) {
+                $now = CarbonImmutable::now();
+
+                $infoSlides = MarketplaceSlide::query()
+                    ->where('market_id', (int) $market->id)
+                    ->where('placement', 'home_info_carousel')
+                    ->where('is_active', true)
+                    ->where(function ($query) use ($now): void {
+                        $query->whereNull('starts_at')
+                            ->orWhere('starts_at', '<=', $now);
+                    })
+                    ->where(function ($query) use ($now): void {
+                        $query->whereNull('ends_at')
+                            ->orWhere('ends_at', '>=', $now);
+                    })
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get();
+            }
+
+            if ($infoSlides === [] || (method_exists($infoSlides, 'isEmpty') && $infoSlides->isEmpty())) {
+                if ($legacySiteMergeEnabled) {
+                    $infoSlides = collect(MarketplaceDefaultSlideCatalog::defaultsForMarket($market, $marketplaceSettings))
+                        ->map(static function (array $row): array {
+                            return $row + ['image_url' => null];
+                        });
+                }
+            }
+        }
+
         return view('marketplace.home', array_merge(
             $this->sharedViewData($request, $market),
             [
@@ -106,6 +147,10 @@ class HomeController extends BaseMarketplaceController
                 'announcements' => $announcements,
                 'nearestSanitaryAnnouncement' => $nearestSanitaryAnnouncement,
                 'topStores' => $topStores,
+                'publicAddress' => $publicAddress,
+                'publicPhone' => $publicPhone,
+                'publicEmail' => $publicEmail,
+                'infoSlides' => $infoSlides,
             ],
         ));
     }

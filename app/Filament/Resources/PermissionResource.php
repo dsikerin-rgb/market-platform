@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\PermissionResource\Pages;
+use App\Support\PermissionDisplayCatalog;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -13,25 +14,20 @@ use Illuminate\Database\Eloquent\Builder;
 
 class PermissionResource extends BaseResource
 {
-    
-
     protected static ?string $model = \Spatie\Permission\Models\Permission::class;
 
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?string $modelLabel = 'Право';
+
     protected static ?string $pluralModelLabel = 'Права';
 
-    /**
-     * ВАЖНО: убираем из левого меню.
-     * Права должны открываться со страницы-хаба "Настройки рынка".
-     * Сам ресурс остаётся доступным по URL, доступ контролируется canViewAny/canCreate/etc.
-     */
     protected static bool $shouldRegisterNavigation = false;
 
-    // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Права';
+
     protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-key';
 
     public static function shouldRegisterNavigation(): bool
@@ -39,7 +35,6 @@ class PermissionResource extends BaseResource
         return false;
     }
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -47,6 +42,7 @@ class PermissionResource extends BaseResource
             'guard_name',
         ];
     }
+
     public static function form(Schema $schema): Schema
     {
         $nameField = Forms\Components\TextInput::make('name')
@@ -91,10 +87,24 @@ class PermissionResource extends BaseResource
 
         return $table
             ->columns([
+                TextColumn::make('display_group')
+                    ->label('Группа')
+                    ->getStateUsing(fn ($record): string => PermissionDisplayCatalog::group((string) $record->name))
+                    ->badge()
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('name', $direction)),
+
+                TextColumn::make('display_label')
+                    ->label('Название')
+                    ->getStateUsing(fn ($record): string => PermissionDisplayCatalog::label((string) $record->name))
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where('name', 'like', '%' . $search . '%');
+                    }),
+
                 TextColumn::make('name')
                     ->label('Код права')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('guard_name')
                     ->label('Guard')

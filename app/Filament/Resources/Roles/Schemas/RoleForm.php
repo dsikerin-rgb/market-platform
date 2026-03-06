@@ -2,16 +2,17 @@
 
 namespace App\Filament\Resources\Roles\Schemas;
 
+use App\Support\PermissionDisplayCatalog;
 use App\Support\RoleScenarioCatalog;
 use Filament\Forms;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
+use Spatie\Permission\Models\Permission;
 
 class RoleForm
 {
     public static function configure(Schema $schema): Schema
     {
-        // Системные коды ролей (в БД) → человеко-читаемые названия (в UI)
         $roleOptions = RoleScenarioCatalog::options() + [
             '__custom' => 'Другая (ввести вручную)',
         ];
@@ -23,14 +24,12 @@ class RoleForm
             ->preload()
             ->required()
             ->reactive()
-            // При открытии существующей роли: если она не из списка — показываем "Другая"
             ->afterStateHydrated(function ($state, callable $set) use ($roleOptions) {
                 if (is_string($state) && $state !== '' && ! array_key_exists($state, $roleOptions)) {
                     $set('name_custom', $state);
                     $set('name', '__custom');
                 }
             })
-            // Если выбрали "Другая" — сохраняем то, что ввели в name_custom
             ->dehydrateStateUsing(fn ($state, $get) => $state === '__custom'
                 ? trim((string) $get('name_custom'))
                 : (string) $state)
@@ -61,7 +60,52 @@ class RoleForm
             ->preload()
             ->searchable()
             ->relationship('permissions', 'name')
-            ->helperText('Добавьте права, которые должна предоставлять роль.');
+            ->getOptionLabelFromRecordUsing(fn ($record): string => PermissionDisplayCatalog::label((string) $record->name))
+            ->helperText('Добавьте права, которые должна предоставлять роль. В списке используются человекочитаемые названия.');
+
+        $marketplacePermissionsField = Forms\Components\Placeholder::make('marketplace_permissions_preview')
+            ->label('Права маркетплейса')
+            ->content(function ($get): HtmlString {
+                $selected = collect($get('permissions') ?? [])
+                    ->filter(fn ($value) => filled($value))
+                    ->map(fn ($value) => is_numeric($value) ? (int) $value : (string) $value)
+                    ->all();
+
+                $selectedIds = array_values(array_filter($selected, 'is_int'));
+
+                $selectedNames = Permission::query()
+                    ->when($selectedIds !== [], fn ($query) => $query->whereIn('id', $selectedIds))
+                    ->pluck('name')
+                    ->map(fn ($value): string => (string) $value)
+                    ->all();
+
+                foreach ($selected as $value) {
+                    if (is_string($value) && $value !== '') {
+                        $selectedNames[] = $value;
+                    }
+                }
+
+                $rows = array_map(function (string $permission) use ($selectedNames): string {
+                    $isSelected = in_array($permission, $selectedNames, true);
+                    $state = $isSelected ? 'Подключено' : 'Не выдано';
+                    $stateClass = $isSelected ? 'text-success-600' : 'text-gray-500';
+
+                    return '<div class="flex items-start justify-between gap-3 text-sm">'
+                        . '<div>'
+                        . '<div class="font-medium">' . e(PermissionDisplayCatalog::label($permission)) . '</div>'
+                        . '<div class="text-gray-500">' . e($permission) . '</div>'
+                        . '</div>'
+                        . '<div class="' . $stateClass . '">' . e($state) . '</div>'
+                        . '</div>';
+                }, PermissionDisplayCatalog::marketplacePermissions());
+
+                return new HtmlString(
+                    '<div class="space-y-3">'
+                    . '<div class="text-sm text-gray-500">Отдельная группа прав для настройки маркетплейса и его промо-блоков.</div>'
+                    . implode('', $rows)
+                    . '</div>'
+                );
+            });
 
         $profileField = Forms\Components\Placeholder::make('role_profile_preview')
             ->label('Профиль роли')
@@ -88,7 +132,6 @@ class RoleForm
                 );
             });
 
-        // Если есть Grid — делаем аккуратную раскладку как в UI (в одну строку/блок)
         if (class_exists(\Filament\Forms\Components\Grid::class)) {
             return $schema->components([
                 \Filament\Forms\Components\Grid::make(2)->schema([
@@ -97,6 +140,7 @@ class RoleForm
                     $labelField,
                 ]),
                 $profileField,
+                $marketplacePermissionsField,
                 $permissionsField,
                 $guardField,
             ]);
@@ -107,6 +151,7 @@ class RoleForm
             $customNameField,
             $labelField,
             $profileField,
+            $marketplacePermissionsField,
             $permissionsField,
             $guardField,
         ]);

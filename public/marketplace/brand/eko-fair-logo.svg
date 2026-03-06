@@ -1,0 +1,11 @@
+<svg width="296" height="74" viewBox="0 0 296 74" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="296" height="74" rx="18" fill="white"/>
+  <g transform="translate(14 13)">
+    <circle cx="18" cy="28" r="10" fill="#11B86B"/>
+    <circle cx="34" cy="17" r="9" fill="#0A84D6"/>
+    <circle cx="36" cy="37" r="8" fill="#F59E0B"/>
+    <path d="M17 18C19 10 25 5 33 4C31 12 26 18 17 18Z" fill="#16A34A"/>
+  </g>
+  <text x="66" y="31" fill="#15355F" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="800">ЭКО ЯРМАРКА</text>
+  <text x="66" y="54" fill="#5D6B86" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="600">Маркетплейс свежих покупок</text>
+</svg>

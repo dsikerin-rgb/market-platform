@@ -9,6 +9,7 @@ namespace App\Filament\Resources\IntegrationExchangeResource\Pages;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Models\IntegrationExchange;
 use Filament\Actions;
+use Filament\Facades\Filament;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use Filament\Support\Enums\Width;
 
@@ -39,6 +40,12 @@ class EditIntegrationExchange extends BaseEditRecord
     {
         /** @var IntegrationExchange $record */
         $record = $this->record;
+
+        $user = Filament::auth()->user();
+
+        if (! $user || ! $user->isSuperAdmin()) {
+            return true;
+        }
 
         return $record->direction === IntegrationExchange::DIRECTION_IN;
     }
