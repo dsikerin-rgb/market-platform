@@ -114,7 +114,8 @@ class MarketplaceSettings extends Page
 
                         Forms\Components\TextInput::make('public_phone')
                             ->label('Телефон')
-                            ->tel()
+                            ->placeholder('+7 (3852) 55-67-55')
+                            ->helperText('Можно указывать номер в обычном формате: +7 (3852) 55-67-55')
                             ->maxLength(255),
 
                         Forms\Components\TextInput::make('public_email')
