@@ -67,6 +67,9 @@ class UserNotificationSettings extends Page
             ? $preferences->normalizeTopics($raw['topics'])
             : UserNotificationPreferences::defaultTopicsForUser($user);
 
+        $visibleTopics = UserNotificationPreferences::visibleTopicsForUser($user);
+        $topics = array_values(array_intersect($topics, $visibleTopics));
+
         if ($topics === []) {
             $topics = UserNotificationPreferences::defaultTopicsForUser($user);
         }
@@ -142,7 +145,7 @@ class UserNotificationSettings extends Page
                             ->schema([
                                 Forms\Components\CheckboxList::make('topics')
                                     ->label('')
-                                    ->options(UserNotificationPreferences::topicLabels())
+                                    ->options($this->topicOptions())
                                     ->columns(2)
                                     ->required($this->canSelfManage)
                                     ->disabled(! $this->canSelfManage)
@@ -173,6 +176,11 @@ class UserNotificationSettings extends Page
             'channels' => $state['channels'] ?? [],
             'topics' => $state['topics'] ?? [],
         ], $selfManage, UserNotificationPreferences::defaultTopicsForUser($user));
+
+        $normalized['topics'] = array_values(array_intersect(
+            $normalized['topics'],
+            UserNotificationPreferences::visibleTopicsForUser($user),
+        ));
 
         if ($normalized['channels'] === [] || $normalized['topics'] === []) {
             Notification::make()
@@ -208,6 +216,11 @@ class UserNotificationSettings extends Page
         return 'Для обычных пользователей эта тема уведомляет о входе в админку под их учётной записью. По умолчанию она выключена и включается вручную.';
     }
 
+    public function oneCIntegrationsTopicHelper(): string
+    {
+        return 'Тема "Интеграции 1С" уведомляет super-admin о завершении новых обменов 1С со статусом, сущностью и счётчиками импорта.';
+    }
+
     /**
      * @return list<array{title:string,body:string}>
      */
@@ -217,6 +230,10 @@ class UserNotificationSettings extends Page
             [
                 'title' => 'Как работает безопасность',
                 'body' => $this->securityTopicHelper(),
+            ],
+            [
+                'title' => 'Интеграции 1С',
+                'body' => $this->oneCIntegrationsTopicHelper(),
             ],
             [
                 'title' => 'Каналы доставки',
@@ -232,5 +249,22 @@ class UserNotificationSettings extends Page
         }
 
         return $cards;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function topicOptions(): array
+    {
+        $labels = UserNotificationPreferences::topicLabels();
+        $user = $this->currentUser;
+
+        if (! $user instanceof User) {
+            return $labels;
+        }
+
+        $visible = UserNotificationPreferences::visibleTopicsForUser($user);
+
+        return array_intersect_key($labels, array_flip($visible));
     }
 }

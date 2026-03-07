@@ -9,6 +9,7 @@ use App\Models\User;
 class UserNotificationPreferences
 {
     public const TOPIC_SECURITY = 'security';
+    public const TOPIC_ONE_C_INTEGRATIONS = 'one_c_integrations';
 
     /**
      * @var list<string>
@@ -20,6 +21,7 @@ class UserNotificationPreferences
         'tasks',
         'reminders',
         self::TOPIC_SECURITY,
+        self::TOPIC_ONE_C_INTEGRATIONS,
     ];
 
     /**
@@ -43,6 +45,7 @@ class UserNotificationPreferences
             'tasks' => 'Назначения задач',
             'reminders' => 'Напоминания',
             self::TOPIC_SECURITY => 'Безопасность и входы',
+            self::TOPIC_ONE_C_INTEGRATIONS => 'Интеграции 1С',
         ];
     }
 
@@ -53,7 +56,10 @@ class UserNotificationPreferences
     {
         return $user->isSuperAdmin()
             ? self::TOPICS
-            : array_values(array_diff(self::TOPICS, [self::TOPIC_SECURITY]));
+            : array_values(array_diff(self::TOPICS, [
+                self::TOPIC_SECURITY,
+                self::TOPIC_ONE_C_INTEGRATIONS,
+            ]));
     }
 
     /**
@@ -64,7 +70,20 @@ class UserNotificationPreferences
     {
         return in_array('super-admin', $roleNames, true)
             ? self::TOPICS
-            : array_values(array_diff(self::TOPICS, [self::TOPIC_SECURITY]));
+            : array_values(array_diff(self::TOPICS, [
+                self::TOPIC_SECURITY,
+                self::TOPIC_ONE_C_INTEGRATIONS,
+            ]));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function visibleTopicsForUser(User $user): array
+    {
+        return $user->isSuperAdmin()
+            ? self::TOPICS
+            : array_values(array_diff(self::TOPICS, [self::TOPIC_ONE_C_INTEGRATIONS]));
     }
 
     /**

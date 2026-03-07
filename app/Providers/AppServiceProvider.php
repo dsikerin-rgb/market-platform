@@ -4,7 +4,9 @@
 namespace App\Providers;
 
 use App\Listeners\NotifySuperAdminsAboutUserLogin;
+use App\Models\IntegrationExchange;
 use App\Models\Task;
+use App\Observers\IntegrationExchangeObserver;
 use App\Policies\TaskPolicy;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Event;
@@ -27,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::policy(Task::class, TaskPolicy::class);
+        IntegrationExchange::observe(IntegrationExchangeObserver::class);
 
         Event::listen(Login::class, NotifySuperAdminsAboutUserLogin::class);
     }
