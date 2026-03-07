@@ -6,8 +6,8 @@
     <section class="mp-card" style="max-width:640px;margin:0 auto;">
         <h1 class="mp-page-title" style="font-size:30px;">Вход в аккаунт</h1>
         <p class="mp-page-sub">
-            Одна учётная запись для покупок на маркетплейсе и работы в кабинете арендатора.
-            Если у аккаунта есть доступ продавца, после входа откроется кабинет арендатора.
+            Одна учётная запись для маркетплейса и кабинета арендатора.
+            После входа вы останетесь на маркетплейсе, а кабинет продавца откроется по кнопке «Мой кабинет».
         </p>
 
         <div style="margin-top:18px;border:1px solid #d7e7f8;border-radius:16px;padding:16px;background:#f8fbff;">

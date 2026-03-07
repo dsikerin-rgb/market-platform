@@ -128,6 +128,9 @@ abstract class BaseMarketplaceController extends Controller
             'legacy_site_merge_enabled' => array_key_exists('legacy_site_merge_enabled', $raw)
                 ? (bool) $raw['legacy_site_merge_enabled']
                 : (bool) config('marketplace.brand.legacy_site_merge_enabled', true),
+            'allow_public_sales_without_active_contracts' => array_key_exists('allow_public_sales_without_active_contracts', $raw)
+                ? (bool) $raw['allow_public_sales_without_active_contracts']
+                : (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false),
         ];
     }
 

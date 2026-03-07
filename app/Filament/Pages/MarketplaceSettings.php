@@ -47,6 +47,7 @@ class MarketplaceSettings extends Page
         'slider_autoplay_enabled' => true,
         'slider_autoplay_interval_ms' => 7000,
         'legacy_site_merge_enabled' => true,
+        'allow_public_sales_without_active_contracts' => false,
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -84,6 +85,9 @@ class MarketplaceSettings extends Page
                 ? (int) $settings['slider_autoplay_interval_ms']
                 : 7000,
             'legacy_site_merge_enabled' => array_key_exists('legacy_site_merge_enabled', $settings) ? (bool) $settings['legacy_site_merge_enabled'] : true,
+            'allow_public_sales_without_active_contracts' => array_key_exists('allow_public_sales_without_active_contracts', $settings)
+                ? (bool) $settings['allow_public_sales_without_active_contracts']
+                : (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false),
         ]);
     }
 
@@ -166,6 +170,16 @@ class MarketplaceSettings extends Page
                             ->default(true),
                     ])
                     ->columns(2),
+
+                Section::make('Публикация продавцов')
+                    ->description('Управляет правилом публичного отображения товаров и витрин на маркетплейсе.')
+                    ->schema([
+                        Forms\Components\Toggle::make('allow_public_sales_without_active_contracts')
+                            ->label('Показывать товары и витрины без действующих договоров')
+                            ->helperText('Временный режим для запуска или сбоя интеграции. Если включён, публичный маркетплейс не будет скрывать продавцов без активного договора в системе.')
+                            ->default(false),
+                    ])
+                    ->columns(2),
             ]);
     }
 
@@ -187,6 +201,7 @@ class MarketplaceSettings extends Page
             'slider_autoplay_enabled' => (bool) ($state['slider_autoplay_enabled'] ?? true),
             'slider_autoplay_interval_ms' => max(4000, min((int) ($state['slider_autoplay_interval_ms'] ?? 7000), 20000)),
             'legacy_site_merge_enabled' => (bool) ($state['legacy_site_merge_enabled'] ?? true),
+            'allow_public_sales_without_active_contracts' => (bool) ($state['allow_public_sales_without_active_contracts'] ?? false),
         ];
 
         $this->market->settings = $settings;

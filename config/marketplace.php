@@ -10,6 +10,9 @@ return [
         // Fast rollback toggle: false hides the dedicated nearest sanitary warning block.
         'sanitary_warning_enabled' => env('MARKETPLACE_HOME_SANITARY_WARNING_ENABLED', true),
     ],
+    'contracts' => [
+        'allow_public_sales_without_active_contracts' => env('MARKETPLACE_ALLOW_PUBLIC_SALES_WITHOUT_ACTIVE_CONTRACTS', false),
+    ],
     'brand' => [
         // Fast rollback toggle for legacy-site content merged into marketplace home.
         'legacy_site_merge_enabled' => env('MARKETPLACE_BRAND_LEGACY_SITE_MERGE_ENABLED', true),

@@ -8,6 +8,7 @@ use App\Models\MarketplaceAnnouncement;
 use App\Models\MarketplaceProduct;
 use App\Models\MarketplaceSlide;
 use App\Models\Tenant;
+use App\Services\Auth\PortalAccessService;
 use App\Support\MarketplaceDefaultSlideCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -19,9 +20,10 @@ class HomeController extends BaseMarketplaceController
     public function __invoke(Request $request, string $marketSlug): View
     {
         $market = $this->resolveMarketOrFail($marketSlug);
+        $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
 
         $featuredProducts = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
             ->where('is_featured', true)
             ->with(['tenant:id,name,short_name,slug', 'category:id,name,slug'])
             ->orderByDesc('published_at')
@@ -29,7 +31,7 @@ class HomeController extends BaseMarketplaceController
             ->get();
 
         $latestProducts = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('published_at')
             ->orderByDesc('id')
@@ -89,11 +91,11 @@ class HomeController extends BaseMarketplaceController
         $topStores = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->whereHas('marketplaceProducts', function ($query) use ($market): void {
-                $query->publiclyVisibleInMarket((int) $market->id);
+            ->whereHas('marketplaceProducts', function ($query) use ($market, $allowWithoutActiveContracts): void {
+                $query->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts);
             })
-            ->withCount(['marketplaceProducts as active_products_count' => function ($query) use ($market): void {
-                $query->publiclyVisibleInMarket((int) $market->id);
+            ->withCount(['marketplaceProducts as active_products_count' => function ($query) use ($market, $allowWithoutActiveContracts): void {
+                $query->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts);
             }])
             ->orderByDesc('active_products_count')
             ->limit(12)
