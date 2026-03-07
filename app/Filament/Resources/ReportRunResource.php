@@ -31,7 +31,7 @@ class ReportRunResource extends BaseResource
     protected static bool $shouldRegisterNavigation = false;
 
     protected static ?string $navigationLabel = 'Запуски отчётов';
-    protected static \UnitEnum|string|null $navigationGroup = 'Отчёты';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-play';
 
     protected static function selectedMarketIdFromSession(): ?int

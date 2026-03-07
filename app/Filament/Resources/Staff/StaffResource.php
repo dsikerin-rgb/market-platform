@@ -26,6 +26,8 @@ class StaffResource extends BaseResource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static ?int $navigationSort = 20;
+
     protected static ?string $recordTitleAttribute = 'name';
 
     /**
@@ -35,15 +37,7 @@ class StaffResource extends BaseResource
      */
     public static function getNavigationGroup(): ?string
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return null;
-        }
-
-        return (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            ? 'Рынки'
-            : 'Рынок';
+        return null;
     }
 
     protected static function selectedMarketIdFromSession(): ?int

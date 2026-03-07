@@ -29,7 +29,7 @@ class RoleResource extends BaseResource
 
     // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Роли';
-    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-shield-check';
 
     protected static ?string $recordTitleAttribute = 'name';

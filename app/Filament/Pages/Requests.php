@@ -17,9 +17,9 @@ class Requests extends Page
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-inbox';
 
     // В одну группу с "Задачами"
-    protected static \UnitEnum|string|null $navigationGroup = 'Оперативная работа';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 90;
 
     protected string $view = 'filament.pages.requests';
 

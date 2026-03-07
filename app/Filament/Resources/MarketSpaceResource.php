@@ -53,18 +53,12 @@ class MarketSpaceResource extends BaseResource
 
     public static function getNavigationGroup(): ?string
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return null;
-        }
-
-        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок';
+        return null;
     }
 
     public static function getNavigationSort(): int
     {
-        return 30;
+        return 40;
     }
 
     protected static function selectedMarketIdFromSession(): ?int

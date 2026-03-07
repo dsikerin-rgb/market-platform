@@ -32,7 +32,7 @@ class StaffInvitationResource extends BaseResource
 
     // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Приглашения';
-    protected static \UnitEnum|string|null $navigationGroup = 'Сотрудники';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-envelope-open';
 
     protected static function selectedMarketIdFromSession(): ?int

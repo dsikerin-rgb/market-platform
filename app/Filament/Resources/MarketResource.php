@@ -32,9 +32,9 @@ class MarketResource extends BaseResource
     protected static ?string $pluralModelLabel = 'Рынки';
 
     protected static ?string $navigationLabel = 'Рынки';
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-building-storefront';
-    protected static ?int $navigationSort = 10;
+    protected static ?int $navigationSort = 140;
 
     public static function shouldRegisterNavigation(): bool
     {

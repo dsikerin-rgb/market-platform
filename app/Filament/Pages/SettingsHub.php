@@ -14,11 +14,11 @@ class SettingsHub extends Page
 
     protected static ?string $navigationLabel = 'Настройки';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 120;
 
     protected static ?string $slug = 'settings';
 

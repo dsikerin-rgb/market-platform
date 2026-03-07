@@ -42,18 +42,7 @@ class IntegrationExchangeResource extends BaseResource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canViewAny();
-    }
-
-    public static function getNavigationGroup(): ?string
-    {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return null;
-        }
-
-        return $user->isSuperAdmin() ? 'Ops' : 'Рынок';
+        return false;
     }
 
     protected static function selectedMarketIdFromSession(): ?int
@@ -381,7 +370,8 @@ class IntegrationExchangeResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return (bool) $user
+            && ($user->isSuperAdmin() || ($user->hasRole('market-operator') && (bool) $user->market_id));
     }
 
     public static function canCreate(): bool
@@ -407,7 +397,9 @@ class IntegrationExchangeResource extends BaseResource
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        return $user->hasRole('market-operator')
+            && $user->market_id
+            && $record->market_id === $user->market_id;
     }
 
     public static function canDelete($record): bool

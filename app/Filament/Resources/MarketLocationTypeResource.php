@@ -32,7 +32,7 @@ class MarketLocationTypeResource extends BaseResource
 
     // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Типы локаций';
-    protected static \UnitEnum|string|null $navigationGroup = 'Рынки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-rectangle-group';
 
     protected static function selectedMarketIdFromSession(): ?int

@@ -33,7 +33,7 @@ class TaskWatcherResource extends BaseResource
 
     // Оставляем метаданные (не влияют на меню при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Наблюдатели задач';
-    protected static \UnitEnum|string|null $navigationGroup = 'Задачи';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-eye';
 
     protected static function selectedMarketIdFromSession(): ?int

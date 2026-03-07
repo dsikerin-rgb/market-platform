@@ -32,7 +32,7 @@ class ReportResource extends BaseResource
 
     // На всякий случай оставляем (на меню не влияет, пока $shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Шаблоны отчётов';
-    protected static \UnitEnum|string|null $navigationGroup = 'Отчёты';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static ?int $navigationSort = 10;
 

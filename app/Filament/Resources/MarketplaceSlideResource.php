@@ -28,7 +28,7 @@ class MarketplaceSlideResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Слайды';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Маркетплейс';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-photo';
 
