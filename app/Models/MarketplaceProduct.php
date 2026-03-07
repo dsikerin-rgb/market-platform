@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -71,5 +72,16 @@ class MarketplaceProduct extends Model
     {
         return $this->hasMany(MarketplaceFavorite::class, 'product_id');
     }
-}
 
+    public function scopePubliclyVisibleInMarket(Builder $query, int $marketId): Builder
+    {
+        return $query
+            ->where('market_id', $marketId)
+            ->where('is_active', true)
+            ->whereHas('tenant.contracts', function (Builder $contracts) use ($marketId): void {
+                $contracts
+                    ->where('market_id', $marketId)
+                    ->where('is_active', true);
+            });
+    }
+}

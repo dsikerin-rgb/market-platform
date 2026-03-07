@@ -20,7 +20,7 @@ class BuyerCabinetController extends BaseMarketplaceController
 
         $favoritesCount = (int) MarketplaceFavorite::query()
             ->where('buyer_user_id', (int) $buyer->id)
-            ->whereHas('product', fn ($q) => $q->where('market_id', (int) $market->id))
+            ->whereHas('product', fn ($q) => $q->publiclyVisibleInMarket((int) $market->id))
             ->count();
 
         $openChatsCount = (int) MarketplaceChat::query()
@@ -31,8 +31,7 @@ class BuyerCabinetController extends BaseMarketplaceController
 
         $latestFavorites = MarketplaceProduct::query()
             ->whereHas('favorites', fn ($q) => $q->where('buyer_user_id', (int) $buyer->id))
-            ->where('market_id', (int) $market->id)
-            ->where('is_active', true)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('id')
             ->limit(8)
@@ -68,8 +67,7 @@ class BuyerCabinetController extends BaseMarketplaceController
         abort_unless($buyer, 403);
 
         $products = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
-            ->where('is_active', true)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->whereHas('favorites', fn ($q) => $q->where('buyer_user_id', (int) $buyer->id))
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('id')
@@ -84,4 +82,3 @@ class BuyerCabinetController extends BaseMarketplaceController
         ));
     }
 }
-

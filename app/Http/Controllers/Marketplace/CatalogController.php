@@ -17,8 +17,7 @@ class CatalogController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
 
         $query = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
-            ->where('is_active', true)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->with(['tenant:id,name,short_name,slug', 'category:id,name,slug']);
 
         $search = trim((string) $request->query('q', ''));
@@ -104,11 +103,11 @@ class CatalogController extends BaseMarketplaceController
         $stores = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->whereHas('marketplaceProducts', function ($q): void {
-                $q->where('is_active', true);
+            ->whereHas('marketplaceProducts', function ($q) use ($market): void {
+                $q->publiclyVisibleInMarket((int) $market->id);
             })
-            ->withCount(['marketplaceProducts as active_products_count' => function ($q): void {
-                $q->where('is_active', true);
+            ->withCount(['marketplaceProducts as active_products_count' => function ($q) use ($market): void {
+                $q->publiclyVisibleInMarket((int) $market->id);
             }])
             ->orderBy('name')
             ->limit(200)

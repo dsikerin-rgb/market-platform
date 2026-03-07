@@ -9,7 +9,6 @@
                 <h1 class="mp-page-title">Избранные товары</h1>
                 <p class="mp-page-sub">Список сохранённых предложений.</p>
             </div>
-            <a class="mp-btn" href="{{ route('marketplace.buyer.dashboard', ['marketSlug' => $market->slug]) }}">В кабинет</a>
         </div>
 
         @if($products->count() === 0)
@@ -29,4 +28,3 @@
         @endif
     </section>
 @endsection
-

@@ -1,13 +1,18 @@
+@php
+    $buyerDashboardTitle = 'Кабинет маркетплейса';
+    $buyerDashboardSubtitle = 'Избранное, сообщения и активность на маркетплейсе.';
+@endphp
+
 @extends('marketplace.layout')
 
-@section('title', 'Кабинет покупателя')
+@section('title', $buyerDashboardTitle)
 
 @section('content')
     <section class="mp-card">
         <div class="mp-page-head">
             <div>
-                <h1 class="mp-page-title">Кабинет покупателя</h1>
-                <p class="mp-page-sub">Ваши избранные товары и последние диалоги.</p>
+                <h1 class="mp-page-title">{{ $buyerDashboardTitle }}</h1>
+                <p class="mp-page-sub">{{ $buyerDashboardSubtitle }}</p>
             </div>
             <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Найти товары</a>
         </div>
@@ -17,7 +22,7 @@
                 <div style="font-size:32px;font-weight:900;">{{ $favoritesCount }}</div>
             </div>
             <div style="background:#f4fbff;border:1px solid #d5e9fb;border-radius:14px;padding:14px;">
-                <div class="mp-muted">Открытые чаты</div>
+                <div class="mp-muted">Сообщения</div>
                 <div style="font-size:32px;font-weight:900;">{{ $openChatsCount }}</div>
             </div>
             <div style="background:#f4fbff;border:1px solid #d5e9fb;border-radius:14px;padding:14px;">
@@ -34,20 +39,20 @@
     <section class="mp-card">
         <div class="mp-page-head">
             <div>
-                <h2 class="mp-page-title" style="font-size:24px;">Последние чаты</h2>
+                <h2 class="mp-page-title" style="font-size:24px;">Последние сообщения</h2>
             </div>
-            <a class="mp-btn" href="{{ route('marketplace.buyer.chats', ['marketSlug' => $market->slug]) }}">Все чаты</a>
+            <a class="mp-btn" href="{{ route('marketplace.buyer.chats', ['marketSlug' => $market->slug]) }}">Все сообщения</a>
         </div>
 
         @if($latestChats->count() === 0)
-            <p class="mp-muted">Пока нет диалогов с продавцами.</p>
+            <p class="mp-muted">Пока нет переписок.</p>
         @else
             <div style="display:grid;gap:10px;">
                 @foreach($latestChats as $chat)
                     <a href="{{ route('marketplace.buyer.chat.show', ['marketSlug' => $market->slug, 'chatId' => $chat->id]) }}"
                        style="display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid #d7e7f8;border-radius:12px;padding:12px;background:#fff;">
                         <div>
-                            <div style="font-weight:700;">{{ $chat->subject ?: 'Диалог с продавцом' }}</div>
+                            <div style="font-weight:700;">{{ $chat->subject ?: 'Диалог' }}</div>
                             <div class="mp-muted" style="font-size:13px;">
                                 {{ $chat->tenant?->short_name ?: ($chat->tenant?->name ?: 'Магазин') }}
                                 @if($chat->product)

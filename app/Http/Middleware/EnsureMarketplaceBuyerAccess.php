@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\PortalAccessService;
 use App\Services\Marketplace\MarketplaceContextService;
 use Closure;
 use Illuminate\Http\Request;
@@ -24,20 +25,18 @@ class EnsureMarketplaceBuyerAccess
             return redirect()->route('marketplace.entry');
         }
 
-        if (! method_exists($user, 'isBuyer') || ! $user->isBuyer()) {
-            abort(403);
-        }
-
         $market = app(MarketplaceContextService::class)->resolveMarket($marketSlug);
         if (! $market) {
             abort(404);
         }
 
-        if ((int) ($user->market_id ?? 0) > 0 && (int) $user->market_id !== (int) $market->id) {
+        $access = app(PortalAccessService::class);
+        if (! $access->canUseMarketplaceBuyer($user, $market)) {
             abort(403);
         }
+
+        $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_BUYER);
 
         return $next($request);
     }
 }
-

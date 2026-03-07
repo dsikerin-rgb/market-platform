@@ -1,6 +1,11 @@
 @props(['tenant' => null, 'title' => null])
 
 @php
+    use App\Models\User;
+    use App\Services\Auth\PortalAccessService;
+    use App\Services\Cabinet\TenantImpersonationService;
+    use Illuminate\Support\Facades\Route;
+
     $viteHot = file_exists(public_path('hot'));
     $viteManifest = file_exists(public_path('build/manifest.json'));
     $useVite = $viteHot || (! app()->environment('local') && $viteManifest);
@@ -15,22 +20,44 @@
     }
     $marketName = $marketName ?: config('app.name', 'Market Platform');
 
-    $impersonation = session(\App\Services\Cabinet\TenantImpersonationService::SESSION_KEY);
+    $impersonation = session(TenantImpersonationService::SESSION_KEY);
     $isImpersonation = is_array($impersonation) && ! empty($impersonation['impersonator_user_id']);
     $isDashboard = request()->routeIs('cabinet.dashboard');
     $unreadCommunicationCount = 0;
 
     $authUser = auth()->user();
-    $authUserName = is_object($authUser) ? trim((string) ($authUser->name ?? '')) : '';
+    $portalAccess = app(PortalAccessService::class);
+    $portalUser = $authUser instanceof User ? $authUser : null;
+    $authUserName = $portalUser ? trim((string) ($portalUser->name ?? '')) : '';
     $showAuthUserName = $authUserName !== '' && mb_strtolower($authUserName) !== mb_strtolower($tenantName);
-    if ($authUser && (int) ($authUser->tenant_id ?? 0) > 0) {
+
+    $cabinetCurrentUserCanUseBuyer = false;
+    $cabinetCurrentUserCanSellPublicly = false;
+    $cabinetMarketplaceUrl = null;
+
+    if ($portalUser && ! $isImpersonation) {
+        $userMarket = $portalAccess->resolveUserMarket($portalUser);
+        $cabinetCurrentUserCanUseBuyer = $portalAccess->canUseMarketplaceBuyer($portalUser, $userMarket);
+        $cabinetCurrentUserCanSellPublicly = $portalAccess->canSellOnMarketplace($portalUser, $userMarket);
+
+        if ($cabinetCurrentUserCanUseBuyer) {
+            $marketRouteKey = $portalAccess->resolveUserMarketRouteKey($portalUser);
+            if ($marketRouteKey !== null) {
+                $cabinetMarketplaceUrl = route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]);
+            }
+        }
+    }
+
+    $showSellerShadowState = $portalUser && ! $isImpersonation && ! $cabinetCurrentUserCanSellPublicly;
+
+    if ($portalUser && (int) ($portalUser->tenant_id ?? 0) > 0) {
         try {
             $seenAt = (string) session('cabinet.communication_seen_at', '1970-01-01 00:00:00');
-            $tenantId = (int) $authUser->tenant_id;
-            $marketId = (int) ($authUser->market_id ?? 0);
+            $tenantId = (int) $portalUser->tenant_id;
+            $marketId = (int) ($portalUser->market_id ?? 0);
 
             $unreadCommunicationCount = \App\Models\TicketComment::query()
-                ->where('user_id', '<>', (int) $authUser->id)
+                ->where('user_id', '<>', (int) $portalUser->id)
                 ->where('created_at', '>', $seenAt)
                 ->whereHas('ticket', function ($query) use ($tenantId, $marketId) {
                     $query->where('tenant_id', $tenantId)
@@ -67,22 +94,61 @@
     <style>
         :root {
             --cabinet-shell-max-width: 28rem;
+            --cabinet-content-bottom: 10rem;
         }
 
         body[data-device='mobile'] {
             --cabinet-shell-max-width: 28rem;
+            --cabinet-content-bottom: 10rem;
         }
 
-        /* Smartphone-first: tablet/desktop currently use the same shell width. */
-        body[data-device='tablet'],
+        body[data-device='tablet'] {
+            --cabinet-shell-max-width: 64rem;
+            --cabinet-content-bottom: 2.5rem;
+        }
+
         body[data-device='desktop'] {
-            --cabinet-shell-max-width: 28rem;
+            --cabinet-shell-max-width: 76rem;
+            --cabinet-content-bottom: 2.75rem;
         }
 
         .cabinet-shell {
             width: 100%;
             max-width: var(--cabinet-shell-max-width);
             margin-inline: auto;
+        }
+
+        .cabinet-main {
+            padding-bottom: var(--cabinet-content-bottom);
+        }
+
+        .cabinet-top-nav {
+            display: none;
+        }
+
+        .cabinet-top-nav__link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2.75rem;
+            border-radius: 0.9rem;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            background: rgba(248, 250, 252, 0.85);
+            color: rgb(51 65 85);
+            font-size: 0.95rem;
+            font-weight: 600;
+            transition: 0.18s ease;
+        }
+
+        .cabinet-top-nav__link:hover {
+            background: rgba(241, 245, 249, 0.98);
+        }
+
+        .cabinet-top-nav__link.is-active {
+            border-color: rgba(2, 132, 199, 0.45);
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.14), rgba(56, 189, 248, 0.18));
+            color: rgb(14 116 144);
+            box-shadow: 0 8px 22px rgba(14, 165, 233, 0.14);
         }
 
         .cabinet-bottom-nav {
@@ -103,7 +169,7 @@
 
         @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
             .cabinet-bottom-nav__inner {
-                background: rgba(255, 255, 255, 0.5);
+                background: rgba(255, 255, 255, 0.88);
             }
         }
 
@@ -149,6 +215,19 @@
                 height: 17px;
             }
         }
+
+        @media (min-width: 768px) {
+            .cabinet-top-nav {
+                display: grid;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+                gap: 0.5rem;
+                margin-top: 1rem;
+            }
+
+            .cabinet-bottom-nav {
+                display: none;
+            }
+        }
     </style>
 
     @stack('head')
@@ -158,30 +237,48 @@
 <div class="h-screen bg-gradient-to-b from-sky-200/65 via-slate-100 to-slate-200">
     <div class="cabinet-shell h-screen relative flex flex-col overflow-hidden">
         <header class="sticky top-0 z-30 px-3 pt-3">
-            <div class="rounded-3xl border border-slate-200/90 bg-white/95 backdrop-blur shadow-[0_10px_24px_rgba(15,23,42,0.10)] px-4 py-3">
+            <div class="rounded-3xl border border-slate-200/90 bg-white/95 backdrop-blur shadow-[0_10px_24px_rgba(15,23,42,0.10)] px-4 py-3 md:px-5 md:py-4">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                         @if($isDashboard)
                             <div class="inline-flex max-w-full items-center rounded-full border border-sky-800/30 bg-sky-700 text-sky-50 text-[11px] px-2.5 py-1 font-semibold truncate shadow-sm">
                                 {{ $marketName }}
                             </div>
-                            <h1 class="mt-2 text-base font-semibold leading-tight truncate">
+                            <h1 class="mt-2 text-base font-semibold leading-tight truncate md:text-xl">
                                 {{ $tenantName }}
                             </h1>
                             @if ($showAuthUserName)
                                 <p class="mt-1 text-sm text-slate-700 truncate">{{ $authUserName }}</p>
                             @endif
-                            
+                            @if ($showSellerShadowState)
+                                <p class="mt-2 text-xs font-semibold text-amber-700">
+                                    Публикация на маркетплейсе приостановлена: нет активного договора аренды.
+                                </p>
+                            @endif
                         @else
-                            <h1 class="text-base font-semibold leading-tight truncate">
+                            <h1 class="text-base font-semibold leading-tight truncate md:text-xl">
                                 {{ $title ?? 'Кабинет арендатора' }}
                             </h1>
+                            @if ($showSellerShadowState)
+                                <p class="mt-2 text-xs font-semibold text-amber-700">
+                                    Публикация на маркетплейсе приостановлена: нет активного договора аренды.
+                                </p>
+                            @endif
                         @endif
                     </div>
 
-                    @if (auth()->check() && (\Illuminate\Support\Facades\Route::has('cabinet.logout') || \Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit')))
+                    @if (auth()->check() && (Route::has('cabinet.logout') || Route::has('cabinet.impersonation.exit')))
                         <div class="shrink-0 flex items-center gap-2">
-                            @if (\Illuminate\Support\Facades\Route::has('cabinet.requests.create'))
+                            @if ($cabinetMarketplaceUrl)
+                                <a
+                                    href="{{ $cabinetMarketplaceUrl }}"
+                                    class="inline-flex h-10 items-center justify-center rounded-xl border border-sky-300 bg-sky-50 px-3.5 text-sky-700 text-sm font-semibold"
+                                >
+                                    Покупки
+                                </a>
+                            @endif
+
+                            @if (Route::has('cabinet.requests.create'))
                                 <a
                                     href="{{ route('cabinet.requests.create', ['category' => 'help']) }}"
                                     class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sky-300 bg-sky-50 text-sky-700 text-base font-bold"
@@ -189,8 +286,9 @@
                                     title="Помощь"
                                 >?</a>
                             @endif
+
                             @if ($isImpersonation)
-                                @if (\Illuminate\Support\Facades\Route::has('cabinet.impersonation.exit'))
+                                @if (Route::has('cabinet.impersonation.exit'))
                                     <form method="POST" action="{{ route('cabinet.impersonation.exit') }}" data-navigate="false">
                                         @csrf
                                         <button
@@ -223,10 +321,33 @@
                         </div>
                     @endif
                 </div>
+
+                <nav class="cabinet-top-nav">
+                    <a
+                        href="{{ route('cabinet.dashboard') }}"
+                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.dashboard')])
+                    >Главная</a>
+                    <a
+                        href="{{ route('cabinet.accruals') }}"
+                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments')])
+                    >Финансы</a>
+                    <a
+                        href="{{ route('cabinet.requests') }}"
+                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.requests*') || request()->routeIs('cabinet.customer-chat')])
+                    >Общение</a>
+                    <a
+                        href="{{ route('cabinet.documents') }}"
+                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.documents')])
+                    >Документы</a>
+                    <a
+                        href="{{ route('cabinet.showcase.edit') }}"
+                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.showcase.*')])
+                    >Витрина</a>
+                </nav>
             </div>
         </header>
 
-        <main class="flex-1 overflow-y-auto px-3 pt-3 pb-40">
+        <main class="cabinet-main flex-1 overflow-y-auto px-3 pt-3 pb-40 md:pb-8">
             <div class="space-y-3">
                 @if (session('success'))
                     <div class="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-900">
@@ -250,13 +371,11 @@
                     </div>
                 @endif
 
-                
-
                 {{ $slot }}
             </div>
         </main>
 
-        <nav class="cabinet-bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-30 px-3 pt-2">
+        <nav class="cabinet-bottom-nav fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-30 px-3 pt-2 md:hidden">
             <div class="cabinet-bottom-nav__inner rounded-3xl shadow-[0_12px_30px_rgba(15,23,42,0.18)] safe-pb">
                 <a
                     href="{{ route('cabinet.dashboard') }}"
