@@ -53,6 +53,8 @@
         </section>
     @endif
 
+    @include('cabinet.partials.sales-nav')
+
     <form method="POST" action="{{ route('cabinet.showcase.update') }}" enctype="multipart/form-data" class="space-y-3">
         @csrf
         @if(!empty($selectedSpaceId))

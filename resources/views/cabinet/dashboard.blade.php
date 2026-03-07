@@ -41,6 +41,7 @@
             <a href="{{ route('cabinet.requests') }}" class="rounded-2xl bg-slate-50 border border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">Общение</a>
             <a href="{{ route('cabinet.documents') }}" class="rounded-2xl bg-slate-50 border border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">Документы</a>
             <a href="{{ route('cabinet.spaces') }}" class="rounded-2xl bg-slate-50 border border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">Торговые места</a>
+            <a href="{{ route('cabinet.products.index') }}" class="rounded-2xl bg-slate-50 border border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">Товары</a>
             <a href="{{ route('cabinet.showcase.edit') }}" class="rounded-2xl bg-slate-50 border border-slate-200 px-3 py-3 text-sm font-medium text-slate-800">Моя витрина</a>
         </div>
     </section>

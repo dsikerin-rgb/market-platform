@@ -117,6 +117,34 @@
                 </div>
 
                 @php
+                    $productCount = (int) ($spaceProductCounts[(int) $space->id] ?? 0);
+                @endphp
+                <div class="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-semibold text-slate-700">Товары этого места</p>
+                            <p class="mt-1 text-xs text-slate-500">
+                                {{ $productCount > 0 ? 'Карточек товара: ' . $productCount : 'Товары для этого места пока не добавлены.' }}
+                            </p>
+                        </div>
+                        <div class="flex shrink-0 items-center gap-2">
+                            <a
+                                href="{{ route('cabinet.products.index', ['space_id' => (int) $space->id]) }}"
+                                class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                            >
+                                Открыть
+                            </a>
+                            <a
+                                href="{{ route('cabinet.products.create', ['space_id' => (int) $space->id]) }}"
+                                class="inline-flex items-center rounded-xl border border-sky-600 bg-sky-600 px-3 py-2 text-xs font-semibold text-white"
+                            >
+                                Добавить
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                @php
                     $staff = collect($spaceStaffMap[(int) $space->id] ?? []);
                 @endphp
                 <div class="mt-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-3">
@@ -160,4 +188,21 @@
             </div>
         @endforelse
     </section>
+
+    @if(!empty($globalProductsCount))
+        <section class="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-semibold text-slate-900">Товары без привязки</h2>
+                    <p class="mt-1 text-xs text-slate-500">Эти товары показываются в общей витрине арендатора.</p>
+                </div>
+                <a
+                    href="{{ route('cabinet.products.index', ['space_id' => -1]) }}"
+                    class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                >
+                    Открыть ({{ (int) $globalProductsCount }})
+                </a>
+            </div>
+        </section>
+    @endif
 </x-cabinet-layout>
