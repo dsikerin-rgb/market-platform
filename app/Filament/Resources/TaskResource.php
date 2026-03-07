@@ -40,8 +40,9 @@ class TaskResource extends BaseResource
     protected static ?string $navigationLabel = 'Задачи';
 
     // В Filament v4 base type: UnitEnum|string|null
-    protected static \UnitEnum|string|null $navigationGroup = 'Оперативная работа';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
+    protected static ?int $navigationSort = 80;
 
     /**
      * Чтобы Filament (где поддерживается) использовал название задачи как заголовок записи.

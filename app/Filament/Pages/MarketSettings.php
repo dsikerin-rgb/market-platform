@@ -24,7 +24,7 @@ class MarketSettings extends Page
      * На prod у market-admin этот пункт лежит в “Панель управления”.
      * Важно: в Filament 4 тип должен совпадать с базовым классом.
      */
-    protected static \UnitEnum|string|null $navigationGroup = 'Панель управления';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
     protected static ?int $navigationSort = 5;
@@ -81,28 +81,7 @@ class MarketSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            return true;
-        }
-
-        $hasMarket = (int) ($user->market_id ?? 0) > 0;
-
-        // На локали права могут быть не посеяны/отличаться, поэтому страхуемся ролями.
-        $hasRoleAccess = method_exists($user, 'hasAnyRole')
-            && $user->hasAnyRole(['market-admin', 'market-maintenance']);
-
-        $hasPermissionAccess =
-            $user->can('markets.view') ||
-            $user->can('markets.update') ||
-            $user->can('markets.viewAny');
-
-        return $hasMarket && ($hasRoleAccess || $hasPermissionAccess);
+        return false;
     }
 
     public static function canAccess(): bool

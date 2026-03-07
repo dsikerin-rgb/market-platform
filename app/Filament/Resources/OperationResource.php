@@ -42,9 +42,10 @@ class OperationResource extends BaseResource
     protected static ?string $navigationLabel = 'Операции';
 
     // Filament v4 требует именно UnitEnum|string|null
-    protected static \UnitEnum|string|null $navigationGroup = 'Управление';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
+    protected static ?int $navigationSort = 100;
 
     
     public static function getGloballySearchableAttributes(): array

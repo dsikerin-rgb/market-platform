@@ -26,7 +26,7 @@ class PermissionResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Права';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-key';
 

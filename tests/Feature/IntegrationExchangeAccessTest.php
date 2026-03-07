@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Models\IntegrationExchange;
 use App\Models\Market;
@@ -35,9 +36,12 @@ class IntegrationExchangeAccessTest extends TestCase
         $this->actingAs($user);
 
         self::assertTrue(IntegrationExchangeResource::canViewAny());
-        self::assertTrue(IntegrationExchangeResource::shouldRegisterNavigation());
+        self::assertFalse(IntegrationExchangeResource::shouldRegisterNavigation());
 
         $this->get(IntegrationExchangeResource::getUrl('index'))
+            ->assertOk();
+
+        $this->get(OpsDiagnostics::getUrl())
             ->assertOk();
     }
 
@@ -106,9 +110,39 @@ class IntegrationExchangeAccessTest extends TestCase
         $this->actingAs($user);
 
         self::assertTrue(IntegrationExchangeResource::canViewAny());
-        self::assertTrue(IntegrationExchangeResource::shouldRegisterNavigation());
+        self::assertFalse(IntegrationExchangeResource::shouldRegisterNavigation());
         self::assertTrue(IntegrationExchangeResource::canCreate());
         self::assertTrue(IntegrationExchangeResource::canEdit($exchange));
         self::assertTrue(IntegrationExchangeResource::canDelete($exchange));
+
+        $this->get(OpsDiagnostics::getUrl())
+            ->assertOk();
+    }
+
+    public function test_market_admin_cannot_access_diagnostics_or_integration_journal(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('market-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-admin@example.test',
+        ]);
+        $user->assignRole('market-admin');
+
+        $this->actingAs($user);
+
+        self::assertFalse(IntegrationExchangeResource::canViewAny());
+
+        $this->get(IntegrationExchangeResource::getUrl('index'))
+            ->assertForbidden();
+
+        $this->get(OpsDiagnostics::getUrl())
+            ->assertForbidden();
     }
 }

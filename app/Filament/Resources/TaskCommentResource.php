@@ -33,7 +33,7 @@ class TaskCommentResource extends BaseResource
 
     // Оставляем метаданные (не влияют на меню при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Комментарии задач';
-    protected static \UnitEnum|string|null $navigationGroup = 'Задачи';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-chat-bubble-left-ellipsis';
 
     protected static function selectedMarketIdFromSession(): ?int

@@ -204,4 +204,13 @@ html:not([data-admin-overrides="0"]) .dark .fi-fo-field-label-ctn .fi-sc-icon.fi
 html:not([data-admin-overrides="0"]) .dark .fi-fo-field-label-ctn .fi-sc-icon.fi-color:focus{
   color: var(--gray-300) !important;
 }
+
+/* ====================================================================== */
+/* === Sidebar: visual spacing between flat navigation clusters          === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-sidebar a[href$="/admin/market-holidays"],
+html:not([data-admin-overrides="0"]) .fi-sidebar a[href$="/admin/settings"],
+html:not([data-admin-overrides="0"]) .fi-sidebar a[href$="/admin/markets"]{
+  margin-top: .85rem;
+}
 </style>

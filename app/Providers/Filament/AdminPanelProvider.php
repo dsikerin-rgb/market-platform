@@ -129,14 +129,6 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Amber,
             ])
 
-            ->navigationGroups([
-                'Рынки',
-                'Рынок',
-                'Оперативная работа',
-                'Настройки',
-                'Ops',
-            ])
-
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
 
             ->pages([

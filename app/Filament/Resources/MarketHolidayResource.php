@@ -29,8 +29,9 @@ class MarketHolidayResource extends BaseResource
     protected static ?string $modelLabel = 'Событие календаря';
     protected static ?string $pluralModelLabel = 'Календарь';
     protected static ?string $navigationLabel = 'Календарь';
-    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-calendar-days';
+    protected static ?int $navigationSort = 70;
 
     public static function shouldRegisterNavigation(): bool
     {

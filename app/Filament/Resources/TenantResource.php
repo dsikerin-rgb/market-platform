@@ -39,6 +39,8 @@ class TenantResource extends BaseResource
     protected static ?string $pluralModelLabel = 'Арендаторы';
     protected static ?string $navigationLabel = 'Арендаторы';
 
+    protected static ?int $navigationSort = 30;
+
     /** @var array<string, array<int, string>> */
     private static array $tableColumnsCache = [];
 
@@ -55,13 +57,7 @@ class TenantResource extends BaseResource
      */
     public static function getNavigationGroup(): ?string
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return null;
-        }
-
-        return $user->isSuperAdmin() ? 'Рынки' : 'Рынок';
+        return null;
     }
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-users';

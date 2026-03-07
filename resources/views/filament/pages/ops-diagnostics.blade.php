@@ -150,7 +150,8 @@
         // Backward compatibility:
         // - ранее существовал только $telescopeEnabled (по config).
         // - теперь (в новой версии OpsDiagnostics) есть $telescopeRecordingEnabled и $telescopeEnabledUntil/*.
-        $telescopeConfigEnabledLocal = $telescopeConfigEnabled ?? ($telescopeInstalled ? (bool) config('telescope.enabled', true) : false);
+        $telescopeInstalledLocal = isset($telescopeInstalled) ? (bool) $telescopeInstalled : false;
+        $telescopeConfigEnabledLocal = $telescopeConfigEnabled ?? ($telescopeInstalledLocal ? (bool) config('telescope.enabled', true) : false);
         $telescopeRecordingEnabledLocal = $telescopeRecordingEnabled ?? ($telescopeEnabled ?? false);
 
         $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
@@ -169,9 +170,66 @@
         ];
     @endphp
 
+    @if ($canViewIntegrationJournal && ! $canUseOpsTools)
+        <x-filament::section
+            heading="Журнал интеграций"
+            description="Просмотр входящих и исходящих обменов с 1С и другими интеграциями."
+        >
+            <div style="display: grid; gap: 1rem;">
+                <div class="ops-muted" style="font-size: .875rem; line-height: 1.5;">
+                    Для <span class="ops-inline-code">market-operator</span> этот раздел является основным режимом страницы
+                    диагностики. Открывается журнал обменов по вашему рынку без доступа к ops-инструментам.
+                </div>
+
+                <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                    <x-filament::badge color="success">
+                        Доступ открыт
+                    </x-filament::badge>
+
+                    <x-filament::button
+                        tag="a"
+                        href="{{ $integrationExchangesUrl }}"
+                        icon="heroicon-m-arrow-top-right-on-square"
+                    >
+                        Открыть журнал интеграций
+                    </x-filament::button>
+                </div>
+            </div>
+        </x-filament::section>
+    @endif
+
+    @if ($canUseOpsTools)
     <div class="ops-page-grid">
         {{-- Левая колонка: Состояние + Действия --}}
         <div class="ops-main" style="display: grid; gap: 2rem;">
+            @if ($canViewIntegrationJournal)
+                <x-filament::section
+                    heading="Журнал интеграций"
+                    description="Просмотр входящих и исходящих обменов с 1С и другими интеграциями."
+                >
+                    <div style="display: grid; gap: 1rem;">
+                        <div class="ops-muted" style="font-size: .875rem; line-height: 1.5;">
+                            Для <span class="ops-inline-code">market-operator</span> этот раздел является основным режимом страницы
+                            диагностики. Открывается журнал обменов по вашему рынку без доступа к ops-инструментам.
+                        </div>
+
+                        <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                            <x-filament::badge color="success">
+                                Доступ открыт
+                            </x-filament::badge>
+
+                            <x-filament::button
+                                tag="a"
+                                href="{{ $integrationExchangesUrl }}"
+                                icon="heroicon-m-arrow-top-right-on-square"
+                            >
+                                Открыть журнал интеграций
+                            </x-filament::button>
+                        </div>
+                    </div>
+                </x-filament::section>
+            @endif
+
             {{-- Состояние системы --}}
             <x-filament::section
                 heading="Диагностика системы"
@@ -577,4 +635,5 @@ php artisan optimize:clear</code></pre>
             </div>
         </div>
     </div>
+    @endif
 </x-filament-panels::page>

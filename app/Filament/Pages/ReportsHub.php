@@ -12,7 +12,7 @@ class ReportsHub extends Page
     protected static ?string $title = 'Отчёты';
     protected static ?string $navigationLabel = 'Отчёты';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
     protected static ?int $navigationSort = 90;
 
@@ -36,8 +36,7 @@ class ReportsHub extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        // если роута ещё нет — НЕ регистрируем пункт, иначе sidebar упадёт на getUrl()
-        return static::canAccess() && Route::has(static::getPageRouteName());
+        return false;
     }
 
     public static function getNavigationUrl(): string

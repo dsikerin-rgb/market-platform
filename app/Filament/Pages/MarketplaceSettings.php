@@ -16,7 +16,7 @@ class MarketplaceSettings extends Page
 {
     protected static ?string $navigationLabel = 'Настройки маркетплейса';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Маркетплейс';
+    protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
 

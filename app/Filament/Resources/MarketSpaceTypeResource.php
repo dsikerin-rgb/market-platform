@@ -32,7 +32,7 @@ class MarketSpaceTypeResource extends BaseResource
 
     // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
     protected static ?string $navigationLabel = 'Типы мест';
-    protected static \UnitEnum|string|null $navigationGroup = 'Настройки рынка';
+    protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
 
     public static function shouldRegisterNavigation(): bool

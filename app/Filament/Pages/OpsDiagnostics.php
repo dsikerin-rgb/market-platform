@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\IntegrationExchangeResource;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -53,7 +54,8 @@ class OpsDiagnostics extends Page
      * Типы должны совпадать с Filament\Pages\Page (важно для PHPStan/IDE и избежания конфликтов сигнатур).
      */
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-wrench-screwdriver';
-    protected static UnitEnum|string|null $navigationGroup = 'Ops';
+    protected static UnitEnum|string|null $navigationGroup = null;
+    protected static ?int $navigationSort = 150;
 
     protected static ?string $navigationLabel = 'Диагностика';
     protected static ?string $title = 'Диагностика (Ops)';
@@ -62,7 +64,15 @@ class OpsDiagnostics extends Page
     {
         $user = Filament::auth()->user();
 
-        return (bool) ($user?->isSuperAdmin() ?? false);
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->hasRole('market-operator') && (bool) $user->market_id;
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -76,6 +86,10 @@ class OpsDiagnostics extends Page
      */
     protected function getHeaderActions(): array
     {
+        if (! (Filament::auth()->user()?->isSuperAdmin() ?? false)) {
+            return [];
+        }
+
         return [
             Action::make('importMapExtractJson')
                 ->label('Импорт подложки карты (JSON)')
@@ -167,6 +181,21 @@ class OpsDiagnostics extends Page
 
     protected function getViewData(): array
     {
+        $user = Filament::auth()->user();
+        $canUseOpsTools = (bool) ($user?->isSuperAdmin() ?? false);
+        $canViewIntegrationJournal = IntegrationExchangeResource::canViewAny();
+        $integrationExchangesUrl = $canViewIntegrationJournal
+            ? IntegrationExchangeResource::getUrl('index')
+            : null;
+
+        if (! $canUseOpsTools) {
+            return [
+                'canUseOpsTools' => false,
+                'canViewIntegrationJournal' => $canViewIntegrationJournal,
+                'integrationExchangesUrl' => $integrationExchangesUrl,
+            ];
+        }
+
         $telescopeInstalled = class_exists(\Laravel\Telescope\Telescope::class);
 
         // Важно: config('telescope.enabled') влияет на то, доступны ли маршруты/UI Telescope.
@@ -199,6 +228,9 @@ class OpsDiagnostics extends Page
         );
 
         return [
+            'canUseOpsTools' => true,
+            'canViewIntegrationJournal' => $canViewIntegrationJournal,
+            'integrationExchangesUrl' => $integrationExchangesUrl,
             'appEnv' => (string) config('app.env'),
             'appPath' => base_path(),
 
@@ -748,7 +780,7 @@ class OpsDiagnostics extends Page
 
     private function ensureSuperAdmin(): void
     {
-        if (! static::canAccess()) {
+        if (! (Filament::auth()->user()?->isSuperAdmin() ?? false)) {
             abort(403);
         }
     }
