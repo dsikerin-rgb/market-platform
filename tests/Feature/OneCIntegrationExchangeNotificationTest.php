@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\Channels\TelegramChannel;
 use App\Notifications\OneCIntegrationExchangeNotification;
 use App\Support\UserNotificationPreferences;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Spatie\Permission\Models\Role;
@@ -83,6 +84,48 @@ class OneCIntegrationExchangeNotificationTest extends TestCase
                     && ((int) (($payload['counters']['received'] ?? null) ?? 0)) === 39
                     && ((int) (($payload['counters']['inserted'] ?? null) ?? 0)) === 39;
             }
+        );
+    }
+
+    public function test_one_c_notification_uses_market_timezone_for_finished_at(): void
+    {
+        config([
+            'app.timezone' => 'Asia/Omsk',
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = new Market([
+            'id' => 1,
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Asia/Barnaul',
+            'is_active' => true,
+        ]);
+
+        $exchange = new IntegrationExchange();
+        $exchange->setRawAttributes([
+            'market_id' => 1,
+            'direction' => IntegrationExchange::DIRECTION_IN,
+            'entity_type' => 'contract_debts',
+            'status' => IntegrationExchange::STATUS_OK,
+            'payload' => json_encode([
+                'endpoint' => '/api/1c/contract-debts',
+                'received' => 39,
+                'inserted' => 0,
+                'skipped' => 39,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'finished_at' => '2026-03-07 09:54:21',
+        ], true);
+        $exchange->setRelation('market', $market);
+
+        $notification = new OneCIntegrationExchangeNotification($exchange);
+        $reflection = new \ReflectionClass($notification);
+        $method = $reflection->getMethod('formatDateTimeForMarket');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            '2026-03-07 10:54:21',
+            $method->invoke($notification, CarbonImmutable::create(2026, 3, 7, 9, 54, 21, 'Asia/Omsk')),
         );
     }
 

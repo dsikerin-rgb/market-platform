@@ -7,6 +7,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\IntegrationExchangeResource\Pages;
 use App\Models\IntegrationExchange;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -87,6 +88,28 @@ class IntegrationExchangeResource extends BaseResource
         return filled($value) ? $value : $default;
     }
 
+    private static function resolveTimezone(?string $marketTimezone): string
+    {
+        $tz = trim((string) $marketTimezone);
+
+        if ($tz === '') {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        try {
+            CarbonImmutable::now($tz);
+        } catch (\Throwable) {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        return $tz;
+    }
+
+    private static function recordTimezone(?IntegrationExchange $record): string
+    {
+        return static::resolveTimezone($record?->market?->timezone);
+    }
+
     
     public static function getGloballySearchableAttributes(): array
     {
@@ -151,11 +174,13 @@ class IntegrationExchangeResource extends BaseResource
 
             Forms\Components\DateTimePicker::make('started_at')
                 ->label('Начато')
-                ->seconds(false),
+                ->seconds(false)
+                ->timezone(fn (?IntegrationExchange $record): string => static::recordTimezone($record)),
 
             Forms\Components\DateTimePicker::make('finished_at')
                 ->label('Завершено')
-                ->seconds(false),
+                ->seconds(false)
+                ->timezone(fn (?IntegrationExchange $record): string => static::recordTimezone($record)),
         ];
 
         $rightColumn = [
@@ -288,7 +313,8 @@ class IntegrationExchangeResource extends BaseResource
 
                 TextColumn::make('started_at')
                     ->label('Начато')
-                    ->dateTime()
+                    ->timezone(static fn (IntegrationExchange $record): string => static::recordTimezone($record))
+                    ->dateTime('d.m.Y H:i')
                     ->sortable(),
 
                 TextColumn::make('duration_ms')
@@ -344,7 +370,8 @@ class IntegrationExchangeResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()
+            ->with(['market:id,name,timezone']);
         $user = Filament::auth()->user();
 
         if (! $user) {
