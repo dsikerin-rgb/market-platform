@@ -1,4 +1,5 @@
 <?php
+# app/Http/Controllers/Cabinet/ProductsController.php
 
 declare(strict_types=1);
 
@@ -10,6 +11,7 @@ use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -31,7 +33,7 @@ class ProductsController extends Controller
         $selectedSpaceId = $this->resolveSelectedSpaceId($request, $spaces, $canManageGlobalProducts);
         $search = trim((string) $request->query('q', ''));
 
-        $products = $this->baseProductsQuery($authUser, $tenant, $spaces, $canManageGlobalProducts)
+        $products = $this->baseProductsQuery($tenant, $spaces, $canManageGlobalProducts)
             ->when($selectedSpaceId > 0, fn ($query) => $query->where('market_space_id', $selectedSpaceId))
             ->when($selectedSpaceId === -1, fn ($query) => $query->whereNull('market_space_id'))
             ->when($search !== '', function ($query) use ($search): void {
@@ -116,7 +118,7 @@ class ProductsController extends Controller
         $tenant = $authUser->tenant;
 
         [$spaces, $canManageGlobalProducts] = $this->resolveAccessibleSpaces($authUser, $tenant);
-        $productModel = $this->resolveProductOrFail($authUser, $tenant, $spaces, $canManageGlobalProducts, $product);
+        $productModel = $this->resolveProductOrFail($tenant, $spaces, $canManageGlobalProducts, $product);
         $categories = $this->resolveCategories($tenant);
 
         return view('cabinet.products.form', [
@@ -138,18 +140,24 @@ class ProductsController extends Controller
         $tenant = $authUser->tenant;
 
         [$spaces, $canManageGlobalProducts] = $this->resolveAccessibleSpaces($authUser, $tenant);
-        $productModel = $this->resolveProductOrFail($authUser, $tenant, $spaces, $canManageGlobalProducts, $product);
+        $productModel = $this->resolveProductOrFail($tenant, $spaces, $canManageGlobalProducts, $product);
         $validated = $this->validateProductPayload($request, $tenant, $spaces, $canManageGlobalProducts);
 
-        $images = collect($productModel->images ?? [])
+        $existingImages = collect($productModel->images ?? [])
             ->filter(static fn ($path): bool => is_string($path) && $path !== '')
             ->values();
 
-        $removeImages = collect($request->input('remove_images', []))
-            ->filter(static fn ($path): bool => is_string($path) && $path !== '')
-            ->values();
+        $removeImages = $this->resolveRemovableImages($request, $existingImages);
+        $remainingImagesCount = $existingImages->count() - $removeImages->count();
+        $newImagesCount = $this->countUploadedImages($request);
 
-        $images = $images
+        if (($remainingImagesCount + $newImagesCount) > self::MAX_IMAGES) {
+            throw ValidationException::withMessages([
+                'new_images' => 'Можно сохранить не более ' . self::MAX_IMAGES . ' изображений у одного товара.',
+            ]);
+        }
+
+        $images = $existingImages
             ->reject(static fn (string $path): bool => $removeImages->contains($path))
             ->values();
 
@@ -158,17 +166,24 @@ class ProductsController extends Controller
         }
 
         $newImages = $this->storeUploadedImages($request);
-        $images = $images->concat($newImages)->take(self::MAX_IMAGES)->values();
+        $images = $images->concat($newImages)->values();
 
         $wasInactive = ! (bool) $productModel->is_active;
 
         $productModel->fill($this->buildProductAttributes($validated, $tenant));
+
         if (! filled($productModel->slug)) {
-            $productModel->slug = $this->makeUniqueSlug((int) $tenant->market_id, (string) $productModel->title, (int) $productModel->id);
+            $productModel->slug = $this->makeUniqueSlug(
+                (int) $tenant->market_id,
+                (string) $productModel->title,
+                (int) $productModel->id
+            );
         }
+
         if ($wasInactive && (bool) $productModel->is_active && ! $productModel->published_at) {
             $productModel->published_at = now();
         }
+
         $productModel->images = $images->all();
         $productModel->save();
 
@@ -185,7 +200,7 @@ class ProductsController extends Controller
         $tenant = $authUser->tenant;
 
         [$spaces, $canManageGlobalProducts] = $this->resolveAccessibleSpaces($authUser, $tenant);
-        $productModel = $this->resolveProductOrFail($authUser, $tenant, $spaces, $canManageGlobalProducts, $product);
+        $productModel = $this->resolveProductOrFail($tenant, $spaces, $canManageGlobalProducts, $product);
 
         foreach ((array) ($productModel->images ?? []) as $path) {
             if (is_string($path) && $path !== '') {
@@ -209,7 +224,9 @@ class ProductsController extends Controller
             ->get(['id', 'code', 'number', 'display_name']);
 
         $allowedSpaceIds = $user->allowedTenantSpaceIds();
-        $spaces = $allSpaces->when($allowedSpaceIds !== [], fn (Collection $collection) => $collection->whereIn('id', $allowedSpaceIds))->values();
+        $spaces = $allSpaces
+            ->when($allowedSpaceIds !== [], fn (Collection $collection) => $collection->whereIn('id', $allowedSpaceIds))
+            ->values();
 
         $canManageGlobalProducts = $user->hasRole('merchant')
             || $spaces->count() === $allSpaces->count();
@@ -231,6 +248,7 @@ class ProductsController extends Controller
     private function resolveCreateSpaceId(Request $request, Collection $spaces, bool $canManageGlobalProducts): int
     {
         $selectedSpaceId = (int) $request->integer('space_id', 0);
+
         if ($selectedSpaceId === -1 && ! $canManageGlobalProducts) {
             return 0;
         }
@@ -253,7 +271,7 @@ class ProductsController extends Controller
             ->get(['id', 'name', 'market_id']);
     }
 
-    private function baseProductsQuery(User $user, Tenant $tenant, Collection $spaces, bool $canManageGlobalProducts)
+    private function baseProductsQuery(Tenant $tenant, Collection $spaces, bool $canManageGlobalProducts): Builder
     {
         $query = MarketplaceProduct::query()
             ->where('tenant_id', (int) $tenant->id)
@@ -273,9 +291,9 @@ class ProductsController extends Controller
         return $query->whereIn('market_space_id', $spaceIds);
     }
 
-    private function resolveProductOrFail(User $user, Tenant $tenant, Collection $spaces, bool $canManageGlobalProducts, int $productId): MarketplaceProduct
+    private function resolveProductOrFail(Tenant $tenant, Collection $spaces, bool $canManageGlobalProducts, int $productId): MarketplaceProduct
     {
-        $product = $this->baseProductsQuery($user, $tenant, $spaces, $canManageGlobalProducts)
+        $product = $this->baseProductsQuery($tenant, $spaces, $canManageGlobalProducts)
             ->whereKey($productId)
             ->firstOrFail();
 
@@ -386,6 +404,34 @@ class ProductsController extends Controller
         }
 
         return $paths;
+    }
+
+    private function resolveRemovableImages(Request $request, Collection $existingImages): Collection
+    {
+        $requestedRemoveImages = collect($request->input('remove_images', []))
+            ->filter(static fn ($path): bool => is_string($path) && $path !== '')
+            ->values();
+
+        $unknownRemoveImages = $requestedRemoveImages
+            ->diff($existingImages)
+            ->values();
+
+        if ($unknownRemoveImages->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'remove_images' => 'Передан некорректный список изображений для удаления.',
+            ]);
+        }
+
+        return $requestedRemoveImages
+            ->intersect($existingImages)
+            ->values();
+    }
+
+    private function countUploadedImages(Request $request): int
+    {
+        return collect($request->file('new_images', []))
+            ->filter()
+            ->count();
     }
 
     private function makeUniqueSlug(int $marketId, string $title, ?int $ignoreProductId = null): string
