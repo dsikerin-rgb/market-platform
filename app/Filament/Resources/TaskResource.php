@@ -1,11 +1,11 @@
 <?php
-
 # app/Filament/Resources/TaskResource.php
 
 declare(strict_types=1);
 
 namespace App\Filament\Resources;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\TaskResource\Pages;
 use App\Filament\Resources\TaskResource\RelationManagers\TaskAttachmentsRelationManager;
 use App\Filament\Resources\TaskResource\RelationManagers\TaskCommentsRelationManager;
@@ -15,7 +15,6 @@ use App\Models\TaskParticipant;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
@@ -39,17 +38,12 @@ class TaskResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Задачи';
 
-    // В Filament v4 base type: UnitEnum|string|null
     protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 80;
 
-    /**
-     * Чтобы Filament (где поддерживается) использовал название задачи как заголовок записи.
-     */
     protected static ?string $recordTitleAttribute = 'title';
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -59,6 +53,7 @@ class TaskResource extends BaseResource
             'assignee.name',
         ];
     }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -147,9 +142,6 @@ class TaskResource extends BaseResource
             return $isCreator($record) || $isAssignee($record) || $isCoexecutor($record);
         };
 
-        /**
-         * Inline label (лейбл слева). Безопасно для разных версий Filament.
-         */
         $inline = static function ($component, bool $enabled = true) {
             if ($enabled && is_object($component) && method_exists($component, 'inlineLabel')) {
                 $component->inlineLabel();
@@ -169,7 +161,6 @@ class TaskResource extends BaseResource
                 ->label($label)
                 ->content($content);
 
-            // В "Сводке" хотим единый стиль с лейблом слева
             $inline($p, true);
 
             if ($columnSpan !== null) {
@@ -213,9 +204,6 @@ class TaskResource extends BaseResource
             );
         };
 
-        // -------------------------
-        // Рынок
-        // -------------------------
         $marketComponents = [];
 
         if ($user && $user->isSuperAdmin()) {
@@ -256,7 +244,6 @@ class TaskResource extends BaseResource
                 ->columnSpanFull()
                 ->dehydrated(true);
 
-            // В create тоже можно оставить inline (не критично), но он будет "как в сводке" и аккуратнее
             $marketComponents[] = $inline($marketSelect, true);
         } else {
             $marketComponents[] = Forms\Components\Hidden::make('market_id')
@@ -264,9 +251,6 @@ class TaskResource extends BaseResource
                 ->dehydrated(true);
         }
 
-        // -------------------------
-        // Постановщик (read-only)
-        // -------------------------
         $creatorDisplay = $readonlyText(
             'creator_display',
             'Постановщик',
@@ -287,9 +271,6 @@ class TaskResource extends BaseResource
             'full'
         );
 
-        // -------------------------
-        // CORE: title / description
-        // -------------------------
         $titleEditable = $inline(
             Forms\Components\TextInput::make('title')
                 ->label('Название задачи')
@@ -330,9 +311,6 @@ class TaskResource extends BaseResource
             ->default(fn () => $user?->id)
             ->dehydrated(fn (string $operation): bool => $operation === 'create');
 
-        // -------------------------
-        // STATUS
-        // -------------------------
         $statusHiddenOnCreate = Forms\Components\Hidden::make('status')
             ->default(Task::STATUS_NEW)
             ->visible(fn (string $operation): bool => $operation === 'create')
@@ -384,9 +362,6 @@ class TaskResource extends BaseResource
             fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateStatus($record, $operation),
         );
 
-        // -------------------------
-        // Параметры
-        // -------------------------
         $priorityEditable = $inline(
             Forms\Components\Select::make('priority')
                 ->label('Приоритет')
@@ -465,18 +440,14 @@ class TaskResource extends BaseResource
             fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
         );
 
-        // -------------------------
-        // Участники (ВАЖНО: без inlineLabel — чтобы не было "наезда")
-        // -------------------------
         $coexecutorsField = $inline(
             Forms\Components\Select::make('coexecutor_user_ids')
                 ->label('Соисполнители')
                 ->placeholder('Добавить соисполнителей')
-                ->relationship('participants', 'name', function (Builder $query) use ($user) {
-                    return static::limitUsersToMarket($query, $user);
-                })
-                ->multiple()
+                ->options(fn () => static::getAssignableUserOptions($user))
                 ->searchable()
+                ->getSearchResultsUsing(fn (string $search): array => static::getAssignableUserOptions($user, $search))
+                ->multiple()
                 ->preload()
                 ->native(false)
                 ->helperText('Соисполнители участвуют в выполнении. Если пользователь выбран и тут, и в наблюдателях — он станет соисполнителем.')
@@ -490,11 +461,8 @@ class TaskResource extends BaseResource
         );
 
         if (method_exists($coexecutorsField, 'getOptionLabelsUsing')) {
-            $coexecutorsField->getOptionLabelsUsing(function (array $values): array {
-                return User::query()
-                    ->whereIn('id', array_map('intval', $values))
-                    ->pluck('name', 'id')
-                    ->toArray();
+            $coexecutorsField->getOptionLabelsUsing(function (array $values) use ($user): array {
+                return static::getUserLabelsByIds($values, $user);
             });
         }
 
@@ -559,11 +527,10 @@ class TaskResource extends BaseResource
             Forms\Components\Select::make('observer_user_ids')
                 ->label('Наблюдатели')
                 ->placeholder('Добавить наблюдателей')
-                ->relationship('participants', 'name', function (Builder $query) use ($user) {
-                    return static::limitUsersToMarket($query, $user);
-                })
-                ->multiple()
+                ->options(fn () => static::getAssignableUserOptions($user))
                 ->searchable()
+                ->getSearchResultsUsing(fn (string $search): array => static::getAssignableUserOptions($user, $search))
+                ->multiple()
                 ->preload()
                 ->native(false)
                 ->helperText('Наблюдатели видят задачу и получают уведомления, но не считаются исполнителями.')
@@ -577,11 +544,8 @@ class TaskResource extends BaseResource
         );
 
         if (method_exists($observersField, 'getOptionLabelsUsing')) {
-            $observersField->getOptionLabelsUsing(function (array $values): array {
-                return User::query()
-                    ->whereIn('id', array_map('intval', $values))
-                    ->pluck('name', 'id')
-                    ->toArray();
+            $observersField->getOptionLabelsUsing(function (array $values) use ($user): array {
+                return static::getUserLabelsByIds($values, $user);
             });
         }
 
@@ -650,9 +614,6 @@ class TaskResource extends BaseResource
             fn (?Task $record): bool => (bool) $record && filled($record->source_type) && filled($record->source_id),
         );
 
-        // -------------------------
-        // EDIT: Дата создания
-        // -------------------------
         $createdAt = $readonlyText(
             'created_at_display',
             'Дата создания',
@@ -664,9 +625,6 @@ class TaskResource extends BaseResource
             fn (?Task $record, string $operation): bool => $operation === 'edit',
         );
 
-        // -------------------------
-        // CREATE: Wizard
-        // -------------------------
         $createWizard = Wizard::make([
             Step::make('Основное')
                 ->description('Что нужно сделать')
@@ -674,15 +632,11 @@ class TaskResource extends BaseResource
                     Section::make('Данные задачи')
                         ->schema([
                             ...$marketComponents,
-
                             $creatorDisplay,
-
                             $titleEditable,
                             $titleReadonly,
-
                             $descriptionEditable,
                             $descriptionReadonly,
-
                             $createdByHidden,
                         ])
                         ->columns(12)
@@ -695,16 +649,12 @@ class TaskResource extends BaseResource
                     Section::make('Параметры')
                         ->schema([
                             $statusHiddenOnCreate,
-
                             $statusEditableOnEdit,
                             $statusReadonlyOnEdit,
-
                             $priorityEditable,
                             $priorityReadonly,
-
                             $dueAtEditable,
                             $dueAtReadonly,
-
                             $assigneeEditable,
                             $assigneeReadonly,
                         ])
@@ -719,10 +669,8 @@ class TaskResource extends BaseResource
                         ->schema([
                             $coexecutorsField,
                             $coexecutorsReadonly,
-
                             $observersField,
                             $observersReadonly,
-
                             $sourceLabel,
                         ])
                         ->columns(12)
@@ -737,40 +685,27 @@ class TaskResource extends BaseResource
             $createWizard->columnSpanFull();
         }
 
-        // -------------------------
-        // EDIT: Сводка + вкладки
-        // -------------------------
         $editSummary = Section::make('Сводка')
             ->schema([
                 ...$marketComponents,
-
                 $creatorDisplay,
-
                 $createdAt,
-
                 $titleEditable,
                 $titleReadonly,
-
                 $descriptionEditable,
                 $descriptionReadonly,
-
                 $statusHiddenOnCreate,
-
                 $statusEditableOnEdit,
                 $statusReadonlyOnEdit,
-
                 $priorityEditable,
                 $priorityReadonly,
-
                 $dueAtEditable,
                 $dueAtReadonly,
-
                 $assigneeEditable,
                 $assigneeReadonly,
             ])
             ->columns(12);
 
-        // CSS-хук: применяем твои правки inline-label только к "Сводке"
         if (method_exists($editSummary, 'extraAttributes')) {
             $editSummary->extraAttributes([
                 'class' => 'task-summary-compact',
@@ -813,10 +748,8 @@ class TaskResource extends BaseResource
             $participantsGrid = static::makeGrid(12, [
                 $coexecutorsField,
                 $coexecutorsReadonly,
-
                 $observersField,
                 $observersReadonly,
-
                 $sourceLabel,
             ]);
 
@@ -861,10 +794,8 @@ class TaskResource extends BaseResource
                 ->schema([
                     $coexecutorsField,
                     $coexecutorsReadonly,
-
                     $observersField,
                     $observersReadonly,
-
                     $sourceLabel,
                 ])
                 ->columns(12);
@@ -1176,15 +1107,12 @@ class TaskResource extends BaseResource
 
     public static function getPages(): array
     {
-    return [
-        'index' => Pages\ListTasks::route('/'),
-        'create' => Pages\CreateTask::route('/create'),
-
-             // ВАЖНО: /calendar должен быть ДО /{record}
-              'calendar' => Pages\TaskCalendar::route('/calendar'),
-
-             'view' => Pages\ViewTask::route('/{record}'),
-             'edit' => Pages\EditTask::route('/{record}/edit'),
+        return [
+            'index' => Pages\ListTasks::route('/'),
+            'create' => Pages\CreateTask::route('/create'),
+            'calendar' => Pages\TaskCalendar::route('/calendar'),
+            'view' => Pages\ViewTask::route('/{record}'),
+            'edit' => Pages\EditTask::route('/{record}/edit'),
         ];
     }
 
@@ -1352,9 +1280,6 @@ class TaskResource extends BaseResource
             && $user->hasRole('market-admin');
     }
 
-    /**
-     * Super-admin selection: делаем чтение максимально совместимым (разные версии Filament/панелей).
-     */
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
@@ -1529,10 +1454,6 @@ class TaskResource extends BaseResource
         }
     }
 
-    /**
-     * Filament v4: Filament\Schemas\Components\Grid
-     * Filament v3: Filament\Forms\Components\Grid
-     */
     protected static function resolveGridClass(): string
     {
         if (class_exists(\Filament\Schemas\Components\Grid::class)) {
@@ -1559,5 +1480,51 @@ class TaskResource extends BaseResource
         }
 
         return $grid;
+    }
+
+    protected static function getAssignableUserOptions(?User $user, ?string $search = null, int $limit = 50): array
+    {
+        $query = User::query()
+            ->select(['id', 'name'])
+            ->orderBy('name');
+
+        $query = static::limitUsersToMarket($query, $user);
+
+        $search = trim((string) $search);
+        if ($search !== '') {
+            $query->where('name', 'like', '%' . addcslashes($search, '\\%_') . '%');
+        }
+
+        return $query
+            ->limit($limit)
+            ->pluck('name', 'id')
+            ->toArray();
+    }
+
+    protected static function getUserLabelsByIds(array $values, ?User $user = null): array
+    {
+        $ids = static::normalizeIds($values);
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $query = User::query()
+            ->select(['id', 'name'])
+            ->whereIn('id', $ids)
+            ->orderBy('name');
+
+        if ($user) {
+            $query = static::limitUsersToMarket($query, $user);
+        }
+
+        $users = $query->pluck('name', 'id')->toArray();
+
+        $labels = [];
+        foreach ($ids as $id) {
+            $labels[$id] = $users[$id] ?? "Пользователь #{$id}";
+        }
+
+        return $labels;
     }
 }
