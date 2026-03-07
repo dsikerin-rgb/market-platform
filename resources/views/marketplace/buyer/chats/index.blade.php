@@ -1,26 +1,25 @@
 @extends('marketplace.layout')
 
-@section('title', 'Чаты')
+@section('title', 'Сообщения')
 
 @section('content')
     <section class="mp-card">
         <div class="mp-page-head">
             <div>
-                <h1 class="mp-page-title">Чаты с продавцами</h1>
-                <p class="mp-page-sub">Вся переписка по товарам и заказам.</p>
+                <h1 class="mp-page-title">Сообщения</h1>
+                <p class="mp-page-sub">Все переписки на маркетплейсе в одном месте.</p>
             </div>
-            <a class="mp-btn" href="{{ route('marketplace.buyer.dashboard', ['marketSlug' => $market->slug]) }}">В кабинет</a>
         </div>
 
         @if($chats->count() === 0)
-            <p class="mp-muted" style="margin:0;">Пока нет активных диалогов.</p>
+            <p class="mp-muted" style="margin:0;">Пока нет активных переписок.</p>
         @else
             <div style="display:grid;gap:10px;">
                 @foreach($chats as $chat)
                     <a href="{{ route('marketplace.buyer.chat.show', ['marketSlug' => $market->slug, 'chatId' => $chat->id]) }}"
                        style="display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid #d7e7f8;border-radius:12px;padding:12px;background:#fff;">
                         <div>
-                            <div style="font-weight:800;">{{ $chat->subject ?: 'Диалог с продавцом' }}</div>
+                            <div style="font-weight:800;">{{ $chat->subject ?: 'Диалог' }}</div>
                             <div class="mp-muted" style="font-size:13px;">
                                 {{ $chat->tenant?->short_name ?: ($chat->tenant?->name ?: 'Магазин') }}
                                 @if($chat->product)
@@ -41,4 +40,3 @@
         @endif
     </section>
 @endsection
-

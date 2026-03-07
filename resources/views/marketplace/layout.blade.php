@@ -72,6 +72,13 @@
             flex-shrink: 0;
         }
 
+        .mp-public-actions,
+        .mp-account-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .mp-inline-form { margin: 0; }
 
         .mp-btn {
@@ -131,6 +138,47 @@
             align-items: center;
             gap: 10px;
             margin: 10px 0 0;
+        }
+
+        .mp-buyer-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(201, 220, 243, .8);
+        }
+
+        .mp-buyer-nav__link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 12px;
+            border-radius: 12px;
+            border: 1px solid #d3e3f6;
+            background: #fff;
+            font-weight: 700;
+            color: #24446d;
+        }
+
+        .mp-buyer-nav__link.is-active {
+            background: #eef7ff;
+            border-color: #95c9f6;
+            color: #0f4d87;
+        }
+
+        .mp-buyer-nav__badge {
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: #fff;
+            background: #0a84d6;
         }
 
         .mp-cats {
@@ -262,6 +310,8 @@
             .mp-top-search-inline { order: 3; flex-basis: 100%; min-width: 0; margin: 0; }
             .mp-logo { order: 1; }
             .mp-actions { order: 2; margin-left: auto; }
+            .mp-public-actions,
+            .mp-account-actions { gap: 6px; }
             .mp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .mp-actions .mp-btn span { display: none; }
             .mp-actions .mp-btn { padding: 9px 10px; }
@@ -279,6 +329,8 @@
 </head>
 <body>
 @php($marketRouteKey = filled($market->slug ?? null) ? (string) $market->slug : (string) $market->id)
+@php($isBuyerArea = request()->routeIs('marketplace.buyer.*'))
+@php($accountHomeUrl = $marketplaceCurrentUserCanUseSeller ? route('cabinet.dashboard') : route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]))
 <div class="mp-shell">
     <header class="mp-top">
         <div class="mp-top-line">
@@ -292,31 +344,33 @@
             </form>
 
             <div class="mp-actions">
-                <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">&#128506; <span>Карта</span></a>
-                <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $marketRouteKey]) }}">&#128227; <span>Анонсы</span></a>
+                <div class="mp-public-actions">
+                    <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">&#128506; <span>Карта</span></a>
+                    <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $marketRouteKey]) }}">&#128227; <span>Анонсы</span></a>
+                </div>
 
                 @if($marketplaceCurrentUser)
-                    @if($marketplaceCurrentUserCanUseSeller)
-                        <a class="mp-btn" href="{{ route('cabinet.dashboard') }}">
-                            &#127970;
-                            <span>{{ $marketplaceCurrentUserCanSellPublicly ? 'Продавец' : 'Кабинет продавца' }}</span>
-                        </a>
-                    @endif
+                    <div class="mp-account-actions">
+                        @if($marketplaceCurrentUserCanUseBuyer)
+                            <a
+                                class="mp-btn {{ request()->routeIs('marketplace.buyer.chats') || request()->routeIs('marketplace.buyer.chat.show') ? 'mp-btn-brand' : '' }}"
+                                href="{{ route('marketplace.buyer.chats', ['marketSlug' => $marketRouteKey]) }}"
+                            >
+                                &#128172;
+                                <span>Сообщения{{ $marketplaceChatUnreadCount > 0 ? ' (' . $marketplaceChatUnreadCount . ')' : '' }}</span>
+                            </a>
+                        @endif
 
-                    @if($marketplaceCurrentUserCanUseBuyer)
-                        <a class="mp-btn" href="{{ route('marketplace.buyer.chats', ['marketSlug' => $marketRouteKey]) }}">
-                            &#128172;
-                            <span>Чаты{{ $marketplaceChatUnreadCount > 0 ? ' (' . $marketplaceChatUnreadCount . ')' : '' }}</span>
+                        <a class="mp-btn {{ $marketplaceCurrentUserCanUseSeller && request()->routeIs('marketplace.buyer.*') ? '' : (request()->routeIs('marketplace.buyer.dashboard') ? 'mp-btn-brand' : '') }}"
+                           href="{{ $accountHomeUrl }}">
+                            &#128100; <span>Мой кабинет</span>
                         </a>
-                        <a class="mp-btn mp-btn-brand" href="{{ route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]) }}">
-                            &#128100; <span>Покупки</span>
-                        </a>
-                    @endif
 
-                    <form class="mp-inline-form" method="post" action="{{ route('marketplace.logout', ['marketSlug' => $marketRouteKey]) }}">
-                        @csrf
-                        <button class="mp-btn" type="submit">&#128682; <span>Выйти</span></button>
-                    </form>
+                        <form class="mp-inline-form" method="post" action="{{ route('marketplace.logout', ['marketSlug' => $marketRouteKey]) }}">
+                            @csrf
+                            <button class="mp-btn" type="submit">&#128682; <span>Выйти</span></button>
+                        </form>
+                    </div>
                 @else
                     <a class="mp-btn mp-btn-brand" href="{{ route('marketplace.login', ['marketSlug' => $marketRouteKey]) }}">
                         &#128100; <span>Войти</span>
@@ -351,6 +405,32 @@
                 </div>
             </div>
         @endif
+
+        @if($marketplaceCurrentUserCanUseBuyer && $isBuyerArea)
+            <nav class="mp-buyer-nav" aria-label="Кабинет маркетплейса">
+                <a
+                    href="{{ route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]) }}"
+                    @class(['mp-buyer-nav__link', 'is-active' => request()->routeIs('marketplace.buyer.dashboard')])
+                >
+                    Мой кабинет
+                </a>
+                <a
+                    href="{{ route('marketplace.buyer.favorites', ['marketSlug' => $marketRouteKey]) }}"
+                    @class(['mp-buyer-nav__link', 'is-active' => request()->routeIs('marketplace.buyer.favorites')])
+                >
+                    Избранное
+                </a>
+                <a
+                    href="{{ route('marketplace.buyer.chats', ['marketSlug' => $marketRouteKey]) }}"
+                    @class(['mp-buyer-nav__link', 'is-active' => request()->routeIs('marketplace.buyer.chats') || request()->routeIs('marketplace.buyer.chat.show')])
+                >
+                    Сообщения
+                    @if($marketplaceChatUnreadCount > 0)
+                        <span class="mp-buyer-nav__badge">{{ $marketplaceChatUnreadCount }}</span>
+                    @endif
+                </a>
+            </nav>
+        @endif
     </header>
 
     <main class="mp-main">
@@ -374,10 +454,10 @@
         <a class="{{ request()->routeIs('marketplace.catalog') ? 'is-active' : '' }}" href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey]) }}">Каталог</a>
         <a class="{{ request()->routeIs('marketplace.map') ? 'is-active' : '' }}" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">Карта</a>
         <a class="{{ request()->routeIs('marketplace.buyer.chats*') ? 'is-active' : '' }}" href="{{ $marketplaceCurrentUserCanUseBuyer ? route('marketplace.buyer.chats', ['marketSlug' => $marketRouteKey]) : route('marketplace.login', ['marketSlug' => $marketRouteKey]) }}">
-            Общение
+            Сообщения
         </a>
-        <a class="{{ request()->routeIs('marketplace.buyer.*') ? 'is-active' : '' }}" href="{{ $marketplaceCurrentUserCanUseBuyer ? route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]) : route('marketplace.login', ['marketSlug' => $marketRouteKey]) }}">
-            Покупки
+        <a class="{{ request()->routeIs('marketplace.buyer.dashboard') || request()->routeIs('cabinet.*') ? 'is-active' : '' }}" href="{{ $marketplaceCurrentUser ? $accountHomeUrl : route('marketplace.login', ['marketSlug' => $marketRouteKey]) }}">
+            Кабинет
         </a>
     </nav>
 </div>
