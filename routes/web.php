@@ -13,6 +13,7 @@ use App\Http\Controllers\Cabinet\CustomerChatController;
 use App\Http\Controllers\Cabinet\DashboardController;
 use App\Http\Controllers\Cabinet\DocumentsController;
 use App\Http\Controllers\Cabinet\PaymentsController;
+use App\Http\Controllers\Cabinet\ProductsController;
 use App\Http\Controllers\Cabinet\PublicShowcaseController;
 use App\Http\Controllers\Cabinet\RequestsController;
 use App\Http\Controllers\Cabinet\ShowcaseController;
@@ -84,6 +85,12 @@ Route::prefix('cabinet')->group(function () {
 
         Route::get('/showcase', [ShowcaseController::class, 'edit'])->name('cabinet.showcase.edit');
         Route::post('/showcase', [ShowcaseController::class, 'update'])->name('cabinet.showcase.update');
+        Route::get('/products', [ProductsController::class, 'index'])->name('cabinet.products.index');
+        Route::get('/products/create', [ProductsController::class, 'create'])->name('cabinet.products.create');
+        Route::post('/products', [ProductsController::class, 'store'])->name('cabinet.products.store');
+        Route::get('/products/{product}/edit', [ProductsController::class, 'edit'])->name('cabinet.products.edit');
+        Route::post('/products/{product}', [ProductsController::class, 'update'])->name('cabinet.products.update');
+        Route::post('/products/{product}/delete', [ProductsController::class, 'destroy'])->name('cabinet.products.destroy');
     });
 });
 

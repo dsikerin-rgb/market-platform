@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Cabinet;
 
 use App\Http\Controllers\Controller;
 use App\Models\MarketSpace;
+use App\Models\MarketplaceProduct;
 use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Cabinet\TenantCabinetUserService;
@@ -78,11 +79,29 @@ class SpacesController extends Controller
             }
         }
 
+        $spaceProductCounts = MarketplaceProduct::query()
+            ->where('tenant_id', (int) $tenant->id)
+            ->where('market_id', (int) ($tenant->market_id ?? 0))
+            ->whereNotNull('market_space_id')
+            ->selectRaw('market_space_id, COUNT(*) as aggregate')
+            ->groupBy('market_space_id')
+            ->pluck('aggregate', 'market_space_id')
+            ->map(static fn ($count): int => (int) $count)
+            ->all();
+
+        $globalProductsCount = (int) MarketplaceProduct::query()
+            ->where('tenant_id', (int) $tenant->id)
+            ->where('market_id', (int) ($tenant->market_id ?? 0))
+            ->whereNull('market_space_id')
+            ->count();
+
         return view('cabinet.spaces', [
             'tenant' => $tenant,
             'spaces' => $spaces,
             'contract' => $contract,
             'spaceStaffMap' => $spaceStaffMap,
+            'spaceProductCounts' => $spaceProductCounts,
+            'globalProductsCount' => $globalProductsCount,
             'canManageStaff' => $this->canManageStaff($request->user()),
         ]);
     }

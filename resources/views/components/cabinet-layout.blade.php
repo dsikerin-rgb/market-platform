@@ -219,7 +219,7 @@
         @media (min-width: 768px) {
             .cabinet-top-nav {
                 display: grid;
-                grid-template-columns: repeat(5, minmax(0, 1fr));
+                grid-template-columns: repeat(6, minmax(0, 1fr));
                 gap: 0.5rem;
                 margin-top: 1rem;
             }
@@ -339,6 +339,10 @@
                         href="{{ route('cabinet.documents') }}"
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.documents')])
                     >Документы</a>
+                    <a
+                        href="{{ route('cabinet.products.index') }}"
+                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.products.*')])
+                    >Товары</a>
                     <a
                         href="{{ route('cabinet.showcase.edit') }}"
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.showcase.*')])
