@@ -21,8 +21,7 @@ class HomeController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
 
         $featuredProducts = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
-            ->where('is_active', true)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->where('is_featured', true)
             ->with(['tenant:id,name,short_name,slug', 'category:id,name,slug'])
             ->orderByDesc('published_at')
@@ -30,8 +29,7 @@ class HomeController extends BaseMarketplaceController
             ->get();
 
         $latestProducts = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
-            ->where('is_active', true)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('published_at')
             ->orderByDesc('id')
@@ -91,11 +89,11 @@ class HomeController extends BaseMarketplaceController
         $topStores = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->whereHas('marketplaceProducts', function ($query): void {
-                $query->where('is_active', true);
+            ->whereHas('marketplaceProducts', function ($query) use ($market): void {
+                $query->publiclyVisibleInMarket((int) $market->id);
             })
-            ->withCount(['marketplaceProducts as active_products_count' => function ($query): void {
-                $query->where('is_active', true);
+            ->withCount(['marketplaceProducts as active_products_count' => function ($query) use ($market): void {
+                $query->publiclyVisibleInMarket((int) $market->id);
             }])
             ->orderByDesc('active_products_count')
             ->limit(12)

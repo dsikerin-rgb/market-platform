@@ -87,6 +87,11 @@ class BuyerChatController extends BaseMarketplaceController
 
         $tenant = Tenant::query()
             ->where('market_id', (int) $market->id)
+            ->whereHas('contracts', function ($query) use ($market): void {
+                $query
+                    ->where('market_id', (int) $market->id)
+                    ->where('is_active', true);
+            })
             ->where(function ($query) use ($tenantSlug): void {
                 $query->where('slug', $tenantSlug);
                 if (is_numeric($tenantSlug)) {
@@ -105,10 +110,9 @@ class BuyerChatController extends BaseMarketplaceController
         $productSlug = trim((string) ($validated['product_slug'] ?? ''));
         if ($productSlug !== '') {
             $product = MarketplaceProduct::query()
-                ->where('market_id', (int) $market->id)
+                ->publiclyVisibleInMarket((int) $market->id)
                 ->where('tenant_id', (int) $tenant->id)
                 ->where('slug', $productSlug)
-                ->where('is_active', true)
                 ->first();
         }
 

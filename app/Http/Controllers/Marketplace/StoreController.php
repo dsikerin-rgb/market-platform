@@ -31,9 +31,8 @@ class StoreController extends BaseMarketplaceController
         }
 
         $productsQuery = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->where('tenant_id', (int) $tenant->id)
-            ->where('is_active', true)
             ->with(['marketSpace:id,display_name,number,code']);
 
         if ($selectedSpaceId > 0) {
@@ -135,6 +134,11 @@ class StoreController extends BaseMarketplaceController
     {
         return Tenant::query()
             ->where('market_id', $marketId)
+            ->whereHas('contracts', function ($query) use ($marketId): void {
+                $query
+                    ->where('market_id', $marketId)
+                    ->where('is_active', true);
+            })
             ->where(function ($query) use ($tenantRouteKey): void {
                 $query->where('slug', $tenantRouteKey);
                 if (is_numeric($tenantRouteKey)) {

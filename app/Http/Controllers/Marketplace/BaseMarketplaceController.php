@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Market;
 use App\Models\MarketplaceCategory;
 use App\Models\User;
+use App\Services\Auth\PortalAccessService;
 use App\Services\Marketplace\MarketplaceContextService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -29,6 +30,9 @@ abstract class BaseMarketplaceController extends Controller
      *   topCategories: \Illuminate\Support\Collection<int, MarketplaceCategory>,
      *   marketplaceCurrentUser: ?User,
      *   marketplaceCurrentUserIsBuyer: bool,
+     *   marketplaceCurrentUserCanUseBuyer: bool,
+     *   marketplaceCurrentUserCanUseSeller: bool,
+     *   marketplaceCurrentUserCanSellPublicly: bool,
      *   marketplaceFavoriteCount: int,
      *   marketplaceChatUnreadCount: int,
      *   marketplaceSettings: array<string,mixed>,
@@ -65,11 +69,16 @@ abstract class BaseMarketplaceController extends Controller
             ->take(16);
 
         $user = $request->user();
-        $isBuyer = $user instanceof User && method_exists($user, 'isBuyer') && $user->isBuyer();
+        $access = app(PortalAccessService::class);
+
+        $canUseBuyer = $user instanceof User && $access->canUseMarketplaceBuyer($user, $market);
+        $canUseSeller = $user instanceof User && $access->canUseSellerCabinet($user);
+        $canSellPublicly = $user instanceof User && $access->canSellOnMarketplace($user, $market);
+        $portalUser = ($canUseBuyer || $canUseSeller) && $user instanceof User ? $user : null;
 
         $favoriteCount = 0;
         $chatUnread = 0;
-        if ($isBuyer) {
+        if ($canUseBuyer && $user instanceof User) {
             $favoriteCount = (int) $user->marketplaceFavorites()->count();
             $chatUnread = (int) $user->marketplaceBuyerChats()
                 ->where('market_id', (int) $market->id)
@@ -81,8 +90,11 @@ abstract class BaseMarketplaceController extends Controller
         return [
             'market' => $market,
             'topCategories' => $topCategories,
-            'marketplaceCurrentUser' => $isBuyer ? $user : null,
-            'marketplaceCurrentUserIsBuyer' => $isBuyer,
+            'marketplaceCurrentUser' => $portalUser,
+            'marketplaceCurrentUserIsBuyer' => $canUseBuyer,
+            'marketplaceCurrentUserCanUseBuyer' => $canUseBuyer,
+            'marketplaceCurrentUserCanUseSeller' => $canUseSeller,
+            'marketplaceCurrentUserCanSellPublicly' => $canSellPublicly,
             'marketplaceFavoriteCount' => $favoriteCount,
             'marketplaceChatUnreadCount' => $chatUnread,
             'marketplaceSettings' => $marketplaceSettings,

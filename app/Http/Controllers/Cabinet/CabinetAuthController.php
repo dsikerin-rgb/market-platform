@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cabinet;
 use App\Http\Controllers\Controller;
 use App\Models\Market;
 use App\Models\User;
+use App\Services\Auth\PortalAccessService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -18,13 +19,29 @@ class CabinetAuthController extends Controller
     public function showLogin(Request $request): View|RedirectResponse
     {
         $user = $request->user();
-        $canAccessCabinet = $user ? $this->canAccessCabinet($user) : false;
+        $access = app(PortalAccessService::class);
 
-        if ($user && $canAccessCabinet) {
+        if ($user && $access->canUseSellerCabinet($user)) {
+            $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_SELLER);
+
             return redirect()->route('cabinet.dashboard');
         }
 
-        if ($user && ! $canAccessCabinet) {
+        if ($user && $access->canUseMarketplaceBuyer($user, $access->resolveUserMarket($user))) {
+            $marketSlug = $access->resolveUserMarketRouteKey($user);
+            if ($marketSlug !== null) {
+                $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_BUYER);
+
+                return redirect()->route('marketplace.buyer.dashboard', ['marketSlug' => $marketSlug]);
+            }
+        }
+
+        if ($user && method_exists($user, 'hasAnyRole') && $user->hasAnyRole([
+            'super-admin',
+            'market-admin',
+            'market-manager',
+            'market-operator',
+        ])) {
             return redirect('/admin');
         }
 
@@ -39,6 +56,7 @@ class CabinetAuthController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
+        $access = app(PortalAccessService::class);
 
         $remember = $request->boolean('remember');
         $email = Str::lower(trim((string) ($credentials['email'] ?? '')));
@@ -67,7 +85,7 @@ class CabinetAuthController extends Controller
                 ->withErrors(['email' => 'Неверный email или пароль.']);
         }
 
-        if (! $this->canAccessCabinet($user)) {
+        if (! $access->canUseSellerCabinet($user)) {
             RateLimiter::hit($throttleKey, 60);
 
             return back()
@@ -80,6 +98,7 @@ class CabinetAuthController extends Controller
         Auth::login($user, $remember);
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
+        $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_SELLER);
 
         return redirect()->intended(route('cabinet.dashboard'));
     }
@@ -88,27 +107,11 @@ class CabinetAuthController extends Controller
     {
         Auth::guard('web')->logout();
 
+        $request->session()->forget(PortalAccessService::SESSION_ACTIVE_MODE);
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         return redirect()->route('cabinet.login');
-    }
-
-    private function canAccessCabinet(User $user): bool
-    {
-        $hasRoleAccess = method_exists($user, 'hasAnyRole')
-            && $user->hasAnyRole(['merchant', 'merchant-user']);
-
-        if (! $hasRoleAccess || ! $user->tenant_id) {
-            return false;
-        }
-
-        $tenant = $user->tenant;
-        if (! $tenant) {
-            return false;
-        }
-
-        return ! ($user->market_id && $tenant->market_id && (int) $user->market_id !== (int) $tenant->market_id);
     }
 
     private function resolveLoginMarketName(Request $request, ?User $currentUser): string

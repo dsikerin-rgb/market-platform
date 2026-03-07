@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Marketplace;
 
 use App\Models\MarketplaceProduct;
 use App\Models\TenantReview;
+use App\Services\Auth\PortalAccessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -17,9 +18,8 @@ class ProductController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
 
         $product = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->where('slug', $productSlug)
-            ->where('is_active', true)
             ->with([
                 'tenant:id,name,short_name,slug,market_id',
                 'category:id,name,slug',
@@ -48,8 +48,7 @@ class ProductController extends BaseMarketplaceController
             ->get();
 
         $relatedProducts = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
-            ->where('is_active', true)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->whereKeyNot((int) $product->id)
             ->where(function ($query) use ($product): void {
                 $query
@@ -64,7 +63,7 @@ class ProductController extends BaseMarketplaceController
 
         $favoriteExists = false;
         $user = $request->user();
-        if ($user && method_exists($user, 'isBuyer') && $user->isBuyer()) {
+        if ($user && app(PortalAccessService::class)->canUseMarketplaceBuyer($user, $market)) {
             $favoriteExists = $user->marketplaceFavorites()
                 ->where('product_id', (int) $product->id)
                 ->exists();

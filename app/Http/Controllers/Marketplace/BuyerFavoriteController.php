@@ -18,9 +18,8 @@ class BuyerFavoriteController extends BaseMarketplaceController
         abort_unless($buyer, 403);
 
         $product = MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id)
             ->where('slug', $productSlug)
-            ->where('is_active', true)
             ->firstOrFail();
 
         $existing = MarketplaceFavorite::query()
@@ -46,4 +45,3 @@ class BuyerFavoriteController extends BaseMarketplaceController
         return back()->with('success', 'Добавлено в избранное.');
     }
 }
-

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\PortalAccessService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,15 +16,13 @@ class EnsureTenantCabinetAccess
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
+        $access = app(PortalAccessService::class);
 
         if (! $user) {
             return redirect()->route('cabinet.login');
         }
 
-        $hasRoleAccess = method_exists($user, 'hasAnyRole')
-            && $user->hasAnyRole(['merchant', 'merchant-user']);
-
-        if (! $hasRoleAccess) {
+        if (! $access->canUseSellerCabinet($user)) {
             if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole([
                 'super-admin',
                 'market-admin',
@@ -33,6 +32,13 @@ class EnsureTenantCabinetAccess
                 return redirect('/admin');
             }
 
+            $marketSlug = $access->resolveUserMarketRouteKey($user);
+            if ($marketSlug !== null && $access->canUseMarketplaceBuyer($user, $access->resolveUserMarket($user))) {
+                $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_BUYER);
+
+                return redirect()->route('marketplace.buyer.dashboard', ['marketSlug' => $marketSlug]);
+            }
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -40,31 +46,7 @@ class EnsureTenantCabinetAccess
             return redirect()->route('cabinet.login');
         }
 
-        if (! $user->tenant_id) {
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return redirect()->route('cabinet.login');
-        }
-
-        $tenant = $user->tenant;
-
-        if (! $tenant) {
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return redirect()->route('cabinet.login');
-        }
-
-        if ($user->market_id && $tenant->market_id && $user->market_id !== $tenant->market_id) {
-            Auth::guard('web')->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return redirect()->route('cabinet.login');
-        }
+        $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_SELLER);
 
         return $next($request);
     }
