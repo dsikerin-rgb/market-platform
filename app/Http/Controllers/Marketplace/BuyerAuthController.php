@@ -24,14 +24,10 @@ class BuyerAuthController extends BaseMarketplaceController
         $user = $request->user();
         $access = app(PortalAccessService::class);
 
-        if ($user instanceof User) {
-            $mode = $this->resolvePreferredMode($request, $user, $market, $access);
+        if ($user instanceof User && $access->canUseMarketplaceBuyer($user, $market)) {
+            $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_BUYER);
 
-            if ($mode !== null) {
-                $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, $mode);
-
-                return $this->redirectForMode($market->slug, $mode);
-            }
+            return redirect()->route('marketplace.home', ['marketSlug' => $market->slug]);
         }
 
         return view('marketplace.auth.login', array_merge(
@@ -67,8 +63,7 @@ class BuyerAuthController extends BaseMarketplaceController
             ]);
         }
 
-        $mode = $access->defaultMode($user, $market);
-        if ($mode === null) {
+        if (! $access->canUseMarketplaceBuyer($user, $market)) {
             return back()->withInput($request->only('email'))->withErrors([
                 'email' => 'Для этого аккаунта вход в маркетплейс недоступен.',
             ]);
@@ -76,9 +71,9 @@ class BuyerAuthController extends BaseMarketplaceController
 
         Auth::login($user, true);
         $request->session()->regenerate();
-        $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, $mode);
+        $request->session()->put(PortalAccessService::SESSION_ACTIVE_MODE, PortalAccessService::MODE_BUYER);
 
-        return $this->redirectForMode($market->slug, $mode);
+        return redirect()->intended(route('marketplace.home', ['marketSlug' => $market->slug]));
     }
 
     public function showRegister(Request $request, string $marketSlug): View|RedirectResponse
@@ -140,35 +135,4 @@ class BuyerAuthController extends BaseMarketplaceController
         return redirect()->route('marketplace.home', ['marketSlug' => $market->slug]);
     }
 
-    private function resolvePreferredMode(Request $request, User $user, Market $market, PortalAccessService $access): ?string
-    {
-        $sessionMode = (string) $request->session()->get(PortalAccessService::SESSION_ACTIVE_MODE, '');
-        if ($sessionMode !== '') {
-            return $this->sanitizeAllowedMode($sessionMode, $user, $market, $access);
-        }
-
-        return $access->defaultMode($user, $market);
-    }
-
-    private function sanitizeAllowedMode(string $mode, User $user, Market $market, PortalAccessService $access): ?string
-    {
-        if ($mode === PortalAccessService::MODE_SELLER && $access->canUseSellerCabinet($user) && $access->isInMarket($user, $market)) {
-            return PortalAccessService::MODE_SELLER;
-        }
-
-        if ($mode === PortalAccessService::MODE_BUYER && $access->canUseMarketplaceBuyer($user, $market)) {
-            return PortalAccessService::MODE_BUYER;
-        }
-
-        return null;
-    }
-
-    private function redirectForMode(string $marketSlug, string $mode): RedirectResponse
-    {
-        if ($mode === PortalAccessService::MODE_SELLER) {
-            return redirect()->route('cabinet.dashboard');
-        }
-
-        return redirect()->route('marketplace.buyer.dashboard', ['marketSlug' => $marketSlug]);
-    }
 }

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Marketplace;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\TenantReview;
+use App\Services\Auth\PortalAccessService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -17,7 +18,8 @@ class StoreController extends BaseMarketplaceController
     public function show(Request $request, string $marketSlug, string $tenantSlug): View
     {
         $market = $this->resolveMarketOrFail($marketSlug);
-        $tenant = $this->resolveTenantByRouteKey((int) $market->id, $tenantSlug);
+        $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
+        $tenant = $this->resolveTenantByRouteKey((int) $market->id, $tenantSlug, $allowWithoutActiveContracts);
 
         $spaces = $tenant->spaces()
             ->orderByRaw('COALESCE(code, number, display_name) asc')
@@ -31,7 +33,7 @@ class StoreController extends BaseMarketplaceController
         }
 
         $productsQuery = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
             ->where('tenant_id', (int) $tenant->id)
             ->with(['marketSpace:id,display_name,number,code']);
 
@@ -130,21 +132,25 @@ class StoreController extends BaseMarketplaceController
         return back()->with('success', 'Спасибо, отзыв опубликован.');
     }
 
-    private function resolveTenantByRouteKey(int $marketId, string $tenantRouteKey): Tenant
+    private function resolveTenantByRouteKey(int $marketId, string $tenantRouteKey, bool $allowWithoutActiveContracts): Tenant
     {
-        return Tenant::query()
+        $query = Tenant::query()
             ->where('market_id', $marketId)
-            ->whereHas('contracts', function ($query) use ($marketId): void {
-                $query
-                    ->where('market_id', $marketId)
-                    ->where('is_active', true);
-            })
             ->where(function ($query) use ($tenantRouteKey): void {
                 $query->where('slug', $tenantRouteKey);
                 if (is_numeric($tenantRouteKey)) {
                     $query->orWhere('id', (int) $tenantRouteKey);
                 }
-            })
-            ->firstOrFail();
+            });
+
+        if (! $allowWithoutActiveContracts) {
+            $query->whereHas('contracts', function ($contracts) use ($marketId): void {
+                $contracts
+                    ->where('market_id', $marketId)
+                    ->where('is_active', true);
+            });
+        }
+
+        return $query->firstOrFail();
     }
 }

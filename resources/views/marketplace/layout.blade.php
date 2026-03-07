@@ -106,6 +106,42 @@
             color: #fff;
         }
 
+        .mp-icon-btn {
+            width: 46px;
+            height: 46px;
+            padding: 0;
+            justify-content: center;
+            position: relative;
+            border-radius: 14px;
+        }
+
+        .mp-icon-btn__icon {
+            width: 20px;
+            height: 20px;
+            display: block;
+            color: currentColor;
+        }
+
+        .mp-icon-btn__badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 5px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #ef4444;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1;
+            border: 2px solid #fff;
+            box-shadow: 0 6px 16px rgba(239, 68, 68, .22);
+        }
+
         .mp-search-row {
             display: none;
             grid-template-columns: 1fr auto;
@@ -346,24 +382,34 @@
             <div class="mp-actions">
                 <div class="mp-public-actions">
                     <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">&#128506; <span>Карта</span></a>
-                    <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $marketRouteKey]) }}">&#128227; <span>Анонсы</span></a>
                 </div>
 
                 @if($marketplaceCurrentUser)
                     <div class="mp-account-actions">
                         @if($marketplaceCurrentUserCanUseBuyer)
                             <a
-                                class="mp-btn {{ request()->routeIs('marketplace.buyer.chats') || request()->routeIs('marketplace.buyer.chat.show') ? 'mp-btn-brand' : '' }}"
+                                class="mp-btn mp-icon-btn {{ request()->routeIs('marketplace.buyer.chats') || request()->routeIs('marketplace.buyer.chat.show') ? 'mp-btn-brand' : '' }}"
                                 href="{{ route('marketplace.buyer.chats', ['marketSlug' => $marketRouteKey]) }}"
+                                aria-label="Сообщения"
+                                title="Сообщения"
                             >
-                                &#128172;
-                                <span>Сообщения{{ $marketplaceChatUnreadCount > 0 ? ' (' . $marketplaceChatUnreadCount . ')' : '' }}</span>
+                                <svg class="mp-icon-btn__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M7 10.5h10M7 14h6m-5.5 5 2.7-2H18a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H6A3 3 0 0 0 3 7v7a3 3 0 0 0 3 3h1.5v2Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                @if($marketplaceChatUnreadCount > 0)
+                                    <span class="mp-icon-btn__badge">{{ $marketplaceChatUnreadCount }}</span>
+                                @endif
                             </a>
                         @endif
 
-                        <a class="mp-btn {{ $marketplaceCurrentUserCanUseSeller && request()->routeIs('marketplace.buyer.*') ? '' : (request()->routeIs('marketplace.buyer.dashboard') ? 'mp-btn-brand' : '') }}"
-                           href="{{ $accountHomeUrl }}">
-                            &#128100; <span>Мой кабинет</span>
+                        <a class="mp-btn mp-icon-btn {{ $marketplaceCurrentUserCanUseSeller && request()->routeIs('marketplace.buyer.*') ? '' : (request()->routeIs('marketplace.buyer.dashboard') ? 'mp-btn-brand' : '') }}"
+                           href="{{ $accountHomeUrl }}"
+                           aria-label="Мой кабинет"
+                           title="Мой кабинет">
+                            <svg class="mp-icon-btn__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M4 20h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                            </svg>
                         </a>
 
                         <form class="mp-inline-form" method="post" action="{{ route('marketplace.logout', ['marketSlug' => $marketRouteKey]) }}">

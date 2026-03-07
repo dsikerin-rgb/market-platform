@@ -92,11 +92,32 @@ class PortalAccessService
             return false;
         }
 
+        if ($this->allowsPublicSalesWithoutActiveContract($resolvedMarket)) {
+            return true;
+        }
+
         return TenantContract::query()
             ->where('tenant_id', $tenantId)
             ->where('market_id', $marketId)
             ->where('is_active', true)
             ->exists();
+    }
+
+    public function allowsPublicSalesWithoutActiveContract(?Market $market): bool
+    {
+        $fallback = (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false);
+
+        if (! $market) {
+            return $fallback;
+        }
+
+        $settings = (array) (($market->settings ?? [])['marketplace'] ?? []);
+
+        if (! array_key_exists('allow_public_sales_without_active_contracts', $settings)) {
+            return $fallback;
+        }
+
+        return (bool) $settings['allow_public_sales_without_active_contracts'];
     }
 
     public function resolveUserMarket(?User $user): ?Market

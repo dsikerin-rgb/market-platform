@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantReview;
+use App\Services\Auth\PortalAccessService;
 use Illuminate\View\View;
 
 class PublicShowcaseController extends Controller
@@ -15,6 +16,19 @@ class PublicShowcaseController extends Controller
         $tenant = Tenant::query()
             ->where('slug', $tenantSlug)
             ->firstOrFail();
+
+        $market = $tenant->market()->select(['id', 'settings'])->first();
+        $access = app(PortalAccessService::class);
+        $allowWithoutActiveContracts = $access->allowsPublicSalesWithoutActiveContract($market);
+
+        if (! $allowWithoutActiveContracts) {
+            $hasActiveContract = $tenant->contracts()
+                ->where('market_id', (int) ($tenant->market_id ?? 0))
+                ->where('is_active', true)
+                ->exists();
+
+            abort_unless($hasActiveContract, 404);
+        }
 
         $spaces = MarketSpace::query()
             ->where('tenant_id', (int) $tenant->id)

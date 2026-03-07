@@ -8,6 +8,7 @@ use App\Models\MarketplaceChat;
 use App\Models\MarketplaceChatMessage;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
+use App\Services\Auth\PortalAccessService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -84,21 +85,26 @@ class BuyerChatController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
         $buyer = $request->user();
         abort_unless($buyer, 403);
+        $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
 
-        $tenant = Tenant::query()
+        $tenantQuery = Tenant::query()
             ->where('market_id', (int) $market->id)
-            ->whereHas('contracts', function ($query) use ($market): void {
-                $query
-                    ->where('market_id', (int) $market->id)
-                    ->where('is_active', true);
-            })
             ->where(function ($query) use ($tenantSlug): void {
                 $query->where('slug', $tenantSlug);
                 if (is_numeric($tenantSlug)) {
                     $query->orWhereKey((int) $tenantSlug);
                 }
-            })
-            ->firstOrFail();
+            });
+
+        if (! $allowWithoutActiveContracts) {
+            $tenantQuery->whereHas('contracts', function ($contracts) use ($market): void {
+                $contracts
+                    ->where('market_id', (int) $market->id)
+                    ->where('is_active', true);
+            });
+        }
+
+        $tenant = $tenantQuery->firstOrFail();
 
         $validated = $request->validate([
             'product_slug' => ['nullable', 'string', 'max:220'],
@@ -110,7 +116,7 @@ class BuyerChatController extends BaseMarketplaceController
         $productSlug = trim((string) ($validated['product_slug'] ?? ''));
         if ($productSlug !== '') {
             $product = MarketplaceProduct::query()
-                ->publiclyVisibleInMarket((int) $market->id)
+                ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
                 ->where('tenant_id', (int) $tenant->id)
                 ->where('slug', $productSlug)
                 ->first();

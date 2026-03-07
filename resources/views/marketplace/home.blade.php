@@ -3,8 +3,121 @@
 @section('title', 'Маркетплейс')
 
 @section('content')
+    @php
+        $marketSlug = $market->slug;
+        $heroStats = [
+            [
+                'label' => 'Витрин',
+                'value' => $topStores->count(),
+                'url' => $topStores->count() > 0
+                    ? '#marketplace-stores'
+                    : route('marketplace.catalog', ['marketSlug' => $marketSlug]),
+            ],
+            [
+                'label' => 'Товаров',
+                'value' => $latestProducts->count(),
+                'url' => route('marketplace.catalog', ['marketSlug' => $marketSlug]),
+            ],
+            [
+                'label' => 'Анонсов',
+                'value' => $announcements->count(),
+                'url' => route('marketplace.announcements', ['marketSlug' => $marketSlug]),
+            ],
+            [
+                'label' => 'Избранное',
+                'value' => $marketplaceFavoriteCount ?? 0,
+                'url' => $marketplaceCurrentUserCanUseBuyer
+                    ? route('marketplace.buyer.favorites', ['marketSlug' => $marketSlug])
+                    : route('marketplace.login', ['marketSlug' => $marketSlug]),
+            ],
+        ];
+    @endphp
+
+    <style>
+        .mp-hero-grid {
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1.2fr .8fr;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .mp-hero-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 96px);
+            justify-content: end;
+            gap: 8px;
+        }
+
+        .mp-hero-stat {
+            min-height: 0;
+            aspect-ratio: 1 / 1;
+            background: rgba(255,255,255,.16);
+            border: 1px solid rgba(255,255,255,.35);
+            border-radius: 16px;
+            padding: 14px;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 10px 24px rgba(12, 62, 109, .14);
+            transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+
+        .mp-hero-stat:hover {
+            transform: translateY(-2px);
+            background: rgba(255,255,255,.22);
+            box-shadow: 0 14px 28px rgba(12, 62, 109, .18);
+        }
+
+        .mp-hero-stat__label {
+            font-size: 11px;
+            opacity: .92;
+        }
+
+        .mp-hero-stat__value {
+            font-size: 24px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        @media (max-width: 980px) {
+            .mp-hero-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .mp-hero-stats {
+                justify-content: start;
+            }
+        }
+
+        @media (max-width: 560px) {
+            .mp-hero-grid {
+                padding: 18px;
+            }
+
+            .mp-hero-stats {
+                grid-template-columns: repeat(2, 82px);
+                gap: 6px;
+            }
+
+            .mp-hero-stat {
+                padding: 10px;
+                border-radius: 12px;
+            }
+
+            .mp-hero-stat__label {
+                font-size: 10px;
+            }
+
+            .mp-hero-stat__value {
+                font-size: 20px;
+            }
+        }
+    </style>
+
     <section class="mp-card" style="padding:0;overflow:hidden;background:linear-gradient(120deg,#0a84d6,#10b2d8 60%,#7bd5ff);color:#fff;">
-        <div style="padding:24px;display:grid;grid-template-columns:1.2fr .8fr;gap:14px;align-items:center;">
+        <div class="mp-hero-grid">
             <div>
                 <div style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;">Городская Экоярмарка</div>
                 <h1 class="mp-page-title" style="color:#fff;margin-top:8px;">{{ $marketplaceSettings['hero_title'] }}</h1>
@@ -16,23 +129,13 @@
                     <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
                 </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:12px;">
-                    <div style="font-size:12px;opacity:.9;">Витрин</div>
-                    <div style="font-size:28px;font-weight:800;">{{ $topStores->count() }}</div>
-                </div>
-                <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:12px;">
-                    <div style="font-size:12px;opacity:.9;">Товаров</div>
-                    <div style="font-size:28px;font-weight:800;">{{ $latestProducts->count() }}</div>
-                </div>
-                <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:12px;">
-                    <div style="font-size:12px;opacity:.9;">Анонсов</div>
-                    <div style="font-size:28px;font-weight:800;">{{ $announcements->count() }}</div>
-                </div>
-                <div style="background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:12px;">
-                    <div style="font-size:12px;opacity:.9;">Избранное</div>
-                    <div style="font-size:28px;font-weight:800;">{{ $marketplaceFavoriteCount ?? 0 }}</div>
-                </div>
+            <div class="mp-hero-stats">
+                @foreach($heroStats as $stat)
+                    <a class="mp-hero-stat" href="{{ $stat['url'] }}">
+                        <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
+                        <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
+                    </a>
+                @endforeach
             </div>
         </div>
     </section>
@@ -98,18 +201,6 @@
                     flex: 1;
                     flex-direction: column;
                     gap: 10px;
-                }
-                .mp-slider__badge {
-                    display: inline-flex;
-                    align-items: center;
-                    width: fit-content;
-                    padding: 6px 10px;
-                    border-radius: 999px;
-                    font-size: 12px;
-                    font-weight: 700;
-                    color: #1c4d81;
-                    border: 1px solid #bed9f7;
-                    background: #f0f8ff;
                 }
                 .mp-slider__title {
                     margin: 0;
@@ -192,7 +283,6 @@
                         @foreach($infoSlides as $slide)
                             @php($imageUrl = is_object($slide) ? $slide->image_url : ($slide['image_url'] ?? null))
                             @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
-                            @php($badge = is_object($slide) ? ($slide->badge ?? null) : ($slide['badge'] ?? null))
                             @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
                             @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
                             @php($ctaLabel = is_object($slide) ? ($slide->cta_label ?? null) : ($slide['cta_label'] ?? null))
@@ -204,9 +294,6 @@
                                     </div>
                                 @endif
                                 <div class="mp-slider__body">
-                                    @if(filled($badge))
-                                        <span class="mp-slider__badge">{{ $badge }}</span>
-                                    @endif
                                     <h3 class="mp-slider__title">{{ $title }}</h3>
                                     @if(filled($description))
                                         <p class="mp-slider__text">{{ $description }}</p>
@@ -334,7 +421,7 @@
     </section>
 
     @if($topStores->count() > 0)
-        <section class="mp-card">
+        <section id="marketplace-stores" class="mp-card">
             <div class="mp-page-head">
                 <div>
                     <h2 class="mp-page-title" style="font-size:26px;">Витрины продавцов</h2>

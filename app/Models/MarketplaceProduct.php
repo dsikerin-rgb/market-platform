@@ -73,15 +73,20 @@ class MarketplaceProduct extends Model
         return $this->hasMany(MarketplaceFavorite::class, 'product_id');
     }
 
-    public function scopePubliclyVisibleInMarket(Builder $query, int $marketId): Builder
+    public function scopePubliclyVisibleInMarket(Builder $query, int $marketId, bool $allowWithoutActiveContracts = false): Builder
     {
-        return $query
+        $query = $query
             ->where('market_id', $marketId)
-            ->where('is_active', true)
-            ->whereHas('tenant.contracts', function (Builder $contracts) use ($marketId): void {
-                $contracts
-                    ->where('market_id', $marketId)
-                    ->where('is_active', true);
-            });
+            ->where('is_active', true);
+
+        if ($allowWithoutActiveContracts) {
+            return $query;
+        }
+
+        return $query->whereHas('tenant.contracts', function (Builder $contracts) use ($marketId): void {
+            $contracts
+                ->where('market_id', $marketId)
+                ->where('is_active', true);
+        });
     }
 }

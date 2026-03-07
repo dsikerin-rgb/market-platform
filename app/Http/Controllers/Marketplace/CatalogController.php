@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Marketplace;
 use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
+use App\Services\Auth\PortalAccessService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -15,9 +16,10 @@ class CatalogController extends BaseMarketplaceController
     public function index(Request $request, string $marketSlug): View
     {
         $market = $this->resolveMarketOrFail($marketSlug);
+        $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
 
         $query = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
             ->with(['tenant:id,name,short_name,slug', 'category:id,name,slug']);
 
         $search = trim((string) $request->query('q', ''));
@@ -103,11 +105,11 @@ class CatalogController extends BaseMarketplaceController
         $stores = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->whereHas('marketplaceProducts', function ($q) use ($market): void {
-                $q->publiclyVisibleInMarket((int) $market->id);
+            ->whereHas('marketplaceProducts', function ($q) use ($market, $allowWithoutActiveContracts): void {
+                $q->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts);
             })
-            ->withCount(['marketplaceProducts as active_products_count' => function ($q) use ($market): void {
-                $q->publiclyVisibleInMarket((int) $market->id);
+            ->withCount(['marketplaceProducts as active_products_count' => function ($q) use ($market, $allowWithoutActiveContracts): void {
+                $q->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts);
             }])
             ->orderBy('name')
             ->limit(200)

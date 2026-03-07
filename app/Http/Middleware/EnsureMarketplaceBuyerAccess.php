@@ -19,10 +19,10 @@ class EnsureMarketplaceBuyerAccess
 
         if (! $user) {
             if ($marketSlug !== '') {
-                return redirect()->route('marketplace.login', ['marketSlug' => $marketSlug]);
+                return redirect()->guest(route('marketplace.login', ['marketSlug' => $marketSlug]));
             }
 
-            return redirect()->route('marketplace.entry');
+            return redirect()->guest(route('marketplace.entry'));
         }
 
         $market = app(MarketplaceContextService::class)->resolveMarket($marketSlug);
