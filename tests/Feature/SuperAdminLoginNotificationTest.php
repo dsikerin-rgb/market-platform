@@ -175,7 +175,6 @@ class SuperAdminLoginNotificationTest extends TestCase
 
         Notification::assertSentToTimes($superAdmin, UserLoggedInNotification::class, 1);
     }
-
     public function test_regular_user_can_receive_notification_about_login_to_own_account_when_security_enabled(): void
     {
         Notification::fake();
