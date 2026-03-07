@@ -7,6 +7,7 @@ namespace App\Notifications;
 use App\Models\IntegrationExchange;
 use App\Support\NotificationChannelResolver;
 use App\Support\UserNotificationPreferences;
+use Carbon\CarbonImmutable;
 use Filament\Notifications\Notification as FilamentNotification;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -19,7 +20,7 @@ class OneCIntegrationExchangeNotification extends Notification
         private readonly IntegrationExchange $exchange,
     ) {
         $this->exchange->loadMissing('market');
-        $this->finishedAt = ($this->exchange->finished_at ?? now())->format('Y-m-d H:i:s');
+        $this->finishedAt = $this->formatDateTimeForMarket($this->exchange->finished_at ?? now());
     }
 
     public function via(object $notifiable): array
@@ -226,6 +227,38 @@ class OneCIntegrationExchangeNotification extends Notification
     private function marketName(): string
     {
         return trim((string) ($this->exchange->market->name ?? ''));
+    }
+
+    private function marketTimezone(): string
+    {
+        $tz = trim((string) ($this->exchange->market->timezone ?? ''));
+
+        if ($tz === '') {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        try {
+            CarbonImmutable::now($tz);
+        } catch (\Throwable) {
+            $tz = (string) config('app.timezone', 'UTC');
+        }
+
+        return $tz;
+    }
+
+    private function formatDateTimeForMarket(mixed $value): string
+    {
+        try {
+            $dateTime = $value instanceof \DateTimeInterface
+                ? CarbonImmutable::instance($value)
+                : CarbonImmutable::parse((string) $value);
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+
+        return $dateTime
+            ->timezone($this->marketTimezone())
+            ->format('Y-m-d H:i:s');
     }
 
     private function errorText(): string
