@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
+use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -2091,9 +2092,71 @@ class TenantResource extends BaseResource
             ];
         }
 
-        // Используем единый сервис расчёта задолженности
-        $resolver = app(DebtStatusResolver::class);
-        return $resolver->resolve($record);
+        // Проверяем ручной статус (manual override)
+        $manualStatus = trim($record->debt_status ?? '');
+        if ($manualStatus !== '' && isset(Tenant::DEBT_STATUS_LABELS[$manualStatus])) {
+            return [
+                'mode' => 'manual',
+                'status' => $manualStatus,
+                'label' => Tenant::DEBT_STATUS_LABELS[$manualStatus],
+                'updated_at' => $record->debt_status_updated_at?->format('d.m.Y H:i'),
+                'source' => 'Ручная установка',
+                'severity' => self::getDebtSeverity($manualStatus),
+            ];
+        }
+
+        // Автоматический расчёт через агрегатор
+        $aggregator = app(DebtAggregator::class);
+        $aggregateMode = self::getTenantAggregateMode($record);
+        $result = $aggregator->aggregate($record, $aggregateMode);
+
+        // Формируем результат
+        if ($result['aggregate_status'] === null || $result['aggregate_status'] === 'gray') {
+            return [
+                'mode' => 'auto',
+                'status' => 'gray',
+                'label' => 'Нет данных',
+                'updated_at' => null,
+                'source' => 'Агрегатор: нет данных по местам',
+                'severity' => 0,
+            ];
+        }
+
+        return [
+            'mode' => 'auto',
+            'status' => $result['aggregate_status'],
+            'label' => $result['aggregate_label'],
+            'updated_at' => null,
+            'source' => 'Агрегатор: режим ' . $aggregateMode,
+            'severity' => $result['aggregate_severity'],
+        ];
+    }
+
+    /**
+     * Получить режим агрегации для арендатора.
+     */
+    private static function getTenantAggregateMode(Tenant $tenant): string
+    {
+        $market = $tenant->market;
+        if (!$market || !isset($market->settings['debt_monitoring'])) {
+            return 'worst';
+        }
+
+        return $market->settings['debt_monitoring']['tenant_aggregate_mode'] ?? 'worst';
+    }
+
+    /**
+     * Получить severity статуса.
+     */
+    private static function getDebtSeverity(string $status): int
+    {
+        return match ($status) {
+            'green' => 0,
+            'pending' => 1,
+            'orange' => 2,
+            'red' => 3,
+            default => 0,
+        };
     }
 
     private static function formatRub(float $value): string
