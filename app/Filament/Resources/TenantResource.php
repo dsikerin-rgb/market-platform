@@ -2127,7 +2127,7 @@ class TenantResource extends BaseResource
      */
     private static function resolveAutoDebtStatus(Tenant $record): array
     {
-        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+        if (! DbSchema::hasTable('contract_debts')) {
             return ['status' => null, 'snapshot_label' => null, 'reason' => 'Данные 1С недоступны'];
         }
 
@@ -2138,8 +2138,34 @@ class TenantResource extends BaseResource
         $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
         $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
         $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
+        $hasTenantExternalId = static::hasColumn('contract_debts', 'tenant_external_id');
 
-        $base = DB::table('contract_debts')->where('tenant_id', (int) $record->id);
+        // Поиск по external_id (UUID из 1С), а не по внутреннему ID
+        $base = DB::table('contract_debts');
+        
+        // Пробуем найти по tenant_external_id (UUID из 1С)
+        if ($hasTenantExternalId) {
+            $externalId = trim((string) ($record->external_id ?? ''));
+            $oneCUid = trim((string) ($record->one_c_uid ?? ''));
+            
+            if ($externalId !== '' || $oneCUid !== '') {
+                $base->where(function ($q) use ($externalId, $oneCUid) {
+                    if ($externalId !== '') {
+                        $q->where('tenant_external_id', $externalId);
+                    }
+                    if ($oneCUid !== '') {
+                        $q->orWhere('tenant_external_id', $oneCUid);
+                    }
+                });
+            } else {
+                // Нет external_id или one_c_uid — пробуем по tenant_id
+                $base->where('tenant_id', (int) $record->id);
+            }
+        } else {
+            // Нет колонки tenant_external_id — используем tenant_id
+            $base->where('tenant_id', (int) $record->id);
+        }
+        
         if ($hasMarketId) {
             $base->where('market_id', (int) $record->market_id);
         }
