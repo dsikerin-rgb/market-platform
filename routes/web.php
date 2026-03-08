@@ -743,7 +743,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $spacesById = $spaceIds->isNotEmpty()
             ? MarketSpace::query()
-                ->with(['tenant:id,debt_status'])
+                ->with(['tenant:id,market_id,name,short_name,external_id,one_c_uid,debt_status'])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
                 ->get(['id', 'tenant_id', 'number', 'code', 'display_name'])
@@ -753,6 +753,78 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $items = $rows->map(static function (MarketSpaceMapShape $s) use ($spacesById): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
+
+            // Расчёт статуса задолженности (авто из 1С или ручной)
+            $debtStatus = null;
+            $debtStatusLabel = null;
+            $debtStatusMode = null;
+            
+            if ($tenant) {
+                $manualStatus = trim($tenant->debt_status ?? '');
+                if ($manualStatus !== '' && array_key_exists($manualStatus, \App\Models\Tenant::DEBT_STATUS_LABELS)) {
+                    $debtStatus = $manualStatus;
+                    $debtStatusLabel = \App\Models\Tenant::DEBT_STATUS_LABELS[$manualStatus];
+                    $debtStatusMode = 'manual';
+                } else {
+                    // Авто-расчёт из contract_debts по external_id
+                    $extId = trim($tenant->external_id ?? '');
+                    $oneCUid = trim($tenant->one_c_uid ?? '');
+                    
+                    if ($extId || $oneCUid) {
+                        $query = \DB::table('contract_debts')
+                            ->where('tenant_external_id', $extId);
+                        if ($oneCUid) {
+                            $query->orWhere('tenant_external_id', $oneCUid);
+                        }
+                        $query->where('market_id', $tenant->market_id);
+                        
+                        $debts = $query->get(['debt_amount', 'period']);
+                        
+                        if ($debts->isNotEmpty()) {
+                            $totalDebt = $debts->sum('debt_amount');
+                            $oldestPeriod = null;
+                            
+                            foreach ($debts as $d) {
+                                if ($d->debt_amount > 0 && $d->period) {
+                                    if (!$oldestPeriod || $d->period < $oldestPeriod) {
+                                        $oldestPeriod = $d->period;
+                                    }
+                                }
+                            }
+                            
+                            if ($totalDebt <= 0.009) {
+                                $debtStatus = 'green';
+                                $debtStatusLabel = 'Нет задолженности';
+                            } elseif (!$oldestPeriod) {
+                                $debtStatus = 'orange';
+                                $debtStatusLabel = 'Задолженность до 3 месяцев';
+                            } else {
+                                try {
+                                    $periodDate = \Carbon\Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01');
+                                    $monthsOverdue = $periodDate->diffInMonths(\Carbon\Carbon::now()->startOfMonth());
+                                    if ($monthsOverdue >= 3) {
+                                        $debtStatus = 'red';
+                                        $debtStatusLabel = 'Задолженность свыше 3 месяцев';
+                                    } else {
+                                        $debtStatus = 'orange';
+                                        $debtStatusLabel = 'Задолженность до 3 месяцев';
+                                    }
+                                } catch (\Throwable $e) {
+                                    $debtStatus = 'orange';
+                                    $debtStatusLabel = 'Задолженность до 3 месяцев';
+                                }
+                            }
+                            $debtStatusMode = 'auto';
+                        } else {
+                            $debtStatusLabel = 'Нет данных';
+                            $debtStatusMode = 'auto';
+                        }
+                    } else {
+                        $debtStatusLabel = 'Нет данных';
+                        $debtStatusMode = 'auto';
+                    }
+                }
+            }
 
             return [
                 'id' => (int) $s->id,
