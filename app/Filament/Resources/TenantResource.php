@@ -72,7 +72,6 @@ class TenantResource extends BaseResource
         return filled($value) ? (int) $value : null;
     }
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -85,6 +84,7 @@ class TenantResource extends BaseResource
             'one_c_uid',
         ];
     }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -92,7 +92,6 @@ class TenantResource extends BaseResource
         $tabs = Tabs::make('tenant_tabs')
             ->columnSpanFull();
 
-        // Безопасно: если в вашей версии Filament нет этого метода — просто пропускаем.
         if (method_exists($tabs, 'persistTabInQueryString')) {
             $tabs->persistTabInQueryString();
         }
@@ -143,7 +142,6 @@ class TenantResource extends BaseResource
                                 Forms\Components\TextInput::make('short_name')
                                     ->label('Краткое название / вывеска')
                                     ->maxLength(255),
-
 
                                 Forms\Components\Toggle::make('is_active')
                                     ->label('Активен')
@@ -299,8 +297,6 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(2),
                     ]),
-
-
             ]),
         ]);
     }
@@ -310,6 +306,22 @@ class TenantResource extends BaseResource
         $user = Filament::auth()->user();
 
         $toolbarActions = static::tenantToolbarActions();
+
+        $debtStatusColumn = TextColumn::make('debt_status')
+            ->label('Задолженность');
+
+        if (method_exists($debtStatusColumn, 'state')) {
+            $debtStatusColumn->state(fn (Tenant $record): string => static::resolveDebtStatusForDisplay($record)['label']);
+        } elseif (method_exists($debtStatusColumn, 'getStateUsing')) {
+            $debtStatusColumn->getStateUsing(fn (Tenant $record): string => static::resolveDebtStatusForDisplay($record)['label']);
+        } else {
+            $debtStatusColumn->formatStateUsing(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['label']);
+        }
+
+        $debtStatusColumn
+            ->badge()
+            ->color(fn (Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
+            ->description(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)');
 
         return $table
             ->columns([
@@ -437,12 +449,7 @@ class TenantResource extends BaseResource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('debt_status')
-                    ->label('Задолженность')
-                    ->formatStateUsing(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['label'])
-                    ->badge()
-                    ->color(fn (Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
-                    ->description(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)'),
+                $debtStatusColumn,
 
                 IconColumn::make('is_active')
                     ->label('Активен')
@@ -1657,11 +1664,10 @@ class TenantResource extends BaseResource
             $query->orderBy('tc.market_space_id');
         }
 
-        $rows = $query
-            ->orderByDesc('tc.starts_at')
-            ->orderBy('tc.id')
-            ->limit(500)
-            ->get($select);
+        $query->orderByDesc('tc.starts_at')
+            ->orderBy('tc.id');
+
+        $rows = $query->limit(500)->get($select);
 
         if ($rows->isEmpty()) {
             return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет договоров.</div>');
@@ -2140,13 +2146,12 @@ class TenantResource extends BaseResource
         $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
         $hasTenantExternalId = static::hasColumn('contract_debts', 'tenant_external_id');
 
-        // Поиск по external_id (UUID из 1С), а не по внутреннему ID
         $base = DB::table('contract_debts');
-        
+
         if ($hasTenantExternalId) {
             $externalId = trim((string) ($record->external_id ?? ''));
             $oneCUid = trim((string) ($record->one_c_uid ?? ''));
-            
+
             if ($externalId !== '' || $oneCUid !== '') {
                 $base->where(function ($q) use ($externalId, $oneCUid) {
                     if ($externalId !== '') {
@@ -2157,14 +2162,12 @@ class TenantResource extends BaseResource
                     }
                 });
             } else {
-                // Нет external_id или one_c_uid — пробуем по tenant_id
                 $base->where('tenant_id', (int) $record->id);
             }
         } else {
-            // Нет колонки tenant_external_id — используем tenant_id
             $base->where('tenant_id', (int) $record->id);
         }
-        
+
         if ($hasMarketId) {
             $base->where('market_id', (int) $record->market_id);
         }
