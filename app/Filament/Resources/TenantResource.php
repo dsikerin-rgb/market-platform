@@ -1909,7 +1909,7 @@ class TenantResource extends BaseResource
         return ['' => 'Автоматически (из 1С)'] + Tenant::DEBT_STATUS_LABELS;
     }
 
-    private static function debtStatusColor(?string $state): string
+    public static function debtStatusColor(?string $state): string
     {
         return match ($state) {
             'green' => 'success',
@@ -2074,7 +2074,7 @@ class TenantResource extends BaseResource
     /**
      * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string}
      */
-    private static function resolveDebtStatusForDisplay(?Tenant $record): array
+    public static function resolveDebtStatusForDisplay(?Tenant $record): array
     {
         if (! $record) {
             return [
