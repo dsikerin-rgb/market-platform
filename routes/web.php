@@ -4,6 +4,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\TenantResource;
 use App\Http\Controllers\Auth\MarketRegistrationController;
 use App\Http\Controllers\Admin\TenantCabinetImpersonationController;
 use App\Http\Controllers\Cabinet\AccrualsController;
@@ -36,6 +37,8 @@ use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Services\Debt\DebtStatusResolver;
+use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Http\Request;
@@ -44,7 +47,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use App\Services\Marketplace\MarketplaceContextService;
 
 Route::view('/', 'welcome')->name('home');
 
@@ -236,7 +238,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ? Market::query()->whereKey((int) $selectedMarketId)->first()
                 : Market::query()->orderBy('id')->first();
 
-            // если выбранный market_id удалён/не найден — fallback на первый
             if (! $market) {
                 $market = Market::query()->orderBy('id')->first();
             }
@@ -394,9 +395,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         [$polygon, $bbox] = $normalizePolygonAndBbox($validated['polygon']);
 
-        // ВАЖНО: в БД есть UNIQUE(market_id, version, page, market_space_id).
-        // Если shape ранее "удалили" через is_active=0, запись всё равно остаётся и мешает создать новую.
-        // Поэтому при market_space_id делаем upsert: если запись с таким ключом уже есть — обновляем её.
         if ($marketSpaceId !== null) {
             $existing = MarketSpaceMapShape::query()
                 ->where('market_id', (int) $market->id)
@@ -523,7 +521,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        // Считаем будущие значения ключа уникальности.
         $nextPage = array_key_exists('page', $validated)
             ? (int) ($validated['page'] ?? 1)
             : (int) ($shapeModel->page ?? 1);
@@ -536,7 +533,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ? $validated['market_space_id']
             : $shapeModel->market_space_id;
 
-        // Проверяем, что market_space_id принадлежит рынку.
         if (array_key_exists('market_space_id', $validated)) {
             $marketSpaceId = $validated['market_space_id'];
 
@@ -554,8 +550,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
-        // ВАЖНО: защитимся от UNIQUE(market_id, version, page, market_space_id).
-        // Если пытаемся привязать к месту, которое уже занято (часто это "удалённая" запись), освобождаем конфликт.
         if ($nextMarketSpaceId !== null) {
             $conflict = MarketSpaceMapShape::query()
                 ->where('market_id', (int) $market->id)
@@ -665,8 +659,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->firstOrFail();
 
         try {
-            // ВАЖНО: освобождаем уникальный ключ (market_id, version, page, market_space_id)
-            // чтобы можно было снова привязать это же место к новой фигуре.
             $shapeModel->market_space_id = null;
             $shapeModel->is_active = false;
             $shapeModel->save();
@@ -743,7 +735,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $spacesById = $spaceIds->isNotEmpty()
             ? MarketSpace::query()
-                ->with(['tenant:id,debt_status'])
+                ->with(['tenant:id,market_id,name,short_name,external_id,one_c_uid,debt_status,debt_status_updated_at,updated_at'])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
                 ->get(['id', 'tenant_id', 'number', 'code', 'display_name'])
@@ -753,6 +745,18 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $items = $rows->map(static function (MarketSpaceMapShape $s) use ($spacesById): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
+
+            $resolver = app(DebtStatusResolver::class);
+            $resolvedDebt = $tenant
+                ? $resolver->resolve($tenant)
+                : [
+                    'mode' => 'auto',
+                    'status' => null,
+                    'label' => 'Автоматически: нет данных',
+                    'updated_at' => null,
+                    'source' => null,
+                    'severity' => 0,
+                ];
 
             return [
                 'id' => (int) $s->id,
@@ -773,7 +777,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'sort_order' => (int) ($s->sort_order ?? 0),
                 'is_active' => (bool) ($s->is_active ?? true),
                 'meta' => is_array($s->meta) ? $s->meta : [],
-                'debt_status' => $tenant?->debt_status,
+
+                'debt_status' => $resolvedDebt['status'],
+                'debt_status_label' => $resolvedDebt['label'],
+                'debt_status_mode' => $resolvedDebt['mode'],
+                'debt_status_updated_at' => $resolvedDebt['updated_at'],
+
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
@@ -978,7 +987,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
-        // point-in-polygon (ray casting)
         $pointInPolygon = static function (float $px, float $py, array $polygon): bool {
             $n = count($polygon);
             if ($n < 3) {
@@ -1084,6 +1092,18 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
+        $resolver = app(DebtStatusResolver::class);
+        $resolvedDebt = $tenant
+            ? $resolver->resolve($tenant)
+            : [
+                'mode' => 'auto',
+                'status' => null,
+                'label' => 'Автоматически: нет данных',
+                'updated_at' => null,
+                'source' => null,
+                'severity' => 0,
+            ];
+
         return response()->json([
             'ok' => true,
             'hit' => [
@@ -1102,8 +1122,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'tenant' => $tenant ? [
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
-                    'debt_status' => $tenant->debt_status,
-                    'debt_status_label' => $tenant->debt_status_label,
+                    'debt_status' => $resolvedDebt['status'],
+                    'debt_status_label' => $resolvedDebt['label'],
+                    'debt_status_mode' => $resolvedDebt['mode'],
                 ] : null,
                 'tenant_id' => $tenant?->id ? (int) $tenant->id : null,
 
