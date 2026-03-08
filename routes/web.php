@@ -4,6 +4,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\TenantResource;
 use App\Http\Controllers\Auth\MarketRegistrationController;
 use App\Http\Controllers\Admin\TenantCabinetImpersonationController;
 use App\Http\Controllers\Cabinet\AccrualsController;
@@ -36,6 +37,7 @@ use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Http\Request;
@@ -44,7 +46,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use App\Services\Marketplace\MarketplaceContextService;
 
 Route::view('/', 'welcome')->name('home');
 
@@ -236,7 +237,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ? Market::query()->whereKey((int) $selectedMarketId)->first()
                 : Market::query()->orderBy('id')->first();
 
-            // если выбранный market_id удалён/не найден — fallback на первый
             if (! $market) {
                 $market = Market::query()->orderBy('id')->first();
             }
@@ -394,9 +394,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         [$polygon, $bbox] = $normalizePolygonAndBbox($validated['polygon']);
 
-        // ВАЖНО: в БД есть UNIQUE(market_id, version, page, market_space_id).
-        // Если shape ранее "удалили" через is_active=0, запись всё равно остаётся и мешает создать новую.
-        // Поэтому при market_space_id делаем upsert: если запись с таким ключом уже есть — обновляем её.
         if ($marketSpaceId !== null) {
             $existing = MarketSpaceMapShape::query()
                 ->where('market_id', (int) $market->id)
@@ -523,7 +520,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        // Считаем будущие значения ключа уникальности.
         $nextPage = array_key_exists('page', $validated)
             ? (int) ($validated['page'] ?? 1)
             : (int) ($shapeModel->page ?? 1);
@@ -536,7 +532,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ? $validated['market_space_id']
             : $shapeModel->market_space_id;
 
-        // Проверяем, что market_space_id принадлежит рынку.
         if (array_key_exists('market_space_id', $validated)) {
             $marketSpaceId = $validated['market_space_id'];
 
@@ -554,8 +549,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
-        // ВАЖНО: защитимся от UNIQUE(market_id, version, page, market_space_id).
-        // Если пытаемся привязать к месту, которое уже занято (часто это "удалённая" запись), освобождаем конфликт.
         if ($nextMarketSpaceId !== null) {
             $conflict = MarketSpaceMapShape::query()
                 ->where('market_id', (int) $market->id)
@@ -665,8 +658,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->firstOrFail();
 
         try {
-            // ВАЖНО: освобождаем уникальный ключ (market_id, version, page, market_space_id)
-            // чтобы можно было снова привязать это же место к новой фигуре.
             $shapeModel->market_space_id = null;
             $shapeModel->is_active = false;
             $shapeModel->save();
@@ -743,7 +734,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $spacesById = $spaceIds->isNotEmpty()
             ? MarketSpace::query()
-                ->with(['tenant:id,market_id,name,short_name,external_id,one_c_uid,debt_status'])
+                ->with(['tenant:id,market_id,name,short_name,external_id,one_c_uid,debt_status,debt_status_updated_at,updated_at'])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
                 ->get(['id', 'tenant_id', 'number', 'code', 'display_name'])
@@ -754,77 +745,15 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
 
-            // Расчёт статуса задолженности (авто из 1С или ручной)
-            $debtStatus = null;
-            $debtStatusLabel = null;
-            $debtStatusMode = null;
-            
-            if ($tenant) {
-                $manualStatus = trim($tenant->debt_status ?? '');
-                if ($manualStatus !== '' && array_key_exists($manualStatus, \App\Models\Tenant::DEBT_STATUS_LABELS)) {
-                    $debtStatus = $manualStatus;
-                    $debtStatusLabel = \App\Models\Tenant::DEBT_STATUS_LABELS[$manualStatus];
-                    $debtStatusMode = 'manual';
-                } else {
-                    // Авто-расчёт из contract_debts по external_id
-                    $extId = trim($tenant->external_id ?? '');
-                    $oneCUid = trim($tenant->one_c_uid ?? '');
-                    
-                    if ($extId || $oneCUid) {
-                        $query = \DB::table('contract_debts')
-                            ->where('tenant_external_id', $extId);
-                        if ($oneCUid) {
-                            $query->orWhere('tenant_external_id', $oneCUid);
-                        }
-                        $query->where('market_id', $tenant->market_id);
-                        
-                        $debts = $query->get(['debt_amount', 'period']);
-                        
-                        if ($debts->isNotEmpty()) {
-                            $totalDebt = $debts->sum('debt_amount');
-                            $oldestPeriod = null;
-                            
-                            foreach ($debts as $d) {
-                                if ($d->debt_amount > 0 && $d->period) {
-                                    if (!$oldestPeriod || $d->period < $oldestPeriod) {
-                                        $oldestPeriod = $d->period;
-                                    }
-                                }
-                            }
-                            
-                            if ($totalDebt <= 0.009) {
-                                $debtStatus = 'green';
-                                $debtStatusLabel = 'Нет задолженности';
-                            } elseif (!$oldestPeriod) {
-                                $debtStatus = 'orange';
-                                $debtStatusLabel = 'Задолженность до 3 месяцев';
-                            } else {
-                                try {
-                                    $periodDate = \Carbon\Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01');
-                                    $monthsOverdue = $periodDate->diffInMonths(\Carbon\Carbon::now()->startOfMonth());
-                                    if ($monthsOverdue >= 3) {
-                                        $debtStatus = 'red';
-                                        $debtStatusLabel = 'Задолженность свыше 3 месяцев';
-                                    } else {
-                                        $debtStatus = 'orange';
-                                        $debtStatusLabel = 'Задолженность до 3 месяцев';
-                                    }
-                                } catch (\Throwable $e) {
-                                    $debtStatus = 'orange';
-                                    $debtStatusLabel = 'Задолженность до 3 месяцев';
-                                }
-                            }
-                            $debtStatusMode = 'auto';
-                        } else {
-                            $debtStatusLabel = 'Нет данных';
-                            $debtStatusMode = 'auto';
-                        }
-                    } else {
-                        $debtStatusLabel = 'Нет данных';
-                        $debtStatusMode = 'auto';
-                    }
-                }
-            }
+            $resolvedDebt = $tenant
+                ? TenantResource::resolveDebtStatusForDisplay($tenant)
+                : [
+                    'mode' => 'auto',
+                    'status' => null,
+                    'label' => 'Автоматически: нет данных',
+                    'updated_at' => null,
+                    'source' => null,
+                ];
 
             return [
                 'id' => (int) $s->id,
@@ -845,7 +774,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'sort_order' => (int) ($s->sort_order ?? 0),
                 'is_active' => (bool) ($s->is_active ?? true),
                 'meta' => is_array($s->meta) ? $s->meta : [],
-                'debt_status' => $tenant?->debt_status,
+
+                'debt_status' => $resolvedDebt['status'],
+                'debt_status_label' => $resolvedDebt['label'],
+                'debt_status_mode' => $resolvedDebt['mode'],
+                'debt_status_updated_at' => $resolvedDebt['updated_at'],
+
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
@@ -1050,7 +984,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
-        // point-in-polygon (ray casting)
         $pointInPolygon = static function (float $px, float $py, array $polygon): bool {
             $n = count($polygon);
             if ($n < 3) {
@@ -1156,6 +1089,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
+        $resolvedDebt = $tenant
+            ? TenantResource::resolveDebtStatusForDisplay($tenant)
+            : [
+                'mode' => 'auto',
+                'status' => null,
+                'label' => 'Автоматически: нет данных',
+                'updated_at' => null,
+                'source' => null,
+            ];
+
         return response()->json([
             'ok' => true,
             'hit' => [
@@ -1174,8 +1117,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'tenant' => $tenant ? [
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
-                    'debt_status' => $tenant->debt_status,
-                    'debt_status_label' => $tenant->debt_status_label,
+                    'debt_status' => $resolvedDebt['status'],
+                    'debt_status_label' => $resolvedDebt['label'],
+                    'debt_status_mode' => $resolvedDebt['mode'],
                 ] : null,
                 'tenant_id' => $tenant?->id ? (int) $tenant->id : null,
 
