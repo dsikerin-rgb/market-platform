@@ -238,20 +238,20 @@ class DebtStatusResolverTest extends TestCase
             'debt_status' => null,
         ]);
 
-        // Создаём запись с долгом, но без calculated_at/created_at
-        // Сервис не сможет определить срок оплаты → gray
-        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-01|10000|0|10000');
+        // Создаём запись с долгом, calculated_at, но с пустым period (невалидный формат)
+        // Сервис не сможет корректно распарсить период → gray
+        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '||10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
             'contract_external_id' => 'contract-' . $tenant->external_id,
-            'period' => '2026-01',
+            'period' => '',
             'accrued_amount' => 10000,
             'paid_amount' => 0,
             'debt_amount' => 10000,
-            'calculated_at' => null,
-            'created_at' => null,
+            'calculated_at' => Carbon::now(),
+            'created_at' => Carbon::now(),
             'hash' => $hash,
         ]);
 
