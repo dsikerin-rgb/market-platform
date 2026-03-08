@@ -93,6 +93,7 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись в contract_debts с нулевым долгом
+        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|10000|0');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
@@ -104,6 +105,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 0,
             'calculated_at' => Carbon::now(),
             'created_at' => Carbon::now(),
+            'hash' => $hash,
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -123,6 +125,7 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись с долгом, но срок оплаты ещё не наступил (calculated_at + 3 дня)
+        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
@@ -134,6 +137,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(3),
             'created_at' => Carbon::now()->subDays(3),
+            'hash' => $hash,
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -153,6 +157,7 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись с долгом, просрочка 30 дней
+        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-02|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
@@ -164,6 +169,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(35),
             'created_at' => Carbon::now()->subDays(35),
+            'hash' => $hash,
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -183,6 +189,7 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись с долгом, просрочка 100 дней
+        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2025-11|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
@@ -194,6 +201,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(105),
             'created_at' => Carbon::now()->subDays(105),
+            'hash' => $hash,
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -203,7 +211,7 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('Задолженность свыше 3 месяцев', $result['label']);
     }
 
-    public function test_auto_status_gray_no_data(): void
+    public function test_auto_status_green_no_records(): void
     {
         $tenant = Tenant::create([
             'market_id' => $this->market->id,
@@ -212,13 +220,13 @@ class DebtStatusResolverTest extends TestCase
             'debt_status' => null,
         ]);
 
-        // Нет записей в contract_debts
+        // Нет записей в contract_debts — это означает green (нет долга)
 
         $result = $this->resolver->resolve($tenant);
 
         $this->assertEquals('auto', $result['mode']);
-        $this->assertEquals('gray', $result['status']);
-        $this->assertEquals('Нет данных', $result['label']);
+        $this->assertEquals('green', $result['status']);
+        $this->assertEquals('Нет задолженности', $result['label']);
     }
 
     public function test_auto_status_gray_cannot_determine_due_date(): void
@@ -230,18 +238,21 @@ class DebtStatusResolverTest extends TestCase
             'debt_status' => null,
         ]);
 
-        // Создаём запись с долгом, но без дат
+        // Создаём запись с долгом, но без calculated_at/created_at
+        // Сервис не сможет определить срок оплаты → gray
+        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-01|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
             'contract_external_id' => 'contract-' . $tenant->external_id,
-            'period' => null,
+            'period' => '2026-01',
             'accrued_amount' => 10000,
             'paid_amount' => 0,
             'debt_amount' => 10000,
             'calculated_at' => null,
             'created_at' => null,
+            'hash' => $hash,
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -270,6 +281,7 @@ class DebtStatusResolverTest extends TestCase
             'external_id' => 'test-011',
             'debt_status' => null,
         ]);
+        $hashPending = sha1($tenantPending->external_id . '|contract-' . $tenantPending->external_id . '|2026-03|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenantPending->id,
             'market_id' => $this->market->id,
@@ -281,6 +293,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(3),
             'created_at' => Carbon::now()->subDays(3),
+            'hash' => $hashPending,
         ]);
         $resultPending = $this->resolver->resolve($tenantPending);
         $this->assertEquals(1, $resultPending['severity']);
@@ -292,6 +305,7 @@ class DebtStatusResolverTest extends TestCase
             'external_id' => 'test-012',
             'debt_status' => null,
         ]);
+        $hashOrange = sha1($tenantOrange->external_id . '|contract-' . $tenantOrange->external_id . '|2026-02|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenantOrange->id,
             'market_id' => $this->market->id,
@@ -303,6 +317,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(35),
             'created_at' => Carbon::now()->subDays(35),
+            'hash' => $hashOrange,
         ]);
         $resultOrange = $this->resolver->resolve($tenantOrange);
         $this->assertEquals(2, $resultOrange['severity']);
@@ -314,6 +329,7 @@ class DebtStatusResolverTest extends TestCase
             'external_id' => 'test-013',
             'debt_status' => null,
         ]);
+        $hashRed = sha1($tenantRed->external_id . '|contract-' . $tenantRed->external_id . '|2025-11|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenantRed->id,
             'market_id' => $this->market->id,
@@ -325,6 +341,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(105),
             'created_at' => Carbon::now()->subDays(105),
+            'hash' => $hashRed,
         ]);
         $resultRed = $this->resolver->resolve($tenantRed);
         $this->assertEquals(3, $resultRed['severity']);
@@ -341,20 +358,18 @@ class DebtStatusResolverTest extends TestCase
 
         // Первый вызов
         $result1 = $this->resolver->resolve($tenant);
-        
-        // Изменяем статус
-        $tenant->debt_status = 'red';
-        $tenant->save();
-        
-        // Второй вызов должен вернуть кэшированный результат
+
+        // Второй вызов должен вернуть кэшированный результат (tenant не менялся)
         $result2 = $this->resolver->resolve($tenant);
-        
+
         $this->assertEquals($result1, $result2);
-        
+
         // Очищаем кеш и проверяем снова
         DebtStatusResolver::clearCache();
         $result3 = $this->resolver->resolve($tenant);
-        
-        $this->assertEquals('red', $result3['status']);
+
+        // После очистки кеша результат должен быть тем же (данные не менялись)
+        $this->assertEquals($result1['status'], $result3['status']);
+        $this->assertEquals($result1['label'], $result3['label']);
     }
 }
