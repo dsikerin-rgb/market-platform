@@ -37,6 +37,7 @@ use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Services\Debt\DebtStatusResolver;
 use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
@@ -745,14 +746,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
 
+            $resolver = app(DebtStatusResolver::class);
             $resolvedDebt = $tenant
-                ? TenantResource::resolveDebtStatusForDisplay($tenant)
+                ? $resolver->resolve($tenant)
                 : [
                     'mode' => 'auto',
                     'status' => null,
                     'label' => 'Автоматически: нет данных',
                     'updated_at' => null,
                     'source' => null,
+                    'severity' => 0,
                 ];
 
             return [
@@ -1089,14 +1092,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
+        $resolver = app(DebtStatusResolver::class);
         $resolvedDebt = $tenant
-            ? TenantResource::resolveDebtStatusForDisplay($tenant)
+            ? $resolver->resolve($tenant)
             : [
                 'mode' => 'auto',
                 'status' => null,
                 'label' => 'Автоматически: нет данных',
                 'updated_at' => null,
                 'source' => null,
+                'severity' => 0,
             ];
 
         return response()->json([

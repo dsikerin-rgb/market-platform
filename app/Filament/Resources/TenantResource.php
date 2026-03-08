@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
+use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -46,9 +47,6 @@ class TenantResource extends BaseResource
 
     /** @var array<string, array<string, mixed>> */
     private static array $accrualSummaryCache = [];
-
-    /** @var array<string, array{mode:string,status:?string,label:string,updated_at:?string,source:?string}> */
-    private static array $resolvedDebtStatusCache = [];
 
     /**
      * Группа динамическая:
@@ -2078,7 +2076,7 @@ class TenantResource extends BaseResource
     }
 
     /**
-     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string}
+     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int}
      */
     public static function resolveDebtStatusForDisplay(?Tenant $record): array
     {
@@ -2089,186 +2087,13 @@ class TenantResource extends BaseResource
                 'label' => 'Автоматически: нет данных',
                 'updated_at' => null,
                 'source' => null,
+                'severity' => 0,
             ];
         }
 
-        $cacheKey = (int) $record->market_id . ':' . (int) $record->id . ':' . ((string) ($record->updated_at ?? ''));
-        if (isset(self::$resolvedDebtStatusCache[$cacheKey])) {
-            return self::$resolvedDebtStatusCache[$cacheKey];
-        }
-
-        $manual = trim((string) ($record->debt_status ?? ''));
-        if ($manual !== '' && array_key_exists($manual, Tenant::DEBT_STATUS_LABELS)) {
-            return self::$resolvedDebtStatusCache[$cacheKey] = [
-                'mode' => 'manual',
-                'status' => $manual,
-                'label' => Tenant::DEBT_STATUS_LABELS[$manual],
-                'updated_at' => $record->debt_status_updated_at?->format('d.m.Y H:i'),
-                'source' => null,
-            ];
-        }
-
-        $auto = static::resolveAutoDebtStatus($record);
-        if ($auto['status'] !== null) {
-            return self::$resolvedDebtStatusCache[$cacheKey] = [
-                'mode' => 'auto',
-                'status' => $auto['status'],
-                'label' => Tenant::DEBT_STATUS_LABELS[$auto['status']] ?? 'Автоматически',
-                'updated_at' => $auto['snapshot_label'],
-                'source' => 'Источник: contract_debts',
-            ];
-        }
-
-        return self::$resolvedDebtStatusCache[$cacheKey] = [
-            'mode' => 'auto',
-            'status' => null,
-            'label' => 'Автоматически: нет данных',
-            'updated_at' => $auto['snapshot_label'],
-            'source' => $auto['reason'],
-        ];
-    }
-
-    /**
-     * @return array{status:?string,snapshot_label:?string,reason:?string}
-     */
-    private static function resolveAutoDebtStatus(Tenant $record): array
-    {
-        if (! DbSchema::hasTable('contract_debts')) {
-            return ['status' => null, 'snapshot_label' => null, 'reason' => 'Данные 1С недоступны'];
-        }
-
-        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
-        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
-        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
-        $hasPeriod = static::hasColumn('contract_debts', 'period');
-        $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
-        $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
-        $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
-        $hasTenantExternalId = static::hasColumn('contract_debts', 'tenant_external_id');
-
-        $base = DB::table('contract_debts');
-
-        if ($hasTenantExternalId) {
-            $externalId = trim((string) ($record->external_id ?? ''));
-            $oneCUid = trim((string) ($record->one_c_uid ?? ''));
-
-            if ($externalId !== '' || $oneCUid !== '') {
-                $base->where(function ($q) use ($externalId, $oneCUid) {
-                    if ($externalId !== '') {
-                        $q->where('tenant_external_id', $externalId);
-                    }
-                    if ($oneCUid !== '') {
-                        $q->orWhere('tenant_external_id', $oneCUid);
-                    }
-                });
-            } else {
-                $base->where('tenant_id', (int) $record->id);
-            }
-        } else {
-            $base->where('tenant_id', (int) $record->id);
-        }
-
-        if ($hasMarketId) {
-            $base->where('market_id', (int) $record->market_id);
-        }
-
-        $snapshotLabel = null;
-        if ($hasCalculatedAt) {
-            $latest = (clone $base)->max('calculated_at');
-            if ($latest) {
-                $base->where('calculated_at', $latest);
-                try {
-                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
-                } catch (Throwable) {
-                    $snapshotLabel = (string) $latest;
-                }
-            }
-        } elseif ($hasCreatedAt) {
-            $latest = (clone $base)->max('created_at');
-            if ($latest) {
-                $base->where('created_at', $latest);
-                try {
-                    $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
-                } catch (Throwable) {
-                    $snapshotLabel = (string) $latest;
-                }
-            }
-        } elseif ($hasPeriod) {
-            $latest = (clone $base)->max('period');
-            if ($latest) {
-                $base->where('period', $latest);
-                $snapshotLabel = (string) $latest;
-            }
-        }
-
-        $fields = [];
-        if ($hasDebt) {
-            $fields[] = 'debt_amount';
-        }
-        if ($hasAccrued) {
-            $fields[] = 'accrued_amount';
-        }
-        if ($hasPaid) {
-            $fields[] = 'paid_amount';
-        }
-        if ($hasPeriod) {
-            $fields[] = 'period';
-        }
-
-        if ($fields === []) {
-            return ['status' => null, 'snapshot_label' => $snapshotLabel, 'reason' => 'В 1С нет полей для расчёта долга'];
-        }
-
-        $rows = (clone $base)->get($fields);
-        if ($rows->isEmpty()) {
-            return ['status' => null, 'snapshot_label' => $snapshotLabel, 'reason' => 'Нет данных 1С по арендатору'];
-        }
-
-        $totalDebt = 0.0;
-        $oldestDebtPeriod = null;
-        $currentMonth = Carbon::now()->startOfMonth();
-
-        foreach ($rows as $row) {
-            $rowDebt = 0.0;
-
-            if ($hasDebt) {
-                $rowDebt = (float) ($row->debt_amount ?? 0);
-            } elseif ($hasAccrued || $hasPaid) {
-                $rowDebt = (float) ($row->accrued_amount ?? 0) - (float) ($row->paid_amount ?? 0);
-            }
-
-            $totalDebt += $rowDebt;
-
-            if ($rowDebt > 0.009 && $hasPeriod) {
-                $rawPeriod = trim((string) ($row->period ?? ''));
-                if (preg_match('/^\d{4}-\d{2}/', $rawPeriod) === 1) {
-                    try {
-                        $period = Carbon::createFromFormat('Y-m-d', substr($rawPeriod, 0, 7) . '-01')->startOfMonth();
-                        if (! $oldestDebtPeriod || $period->lt($oldestDebtPeriod)) {
-                            $oldestDebtPeriod = $period;
-                        }
-                    } catch (Throwable) {
-                        // ignore parsing problems for malformed source period
-                    }
-                }
-            }
-        }
-
-        if ($totalDebt <= 0.009) {
-            return ['status' => 'green', 'snapshot_label' => $snapshotLabel, 'reason' => null];
-        }
-
-        if (! $oldestDebtPeriod) {
-            return ['status' => 'orange', 'snapshot_label' => $snapshotLabel, 'reason' => null];
-        }
-
-        $monthsOverdue = $oldestDebtPeriod->diffInMonths($currentMonth);
-
-        return [
-            'status' => $monthsOverdue >= 3 ? 'red' : 'orange',
-            'snapshot_label' => $snapshotLabel,
-            'reason' => null,
-        ];
+        // Используем единый сервис расчёта задолженности
+        $resolver = app(DebtStatusResolver::class);
+        return $resolver->resolve($record);
     }
 
     private static function formatRub(float $value): string
