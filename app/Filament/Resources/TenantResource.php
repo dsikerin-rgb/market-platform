@@ -439,10 +439,10 @@ class TenantResource extends BaseResource
 
                 TextColumn::make('debt_status')
                     ->label('Задолженность')
-                    ->formatStateUsing(fn (?string $state, Tenant $record) => static::resolveDebtStatusForDisplay($record)['label'])
+                    ->formatStateUsing(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['label'])
                     ->badge()
-                    ->color(fn (?string $state, Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
-                    ->description(fn (?string $state, Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)'),
+                    ->color(fn (Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
+                    ->description(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)'),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
