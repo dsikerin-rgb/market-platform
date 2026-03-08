@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\Market;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Единый сервис расчёта статуса задолженности арендатора.
@@ -278,17 +279,17 @@ class DebtStatusResolver
      */
     private function fetchDebtsData(Tenant $tenant): ?array
     {
-        if (!DB::getConnection()->getSchemaBuilder()->hasTable('contract_debts')) {
+        if (!Schema::hasTable('contract_debts')) {
             return null;
         }
 
-        $hasTenantExternalId = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'tenant_external_id');
-        $hasMarketId = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'market_id');
-        $hasCalculatedAt = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'calculated_at');
-        $hasCreatedAt = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'created_at');
-        $hasPeriod = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'period');
-        $hasDueDate = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'due_date');
-        $hasDebt = DB::getConnection()->getSchemaBuilder()->hasColumn('contract_debts', 'debt_amount');
+        $hasTenantExternalId = Schema::hasColumn('contract_debts', 'tenant_external_id');
+        $hasMarketId = Schema::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = Schema::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = Schema::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = Schema::hasColumn('contract_debts', 'period');
+        $hasDueDate = Schema::hasColumn('contract_debts', 'due_date');
+        $hasDebt = Schema::hasColumn('contract_debts', 'debt_amount');
 
         if (!$hasDebt) {
             return null;
