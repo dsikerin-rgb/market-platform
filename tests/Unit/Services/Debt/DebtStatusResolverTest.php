@@ -211,7 +211,7 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('Задолженность свыше 3 месяцев', $result['label']);
     }
 
-    public function test_auto_status_green_no_records(): void
+    public function test_auto_status_gray_no_records(): void
     {
         $tenant = Tenant::create([
             'market_id' => $this->market->id,
@@ -220,13 +220,13 @@ class DebtStatusResolverTest extends TestCase
             'debt_status' => null,
         ]);
 
-        // Нет записей в contract_debts — это означает green (нет долга)
+        // Нет записей в contract_debts — это gray (нет данных по арендатору)
 
         $result = $this->resolver->resolve($tenant);
 
         $this->assertEquals('auto', $result['mode']);
-        $this->assertEquals('green', $result['status']);
-        $this->assertEquals('Нет задолженности', $result['label']);
+        $this->assertEquals('gray', $result['status']);
+        $this->assertEquals('Нет данных', $result['label']);
     }
 
     public function test_auto_status_gray_cannot_determine_due_date(): void

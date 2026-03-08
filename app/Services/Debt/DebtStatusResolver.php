@@ -194,12 +194,13 @@ class DebtStatusResolver
         }
 
         if ($debtsData['rows']->isEmpty()) {
+            // Нет записей по арендатору — это gray (данные есть, но записей нет)
             return $this->makeResult(
                 mode: 'auto',
-                status: self::STATUS_GREEN,
-                label: self::STATUS_LABELS[self::STATUS_GREEN],
+                status: self::STATUS_GRAY,
+                label: self::STATUS_LABELS[self::STATUS_GRAY],
                 updatedAt: $debtsData['snapshot_label'],
-                source: 'Источник: contract_debts',
+                source: 'Нет данных 1С по арендатору',
                 severity: 0
             );
         }
@@ -208,6 +209,7 @@ class DebtStatusResolver
         $totalDebt = $debtsData['rows']->sum('debt_amount');
 
         if ($totalDebt <= 0.009) {
+            // Записи есть, долг нулевой — это green
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GREEN,
