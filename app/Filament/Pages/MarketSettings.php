@@ -171,6 +171,9 @@ class MarketSettings extends Page
             'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['grace_days']
                 : 5,
+            'debt_monitoring_orange_after_days' => is_numeric($settings['debt_monitoring']['orange_after_days'] ?? null)
+                ? (int) $settings['debt_monitoring']['orange_after_days']
+                : 6,
             'debt_monitoring_red_after_days' => is_numeric($settings['debt_monitoring']['red_after_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['red_after_days']
                 : 90,
@@ -438,7 +441,7 @@ class MarketSettings extends Page
                     ->schema([
                         Forms\Components\TextInput::make('debt_monitoring_grace_days')
                             ->label('Льготный срок оплаты, дней')
-                            ->helperText('Сколько дней после выставления начисления долг ещё не считается просроченным.')
+                            ->helperText('Сколько дней после выставления начисления долг ещё не считается просроченным (статус pending).')
                             ->numeric()
                             ->minValue(0)
                             ->maxValue(30)
@@ -446,7 +449,20 @@ class MarketSettings extends Page
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
-                                'lg' => 4,
+                                'lg' => 3,
+                            ]),
+
+                        Forms\Components\TextInput::make('debt_monitoring_orange_after_days')
+                            ->label('Жёлтый статус после, дней просрочки')
+                            ->helperText('После какого количества дней просрочки статус становится жёлтым (orange).')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(180)
+                            ->default(6)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
                             ]),
 
                         Forms\Components\TextInput::make('debt_monitoring_red_after_days')
@@ -459,7 +475,7 @@ class MarketSettings extends Page
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
-                                'lg' => 4,
+                                'lg' => 3,
                             ]),
 
                         Forms\Components\Select::make('debt_monitoring_tenant_aggregate_mode')
@@ -474,7 +490,7 @@ class MarketSettings extends Page
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
-                                'lg' => 4,
+                                'lg' => 3,
                             ]),
                     ])
                     ->columns(12)
@@ -548,6 +564,9 @@ class MarketSettings extends Page
             'grace_days' => is_numeric($state['debt_monitoring_grace_days'] ?? null)
                 ? max(0, min(30, (int) $state['debt_monitoring_grace_days']))
                 : 5,
+            'orange_after_days' => is_numeric($state['debt_monitoring_orange_after_days'] ?? null)
+                ? max(1, min(180, (int) $state['debt_monitoring_orange_after_days']))
+                : 6,
             'red_after_days' => is_numeric($state['debt_monitoring_red_after_days'] ?? null)
                 ? max(1, min(180, (int) $state['debt_monitoring_red_after_days']))
                 : 90,
