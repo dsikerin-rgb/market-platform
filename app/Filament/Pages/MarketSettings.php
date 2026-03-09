@@ -151,6 +151,15 @@ class MarketSettings extends Page
             'notification_channels_reminders' => $this->normalizeNotificationChannels(
                 $settings['notification_channels_reminders'] ?? ['database']
             ),
+            'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
+                ? (int) $settings['debt_monitoring']['grace_days']
+                : 5,
+            'debt_monitoring_red_after_days' => is_numeric($settings['debt_monitoring']['red_after_days'] ?? null)
+                ? (int) $settings['debt_monitoring']['red_after_days']
+                : 90,
+            'debt_monitoring_tenant_aggregate_mode' => in_array($settings['debt_monitoring']['tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
+                ? $settings['debt_monitoring']['tenant_aggregate_mode']
+                : 'worst',
         ]);
     }
 
@@ -406,6 +415,54 @@ class MarketSettings extends Page
                     ->columns(12)
                     ->collapsible()
                     ->collapsed(),
+
+                Section::make('Мониторинг задолженности')
+                    ->description('Настройки расчёта и отображения задолженности арендаторов.')
+                    ->schema([
+                        Forms\Components\TextInput::make('debt_monitoring_grace_days')
+                            ->label('Льготный срок оплаты, дней')
+                            ->helperText('Сколько дней после выставления начисления долг ещё не считается просроченным.')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(30)
+                            ->default(5)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+
+                        Forms\Components\TextInput::make('debt_monitoring_red_after_days')
+                            ->label('Красный статус после, дней просрочки')
+                            ->helperText('После какого количества дней просрочки статус становится красным.')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(180)
+                            ->default(90)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+
+                        Forms\Components\Select::make('debt_monitoring_tenant_aggregate_mode')
+                            ->label('Агрегация по арендатору')
+                            ->options([
+                                'worst' => 'По худшему месту',
+                                'dominant' => 'По преобладающему статусу',
+                            ])
+                            ->helperText('Как рассчитывать итоговый статус арендатора, если у него несколько торговых мест.')
+                            ->default('worst')
+                            ->native(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+                    ])
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 
@@ -470,6 +527,17 @@ class MarketSettings extends Page
         $settings['notification_channels_reminders'] = $this->normalizeNotificationChannels(
             $state['notification_channels_reminders'] ?? ['database']
         );
+        $settings['debt_monitoring'] = [
+            'grace_days' => is_numeric($state['debt_monitoring_grace_days'] ?? null)
+                ? max(0, min(30, (int) $state['debt_monitoring_grace_days']))
+                : 5,
+            'red_after_days' => is_numeric($state['debt_monitoring_red_after_days'] ?? null)
+                ? max(1, min(180, (int) $state['debt_monitoring_red_after_days']))
+                : 90,
+            'tenant_aggregate_mode' => in_array($state['debt_monitoring_tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
+                ? $state['debt_monitoring_tenant_aggregate_mode']
+                : 'worst',
+        ];
 
         $this->market->fill([
             'name' => (string) ($state['name'] ?? ''),

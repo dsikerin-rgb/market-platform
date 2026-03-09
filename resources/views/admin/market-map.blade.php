@@ -474,11 +474,11 @@
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #f59e0b;"></span>
-              <span class="legend-label">Задолженность до 90 дней</span>
+              <span class="legend-label">Задолженность до {{ $debtRedAfterDays ?? 90 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #dc2626;"></span>
-              <span class="legend-label">Задолженность 90+ дней</span>
+              <span class="legend-label">Задолженность {{ $debtRedAfterDays ?? 90 }}+ дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #94a3b8;"></span>

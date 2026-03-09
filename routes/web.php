@@ -1431,6 +1431,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'marketSpaceId' => $marketSpaceId,
             'focusShape' => $focusShape,
             'marketSpaceNotLinked' => $marketSpaceNotLinked,
+            'debtRedAfterDays' => (int) ($market->settings['debt_monitoring']['red_after_days'] ?? 90),
 
             'settingsUrl' => url('/admin/market-settings'),
 
