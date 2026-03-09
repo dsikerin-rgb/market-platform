@@ -1,4 +1,5 @@
 <?php
+# database/migrations/2026_03_08_000000_init_market_debt_monitoring_settings.php
 
 use App\Models\Market;
 use Illuminate\Database\Migrations\Migration;
@@ -19,7 +20,9 @@ return new class extends Migration
             if (!isset($settings['debt_monitoring'])) {
                 $settings['debt_monitoring'] = [
                     'grace_days' => 5,
-                    'red_after_days' => 90,
+                    'yellow_after_days' => 1,
+                    'red_after_days' => 30,
+                    'tenant_aggregate_mode' => 'worst',
                 ];
                 
                 $market->settings = $settings;
