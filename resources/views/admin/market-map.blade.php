@@ -136,6 +136,47 @@
       background: rgba(120,120,120,.06);
       flex-wrap:wrap;
     }
+    
+    /* Легенда карты */
+    .legend {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(120,120,120,.18);
+      background: rgba(255,255,255,.95);
+      font-size: 12px;
+    }
+    .legend-title {
+      font-weight: 700;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-color {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid rgba(120,120,120,.3);
+      flex-shrink: 0;
+    }
+    .legend-color.legend-vacant {
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid #94a3b8;
+    }
+    .legend-color.legend-unlinked {
+      background: transparent;
+      border: 1px dashed #94a3b8;
+    }
+    .legend-label {
+      white-space: nowrap;
+    }
     .stage {
       height: calc(100vh - 190px);
       min-height: 420px;
@@ -420,6 +461,37 @@
               <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
               <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
             @endif
+          </div>
+        </div>
+
+        <!-- Легенда карты -->
+        <div class="legend">
+          <div class="legend-title">Условные обозначения</div>
+          <div class="legend-items">
+            <div class="legend-item">
+              <span class="legend-color" style="background: #22c55e;"></span>
+              <span class="legend-label">Нет задолженности</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #f59e0b;"></span>
+              <span class="legend-label">Задолженность до 90 дней</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #dc2626;"></span>
+              <span class="legend-label">Задолженность 90+ дней</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #94a3b8;"></span>
+              <span class="legend-label">Нет данных 1С</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-vacant"></span>
+              <span class="legend-label">Свободно</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-unlinked"></span>
+              <span class="legend-label">Разметка без привязки</span>
+            </div>
           </div>
         </div>
 
