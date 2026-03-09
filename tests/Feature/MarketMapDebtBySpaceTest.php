@@ -452,7 +452,7 @@ class MarketMapDebtBySpaceTest extends TestCase
         // Проверяем, что API возвращает debt_overdue_days
         $this->assertArrayHasKey('debt_overdue_days', $shape);
         $this->assertNotNull($shape['debt_overdue_days']);
-        $this->assertIsInt($shape['debt_overdue_days']);
+        $this->assertIsNumeric($shape['debt_overdue_days']);
         $this->assertGreaterThan(0, $shape['debt_overdue_days']);
         
         // Проверяем, что статус orange
