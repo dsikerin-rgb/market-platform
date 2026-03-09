@@ -53,8 +53,6 @@ class MarketMapDebtBySpaceTest extends TestCase
 
     /**
      * Тест: два места одного арендатора могут иметь разные debt_status
-     * Примечание: в текущей реализации оба места получают tenant-level статус,
-     * но API готов к space-level статусам при наличии market_space_id в contract_debts
      */
     public function test_two_spaces_can_have_different_debt_status(): void
     {
@@ -90,6 +88,51 @@ class MarketMapDebtBySpaceTest extends TestCase
             'polygon' => [[20, 0], [30, 0], [30, 10], [20, 10]],
         ]);
 
+        // Создаём долг только для space1 через contract_debts
+        $contractExternalId1 = 'contract-space-1';
+        DB::table('contract_debts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'tenant_external_id' => $this->tenant->external_id,
+            'contract_external_id' => $contractExternalId1,
+            'period' => '2026-02',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => now()->subDays(35),
+            'created_at' => now()->subDays(35),
+            'hash' => sha1($this->tenant->external_id . '|' . $contractExternalId1 . '|2026-02|10000|0|10000'),
+        ]);
+
+        // Привязываем контракт к space1
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $space1->id,
+            'external_id' => $contractExternalId1,
+            'number' => '1',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Для space2 создаём контракт без долга
+        $contractExternalId2 = 'contract-space-2';
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $space2->id,
+            'external_id' => $contractExternalId2,
+            'number' => '2',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         // Аутентификуемся
         $this->actingAsSuperAdmin();
 
@@ -104,14 +147,15 @@ class MarketMapDebtBySpaceTest extends TestCase
         $items = $response->json('items');
         $this->assertCount(2, $items);
 
-        // Проверяем, что оба места присутствуют в ответе
+        // Находим shape для space1 (с долгом) и space2 (без долга)
         $space1Shape = collect($items)->firstWhere('market_space_id', $space1->id);
         $space2Shape = collect($items)->firstWhere('market_space_id', $space2->id);
 
-        $this->assertNotNull($space1Shape);
-        $this->assertNotNull($space2Shape);
-        $this->assertArrayHasKey('debt_status', $space1Shape);
-        $this->assertArrayHasKey('debt_status', $space2Shape);
+        // space1 должен иметь orange (долг 35 дней)
+        $this->assertEquals('orange', $space1Shape['debt_status']);
+
+        // space2 должен иметь green (нет долга)
+        $this->assertEquals('green', $space2Shape['debt_status']);
     }
 
     /**

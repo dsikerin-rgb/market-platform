@@ -5,6 +5,7 @@ namespace App\Services\Debt;
 use App\Models\Tenant;
 use App\Models\Market;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -73,7 +74,7 @@ class DebtStatusResolver
      */
     public function resolveForMarketSpace(int $marketSpaceId, int $marketId): array
     {
-        // Получаем арендатора места
+        // Получаем место и арендатора
         $space = DB::table('market_spaces')
             ->where('id', $marketSpaceId)
             ->where('market_id', $marketId)
@@ -98,7 +99,225 @@ class DebtStatusResolver
             );
         }
 
-        return $this->resolve($tenant);
+        // Получаем external_id контрактов, привязанных к этому месту
+        $contractExternalIds = DB::table('tenant_contracts')
+            ->where('market_space_id', $marketSpaceId)
+            ->where('market_id', $marketId)
+            ->whereNotNull('external_id')
+            ->pluck('external_id');
+
+        if ($contractExternalIds->isEmpty()) {
+            // Нет контрактов с external_id для этого места
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Нет договора 1С для места',
+                severity: 0
+            );
+        }
+
+        // Проверяем наличие таблицы contract_debts
+        if (!Schema::hasTable('contract_debts')) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Таблица contract_debts отсутствует',
+                severity: 0
+            );
+        }
+
+        // Получаем долги по contract_external_id
+        $hasDebt = Schema::hasColumn('contract_debts', 'debt_amount');
+        $hasCalculatedAt = Schema::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = Schema::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = Schema::hasColumn('contract_debts', 'period');
+
+        if (!$hasDebt) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Нет поля debt_amount',
+                severity: 0
+            );
+        }
+
+        // Запрашиваем долги по contract_external_id
+        $query = DB::table('contract_debts')
+            ->whereIn('contract_external_id', $contractExternalIds->all())
+            ->where('market_id', $marketId);
+
+        // Определяем последний snapshot
+        $snapshotLabel = null;
+        if ($hasCalculatedAt) {
+            $latest = $query->clone()->max('calculated_at');
+            if ($latest) {
+                $query->where('calculated_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse($latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasCreatedAt) {
+            $latest = $query->clone()->max('created_at');
+            if ($latest) {
+                $query->where('created_at', $latest);
+                try {
+                    $snapshotLabel = Carbon::parse($latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasPeriod) {
+            $latest = $query->clone()->max('period');
+            if ($latest) {
+                $query->where('period', $latest);
+                $snapshotLabel = (string) $latest;
+            }
+        }
+
+        $rows = $query->get(['debt_amount', 'period']);
+
+        if ($rows->isEmpty()) {
+            // Нет записей 1С для контрактов этого места
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: 'Нет данных 1С по договору',
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: пусто',
+                severity: 0
+            );
+        }
+
+        // Считаем общий долг по месту
+        $totalDebt = $rows->sum('debt_amount');
+
+        if ($totalDebt <= 0.009) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: 'Нет задолженности',
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 0
+            );
+        }
+
+        // Есть долг - определяем статус по просрочке
+        $settings = $this->getMarketSettings($marketId);
+        $graceDays = $settings['grace_days'] ?? 5;
+        $redAfterDays = $settings['red_after_days'] ?? 90;
+
+        $dueDate = $this->calculateDueDateFromRows($rows, $graceDays, $hasPeriod, $hasCalculatedAt, $hasCreatedAt);
+
+        if ($dueDate === null) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Не удалось определить срок оплаты',
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: нет дат',
+                severity: 0
+            );
+        }
+
+        $now = Carbon::now();
+        $isOverdue = $now->gt($dueDate);
+
+        if (!$isOverdue) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: 'К оплате / срок не наступил',
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 1
+            );
+        }
+
+        $daysOverdue = $dueDate->diffInDays($now);
+
+        if ($daysOverdue >= $redAfterDays) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_RED,
+                label: 'Задолженность свыше 3 месяцев',
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 3
+            );
+        }
+
+        return $this->makeResult(
+            mode: 'auto',
+            status: self::STATUS_ORANGE,
+            label: 'Задолженность до 3 месяцев',
+            updatedAt: $snapshotLabel,
+            source: 'contract_debts',
+            severity: 2
+        );
+    }
+
+    /**
+     * Рассчитать дату оплаты (due date) из rows.
+     *
+     * @param \Illuminate\Support\Collection $rows
+     * @param int $graceDays
+     * @param bool $hasPeriod
+     * @param bool $hasCalculatedAt
+     * @param bool $hasCreatedAt
+     * @return Carbon|null
+     */
+    private function calculateDueDateFromRows(
+        Collection $rows,
+        int $graceDays,
+        bool $hasPeriod,
+        bool $hasCalculatedAt,
+        bool $hasCreatedAt
+    ): ?Carbon {
+        // 1. Если есть calculated_at в rows - используем его + grace_days
+        if ($hasCalculatedAt) {
+            $latestCalculatedAt = $rows->max('calculated_at');
+            if ($latestCalculatedAt) {
+                try {
+                    return Carbon::parse($latestCalculatedAt)->addDays($graceDays);
+                } catch (\Throwable) {
+                    // continue
+                }
+            }
+        }
+
+        // 2. Если есть created_at в rows - используем его + grace_days
+        if ($hasCreatedAt) {
+            $latestCreatedAt = $rows->max('created_at');
+            if ($latestCreatedAt) {
+                try {
+                    return Carbon::parse($latestCreatedAt)->addDays($graceDays);
+                } catch (\Throwable) {
+                    // continue
+                }
+            }
+        }
+
+        // 3. Если есть period - используем его + grace_days
+        if ($hasPeriod) {
+            $latestPeriod = $rows->max('period');
+            if ($latestPeriod) {
+                try {
+                    // period в формате YYYY-MM
+                    if (preg_match('/^\d{4}-\d{2}/', $latestPeriod) === 1) {
+                        return Carbon::createFromFormat('Y-m-d', substr($latestPeriod, 0, 7) . '-01')
+                            ->startOfMonth()
+                            ->addDays($graceDays);
+                    }
+                } catch (\Throwable) {
+                    // continue
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
