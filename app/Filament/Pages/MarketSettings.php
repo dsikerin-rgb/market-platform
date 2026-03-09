@@ -21,10 +21,10 @@ class MarketSettings extends Page
     protected static ?string $navigationLabel = 'Настройки рынка';
 
     /**
-     * На prod у market-admin этот пункт лежит в “Панель управления”.
+     * На prod у market-admin этот пункт лежит в "Панель управления".
      * Важно: в Filament 4 тип должен совпадать с базовым классом.
      */
-    protected static \UnitEnum|string|null $navigationGroup = null;
+    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
     protected static ?int $navigationSort = 5;
@@ -81,12 +81,29 @@ class MarketSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return true;
     }
 
     public static function canAccess(): bool
     {
-        return static::shouldRegisterNavigation();
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        // Super-admin имеет доступ всегда
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Market-admin имеет доступ к настройкам своего рынка
+        if (method_exists($user, 'hasRole') && $user->hasRole('market-admin')) {
+            return true;
+        }
+
+        // Проверка по permission
+        return $user->can('market-settings.view') || $user->can('market-settings.edit');
     }
 
     public static function getNavigationItems(): array
