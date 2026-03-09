@@ -246,7 +246,8 @@ class DebtStatusResolver
                 label: 'Задолженность свыше 3 месяцев',
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
-                severity: 3
+                severity: 3,
+                extra: ['overdue_days' => $daysOverdue]
             );
         }
 
@@ -257,18 +258,20 @@ class DebtStatusResolver
                 label: 'Задолженность до 3 месяцев',
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
-                severity: 2
+                severity: 2,
+                extra: ['overdue_days' => $daysOverdue]
             );
         }
 
-        // Просрочка есть, но меньше orange_after_days — pending
+        // Просрочка есть, но меньше yellow_after_days — pending
         return $this->makeResult(
             mode: 'auto',
             status: self::STATUS_PENDING,
             label: 'К оплате / срок не наступил',
             updatedAt: $snapshotLabel,
             source: 'contract_debts',
-            severity: 1
+            severity: 1,
+            extra: ['overdue_days' => max(0, $daysOverdue)]
         );
     }
 
@@ -699,7 +702,8 @@ class DebtStatusResolver
      * @param string|null $updatedAt
      * @param string|null $source
      * @param int $severity
-     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int}
+     * @param array $extra
+     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int,extra:?array}
      */
     private function makeResult(
         string $mode,
@@ -707,7 +711,8 @@ class DebtStatusResolver
         string $label,
         ?string $updatedAt = null,
         ?string $source = null,
-        int $severity = 0
+        int $severity = 0,
+        array $extra = []
     ): array {
         return [
             'mode' => $mode,
@@ -716,6 +721,7 @@ class DebtStatusResolver
             'updated_at' => $updatedAt,
             'source' => $source,
             'severity' => $severity,
+            'extra' => $extra !== [] ? $extra : null,
         ];
     }
 

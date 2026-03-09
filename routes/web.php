@@ -787,6 +787,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_mode' => $resolvedDebt['mode'],
                 'debt_status_updated_at' => $resolvedDebt['updated_at'],
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
+                'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
 
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,

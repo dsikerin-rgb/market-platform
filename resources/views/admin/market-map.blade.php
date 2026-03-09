@@ -1970,27 +1970,52 @@
               let line1 = '';
               let line2 = '';
               let line3 = '';
+              let line4 = '';
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
                 title = label ? ('Место: ' + escapeHtml(label)) : 'Торговое место';
                 line1 = space.area_sqm ? ('Площадь: ' + escapeHtml(space.area_sqm) + ' м²') : '';
-                
+
                 // Проверяем наличие арендатора
                 const hasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
-                
+
                 if (!hasTenant) {
                   line2 = 'Свободно';
                   line3 = '';
+                  line4 = '';
                 } else {
                   line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
-                  line3 = tenant?.debt_status_label ? ('Задолженность: ' + escapeHtml(tenant.debt_status_label)) : 'Задолженность: —';
+                  
+                  // Информация о задолженности
+                  const debtStatus = hit.debt_status || null;
+                  const debtLabel = hit.debt_status_label || '';
+                  const overdueDays = hit.debt_overdue_days !== null && hit.debt_overdue_days !== undefined ? Number(hit.debt_overdue_days) : null;
+                  const debtSource = hit.debt_status_source || '';
+
+                  if (debtStatus === 'green') {
+                    line3 = 'Статус: Нет задолженности';
+                    line4 = '';
+                  } else if (debtStatus === 'pending') {
+                    line3 = 'Статус: Ожидает срока оплаты';
+                    line4 = 'Льготный срок ещё не истёк';
+                  } else if (debtStatus === 'orange' || debtStatus === 'red') {
+                    line3 = 'Статус: ' + escapeHtml(debtLabel);
+                    line4 = overdueDays !== null ? ('Дней просрочки: ' + String(overdueDays)) : '';
+                  } else if (debtStatus === 'gray') {
+                    line3 = 'Статус: Нет данных 1С';
+                    line4 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                  } else {
+                    line3 = debtLabel ? ('Задолженность: ' + escapeHtml(debtLabel)) : 'Задолженность: —';
+                    line4 = '';
+                  }
                 }
               } else {
                 title = 'Разметка';
                 line1 = 'Место не привязано (разметка)';
                 line2 = '';
                 line3 = '';
+                line4 = '';
               }
 
               let actions = '';
@@ -2035,6 +2060,7 @@
                 (CAN_EDIT && editMode ? '<div class="row muted">Выбрано: ' + escapeHtml(chosenLabel) + '</div>' : '') +
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
                 (line3 ? '<div class="row">' + line3 + '</div>' : '') +
+                (line4 ? '<div class="row">' + line4 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
                 '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>' +
                 actions

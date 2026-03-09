@@ -384,4 +384,78 @@ class MarketMapDebtBySpaceTest extends TestCase
         $shape = $items[0];
         $this->assertArrayHasKey('debt_status_source', $shape);
     }
+
+    /**
+     * Тест: shapes API возвращает debt_overdue_days для orange/red статусов
+     */
+    public function test_shapes_api_returns_debt_overdue_days(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '1',
+            'code' => 'space-1',
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $this->market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [[0, 0], [10, 0], [10, 10], [0, 10]],
+        ]);
+
+        // Создаём долг с просрочкой 35 дней
+        $contractExternalId = 'contract-space-1';
+        DB::table('contract_debts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'tenant_external_id' => $this->tenant->external_id,
+            'contract_external_id' => $contractExternalId,
+            'period' => '2026-02',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => now()->subDays(35),
+            'created_at' => now()->subDays(35),
+            'hash' => sha1($this->tenant->external_id . '|' . $contractExternalId . '|2026-02|10000|0|10000'),
+        ]);
+
+        // Привязываем контракт к месту
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => $contractExternalId,
+            'number' => '1',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.shapes', [
+            'market' => $this->market->id,
+            'page' => 1,
+        ]));
+
+        $response->assertOk();
+
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+
+        $shape = $items[0];
+        
+        // Проверяем, что API возвращает debt_overdue_days
+        $this->assertArrayHasKey('debt_overdue_days', $shape);
+        $this->assertNotNull($shape['debt_overdue_days']);
+        $this->assertIsInt($shape['debt_overdue_days']);
+        $this->assertGreaterThan(0, $shape['debt_overdue_days']);
+        
+        // Проверяем, что статус orange
+        $this->assertEquals('orange', $shape['debt_status']);
+    }
 }
