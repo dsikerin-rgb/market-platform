@@ -1986,22 +1986,29 @@
                   line4 = '';
                 } else {
                   line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
-                  
+
                   // Информация о задолженности
                   const debtStatus = hit.debt_status || null;
                   const debtLabel = hit.debt_status_label || '';
+                  const debtMode = hit.debt_status_mode || 'auto';
                   const overdueDays = hit.debt_overdue_days !== null && hit.debt_overdue_days !== undefined ? Number(hit.debt_overdue_days) : null;
                   const debtSource = hit.debt_status_source || '';
 
                   if (debtStatus === 'green') {
                     line3 = 'Статус: Нет задолженности';
-                    line4 = '';
+                    line4 = debtMode === 'manual' ? 'Статус задан вручную' : '';
                   } else if (debtStatus === 'pending') {
                     line3 = 'Статус: Ожидает срока оплаты';
                     line4 = 'Льготный срок ещё не истёк';
                   } else if (debtStatus === 'orange' || debtStatus === 'red') {
                     line3 = 'Статус: ' + escapeHtml(debtLabel);
-                    line4 = overdueDays !== null ? ('Дней просрочки: ' + String(overdueDays)) : '';
+                    if (overdueDays !== null) {
+                      line4 = 'Дней просрочки: ' + String(overdueDays);
+                    } else if (debtMode === 'manual') {
+                      line4 = 'Статус задан вручную';
+                    } else {
+                      line4 = '';
+                    }
                   } else if (debtStatus === 'gray') {
                     line3 = 'Статус: Нет данных 1С';
                     line4 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
@@ -2056,13 +2063,10 @@
               showPopoverAt(
                 e.clientX, e.clientY,
                 '<div class="t">' + title + '</div>' +
-                (shapeId ? '<div class="row muted">shape_id: ' + escapeHtml(String(shapeId)) + '</div>' : '') +
-                (CAN_EDIT && editMode ? '<div class="row muted">Выбрано: ' + escapeHtml(chosenLabel) + '</div>' : '') +
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
                 (line3 ? '<div class="row">' + line3 + '</div>' : '') +
                 (line4 ? '<div class="row">' + line4 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
-                '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>' +
                 actions
               );
             } catch (err) {
