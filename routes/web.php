@@ -37,6 +37,7 @@ use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
@@ -746,17 +747,20 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
 
+            // Для каждого shape используем статус по конкретному месту
             $resolver = app(DebtStatusResolver::class);
-            $resolvedDebt = $tenant
-                ? $resolver->resolve($tenant)
-                : [
-                    'mode' => 'auto',
-                    'status' => null,
-                    'label' => 'Автоматически: нет данных',
-                    'updated_at' => null,
-                    'source' => null,
-                    'severity' => 0,
-                ];
+            $resolvedDebt = $space && $tenant
+                ? $resolver->resolveForMarketSpace($space->id, $tenant->market_id)
+                : ($tenant
+                    ? $resolver->resolve($tenant)
+                    : [
+                        'mode' => 'auto',
+                        'status' => 'gray',
+                        'label' => 'Нет данных',
+                        'updated_at' => null,
+                        'source' => null,
+                        'severity' => 0,
+                    ]);
 
             return [
                 'id' => (int) $s->id,
@@ -782,6 +786,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_label' => $resolvedDebt['label'],
                 'debt_status_mode' => $resolvedDebt['mode'],
                 'debt_status_updated_at' => $resolvedDebt['updated_at'],
+                'debt_status_source' => $resolvedDebt['source'] ?? null,
 
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
