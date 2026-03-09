@@ -1093,6 +1093,7 @@
               // Цвета для debt status
               const debtColors = {
                 green: '#22c55e',
+                pending: '#eab308',
                 orange: '#f59e0b',
                 red: '#dc2626',
                 gray: '#94a3b8',
