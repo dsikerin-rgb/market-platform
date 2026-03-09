@@ -1100,12 +1100,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $resolver = app(DebtStatusResolver::class);
-        $resolvedDebt = $tenant
-            ? $resolver->resolve($tenant)
+        $resolvedDebt = $space && $tenant
+            ? $resolver->resolveForMarketSpace($space->id, $tenant->market_id)
             : [
                 'mode' => 'auto',
-                'status' => null,
-                'label' => 'Автоматически: нет данных',
+                'status' => 'gray',
+                'label' => 'Нет данных',
                 'updated_at' => null,
                 'source' => null,
                 'severity' => 0,
@@ -1134,9 +1134,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'debt_status_mode' => $resolvedDebt['mode'],
                 ] : null,
                 'tenant_id' => $tenant?->id ? (int) $tenant->id : null,
+                'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
+
+                'debt_status' => $resolvedDebt['status'],
+                'debt_status_label' => $resolvedDebt['label'],
+                'debt_status_mode' => $resolvedDebt['mode'],
+                'debt_status_updated_at' => $resolvedDebt['updated_at'],
+                'debt_status_source' => $resolvedDebt['source'] ?? null,
+                'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
 
                 'debt' => null,
-                'debt_overdue_days' => null,
                 'color' => null,
             ],
             'meta' => compact('x', 'y', 'page', 'version'),
