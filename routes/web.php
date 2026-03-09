@@ -791,6 +791,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
+                'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
             ];
         })->values();
 

@@ -1013,25 +1013,72 @@
               const isImportedOverlay = Boolean(meta && meta.import_source);
               const isNormalLinked = isLinked && !isImportedOverlay;
 
+              // Проверяем состояние места
+              const hasSpace = isLinked;
+              const hasTenant = hasSpace && (s.space_tenant_id !== null && s.space_tenant_id !== undefined);
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
+              
+              // Цвета для debt status
               const debtColors = {
                 green: '#22c55e',
                 orange: '#f59e0b',
                 red: '#dc2626',
+                gray: '#94a3b8',
               };
-              const debtFill = debtStatus && debtColors[debtStatus] ? debtColors[debtStatus] : null;
-
-              const hasDebtFill = Boolean(isLinked && debtFill);
-              const fill = hasDebtFill ? debtFill : (isNormalLinked ? (s.fill_color || '#00A3FF') : (s.fill_color || '#00A3FF'));
-              const stroke = BORDER_COLOR;
-              const fo = hasDebtFill
-                ? 1
-                : (isNormalLinked
-                  ? ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12)
-                  : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12));
+              
+              // Определяем тип отрисовки
+              let fillStyle = 'normal'; // normal, gray, vacant, unlinked
+              let debtFill = null;
+              
+              if (!hasSpace) {
+                // Shape без market_space_id — разметка без привязки
+                fillStyle = 'unlinked';
+              } else if (!hasTenant) {
+                // Место есть, но арендатора нет — свободно
+                fillStyle = 'vacant';
+              } else if (debtStatus && debtColors[debtStatus]) {
+                // Есть арендатор и debt_status — используем debt цвет
+                debtFill = debtColors[debtStatus];
+                fillStyle = 'debt';
+              } else {
+                // Место с арендатором, но нет debt_status — normal
+                fillStyle = 'normal';
+              }
+              
+              // Применяем стили
+              let fill = null;
+              let stroke = BORDER_COLOR;
+              let strokeDasharray = null;
+              let fo = 0.12;
+              
+              if (fillStyle === 'unlinked') {
+                // Разметка без привязки: без заливки, пунктирная серая обводка
+                fill = 'none';
+                stroke = '#94a3b8';
+                strokeDasharray = '6 6';
+                fo = 0;
+              } else if (fillStyle === 'vacant') {
+                // Свободно: прозрачная заливка, серая обводка
+                fill = s.fill_color || '#00A3FF';
+                stroke = '#94a3b8';
+                fo = 0.05;
+              } else if (fillStyle === 'debt') {
+                // Debt status: закрашиваем цветом долга
+                fill = debtFill;
+                stroke = BORDER_COLOR;
+                fo = 1;
+              } else {
+                // Normal: обычная заливка
+                fill = s.fill_color || '#00A3FF';
+                stroke = BORDER_COLOR;
+                fo = typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12;
+              }
+              
               const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
+
+              const strokeDashAttr = strokeDasharray ? (' stroke-dasharray="' + strokeDasharray + '"') : '';
 
               parts.push(
                 '<polygon points="' + pts +
@@ -1039,6 +1086,7 @@
                 '" fill-opacity="' + (isSel ? Math.min(1, fo + 0.08) : fo) +
                 '" stroke="' + stroke +
                 '" stroke-opacity="1"' +
+                strokeDashAttr +
                 '" stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
@@ -1855,9 +1903,19 @@
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
                 title = label ? ('Место: ' + escapeHtml(label)) : 'Торговое место';
                 line1 = space.area_sqm ? ('Площадь: ' + escapeHtml(space.area_sqm) + ' м²') : '';
-                line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
-                line3 = tenant?.debt_status_label ? ('Задолженность: ' + escapeHtml(tenant.debt_status_label)) : 'Задолженность: —';
+                
+                // Проверяем наличие арендатора
+                const hasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+                
+                if (!hasTenant) {
+                  line2 = 'Свободно';
+                  line3 = '';
+                } else {
+                  line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
+                  line3 = tenant?.debt_status_label ? ('Задолженность: ' + escapeHtml(tenant.debt_status_label)) : 'Задолженность: —';
+                }
               } else {
+                title = 'Разметка';
                 line1 = 'Место не привязано (разметка)';
                 line2 = '';
                 line3 = '';
