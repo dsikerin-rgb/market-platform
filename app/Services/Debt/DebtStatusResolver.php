@@ -179,10 +179,10 @@ class DebtStatusResolver
         $rows = $query->get(['debt_amount', 'period']);
 
         if ($rows->isEmpty()) {
-            // Нет записей 1С для контрактов этого места
+            // Нет записей 1С для контрактов этого места — это gray
             return $this->makeResult(
                 mode: 'auto',
-                status: self::STATUS_GREEN,
+                status: self::STATUS_GRAY,
                 label: 'Нет данных 1С по договору',
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts: пусто',

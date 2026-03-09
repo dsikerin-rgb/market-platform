@@ -154,8 +154,58 @@ class MarketMapDebtBySpaceTest extends TestCase
         // space1 должен иметь orange (долг 35 дней)
         $this->assertEquals('orange', $space1Shape['debt_status']);
 
-        // space2 должен иметь green (нет долга)
-        $this->assertEquals('green', $space2Shape['debt_status']);
+        // space2 должен иметь gray (нет записей 1С для контракта)
+        $this->assertEquals('gray', $space2Shape['debt_status']);
+    }
+
+    /**
+     * Тест: contract exists but no contract_debts rows => gray
+     */
+    public function test_contract_exists_but_no_contract_debts_returns_gray(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '1',
+            'code' => 'space-1',
+        ]);
+
+        // Создаём контракт с external_id, но без записей в contract_debts
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-no-debts',
+            'number' => '1',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $this->market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [[0, 0], [10, 0], [10, 10], [0, 10]],
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.shapes', [
+            'market' => $this->market->id,
+            'page' => 1,
+        ]));
+
+        $response->assertOk();
+
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+
+        $shape = $items[0];
+        $this->assertEquals('gray', $shape['debt_status']);
     }
 
     /**
