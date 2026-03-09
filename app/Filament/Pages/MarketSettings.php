@@ -171,12 +171,12 @@ class MarketSettings extends Page
             'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['grace_days']
                 : 5,
-            'debt_monitoring_orange_after_days' => is_numeric($settings['debt_monitoring']['orange_after_days'] ?? null)
-                ? (int) $settings['debt_monitoring']['orange_after_days']
-                : 6,
+            'debt_monitoring_yellow_after_days' => is_numeric($settings['debt_monitoring']['yellow_after_days'] ?? $settings['debt_monitoring']['orange_after_days'] ?? null)
+                ? (int) ($settings['debt_monitoring']['yellow_after_days'] ?? $settings['debt_monitoring']['orange_after_days'])
+                : 1,
             'debt_monitoring_red_after_days' => is_numeric($settings['debt_monitoring']['red_after_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['red_after_days']
-                : 90,
+                : 30,
             'debt_monitoring_tenant_aggregate_mode' => in_array($settings['debt_monitoring']['tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $settings['debt_monitoring']['tenant_aggregate_mode']
                 : 'worst',
@@ -452,13 +452,13 @@ class MarketSettings extends Page
                                 'lg' => 3,
                             ]),
 
-                        Forms\Components\TextInput::make('debt_monitoring_orange_after_days')
+                        Forms\Components\TextInput::make('debt_monitoring_yellow_after_days')
                             ->label('Жёлтый статус после, дней просрочки')
-                            ->helperText('После какого количества дней просрочки статус становится жёлтым (orange).')
+                            ->helperText('Через сколько дней просрочки статус становится жёлтым (orange). Обычно 1 день.')
                             ->numeric()
                             ->minValue(1)
-                            ->maxValue(180)
-                            ->default(6)
+                            ->maxValue(60)
+                            ->default(1)
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
@@ -467,11 +467,11 @@ class MarketSettings extends Page
 
                         Forms\Components\TextInput::make('debt_monitoring_red_after_days')
                             ->label('Красный статус после, дней просрочки')
-                            ->helperText('После какого количества дней просрочки статус становится красным.')
+                            ->helperText('Через сколько дней просрочки статус становится красным (red). Рекомендуемое значение: 30 дней.')
                             ->numeric()
-                            ->minValue(1)
+                            ->minValue(2)
                             ->maxValue(180)
-                            ->default(90)
+                            ->default(30)
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
@@ -560,16 +560,24 @@ class MarketSettings extends Page
         $settings['notification_channels_reminders'] = $this->normalizeNotificationChannels(
             $state['notification_channels_reminders'] ?? ['database']
         );
+        $yellowAfterDays = is_numeric($state['debt_monitoring_yellow_after_days'] ?? null)
+            ? max(1, min(60, (int) $state['debt_monitoring_yellow_after_days']))
+            : 1;
+        $redAfterDays = is_numeric($state['debt_monitoring_red_after_days'] ?? null)
+            ? max(2, min(180, (int) $state['debt_monitoring_red_after_days']))
+            : 30;
+        
+        // Гарантируем, что red_after_days > yellow_after_days
+        if ($redAfterDays <= $yellowAfterDays) {
+            $redAfterDays = $yellowAfterDays + 1;
+        }
+        
         $settings['debt_monitoring'] = [
             'grace_days' => is_numeric($state['debt_monitoring_grace_days'] ?? null)
                 ? max(0, min(30, (int) $state['debt_monitoring_grace_days']))
                 : 5,
-            'orange_after_days' => is_numeric($state['debt_monitoring_orange_after_days'] ?? null)
-                ? max(1, min(180, (int) $state['debt_monitoring_orange_after_days']))
-                : 6,
-            'red_after_days' => is_numeric($state['debt_monitoring_red_after_days'] ?? null)
-                ? max(1, min(180, (int) $state['debt_monitoring_red_after_days']))
-                : 90,
+            'yellow_after_days' => $yellowAfterDays,
+            'red_after_days' => $redAfterDays,
             'tenant_aggregate_mode' => in_array($state['debt_monitoring_tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $state['debt_monitoring_tenant_aggregate_mode']
                 : 'worst',

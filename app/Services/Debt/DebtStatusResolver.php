@@ -207,8 +207,8 @@ class DebtStatusResolver
         // Есть долг - определяем статус по просрочке
         $settings = $this->getMarketSettings($marketId);
         $graceDays = $settings['grace_days'] ?? 5;
-        $orangeAfterDays = $settings['orange_after_days'] ?? 6;
-        $redAfterDays = $settings['red_after_days'] ?? 90;
+        $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
+        $redAfterDays = $settings['red_after_days'] ?? 30;
 
         $dueDate = $this->calculateDueDateFromRows($rows, $graceDays, $hasPeriod, $hasCalculatedAt, $hasCreatedAt);
 
@@ -250,7 +250,7 @@ class DebtStatusResolver
             );
         }
 
-        if ($daysOverdue >= $orangeAfterDays) {
+        if ($daysOverdue >= $yellowAfterDays) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_ORANGE,
@@ -675,8 +675,8 @@ class DebtStatusResolver
         if (!$market) {
             return [
                 'grace_days' => 5,
-                'orange_after_days' => 6,
-                'red_after_days' => 90,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
             ];
         }
 
@@ -685,8 +685,8 @@ class DebtStatusResolver
 
         return [
             'grace_days' => $debtMonitoring['grace_days'] ?? 5,
-            'orange_after_days' => $debtMonitoring['orange_after_days'] ?? 6,
-            'red_after_days' => $debtMonitoring['red_after_days'] ?? 90,
+            'yellow_after_days' => $debtMonitoring['yellow_after_days'] ?? $debtMonitoring['orange_after_days'] ?? 1,
+            'red_after_days' => $debtMonitoring['red_after_days'] ?? 30,
         ];
     }
 
