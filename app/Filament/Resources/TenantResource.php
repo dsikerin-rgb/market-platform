@@ -457,9 +457,10 @@ class TenantResource extends BaseResource
                 $debtStatusColumn,
 
                 IconColumn::make('is_active')
-                    ->label('Активен')
+                    ->label('Карточка активна')
                     ->boolean()
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('created_at')
                     ->label('Создан')
