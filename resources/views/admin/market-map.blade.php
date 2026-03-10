@@ -206,7 +206,7 @@
       flex-shrink: 0;
     }
     .legend-color.legend-vacant {
-      background: rgba(148, 163, 184, 0.08);
+      background: #e5e7eb;
       border: 1px solid #94a3b8;
     }
     .legend-color.legend-unlinked {
@@ -1266,10 +1266,10 @@
                 stroke = '#94a3b8';
                 fo = 1;
               } else if (fillStyle === 'vacant') {
-                // Свободно: прозрачная заливка, серая обводка
-                fill = s.fill_color || '#00A3FF';
+                // Свободно: плотная светло-серая заливка, чтобы не просвечивала подложка
+                fill = '#e5e7eb';
                 stroke = '#94a3b8';
-                fo = 0.05;
+                fo = 0.92;
               } else if (fillStyle === 'debt') {
                 // Debt status: закрашиваем цветом долга
                 fill = debtFill;
