@@ -1593,12 +1593,18 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $marketSpaceNotLinked = true;
         }
 
+        $viewerUser = Filament::auth()->user();
+        $canOpenPdf = (bool) ($viewerUser
+            && method_exists($viewerUser, 'isSuperAdmin')
+            && $viewerUser->isSuperAdmin());
+
         $payload = [
             'market' => $market,
             'marketId' => (int) ($market->id ?? 0),
             'marketName' => (string) ($market->name ?? 'Рынок'),
             'hasMap' => $hasMap,
             'canEdit' => (bool) $canEditShapes(),
+            'canOpenPdf' => $canOpenPdf,
             'mapPage' => $page,
             'mapVersion' => $version,
             'marketSpaceId' => $marketSpaceId,

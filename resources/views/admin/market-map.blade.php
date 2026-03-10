@@ -9,6 +9,7 @@
     $hasMap   = isset($hasMap) ? (bool) $hasMap : true;
     $canEdit  = isset($canEdit) ? (bool) $canEdit : false;
     $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
+    $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
 
@@ -168,25 +169,14 @@
       background: rgba(255,255,255,.55);
       border: 1px solid rgba(120,120,120,.16);
     }
-    .toolbar-help {
-      flex-shrink: 0;
-      cursor: help;
-    }
-    .toolbar-help.toolbar-help--icon {
-      width: 24px;
-      height: 24px;
-      justify-content: center;
-      padding-left: 0;
-      padding-right: 0;
-    }
-    .toolbar-helpIcon {
-      width: 16px;
-      height: 16px;
-      justify-content: center;
-      padding: 0;
-      font-weight: 700;
-      font-size: 12px;
-      line-height: 1;
+    .toolbar-label {
+      display: inline-flex;
+      align-items: center;
+      padding: 0 4px 0 0;
+      color: rgba(15, 23, 42, 0.72);
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
     }
     .legend[hidden] {
       display: none;
@@ -464,10 +454,13 @@
               <button id="zoomIn" type="button">+</button>
               <button id="zoomReset" type="button">100%</button>
               <button id="fitWidth" type="button">По ширине</button>
-              <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>
+              @if ($canOpenPdf)
+                <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>
+              @endif
             </div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group toolbar-group--accent">
+              <span class="toolbar-label">Слои</span>
               <button
                 id="layerDebt"
                 type="button"
@@ -482,14 +475,11 @@
                 title="Слой показывает относительную ставку по занятым местам."
                 aria-label="Слой показывает относительную ставку по занятым местам."
               >Арендная ставка</button>
+            </div>
+
+            <div class="toolbar-group">
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-              <span
-                class="pill toolbar-help toolbar-help--icon"
-                title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−"
-                aria-label="Подсказка по навигации"
-              >
-                <span class="toolbar-helpIcon">?</span>
-              </span>
+              <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
               <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
             </div>
@@ -544,14 +534,7 @@
 
                 <span class="pill" id="spaceChosenPill" style="display:none;"></span>
                 <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
-                <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
-                <span
-                  class="pill toolbar-help toolbar-help--icon"
-                  title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить"
-                  aria-label="Подсказка по разметке"
-                >
-                  <span class="toolbar-helpIcon">?</span>
-                </span>
+                <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Режим разметки</span>
               </div>
             </div>
           @endif
