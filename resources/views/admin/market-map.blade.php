@@ -2129,6 +2129,9 @@
                   const debtLabel = hit.debt_status_label || '';
                   const debtMode = hit.debt_status_mode || 'auto';
                   const overdueDays = hit.debt_overdue_days !== null && hit.debt_overdue_days !== undefined ? Number(hit.debt_overdue_days) : null;
+                  const overdueDaysLabel = overdueDays !== null && Number.isFinite(overdueDays)
+                    ? String(Math.max(0, Math.round(overdueDays)))
+                    : null;
                   const debtSource = hit.debt_status_source || '';
 
                   if (debtStatus === 'green') {
@@ -2139,8 +2142,8 @@
                     line4 = 'Начисление есть, просрочки нет';
                   } else if (debtStatus === 'orange' || debtStatus === 'red') {
                     line3 = 'Статус: ' + escapeHtml(debtLabel);
-                    if (overdueDays !== null) {
-                      line4 = 'Дней просрочки: ' + String(overdueDays);
+                    if (overdueDaysLabel !== null) {
+                      line4 = 'Дней просрочки: ' + overdueDaysLabel;
                     } else if (debtMode === 'manual') {
                       line4 = 'Статус задан вручную';
                     } else {

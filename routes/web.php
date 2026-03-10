@@ -860,6 +860,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         if ($tenant) {
             $tenantName = (string) ($tenant->display_name ?? '');
             if ($tenantName === '') {
+                $tenantName = (string) ($tenant->short_name ?? '');
+            }
+            if ($tenantName === '') {
                 $tenantName = (string) ($tenant->name ?? '');
             }
         }
@@ -935,6 +938,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $tenantName = null;
             if ($tenant) {
                 $tenantName = (string) ($tenant->display_name ?? '');
+                if ($tenantName === '') {
+                    $tenantName = (string) ($tenant->short_name ?? '');
+                }
                 if ($tenantName === '') {
                     $tenantName = (string) ($tenant->name ?? '');
                 }
@@ -1094,6 +1100,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $tenantName = null;
         if ($tenant) {
             $tenantName = (string) ($tenant->display_name ?? '');
+            if ($tenantName === '') {
+                $tenantName = (string) ($tenant->short_name ?? '');
+            }
             if ($tenantName === '') {
                 $tenantName = (string) ($tenant->name ?? '');
             }
