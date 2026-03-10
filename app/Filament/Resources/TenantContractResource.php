@@ -5,16 +5,21 @@ declare(strict_types=1);
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantContractResource\Pages;
+use App\Models\MarketSpace;
 use App\Models\TenantContract;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use Filament\Facades\Filament;
+use Filament\Forms;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class TenantContractResource extends BaseResource
 {
@@ -33,6 +38,9 @@ class TenantContractResource extends BaseResource
 
     /** @var array<string, array<string, mixed>> */
     private static array $classificationCache = [];
+
+    /** @var array<int, array<int, array{chain_count:int,chain_position:int,overlap_count:int}>> */
+    private static array $chainStatsCache = [];
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -80,7 +88,115 @@ class TenantContractResource extends BaseResource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([]);
+        return $schema->components([
+            Section::make('Документ из 1С')
+                ->description('Поля ниже приходят из 1С и доступны только для просмотра.')
+                ->schema([
+                    Forms\Components\TextInput::make('tenant_display')
+                        ->label('Арендатор')
+                        ->formatStateUsing(fn (?TenantContract $record): string => static::tenantLabel($record))
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('number')
+                        ->label('Номер документа')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('document_type_display')
+                        ->label('Тип документа')
+                        ->formatStateUsing(fn (?TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('place_token_display')
+                        ->label('Токен места')
+                        ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('document_date_display')
+                        ->label('Дата из номера')
+                        ->formatStateUsing(fn (?TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('signed_at')
+                        ->label('Дата подписания из 1С')
+                        ->formatStateUsing(fn (?TenantContract $record): string => $record?->signed_at?->format('d.m.Y') ?: '—')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('starts_at')
+                        ->label('Начало')
+                        ->formatStateUsing(fn (?TenantContract $record): string => $record?->starts_at?->format('d.m.Y') ?: '—')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('ends_at')
+                        ->label('Окончание')
+                        ->formatStateUsing(fn (?TenantContract $record): string => $record?->ends_at?->format('d.m.Y') ?: '—')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('status_display')
+                        ->label('Статус договора')
+                        ->formatStateUsing(fn (?TenantContract $record): string => static::contractStatusLabel($record?->status))
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('chain_display')
+                        ->label('Цепочка')
+                        ->formatStateUsing(fn (?TenantContract $record): string => $record ? static::chainDisplay($record) : '—')
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('overlap_display')
+                        ->label('Наложение')
+                        ->formatStateUsing(fn (?TenantContract $record): string => $record ? static::overlapDisplay($record) : '—')
+                        ->disabled()
+                        ->dehydrated(false),
+                ])
+                ->columns(2),
+
+            Section::make('Локальная привязка')
+                ->description('Редактируются только локальные поля mapping. Канонические данные договора остаются под управлением 1С.')
+                ->schema([
+                    Forms\Components\Select::make('market_space_id')
+                        ->label('Торговое место')
+                        ->options(function (?TenantContract $record): array {
+                            if (! $record) {
+                                return [];
+                            }
+
+                            $spaces = MarketSpace::query()
+                                ->where('market_id', (int) $record->market_id)
+                                ->orderByRaw('COALESCE(display_name, number, code)')
+                                ->get(['id', 'display_name', 'number', 'code']);
+
+                            $options = [];
+                            foreach ($spaces as $space) {
+                                $options[(int) $space->id] = static::spaceOptionLabel($space->display_name, $space->number, $space->code);
+                            }
+
+                            return $options;
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->nullable()
+                        ->helperText('Здесь задаётся только локальная привязка договора к торговому месту.'),
+
+                    Forms\Components\Toggle::make('is_active')
+                        ->label('Активен')
+                        ->helperText('Локальный признак активности карточки договора в сервисе.'),
+
+                    Forms\Components\Textarea::make('notes')
+                        ->label('Заметки по mapping')
+                        ->rows(5)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -108,8 +224,7 @@ class TenantContractResource extends BaseResource
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
-                    ->wrap()
-                    ->description(fn (TenantContract $record): ?string => filled($record->external_id) ? '1С: ' . (string) $record->external_id : null),
+                    ->wrap(),
 
                 TextColumn::make('ordering_status')
                     ->label('Статус упорядочивания')
@@ -117,32 +232,39 @@ class TenantContractResource extends BaseResource
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::orderingMeta($record)['color']),
 
+                TextColumn::make('chain_position')
+                    ->label('Цепочка')
+                    ->state(fn (TenantContract $record): string => static::chainDisplay($record))
+                    ->badge()
+                    ->color(fn (TenantContract $record): string => static::chainColor($record))
+                    ->toggleable(),
+
+                TextColumn::make('overlap_status')
+                    ->label('Наложение')
+                    ->state(fn (TenantContract $record): string => static::overlapDisplay($record))
+                    ->badge()
+                    ->color(fn (TenantContract $record): string => static::overlapColor($record))
+                    ->toggleable(),
+
                 TextColumn::make('document_type')
                     ->label('Тип документа')
-                    ->state(fn (TenantContract $record): string => (string) static::classificationFor($record)['label'])
+                    ->state(fn (TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
                     ->badge()
-                    ->color(fn (TenantContract $record): string => static::documentTypeColor((string) static::classificationFor($record)['category'])),
+                    ->color(fn (TenantContract $record): string => static::documentTypeColor((string) static::classificationForRecord($record)['category'])),
 
                 TextColumn::make('place_token')
                     ->label('Токен места')
-                    ->state(fn (TenantContract $record): string => (string) (static::classificationFor($record)['place_token'] ?: '—'))
+                    ->state(fn (TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
                     ->toggleable(),
 
                 TextColumn::make('document_date')
                     ->label('Дата из номера')
-                    ->state(fn (TenantContract $record): string => static::formatClassifierDate(static::classificationFor($record)['document_date'] ?? null))
+                    ->state(fn (TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
                     ->toggleable(),
 
                 TextColumn::make('market_space_link')
                     ->label('Текущее место')
                     ->state(fn (TenantContract $record): string => static::spaceLabel($record))
-                    ->placeholder('—')
-                    ->toggleable(),
-
-                TextColumn::make('signed_at')
-                    ->label('Подписан')
-                    ->date('d.m.Y')
-                    ->sortable()
                     ->placeholder('—')
                     ->toggleable(),
 
@@ -225,7 +347,9 @@ class TenantContractResource extends BaseResource
                     ),
             ])
             ->defaultSort('id', 'desc')
-            ->recordUrl(null);
+            ->recordUrl(fn (TenantContract $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null);
     }
 
     public static function getRelations(): array
@@ -237,6 +361,7 @@ class TenantContractResource extends BaseResource
     {
         return [
             'index' => Pages\ListTenantContracts::route('/'),
+            'edit' => Pages\EditTenantContract::route('/{record}/edit'),
         ];
     }
 
@@ -293,7 +418,19 @@ class TenantContractResource extends BaseResource
 
     public static function canEdit($record): bool
     {
-        return false;
+        $user = Filament::auth()->user();
+
+        if (! $user || ! ($record instanceof TenantContract)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->hasAnyRole(['market-admin', 'market-manager'])
+            && $user->market_id
+            && (int) $record->market_id === (int) $user->market_id;
     }
 
     public static function canDelete($record): bool
@@ -312,8 +449,12 @@ class TenantContractResource extends BaseResource
      *   document_date: ?string
      * }
      */
-    private static function classificationFor(TenantContract $record): array
+    private static function classificationForRecord(?TenantContract $record): array
     {
+        if (! $record) {
+            return app(ContractDocumentClassifier::class)->classify('');
+        }
+
         $cacheKey = implode(':', [
             (string) $record->getKey(),
             md5((string) ($record->number ?? '')),
@@ -328,11 +469,88 @@ class TenantContractResource extends BaseResource
     }
 
     /**
+     * @return array{chain_count:int,chain_position:int,overlap_count:int}
+     */
+    private static function chainStatsFor(TenantContract $record): array
+    {
+        $marketId = (int) $record->market_id;
+        static::warmChainStatsForMarket($marketId);
+
+        return static::$chainStatsCache[$marketId][(int) $record->getKey()] ?? [
+            'chain_count' => 0,
+            'chain_position' => 0,
+            'overlap_count' => 0,
+        ];
+    }
+
+    private static function warmChainStatsForMarket(int $marketId): void
+    {
+        if ($marketId <= 0 || isset(static::$chainStatsCache[$marketId])) {
+            return;
+        }
+
+        $records = TenantContract::query()
+            ->where('market_id', $marketId)
+            ->get(['id', 'market_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active']);
+
+        $grouped = [];
+        foreach ($records as $contract) {
+            $classified = static::classificationForRecord($contract);
+            $token = (string) ($classified['place_token'] ?? '');
+
+            if (! ($classified['actionable'] ?? false) || $token === '') {
+                continue;
+            }
+
+            $grouped[$token][] = [
+                'id' => (int) $contract->id,
+                'order_date' => static::resolveOrderDate($contract, $classified['document_date'] ?? null),
+                'range_start' => static::resolveRangeStart($contract, $classified['document_date'] ?? null),
+                'range_end' => static::resolveRangeEnd($contract),
+            ];
+        }
+
+        $stats = [];
+        foreach ($grouped as $items) {
+            usort($items, static function (array $left, array $right): int {
+                $dateCompare = strcmp($left['order_date'], $right['order_date']);
+                if ($dateCompare !== 0) {
+                    return $dateCompare;
+                }
+
+                return $left['id'] <=> $right['id'];
+            });
+
+            $count = count($items);
+            foreach ($items as $index => $item) {
+                $overlapCount = 0;
+                foreach ($items as $other) {
+                    if ($other['id'] === $item['id']) {
+                        continue;
+                    }
+
+                    if (static::rangesOverlap($item['range_start'], $item['range_end'], $other['range_start'], $other['range_end'])) {
+                        $overlapCount++;
+                    }
+                }
+
+                $stats[(int) $item['id']] = [
+                    'chain_count' => $count,
+                    'chain_position' => $index + 1,
+                    'overlap_count' => $overlapCount,
+                ];
+            }
+        }
+
+        static::$chainStatsCache[$marketId] = $stats;
+    }
+
+    /**
      * @return array{label: string, color: string}
      */
     private static function orderingMeta(TenantContract $record): array
     {
-        $classified = static::classificationFor($record);
+        $classified = static::classificationForRecord($record);
         $hasToken = filled($classified['place_token'] ?? null);
         $hasDate = filled($classified['document_date'] ?? null);
         $hasSpace = filled($record->market_space_id);
@@ -437,5 +655,125 @@ class TenantContractResource extends BaseResource
         }
 
         return '—';
+    }
+
+    private static function tenantLabel(?TenantContract $record): string
+    {
+        if (! $record) {
+            return '—';
+        }
+
+        $short = trim((string) ($record->tenant?->short_name ?? ''));
+        $name = trim((string) ($record->tenant?->name ?? ''));
+
+        if ($short !== '' && $name !== '' && $short !== $name) {
+            return $short . ' · ' . $name;
+        }
+
+        return $short !== '' ? $short : ($name !== '' ? $name : '—');
+    }
+
+    private static function chainDisplay(TenantContract $record): string
+    {
+        $stats = static::chainStatsFor($record);
+
+        if ($stats['chain_count'] <= 0) {
+            return '—';
+        }
+
+        return $stats['chain_position'] . '/' . $stats['chain_count'];
+    }
+
+    private static function chainColor(TenantContract $record): string
+    {
+        $stats = static::chainStatsFor($record);
+
+        if ($stats['chain_count'] <= 0) {
+            return 'gray';
+        }
+
+        return $stats['chain_count'] > 1 ? 'warning' : 'success';
+    }
+
+    private static function overlapDisplay(TenantContract $record): string
+    {
+        $stats = static::chainStatsFor($record);
+
+        if ($stats['chain_count'] <= 0) {
+            return '—';
+        }
+
+        return $stats['overlap_count'] > 0 ? 'Есть' : 'Нет';
+    }
+
+    private static function overlapColor(TenantContract $record): string
+    {
+        $stats = static::chainStatsFor($record);
+
+        if ($stats['chain_count'] <= 0) {
+            return 'gray';
+        }
+
+        return $stats['overlap_count'] > 0 ? 'danger' : 'success';
+    }
+
+    private static function resolveOrderDate(TenantContract $record, ?string $documentDate): string
+    {
+        $resolved = static::resolveRangeStart($record, $documentDate);
+
+        return $resolved ?? sprintf('9999-12-31:%010d', (int) $record->id);
+    }
+
+    private static function resolveRangeStart(TenantContract $record, ?string $documentDate): ?string
+    {
+        if (filled($documentDate)) {
+            return (string) $documentDate;
+        }
+
+        if ($record->signed_at instanceof Carbon) {
+            return $record->signed_at->format('Y-m-d');
+        }
+
+        if ($record->starts_at instanceof Carbon) {
+            return $record->starts_at->format('Y-m-d');
+        }
+
+        return null;
+    }
+
+    private static function resolveRangeEnd(TenantContract $record): ?string
+    {
+        if ($record->ends_at instanceof Carbon) {
+            return $record->ends_at->format('Y-m-d');
+        }
+
+        return null;
+    }
+
+    private static function rangesOverlap(?string $leftStart, ?string $leftEnd, ?string $rightStart, ?string $rightEnd): bool
+    {
+        if (! filled($leftStart) || ! filled($rightStart)) {
+            return false;
+        }
+
+        $leftEnd = filled($leftEnd) ? (string) $leftEnd : '9999-12-31';
+        $rightEnd = filled($rightEnd) ? (string) $rightEnd : '9999-12-31';
+
+        return max((string) $leftStart, (string) $rightStart) <= min($leftEnd, $rightEnd);
+    }
+
+    private static function spaceOptionLabel(?string $displayName, ?string $number, ?string $code): string
+    {
+        $parts = array_values(array_filter([
+            trim((string) $displayName),
+            trim((string) $number),
+            trim((string) $code),
+        ], static fn (string $value): bool => $value !== ''));
+
+        if ($parts === []) {
+            return 'Без названия';
+        }
+
+        return implode(' · ', array_values(array_unique($parts)));
     }
 }
