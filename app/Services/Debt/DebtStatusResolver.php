@@ -759,7 +759,7 @@ class DebtStatusResolver
         $redAfterDays = max($yellowAfterDays + 1, (int) ($settings['red_after_days'] ?? 30));
 
         $orangeLabel = $yellowAfterDays <= 1
-            ? 'Просрочка до ' . $redAfterDays . ' дн.'
+            ? 'Просрочка до ' . ($redAfterDays - 1) . ' дн.'
             : 'Просрочка ' . $yellowAfterDays . '-' . ($redAfterDays - 1) . ' дн.';
 
         return [
