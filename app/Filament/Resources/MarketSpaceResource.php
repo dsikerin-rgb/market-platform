@@ -92,6 +92,26 @@ class MarketSpaceResource extends BaseResource
         return $cache[$marketId][$typeCode] ?? $typeCode;
     }
 
+    protected static function resolveSpaceTypeOptions(?int $marketId, ?string $currentTypeCode = null): array
+    {
+        if (blank($marketId)) {
+            return [];
+        }
+
+        $options = MarketSpaceType::query()
+            ->where('market_id', (int) $marketId)
+            ->where('is_active', true)
+            ->orderBy('name_ru')
+            ->pluck('name_ru', 'code')
+            ->all();
+
+        if (filled($currentTypeCode) && ! isset($options[$currentTypeCode])) {
+            $options[$currentTypeCode] = 'Текущий код: ' . $currentTypeCode . ' (нет в справочнике)';
+        }
+
+        return $options;
+    }
+
     /**
      * Canonical statuses for UI (legacy "free" => "vacant").
      */
@@ -354,27 +374,55 @@ class MarketSpaceResource extends BaseResource
                     Forms\Components\Select::make('type')
                         ->label('Тип места')
                         ->options(function ($get, ?MarketSpace $record) use ($user) {
-                                        $marketId = $get('market_id') ?? $record?->market_id;
+                            $marketId = $get('market_id') ?? $record?->market_id;
 
-                                        if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
-                                            $marketId = $user->market_id;
-                                        }
+                            if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                $marketId = $user->market_id;
+                            }
 
-                                        if (blank($marketId)) {
-                                            return [];
-                                        }
-
-                                        return MarketSpaceType::query()
-                                            ->where('market_id', (int) $marketId)
-                                            ->where('is_active', true)
-                                            ->orderBy('name_ru')
-                                            ->pluck('name_ru', 'code')
-                                            ->all();
-                                    })
+                            return static::resolveSpaceTypeOptions(
+                                filled($marketId) ? (int) $marketId : null,
+                                (string) ($get('type') ?? $record?->type ?? '')
+                            );
+                        })
                                     ->searchable()
                                     ->preload()
                                     ->reactive()
                                     ->nullable()
+                        ->placeholder('—')
+                        ->helperText(function ($get, ?MarketSpace $record) use ($user) {
+                            $marketId = $get('market_id') ?? $record?->market_id;
+
+                            if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                $marketId = $user->market_id;
+                            }
+
+                            if (blank($marketId)) {
+                                return null;
+                            }
+
+                            $currentType = (string) ($get('type') ?? $record?->type ?? '');
+                            $activeTypeCount = MarketSpaceType::query()
+                                ->where('market_id', (int) $marketId)
+                                ->where('is_active', true)
+                                ->count();
+                            $hasCurrentActiveType = $currentType !== ''
+                                && MarketSpaceType::query()
+                                    ->where('market_id', (int) $marketId)
+                                    ->where('is_active', true)
+                                    ->where('code', $currentType)
+                                    ->exists();
+
+                            if ($activeTypeCount === 0) {
+                                return 'Для этого рынка справочник типов мест пока пуст. Сначала заполните "Типы мест".';
+                            }
+
+                            if ($currentType !== '' && ! $hasCurrentActiveType) {
+                                return 'Текущий тип больше не найден среди активных типов мест.';
+                            }
+
+                            return null;
+                        })
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('Категория места для отчётности. Берётся из справочника “Типы мест”.'),
 
