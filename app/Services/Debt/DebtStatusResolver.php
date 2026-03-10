@@ -39,8 +39,8 @@ class DebtStatusResolver
     private const STATUS_LABELS = [
         self::STATUS_GREEN => 'Нет задолженности',
         self::STATUS_PENDING => 'К оплате / срок не наступил',
-        self::STATUS_ORANGE => 'Задолженность до 3 месяцев',
-        self::STATUS_RED => 'Задолженность свыше 3 месяцев',
+        self::STATUS_ORANGE => 'Есть просрочка',
+        self::STATUS_RED => 'Длительная просрочка',
         self::STATUS_GRAY => 'Нет данных',
     ];
 
