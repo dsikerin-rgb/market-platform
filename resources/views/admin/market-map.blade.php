@@ -146,7 +146,7 @@
     }
     .legend-title {
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 0;
       font-size: 13px;
     }
     .legend-items {
@@ -171,8 +171,13 @@
       border: 1px solid #94a3b8;
     }
     .legend-color.legend-unlinked {
-      background: transparent;
-      border: 1px dashed #94a3b8;
+      background:
+        repeating-linear-gradient(
+          45deg,
+          rgba(148, 163, 184, 0.85) 0 2px,
+          transparent 2px 6px
+        );
+      border: 1px solid #94a3b8;
     }
     .legend-label {
       white-space: nowrap;
@@ -466,7 +471,6 @@
 
         <!-- Легенда карты -->
         <div class="legend">
-          <div class="legend-title">Условные обозначения</div>
           <div class="legend-items">
             <div class="legend-item">
               <span class="legend-color" style="background: #22c55e;"></span>
@@ -1047,6 +1051,13 @@
             shapesSvg.setAttribute('viewBox', '0 0 ' + canvas.width + ' ' + canvas.height);
 
             const parts = [];
+            parts.push(
+              '<defs>' +
+              '<pattern id="unlinkedHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">' +
+              '<line x1="0" y1="0" x2="0" y2="8" stroke="#94a3b8" stroke-width="2" stroke-opacity="0.85"></line>' +
+              '</pattern>' +
+              '</defs>'
+            );
             const BORDER_COLOR = '#064e3b';
             const BORDER_WIDTH_BASE = 2.5;
 
@@ -1131,11 +1142,10 @@
               let fo = 0.12;
               
               if (fillStyle === 'unlinked') {
-                // Разметка без привязки: без заливки, пунктирная серая обводка
-                fill = 'none';
+                // Разметка без привязки: штриховка 45 градусов и нейтральная обводка
+                fill = 'url(#unlinkedHatch)';
                 stroke = '#94a3b8';
-                strokeDasharray = '6 6';
-                fo = 0;
+                fo = 1;
               } else if (fillStyle === 'vacant') {
                 // Свободно: прозрачная заливка, серая обводка
                 fill = s.fill_color || '#00A3FF';
