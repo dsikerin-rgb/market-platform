@@ -743,9 +743,49 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->keyBy('id')
             : collect();
 
-        $items = $rows->map(static function (MarketSpaceMapShape $s) use ($spacesById): array {
+        $currentRentRatesBySpaceId = collect();
+        $latestRentRatesBySpaceId = collect();
+
+        if ($spaceIds->isNotEmpty()) {
+            $periodResolver = app(\App\Services\Operations\MarketPeriodResolver::class);
+            $currentPeriodDate = $periodResolver->resolveMarketPeriod($market)->toDateString();
+
+            $currentRentRatesBySpaceId = DB::table('tenant_accruals')
+                ->where('market_id', (int) $market->id)
+                ->whereIn('market_space_id', $spaceIds)
+                ->where('period', $currentPeriodDate)
+                ->whereNotNull('rent_rate')
+                ->groupBy('market_space_id')
+                ->selectRaw('market_space_id, MAX(rent_rate) as rent_rate')
+                ->get()
+                ->mapWithKeys(static fn ($row) => [(int) $row->market_space_id => (float) $row->rent_rate]);
+
+            $latestRentRatesBySpaceId = DB::table('tenant_accruals')
+                ->where('market_id', (int) $market->id)
+                ->whereIn('market_space_id', $spaceIds)
+                ->whereNotNull('rent_rate')
+                ->orderBy('market_space_id')
+                ->orderByDesc('period')
+                ->orderByDesc('id')
+                ->get(['market_space_id', 'rent_rate'])
+                ->groupBy('market_space_id')
+                ->map(static function ($rowsForSpace) {
+                    $first = $rowsForSpace->first();
+
+                    return $first && $first->rent_rate !== null
+                        ? (float) $first->rent_rate
+                        : null;
+                });
+        }
+
+        $items = $rows->map(static function (MarketSpaceMapShape $s) use (
+            $spacesById,
+            $currentRentRatesBySpaceId,
+            $latestRentRatesBySpaceId
+        ): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
+            $spaceId = $space?->id ? (int) $space->id : null;
 
             // Для каждого shape используем статус по конкретному месту
             $resolver = app(DebtStatusResolver::class);
@@ -761,6 +801,21 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'source' => null,
                         'severity' => 0,
                     ]);
+
+            $rentRateValue = $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null;
+            $rentRateUnit = filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null;
+
+            if ($spaceId && $rentRateValue === null) {
+                $currentRate = $currentRentRatesBySpaceId->get($spaceId);
+                if ($currentRate !== null) {
+                    $rentRateValue = (float) $currentRate;
+                } else {
+                    $latestRate = $latestRentRatesBySpaceId->get($spaceId);
+                    if ($latestRate !== null) {
+                        $rentRateValue = (float) $latestRate;
+                    }
+                }
+            }
 
             return [
                 'id' => (int) $s->id,
@@ -793,8 +848,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
                 'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
-                'space_rent_rate_value' => $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null,
-                'space_rent_rate_unit' => filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null,
+                'space_rent_rate_value' => $rentRateValue,
+                'space_rent_rate_unit' => $rentRateUnit,
             ];
         })->values();
 
