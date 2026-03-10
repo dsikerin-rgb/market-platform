@@ -1150,6 +1150,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $rentRateUnit = filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null;
         $currentAccrualPeriod = null;
         $currentAccrualTotal = null;
+        $currentAccrualMode = null;
 
         if ($space) {
             $locationName = filled($space->location?->name) ? (string) $space->location->name : null;
@@ -1178,6 +1179,34 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
                 if ($accrualRow?->total_with_vat !== null) {
                     $currentAccrualTotal = (float) $accrualRow->total_with_vat;
+                    $currentAccrualMode = 'current';
+                }
+
+                if ($currentAccrualTotal === null) {
+                    $latestAccrualQuery = DB::table('tenant_accruals')
+                        ->where('market_id', (int) $market->id)
+                        ->where('market_space_id', (int) $space->id);
+
+                    if ($tenant?->id) {
+                        $latestAccrualQuery->where('tenant_id', (int) $tenant->id);
+                    }
+
+                    $latestAccrual = $latestAccrualQuery
+                        ->orderByDesc('period')
+                        ->orderByDesc('id')
+                        ->first(['period', 'total_with_vat', 'rent_rate']);
+
+                    if ($rentRateValue === null && $latestAccrual?->rent_rate !== null) {
+                        $rentRateValue = (float) $latestAccrual->rent_rate;
+                    }
+
+                    if ($latestAccrual?->total_with_vat !== null) {
+                        $currentAccrualTotal = (float) $latestAccrual->total_with_vat;
+                        $currentAccrualMode = 'latest';
+                        $currentAccrualPeriod = $latestAccrual->period
+                            ? \Illuminate\Support\Carbon::parse((string) $latestAccrual->period)->format('Y-m')
+                            : $currentAccrualPeriod;
+                    }
                 }
             }
         }
@@ -1193,6 +1222,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'tenant_id' => $space->tenant_id ? (int) $space->tenant_id : null,
                     'number' => (string) ($space->number ?? ''),
                     'code' => (string) ($space->code ?? ''),
+                    'display_name' => (string) ($space->display_name ?? ''),
+                    'activity_type' => (string) ($space->activity_type ?? ''),
                     'area_sqm' => (string) ($space->area_sqm ?? ''),
                     'status' => (string) ($space->status ?? ''),
                     'location_name' => $locationName,
@@ -1200,6 +1231,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'rent_rate_unit' => $rentRateUnit,
                     'current_accrual_period' => $currentAccrualPeriod,
                     'current_accrual_total' => $currentAccrualTotal,
+                    'current_accrual_mode' => $currentAccrualMode,
                 ] : null,
 
                 'tenant' => $tenant ? [
