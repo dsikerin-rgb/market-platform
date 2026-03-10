@@ -32,6 +32,7 @@
     .top { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
     .title { font-size: 18px; font-weight: 700; }
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .top-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
     button {
       border: 1px solid rgba(120,120,120,.35);
@@ -127,14 +128,51 @@
       background: rgba(120,120,120,.06);
     }
     .toolbar {
-      padding: 10px 12px;
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-      justify-content:space-between;
+      padding: 10px 12px 12px;
+      display: grid;
+      gap: 10px;
       border-bottom: 1px solid rgba(120,120,120,.18);
       background: rgba(120,120,120,.06);
-      flex-wrap:wrap;
+    }
+    .toolbar-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .toolbar-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 0;
+      min-width: 0;
+    }
+    .toolbar-group.toolbar-group--accent {
+      padding: 6px 8px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.55);
+      border: 1px solid rgba(120,120,120,.16);
+    }
+    .toolbar-separator {
+      width: 1px;
+      align-self: stretch;
+      background: rgba(120,120,120,.18);
+    }
+    .toolbar-help {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toolbar-helpIcon {
+      width: 28px;
+      height: 28px;
+      justify-content: center;
+      padding: 0;
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1;
     }
     
     /* Легенда карты */
@@ -363,12 +401,18 @@
         <div class="title">Карта рынка</div>
       </div>
 
-      <div class="btnrow">
+      <div class="top-actions">
         <button id="closeBtn" type="button" class="pill" style="background:transparent;">✕ Закрыть</button>
         <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
 
         @if ($hasMap)
-          <span class="pill">Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−</span>
+          <span
+            class="pill toolbar-help"
+            title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−"
+          >
+            <span class="toolbar-helpIcon">?</span>
+            Подсказка
+          </span>
         @endif
       </div>
     </div>
@@ -406,67 +450,85 @@
     @else
       <div class="viewer">
         <div class="toolbar">
-          <div class="btnrow">
-            <button id="zoomOut" type="button">−</button>
-            <button id="zoomIn" type="button">+</button>
-            <button id="zoomReset" type="button">100%</button>
-            <button id="fitWidth" type="button">По ширине</button>
-            <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>
+          <div class="toolbar-row">
+            <div class="toolbar-group toolbar-group--accent">
+              <button id="zoomOut" type="button">−</button>
+              <button id="zoomIn" type="button">+</button>
+              <button id="zoomReset" type="button">100%</button>
+              <button id="fitWidth" type="button">По ширине</button>
+              <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>
+            </div>
+
+            <div class="toolbar-group">
+              <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+              <span
+                class="pill toolbar-help"
+                title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−"
+              >
+                Навигация
+              </span>
+            </div>
           </div>
 
-          <div class="btnrow">
-            <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-
-            @if ($canEdit)
-              <button id="toggleEdit" type="button">Разметка: выкл</button>
-
-              <button id="toolSelect" type="button" style="display:none;">Редактировать</button>
-              <button id="toolRect" type="button" style="display:none;">Прямоугольник</button>
-              <button id="toolPoly" type="button" style="display:none;">Полигон</button>
-
-              <label class="pill" id="spaceNumberPill" style="display:none;">
-                Номер:
-                <input
-                  id="marketSpaceNumber"
-                  type="text"
-                  inputmode="text"
-                  placeholder="например 45-4"
-                  style="width:120px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
-                >
-              </label>
-
-              <button id="findByNumber" type="button" style="display:none;">Найти ID</button>
-
-              <label class="pill" style="display:none;">
-                Место ID:
-                <input
-                  id="marketSpaceId"
-                  type="number"
-                  min="1"
-                  step="1"
-                  inputmode="numeric"
-                  placeholder="ID"
-                  style="width:92px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
-                >
-              </label>
-
-              <div class="spacePicker" style="display:none;" id="spacePicker">
-                <input
-                  id="spaceSearch"
-                  type="text"
-                  class="spaceSearchInput"
-                  placeholder="Номер / код / арендатор / ID"
-                  autocomplete="off"
-                >
-                <div id="spaceDropdown" class="spaceDropdown" role="listbox" aria-label="Результаты поиска"></div>
+          @if ($canEdit)
+            <div class="toolbar-row">
+              <div class="toolbar-group toolbar-group--accent">
+                <button id="toggleEdit" type="button">Разметка: выкл</button>
+                <button id="toolSelect" type="button" style="display:none;">Редактировать</button>
+                <button id="toolRect" type="button" style="display:none;">Прямоугольник</button>
+                <button id="toolPoly" type="button" style="display:none;">Полигон</button>
               </div>
 
-              <span class="pill" id="spaceChosenPill" style="display:none;"></span>
+              <div class="toolbar-group">
+                <div class="spacePicker" style="display:none;" id="spacePicker">
+                  <input
+                    id="spaceSearch"
+                    type="text"
+                    class="spaceSearchInput"
+                    placeholder="Номер / код / арендатор / ID"
+                    autocomplete="off"
+                  >
+                  <div id="spaceDropdown" class="spaceDropdown" role="listbox" aria-label="Результаты поиска"></div>
+                </div>
 
-              <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
-              <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
-            @endif
-          </div>
+                <label class="pill" id="spaceNumberPill" style="display:none;">
+                  Номер:
+                  <input
+                    id="marketSpaceNumber"
+                    type="text"
+                    inputmode="text"
+                    placeholder="например 45-4"
+                    style="width:120px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
+                  >
+                </label>
+
+                <button id="findByNumber" type="button" style="display:none;">Найти ID</button>
+
+                <label class="pill" style="display:none;">
+                  Место ID:
+                  <input
+                    id="marketSpaceId"
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputmode="numeric"
+                    placeholder="ID"
+                    style="width:92px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
+                  >
+                </label>
+
+                <span class="pill" id="spaceChosenPill" style="display:none;"></span>
+                <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
+                <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
+                <span
+                  class="pill toolbar-help"
+                  title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить"
+                >
+                  Подсказка по разметке
+                </span>
+              </div>
+            </div>
+          @endif
         </div>
 
         <!-- Легенда карты -->
