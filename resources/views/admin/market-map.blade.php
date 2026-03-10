@@ -1561,7 +1561,7 @@
 
                 const boxW = maxX - minX;
                 const boxH = maxY - minY;
-                const labelSpec = resolveShapeLabelSpec(s, boxW, boxH);
+                const labelSpec = null; // staging diagnostic: isolate base SVG rendering from label logic
 
                 if (labelSpec) {
                   const cx = (minX + maxX) / 2;
