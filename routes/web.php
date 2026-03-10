@@ -1089,7 +1089,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         if (! empty($hitShape->market_space_id)) {
             $space = MarketSpace::query()
-                ->with(['tenant'])
+                ->with(['tenant', 'location'])
                 ->where('market_id', (int) $market->id)
                 ->whereKey((int) $hitShape->market_space_id)
                 ->first();
@@ -1097,14 +1097,39 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $tenant = $space?->tenant;
 
+        $isTechnicalTenantName = static function (?string $value): bool {
+            $value = trim((string) ($value ?? ''));
+            if ($value === '') {
+                return false;
+            }
+
+            if (str_contains($value, '@')) {
+                return true;
+            }
+
+            return preg_match('/^[A-Za-z0-9._-]{6,}$/', $value) === 1;
+        };
+
         $tenantName = null;
         if ($tenant) {
-            $tenantName = (string) ($tenant->display_name ?? '');
-            if ($tenantName === '') {
-                $tenantName = (string) ($tenant->short_name ?? '');
+            $shortName = trim((string) ($tenant->short_name ?? ''));
+            $displayName = trim((string) ($tenant->display_name ?? ''));
+            $name = trim((string) ($tenant->name ?? ''));
+            $contactPerson = trim((string) ($tenant->contact_person ?? ''));
+            $oneCTenantName = trim((string) data_get($tenant->one_c_data ?? [], 'tenant_name', ''));
+
+            $tenantName = $shortName !== '' ? $shortName : $displayName;
+            if ($tenantName === '' && $contactPerson !== '' && ! $isTechnicalTenantName($contactPerson)) {
+                $tenantName = $contactPerson;
+            }
+            if ($tenantName === '' && $oneCTenantName !== '' && ! $isTechnicalTenantName($oneCTenantName)) {
+                $tenantName = $oneCTenantName;
+            }
+            if ($tenantName === '' && $name !== '' && ! $isTechnicalTenantName($name)) {
+                $tenantName = $name;
             }
             if ($tenantName === '') {
-                $tenantName = (string) ($tenant->name ?? '');
+                $tenantName = $shortName !== '' ? $shortName : ($displayName !== '' ? $displayName : $name);
             }
         }
 
@@ -1120,6 +1145,43 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'severity' => 0,
             ];
 
+        $locationName = null;
+        $rentRateValue = $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null;
+        $rentRateUnit = filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null;
+        $currentAccrualPeriod = null;
+        $currentAccrualTotal = null;
+
+        if ($space) {
+            $locationName = filled($space->location?->name) ? (string) $space->location->name : null;
+
+            if (Schema::hasTable('tenant_accruals')) {
+                $periodResolver = app(\App\Services\Operations\MarketPeriodResolver::class);
+                $currentPeriod = $periodResolver->resolveMarketPeriod($market, null);
+                $currentAccrualPeriod = $currentPeriod->format('Y-m');
+
+                $accrualQuery = DB::table('tenant_accruals')
+                    ->where('market_id', (int) $market->id)
+                    ->where('market_space_id', (int) $space->id)
+                    ->where('period', $currentPeriod->toDateString());
+
+                if ($tenant?->id) {
+                    $accrualQuery->where('tenant_id', (int) $tenant->id);
+                }
+
+                $accrualRow = $accrualQuery
+                    ->selectRaw('SUM(total_with_vat) as total_with_vat, MAX(rent_rate) as rent_rate')
+                    ->first();
+
+                if ($rentRateValue === null && $accrualRow?->rent_rate !== null) {
+                    $rentRateValue = (float) $accrualRow->rent_rate;
+                }
+
+                if ($accrualRow?->total_with_vat !== null) {
+                    $currentAccrualTotal = (float) $accrualRow->total_with_vat;
+                }
+            }
+        }
+
         return response()->json([
             'ok' => true,
             'hit' => [
@@ -1133,6 +1195,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'code' => (string) ($space->code ?? ''),
                     'area_sqm' => (string) ($space->area_sqm ?? ''),
                     'status' => (string) ($space->status ?? ''),
+                    'location_name' => $locationName,
+                    'rent_rate_value' => $rentRateValue,
+                    'rent_rate_unit' => $rentRateUnit,
+                    'current_accrual_period' => $currentAccrualPeriod,
+                    'current_accrual_total' => $currentAccrualTotal,
                 ] : null,
 
                 'tenant' => $tenant ? [
