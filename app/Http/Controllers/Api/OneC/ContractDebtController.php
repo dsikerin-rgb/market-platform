@@ -330,6 +330,7 @@ class ContractDebtController extends Controller
                     $marketId,
                     $tenant,
                     $contractExternalId,
+                    $period,
                     $hasActiveSpaceFlag
                 );
 
@@ -574,6 +575,7 @@ class ContractDebtController extends Controller
         int $marketId,
         Tenant $tenant,
         string $contractExternalId,
+        string $period,
         bool $hasActiveSpaceFlag
     ): void {
         $contractExternalId = trim($contractExternalId);
@@ -609,11 +611,17 @@ class ContractDebtController extends Controller
             return;
         }
 
+        $startsAt = $this->normalizePeriodStartDate($period);
+
         TenantContract::query()->create([
             'external_id' => $contractExternalId,
             'market_id' => $marketId,
             'tenant_id' => (int) $tenant->id,
             'market_space_id' => $spaceId,
+            'number' => $contractExternalId,
+            'status' => 'active',
+            'starts_at' => $startsAt,
+            'is_active' => true,
             'notes' => $notes,
         ]);
     }
@@ -651,6 +659,17 @@ class ContractDebtController extends Controller
         }
 
         return $text . "\n" . $marker;
+    }
+
+    private function normalizePeriodStartDate(string $period): string
+    {
+        $period = trim($period);
+
+        if (preg_match('/^\d{4}-\d{2}$/', $period) === 1) {
+            return $period . '-01';
+        }
+
+        return now()->toDateString();
     }
 
     /**
