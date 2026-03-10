@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\TenantContractResource;
 use App\Models\Market;
+use App\Models\Tenant;
+use App\Models\TenantContract;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -65,6 +67,84 @@ class TenantContractResourceAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_market_admin_can_open_contract_card_for_local_mapping(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('market-admin', 'web');
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'П/59У от 01.05.2024',
+            'status' => 'active',
+            'starts_at' => '2024-05-01',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-admin-contract-card@example.test',
+        ]);
+        $user->assignRole('market-admin');
+
+        $this->actingAs($user);
+
+        self::assertTrue(TenantContractResource::canEdit($contract));
+
+        $this->get(TenantContractResource::getUrl('edit', ['record' => $contract]))
+            ->assertOk();
+    }
+
+    public function test_market_manager_can_open_contract_card_in_read_only_mode(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('market-manager', 'web');
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'П/60У от 02.05.2024',
+            'status' => 'active',
+            'starts_at' => '2024-05-02',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-manager-contract-card@example.test',
+        ]);
+        $user->assignRole('market-manager');
+
+        $this->actingAs($user);
+
+        self::assertTrue(TenantContractResource::canEdit($contract));
+
+        $this->get(TenantContractResource::getUrl('edit', ['record' => $contract]))
+            ->assertOk();
+    }
+
     public function test_market_operator_cannot_open_contracts_index(): void
     {
         $market = Market::query()->create([
@@ -88,5 +168,44 @@ class TenantContractResourceAccessTest extends TestCase
 
         $this->get(TenantContractResource::getUrl('index'))
             ->assertForbidden();
+    }
+
+    public function test_market_operator_cannot_open_contract_card(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('market-operator', 'web');
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'П/61У от 03.05.2024',
+            'status' => 'active',
+            'starts_at' => '2024-05-03',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-operator-contract-card@example.test',
+        ]);
+        $user->assignRole('market-operator');
+
+        $this->actingAs($user);
+
+        self::assertFalse(TenantContractResource::canEdit($contract));
+
+        $this->get(TenantContractResource::getUrl('edit', ['record' => $contract]))
+            ->assertNotFound();
     }
 }
