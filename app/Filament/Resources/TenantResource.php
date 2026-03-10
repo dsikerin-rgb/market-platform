@@ -388,10 +388,6 @@ class TenantResource extends BaseResource
                             $parts[] = 'ИНН ' . (string) $record->inn;
                         }
 
-                        if (filled($record->phone)) {
-                            $parts[] = (string) $record->phone;
-                        }
-
                         return $parts ? implode(' · ', $parts) : null;
                     }),
 
