@@ -191,16 +191,20 @@ class ContractController extends Controller
             $tenantsCreated = 0;
             $tenantsUpdatedByInn = 0;
 
-            $spacesNotFound = 0;
-            $spacesAmbiguous = 0;
-            $contractsWithoutSpace = 0;
+            // Явная статистика по 4 сценариям привязки
+            $linkedContracts = 0;           // место найдено однозначно
+            $missingSpaceKey = 0;           // нет market_space_code в payload
+            $spaceNotFound = 0;             // ключ есть, но место не найдено
+            $spaceAmbiguous = 0;            // ключ матчится на несколько мест
+
+            // Примеры проблемных ключей для диагностики
+            $missingKeysSample = [];
+            $notFoundKeysSample = [];
+            $ambiguousKeysSample = [];
+            $samplesLimit = 10;
 
             // Индекс мест строим 1 раз на запрос — быстро (у вас ~245 мест).
             [$spaceIndex, $keysWithCollisions] = $this->buildSpaceIndex($marketId);
-
-            // Примеры неоднозначности: ключ -> [id, id]
-            $ambiguousExamples = [];
-            $ambiguousExamplesLimit = 15;
 
             DB::beginTransaction();
 
@@ -326,30 +330,54 @@ class ContractController extends Controller
 
                 // === Space mapping (safe) ===
                 $marketSpaceId = null;
-
                 $spaceKey = trim((string) ($item['market_space_code'] ?? ''));
-                if ($spaceKey !== '') {
+                
+                // Явное разделение на 4 сценария
+                if ($spaceKey === '') {
+                    // Сценарий 1: missing_space_key — нет ключа в payload
+                    $missingSpaceKey++;
+                    if (count($missingKeysSample) < $samplesLimit) {
+                        $missingKeysSample[] = [
+                            'contract_external_id' => $contractExternalId,
+                            'tenant_external_id' => $tenantExternalId,
+                        ];
+                    }
+                } else {
+                    // Нормализация ключа (trim + uppercase)
+                    $normalizedKey = mb_strtoupper(trim($spaceKey), 'UTF-8');
+                    
                     [$resolvedId, $state, $ids] = $this->resolveMarketSpaceId($spaceIndex, $spaceKey);
 
                     if ($state === 'ok') {
+                        // Сценарий 2: linked — место найдено однозначно
                         $marketSpaceId = $resolvedId;
+                        $linkedContracts++;
                     } elseif ($state === 'not_found') {
-                        $spacesNotFound++;
+                        // Сценарий 3: space_not_found — ключ есть, но место не найдено
+                        $spaceNotFound++;
+                        if (count($notFoundKeysSample) < $samplesLimit) {
+                            $notFoundKeysSample[] = [
+                                'contract_external_id' => $contractExternalId,
+                                'tenant_external_id' => $tenantExternalId,
+                                'market_space_code' => $spaceKey,
+                                'normalized_key' => $normalizedKey,
+                            ];
+                        }
                     } else { // ambiguous
-                        $spacesAmbiguous++;
-
-                        if (count($ambiguousExamples) < $ambiguousExamplesLimit) {
-                            $k = mb_strtoupper(trim($spaceKey), 'UTF-8');
-                            if (! isset($ambiguousExamples[$k])) {
-                                $ambiguousExamples[$k] = $ids ?? [];
-                            }
+                        // Сценарий 4: space_ambiguous — ключ матчится на несколько мест
+                        $spaceAmbiguous++;
+                        if (count($ambiguousKeysSample) < $samplesLimit) {
+                            $ambiguousKeysSample[] = [
+                                'contract_external_id' => $contractExternalId,
+                                'tenant_external_id' => $tenantExternalId,
+                                'market_space_code' => $spaceKey,
+                                'matched_space_ids' => $ids,
+                            ];
                         }
 
                         // ВАЖНО: НЕ привязываем (оставляем null), чтобы не повредить данные.
                         $marketSpaceId = null;
                     }
-                } else {
-                    $contractsWithoutSpace++;
                 }
 
                 $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
@@ -402,16 +430,47 @@ class ContractController extends Controller
 
             $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
 
-            $warnings = [
-                'spaces_not_found' => $spacesNotFound,
-                'spaces_ambiguous' => $spacesAmbiguous,
-                'contracts_without_space' => $contractsWithoutSpace,
-                // теперь это именно "сколько ключей в справочнике конфликтуют"
-                'space_key_collisions' => $keysWithCollisions,
+            // Итоговая статистика по 4 сценариям
+            $linkageStats = [
+                'total_contracts' => $received,
+                'linked_contracts' => $linkedContracts,
+                'contracts_without_space_key' => $missingSpaceKey,
+                'contracts_space_not_found' => $spaceNotFound,
+                'contracts_space_ambiguous' => $spaceAmbiguous,
+                'linkage_rate_percent' => $received > 0 ? round(($linkedContracts / $received) * 100, 2) : 0,
             ];
 
-            if ($ambiguousExamples !== []) {
-                $warnings['ambiguous_examples'] = $ambiguousExamples;
+            // Примеры проблемных ключей
+            $diagnostics = [];
+            if ($missingSpaceKey > 0) {
+                $diagnostics['missing_space_key'] = [
+                    'count' => $missingSpaceKey,
+                    'samples' => $missingKeysSample,
+                ];
+            }
+            if ($spaceNotFound > 0) {
+                $diagnostics['space_not_found'] = [
+                    'count' => $spaceNotFound,
+                    'samples' => $notFoundKeysSample,
+                ];
+            }
+            if ($spaceAmbiguous > 0) {
+                $diagnostics['space_ambiguous'] = [
+                    'count' => $spaceAmbiguous,
+                    'samples' => $ambiguousKeysSample,
+                ];
+            }
+
+            $warnings = [
+                'spaces_not_found' => $spaceNotFound,
+                'spaces_ambiguous' => $spaceAmbiguous,
+                'contracts_without_space' => $missingSpaceKey,
+                'space_key_collisions' => $keysWithCollisions,
+                'linkage_stats' => $linkageStats,
+            ];
+
+            if ($diagnostics !== []) {
+                $warnings['diagnostics'] = $diagnostics;
             }
 
             $response = [
@@ -422,6 +481,7 @@ class ContractController extends Controller
                 'updated' => $updated,
                 'skipped' => $skipped,
                 'calculated_at' => $calculatedAt,
+                'linkage_stats' => $linkageStats,
                 'warnings' => $warnings,
             ];
 
@@ -436,7 +496,7 @@ class ContractController extends Controller
                 'skipped' => $skipped,
                 'calculated_at' => $calculatedAt,
                 'duration_ms' => $durationMs,
-                'meta' => array_merge($warnings, [
+                'meta' => array_merge($linkageStats, [
                     'created' => $created,
                     'updated' => $updated,
                     'tenants_created' => $tenantsCreated,
@@ -445,6 +505,7 @@ class ContractController extends Controller
                 ]),
             ]);
 
+            // Финализируем exchange = ok
             if ($exchange) {
                 $exchange->status = IntegrationExchange::STATUS_OK;
                 $exchange->finished_at = now();
@@ -460,6 +521,7 @@ class ContractController extends Controller
                     'duration_ms' => $durationMs,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'linkage_stats' => $linkageStats,
                     'warnings' => $warnings,
                 ]);
                 $exchange->save();

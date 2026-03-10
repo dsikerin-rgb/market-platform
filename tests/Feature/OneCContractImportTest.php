@@ -1,0 +1,363 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\Market;
+use App\Models\MarketIntegration;
+use App\Models\MarketSpace;
+use App\Models\Tenant;
+use App\Models\TenantContract;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class OneCContractImportTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Market $market;
+    private MarketIntegration $integration;
+    private string $token;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->market = Market::create([
+            'name' => 'Тестовый рынок',
+            'slug' => 'test-market',
+        ]);
+
+        $this->token = 'test-1c-token-' . uniqid();
+
+        $this->integration = MarketIntegration::create([
+            'market_id' => $this->market->id,
+            'type' => MarketIntegration::TYPE_1C,
+            'name' => '1C Integration',
+            'auth_token' => $this->token,
+            'status' => 'active',
+        ]);
+    }
+
+    /**
+     * Тест: договор успешно привязывается к месту по market_space_code
+     */
+    public function test_contract_linked_successfully_by_market_space_code(): void
+    {
+        // Создаём место с кодом "П3/2"
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П3/2',
+            'code' => 'p3-2',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-001',
+            'name' => 'ООО Тест',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-001',
+                    'tenant_external_id' => 'tenant-001',
+                    'market_space_code' => 'П3/2',  // точное совпадение
+                    'contract_number' => '1',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('status', 'ok');
+        $response->assertJsonPath('linkage_stats.linked_contracts', 1);
+        $response->assertJsonPath('linkage_stats.contracts_without_space_key', 0);
+        $response->assertJsonPath('linkage_stats.contracts_space_not_found', 0);
+        $response->assertJsonPath('linkage_stats.contracts_space_ambiguous', 0);
+
+        // Проверяем, что договор создан и привязан к месту
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertEquals($space->id, $contract->market_space_id);
+        $this->assertEquals($tenant->id, $contract->tenant_id);
+    }
+
+    /**
+     * Тест: договор без market_space_code остаётся непривязанным
+     */
+    public function test_contract_without_market_space_code_stays_unlinked(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-002',
+            'name' => 'ООО Тест 2',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-002',
+                    'tenant_external_id' => 'tenant-002',
+                    // market_space_code отсутствует
+                    'contract_number' => '2',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('linkage_stats.contracts_without_space_key', 1);
+
+        // Проверяем, что договор создан, но НЕ привязан к месту
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-002')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertNull($contract->market_space_id);
+        
+        // Проверяем, что в diagnostics есть пример
+        $response->assertJsonPath('warnings.diagnostics.missing_space_key.count', 1);
+    }
+
+    /**
+     * Тест: договор с неизвестным market_space_code остаётся непривязанным
+     */
+    public function test_contract_with_unknown_market_space_code_stays_unlinked(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-003',
+            'name' => 'ООО Тест 3',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-003',
+                    'tenant_external_id' => 'tenant-003',
+                    'market_space_code' => 'UNKNOWN-999',  // такого места нет
+                    'contract_number' => '3',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('linkage_stats.contracts_space_not_found', 1);
+
+        // Проверяем, что договор создан, но НЕ привязан к месту
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-003')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertNull($contract->market_space_id);
+        
+        // Проверяем, что в diagnostics есть пример
+        $response->assertJsonPath('warnings.diagnostics.space_not_found.count', 1);
+    }
+
+    /**
+     * Тест: договор с неоднозначным market_space_code остаётся непривязанным
+     */
+    public function test_contract_with_ambiguous_market_space_code_stays_unlinked(): void
+    {
+        // Создаём ДВА места с одинаковым кодом (коллизия)
+        $space1 = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П5',
+            'code' => 'p5',
+        ]);
+
+        $space2 = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П5',  // тот же номер!
+            'code' => 'p5-duplicate',
+        ]);
+
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-004',
+            'name' => 'ООО Тест 4',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-004',
+                    'tenant_external_id' => 'tenant-004',
+                    'market_space_code' => 'П5',  // неоднозначный ключ
+                    'contract_number' => '4',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('linkage_stats.contracts_space_ambiguous', 1);
+
+        // Проверяем, что договор создан, но НЕ привязан к месту
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-004')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertNull($contract->market_space_id);
+        
+        // Проверяем, что в diagnostics есть пример
+        $response->assertJsonPath('warnings.diagnostics.space_ambiguous.count', 1);
+    }
+
+    /**
+     * Тест: повторный импорт обновляет ранее непривязанный договор
+     */
+    public function test_repeated_import_updates_previously_unlinked_contract(): void
+    {
+        // Создаём место
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П10',
+            'code' => 'p10',
+        ]);
+
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-005',
+            'name' => 'ООО Тест 5',
+        ]);
+
+        // Первый импорт: без market_space_code
+        $response1 = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-005',
+                    'tenant_external_id' => 'tenant-005',
+                    // нет market_space_code
+                    'contract_number' => '5',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response1->assertOk();
+        $response1->assertJsonPath('linkage_stats.contracts_without_space_key', 1);
+
+        // Проверяем, что договор создан, но НЕ привязан
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-005')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertNull($contract->market_space_id);
+
+        // Второй импорт: с правильным market_space_code
+        $response2 = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-005',  // тот же договор
+                    'tenant_external_id' => 'tenant-005',
+                    'market_space_code' => 'П10',  // теперь есть ключ
+                    'contract_number' => '5',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response2->assertOk();
+        $response2->assertJsonPath('linkage_stats.linked_contracts', 1);
+
+        // Проверяем, что договор ОБНОВЛЁН и привязан к месту
+        $contract->refresh();
+        $this->assertEquals($space->id, $contract->market_space_id);
+    }
+
+    /**
+     * Тест: нормализация ключа (uppercase, trim)
+     */
+    public function test_key_normalization_uppercase_trim(): void
+    {
+        // Создаём место с кодом "П3/2"
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П3/2',
+            'code' => 'p3-2',
+        ]);
+
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-006',
+            'name' => 'ООО Тест 6',
+        ]);
+
+        // Отправляем ключ в разных форматах
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-006',
+                    'tenant_external_id' => 'tenant-006',
+                    'market_space_code' => '  п3/2  ',  // lowercase + пробелы
+                    'contract_number' => '6',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('linkage_stats.linked_contracts', 1);
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-006')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertEquals($space->id, $contract->market_space_id);
+    }
+}

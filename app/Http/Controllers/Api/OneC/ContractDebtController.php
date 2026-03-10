@@ -1,15 +1,16 @@
 <?php
+# app/Http/Controllers/Api/OneC/ContractDebtController.php
 
 declare(strict_types=1);
-
-# app/Http/Controllers/Api/OneC/ContractDebtController.php
 
 namespace App\Http\Controllers\Api\OneC;
 
 use App\Http\Controllers\Controller;
 use App\Models\IntegrationExchange;
+use App\Models\MarketSpace;
 use App\Models\MarketIntegration;
 use App\Models\Tenant;
+use App\Models\TenantContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -185,6 +186,7 @@ class ContractDebtController extends Controller
             $notFoundTenants = [];
             $tenantsCreated = 0;
             $tenantsUpdatedByInn = 0;
+            $hasActiveSpaceFlag = Schema::hasColumn('market_spaces', 'is_active');
 
             foreach ($validated['items'] as $item) {
                 $tenantExternalId = trim((string) $item['tenant_external_id']);
@@ -323,6 +325,14 @@ class ContractDebtController extends Controller
                     $skipped++;
                     continue;
                 }
+
+                $this->ensureSingleSpaceContractBridge(
+                    $marketId,
+                    $tenant,
+                    $contractExternalId,
+                    $period,
+                    $hasActiveSpaceFlag
+                );
 
                 /**
                  * Идемпотентность:
@@ -559,6 +569,107 @@ class ContractDebtController extends Controller
         ]);
 
         return hash('sha256', $payload);
+    }
+
+    private function ensureSingleSpaceContractBridge(
+        int $marketId,
+        Tenant $tenant,
+        string $contractExternalId,
+        string $period,
+        bool $hasActiveSpaceFlag
+    ): void {
+        $contractExternalId = trim($contractExternalId);
+        if ($contractExternalId === '') {
+            return;
+        }
+
+        $contract = TenantContract::query()
+            ->where('market_id', $marketId)
+            ->where('external_id', $contractExternalId)
+            ->first();
+
+        if ($contract && $contract->market_space_id) {
+            return;
+        }
+
+        if ($contract && $contract->tenant_id && (int) $contract->tenant_id !== (int) $tenant->id) {
+            return;
+        }
+
+        $spaceId = $this->resolveSingleActiveSpaceId($marketId, (int) $tenant->id, $hasActiveSpaceFlag);
+        if (! $spaceId) {
+            return;
+        }
+
+        $notes = $this->appendInferredMarker($contract?->notes);
+
+        if ($contract) {
+            $contract->tenant_id = (int) $tenant->id;
+            $contract->market_space_id = $spaceId;
+            $contract->notes = $notes;
+            $contract->save();
+            return;
+        }
+
+        $startsAt = $this->normalizePeriodStartDate($period);
+
+        TenantContract::query()->create([
+            'external_id' => $contractExternalId,
+            'market_id' => $marketId,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => $spaceId,
+            'number' => $contractExternalId,
+            'status' => 'active',
+            'starts_at' => $startsAt,
+            'is_active' => true,
+            'notes' => $notes,
+        ]);
+    }
+
+    private function resolveSingleActiveSpaceId(int $marketId, int $tenantId, bool $hasActiveSpaceFlag): ?int
+    {
+        $query = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId);
+
+        if ($hasActiveSpaceFlag) {
+            $query->where('is_active', true);
+        }
+
+        $spaceIds = $query->limit(2)->pluck('id');
+
+        if ($spaceIds->count() !== 1) {
+            return null;
+        }
+
+        return (int) $spaceIds->first();
+    }
+
+    private function appendInferredMarker(mixed $notes): string
+    {
+        $marker = 'inferred:single_space';
+        $text = trim((string) ($notes ?? ''));
+
+        if ($text === '') {
+            return $marker;
+        }
+
+        if (str_contains($text, $marker)) {
+            return $text;
+        }
+
+        return $text . "\n" . $marker;
+    }
+
+    private function normalizePeriodStartDate(string $period): string
+    {
+        $period = trim($period);
+
+        if (preg_match('/^\d{4}-\d{2}$/', $period) === 1) {
+            return $period . '-01';
+        }
+
+        return now()->toDateString();
     }
 
     /**

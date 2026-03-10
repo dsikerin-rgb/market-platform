@@ -21,10 +21,10 @@ class MarketSettings extends Page
     protected static ?string $navigationLabel = 'Настройки рынка';
 
     /**
-     * На prod у market-admin этот пункт лежит в “Панель управления”.
+     * На prod у market-admin этот пункт лежит в "Панель управления".
      * Важно: в Filament 4 тип должен совпадать с базовым классом.
      */
-    protected static \UnitEnum|string|null $navigationGroup = null;
+    protected static \UnitEnum|string|null $navigationGroup = 'Настройки';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-cog-6-tooth';
     protected static ?int $navigationSort = 5;
@@ -81,12 +81,29 @@ class MarketSettings extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return true;
     }
 
     public static function canAccess(): bool
     {
-        return static::shouldRegisterNavigation();
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        // Super-admin имеет доступ всегда
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Market-admin имеет доступ к настройкам своего рынка
+        if (method_exists($user, 'hasRole') && $user->hasRole('market-admin')) {
+            return true;
+        }
+
+        // Проверка по permission
+        return $user->can('market-settings.view') || $user->can('market-settings.edit');
     }
 
     public static function getNavigationItems(): array
@@ -151,6 +168,18 @@ class MarketSettings extends Page
             'notification_channels_reminders' => $this->normalizeNotificationChannels(
                 $settings['notification_channels_reminders'] ?? ['database']
             ),
+            'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
+                ? (int) $settings['debt_monitoring']['grace_days']
+                : 5,
+            'debt_monitoring_yellow_after_days' => is_numeric($settings['debt_monitoring']['yellow_after_days'] ?? $settings['debt_monitoring']['orange_after_days'] ?? null)
+                ? (int) ($settings['debt_monitoring']['yellow_after_days'] ?? $settings['debt_monitoring']['orange_after_days'])
+                : 1,
+            'debt_monitoring_red_after_days' => is_numeric($settings['debt_monitoring']['red_after_days'] ?? null)
+                ? (int) $settings['debt_monitoring']['red_after_days']
+                : 30,
+            'debt_monitoring_tenant_aggregate_mode' => in_array($settings['debt_monitoring']['tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
+                ? $settings['debt_monitoring']['tenant_aggregate_mode']
+                : 'worst',
         ]);
     }
 
@@ -406,6 +435,67 @@ class MarketSettings extends Page
                     ->columns(12)
                     ->collapsible()
                     ->collapsed(),
+
+                Section::make('Мониторинг задолженности')
+                    ->description('Настройки расчёта и отображения задолженности арендаторов.')
+                    ->schema([
+                        Forms\Components\TextInput::make('debt_monitoring_grace_days')
+                            ->label('Льготный срок оплаты, дней')
+                            ->helperText('Сколько дней после выставления начисления долг ещё не считается просроченным (статус pending).')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(30)
+                            ->default(5)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+
+                        Forms\Components\TextInput::make('debt_monitoring_yellow_after_days')
+                            ->label('Жёлтый статус после, дней просрочки')
+                            ->helperText('Через сколько дней просрочки статус становится жёлтым (orange). Обычно 1 день.')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(60)
+                            ->default(1)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+
+                        Forms\Components\TextInput::make('debt_monitoring_red_after_days')
+                            ->label('Красный статус после, дней просрочки')
+                            ->helperText('Через сколько дней просрочки статус становится красным (red). Рекомендуемое значение: 30 дней.')
+                            ->numeric()
+                            ->minValue(2)
+                            ->maxValue(180)
+                            ->default(30)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+
+                        Forms\Components\Select::make('debt_monitoring_tenant_aggregate_mode')
+                            ->label('Агрегация по арендатору')
+                            ->options([
+                                'worst' => 'По худшему месту',
+                                'dominant' => 'По преобладающему статусу',
+                            ])
+                            ->helperText('Как рассчитывать итоговый статус арендатора, если у него несколько торговых мест.')
+                            ->default('worst')
+                            ->native(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+                    ])
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 
@@ -470,6 +560,28 @@ class MarketSettings extends Page
         $settings['notification_channels_reminders'] = $this->normalizeNotificationChannels(
             $state['notification_channels_reminders'] ?? ['database']
         );
+        $yellowAfterDays = is_numeric($state['debt_monitoring_yellow_after_days'] ?? null)
+            ? max(1, min(60, (int) $state['debt_monitoring_yellow_after_days']))
+            : 1;
+        $redAfterDays = is_numeric($state['debt_monitoring_red_after_days'] ?? null)
+            ? max(2, min(180, (int) $state['debt_monitoring_red_after_days']))
+            : 30;
+        
+        // Гарантируем, что red_after_days > yellow_after_days
+        if ($redAfterDays <= $yellowAfterDays) {
+            $redAfterDays = $yellowAfterDays + 1;
+        }
+        
+        $settings['debt_monitoring'] = [
+            'grace_days' => is_numeric($state['debt_monitoring_grace_days'] ?? null)
+                ? max(0, min(30, (int) $state['debt_monitoring_grace_days']))
+                : 5,
+            'yellow_after_days' => $yellowAfterDays,
+            'red_after_days' => $redAfterDays,
+            'tenant_aggregate_mode' => in_array($state['debt_monitoring_tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
+                ? $state['debt_monitoring_tenant_aggregate_mode']
+                : 'worst',
+        ];
 
         $this->market->fill([
             'name' => (string) ($state['name'] ?? ''),
