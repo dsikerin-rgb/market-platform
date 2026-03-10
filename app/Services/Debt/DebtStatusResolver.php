@@ -67,6 +67,13 @@ class DebtStatusResolver
         return $result;
     }
 
+    public function labelForStatus(?string $status, int $marketId): string
+    {
+        $labels = $this->getStatusLabels($marketId);
+
+        return $labels[$status] ?? $labels[self::STATUS_GRAY];
+    }
+
     /**
      * Рассчитать статус для конкретного торгового места.
      *
@@ -74,6 +81,8 @@ class DebtStatusResolver
      */
     public function resolveForMarketSpace(int $marketSpaceId, int $marketId): array
     {
+        $labels = $this->getStatusLabels($marketId);
+
         // Получаем место и арендатора
         $space = DB::table('market_spaces')
             ->where('id', $marketSpaceId)
@@ -197,7 +206,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GREEN,
-                label: 'Нет задолженности',
+                label: $labels[self::STATUS_GREEN],
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 0
@@ -230,7 +239,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_PENDING,
-                label: 'К оплате / срок не наступил',
+                label: $labels[self::STATUS_PENDING],
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 1
@@ -243,7 +252,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_RED,
-                label: 'Задолженность свыше 3 месяцев',
+                label: $labels[self::STATUS_RED],
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 3,
@@ -255,7 +264,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_ORANGE,
-                label: 'Задолженность до 3 месяцев',
+                label: $labels[self::STATUS_ORANGE],
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 2,
@@ -267,7 +276,7 @@ class DebtStatusResolver
         return $this->makeResult(
             mode: 'auto',
             status: self::STATUS_PENDING,
-            label: 'К оплате / срок не наступил',
+            label: $labels[self::STATUS_PENDING],
             updatedAt: $snapshotLabel,
             source: 'contract_debts',
             severity: 1,
@@ -394,7 +403,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'manual',
                 status: $manualStatus,
-                label: self::STATUS_LABELS[$manualStatus],
+                label: $this->labelForStatus($manualStatus, (int) $tenant->market_id),
                 updatedAt: $tenant->debt_status_updated_at?->format('d.m.Y H:i'),
                 source: null,
                 severity: $this->getSeverity($manualStatus)
@@ -412,8 +421,10 @@ class DebtStatusResolver
     private function calculateAutoStatus(Tenant $tenant): array
     {
         $settings = $this->getMarketSettings($tenant->market_id);
+        $labels = $this->getStatusLabels((int) $tenant->market_id);
         $graceDays = $settings['grace_days'] ?? 5;
-        $redAfterDays = $settings['red_after_days'] ?? 90;
+        $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
+        $redAfterDays = $settings['red_after_days'] ?? 30;
 
         // Получаем данные из contract_debts
         $debtsData = $this->fetchDebtsData($tenant);
@@ -422,7 +433,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: self::STATUS_LABELS[self::STATUS_GRAY],
+                label: $labels[self::STATUS_GRAY],
                 source: 'Данные 1С недоступны',
                 severity: 0
             );
@@ -433,7 +444,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: self::STATUS_LABELS[self::STATUS_GRAY],
+                label: $labels[self::STATUS_GRAY],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Нет данных 1С по арендатору',
                 severity: 0
@@ -448,7 +459,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GREEN,
-                label: self::STATUS_LABELS[self::STATUS_GREEN],
+                label: $labels[self::STATUS_GREEN],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 0
@@ -463,7 +474,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: self::STATUS_LABELS[self::STATUS_GRAY],
+                label: $labels[self::STATUS_GRAY],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Не удалось определить срок оплаты',
                 severity: 0
@@ -478,7 +489,7 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_PENDING,
-                label: self::STATUS_LABELS[self::STATUS_PENDING],
+                label: $labels[self::STATUS_PENDING],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 1
@@ -492,17 +503,28 @@ class DebtStatusResolver
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_RED,
-                label: self::STATUS_LABELS[self::STATUS_RED],
+                label: $labels[self::STATUS_RED],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 3
             );
         }
 
+        if ($daysOverdue < $yellowAfterDays) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $debtsData['snapshot_label'],
+                source: 'Источник: contract_debts',
+                severity: 1
+            );
+        }
+
         return $this->makeResult(
             mode: 'auto',
             status: self::STATUS_ORANGE,
-            label: self::STATUS_LABELS[self::STATUS_ORANGE],
+            label: $labels[self::STATUS_ORANGE],
             updatedAt: $debtsData['snapshot_label'],
             source: 'Источник: contract_debts',
             severity: 2
@@ -690,6 +712,30 @@ class DebtStatusResolver
             'grace_days' => $debtMonitoring['grace_days'] ?? 5,
             'yellow_after_days' => $debtMonitoring['yellow_after_days'] ?? $debtMonitoring['orange_after_days'] ?? 1,
             'red_after_days' => $debtMonitoring['red_after_days'] ?? 30,
+        ];
+    }
+
+    /**
+     * Build user-facing status labels from market settings.
+     *
+     * @return array<string, string>
+     */
+    private function getStatusLabels(int $marketId): array
+    {
+        $settings = $this->getMarketSettings($marketId);
+        $yellowAfterDays = max(1, (int) ($settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1));
+        $redAfterDays = max($yellowAfterDays + 1, (int) ($settings['red_after_days'] ?? 30));
+
+        $orangeLabel = $yellowAfterDays <= 1
+            ? 'Просрочка до ' . $redAfterDays . ' дн.'
+            : 'Просрочка ' . $yellowAfterDays . '-' . ($redAfterDays - 1) . ' дн.';
+
+        return [
+            self::STATUS_GREEN => 'Нет задолженности',
+            self::STATUS_PENDING => 'К оплате / срок не наступил',
+            self::STATUS_ORANGE => $orangeLabel,
+            self::STATUS_RED => 'Просрочка от ' . $redAfterDays . ' дн.',
+            self::STATUS_GRAY => 'Нет данных',
         ];
     }
 

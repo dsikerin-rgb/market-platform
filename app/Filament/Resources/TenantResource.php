@@ -2099,13 +2099,15 @@ class TenantResource extends BaseResource
             ];
         }
 
+        $resolver = app(DebtStatusResolver::class);
+
         // Check manual status first.
         $manualStatus = trim($record->debt_status ?? '');
         if ($manualStatus !== '' && isset(Tenant::DEBT_STATUS_LABELS[$manualStatus])) {
             return [
                 'mode' => 'manual',
                 'status' => $manualStatus,
-                'label' => Tenant::DEBT_STATUS_LABELS[$manualStatus],
+                'label' => $resolver->labelForStatus($manualStatus, (int) $record->market_id),
                 'updated_at' => $record->debt_status_updated_at?->format('d.m.Y H:i'),
                 'source' => 'Manual override',
                 'severity' => self::getDebtSeverity($manualStatus),
@@ -2118,8 +2120,6 @@ class TenantResource extends BaseResource
         $result = $aggregator->aggregate($record, $aggregateMode);
 
         if ($result['aggregate_status'] === null || $result['aggregate_status'] === 'gray') {
-            $resolver = app(DebtStatusResolver::class);
-
             return $resolver->resolve($record);
         }
 
