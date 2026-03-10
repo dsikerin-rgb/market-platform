@@ -213,6 +213,11 @@
       align-items: center;
       gap: 5px;
     }
+    .legend-item.legend-item--note {
+      flex-basis: 100%;
+      gap: 0;
+      margin-top: 2px;
+    }
     .legend-color {
       width: 16px;
       height: 16px;
@@ -260,6 +265,9 @@
       position:absolute;
       inset:0;
       pointer-events:none;
+      z-index: 40;
+      display: block;
+      overflow: visible;
     }
 
     .overlay {
@@ -460,8 +468,20 @@
             </div>
 
             <div class="toolbar-group">
-              <button id="layerDebt" type="button" class="button-toggle is-active">Задолженность</button>
-              <button id="layerRent" type="button" class="button-toggle">Ставка</button>
+              <button
+                id="layerDebt"
+                type="button"
+                class="button-toggle is-active"
+                title="Слой показывает статус задолженности по занятым местам."
+                aria-label="Слой показывает статус задолженности по занятым местам."
+              >Задолженность</button>
+              <button
+                id="layerRent"
+                type="button"
+                class="button-toggle"
+                title="Слой показывает относительную ставку по занятым местам."
+                aria-label="Слой показывает относительную ставку по занятым местам."
+              >Арендная ставка</button>
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
               <span
                 class="pill toolbar-help toolbar-help--icon"
@@ -570,6 +590,9 @@
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
             </div>
+            <div class="legend-item legend-item--note">
+              <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам.</span>
+            </div>
           </div>
         </div>
         <div class="legend" id="legendRent" hidden>
@@ -602,7 +625,7 @@
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
             </div>
-            <div class="legend-item">
+            <div class="legend-item legend-item--note">
               <span class="legend-note" id="rentLegendNote">Слой показывает относительную ставку по занятым местам.</span>
             </div>
           </div>
@@ -1185,7 +1208,6 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
-
           let shapes = [];
           let lastHit = null;
 
@@ -1542,7 +1564,7 @@
                 '" stroke="' + stroke +
                 '" stroke-opacity="1"' +
                 strokeDashAttr +
-                '" stroke-width="' + (isSel ? (sw + 1.0) : sw) +
+                ' stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
 
@@ -1574,7 +1596,7 @@
                       '<text x="' + cx.toFixed(2) +
                       '" y="' + y.toFixed(2) +
                       '" text-anchor="middle" dominant-baseline="middle"' +
-                      '" font-size="' + labelSpec.fontSize +
+                      ' font-size="' + labelSpec.fontSize +
                       '" fill="#0f172a" opacity="0.9">' +
                       escapeHtml(line) +
                       '</text>'

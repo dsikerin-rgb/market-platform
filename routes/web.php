@@ -748,7 +748,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         if ($spaceIds->isNotEmpty()) {
             $periodResolver = app(\App\Services\Operations\MarketPeriodResolver::class);
-            $currentPeriodDate = $periodResolver->resolveMarketPeriod($market)->toDateString();
+            $currentPeriodDate = $periodResolver->resolveMarketPeriod($market, null)->toDateString();
 
             $currentRentRatesBySpaceId = DB::table('tenant_accruals')
                 ->where('market_id', (int) $market->id)
