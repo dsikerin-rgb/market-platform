@@ -748,6 +748,27 @@
           return '№' + label + ' — ' + tenant + ' (ID ' + String(space.id) + ')';
         }
 
+        function formatMoneyRu(value) {
+          const num = Number(value);
+          if (!Number.isFinite(num)) return '';
+          return new Intl.NumberFormat('ru-RU', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          }).format(num) + ' ₽';
+        }
+
+        function rentRateUnitLabel(unit) {
+          const key = String(unit || '').trim();
+          if (!key) return '';
+
+          const map = {
+            per_sqm_month: 'за м² в месяц',
+            per_space_month: 'за место в месяц',
+          };
+
+          return map[key] || key;
+        }
+
         function updateChosenPill() {
           if (!spaceChosenPill) return;
           if (!chosenSpace || !isEditMode) {
@@ -2108,19 +2129,35 @@
               let line2 = '';
               let line3 = '';
               let line4 = '';
+              let line5 = '';
+              let line6 = '';
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
                 title = label ? ('Место: ' + escapeHtml(label)) : 'Торговое место';
-                line1 = space.area_sqm ? ('Площадь: ' + escapeHtml(space.area_sqm) + ' м²') : '';
+                const metaParts = [];
+                if (space.location_name) {
+                  metaParts.push('Локация: ' + escapeHtml(space.location_name));
+                }
+                if (space.area_sqm) {
+                  metaParts.push('Площадь: ' + escapeHtml(space.area_sqm) + ' м²');
+                }
+                line1 = metaParts.join(' • ');
 
                 // Проверяем наличие арендатора
                 const hasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+                const rentRateValue = space.rent_rate_value !== null && space.rent_rate_value !== undefined ? Number(space.rent_rate_value) : null;
+                const rentRateUnit = rentRateUnitLabel(space.rent_rate_unit || '');
+                const currentAccrualTotal = space.current_accrual_total !== null && space.current_accrual_total !== undefined ? Number(space.current_accrual_total) : null;
+                const currentAccrualPeriod = space.current_accrual_period ? String(space.current_accrual_period) : '';
 
                 if (!hasTenant) {
                   line2 = 'Свободно';
                   line3 = '';
                   line4 = '';
+                  if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
+                    line5 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
+                  }
                 } else {
                   line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
 
@@ -2141,7 +2178,9 @@
                     line3 = 'Статус: Срок не нарушен';
                     line4 = 'Начисление есть, просрочки нет';
                   } else if (debtStatus === 'orange' || debtStatus === 'red') {
-                    line3 = 'Статус: ' + escapeHtml(debtLabel);
+                    line3 = debtMode === 'manual'
+                      ? ('Статус: ' + escapeHtml(debtLabel))
+                      : ('Статус: ' + (debtStatus === 'red' ? 'Длительная просрочка' : 'Есть просрочка'));
                     if (overdueDaysLabel !== null) {
                       line4 = 'Дней просрочки: ' + overdueDaysLabel;
                     } else if (debtMode === 'manual') {
@@ -2156,6 +2195,14 @@
                     line3 = debtLabel ? ('Задолженность: ' + escapeHtml(debtLabel)) : 'Задолженность: —';
                     line4 = '';
                   }
+
+                  if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
+                    line5 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
+                  }
+
+                  if (currentAccrualTotal !== null && Number.isFinite(currentAccrualTotal)) {
+                    line6 = 'Начислено' + (currentAccrualPeriod ? ' (' + escapeHtml(currentAccrualPeriod) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
+                  }
                 }
               } else {
                 title = 'Разметка';
@@ -2163,6 +2210,8 @@
                 line2 = '';
                 line3 = '';
                 line4 = '';
+                line5 = '';
+                line6 = '';
               }
 
               let actions = '';
@@ -2206,6 +2255,8 @@
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
                 (line3 ? '<div class="row">' + line3 + '</div>' : '') +
                 (line4 ? '<div class="row">' + line4 + '</div>' : '') +
+                (line5 ? '<div class="row">' + line5 + '</div>' : '') +
+                (line6 ? '<div class="row">' + line6 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
                 actions
               );
