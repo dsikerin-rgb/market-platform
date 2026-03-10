@@ -116,7 +116,39 @@ class DebtStatusResolver
             ->pluck('external_id');
 
         if ($contractExternalIds->isEmpty()) {
-            // Нет контрактов с external_id для этого места
+            $activeSpacesCount = DB::table('market_spaces')
+                ->where('market_id', $marketId)
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('is_active', true)
+                ->count();
+
+            if ($activeSpacesCount > 1) {
+                $tenantResolved = $this->resolve($tenant);
+                $tenantStatus = $tenantResolved['status'] ?? null;
+
+                if (in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING], true)) {
+                    return $this->makeResult(
+                        mode: 'auto',
+                        status: $tenantStatus,
+                        label: $tenantStatus === self::STATUS_PENDING ? $labels[self::STATUS_PENDING] : $labels[self::STATUS_GREEN],
+                        updatedAt: $tenantResolved['updated_at'] ?? null,
+                        source: 'tenant-level fallback: место не определено',
+                        severity: (int) ($tenantResolved['severity'] ?? 0)
+                    );
+                }
+
+                if (in_array($tenantStatus, [self::STATUS_ORANGE, self::STATUS_RED], true)) {
+                    return $this->makeResult(
+                        mode: 'auto',
+                        status: self::STATUS_GRAY,
+                        label: $labels[self::STATUS_GRAY],
+                        updatedAt: $tenantResolved['updated_at'] ?? null,
+                        source: 'у арендатора есть просрочка, но конкретное место не определено',
+                        severity: 0
+                    );
+                }
+            }
+
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
