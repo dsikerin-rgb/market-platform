@@ -213,6 +213,11 @@
       align-items: center;
       gap: 5px;
     }
+    .legend-item.legend-item--note {
+      flex-basis: 100%;
+      gap: 0;
+      margin-top: 2px;
+    }
     .legend-color {
       width: 16px;
       height: 16px;
@@ -573,7 +578,7 @@
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
             </div>
-            <div class="legend-item">
+            <div class="legend-item legend-item--note">
               <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам.</span>
             </div>
           </div>
@@ -608,7 +613,7 @@
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
             </div>
-            <div class="legend-item">
+            <div class="legend-item legend-item--note">
               <span class="legend-note" id="rentLegendNote">Слой показывает относительную ставку по занятым местам.</span>
             </div>
           </div>
