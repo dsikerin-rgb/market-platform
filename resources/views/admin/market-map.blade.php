@@ -474,11 +474,17 @@
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #f59e0b;"></span>
-              <span class="legend-label">Задолженность до {{ $debtRedAfterDays ?? 90 }} дней</span>
+              <span class="legend-label">
+                @if (($debtYellowAfterDays ?? 1) <= 1)
+                  Просрочка до {{ ($debtRedAfterDays ?? 30) - 1 }} дней
+                @else
+                  Просрочка {{ $debtYellowAfterDays ?? 1 }}-{{ ($debtRedAfterDays ?? 30) - 1 }} дней
+                @endif
+              </span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #dc2626;"></span>
-              <span class="legend-label">Задолженность {{ $debtRedAfterDays ?? 90 }}+ дней</span>
+              <span class="legend-label">Просрочка от {{ $debtRedAfterDays ?? 30 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #94a3b8;"></span>
