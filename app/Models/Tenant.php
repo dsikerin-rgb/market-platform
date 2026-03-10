@@ -22,8 +22,8 @@ class Tenant extends Model
 
     public const DEBT_STATUS_LABELS = [
         'green' => 'Нет задолженности',
-        'orange' => 'Задолженность до 3 месяцев',
-        'red' => 'Задолженность свыше 3 месяцев',
+        'orange' => 'Есть просрочка',
+        'red' => 'Длительная просрочка',
     ];
 
     /**
