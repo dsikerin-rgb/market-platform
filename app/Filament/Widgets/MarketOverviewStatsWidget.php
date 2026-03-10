@@ -5,6 +5,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MarketResource;
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
+use App\Filament\Resources\TenantResource;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
@@ -22,38 +26,24 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
 
-    protected ?string $heading = 'Сводка по рынку';
+    protected ?string $heading = 'Ключевые показатели';
 
     protected function getStats(): array
     {
         $user = Filament::auth()->user();
 
         if (! $user) {
-            return [
-                Stat::make('Арендаторов сейчас', 0),
-                Stat::make('Договоров сейчас', 0),
-                Stat::make('Торговых мест всего', 0),
-                Stat::make('Торговых мест занято', 0),
-                Stat::make('Торговых мест свободно', 0),
-                Stat::make('Арендаторов в отчёте', '—'),
-                Stat::make('Договоров в отчёте', '—'),
-            ];
+            return $this->buildEmptyStats();
         }
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
         $marketId = $this->resolveMarketIdForWidget($user);
 
         if ($marketId <= 0) {
-            return [
-                ...($isSuperAdmin ? [Stat::make('Всего рынков', Market::query()->count())] : []),
-                Stat::make('Арендаторов сейчас', 0)->description($isSuperAdmin ? 'Выбери рынок' : 'Нет привязки к рынку'),
-                Stat::make('Договоров сейчас', 0),
-                Stat::make('Торговых мест всего', 0),
-                Stat::make('Торговых мест занято', 0),
-                Stat::make('Торговых мест свободно', 0),
-                Stat::make('Арендаторов в отчёте', '—'),
-                Stat::make('Договоров в отчёте', '—'),
-            ];
+            return $this->buildEmptyStats(
+                isSuperAdmin: $isSuperAdmin,
+                note: $isSuperAdmin ? 'Сначала выберите рынок' : 'Нет привязки к рынку',
+            );
         }
 
         $market = Market::query()
@@ -94,43 +84,201 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $hasReportData = is_int($reportRows) && $reportRows > 0;
 
         $tenantsInReport = $this->countTenantsForMonth($marketId, $monthYm, $monthStart, $monthEnd);
-        $contractsInReport = $this->countContractsInPeriod($marketId, $monthStart, $monthEnd);
 
         $accrued = $this->sumAccruedForMonth($marketId, $monthYm, $monthStart, $monthEnd);
         $paid = $this->sumPaidForMonth($marketId, $monthYm, $monthStart, $monthEnd);
 
+        $tenantsUrl = TenantResource::getUrl('index');
+        $contractsUrl = TenantResource::getUrl('index');
+        $spacesUrl = MarketSpaceResource::getUrl('index');
+        $occupiedSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'tableFilters' => [
+                'status' => ['value' => 'occupied'],
+            ],
+        ]);
+        $vacantSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'tableFilters' => [
+                'status' => ['value' => 'vacant'],
+            ],
+        ]);
+        $accrualsUrl = $this->appendQueryString(TenantAccrualResource::getUrl('index'), [
+            'tableFilters' => [
+                'period' => ['value' => $monthStart->toDateString()],
+            ],
+        ]);
+
         $stats = [];
 
         if ($isSuperAdmin) {
-            $stats[] = Stat::make('Всего рынков', Market::query()->count());
+            $stats[] = $this->makeStat(
+                label: 'Рынков в системе',
+                value: Market::query()->count(),
+                description: 'Открыть список рынков',
+                url: MarketResource::getUrl('index'),
+                color: 'primary',
+                icon: 'heroicon-o-building-storefront',
+            );
         }
 
-        // === ОПЕРАТИВНОЕ СОСТОЯНИЕ (СЕГОДНЯ) ===
-        $stats[] = Stat::make('Арендаторов сейчас', $tenantsNow);
-        $stats[] = Stat::make('Договоров сейчас', $contractsNow);
-        $stats[] = Stat::make('Торговых мест всего', $totalSpaces);
-        $stats[] = Stat::make('Торговых мест занято', $occupiedSpaces);
-        $stats[] = Stat::make('Торговых мест свободно', $freeSpaces);
+        $reportDesc = $hasReportData ? $monthLabel : ($monthLabel . ' · нет начислений');
+        $accruedValue = $accrued ?? 0.0;
+        $paidValue = $paid ?? 0.0;
+        $debtValue = $accruedValue - $paidValue;
 
-        // === ОТЧЁТ (МЕСЯЦ) — ФИНАНСЫ/ВЫГРУЗКИ ===
-        $reportDesc = $hasReportData ? $monthLabel : ($monthLabel . ' · нет данных');
-
-        if ($accrued !== null) {
-            $stats[] = Stat::make('Начислено (отчёт)', $this->formatMoney($accrued))->description($reportDesc);
-        }
-
-        if ($paid !== null) {
-            $stats[] = Stat::make('Оплачено (отчёт)', $this->formatMoney($paid))->description($reportDesc);
-        }
-
-        if ($accrued !== null && $paid !== null) {
-            $stats[] = Stat::make('Долг (отчёт)', $this->formatMoney($accrued - $paid))->description($reportDesc);
-        }
-
-        $stats[] = Stat::make('Арендаторов в отчёте', $tenantsInReport ?? '—')->description($reportDesc);
-        $stats[] = Stat::make('Договоров в отчёте', $contractsInReport ?? '—')->description($reportDesc);
+        $stats[] = $this->makeStat(
+            label: 'Активные арендаторы',
+            value: $tenantsNow,
+            description: 'На текущую дату',
+            url: $tenantsUrl,
+            color: 'primary',
+            icon: 'heroicon-o-users',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Активные договоры',
+            value: $contractsNow,
+            description: 'Через карточки арендаторов',
+            url: $contractsUrl,
+            color: 'gray',
+            icon: 'heroicon-o-document-text',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Мест всего',
+            value: $totalSpaces,
+            description: 'Открыть все места рынка',
+            url: $spacesUrl,
+            color: 'gray',
+            icon: 'heroicon-o-home-modern',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Занято мест',
+            value: $occupiedSpaces,
+            description: 'Фильтр: занятые места',
+            url: $occupiedSpacesUrl,
+            color: 'success',
+            icon: 'heroicon-o-check-circle',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Свободно мест',
+            value: $freeSpaces,
+            description: 'Фильтр: свободные места',
+            url: $vacantSpacesUrl,
+            color: 'warning',
+            icon: 'heroicon-o-sparkles',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Арендаторы в начислениях',
+            value: $tenantsInReport ?? 0,
+            description: $reportDesc,
+            url: $accrualsUrl,
+            color: 'info',
+            icon: 'heroicon-o-user-group',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Начислено за месяц',
+            value: $this->formatMoney($accruedValue) . ' ₽',
+            description: $reportDesc,
+            url: $accrualsUrl,
+            color: 'primary',
+            icon: 'heroicon-o-banknotes',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Оплачено за месяц',
+            value: $this->formatMoney($paidValue) . ' ₽',
+            description: $reportDesc,
+            url: $accrualsUrl,
+            color: 'success',
+            icon: 'heroicon-o-arrow-down-circle',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Остаток по отчёту',
+            value: $this->formatMoney($debtValue) . ' ₽',
+            description: $reportDesc,
+            url: $accrualsUrl,
+            color: $debtValue > 0 ? 'danger' : 'success',
+            icon: 'heroicon-o-scale',
+        );
 
         return $stats;
+    }
+
+    /**
+     * @return array<int, Stat>
+     */
+    private function buildEmptyStats(bool $isSuperAdmin = false, ?string $note = null): array
+    {
+        $stats = [];
+
+        if ($isSuperAdmin) {
+            $stats[] = $this->makeStat(
+                label: 'Рынков в системе',
+                value: Market::query()->count(),
+                description: 'Открыть список рынков',
+                url: MarketResource::getUrl('index'),
+                color: 'primary',
+                icon: 'heroicon-o-building-storefront',
+            );
+        }
+
+        $stats[] = $this->makeStat('Активные арендаторы', 0, $note, null, 'primary', 'heroicon-o-users');
+        $stats[] = $this->makeStat('Активные договоры', 0, $note, null, 'gray', 'heroicon-o-document-text');
+        $stats[] = $this->makeStat('Мест всего', 0, $note, null, 'gray', 'heroicon-o-home-modern');
+        $stats[] = $this->makeStat('Занято мест', 0, $note, null, 'success', 'heroicon-o-check-circle');
+        $stats[] = $this->makeStat('Свободно мест', 0, $note, null, 'warning', 'heroicon-o-sparkles');
+        $stats[] = $this->makeStat('Арендаторы в начислениях', 0, $note, null, 'info', 'heroicon-o-user-group');
+        $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
+        $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
+        $stats[] = $this->makeStat('Остаток по отчёту', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
+
+        return $stats;
+    }
+
+    private function makeStat(
+        string $label,
+        string|int $value,
+        ?string $description = null,
+        ?string $url = null,
+        string|array|null $color = null,
+        ?string $icon = null,
+    ): Stat {
+        $stat = Stat::make($label, is_int($value) ? number_format($value, 0, ',', ' ') : $value);
+
+        if ($color !== null) {
+            $stat->color($color);
+        }
+
+        if ($icon !== null) {
+            $stat->icon($icon);
+        }
+
+        if (filled($description)) {
+            $stat->description($description);
+        }
+
+        if ($url !== null) {
+            $stat
+                ->url($url)
+                ->extraAttributes([
+                    'class' => 'cursor-pointer',
+                    'title' => 'Открыть раздел',
+                ]);
+
+            if (filled($description)) {
+                $stat->descriptionIcon('heroicon-m-arrow-top-right-on-square');
+            }
+        }
+
+        return $stat;
+    }
+
+    private function appendQueryString(string $url, array $query): string
+    {
+        $queryString = http_build_query($query);
+
+        if ($queryString === '') {
+            return $url;
+        }
+
+        return $url . (str_contains($url, '?') ? '&' : '?') . $queryString;
     }
 
     private function resolveMarketIdForWidget($user): int
