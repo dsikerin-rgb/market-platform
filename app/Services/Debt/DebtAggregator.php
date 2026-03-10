@@ -70,6 +70,8 @@ class DebtAggregator
 
         // Агрегируем по выбранному режиму
         $aggregateStatus = $this->aggregateByMode($spaces, $mode);
+        $aggregateStatus['label'] = app(DebtStatusResolver::class)
+            ->labelForStatus($aggregateStatus['status'], (int) $tenant->market_id);
 
         // Считаем summary
         $summary = $this->buildSummary($spaces);
