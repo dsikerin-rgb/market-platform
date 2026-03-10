@@ -1188,6 +1188,7 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
+          let shapesDiag = '';
 
           let shapes = [];
           let lastHit = null;
@@ -1242,7 +1243,9 @@
           }
 
           function setScaleLabel() {
-            if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
+            if (!scaleLabel) return;
+            const base = 'Масштаб: ' + Math.round(scale * 100) + '%';
+            scaleLabel.textContent = shapesDiag ? (base + ' • ' + shapesDiag) : base;
           }
 
           function approximateTextWidth(text, fontSize) {
@@ -1386,10 +1389,14 @@
               const json = await res.json();
 
               shapes = (json && json.ok === true && Array.isArray(json.items)) ? json.items : [];
+              shapesDiag = 'shapes: ' + String(shapes.length) + ' • HTTP ' + String(res.status);
+              setScaleLabel();
               updateRentLegend(shapes);
             } catch (e) {
               console.error(e);
               shapes = [];
+              shapesDiag = 'shapes: error';
+              setScaleLabel();
               updateRentLegend([]);
             }
           }
