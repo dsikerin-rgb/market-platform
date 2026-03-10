@@ -100,28 +100,79 @@ class ContractDocumentClassifier
             return null;
         }
 
+        $subject = $this->stripTrailingDateClause($normalized);
         $patterns = [
+            '/(?:^|\s|\x{2116})((?:[\p{L}\p{N}]{1,6}\s*[\/-]\s*)+[\p{L}\p{N}]{1,6}(?:\s+[\p{L}\p{N}]{1,6}(?:\s*[\/-]\s*[\p{L}\p{N}]{1,6})+)*)/u',
+            '/(?:^|\s|\x{2116})(\d+\s*[\/-]\s*[\p{L}]{1,6}(?:[-\/]\d+){0,2})(?![\p{L}\p{N}\/-])/u',
             '/(?:^|\s|№)([А-ЯA-Z]{1,3}\s*[-\/]?\s*\d+(?:[-\/]\d+){0,2})(?![\p{L}\p{N}\/-])/u',
             '/(?:^|\s|№)((?:КИОСК|СКЛАД|СТ|ОС|ХК)\s*[-\/]?\s*\d+(?:[-\/]\d+){0,2})(?![\p{L}\p{N}\/-])/u',
         ];
 
         foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $normalized, $matches) !== 1) {
+            if (preg_match_all($pattern, $subject, $matches) !== 1) {
                 continue;
             }
 
-            $token = trim((string) ($matches[1] ?? ''));
-            if ($token === '') {
-                continue;
+            $candidates = array_reverse($matches[1] ?? []);
+
+            foreach ($candidates as $candidate) {
+                $token = $this->normalizeExtractedToken((string) $candidate);
+                if (! $this->looksLikePlaceToken($token)) {
+                    continue;
+                }
+
+                return $token;
             }
-
-            $token = preg_replace('/\s*([\/-])\s*/u', '$1', $token) ?? $token;
-            $token = preg_replace('/\s+/u', ' ', $token) ?? $token;
-
-            return trim($token);
         }
 
         return null;
+    }
+
+    private function stripTrailingDateClause(string $normalized): string
+    {
+        $stripped = preg_replace(
+            '/\b\x{041E}\x{0422}\s+\d{2}\.\d{2}\.(?:\d{2}|\d{4})\b.*$/u',
+            '',
+            $normalized,
+            1,
+        );
+
+        return trim($stripped ?? $normalized);
+    }
+
+    private function normalizeExtractedToken(string $token): string
+    {
+        $token = trim($token);
+        $token = preg_replace('/\s*([\/-])\s*/u', '$1', $token) ?? $token;
+        $token = preg_replace('/\s+/u', ' ', $token) ?? $token;
+
+        return trim($token);
+    }
+
+    private function looksLikePlaceToken(string $token): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        if ($this->isDatePrefixToken($token)) {
+            return false;
+        }
+
+        if (preg_match('/\p{L}/u', $token) !== 1) {
+            return false;
+        }
+
+        if (preg_match('/\d/u', $token) !== 1) {
+            return false;
+        }
+
+        return mb_strlen($token, 'UTF-8') <= 32;
+    }
+
+    private function isDatePrefixToken(string $token): bool
+    {
+        return preg_match('/^\x{041E}\x{0422}\s+\d{2}$/u', $token) === 1;
     }
 
     private function extractDocumentDate(string $normalized): ?string

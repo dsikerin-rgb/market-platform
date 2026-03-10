@@ -77,6 +77,7 @@ class MarketSettings extends Page
         'notification_channels_messages' => ['database'],
         'notification_channels_tasks' => ['database'],
         'notification_channels_reminders' => ['database'],
+        'dashboard_enabled_widgets' => [],
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -167,6 +168,9 @@ class MarketSettings extends Page
             ),
             'notification_channels_reminders' => $this->normalizeNotificationChannels(
                 $settings['notification_channels_reminders'] ?? ['database']
+            ),
+            'dashboard_enabled_widgets' => $this->normalizeDashboardWidgetSelection(
+                data_get($settings, 'dashboard.enabled_widgets')
             ),
             'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['grace_days']
@@ -436,6 +440,32 @@ class MarketSettings extends Page
                     ->collapsible()
                     ->collapsed(),
 
+                Section::make('Главная страница')
+                    ->description('Настройте, какие виджеты показывать на главной странице для этого рынка.')
+                    ->schema([
+                        Forms\Components\CheckboxList::make('dashboard_enabled_widgets')
+                            ->label('Виджеты панели управления')
+                            ->options(fn (): array => Dashboard::getAvailableDashboardWidgetOptions())
+                            ->descriptions([
+                                'overview' => 'Ключевые показатели рынка и месячной отчётности.',
+                                'revenue_year' => 'Динамика выручки по месяцам.',
+                                'tenant_activity' => 'Оперативная активность арендаторов.',
+                                'spaces_status' => 'Распределение торговых мест по статусам.',
+                                'expiring_contracts' => 'Договоры, требующие продления.',
+                                'recent_requests' => 'Последние обращения арендаторов.',
+                            ])
+                            ->helperText('Если ничего не выбрано, будут показаны все виджеты по умолчанию.')
+                            ->columns([
+                                'default' => 1,
+                                'lg' => 2,
+                            ])
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
+
                 Section::make('Мониторинг задолженности')
                     ->description('Настройки расчёта и отображения задолженности арендаторов.')
                     ->schema([
@@ -559,6 +589,14 @@ class MarketSettings extends Page
         );
         $settings['notification_channels_reminders'] = $this->normalizeNotificationChannels(
             $state['notification_channels_reminders'] ?? ['database']
+        );
+        $settings['dashboard'] = array_merge(
+            (array) ($settings['dashboard'] ?? []),
+            [
+                'enabled_widgets' => $this->normalizeDashboardWidgetSelection(
+                    $state['dashboard_enabled_widgets'] ?? null
+                ),
+            ],
         );
         $yellowAfterDays = is_numeric($state['debt_monitoring_yellow_after_days'] ?? null)
             ? max(1, min(60, (int) $state['debt_monitoring_yellow_after_days']))
@@ -697,6 +735,27 @@ class MarketSettings extends Page
         )));
 
         return $normalized === [] ? ['database'] : $normalized;
+    }
+
+    /**
+     * @param  mixed  $selected
+     * @return list<string>
+     */
+    protected function normalizeDashboardWidgetSelection(mixed $selected): array
+    {
+        $allowed = Dashboard::getDefaultDashboardWidgetKeys();
+        $allowedSet = array_flip($allowed);
+
+        if (! is_array($selected)) {
+            return $allowed;
+        }
+
+        $normalized = array_values(array_filter(
+            $selected,
+            static fn ($key): bool => is_string($key) && isset($allowedSet[$key]),
+        ));
+
+        return $normalized === [] ? $allowed : $normalized;
     }
 
     protected function fillQuickLinks(): void
