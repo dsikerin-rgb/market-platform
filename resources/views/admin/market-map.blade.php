@@ -464,7 +464,7 @@
 
             <div class="toolbar-group">
               <button id="layerDebt" type="button" class="button-toggle is-active">Задолженность</button>
-              <button id="layerRent" type="button" class="button-toggle">Ставка</button>
+              <button id="layerRent" type="button" class="button-toggle">Арендная ставка</button>
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
               <span
                 class="pill toolbar-help toolbar-help--icon"
@@ -572,6 +572,9 @@
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам.</span>
             </div>
           </div>
         </div>
