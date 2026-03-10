@@ -399,27 +399,34 @@ class ContractController extends Controller
                     $number = '1C-' . $contractExternalId;
                 }
 
-                $contract = TenantContract::query()->updateOrCreate(
-                    [
-                        'market_id' => $marketId,
-                        'external_id' => $contractExternalId,
-                    ],
-                    [
-                        'tenant_id' => (int) $tenant->id,
-                        'market_space_id' => $marketSpaceId,
-                        'number' => $number,
-                        'status' => $status,
-                        'starts_at' => (string) $item['starts_at'],
-                        'ends_at' => $item['ends_at'] ?? null,
-                        'signed_at' => $item['signed_at'] ?? null,
-                        'monthly_rent' => $item['monthly_rent'] ?? null,
-                        'currency' => $currency,
-                        'is_active' => $isActive,
-                        'notes' => null,
-                    ]
-                );
+                $contract = TenantContract::query()->firstOrNew([
+                    'market_id' => $marketId,
+                    'external_id' => $contractExternalId,
+                ]);
 
-                if ($contract->wasRecentlyCreated) {
+                $wasRecentlyCreated = ! $contract->exists;
+
+                $contract->fill([
+                    'tenant_id' => (int) $tenant->id,
+                    'number' => $number,
+                    'status' => $status,
+                    'starts_at' => (string) $item['starts_at'],
+                    'ends_at' => $item['ends_at'] ?? null,
+                    'signed_at' => $item['signed_at'] ?? null,
+                    'monthly_rent' => $item['monthly_rent'] ?? null,
+                    'currency' => $currency,
+                    'is_active' => $isActive,
+                ]);
+
+                // Do not overwrite an existing place mapping when 1C did not provide
+                // a reliable market_space_code for this contract.
+                if ($marketSpaceId !== null || $wasRecentlyCreated) {
+                    $contract->market_space_id = $marketSpaceId;
+                }
+
+                $contract->save();
+
+                if ($wasRecentlyCreated) {
                     $created++;
                 } else {
                     $updated++;
