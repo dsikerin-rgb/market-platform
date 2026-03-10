@@ -1410,6 +1410,7 @@
               '</defs>'
             );
             parts.push('<rect x="20" y="20" width="120" height="60" fill="#ff00aa" fill-opacity="0.35" stroke="#ff00aa" stroke-width="3"></rect>');
+            parts.push('<polygon points="180,20 260,20 220,90" fill="#22c55e" fill-opacity="1" stroke="#064e3b" stroke-opacity="1" stroke-width="3"></polygon>');
             const BORDER_COLOR = '#064e3b';
             const BORDER_WIDTH_BASE = 2.5;
             const rentLayerStats = buildRentLayerStats(shapes);
