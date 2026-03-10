@@ -306,15 +306,25 @@ class TenantResource extends BaseResource
 
         $toolbarActions = static::tenantToolbarActions();
 
+        $debtStatusLabelForTable = static function (Tenant $record): string {
+            $resolved = static::resolveDebtStatusForDisplay($record);
+
+            if (($resolved['status'] ?? null) === 'pending') {
+                return 'К оплате';
+            }
+
+            return (string) ($resolved['label'] ?? 'Нет данных');
+        };
+
         $debtStatusColumn = TextColumn::make('debt_status')
             ->label('Задолженность');
 
         if (method_exists($debtStatusColumn, 'state')) {
-            $debtStatusColumn->state(fn (Tenant $record): string => static::resolveDebtStatusForDisplay($record)['label']);
+            $debtStatusColumn->state($debtStatusLabelForTable);
         } elseif (method_exists($debtStatusColumn, 'getStateUsing')) {
-            $debtStatusColumn->getStateUsing(fn (Tenant $record): string => static::resolveDebtStatusForDisplay($record)['label']);
+            $debtStatusColumn->getStateUsing($debtStatusLabelForTable);
         } else {
-            $debtStatusColumn->formatStateUsing(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['label']);
+            $debtStatusColumn->formatStateUsing($debtStatusLabelForTable);
         }
 
         $debtStatusColumn
