@@ -136,6 +136,47 @@
       background: rgba(120,120,120,.06);
       flex-wrap:wrap;
     }
+    
+    /* Легенда карты */
+    .legend {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(120,120,120,.18);
+      background: rgba(255,255,255,.95);
+      font-size: 12px;
+    }
+    .legend-title {
+      font-weight: 700;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .legend-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-color {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1px solid rgba(120,120,120,.3);
+      flex-shrink: 0;
+    }
+    .legend-color.legend-vacant {
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid #94a3b8;
+    }
+    .legend-color.legend-unlinked {
+      background: transparent;
+      border: 1px dashed #94a3b8;
+    }
+    .legend-label {
+      white-space: nowrap;
+    }
     .stage {
       height: calc(100vh - 190px);
       min-height: 420px;
@@ -335,6 +376,7 @@
         btn?.addEventListener('click', function () {
           try { window.close(); } catch (e) { /* ignore */ }
 
+          // Если вкладку закрыть нельзя (не window.open), покажем ссылку на настройки.
           setTimeout(function () {
             if (toSettings) toSettings.style.display = 'inline-flex';
           }, 150);
@@ -419,6 +461,37 @@
               <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
               <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
             @endif
+          </div>
+        </div>
+
+        <!-- Легенда карты -->
+        <div class="legend">
+          <div class="legend-title">Условные обозначения</div>
+          <div class="legend-items">
+            <div class="legend-item">
+              <span class="legend-color" style="background: #22c55e;"></span>
+              <span class="legend-label">Нет задолженности</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #f59e0b;"></span>
+              <span class="legend-label">Задолженность до {{ $debtRedAfterDays ?? 90 }} дней</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #dc2626;"></span>
+              <span class="legend-label">Задолженность {{ $debtRedAfterDays ?? 90 }}+ дней</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #94a3b8;"></span>
+              <span class="legend-label">Нет данных 1С</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-vacant"></span>
+              <span class="legend-label">Свободно</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-unlinked"></span>
+              <span class="legend-label">Разметка без привязки</span>
+            </div>
           </div>
         </div>
 
@@ -616,20 +689,6 @@
           const label = numberLabel || codeLabel || '—';
           const tenant = space.tenantName ? space.tenantName : '—';
           return '№' + label + ' — ' + tenant + ' (ID ' + String(space.id) + ')';
-        }
-
-        function debtModeText(mode) {
-          if (mode === 'manual') return 'Режим: вручную';
-          if (mode === 'auto') return 'Режим: автоматически (1С)';
-          return '';
-        }
-
-        function debtColorByStatus(status) {
-          return {
-            green: '#22c55e',
-            orange: '#f59e0b',
-            red: '#dc2626',
-          }[String(status || '').trim()] || null;
         }
 
         function updateChosenPill() {
@@ -1026,18 +1085,73 @@
               const isImportedOverlay = Boolean(meta && meta.import_source);
               const isNormalLinked = isLinked && !isImportedOverlay;
 
+              // Проверяем состояние места
+              const hasSpace = isLinked;
+              const hasTenant = hasSpace && (s.space_tenant_id !== null && s.space_tenant_id !== undefined);
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
-              const debtFill = debtColorByStatus(debtStatus);
-
-              const hasDebtFill = Boolean(isLinked && debtFill);
-              const fill = hasDebtFill ? debtFill : (s.fill_color || '#00A3FF');
-              const stroke = BORDER_COLOR;
-              const fo = hasDebtFill
-                ? 1
-                : ((typeof s.fill_opacity === 'number') ? s.fill_opacity : 0.12);
+              
+              // Цвета для debt status
+              const debtColors = {
+                green: '#22c55e',
+                pending: '#eab308',
+                orange: '#f59e0b',
+                red: '#dc2626',
+                gray: '#94a3b8',
+              };
+              
+              // Определяем тип отрисовки
+              let fillStyle = 'normal'; // normal, gray, vacant, unlinked
+              let debtFill = null;
+              
+              if (!hasSpace) {
+                // Shape без market_space_id — разметка без привязки
+                fillStyle = 'unlinked';
+              } else if (!hasTenant) {
+                // Место есть, но арендатора нет — свободно
+                fillStyle = 'vacant';
+              } else if (debtStatus && debtColors[debtStatus]) {
+                // Есть арендатор и debt_status — используем debt цвет
+                debtFill = debtColors[debtStatus];
+                fillStyle = 'debt';
+              } else {
+                // Место с арендатором, но нет debt_status — normal
+                fillStyle = 'normal';
+              }
+              
+              // Применяем стили
+              let fill = null;
+              let stroke = BORDER_COLOR;
+              let strokeDasharray = null;
+              let fo = 0.12;
+              
+              if (fillStyle === 'unlinked') {
+                // Разметка без привязки: без заливки, пунктирная серая обводка
+                fill = 'none';
+                stroke = '#94a3b8';
+                strokeDasharray = '6 6';
+                fo = 0;
+              } else if (fillStyle === 'vacant') {
+                // Свободно: прозрачная заливка, серая обводка
+                fill = s.fill_color || '#00A3FF';
+                stroke = '#94a3b8';
+                fo = 0.05;
+              } else if (fillStyle === 'debt') {
+                // Debt status: закрашиваем цветом долга
+                fill = debtFill;
+                stroke = BORDER_COLOR;
+                fo = 1;
+              } else {
+                // Normal: обычная заливка
+                fill = s.fill_color || '#00A3FF';
+                stroke = BORDER_COLOR;
+                fo = typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12;
+              }
+              
               const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
+
+              const strokeDashAttr = strokeDasharray ? (' stroke-dasharray="' + strokeDasharray + '"') : '';
 
               parts.push(
                 '<polygon points="' + pts +
@@ -1045,6 +1159,7 @@
                 '" fill-opacity="' + (isSel ? Math.min(1, fo + 0.08) : fo) +
                 '" stroke="' + stroke +
                 '" stroke-opacity="1"' +
+                strokeDashAttr +
                 '" stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
@@ -1862,10 +1977,49 @@
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
                 title = label ? ('Место: ' + escapeHtml(label)) : 'Торговое место';
                 line1 = space.area_sqm ? ('Площадь: ' + escapeHtml(space.area_sqm) + ' м²') : '';
-                line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
-                line3 = tenant?.debt_status_label ? ('Задолженность: ' + escapeHtml(tenant.debt_status_label)) : 'Задолженность: —';
-                line4 = tenant?.debt_status_mode ? debtModeText(tenant.debt_status_mode) : '';
+
+                // Проверяем наличие арендатора
+                const hasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+
+                if (!hasTenant) {
+                  line2 = 'Свободно';
+                  line3 = '';
+                  line4 = '';
+                } else {
+                  line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
+
+                  // Информация о задолженности
+                  const debtStatus = hit.debt_status || null;
+                  const debtLabel = hit.debt_status_label || '';
+                  const debtMode = hit.debt_status_mode || 'auto';
+                  const overdueDays = hit.debt_overdue_days !== null && hit.debt_overdue_days !== undefined ? Number(hit.debt_overdue_days) : null;
+                  const debtSource = hit.debt_status_source || '';
+
+                  if (debtStatus === 'green') {
+                    line3 = 'Статус: Нет задолженности';
+                    line4 = debtMode === 'manual' ? 'Статус задан вручную' : '';
+                  } else if (debtStatus === 'pending') {
+                    line3 = 'Статус: Ожидает срока оплаты';
+                    line4 = 'Льготный срок ещё не истёк';
+                  } else if (debtStatus === 'orange' || debtStatus === 'red') {
+                    line3 = 'Статус: ' + escapeHtml(debtLabel);
+                    if (overdueDays !== null) {
+                      line4 = 'Дней просрочки: ' + String(overdueDays);
+                    } else if (debtMode === 'manual') {
+                      line4 = 'Статус задан вручную';
+                    } else {
+                      line4 = '';
+                    }
+                  } else if (debtStatus === 'gray') {
+                    line3 = 'Статус: Нет данных 1С';
+                    line4 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                  } else {
+                    line3 = debtLabel ? ('Задолженность: ' + escapeHtml(debtLabel)) : 'Задолженность: —';
+                    line4 = '';
+                  }
+                }
               } else {
+                title = 'Разметка';
                 line1 = 'Место не привязано (разметка)';
                 line2 = '';
                 line3 = '';
@@ -1910,13 +2064,10 @@
               showPopoverAt(
                 e.clientX, e.clientY,
                 '<div class="t">' + title + '</div>' +
-                (shapeId ? '<div class="row muted">shape_id: ' + escapeHtml(String(shapeId)) + '</div>' : '') +
-                (CAN_EDIT && editMode ? '<div class="row muted">Выбрано: ' + escapeHtml(chosenLabel) + '</div>' : '') +
                 (line2 ? '<div class="row">' + line2 + '</div>' : '') +
                 (line3 ? '<div class="row">' + line3 + '</div>' : '') +
-                (line4 ? '<div class="row muted">' + escapeHtml(line4) + '</div>' : '') +
+                (line4 ? '<div class="row">' + line4 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
-                '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>' +
                 actions
               );
             } catch (err) {
