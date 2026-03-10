@@ -1542,7 +1542,7 @@
                 '" stroke="' + stroke +
                 '" stroke-opacity="1"' +
                 strokeDashAttr +
-                '" stroke-width="' + (isSel ? (sw + 1.0) : sw) +
+                ' stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
 
