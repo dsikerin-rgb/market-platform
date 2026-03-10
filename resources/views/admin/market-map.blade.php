@@ -29,44 +29,44 @@
     :root { color-scheme: light dark; }
     body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
     .wrap { padding: 16px; max-width: 1400px; margin: 0 auto; }
-    .top { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+    .top { display:flex; gap:10px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
     .title { font-size: 18px; font-weight: 700; }
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .top-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .top-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 
     button {
       border: 1px solid rgba(120,120,120,.35);
       background: rgba(120,120,120,.10);
-      padding: 8px 10px;
-      border-radius: 10px;
+      padding: 6px 9px;
+      border-radius: 9px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 12px;
     }
     button:hover { background: rgba(120,120,120,.18); }
     button:disabled { opacity:.5; cursor:not-allowed; }
 
     .pill {
-      font-size: 12px;
+      font-size: 11px;
       opacity: .85;
-      padding: 6px 10px;
+      padding: 5px 9px;
       border-radius: 999px;
       border: 1px solid rgba(120,120,120,.25);
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       text-decoration: none;
       white-space: nowrap;
     }
 
     .spacePicker {
       position: relative;
-      min-width: 220px;
+      min-width: 180px;
     }
 
     .spaceSearchInput {
-      width: 240px;
-      padding: 6px 8px;
-      border-radius: 10px;
+      width: 200px;
+      padding: 5px 8px;
+      border-radius: 9px;
       border: 1px solid rgba(120,120,120,.25);
       background: rgba(120,120,120,.06);
       color: inherit;
@@ -128,78 +128,72 @@
       background: rgba(120,120,120,.06);
     }
     .toolbar {
-      padding: 10px 12px 12px;
+      padding: 8px 10px 9px;
       display: grid;
-      gap: 10px;
+      gap: 8px;
       border-bottom: 1px solid rgba(120,120,120,.18);
       background: rgba(120,120,120,.06);
     }
     .toolbar-row {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
     }
     .toolbar-group {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
       flex-wrap: wrap;
       padding: 0;
       min-width: 0;
     }
     .toolbar-group.toolbar-group--accent {
-      padding: 6px 8px;
-      border-radius: 12px;
+      padding: 4px 6px;
+      border-radius: 10px;
       background: rgba(255,255,255,.55);
       border: 1px solid rgba(120,120,120,.16);
     }
-    .toolbar-separator {
-      width: 1px;
-      align-self: stretch;
-      background: rgba(120,120,120,.18);
-    }
     .toolbar-help {
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      flex-shrink: 0;
+    }
+    .toolbar-help.toolbar-help--icon {
+      width: 28px;
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
     }
     .toolbar-helpIcon {
-      width: 28px;
-      height: 28px;
+      width: 16px;
+      height: 16px;
       justify-content: center;
       padding: 0;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1;
     }
     
     /* Легенда карты */
     .legend {
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-bottom: 1px solid rgba(120,120,120,.18);
       background: rgba(255,255,255,.95);
-      font-size: 12px;
-    }
-    .legend-title {
-      font-weight: 700;
-      margin-bottom: 0;
-      font-size: 13px;
+      font-size: 11px;
     }
     .legend-items {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
     }
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
     .legend-color {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       border-radius: 4px;
       border: 1px solid rgba(120,120,120,.3);
       flex-shrink: 0;
@@ -407,11 +401,11 @@
 
         @if ($hasMap)
           <span
-            class="pill toolbar-help"
+            class="pill toolbar-help toolbar-help--icon"
             title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−"
+            aria-label="Подсказка по навигации"
           >
             <span class="toolbar-helpIcon">?</span>
-            Подсказка
           </span>
         @endif
       </div>
@@ -462,10 +456,11 @@
             <div class="toolbar-group">
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
               <span
-                class="pill toolbar-help"
+                class="pill toolbar-help toolbar-help--icon"
                 title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−"
+                aria-label="Подсказка по навигации"
               >
-                Навигация
+                <span class="toolbar-helpIcon">?</span>
               </span>
             </div>
           </div>
@@ -521,10 +516,11 @@
                 <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
                 <span class="pill" id="editHint" style="display:none;">Режим разметки</span>
                 <span
-                  class="pill toolbar-help"
+                  class="pill toolbar-help toolbar-help--icon"
                   title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить"
+                  aria-label="Подсказка по разметке"
                 >
-                  Подсказка по разметке
+                  <span class="toolbar-helpIcon">?</span>
                 </span>
               </div>
             </div>
