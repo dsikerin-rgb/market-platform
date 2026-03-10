@@ -260,6 +260,9 @@
       position:absolute;
       inset:0;
       pointer-events:none;
+      z-index: 40;
+      display: block;
+      overflow: visible;
     }
 
     .overlay {
@@ -1406,6 +1409,7 @@
               '</pattern>' +
               '</defs>'
             );
+            parts.push('<rect x="20" y="20" width="120" height="60" fill="#ff00aa" fill-opacity="0.35" stroke="#ff00aa" stroke-width="3"></rect>');
             const BORDER_COLOR = '#064e3b';
             const BORDER_WIDTH_BASE = 2.5;
             const rentLayerStats = buildRentLayerStats(shapes);
