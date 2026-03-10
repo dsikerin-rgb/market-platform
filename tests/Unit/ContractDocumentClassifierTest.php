@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use JsonException;
 use PHPUnit\Framework\TestCase;
 
 class ContractDocumentClassifierTest extends TestCase
@@ -76,5 +77,52 @@ class ContractDocumentClassifierTest extends TestCase
         $this->assertFalse($result['actionable']);
         $this->assertNull($result['place_token']);
         $this->assertNull($result['document_date']);
+    }
+    /**
+     * @throws JsonException
+     */
+    public function test_extracts_primary_place_token_without_using_date_fragment(): void
+    {
+        $classifier = new ContractDocumentClassifier();
+
+        $result = $classifier->classify(
+            json_decode('"\u041f\/59\u0443 \u043e\u0442 01.05.2024"', true, 512, JSON_THROW_ON_ERROR),
+        );
+
+        $this->assertSame('primary_contract', $result['category']);
+        $this->assertSame('П/59У', $result['place_token']);
+        $this->assertSame('2024-05-01', $result['document_date']);
+    }
+
+    /**
+     * @throws JsonException
+     */
+    public function test_extracts_compound_primary_place_token_before_date(): void
+    {
+        $classifier = new ContractDocumentClassifier();
+
+        $result = $classifier->classify(
+            json_decode('"\u0424\/\u041a 8\/1 \u043e\u0442 01.10.2025"', true, 512, JSON_THROW_ON_ERROR),
+        );
+
+        $this->assertSame('primary_contract', $result['category']);
+        $this->assertSame('Ф/К 8/1', $result['place_token']);
+        $this->assertSame('2025-10-01', $result['document_date']);
+    }
+
+    /**
+     * @throws JsonException
+     */
+    public function test_extracts_compound_service_place_token_before_date(): void
+    {
+        $classifier = new ContractDocumentClassifier();
+
+        $result = $classifier->classify(
+            json_decode('"\u0423\u0423 \u041e-8\/\u041c 24-25 \u043e\u0442 01.07.2022"', true, 512, JSON_THROW_ON_ERROR),
+        );
+
+        $this->assertSame('service_document', $result['category']);
+        $this->assertSame('О-8/М 24-25', $result['place_token']);
+        $this->assertSame('2022-07-01', $result['document_date']);
     }
 }
