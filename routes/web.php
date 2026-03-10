@@ -1442,7 +1442,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'debtYellowAfterDays' => (int) ($market->settings['debt_monitoring']['yellow_after_days']
                 ?? $market->settings['debt_monitoring']['orange_after_days']
                 ?? 1),
-            'debtRedAfterDays' => (int) ($market->settings['debt_monitoring']['red_after_days'] ?? 90),
+            'debtRedAfterDays' => (int) ($market->settings['debt_monitoring']['red_after_days'] ?? 30),
 
             'settingsUrl' => url('/admin/market-settings'),
 
