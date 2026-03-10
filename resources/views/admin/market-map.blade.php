@@ -468,8 +468,20 @@
             </div>
 
             <div class="toolbar-group">
-              <button id="layerDebt" type="button" class="button-toggle is-active">Задолженность</button>
-              <button id="layerRent" type="button" class="button-toggle">Арендная ставка</button>
+              <button
+                id="layerDebt"
+                type="button"
+                class="button-toggle is-active"
+                title="Слой показывает статус задолженности по занятым местам."
+                aria-label="Слой показывает статус задолженности по занятым местам."
+              >Задолженность</button>
+              <button
+                id="layerRent"
+                type="button"
+                class="button-toggle"
+                title="Слой показывает относительную ставку по занятым местам."
+                aria-label="Слой показывает относительную ставку по занятым местам."
+              >Арендная ставка</button>
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
               <span
                 class="pill toolbar-help toolbar-help--icon"
@@ -1196,8 +1208,6 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
-          let shapesDiag = '';
-
           let shapes = [];
           let lastHit = null;
 
@@ -1251,9 +1261,7 @@
           }
 
           function setScaleLabel() {
-            if (!scaleLabel) return;
-            const base = 'Масштаб: ' + Math.round(scale * 100) + '%';
-            scaleLabel.textContent = shapesDiag ? (base + ' • ' + shapesDiag) : base;
+            if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
           }
 
           function approximateTextWidth(text, fontSize) {
@@ -1397,14 +1405,10 @@
               const json = await res.json();
 
               shapes = (json && json.ok === true && Array.isArray(json.items)) ? json.items : [];
-              shapesDiag = 'shapes: ' + String(shapes.length) + ' • HTTP ' + String(res.status);
-              setScaleLabel();
               updateRentLegend(shapes);
             } catch (e) {
               console.error(e);
               shapes = [];
-              shapesDiag = 'shapes: error';
-              setScaleLabel();
               updateRentLegend([]);
             }
           }
