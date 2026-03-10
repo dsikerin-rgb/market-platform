@@ -470,7 +470,7 @@
           <div class="legend-items">
             <div class="legend-item">
               <span class="legend-color" style="background: #22c55e;"></span>
-              <span class="legend-label">Нет задолженности</span>
+              <span class="legend-label">Нет просрочки</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #f59e0b;"></span>
@@ -1093,7 +1093,7 @@
               // Цвета для debt status
               const debtColors = {
                 green: '#22c55e',
-                pending: '#eab308',
+                pending: '#22c55e',
                 orange: '#f59e0b',
                 red: '#dc2626',
                 gray: '#94a3b8',
@@ -1999,8 +1999,8 @@
                     line3 = 'Статус: Нет задолженности';
                     line4 = debtMode === 'manual' ? 'Статус задан вручную' : '';
                   } else if (debtStatus === 'pending') {
-                    line3 = 'Статус: Ожидает срока оплаты';
-                    line4 = 'Льготный срок ещё не истёк';
+                    line3 = 'Статус: Срок не нарушен';
+                    line4 = 'Начисление есть, просрочки нет';
                   } else if (debtStatus === 'orange' || debtStatus === 'red') {
                     line3 = 'Статус: ' + escapeHtml(debtLabel);
                     if (overdueDays !== null) {

@@ -310,7 +310,7 @@ class TenantResource extends BaseResource
             $resolved = static::resolveDebtStatusForDisplay($record);
 
             if (($resolved['status'] ?? null) === 'pending') {
-                return 'К оплате';
+                return 'Срок не нарушен';
             }
 
             return (string) ($resolved['label'] ?? 'Нет данных');
@@ -1924,7 +1924,7 @@ class TenantResource extends BaseResource
     public static function debtStatusColor(?string $state): string
     {
         return match ($state) {
-            'green' => 'success',
+            'green', 'pending' => 'success',
             'orange' => 'warning',
             'red' => 'danger',
             default => 'gray',
@@ -1934,7 +1934,7 @@ class TenantResource extends BaseResource
     private static function debtStatusHex(?string $state): string
     {
         return match ($state) {
-            'green' => '#16a34a',
+            'green', 'pending' => '#16a34a',
             'orange' => '#f59e0b',
             'red' => '#dc2626',
             default => '#6b7280',
