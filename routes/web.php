@@ -739,7 +739,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->with(['tenant:id,market_id,name,short_name,external_id,one_c_uid,debt_status,debt_status_updated_at,updated_at'])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
-                ->get(['id', 'tenant_id', 'number', 'code', 'display_name'])
+                ->get(['id', 'tenant_id', 'number', 'code', 'display_name', 'rent_rate_value', 'rent_rate_unit'])
                 ->keyBy('id')
             : collect();
 
@@ -793,6 +793,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
                 'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
+                'space_rent_rate_value' => $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null,
+                'space_rent_rate_unit' => filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null,
             ];
         })->values();
 

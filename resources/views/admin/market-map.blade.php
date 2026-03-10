@@ -49,6 +49,14 @@
     .button-accent:hover {
       background: #ea580c;
     }
+    .button-toggle.is-active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #fff;
+    }
+    .button-toggle.is-active:hover {
+      background: #1e293b;
+    }
 
     .pill {
       font-size: 11px;
@@ -180,6 +188,13 @@
       font-size: 12px;
       line-height: 1;
     }
+    .legend[hidden] {
+      display: none;
+    }
+    .legend-note {
+      color: rgba(15, 23, 42, 0.72);
+      font-size: 10px;
+    }
     
     /* Легенда карты */
     .legend {
@@ -216,6 +231,10 @@
           rgba(148, 163, 184, 0.85) 0 2px,
           transparent 2px 6px
         );
+      border: 1px solid #94a3b8;
+    }
+    .legend-color.legend-rate-none {
+      background: #cbd5e1;
       border: 1px solid #94a3b8;
     }
     .legend-label {
@@ -441,6 +460,8 @@
             </div>
 
             <div class="toolbar-group">
+              <button id="layerDebt" type="button" class="button-toggle is-active">Задолженность</button>
+              <button id="layerRent" type="button" class="button-toggle">Ставка</button>
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
               <span
                 class="pill toolbar-help toolbar-help--icon"
@@ -517,7 +538,7 @@
         </div>
 
         <!-- Легенда карты -->
-        <div class="legend">
+        <div class="legend" id="legendDebt">
           <div class="legend-items">
             <div class="legend-item">
               <span class="legend-color" style="background: #22c55e;"></span>
@@ -548,6 +569,41 @@
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
+            </div>
+          </div>
+        </div>
+        <div class="legend" id="legendRent" hidden>
+          <div class="legend-items">
+            <div class="legend-item">
+              <span class="legend-color" style="background: #fef3c7;"></span>
+              <span class="legend-label" id="rentLegendLow">Низкая ставка</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #fbbf24;"></span>
+              <span class="legend-label" id="rentLegendMid">Средняя ставка</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #f97316;"></span>
+              <span class="legend-label" id="rentLegendHigh">Повышенная ставка</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #dc2626;"></span>
+              <span class="legend-label" id="rentLegendTop">Высокая ставка</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-rate-none"></span>
+              <span class="legend-label">Ставка не задана</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-vacant"></span>
+              <span class="legend-label">Свободно</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-unlinked"></span>
+              <span class="legend-label">Разметка без привязки</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-note" id="rentLegendNote">Слой показывает относительную ставку по занятым местам.</span>
             </div>
           </div>
         </div>
@@ -598,6 +654,15 @@
         const zoomResetBtn = document.getElementById('zoomReset');
         const fitWidthBtn = document.getElementById('fitWidth');
         const scaleLabel = document.getElementById('scaleLabel');
+        const layerDebtBtn = document.getElementById('layerDebt');
+        const layerRentBtn = document.getElementById('layerRent');
+        const legendDebt = document.getElementById('legendDebt');
+        const legendRent = document.getElementById('legendRent');
+        const rentLegendLow = document.getElementById('rentLegendLow');
+        const rentLegendMid = document.getElementById('rentLegendMid');
+        const rentLegendHigh = document.getElementById('rentLegendHigh');
+        const rentLegendTop = document.getElementById('rentLegendTop');
+        const rentLegendNote = document.getElementById('rentLegendNote');
 
         const popover = document.getElementById('popover');
         const popoverBody = document.getElementById('popoverBody');
@@ -616,9 +681,12 @@
         const editHint = document.getElementById('editHint');
 
         const LS_KEY_CHOSEN = 'mp.marketMap.market_' + String(MARKET_ID) + '.chosenSpace';
+        const LS_KEY_LAYER = 'mp.marketMap.market_' + String(MARKET_ID) + '.layer';
 
         let chosenSpace = null;
         let isEditMode = false;
+        let currentLayer = 'debt';
+        let redrawShapesRef = null;
         let searchResults = [];
         let searchIndex = -1;
         let searchTimer = null;
@@ -767,6 +835,141 @@
           };
 
           return map[key] || key;
+        }
+
+        function normalizeLayerMode(value) {
+          return value === 'rent' ? 'rent' : 'debt';
+        }
+
+        function loadLayerModeFromLS() {
+          try {
+            currentLayer = normalizeLayerMode(localStorage.getItem(LS_KEY_LAYER));
+          } catch {
+            currentLayer = 'debt';
+          }
+        }
+
+        function saveLayerModeToLS() {
+          try {
+            localStorage.setItem(LS_KEY_LAYER, currentLayer);
+          } catch {}
+        }
+
+        function formatLegendRateValue(value) {
+          const num = Number(value);
+          if (!Number.isFinite(num)) return '—';
+          return new Intl.NumberFormat('ru-RU', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          }).format(num);
+        }
+
+        function buildRentLayerStats(items) {
+          const rates = [];
+          const units = new Set();
+
+          for (const item of items) {
+            const rate = Number(item?.space_rent_rate_value);
+            const hasSpace = !!item?.market_space_id;
+            const hasTenant = hasSpace && item?.space_tenant_id !== null && item?.space_tenant_id !== undefined;
+
+            if (!hasTenant || !Number.isFinite(rate) || rate <= 0) continue;
+
+            rates.push(rate);
+
+            const unit = String(item?.space_rent_rate_unit || '').trim();
+            if (unit) units.add(unit);
+          }
+
+          rates.sort((a, b) => a - b);
+
+          if (!rates.length) {
+            return null;
+          }
+
+          const quantile = (q) => {
+            if (rates.length === 1) return rates[0];
+            const pos = (rates.length - 1) * q;
+            const base = Math.floor(pos);
+            const rest = pos - base;
+            const left = rates[base];
+            const right = rates[Math.min(base + 1, rates.length - 1)];
+            return left + ((right - left) * rest);
+          };
+
+          return {
+            lowMax: quantile(0.25),
+            midMax: quantile(0.5),
+            highMax: quantile(0.75),
+            unit: units.size === 1 ? Array.from(units)[0] : '',
+            mixedUnits: units.size > 1,
+          };
+        }
+
+        function getRentRateBand(rateValue, stats) {
+          const rate = Number(rateValue);
+          if (!Number.isFinite(rate) || rate <= 0 || !stats) return 'none';
+          if (rate <= stats.lowMax) return 'low';
+          if (rate <= stats.midMax) return 'mid';
+          if (rate <= stats.highMax) return 'high';
+          return 'top';
+        }
+
+        function updateLegendVisibility() {
+          if (legendDebt) legendDebt.hidden = currentLayer !== 'debt';
+          if (legendRent) legendRent.hidden = currentLayer !== 'rent';
+          layerDebtBtn?.classList.toggle('is-active', currentLayer === 'debt');
+          layerRentBtn?.classList.toggle('is-active', currentLayer === 'rent');
+        }
+
+        function updateRentLegend(items) {
+          const stats = buildRentLayerStats(items);
+          const unitText = stats?.unit ? (' (' + rentRateUnitLabel(stats.unit) + ')') : '';
+
+          if (rentLegendLow) {
+            rentLegendLow.textContent = stats
+              ? ('Низкая ставка до ' + formatLegendRateValue(stats.lowMax) + unitText)
+              : 'Низкая ставка';
+          }
+
+          if (rentLegendMid) {
+            rentLegendMid.textContent = stats
+              ? ('Средняя ставка до ' + formatLegendRateValue(stats.midMax) + unitText)
+              : 'Средняя ставка';
+          }
+
+          if (rentLegendHigh) {
+            rentLegendHigh.textContent = stats
+              ? ('Повышенная ставка до ' + formatLegendRateValue(stats.highMax) + unitText)
+              : 'Повышенная ставка';
+          }
+
+          if (rentLegendTop) {
+            rentLegendTop.textContent = stats
+              ? ('Высокая ставка от ' + formatLegendRateValue(stats.highMax) + unitText)
+              : 'Высокая ставка';
+          }
+
+          if (rentLegendNote) {
+            if (!stats) {
+              rentLegendNote.textContent = 'Нет данных по ставке для занятых мест.';
+            } else if (stats.mixedUnits) {
+              rentLegendNote.textContent = 'Слой показывает относительную ставку; единицы измерения различаются.';
+            } else if (stats.unit) {
+              rentLegendNote.textContent = 'Слой показывает относительную ставку по занятым местам (' + rentRateUnitLabel(stats.unit) + ').';
+            } else {
+              rentLegendNote.textContent = 'Слой показывает относительную ставку по занятым местам.';
+            }
+          }
+        }
+
+        function setLayerMode(mode) {
+          currentLayer = normalizeLayerMode(mode);
+          saveLayerModeToLS();
+          updateLegendVisibility();
+          if (typeof redrawShapesRef === 'function') {
+            redrawShapesRef();
+          }
         }
 
         function updateChosenPill() {
@@ -954,6 +1157,9 @@
             }
           } catch {}
         }
+
+        loadLayerModeFromLS();
+        updateLegendVisibility();
 
         function startPdfJs(pdfjsLib, workerSrc) {
           const stage = document.getElementById('stage');
@@ -1177,9 +1383,11 @@
               const json = await res.json();
 
               shapes = (json && json.ok === true && Array.isArray(json.items)) ? json.items : [];
+              updateRentLegend(shapes);
             } catch (e) {
               console.error(e);
               shapes = [];
+              updateRentLegend([]);
             }
           }
 
@@ -1200,6 +1408,14 @@
             );
             const BORDER_COLOR = '#064e3b';
             const BORDER_WIDTH_BASE = 2.5;
+            const rentLayerStats = buildRentLayerStats(shapes);
+            const rentRateColors = {
+              low: '#fef3c7',
+              mid: '#fbbf24',
+              high: '#f97316',
+              top: '#dc2626',
+              none: '#cbd5e1',
+            };
 
             const selected = selectedShapeId ? findShapeById(selectedShapeId) : null;
 
@@ -1246,6 +1462,7 @@
               const hasSpace = isLinked;
               const hasTenant = hasSpace && (s.space_tenant_id !== null && s.space_tenant_id !== undefined);
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
+              const rentRateBand = getRentRateBand(s.space_rent_rate_value, rentLayerStats);
               
               // Цвета для debt status
               const debtColors = {
@@ -1255,10 +1472,11 @@
                 red: '#dc2626',
                 gray: '#94a3b8',
               };
-              
+
               // Определяем тип отрисовки
-              let fillStyle = 'normal'; // normal, gray, vacant, unlinked
+              let fillStyle = 'normal'; // normal, debt, rent, rent-missing, vacant, unlinked
               let debtFill = null;
+              let rentFill = null;
               
               if (!hasSpace) {
                 // Shape без market_space_id — разметка без привязки
@@ -1266,6 +1484,9 @@
               } else if (!hasTenant) {
                 // Место есть, но арендатора нет — свободно
                 fillStyle = 'vacant';
+              } else if (currentLayer === 'rent') {
+                rentFill = rentRateColors[rentRateBand] || rentRateColors.none;
+                fillStyle = rentRateBand === 'none' ? 'rent-missing' : 'rent';
               } else if (debtStatus && debtColors[debtStatus]) {
                 // Есть арендатор и debt_status — используем debt цвет
                 debtFill = debtColors[debtStatus];
@@ -1296,6 +1517,11 @@
                 fill = debtFill;
                 stroke = BORDER_COLOR;
                 fo = 1;
+              } else if (fillStyle === 'rent' || fillStyle === 'rent-missing') {
+                // Слой ставок: чем выше ставка, тем теплее цвет
+                fill = rentFill;
+                stroke = BORDER_COLOR;
+                fo = 0.96;
               } else {
                 // Normal: обычная заливка
                 fill = s.fill_color || '#00A3FF';
@@ -1381,6 +1607,8 @@
 
             shapesSvg.innerHTML = parts.join('');
           }
+
+          redrawShapesRef = redrawShapes;
 
           function getCanvasPointFromClient(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
@@ -1757,6 +1985,8 @@
           zoomOutBtn?.addEventListener('click', async () => { scale = Math.max(0.2, scale / 1.2); await render(); });
           zoomResetBtn?.addEventListener('click', async () => { scale = 1.0; await render(); });
           fitWidthBtn?.addEventListener('click', async () => { await fitWidth(); });
+          layerDebtBtn?.addEventListener('click', () => setLayerMode('debt'));
+          layerRentBtn?.addEventListener('click', () => setLayerMode('rent'));
 
           if (CAN_EDIT && toggleEditBtn) {
             toggleEditBtn.addEventListener('click', async () => {
