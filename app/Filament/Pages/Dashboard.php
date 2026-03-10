@@ -232,20 +232,105 @@ class Dashboard extends BaseDashboard
 
     public function getWidgets(): array
     {
-        $widgets = [
-            MarketOverviewStatsWidget::class,
-            TenantActivityStatsWidget::class,
-            MarketSpacesStatusChartWidget::class,
+        $widgetMap = array_map(
+            static fn (array $config): string => $config['class'],
+            static::getAvailableDashboardWidgets()
+        );
+        $enabledKeys = $this->resolveEnabledDashboardWidgetKeys();
 
-            ExpiringContractsWidget::class,
-            RecentTenantRequestsWidget::class,
+        return array_values(array_intersect_key($widgetMap, array_flip($enabledKeys)));
+    }
+
+    /**
+     * @return array<string, array{class: class-string, label: string}>
+     */
+    public static function getAvailableDashboardWidgets(): array
+    {
+        $widgets = [
+            'overview' => [
+                'class' => MarketOverviewStatsWidget::class,
+                'label' => 'Ключевые показатели',
+            ],
+            'tenant_activity' => [
+                'class' => TenantActivityStatsWidget::class,
+                'label' => 'Активность арендаторов',
+            ],
+            'spaces_status' => [
+                'class' => MarketSpacesStatusChartWidget::class,
+                'label' => 'Статусы торговых мест',
+            ],
+            'expiring_contracts' => [
+                'class' => ExpiringContractsWidget::class,
+                'label' => 'Истекающие договоры',
+            ],
+            'recent_requests' => [
+                'class' => RecentTenantRequestsWidget::class,
+                'label' => 'Последние обращения',
+            ],
         ];
 
         if (class_exists(\App\Filament\Widgets\RevenueYearChartWidget::class)) {
-            array_splice($widgets, 1, 0, [\App\Filament\Widgets\RevenueYearChartWidget::class]);
+            $widgets = array_slice($widgets, 0, 1, true)
+                + [
+                    'revenue_year' => [
+                        'class' => \App\Filament\Widgets\RevenueYearChartWidget::class,
+                        'label' => 'Выручка по году',
+                    ],
+                ]
+                + array_slice($widgets, 1, null, true);
         }
 
         return $widgets;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function getAvailableDashboardWidgetOptions(): array
+    {
+        return array_map(
+            static fn (array $config): string => $config['label'],
+            static::getAvailableDashboardWidgets()
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function getDefaultDashboardWidgetKeys(): array
+    {
+        return array_keys(static::getAvailableDashboardWidgets());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveEnabledDashboardWidgetKeys(): array
+    {
+        $defaults = static::getDefaultDashboardWidgetKeys();
+        $marketId = $this->resolveMarketId();
+
+        if ($marketId <= 0) {
+            return $defaults;
+        }
+
+        $market = Market::query()
+            ->select(['id', 'settings'])
+            ->find($marketId);
+
+        $enabled = data_get($market?->settings, 'dashboard.enabled_widgets');
+
+        if (! is_array($enabled)) {
+            return $defaults;
+        }
+
+        $allowed = array_flip($defaults);
+        $normalized = array_values(array_filter(
+            $enabled,
+            static fn ($key): bool => is_string($key) && isset($allowed[$key]),
+        ));
+
+        return $normalized === [] ? $defaults : $normalized;
     }
 
     private function resolveMarketId(): int

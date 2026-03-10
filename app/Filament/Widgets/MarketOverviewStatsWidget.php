@@ -12,7 +12,6 @@ use App\Filament\Resources\TenantResource;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
-use App\Models\TenantContract;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -26,7 +25,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
 
-    protected ?string $heading = 'Ключевые показатели';
+    protected ?string $heading = 'Показатели рынка';
 
     protected function getStats(): array
     {
@@ -62,15 +61,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
         $freeSpaces = max($totalSpaces - $occupiedSpaces, 0);
 
-        // Договоры/арендаторы "сейчас" — по интервалам договоров, если они ведутся в БД.
-        $contractsNow = $this->countContractsActiveOnDate($marketId, $now);
-        if ($contractsNow === null) {
-            $contractsNow = TenantContract::query()
-                ->where('market_id', $marketId)
-                ->where('status', 'active')
-                ->count();
-        }
-
         $tenantsNow = $this->countTenantsActiveOnDate($marketId, $now);
         if ($tenantsNow === null) {
             $tenantsNow = Tenant::query()->where('market_id', $marketId)->count();
@@ -83,13 +73,10 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $reportRows = $this->countAccrualRowsForMonth($marketId, $monthYm, $monthStart, $monthEnd);
         $hasReportData = is_int($reportRows) && $reportRows > 0;
 
-        $tenantsInReport = $this->countTenantsForMonth($marketId, $monthYm, $monthStart, $monthEnd);
-
         $accrued = $this->sumAccruedForMonth($marketId, $monthYm, $monthStart, $monthEnd);
         $paid = $this->sumPaidForMonth($marketId, $monthYm, $monthStart, $monthEnd);
 
         $tenantsUrl = TenantResource::getUrl('index');
-        $contractsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
         $occupiedSpacesUrl = $this->appendQueryString($spacesUrl, [
             'tableFilters' => [
@@ -124,27 +111,26 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $accruedValue = $accrued ?? 0.0;
         $paidValue = $paid ?? 0.0;
         $debtValue = $accruedValue - $paidValue;
+        $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
+        $occupancyRate = $totalSpaces > 0
+            ? round(($occupiedSpaces / $totalSpaces) * 100)
+            : 0;
+        $occupancyDesc = $totalSpaces > 0
+            ? "Занято {$occupiedSpaces} из {$totalSpaces}"
+            : 'На рынке пока нет мест';
 
         $stats[] = $this->makeStat(
-            label: 'Активные арендаторы',
+            label: 'Арендаторы сейчас',
             value: $tenantsNow,
-            description: 'На текущую дату',
+            description: $marketScopeDesc,
             url: $tenantsUrl,
             color: 'primary',
             icon: 'heroicon-o-users',
         );
         $stats[] = $this->makeStat(
-            label: 'Активные договоры',
-            value: $contractsNow,
-            description: 'Через карточки арендаторов',
-            url: $contractsUrl,
-            color: 'gray',
-            icon: 'heroicon-o-document-text',
-        );
-        $stats[] = $this->makeStat(
-            label: 'Мест всего',
+            label: 'Торговых мест',
             value: $totalSpaces,
-            description: 'Открыть все места рынка',
+            description: $marketScopeDesc,
             url: $spacesUrl,
             color: 'gray',
             icon: 'heroicon-o-home-modern',
@@ -166,12 +152,12 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-sparkles',
         );
         $stats[] = $this->makeStat(
-            label: 'Арендаторы в начислениях',
-            value: $tenantsInReport ?? 0,
-            description: $reportDesc,
-            url: $accrualsUrl,
-            color: 'info',
-            icon: 'heroicon-o-user-group',
+            label: 'Заполняемость',
+            value: $occupancyRate . ' %',
+            description: $occupancyDesc,
+            url: $occupiedSpacesUrl,
+            color: $occupiedSpaces > 0 ? 'success' : 'gray',
+            icon: 'heroicon-o-chart-bar',
         );
         $stats[] = $this->makeStat(
             label: 'Начислено за месяц',
@@ -190,7 +176,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-arrow-down-circle',
         );
         $stats[] = $this->makeStat(
-            label: 'Остаток по отчёту',
+            label: 'К оплате за месяц',
             value: $this->formatMoney($debtValue) . ' ₽',
             description: $reportDesc,
             url: $accrualsUrl,
@@ -219,15 +205,14 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             );
         }
 
-        $stats[] = $this->makeStat('Активные арендаторы', 0, $note, null, 'primary', 'heroicon-o-users');
-        $stats[] = $this->makeStat('Активные договоры', 0, $note, null, 'gray', 'heroicon-o-document-text');
-        $stats[] = $this->makeStat('Мест всего', 0, $note, null, 'gray', 'heroicon-o-home-modern');
+        $stats[] = $this->makeStat('Арендаторы сейчас', 0, $note, null, 'primary', 'heroicon-o-users');
+        $stats[] = $this->makeStat('Торговых мест', 0, $note, null, 'gray', 'heroicon-o-home-modern');
         $stats[] = $this->makeStat('Занято мест', 0, $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободно мест', 0, $note, null, 'warning', 'heroicon-o-sparkles');
-        $stats[] = $this->makeStat('Арендаторы в начислениях', 0, $note, null, 'info', 'heroicon-o-user-group');
+        $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
-        $stats[] = $this->makeStat('Остаток по отчёту', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
+        $stats[] = $this->makeStat('К оплате за месяц', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
 
         return $stats;
     }
@@ -371,56 +356,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
     }
 
     /**
-     * Договоры "активны на дату" (оперативная метрика).
-     */
-    private function countContractsActiveOnDate(int $marketId, CarbonImmutable $at): ?int
-    {
-        if (! Schema::hasTable('tenant_contracts')) {
-            return null;
-        }
-
-        $meta = $this->getTableMeta('tenant_contracts');
-        $cols = $meta['columns'];
-
-        $marketCol = $this->pickFirstExisting($cols, ['market_id']);
-        if (! $marketCol) {
-            return null;
-        }
-
-        $startCol = $this->pickFirstExisting($cols, ['start_date', 'starts_at', 'date_start', 'begins_at']);
-        $endCol = $this->pickFirstExisting($cols, ['end_date', 'ends_at', 'date_end', 'expires_at']);
-
-        if (! $startCol && ! $endCol) {
-            return null;
-        }
-
-        $q = DB::table('tenant_contracts')->where($marketCol, $marketId);
-
-        $statusCol = $this->pickFirstExisting($cols, ['status']);
-        if ($statusCol) {
-            $q->where($statusCol, '!=', 'cancelled');
-        }
-
-        $date = $at->toDateString();
-
-        if ($startCol) {
-            $q->where($startCol, '<=', $date);
-        }
-
-        if ($endCol) {
-            $q->where(function (Builder $qq) use ($endCol, $date): void {
-                $qq->whereNull($endCol)->orWhere($endCol, '>=', $date);
-            });
-        }
-
-        try {
-            return (int) $q->count();
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    /**
      * Арендаторы "активны на дату" (оперативная метрика) — DISTINCT tenant_id по активным договорам.
      */
     private function countTenantsActiveOnDate(int $marketId, CarbonImmutable $at): ?int
@@ -527,54 +462,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         try {
             return (int) $q->distinct()->count($tenantCol);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
-    private function countContractsInPeriod(int $marketId, CarbonImmutable $start, CarbonImmutable $end): ?int
-    {
-        if (! Schema::hasTable('tenant_contracts')) {
-            return null;
-        }
-
-        $meta = $this->getTableMeta('tenant_contracts');
-        $cols = $meta['columns'];
-
-        $marketCol = $this->pickFirstExisting($cols, ['market_id']);
-        if (! $marketCol) {
-            return null;
-        }
-
-        $startCol = $this->pickFirstExisting($cols, ['start_date', 'starts_at', 'date_start', 'begins_at']);
-        $endCol = $this->pickFirstExisting($cols, ['end_date', 'ends_at', 'date_end', 'expires_at']);
-
-        if (! $startCol && ! $endCol) {
-            return null;
-        }
-
-        $q = DB::table('tenant_contracts')->where($marketCol, $marketId);
-
-        $statusCol = $this->pickFirstExisting($cols, ['status']);
-        if ($statusCol) {
-            $q->where($statusCol, '!=', 'cancelled');
-        }
-
-        $startDate = $start->toDateString();
-        $endDate = $end->toDateString();
-
-        if ($startCol) {
-            $q->where($startCol, '<', $endDate);
-        }
-
-        if ($endCol) {
-            $q->where(function (Builder $qq) use ($endCol, $startDate): void {
-                $qq->whereNull($endCol)->orWhere($endCol, '>=', $startDate);
-            });
-        }
-
-        try {
-            return (int) $q->count();
         } catch (\Throwable) {
             return null;
         }
