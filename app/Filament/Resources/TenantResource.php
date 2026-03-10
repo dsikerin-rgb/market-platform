@@ -2085,14 +2085,14 @@ class TenantResource extends BaseResource
             return [
                 'mode' => 'auto',
                 'status' => null,
-                'label' => 'Автоматически: нет данных',
+                'label' => 'Auto: no data',
                 'updated_at' => null,
                 'source' => null,
                 'severity' => 0,
             ];
         }
 
-        // Проверяем ручной статус (manual override)
+        // Check manual status first.
         $manualStatus = trim($record->debt_status ?? '');
         if ($manualStatus !== '' && isset(Tenant::DEBT_STATUS_LABELS[$manualStatus])) {
             return [
@@ -2100,26 +2100,20 @@ class TenantResource extends BaseResource
                 'status' => $manualStatus,
                 'label' => Tenant::DEBT_STATUS_LABELS[$manualStatus],
                 'updated_at' => $record->debt_status_updated_at?->format('d.m.Y H:i'),
-                'source' => 'Ручная установка',
+                'source' => 'Manual override',
                 'severity' => self::getDebtSeverity($manualStatus),
             ];
         }
 
-        // Автоматический расчёт через агрегатор
+        // Prefer space-level aggregation, but fall back to tenant-level 1C status when no space data exists.
         $aggregator = app(DebtAggregator::class);
         $aggregateMode = self::getTenantAggregateMode($record);
         $result = $aggregator->aggregate($record, $aggregateMode);
 
-        // Формируем результат
         if ($result['aggregate_status'] === null || $result['aggregate_status'] === 'gray') {
-            return [
-                'mode' => 'auto',
-                'status' => 'gray',
-                'label' => 'Нет данных',
-                'updated_at' => null,
-                'source' => 'Агрегатор: нет данных по местам',
-                'severity' => 0,
-            ];
+            $resolver = app(DebtStatusResolver::class);
+
+            return $resolver->resolve($record);
         }
 
         return [
@@ -2127,23 +2121,24 @@ class TenantResource extends BaseResource
             'status' => $result['aggregate_status'],
             'label' => $result['aggregate_label'],
             'updated_at' => null,
-            'source' => 'Агрегатор: режим ' . $aggregateMode,
+            'source' => 'Aggregator mode: ' . $aggregateMode,
             'severity' => $result['aggregate_severity'],
         ];
     }
 
     /**
-     * Получить режим агрегации для арендатора.
+     * Resolve tenant aggregate mode.
      */
     private static function getTenantAggregateMode(Tenant $tenant): string
     {
         $market = $tenant->market;
-        if (!$market || !isset($market->settings['debt_monitoring'])) {
+        if (! $market || ! isset($market->settings['debt_monitoring'])) {
             return 'worst';
         }
 
         return $market->settings['debt_monitoring']['tenant_aggregate_mode'] ?? 'worst';
     }
+
 
     /**
      * Получить severity статуса.
