@@ -29,10 +29,7 @@
     :root { color-scheme: light dark; }
     body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
     .wrap { padding: 16px; max-width: 1400px; margin: 0 auto; }
-    .top { display:flex; gap:10px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
-    .title { font-size: 18px; font-weight: 700; }
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .top-actions { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 
     button {
       border: 1px solid rgba(120,120,120,.35);
@@ -44,6 +41,14 @@
     }
     button:hover { background: rgba(120,120,120,.18); }
     button:disabled { opacity:.5; cursor:not-allowed; }
+    .button-accent {
+      background: #f59e0b;
+      border-color: #d97706;
+      color: #fff;
+    }
+    .button-accent:hover {
+      background: #ea580c;
+    }
 
     .pill {
       font-size: 11px;
@@ -157,9 +162,11 @@
     }
     .toolbar-help {
       flex-shrink: 0;
+      cursor: help;
     }
     .toolbar-help.toolbar-help--icon {
-      width: 28px;
+      width: 24px;
+      height: 24px;
       justify-content: center;
       padding-left: 0;
       padding-right: 0;
@@ -390,29 +397,9 @@
 
 <body>
   <div class="wrap">
-    <div class="top">
-      <div>
-        <div class="title">Карта рынка</div>
-      </div>
-
-      <div class="top-actions">
-        <button id="closeBtn" type="button" class="pill" style="background:transparent;">✕ Закрыть</button>
-        <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
-
-        @if ($hasMap)
-          <span
-            class="pill toolbar-help toolbar-help--icon"
-            title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−"
-            aria-label="Подсказка по навигации"
-          >
-            <span class="toolbar-helpIcon">?</span>
-          </span>
-        @endif
-      </div>
-    </div>
 
     <script>
-      (function () {
+      document.addEventListener('DOMContentLoaded', function () {
         const btn = document.getElementById('closeBtn');
         const toSettings = document.getElementById('toSettingsLink');
 
@@ -424,7 +411,7 @@
             if (toSettings) toSettings.style.display = 'inline-flex';
           }, 150);
         });
-      })();
+      });
     </script>
 
     @if (! $hasMap)
@@ -462,6 +449,8 @@
               >
                 <span class="toolbar-helpIcon">?</span>
               </span>
+              <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
+              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
             </div>
           </div>
 
@@ -1026,6 +1015,78 @@
             if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
           }
 
+          function approximateTextWidth(text, fontSize) {
+            return String(text || '').length * fontSize * 0.58;
+          }
+
+          function splitLabelToTwoLines(text) {
+            const value = String(text || '').trim();
+            if (!value) return [value];
+
+            const words = value.split(/\s+/).filter(Boolean);
+            if (words.length < 2) return [value];
+
+            let bestLines = [value];
+            let bestScore = Infinity;
+
+            for (let i = 1; i < words.length; i++) {
+              const line1 = words.slice(0, i).join(' ');
+              const line2 = words.slice(i).join(' ');
+              const score = Math.abs(line1.length - line2.length);
+
+              if (score < bestScore) {
+                bestScore = score;
+                bestLines = [line1, line2];
+              }
+            }
+
+            return bestLines;
+          }
+
+          function resolveShapeLabelSpec(shape, boxW, boxH) {
+            const rawCandidates = [
+              shape?.space_display_name,
+              shape?.space_number,
+              shape?.space_code,
+            ];
+
+            const seen = new Set();
+            const candidates = rawCandidates
+              .map((value) => String(value || '').trim())
+              .filter((value) => {
+                if (!value || seen.has(value)) return false;
+                seen.add(value);
+                return true;
+              });
+
+            if (!candidates.length) return null;
+
+            const fontSizes = [11, 10, 9, 8];
+            const pad = 6;
+
+            for (const candidate of candidates) {
+              const lineOptions = [[candidate]];
+              const splitLines = splitLabelToTwoLines(candidate);
+              if (splitLines.length > 1) {
+                lineOptions.push(splitLines);
+              }
+
+              for (const lines of lineOptions) {
+                for (const fontSize of fontSizes) {
+                  const lineHeight = Math.ceil(fontSize * 1.18);
+                  const maxLineWidth = Math.max(...lines.map((line) => approximateTextWidth(line, fontSize)));
+                  const totalHeight = lines.length * lineHeight;
+
+                  if (boxW >= maxLineWidth + pad * 2 && boxH >= totalHeight + pad * 2) {
+                    return { lines, fontSize, lineHeight };
+                  }
+                }
+              }
+            }
+
+            return null;
+          }
+
           function setHint(text) {
             if (!editHint) return;
             editHint.textContent = text;
@@ -1238,8 +1299,7 @@
                 '"></polygon>'
               );
 
-              const labelText = String(s.space_display_name || s.space_number || s.space_code || '').trim();
-              if (labelText && viewportPoints.length >= 3) {
+              if (viewportPoints.length >= 3) {
                 let minX = Infinity;
                 let minY = Infinity;
                 let maxX = -Infinity;
@@ -1254,23 +1314,25 @@
 
                 const boxW = maxX - minX;
                 const boxH = maxY - minY;
-                const fontSize = 11;
-                const pad = 6;
-                const labelWidth = labelText.length * 6.5;
-                const labelHeight = fontSize + 2;
+                const labelSpec = resolveShapeLabelSpec(s, boxW, boxH);
 
-                if (boxW >= labelWidth + pad * 2 && boxH >= labelHeight + pad * 2) {
+                if (labelSpec) {
                   const cx = (minX + maxX) / 2;
                   const cy = (minY + maxY) / 2;
-                  parts.push(
-                    '<text x="' + cx.toFixed(2) +
-                    '" y="' + cy.toFixed(2) +
-                    '" text-anchor="middle" dominant-baseline="middle"' +
-                    '" font-size="' + fontSize +
-                    '" fill="#0f172a" opacity="0.9">' +
-                    escapeHtml(labelText) +
-                    '</text>'
-                  );
+                  const offsetBase = ((labelSpec.lines.length - 1) * labelSpec.lineHeight) / 2;
+
+                  labelSpec.lines.forEach((line, index) => {
+                    const y = cy - offsetBase + (index * labelSpec.lineHeight);
+                    parts.push(
+                      '<text x="' + cx.toFixed(2) +
+                      '" y="' + y.toFixed(2) +
+                      '" text-anchor="middle" dominant-baseline="middle"' +
+                      '" font-size="' + labelSpec.fontSize +
+                      '" fill="#0f172a" opacity="0.9">' +
+                      escapeHtml(line) +
+                      '</text>'
+                    );
+                  });
                 }
               }
             }
