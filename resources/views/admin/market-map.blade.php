@@ -1574,7 +1574,7 @@
                       '<text x="' + cx.toFixed(2) +
                       '" y="' + y.toFixed(2) +
                       '" text-anchor="middle" dominant-baseline="middle"' +
-                      '" font-size="' + labelSpec.fontSize +
+                      ' font-size="' + labelSpec.fontSize +
                       '" fill="#0f172a" opacity="0.9">' +
                       escapeHtml(line) +
                       '</text>'
