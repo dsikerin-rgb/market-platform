@@ -2146,20 +2146,25 @@
 
                 // Проверяем наличие арендатора
                 const hasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+                const storefront = space.display_name ? String(space.display_name).trim() : '';
+                const activityType = space.activity_type ? String(space.activity_type).trim() : '';
+                const storefrontLabel = storefront || activityType;
                 const rentRateValue = space.rent_rate_value !== null && space.rent_rate_value !== undefined ? Number(space.rent_rate_value) : null;
                 const rentRateUnit = rentRateUnitLabel(space.rent_rate_unit || '');
                 const currentAccrualTotal = space.current_accrual_total !== null && space.current_accrual_total !== undefined ? Number(space.current_accrual_total) : null;
                 const currentAccrualPeriod = space.current_accrual_period ? String(space.current_accrual_period) : '';
+                const currentAccrualMode = space.current_accrual_mode ? String(space.current_accrual_mode) : '';
 
                 if (!hasTenant) {
                   line2 = 'Свободно';
-                  line3 = '';
+                  line3 = storefrontLabel ? ('Отдел / вывеска: ' + escapeHtml(storefrontLabel)) : '';
                   line4 = '';
                   if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
                     line5 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
                   }
                 } else {
                   line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
+                  line3 = storefrontLabel ? ('Отдел / вывеска: ' + escapeHtml(storefrontLabel)) : '';
 
                   // Информация о задолженности
                   const debtStatus = hit.debt_status || null;
@@ -2172,28 +2177,28 @@
                   const debtSource = hit.debt_status_source || '';
 
                   if (debtStatus === 'green') {
-                    line3 = 'Статус: Нет задолженности';
-                    line4 = debtMode === 'manual' ? 'Статус задан вручную' : '';
+                    line4 = 'Статус: Нет задолженности';
+                    line5 = debtMode === 'manual' ? 'Статус задан вручную' : '';
                   } else if (debtStatus === 'pending') {
-                    line3 = 'Статус: Срок не нарушен';
-                    line4 = 'Начисление есть, просрочки нет';
+                    line4 = 'Статус: Срок не нарушен';
+                    line5 = 'Начисление есть, просрочки нет';
                   } else if (debtStatus === 'orange' || debtStatus === 'red') {
-                    line3 = debtMode === 'manual'
+                    line4 = debtMode === 'manual'
                       ? ('Статус: ' + escapeHtml(debtLabel))
-                      : ('Статус: ' + (debtStatus === 'red' ? 'Длительная просрочка' : 'Есть просрочка'));
+                      : ('Просрочка: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
                     if (overdueDaysLabel !== null) {
-                      line4 = 'Дней просрочки: ' + overdueDaysLabel;
+                      line5 = '';
                     } else if (debtMode === 'manual') {
-                      line4 = 'Статус задан вручную';
+                      line5 = 'Статус задан вручную';
                     } else {
-                      line4 = '';
+                      line5 = '';
                     }
                   } else if (debtStatus === 'gray') {
-                    line3 = 'Статус: Нет данных 1С';
-                    line4 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                    line4 = 'Статус: Нет данных 1С';
+                    line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
                   } else {
-                    line3 = debtLabel ? ('Задолженность: ' + escapeHtml(debtLabel)) : 'Задолженность: —';
-                    line4 = '';
+                    line4 = debtLabel ? ('Задолженность: ' + escapeHtml(debtLabel)) : 'Задолженность: —';
+                    line5 = '';
                   }
 
                   if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
@@ -2201,7 +2206,8 @@
                   }
 
                   if (currentAccrualTotal !== null && Number.isFinite(currentAccrualTotal)) {
-                    line6 = 'Начислено' + (currentAccrualPeriod ? ' (' + escapeHtml(currentAccrualPeriod) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
+                    const accrualSuffix = currentAccrualMode === 'latest' ? 'последний период' : currentAccrualPeriod;
+                    line6 = 'Начислено' + (accrualSuffix ? ' (' + escapeHtml(accrualSuffix) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
                   }
                 }
               } else {
