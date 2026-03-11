@@ -11,6 +11,7 @@ use App\Services\TenantContracts\ContractDocumentClassifier;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -190,15 +191,35 @@ class TenantContractResource extends BaseResource
                         ->native(false)
                         ->helperText('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
 
+                    Forms\Components\Checkbox::make('limit_spaces_to_contract_tenant')
+                        ->label('Только места этого арендатора')
+                        ->default(true)
+                        ->live()
+                        ->dehydrated(false)
+                        ->helperText('По умолчанию список мест ограничен арендатором договора. Снимите галочку, если раньше у этого места был другой арендатор и нужен поиск по всему рынку.'),
+
                     Forms\Components\Select::make('market_space_id')
                         ->label('Торговое место')
-                        ->options(function (?TenantContract $record): array {
+                        ->options(function (Get $get, ?TenantContract $record): array {
                             if (! $record) {
                                 return [];
                             }
 
+                            $currentSpaceId = (int) ($get('market_space_id') ?: $record->market_space_id ?: 0);
+                            $restrictToTenant = (bool) ($get('limit_spaces_to_contract_tenant') ?? true);
+
                             $spaces = MarketSpace::query()
                                 ->where('market_id', (int) $record->market_id)
+                                ->when(
+                                    $restrictToTenant && filled($record->tenant_id),
+                                    fn (Builder $query) => $query->where(function (Builder $query) use ($record, $currentSpaceId): void {
+                                        $query->where('tenant_id', (int) $record->tenant_id);
+
+                                        if ($currentSpaceId > 0) {
+                                            $query->orWhere('id', $currentSpaceId);
+                                        }
+                                    })
+                                )
                                 ->orderByRaw('COALESCE(display_name, number, code)')
                                 ->get(['id', 'display_name', 'number', 'code']);
 
@@ -212,7 +233,7 @@ class TenantContractResource extends BaseResource
                         ->searchable()
                         ->preload()
                         ->nullable()
-                        ->helperText('Здесь задаётся только локальная привязка договора к торговому месту. Статус активности договора остаётся под управлением 1С.'),
+                        ->helperText('Здесь задаётся только локальная привязка договора к торговому месту. Список мест можно ограничить текущим арендатором договора или расширить на весь рынок.'),
 
                     Forms\Components\TextInput::make('space_mapping_updated_display')
                         ->label('Последняя локальная фиксация')
