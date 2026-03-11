@@ -9,6 +9,7 @@ use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
+use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Models\Market;
@@ -278,6 +279,17 @@ class Dashboard extends BaseDashboard
                     ],
                 ]
                 + array_slice($widgets, 1, null, true);
+        }
+
+        if (class_exists(OneCDebtSnapshotsHistoryWidget::class)) {
+            $widgets = array_slice($widgets, 0, 2, true)
+                + [
+                    'onec_debt_snapshots' => [
+                        'class' => OneCDebtSnapshotsHistoryWidget::class,
+                        'label' => 'История 1С-снимков задолженности',
+                    ],
+                ]
+                + array_slice($widgets, 2, null, true);
         }
 
         return $widgets;
