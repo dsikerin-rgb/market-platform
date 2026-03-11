@@ -17,7 +17,7 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
 
     protected int|string|array $columnSpan = [
         'default' => 'full',
-        'lg' => 1,
+        'lg' => 'full',
     ];
 
     protected ?string $maxHeight = '320px';
@@ -31,10 +31,9 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) ($user->market_id ?? null)
-        );
+        return (bool) $user
+            && method_exists($user, 'isSuperAdmin')
+            && $user->isSuperAdmin();
     }
 
     public function getDescription(): ?string
@@ -93,7 +92,6 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
                 ->orderByDesc(DB::raw('COALESCE(calculated_at, created_at)'))
                 ->limit(12)
                 ->get([
-                    'status',
                     'calculated_at',
                     'created_at',
                     'received',
