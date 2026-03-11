@@ -187,6 +187,7 @@ class ContractController extends Controller
             $created = 0;
             $updated = 0;
             $skipped = 0;
+            $manualSpaceMappingsPreserved = 0;
 
             $tenantsCreated = 0;
             $tenantsUpdatedByInn = 0;
@@ -405,6 +406,9 @@ class ContractController extends Controller
                 ]);
 
                 $wasRecentlyCreated = ! $contract->exists;
+                $currentSpaceMappingMode = $contract->effectiveSpaceMappingMode();
+                $usesManualSpaceMapping = ! $wasRecentlyCreated
+                    && $currentSpaceMappingMode === TenantContract::SPACE_MAPPING_MODE_MANUAL;
 
                 $contract->fill([
                     'tenant_id' => (int) $tenant->id,
@@ -418,9 +422,19 @@ class ContractController extends Controller
                     'is_active' => $isActive,
                 ]);
 
-                // Do not overwrite an existing place mapping when 1C did not provide
-                // a reliable market_space_code for this contract.
-                if ($marketSpaceId !== null || $wasRecentlyCreated) {
+                $contract->space_mapping_mode = $currentSpaceMappingMode;
+
+                if (
+                    $usesManualSpaceMapping
+                    && $marketSpaceId !== null
+                    && (int) ($contract->market_space_id ?? 0) !== (int) $marketSpaceId
+                ) {
+                    $manualSpaceMappingsPreserved++;
+                }
+
+                // Respect manually locked local mapping. In auto mode 1C may still
+                // update the place link when it provides a reliable market_space_code.
+                if (! $usesManualSpaceMapping && ($marketSpaceId !== null || $wasRecentlyCreated)) {
                     $contract->market_space_id = $marketSpaceId;
                 }
 
@@ -472,6 +486,7 @@ class ContractController extends Controller
                 'spaces_not_found' => $spaceNotFound,
                 'spaces_ambiguous' => $spaceAmbiguous,
                 'contracts_without_space' => $missingSpaceKey,
+                'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
                 'space_key_collisions' => $keysWithCollisions,
                 'linkage_stats' => $linkageStats,
             ];
@@ -508,6 +523,7 @@ class ContractController extends Controller
                     'updated' => $updated,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
                     'ip' => $request->ip(),
                 ]),
             ]);
@@ -528,6 +544,7 @@ class ContractController extends Controller
                     'duration_ms' => $durationMs,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
                     'linkage_stats' => $linkageStats,
                     'warnings' => $warnings,
                 ]);

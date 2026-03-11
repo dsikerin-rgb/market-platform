@@ -311,11 +311,124 @@ class OneCContractImportTest extends TestCase
         // Проверяем, что договор ОБНОВЛЁН и привязан к месту
         $contract->refresh();
         $this->assertEquals($space->id, $contract->market_space_id);
+        $this->assertSame(TenantContract::SPACE_MAPPING_MODE_AUTO, $contract->space_mapping_mode);
+    }
+
+    /**
+     * Тест: ручная локальная привязка не перезаписывается следующим импортом 1С
+     */
+    public function test_manual_space_mapping_is_preserved_on_repeated_import(): void
+    {
+        $lockedSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П11',
+            'code' => 'p11',
+        ]);
+
+        $oneCSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П12',
+            'code' => 'p12',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-007',
+            'name' => 'ООО Тест 7',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $lockedSpace->id,
+            'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_MANUAL,
+            'external_id' => 'contract-007',
+            'number' => '7',
+            'status' => 'active',
+            'starts_at' => now()->toDateString(),
+            'is_active' => true,
+            'notes' => 'Manual mapping lock',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-007',
+                    'tenant_external_id' => 'tenant-007',
+                    'market_space_code' => 'П12',
+                    'contract_number' => '7',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('warnings.manual_space_mappings_preserved', 1);
+
+        $contract->refresh();
+
+        $this->assertSame($lockedSpace->id, $contract->market_space_id);
+        $this->assertNotSame($oneCSpace->id, $contract->market_space_id);
+        $this->assertSame(TenantContract::SPACE_MAPPING_MODE_MANUAL, $contract->space_mapping_mode);
     }
 
     /**
      * Тест: нормализация ключа (uppercase, trim)
      */
+    /**
+     * Тест: импорт договора не создаёт дубль арендатора, если тот уже найден по ИНН.
+     */
+    public function test_contract_import_reuses_existing_tenant_found_by_inn(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'ООО Старый арендатор',
+            'inn' => '222300420262',
+            'external_id' => null,
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-inn-001',
+                    'tenant_external_id' => 'tenant-inn-001',
+                    'contract_number' => 'ИНН-1',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                    'inn' => '222300420262',
+                    'tenant_name' => 'ООО Новый арендатор',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('status', 'ok');
+
+        $this->assertSame(1, Tenant::query()->count());
+
+        $tenant->refresh();
+        $this->assertSame('tenant-inn-001', $tenant->external_id);
+        $this->assertSame('222300420262', $tenant->inn);
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-inn-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertSame((int) $tenant->id, (int) $contract->tenant_id);
+    }
+
     public function test_key_normalization_uppercase_trim(): void
     {
         // Создаём место с кодом "П3/2"
