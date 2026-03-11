@@ -9,6 +9,26 @@ use PHPUnit\Framework\TestCase;
 
 class SpaceGroupResolverTest extends TestCase
 {
+    public function test_detects_group_and_slot_from_market_space_number(): void
+    {
+        $resolver = new SpaceGroupResolver();
+
+        $result = $resolver->forMarketSpaceNumber('ОС8 13, 14');
+
+        $this->assertSame('ОС8', $result['group_token']);
+        $this->assertSame('13,14', $result['group_segments']);
+    }
+
+    public function test_detects_group_and_slot_from_market_space_number_with_slash(): void
+    {
+        $resolver = new SpaceGroupResolver();
+
+        $result = $resolver->forMarketSpaceNumber('ОС22/1');
+
+        $this->assertSame('ОС22', $result['group_token']);
+        $this->assertSame('1', $result['group_segments']);
+    }
+
     public function test_detects_os_group_and_segments_from_composite_place_token(): void
     {
         $resolver = new SpaceGroupResolver();
@@ -44,6 +64,16 @@ class SpaceGroupResolverTest extends TestCase
         ]);
 
         $this->assertFalse($result['is_composite']);
+        $this->assertNull($result['group_token']);
+        $this->assertNull($result['group_segments']);
+    }
+
+    public function test_returns_empty_group_meta_for_regular_market_space_number(): void
+    {
+        $resolver = new SpaceGroupResolver();
+
+        $result = $resolver->forMarketSpaceNumber('П32/1');
+
         $this->assertNull($result['group_token']);
         $this->assertNull($result['group_segments']);
     }
