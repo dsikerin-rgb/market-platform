@@ -14,6 +14,8 @@ class ListTenantContracts extends ListRecords
 
     protected static ?string $title = 'Договоры';
 
+    public ?string $activeTab = 'operational';
+
     public function getBreadcrumb(): string
     {
         return 'Договоры';
@@ -29,36 +31,57 @@ class ListTenantContracts extends ListRecords
         $tabClass = static::resolveTabClass();
 
         return [
-            'all' => $tabClass::make('Все договоры'),
+            'operational' => $this->makeTab(
+                $tabClass,
+                'Рабочий контур',
+                fn (Builder $query) => TenantContractResource::applyOperationalContractsScope($query, true)
+            ),
             'financial' => $this->makeTab(
                 $tabClass,
-                'Финансово актуальные',
+                'Актуальная задолженность',
                 fn (Builder $query) => TenantContractResource::applyLatestDebtSnapshotScope($query, true)
+            ),
+            'accruals' => $this->makeTab(
+                $tabClass,
+                'Текущие начисления',
+                fn (Builder $query) => TenantContractResource::applyLatestAccrualSnapshotScope($query, true)
             ),
             'mapping_candidates' => $this->makeTab(
                 $tabClass,
                 'Основные кандидаты на привязку',
                 fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
-                    TenantContractResource::applyWorkbenchBucketScope($query, 'primary_contract', true),
+                    TenantContractResource::applyOperationalContractsScope(
+                        TenantContractResource::applyWorkbenchBucketScope($query, 'primary_contract', true),
+                        true
+                    ),
                     'needs_mapping',
                     true
                 )
             ),
-            'financial_unmapped' => $this->makeTab(
+            'operational_unmapped' => $this->makeTab(
                 $tabClass,
-                'Финансово актуальные без места',
-                fn (Builder $query) => TenantContractResource::applyLatestDebtSnapshotScope($query->whereNull('market_space_id'), true)
+                'Рабочий контур без места',
+                fn (Builder $query) => TenantContractResource::applyOperationalContractsScope($query->whereNull('market_space_id'), true)
             ),
             'overlaps' => $this->makeTab(
                 $tabClass,
                 'С наложением',
-                fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope($query, 'has_overlap', true)
+                fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
+                    TenantContractResource::applyOperationalContractsScope($query, true),
+                    'has_overlap',
+                    true
+                )
             ),
             'review' => $this->makeTab(
                 $tabClass,
                 'Требуют разбора',
-                fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope($query, 'needs_review', true)
+                fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
+                    TenantContractResource::applyOperationalContractsScope($query, true),
+                    'needs_review',
+                    true
+                )
             ),
+            'all' => $tabClass::make('Все договоры'),
         ];
     }
 
