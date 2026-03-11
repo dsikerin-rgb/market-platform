@@ -15,6 +15,7 @@ class TenantContract extends Model
 
     public const SPACE_MAPPING_MODE_AUTO = 'auto';
     public const SPACE_MAPPING_MODE_MANUAL = 'manual';
+    public const SPACE_MAPPING_MODE_EXCLUDED = 'excluded';
 
     /**
      * @var list<string>
@@ -55,6 +56,7 @@ class TenantContract extends Model
         return [
             self::SPACE_MAPPING_MODE_AUTO,
             self::SPACE_MAPPING_MODE_MANUAL,
+            self::SPACE_MAPPING_MODE_EXCLUDED,
         ];
     }
 
@@ -90,5 +92,18 @@ class TenantContract extends Model
     public function usesManualSpaceMapping(): bool
     {
         return $this->effectiveSpaceMappingMode() === self::SPACE_MAPPING_MODE_MANUAL;
+    }
+
+    public function excludesFromSpaceMapping(): bool
+    {
+        return $this->effectiveSpaceMappingMode() === self::SPACE_MAPPING_MODE_EXCLUDED;
+    }
+
+    public function usesLockedSpaceMapping(): bool
+    {
+        return in_array($this->effectiveSpaceMappingMode(), [
+            self::SPACE_MAPPING_MODE_MANUAL,
+            self::SPACE_MAPPING_MODE_EXCLUDED,
+        ], true);
     }
 }

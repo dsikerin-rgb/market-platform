@@ -174,17 +174,18 @@ class TenantContractResource extends BaseResource
                 ->columns(2),
 
             Section::make('Локальная привязка')
-                ->description('Редактируются только локальные поля mapping. Канонические данные договора остаются под управлением 1С.')
+                ->description('Редактируются только локальные поля привязки. Канонические данные договора остаются под управлением 1С.')
                 ->schema([
                     Forms\Components\Select::make('space_mapping_mode')
                         ->label('Режим привязки')
                         ->options([
                             TenantContract::SPACE_MAPPING_MODE_AUTO => 'Авто (1С может обновить)',
                             TenantContract::SPACE_MAPPING_MODE_MANUAL => 'Ручная фиксация',
+                            TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует в привязке к месту',
                         ])
                         ->default(TenantContract::SPACE_MAPPING_MODE_AUTO)
                         ->native(false)
-                        ->helperText('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку.'),
+                        ->helperText('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
 
                     Forms\Components\Select::make('market_space_id')
                         ->label('Торговое место')
@@ -217,7 +218,7 @@ class TenantContractResource extends BaseResource
                         ->dehydrated(false),
 
                     Forms\Components\Textarea::make('notes')
-                        ->label('Заметки по mapping')
+                        ->label('Заметки по привязке')
                         ->rows(5)
                         ->columnSpanFull(),
                 ])
@@ -319,7 +320,7 @@ class TenantContractResource extends BaseResource
                     ->toggleable(),
 
                 TextColumn::make('latest_debt_snapshot')
-                    ->label('В debt-snapshot')
+                    ->label('В последней задолженности')
                     ->state(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'Да' : 'Нет')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'success' : 'gray')
@@ -411,7 +412,7 @@ class TenantContractResource extends BaseResource
                     ),
 
                 TernaryFilter::make('in_latest_debt_snapshot')
-                    ->label('Последний debt-snapshot')
+                    ->label('Последняя выгрузка задолженности')
                     ->trueLabel('Только финансово актуальные')
                     ->falseLabel('Только вне последней задолженности')
                     ->queries(
@@ -425,6 +426,7 @@ class TenantContractResource extends BaseResource
                     ->options([
                         TenantContract::SPACE_MAPPING_MODE_AUTO => 'Авто',
                         TenantContract::SPACE_MAPPING_MODE_MANUAL => 'Ручная фиксация',
+                        TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует',
                     ]),
             ])
             ->defaultSort('id', 'desc')
@@ -644,7 +646,7 @@ class TenantContractResource extends BaseResource
             $classified = static::classificationForRecord($contract);
             $token = (string) ($classified['place_token'] ?? '');
 
-            if (! ($classified['actionable'] ?? false) || $token === '') {
+            if ($contract->excludesFromSpaceMapping() || ! ($classified['actionable'] ?? false) || $token === '') {
                 continue;
             }
 
@@ -700,6 +702,13 @@ class TenantContractResource extends BaseResource
         $hasToken = filled($classified['place_token'] ?? null);
         $hasDate = filled($classified['document_date'] ?? null);
         $hasSpace = filled($record->market_space_id);
+
+        if ($record->excludesFromSpaceMapping()) {
+            return [
+                'label' => 'Исключен из привязки',
+                'color' => 'gray',
+            ];
+        }
 
         if (! (bool) ($classified['actionable'] ?? false)) {
             return [
@@ -835,6 +844,7 @@ class TenantContractResource extends BaseResource
     {
         return match (trim((string) $state)) {
             TenantContract::SPACE_MAPPING_MODE_MANUAL => 'Ручная',
+            TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует',
             default => 'Авто',
         };
     }
@@ -843,6 +853,7 @@ class TenantContractResource extends BaseResource
     {
         return match (trim((string) $state)) {
             TenantContract::SPACE_MAPPING_MODE_MANUAL => 'warning',
+            TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'gray',
             default => 'gray',
         };
     }
@@ -854,9 +865,15 @@ class TenantContractResource extends BaseResource
         }
 
         if (! $record->space_mapping_updated_at) {
-            return $record->usesManualSpaceMapping()
-                ? 'Ручная фиксация без истории'
-                : 'История локальной фиксации отсутствует';
+            if ($record->usesManualSpaceMapping()) {
+                return 'Ручная фиксация без истории';
+            }
+
+            if ($record->excludesFromSpaceMapping()) {
+                return 'Исключен из привязки без истории';
+            }
+
+            return 'История локальной фиксации отсутствует';
         }
 
         $parts = [$record->space_mapping_updated_at->format('d.m.Y H:i')];
@@ -914,6 +931,10 @@ class TenantContractResource extends BaseResource
         $classified = static::classificationForRecord($record);
         $token = trim((string) ($classified['place_token'] ?? ''));
 
+        if ($record->excludesFromSpaceMapping()) {
+            return 'Договор явно исключен из привязки к месту и не участвует в исторической цепочке по месту.';
+        }
+
         if (! ($classified['actionable'] ?? false) || $token === '') {
             return 'Для этого документа цепочка по месту не строится: нет надёжного токена места.';
         }
@@ -927,6 +948,10 @@ class TenantContractResource extends BaseResource
 
         foreach ($contracts as $candidate) {
             $candidateClassification = static::classificationForRecord($candidate);
+            if ($candidate->excludesFromSpaceMapping()) {
+                continue;
+            }
+
             if (! ($candidateClassification['actionable'] ?? false)) {
                 continue;
             }
@@ -981,7 +1006,7 @@ class TenantContractResource extends BaseResource
             }
 
             if (static::isInLatestDebtSnapshot($chainRecord)) {
-                $parts[] = '• debt';
+                $parts[] = '• в последней задолженности';
             }
 
             if ((int) $chainRecord->id === (int) $record->id) {
