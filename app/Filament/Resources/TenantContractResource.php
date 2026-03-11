@@ -51,6 +51,9 @@ class TenantContractResource extends BaseResource
     /** @var array<int, array<string, bool>> */
     private static array $latestDebtContractIdsCache = [];
 
+    /** @var array<int, array<int, bool>> */
+    private static array $latestAccrualContractIdsCache = [];
+
     /** @var array<string, array<string, list<int>>> */
     private static array $workbenchIdsCache = [];
 
@@ -812,6 +815,20 @@ class TenantContractResource extends BaseResource
         return static::$latestDebtContractIdsCache[$marketId][$externalId] ?? false;
     }
 
+    private static function isInLatestAccrualSnapshot(TenantContract $record): bool
+    {
+        $marketId = (int) $record->market_id;
+        $contractId = (int) $record->getKey();
+
+        if ($marketId <= 0 || $contractId <= 0) {
+            return false;
+        }
+
+        static::warmLatestAccrualContractIdsForMarket($marketId);
+
+        return static::$latestAccrualContractIdsCache[$marketId][$contractId] ?? false;
+    }
+
     private static function warmLatestDebtContractIdsForMarket(int $marketId): void
     {
         if ($marketId <= 0 || isset(static::$latestDebtContractIdsCache[$marketId])) {
@@ -842,6 +859,36 @@ class TenantContractResource extends BaseResource
         static::$latestDebtContractIdsCache[$marketId] = array_fill_keys($externalIds, true);
     }
 
+    private static function warmLatestAccrualContractIdsForMarket(int $marketId): void
+    {
+        if ($marketId <= 0 || isset(static::$latestAccrualContractIdsCache[$marketId])) {
+            return;
+        }
+
+        $latestPeriod = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->max('period');
+
+        if (! $latestPeriod) {
+            static::$latestAccrualContractIdsCache[$marketId] = [];
+
+            return;
+        }
+
+        $contractIds = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->where('period', $latestPeriod)
+            ->whereNotNull('tenant_contract_id')
+            ->pluck('tenant_contract_id')
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        static::$latestAccrualContractIdsCache[$marketId] = array_fill_keys($contractIds, true);
+    }
+
     private static function applyLatestDebtSnapshotFilter(Builder $query, bool $inLatestSnapshot): Builder
     {
         $method = $inLatestSnapshot ? 'whereExists' : 'whereNotExists';
@@ -862,9 +909,48 @@ class TenantContractResource extends BaseResource
         });
     }
 
+    private static function applyLatestAccrualSnapshotFilter(Builder $query, bool $inLatestSnapshot): Builder
+    {
+        $method = $inLatestSnapshot ? 'whereExists' : 'whereNotExists';
+
+        return $query->{$method}(static function ($subQuery): void {
+            $subQuery
+                ->selectRaw('1')
+                ->from('tenant_accruals as ta')
+                ->whereColumn('ta.market_id', 'tenant_contracts.market_id')
+                ->whereColumn('ta.tenant_contract_id', 'tenant_contracts.id')
+                ->whereRaw(
+                    'ta.period = (
+                        select max(ta2.period)
+                        from tenant_accruals as ta2
+                        where ta2.market_id = tenant_contracts.market_id
+                    )'
+                );
+        });
+    }
+
     public static function applyLatestDebtSnapshotScope(Builder $query, bool $inLatestSnapshot = true): Builder
     {
         return static::applyLatestDebtSnapshotFilter($query, $inLatestSnapshot);
+    }
+
+    public static function applyLatestAccrualSnapshotScope(Builder $query, bool $inLatestSnapshot = true): Builder
+    {
+        return static::applyLatestAccrualSnapshotFilter($query, $inLatestSnapshot);
+    }
+
+    public static function applyOperationalContractsScope(Builder $query, bool $onlyOperational = true): Builder
+    {
+        if (! $onlyOperational) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $query): void {
+            static::applyLatestDebtSnapshotFilter($query, true)
+                ->orWhere(function (Builder $query): void {
+                    static::applyLatestAccrualSnapshotFilter($query, true);
+                });
+        });
     }
 
     /**
@@ -936,6 +1022,7 @@ class TenantContractResource extends BaseResource
         }
 
         $buckets = [
+            'operational' => [],
             'primary_contract' => [],
             'supplemental_document' => [],
             'service_document' => [],
@@ -979,6 +1066,8 @@ class TenantContractResource extends BaseResource
 
         foreach ($marketIds as $currentMarketId) {
             static::warmChainStatsForMarket($currentMarketId);
+            static::warmLatestDebtContractIdsForMarket($currentMarketId);
+            static::warmLatestAccrualContractIdsForMarket($currentMarketId);
         }
 
         foreach ($records as $record) {
@@ -991,6 +1080,11 @@ class TenantContractResource extends BaseResource
             $excluded = $record->excludesFromSpaceMapping();
             $hasSpace = filled($record->market_space_id);
             $stats = static::chainStatsFor($record);
+            $isOperational = static::isInLatestDebtSnapshot($record) || static::isInLatestAccrualSnapshot($record);
+
+            if ($isOperational) {
+                $buckets['operational'][] = $recordId;
+            }
 
             if (array_key_exists($category, $buckets)) {
                 $buckets[$category][] = $recordId;
@@ -1004,19 +1098,19 @@ class TenantContractResource extends BaseResource
                 $buckets['has_document_date'][] = $recordId;
             }
 
-            if ($stats['chain_count'] > 1) {
+            if ($isOperational && $stats['chain_count'] > 1) {
                 $buckets['has_chain'][] = $recordId;
             }
 
-            if ($stats['overlap_count'] > 0) {
+            if ($isOperational && $stats['overlap_count'] > 0) {
                 $buckets['has_overlap'][] = $recordId;
             }
 
-            if ($category === 'primary_contract' && ! $excluded && $hasPlaceToken && $hasDocumentDate && ! $hasSpace) {
+            if ($isOperational && $category === 'primary_contract' && ! $excluded && $hasPlaceToken && $hasDocumentDate && ! $hasSpace) {
                 $buckets['needs_mapping'][] = $recordId;
             }
 
-            if ($actionable && ! $excluded && (! $hasPlaceToken || ! $hasDocumentDate)) {
+            if ($isOperational && $actionable && ! $excluded && (! $hasPlaceToken || ! $hasDocumentDate)) {
                 $buckets['needs_review'][] = $recordId;
             }
         }
