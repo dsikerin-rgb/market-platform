@@ -13,6 +13,7 @@ use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class TenantActivityStatsWidget extends StatsOverviewWidget
@@ -62,92 +63,37 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
             ->find($marketId);
 
         $tz = $this->resolveTimezone($market?->timezone);
-
         [$monthStartTz, $monthEndTz] = $this->resolveMonthRange($tz);
 
-        // Границы месяца считаем в TZ рынка, но в БД обычно лежит UTC → сравниваем по UTC.
         $monthStartUtc = $monthStartTz->utc();
-        $monthEndUtc   = $monthEndTz->utc();
+        $monthEndUtc = $monthEndTz->utc();
 
         $requestsQuery = TenantRequest::query()->where('market_id', $marketId);
-        $contractsQuery = TenantContract::query()->where('market_id', $marketId);
-
-        // TenantRequest: колонки и статусы
         $requestsTable = (new TenantRequest())->getTable();
         $requestsStatusCol = $this->pickFirstExistingColumn($requestsTable, ['status']) ?? 'status';
         $requestsCreatedCol = $this->pickFirstExistingColumn($requestsTable, ['created_at']) ?? 'created_at';
-        $requestsResolvedCol = $this->pickFirstExistingColumn($requestsTable, [
-            'resolved_at',
-            'closed_at',
-            'completed_at',
-            'updated_at', // fallback
-        ]) ?? 'updated_at';
-
-        // TenantContract: колонки
-        $contractsTable = (new TenantContract())->getTable();
-        $contractsCreatedCol = $this->pickFirstExistingColumn($contractsTable, ['created_at']) ?? 'created_at';
-        $contractsEndCol = $this->pickFirstExistingColumn($contractsTable, [
-            'ends_at',
-            'end_date',
-            'ended_at',
-            'expires_at',
-        ]);
-
         $closedStatuses = ['resolved', 'closed'];
 
-        // 1) Новые обращения за месяц (созданы в месяце)
         $requestsCreatedInMonth = (clone $requestsQuery)
             ->where($requestsCreatedCol, '>=', $monthStartUtc)
             ->where($requestsCreatedCol, '<', $monthEndUtc)
             ->count();
 
-        // 2) Открытые обращения (на конец месяца): созданы ДО конца месяца и не закрыты
-        $openRequestsAtMonthEnd = (clone $requestsQuery)
-            ->where($requestsCreatedCol, '<', $monthEndUtc)
+        $openRequests = (clone $requestsQuery)
             ->whereNotIn($requestsStatusCol, $closedStatuses)
             ->count();
 
-        // 3) Решённые/закрытые в месяце (по resolved_at/closed_at если есть)
-        $resolvedInMonth = (clone $requestsQuery)
-            ->whereIn($requestsStatusCol, $closedStatuses)
-            ->where($requestsResolvedCol, '>=', $monthStartUtc)
-            ->where($requestsResolvedCol, '<', $monthEndUtc)
-            ->count();
+        [$financialContourContracts, $financialContourWithoutSpace] = $this->resolveFinancialContourStats($marketId);
 
-        // 4) Новые договоры за месяц (созданы в месяце)
-        $contractsCreatedInMonth = (clone $contractsQuery)
-            ->where($contractsCreatedCol, '>=', $monthStartUtc)
-            ->where($contractsCreatedCol, '<', $monthEndUtc)
-            ->count();
-
-        // 5) Завершённые договоры в месяце (учитываем, что end_date может быть DATE без времени)
-        $contractsFinishedInMonth = 0;
-
-        if ($contractsEndCol) {
-            if ($this->isDateOnlyColumnName($contractsEndCol)) {
-                $startDate = $monthStartTz->toDateString();
-                $endDate = $monthEndTz->toDateString();
-
-                $contractsFinishedInMonth = (clone $contractsQuery)
-                    ->where($contractsEndCol, '>=', $startDate)
-                    ->where($contractsEndCol, '<', $endDate)
-                    ->count();
-            } else {
-                $contractsFinishedInMonth = (clone $contractsQuery)
-                    ->where($contractsEndCol, '>=', $monthStartUtc)
-                    ->where($contractsEndCol, '<', $monthEndUtc)
-                    ->count();
-            }
-        }
-
-        // Убираем лишнюю подпись "MM.YYYY (TZ: ...)" в каждом виджете:
-        // - не добавляем periodLabel в description
         return [
-            Stat::make('Новых обращений', $requestsCreatedInMonth),
-            Stat::make('Открытых обращений', $openRequestsAtMonthEnd),
-            Stat::make('Решённых обращений', $resolvedInMonth),
-            Stat::make('Новых договоров', $contractsCreatedInMonth),
-            Stat::make('Завершённых договоров', $contractsFinishedInMonth),
+            Stat::make('Открытых обращений', $openRequests)
+                ->description('Текущее количество незакрытых обращений'),
+            Stat::make('Новых обращений за месяц', $requestsCreatedInMonth)
+                ->description('Созданы в выбранном месяце'),
+            Stat::make('Договоров в финансовом контуре', $financialContourContracts)
+                ->description('Есть в долгах 1С или связаны с начислениями'),
+            Stat::make('Без привязки к месту', $financialContourWithoutSpace)
+                ->description('Требуют разбора в договорах'),
         ];
     }
 
@@ -169,9 +115,67 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
     }
 
     /**
-     * Возвращает:
-     * - startOfMonth (TZ рынка)
-     * - startOfNextMonth (TZ рынка)
+     * @return array{0: int, 1: int}
+     */
+    private function resolveFinancialContourStats(int $marketId): array
+    {
+        $contractIds = [];
+
+        if (Schema::hasTable('contract_debts')) {
+            try {
+                $debtContractIds = DB::table('tenant_contracts as tc')
+                    ->join('contract_debts as d', function ($join): void {
+                        $join->on('d.market_id', '=', 'tc.market_id')
+                            ->on('d.contract_external_id', '=', 'tc.external_id');
+                    })
+                    ->where('tc.market_id', $marketId)
+                    ->distinct()
+                    ->pluck('tc.id')
+                    ->map(fn ($id): int => (int) $id)
+                    ->all();
+
+                foreach ($debtContractIds as $contractId) {
+                    $contractIds[$contractId] = true;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        if (Schema::hasTable('tenant_accruals') && Schema::hasColumn('tenant_accruals', 'tenant_contract_id')) {
+            try {
+                $accrualContractIds = DB::table('tenant_accruals')
+                    ->where('market_id', $marketId)
+                    ->whereNotNull('tenant_contract_id')
+                    ->distinct()
+                    ->pluck('tenant_contract_id')
+                    ->map(fn ($id): int => (int) $id)
+                    ->all();
+
+                foreach ($accrualContractIds as $contractId) {
+                    $contractIds[$contractId] = true;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        if ($contractIds === []) {
+            return [0, 0];
+        }
+
+        $baseQuery = TenantContract::query()
+            ->where('market_id', $marketId)
+            ->whereIn('id', array_keys($contractIds));
+
+        $total = (clone $baseQuery)->count();
+        $withoutSpace = (clone $baseQuery)->whereNull('market_space_id')->count();
+
+        return [$total, $withoutSpace];
+    }
+
+    /**
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
      */
     private function resolveMonthRange(string $tz): array
     {
@@ -188,7 +192,7 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
             : CarbonImmutable::now($tz)->format('Y-m');
 
         $start = CarbonImmutable::createFromFormat('Y-m', $monthYm, $tz)->startOfMonth();
-        $end   = $start->addMonth();
+        $end = $start->addMonth();
 
         return [$start, $end];
     }
@@ -204,29 +208,16 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         return null;
     }
 
-    private function isDateOnlyColumnName(string $column): bool
-    {
-        $c = strtolower($column);
-
-        if (str_ends_with($c, '_at')) {
-            return false;
-        }
-
-        // end_date / start_date / ...date
-        return str_contains($c, 'date');
-    }
-
     /**
      * @return array<int, Stat>
      */
     private function zeroStats(?string $note = null): array
     {
         $stats = [
-            Stat::make('Новых обращений', 0),
             Stat::make('Открытых обращений', 0),
-            Stat::make('Решённых обращений', 0),
-            Stat::make('Новых договоров', 0),
-            Stat::make('Завершённых договоров', 0),
+            Stat::make('Новых обращений за месяц', 0),
+            Stat::make('Договоров в финансовом контуре', 0),
+            Stat::make('Без привязки к месту', 0),
         ];
 
         if ($note) {
