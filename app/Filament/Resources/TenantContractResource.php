@@ -54,6 +54,12 @@ class TenantContractResource extends BaseResource
     /** @var array<int, array<int, bool>> */
     private static array $latestAccrualContractIdsCache = [];
 
+    /** @var array<int, array<string, bool>> */
+    private static array $debtHistoryContractIdsCache = [];
+
+    /** @var array<int, array<int, bool>> */
+    private static array $accrualHistoryContractIdsCache = [];
+
     /** @var array<string, array<string, list<int>>> */
     private static array $workbenchIdsCache = [];
 
@@ -829,6 +835,34 @@ class TenantContractResource extends BaseResource
         return static::$latestAccrualContractIdsCache[$marketId][$contractId] ?? false;
     }
 
+    private static function isInDebtHistory(TenantContract $record): bool
+    {
+        $marketId = (int) $record->market_id;
+        $externalId = trim((string) ($record->external_id ?? ''));
+
+        if ($marketId <= 0 || $externalId === '') {
+            return false;
+        }
+
+        static::warmDebtHistoryContractIdsForMarket($marketId);
+
+        return static::$debtHistoryContractIdsCache[$marketId][$externalId] ?? false;
+    }
+
+    private static function isInAccrualHistory(TenantContract $record): bool
+    {
+        $marketId = (int) $record->market_id;
+        $contractId = (int) $record->getKey();
+
+        if ($marketId <= 0 || $contractId <= 0) {
+            return false;
+        }
+
+        static::warmAccrualHistoryContractIdsForMarket($marketId);
+
+        return static::$accrualHistoryContractIdsCache[$marketId][$contractId] ?? false;
+    }
+
     private static function warmLatestDebtContractIdsForMarket(int $marketId): void
     {
         if ($marketId <= 0 || isset(static::$latestDebtContractIdsCache[$marketId])) {
@@ -889,6 +923,44 @@ class TenantContractResource extends BaseResource
         static::$latestAccrualContractIdsCache[$marketId] = array_fill_keys($contractIds, true);
     }
 
+    private static function warmDebtHistoryContractIdsForMarket(int $marketId): void
+    {
+        if ($marketId <= 0 || isset(static::$debtHistoryContractIdsCache[$marketId])) {
+            return;
+        }
+
+        $externalIds = DB::table('contract_debts')
+            ->where('market_id', $marketId)
+            ->whereNotNull('contract_external_id')
+            ->pluck('contract_external_id')
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter(static fn (string $value): bool => $value !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        static::$debtHistoryContractIdsCache[$marketId] = array_fill_keys($externalIds, true);
+    }
+
+    private static function warmAccrualHistoryContractIdsForMarket(int $marketId): void
+    {
+        if ($marketId <= 0 || isset(static::$accrualHistoryContractIdsCache[$marketId])) {
+            return;
+        }
+
+        $contractIds = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->whereNotNull('tenant_contract_id')
+            ->pluck('tenant_contract_id')
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        static::$accrualHistoryContractIdsCache[$marketId] = array_fill_keys($contractIds, true);
+    }
+
     private static function applyLatestDebtSnapshotFilter(Builder $query, bool $inLatestSnapshot): Builder
     {
         $method = $inLatestSnapshot ? 'whereExists' : 'whereNotExists';
@@ -929,6 +1001,32 @@ class TenantContractResource extends BaseResource
         });
     }
 
+    private static function applyDebtHistoryFilter(Builder $query, bool $inHistory): Builder
+    {
+        $method = $inHistory ? 'whereExists' : 'whereNotExists';
+
+        return $query->{$method}(static function ($subQuery): void {
+            $subQuery
+                ->selectRaw('1')
+                ->from('contract_debts as cd')
+                ->whereColumn('cd.market_id', 'tenant_contracts.market_id')
+                ->whereColumn('cd.contract_external_id', 'tenant_contracts.external_id');
+        });
+    }
+
+    private static function applyAccrualHistoryFilter(Builder $query, bool $inHistory): Builder
+    {
+        $method = $inHistory ? 'whereExists' : 'whereNotExists';
+
+        return $query->{$method}(static function ($subQuery): void {
+            $subQuery
+                ->selectRaw('1')
+                ->from('tenant_accruals as ta')
+                ->whereColumn('ta.market_id', 'tenant_contracts.market_id')
+                ->whereColumn('ta.tenant_contract_id', 'tenant_contracts.id');
+        });
+    }
+
     public static function applyLatestDebtSnapshotScope(Builder $query, bool $inLatestSnapshot = true): Builder
     {
         return static::applyLatestDebtSnapshotFilter($query, $inLatestSnapshot);
@@ -939,6 +1037,16 @@ class TenantContractResource extends BaseResource
         return static::applyLatestAccrualSnapshotFilter($query, $inLatestSnapshot);
     }
 
+    public static function applyDebtHistoryScope(Builder $query, bool $inHistory = true): Builder
+    {
+        return static::applyDebtHistoryFilter($query, $inHistory);
+    }
+
+    public static function applyAccrualHistoryScope(Builder $query, bool $inHistory = true): Builder
+    {
+        return static::applyAccrualHistoryFilter($query, $inHistory);
+    }
+
     public static function applyOperationalContractsScope(Builder $query, bool $onlyOperational = true): Builder
     {
         if (! $onlyOperational) {
@@ -946,9 +1054,9 @@ class TenantContractResource extends BaseResource
         }
 
         return $query->where(function (Builder $query): void {
-            static::applyLatestDebtSnapshotFilter($query, true)
+            static::applyDebtHistoryFilter($query, true)
                 ->orWhere(function (Builder $query): void {
-                    static::applyLatestAccrualSnapshotFilter($query, true);
+                    static::applyAccrualHistoryFilter($query, true);
                 });
         });
     }
@@ -1068,6 +1176,8 @@ class TenantContractResource extends BaseResource
             static::warmChainStatsForMarket($currentMarketId);
             static::warmLatestDebtContractIdsForMarket($currentMarketId);
             static::warmLatestAccrualContractIdsForMarket($currentMarketId);
+            static::warmDebtHistoryContractIdsForMarket($currentMarketId);
+            static::warmAccrualHistoryContractIdsForMarket($currentMarketId);
         }
 
         foreach ($records as $record) {
@@ -1080,7 +1190,7 @@ class TenantContractResource extends BaseResource
             $excluded = $record->excludesFromSpaceMapping();
             $hasSpace = filled($record->market_space_id);
             $stats = static::chainStatsFor($record);
-            $isOperational = static::isInLatestDebtSnapshot($record) || static::isInLatestAccrualSnapshot($record);
+            $isOperational = static::isInDebtHistory($record) || static::isInAccrualHistory($record);
 
             if ($isOperational) {
                 $buckets['operational'][] = $recordId;
