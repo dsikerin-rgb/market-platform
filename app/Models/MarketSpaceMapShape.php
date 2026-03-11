@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 final class MarketSpaceMapShape extends Model
 {
@@ -68,6 +69,10 @@ final class MarketSpaceMapShape extends Model
 
     protected static function booted(): void
     {
+        static::creating(static function (): void {
+            self::syncPrimaryKeySequenceForPostgres();
+        });
+
         static::saving(static function (self $shape): void {
             $poly = self::normalizePolygon($shape->polygon);
 
@@ -85,6 +90,25 @@ final class MarketSpaceMapShape extends Model
             // нормализуем всегда, даже если < 3 точек (валидация — на API)
             $shape->polygon = $poly;
         });
+    }
+
+    private static function syncPrimaryKeySequenceForPostgres(): void
+    {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $seqRow = DB::selectOne("select pg_get_serial_sequence('market_space_map_shapes', 'id') as seq");
+        $sequence = is_object($seqRow) ? ($seqRow->seq ?? null) : null;
+
+        if (! \is_string($sequence) || $sequence === '') {
+            return;
+        }
+
+        DB::statement(
+            "select setval(?, coalesce((select max(id) from market_space_map_shapes), 0) + 1, false)",
+            [$sequence]
+        );
     }
 
     /**
