@@ -1,5 +1,4 @@
 <?php
-# app/Filament/Widgets/RevenueYearChartWidget.php
 
 declare(strict_types=1);
 
@@ -11,7 +10,6 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,7 +17,7 @@ class RevenueYearChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected ?string $heading = 'К оплате (начислено) и заполняемость за 13 месяцев';
+    protected ?string $heading = 'Начислено по 1С и охват мест за 13 месяцев';
 
     protected int|string|array $columnSpan = [
         'default' => 'full',
@@ -65,7 +63,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market->timezone);
 
-        return 'Локация: ' . (string) $market->name . ' • TZ: ' . $tz;
+        return 'Локация: ' . (string) $market->name . ' • TZ: ' . $tz . ' • Источник: 1С';
     }
 
     protected function getData(): array
@@ -88,10 +86,8 @@ class RevenueYearChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        // Конец окна = выбранный "отчётный месяц"
         [, $endMonthStart] = $this->resolveEndMonth($tz);
 
-        // 13 месяцев (включая выбранный)
         $months = [];
         $cursor = $endMonthStart->subMonths(12);
         for ($i = 0; $i < 13; $i++) {
@@ -99,87 +95,26 @@ class RevenueYearChartWidget extends ChartWidget
             $cursor = $cursor->addMonth();
         }
 
-        $labels = array_map(fn (string $ym) => $this->formatMonthLabel($ym, $tz), $months);
+        $labels = array_map(
+            fn (string $ym): string => $this->formatMonthLabel($ym, $tz),
+            $months
+        );
 
         $totalSpaces = MarketSpace::query()
             ->where('market_id', $marketId)
             ->count();
 
-        if (! Schema::hasTable('tenant_accruals')) {
+        if (! Schema::hasTable('contract_debts')) {
             return $this->emptyTwoSeriesChart($labels, count($months));
         }
 
-        $meta = $this->getTableMeta('tenant_accruals');
-        $cols = $meta['columns'];
-
-        $marketCol = $this->pickFirstExisting($cols, ['market_id']);
-        $periodCol = $this->pickFirstExisting($cols, ['period', 'period_ym', 'period_start', 'period_date', 'accrual_period', 'month']);
-
-        if (! $marketCol || ! $periodCol) {
-            return $this->emptyTwoSeriesChart($labels, count($months));
-        }
-
-        $periodMode = $this->detectPeriodMode('tenant_accruals', $marketCol, $periodCol, $marketId);
-
-        // Payable (строчно): COALESCE(total_with_vat, total_amount, sum(parts))
-        $payableRowExpr = $this->buildPayableRowExpression($cols);
-
-        if ($payableRowExpr === null) {
-            return $this->emptyTwoSeriesChart($labels, count($months));
-        }
-
-        // Здесь payableRowExpr уже возвращает выражение "на строку", поэтому просто SUM(...)
-        $payableSumExpr = 'COALESCE(SUM(' . $payableRowExpr . '), 0)';
-
-        // Заполняемость: DISTINCT count(market_space_id) where payable > 0
-        $spaceCol = $this->pickFirstExisting($cols, ['market_space_id', 'space_id']);
-        $canComputeOccupancy = (bool) $spaceCol && $totalSpaces > 0;
-
-        $payableData = [];
-        $occupancyPctData = [];
-
-        foreach ($months as $ym) {
-            $startTz = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
-            $endTz = $startTz->addMonth();
-
-            // --- Payable ---
-            $qPayable = DB::table('tenant_accruals')->where($marketCol, $marketId);
-            $this->applyMonthFilter($qPayable, $periodCol, $ym, $startTz, $endTz, $periodMode);
-
-            try {
-                $v = $qPayable->selectRaw($payableSumExpr . ' as v')->value('v');
-                $payableData[] = (int) round(is_numeric($v) ? (float) $v : 0.0);
-            } catch (\Throwable) {
-                $payableData[] = 0;
-            }
-
-            // --- Occupancy % ---
-            if (! $canComputeOccupancy) {
-                $occupancyPctData[] = 0.0;
-                continue;
-            }
-
-            $qOcc = DB::table('tenant_accruals')->where($marketCol, $marketId);
-            $this->applyMonthFilter($qOcc, $periodCol, $ym, $startTz, $endTz, $periodMode);
-
-            // payable > 0 по той же логике, что и начислено
-            $qOcc->whereRaw('(' . $payableRowExpr . ') > 0');
-
-            try {
-                $occupied = (int) $qOcc->distinct()->count($spaceCol);
-            } catch (\Throwable) {
-                $occupied = 0;
-            }
-
-            $pct = ($totalSpaces > 0) ? ($occupied / $totalSpaces) * 100 : 0;
-            $occupancyPctData[] = (float) round($pct, 1);
-        }
+        [$payableData, $coveragePctData] = $this->buildDebtSeries($marketId, $months, $totalSpaces);
 
         return [
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'К оплате (начислено)',
+                    'label' => 'К оплате (1С)',
                     'data' => $payableData,
                     'yAxisID' => 'y',
                     'tension' => 0.25,
@@ -188,10 +123,11 @@ class RevenueYearChartWidget extends ChartWidget
                     'backgroundColor' => '#fbbf24',
                     'pointRadius' => 2,
                     'borderWidth' => 2,
+                    'spanGaps' => false,
                 ],
                 [
-                    'label' => 'Заполняемость, %',
-                    'data' => $occupancyPctData,
+                    'label' => 'Мест в 1С-контуре, %',
+                    'data' => $coveragePctData,
                     'yAxisID' => 'y1',
                     'tension' => 0.25,
                     'fill' => false,
@@ -199,6 +135,7 @@ class RevenueYearChartWidget extends ChartWidget
                     'backgroundColor' => '#60a5fa',
                     'pointRadius' => 2,
                     'borderWidth' => 2,
+                    'spanGaps' => false,
                 ],
             ],
         ];
@@ -307,19 +244,16 @@ class RevenueYearChartWidget extends ChartWidget
     {
         $raw = null;
 
-        // Filament page filters
         if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
             $raw = $this->pageFilters['month'] ?? null;
         }
 
-        // fallback
         if (! $raw && is_array($this->filters ?? null)) {
             $raw = $this->filters['month'] ?? null;
         }
 
         $raw = $raw ?: session('dashboard_month');
 
-        // Если вдруг попал dashboard_period=Y-m-d
         if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
             try {
                 $raw = CarbonImmutable::createFromFormat('Y-m-d', $raw, $tz)->format('Y-m');
@@ -362,8 +296,8 @@ class RevenueYearChartWidget extends ChartWidget
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'К оплате (начислено)',
-                    'data' => array_fill(0, $count, 0),
+                    'label' => 'К оплате (1С)',
+                    'data' => array_fill(0, $count, null),
                     'yAxisID' => 'y',
                     'tension' => 0.25,
                     'fill' => false,
@@ -371,10 +305,11 @@ class RevenueYearChartWidget extends ChartWidget
                     'backgroundColor' => '#fbbf24',
                     'pointRadius' => 2,
                     'borderWidth' => 2,
+                    'spanGaps' => false,
                 ],
                 [
-                    'label' => 'Заполняемость, %',
-                    'data' => array_fill(0, $count, 0),
+                    'label' => 'Мест в 1С-контуре, %',
+                    'data' => array_fill(0, $count, null),
                     'yAxisID' => 'y1',
                     'tension' => 0.25,
                     'fill' => false,
@@ -382,179 +317,100 @@ class RevenueYearChartWidget extends ChartWidget
                     'backgroundColor' => '#60a5fa',
                     'pointRadius' => 2,
                     'borderWidth' => 2,
+                    'spanGaps' => false,
                 ],
             ],
         ];
     }
 
-    private function getTableMeta(string $table): array
+    /**
+     * @param  list<string>  $months
+     * @return array{0: list<int|null>, 1: list<float|null>}
+     */
+    private function buildDebtSeries(int $marketId, array $months, int $totalSpaces): array
     {
         try {
-            $columns = Schema::getColumnListing($table);
+            $rows = DB::table('contract_debts as d')
+                ->leftJoin('tenant_contracts as tc', function ($join): void {
+                    $join->on('tc.market_id', '=', 'd.market_id')
+                        ->on('tc.external_id', '=', 'd.contract_external_id');
+                })
+                ->where('d.market_id', $marketId)
+                ->whereIn('d.period', $months)
+                ->orderBy('d.period')
+                ->orderBy('d.contract_external_id')
+                ->orderByDesc('d.calculated_at')
+                ->select([
+                    'd.period',
+                    'd.contract_external_id',
+                    'd.accrued_amount',
+                    'tc.market_space_id',
+                ])
+                ->get();
         } catch (\Throwable) {
-            $columns = [];
+            return [
+                array_fill(0, count($months), null),
+                array_fill(0, count($months), null),
+            ];
         }
 
-        return [
-            'columns' => $columns,
-        ];
-    }
+        $latestByContractPeriod = [];
 
-    private function pickFirstExisting(array $columns, array $candidates): ?string
-    {
-        $set = array_flip($columns);
+        foreach ($rows as $row) {
+            $period = trim((string) ($row->period ?? ''));
+            $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
 
-        foreach ($candidates as $candidate) {
-            if (isset($set[$candidate])) {
-                return $candidate;
+            if ($period === '' || $contractExternalId === '') {
+                continue;
+            }
+
+            $key = $period . '|' . $contractExternalId;
+
+            if (! array_key_exists($key, $latestByContractPeriod)) {
+                $latestByContractPeriod[$key] = $row;
             }
         }
 
-        return null;
-    }
+        $periodStats = [];
 
-    /**
-     * Определяем, как хранится period:
-     * - ym_int: 202601
-     * - ym_string: "2026-01"
-     * - date: "2026-01-01"
-     * - datetime: "2025-12-31 17:00:00+00" / "...T17:00:00Z"
-     */
-    private function detectPeriodMode(string $table, string $marketCol, string $periodCol, int $marketId): string
-    {
-        try {
-            $sample = DB::table($table)
-                ->where($marketCol, $marketId)
-                ->whereNotNull($periodCol)
-                ->orderByDesc($periodCol)
-                ->value($periodCol);
-        } catch (\Throwable) {
-            $sample = null;
-        }
+        foreach ($latestByContractPeriod as $row) {
+            $period = trim((string) ($row->period ?? ''));
 
-        if (is_int($sample) || (is_string($sample) && preg_match('/^\d{6}$/', trim($sample)))) {
-            return 'ym_int';
-        }
-
-        if (is_string($sample)) {
-            $s = trim($sample);
-
-            if (preg_match('/^\d{4}-\d{2}$/', $s)) {
-                return 'ym_string';
+            if (! isset($periodStats[$period])) {
+                $periodStats[$period] = [
+                    'payable' => 0.0,
+                    'spaces' => [],
+                ];
             }
 
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) {
-                return 'date';
-            }
+            $periodStats[$period]['payable'] += (float) ($row->accrued_amount ?? 0);
 
-            if (preg_match('/^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}/', $s)) {
-                return 'datetime';
+            if ($row->market_space_id !== null) {
+                $periodStats[$period]['spaces'][(int) $row->market_space_id] = true;
             }
         }
 
-        return 'datetime';
-    }
+        $payableData = [];
+        $coveragePctData = [];
 
-    private function applyMonthFilter(
-        Builder $q,
-        string $periodCol,
-        string $monthYm,
-        CarbonImmutable $startTz,
-        CarbonImmutable $endTz,
-        string $mode
-    ): void {
-        if ($mode === 'ym_int') {
-            $q->where($periodCol, (int) str_replace('-', '', $monthYm));
-            return;
-        }
-
-        if ($mode === 'ym_string') {
-            $q->where($periodCol, $monthYm);
-            return;
-        }
-
-        // Для PostgreSQL (и period как date/datetime) — фильтруем как в твоей проверке SQL:
-        // to_char(date_trunc('month', period::timestamp), 'YYYY-MM') = '2025-12'
-        if (DB::getDriverName() === 'pgsql') {
-            $col = '"' . str_replace('"', '""', $periodCol) . '"';
-
-            $q->whereRaw(
-                "to_char(date_trunc('month', {$col}::timestamp), 'YYYY-MM') = ?",
-                [$monthYm]
-            );
-
-            return;
-        }
-
-        if ($mode === 'date') {
-            $q->where($periodCol, '>=', $startTz->toDateString())
-                ->where($periodCol, '<', $endTz->toDateString());
-            return;
-        }
-
-        $startUtc = $startTz->utc()->toDateTimeString();
-        $endUtc = $endTz->utc()->toDateTimeString();
-
-        $q->where($periodCol, '>=', $startUtc)
-            ->where($periodCol, '<', $endUtc);
-    }
-
-    /**
-     * Строчное payable выражение:
-     * COALESCE(total_with_vat, total_amount, rent + utilities + management_fee + ...)
-     */
-    private function buildPayableRowExpression(array $columns): ?string
-    {
-        $totalWithVatCol = $this->pickFirstExisting($columns, [
-            'total_with_vat',
-            'total_with_nds',
-            'total_vat',
-            'amount_with_vat',
-        ]);
-
-        $totalCol = $this->pickFirstExisting($columns, [
-            'total_amount',
-            'payable_total',
-            'amount_total',
-            'total',
-        ]);
-
-        $parts = [];
-
-        foreach ([
-            'rent_amount',
-            'utilities_amount',
-            'utility_amount',
-            'management_fee',
-            'management_fee_amount',
-            'service_amount',
-            'services_amount',
-            'maintenance_amount',
-            'penalty_amount',
-            'penalties_amount',
-        ] as $col) {
-            if (in_array($col, $columns, true)) {
-                $parts[] = 'COALESCE("' . $col . '", 0)';
+        foreach ($months as $month) {
+            if (! isset($periodStats[$month])) {
+                $payableData[] = null;
+                $coveragePctData[] = null;
+                continue;
             }
+
+            $payableData[] = (int) round($periodStats[$month]['payable']);
+
+            if ($totalSpaces <= 0) {
+                $coveragePctData[] = null;
+                continue;
+            }
+
+            $occupied = count($periodStats[$month]['spaces']);
+            $coveragePctData[] = round(($occupied / $totalSpaces) * 100, 1);
         }
 
-        $partsExpr = $parts !== [] ? '(' . implode(' + ', $parts) . ')' : null;
-
-        $targets = [];
-        if ($totalWithVatCol) {
-            $targets[] = '"' . $totalWithVatCol . '"';
-        }
-        if ($totalCol) {
-            $targets[] = '"' . $totalCol . '"';
-        }
-        if ($partsExpr) {
-            $targets[] = $partsExpr;
-        }
-
-        if ($targets === []) {
-            return null;
-        }
-
-        return 'COALESCE(' . implode(', ', $targets) . ', 0)';
+        return [$payableData, $coveragePctData];
     }
 }
