@@ -161,7 +161,8 @@ class TenantContractResource extends BaseResource
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('starts_at')
-                        ->label('Начало')
+                        ->label('Техническая дата 1С')
+                        ->helperText('Не используется как основная дата договора. Для истории приоритет у даты из номера договора.')
                         ->formatStateUsing(fn (?TenantContract $record): string => $record?->starts_at?->format('d.m.Y') ?: '—')
                         ->disabled()
                         ->dehydrated(false),
@@ -446,9 +447,10 @@ class TenantContractResource extends BaseResource
                     ->toggleable(),
 
                 TextColumn::make('starts_at')
-                    ->label('Начало')
+                    ->label('Техническая дата 1С')
                     ->date('d.m.Y')
                     ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->placeholder('—'),
 
                 TextColumn::make('ends_at')
@@ -1395,11 +1397,11 @@ class TenantContractResource extends BaseResource
         }
 
         if ($startsAt === $classifierDate) {
-            return 'В starts_at';
+            return 'Совпадает с тех. датой 1С';
         }
 
         if ($startsAt !== null && $startsAt !== '') {
-            return 'Нужна проверка';
+            return 'Только тех. дата 1С';
         }
 
         return 'Только в номере';
@@ -1408,8 +1410,8 @@ class TenantContractResource extends BaseResource
     private static function dateConsistencyColor(TenantContract $record): string
     {
         return match (static::dateConsistencyLabel($record)) {
-            'Совпадает', 'В starts_at' => 'success',
-            'Только в номере' => 'warning',
+            'Совпадает' => 'success',
+            'Только в номере', 'Совпадает с тех. датой 1С', 'Только тех. дата 1С' => 'warning',
             'Нет даты' => 'gray',
             default => 'danger',
         };
@@ -1677,10 +1679,6 @@ class TenantContractResource extends BaseResource
 
         if ($record->signed_at instanceof Carbon) {
             return $record->signed_at->format('Y-m-d');
-        }
-
-        if ($record->starts_at instanceof Carbon) {
-            return $record->starts_at->format('Y-m-d');
         }
 
         return null;
