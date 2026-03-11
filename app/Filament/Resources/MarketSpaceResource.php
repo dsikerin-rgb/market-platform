@@ -288,6 +288,7 @@ class MarketSpaceResource extends BaseResource
 
                                         return Tenant::query()
                                             ->where('market_id', (int) $marketId)
+                                            ->active()
                                             ->orderBy('name')
                                             ->pluck('name', 'id')
                                             ->all();

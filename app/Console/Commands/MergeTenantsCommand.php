@@ -42,6 +42,21 @@ class MergeTenantsCommand extends Command
     ];
 
     /**
+     * @var list<array{table:string,column:string}>
+     */
+    private array $postMergeReferenceTargets = [
+        ['table' => 'market_spaces', 'column' => 'tenant_id'],
+        ['table' => 'tenant_contracts', 'column' => 'tenant_id'],
+        ['table' => 'tenant_requests', 'column' => 'tenant_id'],
+        ['table' => 'tenant_accruals', 'column' => 'tenant_id'],
+        ['table' => 'tenant_documents', 'column' => 'tenant_id'],
+        ['table' => 'tickets', 'column' => 'tenant_id'],
+        ['table' => 'users', 'column' => 'tenant_id'],
+        ['table' => 'contract_debts', 'column' => 'tenant_id'],
+        ['table' => 'tenant_showcases', 'column' => 'tenant_id'],
+    ];
+
+    /**
      * Политика атрибутов: в каноне не перетираем, только дозаполняем пустые.
      *
      * @var list<string>
@@ -189,7 +204,15 @@ class MergeTenantsCommand extends Command
             $this->markMergeNotes($fromLocked, $toLocked);
 
             $toLocked->save();
-            $fromLocked->save();
+
+            $remainingReferences = $this->collectSpecificReferenceCounts($fromId, $this->postMergeReferenceTargets);
+            foreach ($remainingReferences as $key => $count) {
+                if ($count > 0) {
+                    throw new RuntimeException("Source tenant still has references after merge: {$key}={$count}");
+                }
+            }
+
+            $fromLocked->delete();
 
             DB::commit();
         } catch (Throwable $e) {
@@ -264,9 +287,24 @@ class MergeTenantsCommand extends Command
      */
     private function collectReferenceCounts(int $fromId): array
     {
+        $counts = $this->collectSpecificReferenceCounts($fromId, $this->referenceTargets);
+
+        if (Schema::hasTable('tenant_showcases') && Schema::hasColumn('tenant_showcases', 'tenant_id')) {
+            $counts['tenant_showcases.tenant_id'] = (int) DB::table('tenant_showcases')->where('tenant_id', $fromId)->count();
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @param list<array{table:string,column:string}> $targets
+     * @return array<string,int>
+     */
+    private function collectSpecificReferenceCounts(int $tenantId, array $targets): array
+    {
         $counts = [];
 
-        foreach ($this->referenceTargets as $target) {
+        foreach ($targets as $target) {
             $table = $target['table'];
             $column = $target['column'];
 
@@ -274,11 +312,7 @@ class MergeTenantsCommand extends Command
                 continue;
             }
 
-            $counts["{$table}.{$column}"] = (int) DB::table($table)->where($column, $fromId)->count();
-        }
-
-        if (Schema::hasTable('tenant_showcases') && Schema::hasColumn('tenant_showcases', 'tenant_id')) {
-            $counts['tenant_showcases.tenant_id'] = (int) DB::table('tenant_showcases')->where('tenant_id', $fromId)->count();
+            $counts["{$table}.{$column}"] = (int) DB::table($table)->where($column, $tenantId)->count();
         }
 
         return $counts;
@@ -453,17 +487,10 @@ class MergeTenantsCommand extends Command
         }
 
         if (Schema::hasColumn('tenants', 'notes')) {
-            $fromNote = trim((string) ($from->notes ?? ''));
             $toNote = trim((string) ($to->notes ?? ''));
 
-            $fromSuffix = "merged_into_tenant_id={$to->id} at {$stamp}";
             $toSuffix = "merged_from_tenant_id={$from->id} at {$stamp}";
-            $fromMarker = "merged_into_tenant_id={$to->id}";
             $toMarker = "merged_from_tenant_id={$from->id}";
-
-            if (! str_contains($fromNote, $fromMarker)) {
-                $from->notes = $fromNote === '' ? $fromSuffix : ($fromNote . "\n" . $fromSuffix);
-            }
 
             if (! str_contains($toNote, $toMarker)) {
                 $to->notes = $toNote === '' ? $toSuffix : ($toNote . "\n" . $toSuffix);

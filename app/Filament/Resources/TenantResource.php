@@ -760,7 +760,8 @@ class TenantResource extends BaseResource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()
+            ->where('is_active', true);
         $user = Filament::auth()->user();
 
         if (! $user) {
