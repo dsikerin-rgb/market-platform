@@ -705,6 +705,11 @@ class TenantContractResource extends BaseResource
         });
     }
 
+    public static function applyLatestDebtSnapshotScope(Builder $query, bool $inLatestSnapshot = true): Builder
+    {
+        return static::applyLatestDebtSnapshotFilter($query, $inLatestSnapshot);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -734,6 +739,11 @@ class TenantContractResource extends BaseResource
         return $include
             ? $query->whereIn('tenant_contracts.id', $ids)
             : $query->whereNotIn('tenant_contracts.id', $ids);
+    }
+
+    public static function applyWorkbenchBucketScope(Builder $query, string $bucket, bool $include = true): Builder
+    {
+        return static::applyWorkbenchIdsFilter($query, $bucket, $include);
     }
 
     private static function currentWorkbenchMarketId(): ?int
