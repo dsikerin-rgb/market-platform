@@ -167,6 +167,65 @@ class TenantContractResourceAccessTest extends TestCase
         $this->assertSame((int) $user->id, (int) $contract->space_mapping_updated_by_user_id);
     }
 
+    public function test_market_admin_can_exclude_contract_from_space_mapping(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('market-admin', 'web');
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'P-102',
+            'code' => 'p-102',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $space->id,
+            'number' => 'Договор на возмещение коммунальных услуг от 01.07.',
+            'status' => 'active',
+            'starts_at' => '2024-07-01',
+            'is_active' => true,
+            'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_MANUAL,
+        ]);
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-admin-contract-excluded@example.test',
+        ]);
+        $user->assignRole('market-admin');
+
+        $this->actingAs($user);
+
+        Livewire::test(EditTenantContract::class, ['record' => (string) $contract->getRouteKey()])
+            ->fillForm([
+                'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_EXCLUDED,
+                'market_space_id' => (int) $space->id,
+                'notes' => 'Do not map utility agreements to places',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $contract->refresh();
+
+        $this->assertNull($contract->market_space_id);
+        $this->assertSame(TenantContract::SPACE_MAPPING_MODE_EXCLUDED, $contract->space_mapping_mode);
+        $this->assertNotNull($contract->space_mapping_updated_at);
+        $this->assertSame((int) $user->id, (int) $contract->space_mapping_updated_by_user_id);
+    }
+
     public function test_market_manager_can_open_contract_card_in_read_only_mode(): void
     {
         $market = Market::query()->create([

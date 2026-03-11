@@ -407,8 +407,8 @@ class ContractController extends Controller
 
                 $wasRecentlyCreated = ! $contract->exists;
                 $currentSpaceMappingMode = $contract->effectiveSpaceMappingMode();
-                $usesManualSpaceMapping = ! $wasRecentlyCreated
-                    && $currentSpaceMappingMode === TenantContract::SPACE_MAPPING_MODE_MANUAL;
+                $usesLockedSpaceMapping = ! $wasRecentlyCreated
+                    && $contract->usesLockedSpaceMapping();
 
                 $contract->fill([
                     'tenant_id' => (int) $tenant->id,
@@ -425,7 +425,7 @@ class ContractController extends Controller
                 $contract->space_mapping_mode = $currentSpaceMappingMode;
 
                 if (
-                    $usesManualSpaceMapping
+                    $usesLockedSpaceMapping
                     && $marketSpaceId !== null
                     && (int) ($contract->market_space_id ?? 0) !== (int) $marketSpaceId
                 ) {
@@ -434,7 +434,7 @@ class ContractController extends Controller
 
                 // Respect manually locked local mapping. In auto mode 1C may still
                 // update the place link when it provides a reliable market_space_code.
-                if (! $usesManualSpaceMapping && ($marketSpaceId !== null || $wasRecentlyCreated)) {
+                if (! $usesLockedSpaceMapping && ($marketSpaceId !== null || $wasRecentlyCreated)) {
                     $contract->market_space_id = $marketSpaceId;
                 }
 

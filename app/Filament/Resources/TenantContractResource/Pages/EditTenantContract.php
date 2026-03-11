@@ -51,7 +51,11 @@ class EditTenantContract extends BaseEditRecord
         $submittedSpaceId = $this->normalizeNullableInt($data['market_space_id'] ?? null);
         $spaceWasChanged = $currentSpaceId !== $submittedSpaceId;
 
-        if ($spaceWasChanged) {
+        if ($submittedMode === TenantContract::SPACE_MAPPING_MODE_EXCLUDED) {
+            $submittedSpaceId = null;
+            $data['market_space_id'] = null;
+            $spaceWasChanged = $currentSpaceId !== null;
+        } elseif ($spaceWasChanged) {
             $submittedMode = TenantContract::SPACE_MAPPING_MODE_MANUAL;
         }
 

@@ -379,6 +379,64 @@ class OneCContractImportTest extends TestCase
     }
 
     /**
+     * Тест: договор, исключенный из привязки к месту, не получает место при следующем импорте 1С.
+     */
+    public function test_excluded_space_mapping_is_preserved_on_repeated_import(): void
+    {
+        $oneCSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'P13',
+            'code' => 'p13',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-008',
+            'name' => 'ООО Тест 8',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => null,
+            'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_EXCLUDED,
+            'external_id' => 'contract-008',
+            'number' => 'Договор на возмещение коммунальных услуг от 01.07.',
+            'status' => 'active',
+            'starts_at' => now()->toDateString(),
+            'is_active' => true,
+            'notes' => 'Excluded from space mapping',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-008',
+                    'tenant_external_id' => 'tenant-008',
+                    'market_space_code' => 'P13',
+                    'contract_number' => 'Договор на возмещение коммунальных услуг от 01.07.',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('warnings.manual_space_mappings_preserved', 1);
+
+        $contract->refresh();
+
+        $this->assertNull($contract->market_space_id);
+        $this->assertSame(TenantContract::SPACE_MAPPING_MODE_EXCLUDED, $contract->space_mapping_mode);
+        $this->assertNotSame($oneCSpace->id, $contract->market_space_id);
+    }
+
+    /**
      * Тест: нормализация ключа (uppercase, trim)
      */
     /**
