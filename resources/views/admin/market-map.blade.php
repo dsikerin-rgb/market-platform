@@ -1748,8 +1748,18 @@
             const viewport = page.getViewport({ scale });
             currentViewport = viewport;
 
-            canvas.width = Math.floor(viewport.width);
-            canvas.height = Math.floor(viewport.height);
+            const viewportWidth = Math.floor(viewport.width);
+            const viewportHeight = Math.floor(viewport.height);
+
+            canvas.width = viewportWidth;
+            canvas.height = viewportHeight;
+            canvas.style.width = viewportWidth + 'px';
+            canvas.style.height = viewportHeight + 'px';
+
+            if (canvasWrap) {
+              canvasWrap.style.width = viewportWidth + 'px';
+              canvasWrap.style.height = viewportHeight + 'px';
+            }
 
             ctx.save();
             ctx.fillStyle = '#ffffff';
