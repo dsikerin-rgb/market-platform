@@ -46,6 +46,9 @@ class TenantContractResource extends BaseResource
     /** @var array<int, array<string, bool>> */
     private static array $latestDebtContractIdsCache = [];
 
+    /** @var array<string, array<string, list<int>>> */
+    private static array $workbenchIdsCache = [];
+
     public static function shouldRegisterNavigation(): bool
     {
         $user = Filament::auth()->user();
@@ -421,6 +424,77 @@ class TenantContractResource extends BaseResource
                         blank: fn (Builder $query) => $query,
                     ),
 
+                SelectFilter::make('document_category')
+                    ->label('Классификация документа')
+                    ->options(static::contractCategoryOptions())
+                    ->query(static function (Builder $query, array $data): Builder {
+                        $value = trim((string) ($data['value'] ?? ''));
+
+                        return $value !== ''
+                            ? static::applyWorkbenchIdsFilter($query, $value, true)
+                            : $query;
+                    }),
+
+                TernaryFilter::make('has_place_token')
+                    ->label('Токен места в номере')
+                    ->trueLabel('Только с токеном места')
+                    ->falseLabel('Только без токена места')
+                    ->queries(
+                        true: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_place_token', true),
+                        false: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_place_token', false),
+                        blank: fn (Builder $query) => $query,
+                    ),
+
+                TernaryFilter::make('has_document_date')
+                    ->label('Дата в номере')
+                    ->trueLabel('Только с датой в номере')
+                    ->falseLabel('Только без даты в номере')
+                    ->queries(
+                        true: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_document_date', true),
+                        false: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_document_date', false),
+                        blank: fn (Builder $query) => $query,
+                    ),
+
+                TernaryFilter::make('has_chain')
+                    ->label('Историческая цепочка')
+                    ->trueLabel('Только в цепочке')
+                    ->falseLabel('Только вне цепочки')
+                    ->queries(
+                        true: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_chain', true),
+                        false: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_chain', false),
+                        blank: fn (Builder $query) => $query,
+                    ),
+
+                TernaryFilter::make('has_overlap')
+                    ->label('Наложение в цепочке')
+                    ->trueLabel('Только с наложением')
+                    ->falseLabel('Только без наложения')
+                    ->queries(
+                        true: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_overlap', true),
+                        false: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'has_overlap', false),
+                        blank: fn (Builder $query) => $query,
+                    ),
+
+                TernaryFilter::make('needs_mapping')
+                    ->label('Требует привязки к месту')
+                    ->trueLabel('Только требующие привязки')
+                    ->falseLabel('Только не требующие привязки')
+                    ->queries(
+                        true: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'needs_mapping', true),
+                        false: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'needs_mapping', false),
+                        blank: fn (Builder $query) => $query,
+                    ),
+
+                TernaryFilter::make('needs_review')
+                    ->label('Требует разбора')
+                    ->trueLabel('Только требующие разбора')
+                    ->falseLabel('Только не требующие разбора')
+                    ->queries(
+                        true: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'needs_review', true),
+                        false: fn (Builder $query) => static::applyWorkbenchIdsFilter($query, 'needs_review', false),
+                        blank: fn (Builder $query) => $query,
+                    ),
+
                 SelectFilter::make('space_mapping_mode')
                     ->label('Режим привязки')
                     ->options([
@@ -629,6 +703,160 @@ class TenantContractResource extends BaseResource
                     )'
                 );
         });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function contractCategoryOptions(): array
+    {
+        return [
+            'primary_contract' => 'Основной договор аренды',
+            'supplemental_document' => 'Доп. соглашение',
+            'service_document' => 'Служебный договорный документ',
+            'penalty_document' => 'Пени / штрафы',
+            'non_rent_document' => 'Неарендный документ',
+            'placeholder_document' => 'Без договора',
+            'unknown' => 'Не классифицировано',
+        ];
+    }
+
+    private static function applyWorkbenchIdsFilter(Builder $query, string $bucket, bool $include): Builder
+    {
+        $ids = static::workbenchIdsFor(static::currentWorkbenchMarketId())[$bucket] ?? [];
+
+        if ($ids === []) {
+            return $include
+                ? $query->whereRaw('1 = 0')
+                : $query;
+        }
+
+        return $include
+            ? $query->whereIn('tenant_contracts.id', $ids)
+            : $query->whereNotIn('tenant_contracts.id', $ids);
+    }
+
+    private static function currentWorkbenchMarketId(): ?int
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        if ($user->isSuperAdmin()) {
+            $selectedMarketId = static::selectedMarketIdFromSession();
+
+            return filled($selectedMarketId)
+                ? (int) $selectedMarketId
+                : null;
+        }
+
+        return $user->market_id
+            ? (int) $user->market_id
+            : null;
+    }
+
+    /**
+     * @return array<string, list<int>>
+     */
+    private static function workbenchIdsFor(?int $marketId): array
+    {
+        $cacheKey = $marketId !== null ? 'market:' . $marketId : 'all';
+
+        if (isset(static::$workbenchIdsCache[$cacheKey])) {
+            return static::$workbenchIdsCache[$cacheKey];
+        }
+
+        $buckets = [
+            'primary_contract' => [],
+            'supplemental_document' => [],
+            'service_document' => [],
+            'penalty_document' => [],
+            'non_rent_document' => [],
+            'placeholder_document' => [],
+            'unknown' => [],
+            'has_place_token' => [],
+            'has_document_date' => [],
+            'has_chain' => [],
+            'has_overlap' => [],
+            'needs_mapping' => [],
+            'needs_review' => [],
+        ];
+
+        $query = TenantContract::query();
+        if ($marketId !== null) {
+            $query->where('market_id', $marketId);
+        }
+
+        $records = $query->get([
+            'id',
+            'market_id',
+            'market_space_id',
+            'space_mapping_mode',
+            'number',
+            'starts_at',
+            'ends_at',
+            'signed_at',
+            'status',
+            'is_active',
+        ]);
+
+        $marketIds = $records
+            ->pluck('market_id')
+            ->filter()
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->unique()
+            ->values()
+            ->all();
+
+        foreach ($marketIds as $currentMarketId) {
+            static::warmChainStatsForMarket($currentMarketId);
+        }
+
+        foreach ($records as $record) {
+            $recordId = (int) $record->getKey();
+            $classified = static::classificationForRecord($record);
+            $category = (string) ($classified['category'] ?? 'unknown');
+            $hasPlaceToken = filled($classified['place_token'] ?? null);
+            $hasDocumentDate = filled($classified['document_date'] ?? null);
+            $actionable = (bool) ($classified['actionable'] ?? false);
+            $excluded = $record->excludesFromSpaceMapping();
+            $hasSpace = filled($record->market_space_id);
+            $stats = static::chainStatsFor($record);
+
+            if (array_key_exists($category, $buckets)) {
+                $buckets[$category][] = $recordId;
+            }
+
+            if ($hasPlaceToken) {
+                $buckets['has_place_token'][] = $recordId;
+            }
+
+            if ($hasDocumentDate) {
+                $buckets['has_document_date'][] = $recordId;
+            }
+
+            if ($stats['chain_count'] > 1) {
+                $buckets['has_chain'][] = $recordId;
+            }
+
+            if ($stats['overlap_count'] > 0) {
+                $buckets['has_overlap'][] = $recordId;
+            }
+
+            if ($actionable && ! $excluded && $hasPlaceToken && $hasDocumentDate && ! $hasSpace) {
+                $buckets['needs_mapping'][] = $recordId;
+            }
+
+            if ($actionable && ! $excluded && (! $hasPlaceToken || ! $hasDocumentDate)) {
+                $buckets['needs_review'][] = $recordId;
+            }
+        }
+
+        static::$workbenchIdsCache[$cacheKey] = $buckets;
+
+        return static::$workbenchIdsCache[$cacheKey];
     }
 
     private static function warmChainStatsForMarket(int $marketId): void
