@@ -7,6 +7,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TenantContractResource\Pages;
 use App\Models\MarketSpace;
 use App\Models\TenantContract;
+use App\Services\MarketSpaces\SpaceGroupResolver;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -40,6 +41,9 @@ class TenantContractResource extends BaseResource
 
     /** @var array<string, array<string, mixed>> */
     private static array $classificationCache = [];
+
+    /** @var array<string, array{is_composite:bool,group_token:?string,group_segments:?string}> */
+    private static array $spaceGroupMetaCache = [];
 
     /** @var array<int, array<int, array{chain_count:int,chain_position:int,overlap_count:int}>> */
     private static array $chainStatsCache = [];
@@ -123,6 +127,18 @@ class TenantContractResource extends BaseResource
                         ->disabled()
                         ->dehydrated(false),
 
+                    Forms\Components\TextInput::make('space_group_display')
+                        ->label('Группа мест')
+                        ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_token'] ?: '—'))
+                        ->disabled()
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('space_group_segments_display')
+                        ->label('Сегменты в группе')
+                        ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_segments'] ?: '—'))
+                        ->disabled()
+                        ->dehydrated(false),
+
                     Forms\Components\TextInput::make('document_date_display')
                         ->label('Дата из номера')
                         ->formatStateUsing(fn (?TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
@@ -198,6 +214,14 @@ class TenantContractResource extends BaseResource
                         ->dehydrated(false)
                         ->helperText('По умолчанию список мест ограничен арендатором договора. Снимите галочку, если раньше у этого места был другой арендатор и нужен поиск по всему рынку.'),
 
+                    Forms\Components\Checkbox::make('limit_spaces_to_place_group')
+                        ->label('Только места этой группы')
+                        ->default(true)
+                        ->live()
+                        ->dehydrated(false)
+                        ->visible(fn (?TenantContract $record): bool => filled(static::spaceGroupMetaForRecord($record)['group_token'] ?? null))
+                        ->helperText('Если система распознала группу мест из номера договора, список мест будет ограничен этой группой. Снимите галочку, если нужно искать место по всему рынку.'),
+
                     Forms\Components\Select::make('market_space_id')
                         ->label('Торговое место')
                         ->options(function (Get $get, ?TenantContract $record): array {
@@ -207,13 +231,27 @@ class TenantContractResource extends BaseResource
 
                             $currentSpaceId = (int) ($get('market_space_id') ?: $record->market_space_id ?: 0);
                             $restrictToTenant = (bool) ($get('limit_spaces_to_contract_tenant') ?? true);
+                            $spaceGroupMeta = static::spaceGroupMetaForRecord($record);
+                            $restrictToGroup = (bool) ($get('limit_spaces_to_place_group') ?? true);
+                            $groupToken = trim((string) ($spaceGroupMeta['group_token'] ?? ''));
+                            $groupSegments = static::explodeGroupSegments($spaceGroupMeta['group_segments'] ?? null);
 
                             $spaces = MarketSpace::query()
                                 ->where('market_id', (int) $record->market_id)
                                 ->when(
                                     $restrictToTenant && filled($record->tenant_id),
                                     fn (Builder $query) => $query->where(function (Builder $query) use ($record, $currentSpaceId): void {
-                                        $query->where('tenant_id', (int) $record->tenant_id);
+                                            $query->where('tenant_id', (int) $record->tenant_id);
+
+                                            if ($currentSpaceId > 0) {
+                                                $query->orWhere('id', $currentSpaceId);
+                                            }
+                                        })
+                                    )
+                                ->when(
+                                    $restrictToGroup && $groupToken !== '',
+                                    fn (Builder $query) => $query->where(function (Builder $query) use ($groupToken, $currentSpaceId): void {
+                                        $query->where('space_group_token', $groupToken);
 
                                         if ($currentSpaceId > 0) {
                                             $query->orWhere('id', $currentSpaceId);
@@ -221,11 +259,52 @@ class TenantContractResource extends BaseResource
                                     })
                                 )
                                 ->orderByRaw('COALESCE(display_name, number, code)')
-                                ->get(['id', 'display_name', 'number', 'code']);
+                                ->get(['id', 'display_name', 'number', 'code', 'space_group_token', 'space_group_slot']);
+
+                            if ($groupSegments !== []) {
+                                $spaces = $spaces->sort(function (MarketSpace $left, MarketSpace $right) use ($groupSegments): int {
+                                    $leftPriority = in_array(static::normalizeGroupSlot($left->space_group_slot), $groupSegments, true) ? 0 : 1;
+                                    $rightPriority = in_array(static::normalizeGroupSlot($right->space_group_slot), $groupSegments, true) ? 0 : 1;
+
+                                    if ($leftPriority !== $rightPriority) {
+                                        return $leftPriority <=> $rightPriority;
+                                    }
+
+                                    $leftLabel = mb_strtolower(
+                                        static::spaceOptionLabel(
+                                            $left->display_name,
+                                            $left->number,
+                                            $left->code,
+                                            $left->space_group_token,
+                                            $left->space_group_slot,
+                                        ),
+                                        'UTF-8'
+                                    );
+
+                                    $rightLabel = mb_strtolower(
+                                        static::spaceOptionLabel(
+                                            $right->display_name,
+                                            $right->number,
+                                            $right->code,
+                                            $right->space_group_token,
+                                            $right->space_group_slot,
+                                        ),
+                                        'UTF-8'
+                                    );
+
+                                    return $leftLabel <=> $rightLabel;
+                                })->values();
+                            }
 
                             $options = [];
                             foreach ($spaces as $space) {
-                                $options[(int) $space->id] = static::spaceOptionLabel($space->display_name, $space->number, $space->code);
+                                $options[(int) $space->id] = static::spaceOptionLabel(
+                                    $space->display_name,
+                                    $space->number,
+                                    $space->code,
+                                    $space->space_group_token,
+                                    $space->space_group_slot,
+                                );
                             }
 
                             return $options;
@@ -233,7 +312,7 @@ class TenantContractResource extends BaseResource
                         ->searchable()
                         ->preload()
                         ->nullable()
-                        ->helperText('Здесь задаётся только локальная привязка договора к торговому месту. Список мест можно ограничить текущим арендатором договора или расширить на весь рынок.'),
+                        ->helperText('Здесь задаётся только локальная привязка договора к торговому месту. Список можно ограничить арендатором договора и, если договор составной, его группой мест.'),
 
                     Forms\Components\TextInput::make('space_mapping_updated_display')
                         ->label('Последняя локальная фиксация')
@@ -645,6 +724,63 @@ class TenantContractResource extends BaseResource
         }
 
         return static::$classificationCache[$cacheKey];
+    }
+
+    /**
+     * @return array{is_composite:bool,group_token:?string,group_segments:?string}
+     */
+    private static function spaceGroupMetaForRecord(?TenantContract $record): array
+    {
+        if (! $record) {
+            return [
+                'is_composite' => false,
+                'group_token' => null,
+                'group_segments' => null,
+            ];
+        }
+
+        $cacheKey = implode(':', [
+            (string) $record->getKey(),
+            md5((string) ($record->number ?? '')),
+        ]);
+
+        if (! isset(static::$spaceGroupMetaCache[$cacheKey])) {
+            static::$spaceGroupMetaCache[$cacheKey] = app(SpaceGroupResolver::class)
+                ->forContractClassification(static::classificationForRecord($record));
+        }
+
+        return static::$spaceGroupMetaCache[$cacheKey];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function explodeGroupSegments(?string $segments): array
+    {
+        $segments = trim((string) $segments);
+        if ($segments === '') {
+            return [];
+        }
+
+        $items = preg_split('/\s*,\s*/u', $segments) ?: [];
+
+        return array_values(array_filter(array_map(
+            static fn (string $value): ?string => static::normalizeGroupSlot($value),
+            $items,
+        )));
+    }
+
+    private static function normalizeGroupSlot(?string $value): ?string
+    {
+        $slot = trim((string) $value);
+        if ($slot === '') {
+            return null;
+        }
+
+        $slot = preg_replace('/\s*([,-])\s*/u', '$1', $slot) ?? $slot;
+        $slot = preg_replace('/\s+/u', ' ', $slot) ?? $slot;
+
+        return $slot !== '' ? $slot : null;
     }
 
     /**
@@ -1367,13 +1503,29 @@ class TenantContractResource extends BaseResource
         return max((string) $leftStart, (string) $rightStart) <= min($leftEnd, $rightEnd);
     }
 
-    private static function spaceOptionLabel(?string $displayName, ?string $number, ?string $code): string
+    private static function spaceOptionLabel(
+        ?string $displayName,
+        ?string $number,
+        ?string $code,
+        ?string $groupToken = null,
+        ?string $groupSlot = null
+    ): string
     {
         $parts = array_values(array_filter([
             trim((string) $displayName),
             trim((string) $number),
             trim((string) $code),
         ], static fn (string $value): bool => $value !== ''));
+
+        $normalizedGroupToken = trim((string) $groupToken);
+        $normalizedGroupSlot = trim((string) $groupSlot);
+
+        if ($normalizedGroupToken !== '' || $normalizedGroupSlot !== '') {
+            $groupLabel = trim($normalizedGroupToken . ($normalizedGroupSlot !== '' ? ' / ' . $normalizedGroupSlot : ''));
+            if ($groupLabel !== '') {
+                $parts[] = 'Группа ' . $groupLabel;
+            }
+        }
 
         if ($parts === []) {
             return 'Без названия';
