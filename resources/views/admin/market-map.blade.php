@@ -24,6 +24,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <link rel="modulepreload" href="/vendor/pdfjs/pdf.min.mjs">
+  <link rel="modulepreload" href="/vendor/pdfjs/pdf.worker.min.mjs">
   <title>Карта рынка — {{ $marketName }}</title>
 
   <style>
@@ -1961,6 +1963,13 @@
 
           async function init() {
             const loadingTask = pdfjsLib.getDocument(PDF_URL);
+            const shapesPromise = loadShapes()
+              .then(() => {
+                redrawShapes();
+              })
+              .catch((err) => {
+                console.error(err);
+              });
             const pdfDoc = await loadingTask.promise;
             const requestedPage = MAP_PAGE || 1;
             try {
@@ -1975,9 +1984,10 @@
 
             await fitWidth();
 
-            await loadShapes();
-            redrawShapes();
-            await applyInitialFocus();
+            if (FOCUS_SPACE_ID || FOCUS_SHAPE) {
+              await shapesPromise;
+              await applyInitialFocus();
+            }
 
             if (CAN_EDIT) {
               await refreshChosenSpaceFromServer();
@@ -2662,8 +2672,8 @@
           if (localJs) return localJs;
 
           const cdn = await tryImport(
-            'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs',
-            'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs'
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
           );
           if (cdn) return cdn;
 
