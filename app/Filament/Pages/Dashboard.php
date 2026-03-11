@@ -5,7 +5,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
-use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
@@ -259,10 +258,6 @@ class Dashboard extends BaseDashboard
             'spaces_status' => [
                 'class' => MarketSpacesStatusChartWidget::class,
                 'label' => 'Статусы торговых мест',
-            ],
-            'expiring_contracts' => [
-                'class' => ExpiringContractsWidget::class,
-                'label' => 'Истекающие договоры',
             ],
             'recent_requests' => [
                 'class' => RecentTenantRequestsWidget::class,
