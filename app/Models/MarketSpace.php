@@ -25,6 +25,8 @@ class MarketSpace extends Model
         'tenant_id',
         'number',
         'code',
+        'space_group_token',
+        'space_group_slot',
         'display_name',
         'activity_type',
         'area_sqm',
@@ -48,6 +50,7 @@ class MarketSpace extends Model
     {
         static::creating(function (self $space): void {
             $space->ensureCode();
+            $space->normalizeSpaceGroup();
         });
 
         static::updating(function (self $space): void {
@@ -55,6 +58,8 @@ class MarketSpace extends Model
             if (blank($space->code)) {
                 $space->ensureCode();
             }
+
+            $space->normalizeSpaceGroup();
         });
 
         static::updating(function (self $space): void {
@@ -136,6 +141,22 @@ class MarketSpace extends Model
         }
 
         $this->code = $code;
+    }
+
+    private function normalizeSpaceGroup(): void
+    {
+        $token = trim((string) ($this->space_group_token ?? ''));
+        $slot = trim((string) ($this->space_group_slot ?? ''));
+
+        $token = mb_strtoupper($token, 'UTF-8');
+        $token = preg_replace('/\s+/u', '', $token) ?? $token;
+        $token = str_replace(['-', '/'], '', $token);
+
+        $slot = preg_replace('/\s*([,-])\s*/u', '$1', $slot) ?? $slot;
+        $slot = preg_replace('/\s+/u', ' ', $slot) ?? $slot;
+
+        $this->space_group_token = $token !== '' ? $token : null;
+        $this->space_group_slot = $slot !== '' ? $slot : null;
     }
 
     public function market(): BelongsTo

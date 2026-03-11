@@ -159,6 +159,8 @@ class MarketSpaceResource extends BaseResource
     {
         return [
             'number',
+            'space_group_token',
+            'space_group_slot',
             'display_name',
             'activity_type',
             'location.name',
@@ -353,6 +355,24 @@ class MarketSpaceResource extends BaseResource
                                     ->placeholder('Например: Аптека 22')
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Понятное название для пользователей. Обычно заполняется импортом, но можно редактировать вручную.')
+                                    ->nullable(),
+
+                                Forms\Components\TextInput::make('space_group_token')
+                                    ->label('Группа мест')
+                                    ->maxLength(255)
+                                    ->placeholder('Например: ОС8, ХК1, ПАВИЛЬОН3')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Используйте для группировки мест внутри острова, холодильной линии или другой общей зоны. Для ОС8/14 и ОС8/15 указывайте одну и ту же группу ОС8.')
+                                    ->helperText('Заполняется для мест, которые входят в состав одной группы. Это упрощает привязку договоров вроде ОС8 14-15.')
+                                    ->nullable(),
+
+                                Forms\Components\TextInput::make('space_group_slot')
+                                    ->label('Номер внутри группы')
+                                    ->maxLength(255)
+                                    ->placeholder('Например: 14, 15, 14-15')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции.')
+                                    ->helperText('Для одиночного места указывайте один номер, например 14. Для комбинированного служебного обозначения можно хранить 14-15.')
                                     ->nullable(),
 
                                 Forms\Components\TextInput::make('activity_type')
@@ -911,6 +931,20 @@ class MarketSpaceResource extends BaseResource
                     ->toggleable()
                     ->tooltip(fn (MarketSpace $record) => $record->activity_type ?: null),
 
+                TextColumn::make('space_group_token')
+                    ->label('Группа мест')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('space_group_slot')
+                    ->label('Номер в группе')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('status')
                     ->label('Статус')
                     ->formatStateUsing(fn (?string $state) => static::statusLabel($state))
@@ -989,6 +1023,32 @@ class MarketSpaceResource extends BaseResource
                             ->distinct()
                             ->orderBy('activity_type')
                             ->pluck('activity_type', 'activity_type')
+                            ->all();
+                    }),
+
+                SelectFilter::make('space_group_token')
+                    ->label('Группа мест')
+                    ->options(function () {
+                        $user = Filament::auth()->user();
+
+                        $marketId = null;
+                        if ($user?->isSuperAdmin()) {
+                            $marketId = static::selectedMarketIdFromSession();
+                        } else {
+                            $marketId = $user?->market_id;
+                        }
+
+                        if (blank($marketId)) {
+                            return [];
+                        }
+
+                        return DB::table('market_spaces')
+                            ->where('market_id', (int) $marketId)
+                            ->whereNotNull('space_group_token')
+                            ->where('space_group_token', '!=', '')
+                            ->distinct()
+                            ->orderBy('space_group_token')
+                            ->pluck('space_group_token', 'space_group_token')
                             ->all();
                     }),
             ])
