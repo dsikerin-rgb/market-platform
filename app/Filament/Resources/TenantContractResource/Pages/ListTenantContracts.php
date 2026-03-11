@@ -33,18 +33,18 @@ class ListTenantContracts extends ListRecords
         return [
             'operational' => $this->makeTab(
                 $tabClass,
-                'Рабочий контур',
+                'Финансовый контур',
                 fn (Builder $query) => TenantContractResource::applyOperationalContractsScope($query, true)
             ),
             'financial' => $this->makeTab(
                 $tabClass,
-                'Актуальная задолженность',
+                'Последняя задолженность',
                 fn (Builder $query) => TenantContractResource::applyLatestDebtSnapshotScope($query, true)
             ),
             'accruals' => $this->makeTab(
                 $tabClass,
-                'Текущие начисления',
-                fn (Builder $query) => TenantContractResource::applyLatestAccrualSnapshotScope($query, true)
+                'Договоры из начислений',
+                fn (Builder $query) => TenantContractResource::applyAccrualHistoryScope($query, true)
             ),
             'mapping_candidates' => $this->makeTab(
                 $tabClass,
@@ -60,7 +60,7 @@ class ListTenantContracts extends ListRecords
             ),
             'operational_unmapped' => $this->makeTab(
                 $tabClass,
-                'Рабочий контур без места',
+                'Финансовый контур без места',
                 fn (Builder $query) => TenantContractResource::applyOperationalContractsScope($query->whereNull('market_space_id'), true)
             ),
             'overlaps' => $this->makeTab(
