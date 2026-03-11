@@ -63,7 +63,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         $tenantsNow = $this->countTenantsActiveOnDate($marketId, $now);
         if ($tenantsNow === null) {
-            $tenantsNow = Tenant::query()->where('market_id', $marketId)->count();
+            $tenantsNow = Tenant::query()->where('market_id', $marketId)->active()->count();
         }
 
         // Финансовая/отчётная часть зависит от выбранного месяца.
