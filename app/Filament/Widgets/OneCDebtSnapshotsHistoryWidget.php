@@ -17,7 +17,7 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
 
     protected int|string|array $columnSpan = [
         'default' => 'full',
-        'lg' => 'full',
+        'lg' => 2,
     ];
 
     protected ?string $maxHeight = '320px';
