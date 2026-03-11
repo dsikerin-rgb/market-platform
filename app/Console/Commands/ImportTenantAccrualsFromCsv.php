@@ -3,6 +3,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -29,7 +30,7 @@ class ImportTenantAccrualsFromCsv extends Command
     /** @var array<string, array<int, string>> */
     private array $tableColumnsCache = [];
 
-    public function handle(): int
+    public function handle(TenantAccrualContractResolver $contractResolver): int
     {
         $startedAt = microtime(true);
 
@@ -578,11 +579,20 @@ class ImportTenantAccrualsFromCsv extends Command
 
                     $payload = $this->buildPayload($headers, $row);
 
+                    $resolvedMarketSpaceId = $this->maybeUseSubSpaceForAccrual($marketSpaceId, $placeCode, $tenantId ?? null, $marketId, $now);
+
+                    $resolvedTenantContractId = $contractResolver->resolve(
+                        $marketId,
+                        $tenantId,
+                        $resolvedMarketSpaceId,
+                        Carbon::parse($period->format('Y-m-d'))->toImmutable(),
+                    );
+
                     $data = [
                         'market_id' => $marketId,
                         'tenant_id' => $tenantId,
-                        'tenant_contract_id' => null,
-                        'market_space_id' => $this->maybeUseSubSpaceForAccrual($marketSpaceId, $placeCode, $tenantId ?? null, $marketId, $now),
+                        'tenant_contract_id' => $resolvedTenantContractId,
+                        'market_space_id' => $resolvedMarketSpaceId,
                         'period' => $period->format('Y-m-d'),
 
                         'source_place_code' => $placeCode !== '' ? $placeCode : null,
