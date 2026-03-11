@@ -1689,7 +1689,7 @@
               nextScale = 1.0;
             }
 
-            nextScale = Math.max(0.2, Math.min(6, nextScale));
+            nextScale = Math.max(0.2, Math.min(7, nextScale));
 
             scale = nextScale;
             await render();
@@ -1996,7 +1996,7 @@
             toast('Клик по месту откроет карточку.');
           }
 
-          zoomInBtn?.addEventListener('click', async () => { scale = Math.min(6, scale * 1.2); await render(); });
+          zoomInBtn?.addEventListener('click', async () => { scale = Math.min(7, scale * 1.2); await render(); });
           zoomOutBtn?.addEventListener('click', async () => { scale = Math.max(0.2, scale / 1.2); await render(); });
           zoomResetBtn?.addEventListener('click', async () => { scale = 1.0; await render(); });
           fitWidthBtn?.addEventListener('click', async () => { await fitWidth(); });
