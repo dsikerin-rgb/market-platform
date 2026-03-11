@@ -1,5 +1,4 @@
 <?php
-# app/Filament/Widgets/MarketSpacesStatusChartWidget.php
 
 declare(strict_types=1);
 
@@ -19,7 +18,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
 
-    protected ?string $heading = 'Заполняемость торговых мест за месяц';
+    protected ?string $heading = 'Места в финансовом контуре за месяц';
 
     protected function getType(): string
     {
@@ -36,10 +35,6 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         );
     }
 
-    /**
-     * “Легенда как Локация”: показываем под заголовком.
-     * Важно: в ChartWidget метод должен быть PUBLIC.
-     */
     public function getDescription(): ?string
     {
         $user = Filament::auth()->user();
@@ -60,25 +55,21 @@ class MarketSpacesStatusChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        [, $start,, $periodLabel] = $this->resolveMonthRange($tz);
+        [, , , $periodLabel] = $this->resolveMonthRange($tz);
 
         $marketName = trim((string) ($market?->name ?? ''));
-
         $parts = [];
 
         if ($marketName !== '') {
             $parts[] = 'Локация: ' . $marketName;
         }
 
-        // periodLabel уже содержит "m.Y (TZ: ...)"
         $parts[] = $periodLabel;
+        $parts[] = 'Источник: 1С долги + связанные начисления';
 
         return implode(' • ', $parts);
     }
 
-    /**
-     * Настройки Chart.js (легенда/отображение).
-     */
     protected function getOptions(): array
     {
         return [
@@ -109,7 +100,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         $marketId = $this->resolveMarketIdForWidget($user);
 
         if (! $marketId) {
-            return $this->emptyChart('Выбери рынок');
+            return $this->emptyChart('Выберите рынок');
         }
 
         $market = Market::query()
@@ -128,41 +119,33 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             return $this->emptyChart($periodLabel);
         }
 
-        $occupiedSpaces = $this->countOccupiedSpacesForMonth($marketId, $monthYm, $monthStart, $monthEnd);
+        $coveredSpaces = $this->countFinancialContourSpacesForMonth($marketId, $monthYm, $monthStart, $monthEnd);
 
-        // fallback на "текущее" состояние, если tenant_accruals недоступен или колонок не хватает
-        if ($occupiedSpaces === null) {
-            $occupiedSpaces = MarketSpace::query()
-                ->where('market_id', $marketId)
-                ->where('status', 'occupied')
-                ->count();
+        if ($coveredSpaces === null) {
+            return $this->emptyChart($periodLabel . ' • нет данных финансового контура');
         }
 
-        $occupiedSpaces = max((int) $occupiedSpaces, 0);
-        $freeSpaces = max($totalSpaces - $occupiedSpaces, 0);
+        $coveredSpaces = max($coveredSpaces, 0);
+        $outsideContour = max($totalSpaces - $coveredSpaces, 0);
 
-        if (($freeSpaces + $occupiedSpaces) === 0) {
+        if (($outsideContour + $coveredSpaces) === 0) {
             return $this->emptyChart($periodLabel);
         }
 
-        // В legend показываем сразу значения — читается лучше.
         $labels = [
-            'Свободно (' . $freeSpaces . ')',
-            'Занято (' . $occupiedSpaces . ')',
+            'Вне контура (' . $outsideContour . ')',
+            'В финансовом контуре (' . $coveredSpaces . ')',
         ];
 
         return [
             'labels' => $labels,
             'datasets' => [
                 [
-                    'data' => [$freeSpaces, $occupiedSpaces],
-
-                    // Разные цвета сегментов => разные цвета легенды
+                    'data' => [$outsideContour, $coveredSpaces],
                     'backgroundColor' => [
-                        '#94A3B8', // Свободно
-                        '#22C55E', // Занято
+                        '#94A3B8',
+                        '#22C55E',
                     ],
-
                     'borderColor' => [
                         '#FFFFFF',
                         '#FFFFFF',
@@ -211,8 +194,6 @@ class MarketSpacesStatusChartWidget extends ChartWidget
     }
 
     /**
-     * Берем фильтры и из Filament 4 (pageFilters), и из возможного legacy (filters).
-     *
      * @return array<string, mixed>
      */
     private function currentFilters(): array
@@ -230,6 +211,9 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         return $out;
     }
 
+    /**
+     * @return array{0:string,1:CarbonImmutable,2:CarbonImmutable,3:string}
+     */
     private function resolveMonthRange(string $tz): array
     {
         $filters = $this->currentFilters();
@@ -242,56 +226,114 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             : CarbonImmutable::now($tz)->format('Y-m');
 
         $start = CarbonImmutable::createFromFormat('Y-m', $monthYm, $tz)->startOfMonth();
-        $end   = $start->addMonth();
+        $end = $start->addMonth();
 
-        $label = $start->format('m.Y') . ' (TZ: ' . $tz . ')';
-
-        return [$monthYm, $start, $end, $label];
+        return [$monthYm, $start, $end, $start->format('m.Y') . ' (TZ: ' . $tz . ')'];
     }
 
-    private function countOccupiedSpacesForMonth(int $marketId, string $monthYm, CarbonImmutable $start, CarbonImmutable $end): ?int
-    {
-        if (! Schema::hasTable('tenant_accruals')) {
+    private function countFinancialContourSpacesForMonth(
+        int $marketId,
+        string $monthYm,
+        CarbonImmutable $start,
+        CarbonImmutable $end
+    ): ?int {
+        $spaceIds = [];
+
+        foreach ($this->spaceIdsFromDebtContour($marketId, $monthYm) as $spaceId) {
+            $spaceIds[$spaceId] = true;
+        }
+
+        foreach ($this->spaceIdsFromAccrualContour($marketId, $monthYm, $start, $end) as $spaceId) {
+            $spaceIds[$spaceId] = true;
+        }
+
+        if ($spaceIds === []) {
             return null;
+        }
+
+        return count($spaceIds);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function spaceIdsFromDebtContour(int $marketId, string $monthYm): array
+    {
+        if (! Schema::hasTable('contract_debts') || ! Schema::hasTable('tenant_contracts')) {
+            return [];
+        }
+
+        try {
+            return DB::table('contract_debts as d')
+                ->join('tenant_contracts as tc', function ($join): void {
+                    $join->on('tc.market_id', '=', 'd.market_id')
+                        ->on('tc.external_id', '=', 'd.contract_external_id');
+                })
+                ->where('d.market_id', $marketId)
+                ->where('d.period', $monthYm)
+                ->whereNotNull('tc.market_space_id')
+                ->distinct()
+                ->pluck('tc.market_space_id')
+                ->map(fn ($id): int => (int) $id)
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function spaceIdsFromAccrualContour(
+        int $marketId,
+        string $monthYm,
+        CarbonImmutable $start,
+        CarbonImmutable $end
+    ): array {
+        if (! Schema::hasTable('tenant_accruals') || ! Schema::hasTable('tenant_contracts')) {
+            return [];
         }
 
         $meta = $this->getTableMeta('tenant_accruals');
         $cols = $meta['columns'];
 
         $marketCol = $this->pickFirstExisting($cols, ['market_id']);
-        $spaceCol  = $this->pickFirstExisting($cols, ['market_space_id', 'space_id']);
+        $contractCol = $this->pickFirstExisting($cols, ['tenant_contract_id']);
         $periodCol = $this->pickPeriodColumn($cols);
+        $spaceCol = $this->pickFirstExisting($cols, ['market_space_id', 'space_id']);
 
-        if (! $marketCol || ! $spaceCol || ! $periodCol) {
-            return null;
-        }
-
-        $rentCol = $this->pickFirstExisting($cols, ['rent_amount']);
-
-        // ВАЖНО: для WHERE нужно построчное выражение (без SUM)
-        $payableRowExpr = $this->buildPayableRowExpression($cols);
-
-        if (! $rentCol && $payableRowExpr === null) {
-            return null;
-        }
-
-        $q = DB::table('tenant_accruals')->where($marketCol, $marketId);
-
-        $this->applyMonthFilter($q, $meta, $periodCol, $monthYm, $start, $end);
-
-        if ($rentCol) {
-            $q->where($rentCol, '>', 0);
-        } else {
-            $q->whereRaw('(' . $payableRowExpr . ') > 0');
+        if (! $marketCol || ! $contractCol || ! $periodCol) {
+            return [];
         }
 
         try {
-            return (int) $q->distinct()->count($spaceCol);
+            $query = DB::table('tenant_accruals as ta')
+                ->join('tenant_contracts as tc', 'tc.id', '=', 'ta.' . $contractCol)
+                ->where('ta.' . $marketCol, $marketId)
+                ->whereNotNull('ta.' . $contractCol);
+
+            $this->applyMonthFilter($query, $meta, 'ta.' . $periodCol, $monthYm, $start, $end);
+
+            $resolvedSpaceExpr = $spaceCol
+                ? 'COALESCE(ta.' . $spaceCol . ', tc.market_space_id)'
+                : 'tc.market_space_id';
+
+            return $query
+                ->whereRaw($resolvedSpaceExpr . ' IS NOT NULL')
+                ->selectRaw('DISTINCT ' . $resolvedSpaceExpr . ' as resolved_market_space_id')
+                ->pluck('resolved_market_space_id')
+                ->map(fn ($id): int => (int) $id)
+                ->values()
+                ->all();
         } catch (\Throwable) {
-            return null;
+            return [];
         }
     }
 
+    /**
+     * @return array{columns:list<string>,types:array<string,string>}
+     */
     private function getTableMeta(string $table): array
     {
         $columns = [];
@@ -311,10 +353,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
                     $types[$name] = strtoupper((string) ($row->type ?? ''));
                 }
 
-                return [
-                    'columns' => $columns,
-                    'types' => $types,
-                ];
+                return ['columns' => $columns, 'types' => $types];
             }
         } catch (\Throwable) {
             // ignore
@@ -326,10 +365,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             $columns = [];
         }
 
-        return [
-            'columns' => $columns,
-            'types' => $types,
-        ];
+        return ['columns' => $columns, 'types' => $types];
     }
 
     private function pickFirstExisting(array $columns, array $candidates): ?string
@@ -358,7 +394,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
     }
 
     private function applyMonthFilter(
-        Builder $q,
+        Builder $query,
         array $meta,
         string $periodCol,
         string $monthYm,
@@ -366,69 +402,31 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         CarbonImmutable $end
     ): void {
         $types = $meta['types'] ?? [];
-        $type = strtoupper((string) ($types[$periodCol] ?? ''));
+        $basePeriodCol = str_contains($periodCol, '.') ? substr($periodCol, strrpos($periodCol, '.') + 1) : $periodCol;
+        $type = strtoupper((string) ($types[$basePeriodCol] ?? ''));
 
         $startDate = $start->toDateString();
         $endDate = $end->toDateString();
 
         if ($type !== '' && str_contains($type, 'INT')) {
-            $ymInt = (int) str_replace('-', '', $monthYm);
-            $q->where($periodCol, $ymInt);
+            $query->where($periodCol, (int) str_replace('-', '', $monthYm));
 
             return;
         }
 
-        $lower = strtolower($periodCol);
+        $lower = strtolower($basePeriodCol);
 
         if (str_contains($lower, 'start') || str_contains($lower, 'date') || str_contains($lower, '_at')) {
-            $q->where($periodCol, '>=', $startDate)->where($periodCol, '<', $endDate);
+            $query->where($periodCol, '>=', $startDate)
+                ->where($periodCol, '<', $endDate);
 
             return;
         }
 
-        $q->where(function (Builder $qq) use ($periodCol, $monthYm, $startDate): void {
-            $qq->where($periodCol, $monthYm)->orWhere($periodCol, $startDate);
+        $query->where(function (Builder $inner) use ($periodCol, $monthYm, $startDate): void {
+            $inner->where($periodCol, $monthYm)
+                ->orWhere($periodCol, $startDate);
         });
-    }
-
-    /**
-     * Построчное выражение суммы начислений для WHERE (без SUM).
-     */
-    private function buildPayableRowExpression(array $columns): ?string
-    {
-        $totalCol = $this->pickFirstExisting($columns, [
-            'total_amount',
-            'payable_total',
-            'amount_total',
-            'total',
-        ]);
-
-        if ($totalCol) {
-            return 'COALESCE("' . $totalCol . '", 0)';
-        }
-
-        $parts = [];
-
-        foreach ([
-            'rent_amount',
-            'utility_amount',
-            'utilities_amount',
-            'service_amount',
-            'services_amount',
-            'maintenance_amount',
-            'penalty_amount',
-            'penalties_amount',
-        ] as $col) {
-            if (in_array($col, $columns, true)) {
-                $parts[] = 'COALESCE("' . $col . '", 0)';
-            }
-        }
-
-        if ($parts === []) {
-            return null;
-        }
-
-        return implode(' + ', $parts);
     }
 
     private function emptyChart(string $label = 'Нет данных'): array
