@@ -7,6 +7,39 @@ namespace App\Services\MarketSpaces;
 final class SpaceGroupResolver
 {
     /**
+     * @return array{
+     *   group_token: ?string,
+     *   group_segments: ?string
+     * }
+     */
+    public function forMarketSpaceNumber(mixed $value): array
+    {
+        $number = trim((string) $value);
+        if ($number === '') {
+            return [
+                'group_token' => null,
+                'group_segments' => null,
+            ];
+        }
+
+        $number = mb_strtoupper($number, 'UTF-8');
+        $number = preg_replace('/\s+/u', ' ', $number) ?? $number;
+        $number = trim($number);
+
+        if (preg_match('/^(ОС)\s*(\d+)\s*[-\/ ]\s*(\d+(?:\s*[-,]\s*\d+)*)$/u', $number, $matches) === 1) {
+            return [
+                'group_token' => $this->normalizeGroupToken($matches[1] . $matches[2]),
+                'group_segments' => $this->normalizeGroupSlot($matches[3]),
+            ];
+        }
+
+        return [
+            'group_token' => null,
+            'group_segments' => null,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $classification
      * @return array{
      *   is_composite: bool,
