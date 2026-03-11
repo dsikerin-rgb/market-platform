@@ -29,10 +29,15 @@ class MatchTenantContractsToSpacesCommand extends Command
         $contracts = TenantContract::query()
             ->where('market_id', $marketId)
             ->whereNull('market_space_id')
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('space_mapping_mode')
+                    ->orWhere('space_mapping_mode', TenantContract::SPACE_MAPPING_MODE_AUTO);
+            })
             ->whereNotNull('tenant_id')
             ->whereNotNull('number')
             ->orderBy('id')
-            ->get(['id', 'market_id', 'tenant_id', 'external_id', 'number']);
+            ->get(['id', 'market_id', 'tenant_id', 'external_id', 'number', 'space_mapping_mode']);
 
         $spacesByTenant = MarketSpace::query()
             ->where('market_id', $marketId)
@@ -82,6 +87,7 @@ class MatchTenantContractsToSpacesCommand extends Command
 
                 if ($apply && $result['market_space_id'] !== null) {
                     $contract->market_space_id = $result['market_space_id'];
+                    $contract->space_mapping_mode = TenantContract::SPACE_MAPPING_MODE_AUTO;
                     $contract->save();
                     $stats['updated']++;
                 }

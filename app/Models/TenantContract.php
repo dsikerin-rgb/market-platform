@@ -13,6 +13,9 @@ class TenantContract extends Model
 {
     use HasFactory;
 
+    public const SPACE_MAPPING_MODE_AUTO = 'auto';
+    public const SPACE_MAPPING_MODE_MANUAL = 'manual';
+
     /**
      * @var list<string>
      */
@@ -21,6 +24,9 @@ class TenantContract extends Model
         'market_id',
         'tenant_id',
         'market_space_id',
+        'space_mapping_mode',
+        'space_mapping_updated_at',
+        'space_mapping_updated_by_user_id',
         'number',
         'status',
         'starts_at',
@@ -38,7 +44,19 @@ class TenantContract extends Model
         'signed_at' => 'date',
         'monthly_rent' => 'decimal:2',
         'is_active' => 'boolean',
+        'space_mapping_updated_at' => 'datetime',
     ];
+
+    /**
+     * @return list<string>
+     */
+    public static function spaceMappingModes(): array
+    {
+        return [
+            self::SPACE_MAPPING_MODE_AUTO,
+            self::SPACE_MAPPING_MODE_MANUAL,
+        ];
+    }
 
     public function market(): BelongsTo
     {
@@ -53,5 +71,24 @@ class TenantContract extends Model
     public function marketSpace(): BelongsTo
     {
         return $this->belongsTo(MarketSpace::class);
+    }
+
+    public function spaceMappingUpdatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'space_mapping_updated_by_user_id');
+    }
+
+    public function effectiveSpaceMappingMode(): string
+    {
+        $mode = trim((string) ($this->space_mapping_mode ?? ''));
+
+        return in_array($mode, self::spaceMappingModes(), true)
+            ? $mode
+            : self::SPACE_MAPPING_MODE_AUTO;
+    }
+
+    public function usesManualSpaceMapping(): bool
+    {
+        return $this->effectiveSpaceMappingMode() === self::SPACE_MAPPING_MODE_MANUAL;
     }
 }
