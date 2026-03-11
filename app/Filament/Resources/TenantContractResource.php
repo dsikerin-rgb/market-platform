@@ -855,7 +855,7 @@ class TenantContractResource extends BaseResource
                 $buckets['has_overlap'][] = $recordId;
             }
 
-            if ($actionable && ! $excluded && $hasPlaceToken && $hasDocumentDate && ! $hasSpace) {
+            if ($category === 'primary_contract' && ! $excluded && $hasPlaceToken && $hasDocumentDate && ! $hasSpace) {
                 $buckets['needs_mapping'][] = $recordId;
             }
 
