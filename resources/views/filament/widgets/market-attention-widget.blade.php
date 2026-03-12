@@ -149,6 +149,9 @@
             border-radius: 0.9rem;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.96));
             box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.55);
+            opacity: 0;
+            transform: translate3d(2.5rem, 0, 0) scale(0.98);
+            animation: market-attention-toast-in 560ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
         }
 
         .dark .market-attention-widget__card--toast {
@@ -159,16 +162,40 @@
             transform: translateY(-2px);
         }
 
+        @keyframes market-attention-toast-in {
+            0% {
+                opacity: 0;
+                transform: translate3d(2.5rem, 0, 0) scale(0.98);
+            }
+
+            72% {
+                opacity: 1;
+                transform: translate3d(-0.16rem, 0, 0) scale(1);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+        }
+
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2) {
             margin-right: 0.55rem;
+            animation-delay: 90ms;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3) {
             margin-right: 1.1rem;
+            animation-delay: 180ms;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
             margin-right: 1.65rem;
+            animation-delay: 270ms;
+        }
+
+        .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(5) {
+            animation-delay: 360ms;
         }
 
         .market-attention-widget__toast-main {
@@ -373,6 +400,14 @@
 
             .dark .market-attention-widget__toast-action + .market-attention-widget__toast-action {
                 border-left-color: rgba(71, 85, 105, 0.45);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .market-attention-widget__card--toast {
+                opacity: 1;
+                transform: none;
+                animation: none;
             }
         }
     </style>
