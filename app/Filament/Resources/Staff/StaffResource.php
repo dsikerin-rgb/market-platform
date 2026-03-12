@@ -53,11 +53,15 @@ class StaffResource extends BaseResource
 
     protected static function applyInternalStaffScope(Builder $query): Builder
     {
-        return $query->where(function (Builder $staffOnly): void {
-            $staffOnly
-                ->whereNull('tenant_id')
-                ->orWhere('tenant_id', 0);
-        });
+        return $query
+            ->where(function (Builder $staffOnly): void {
+                $staffOnly
+                    ->whereNull('tenant_id')
+                    ->orWhere('tenant_id', 0);
+            })
+            ->whereDoesntHave('roles', function (Builder $roleQuery): void {
+                $roleQuery->where('name', 'merchant');
+            });
     }
 
     protected static function applyVisibleStaffScope(Builder $query, ?User $user): Builder
@@ -201,6 +205,14 @@ class StaffResource extends BaseResource
             return false;
         }
 
+        if (
+            $record instanceof User
+            && method_exists($record, 'hasRole')
+            && $record->hasRole('merchant')
+        ) {
+            return false;
+        }
+
         // super-admin — можно (EloquentQuery уже режет по выбранному рынку, если выбран)
         if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return true;
@@ -248,6 +260,14 @@ class StaffResource extends BaseResource
             ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             && method_exists($record, 'hasRole')
             && $record->hasRole('super-admin')
+        ) {
+            return false;
+        }
+
+        if (
+            $record instanceof User
+            && method_exists($record, 'hasRole')
+            && $record->hasRole('merchant')
         ) {
             return false;
         }
