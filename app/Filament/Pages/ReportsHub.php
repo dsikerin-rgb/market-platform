@@ -6,6 +6,7 @@ use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\ReportRunResource;
 use App\Models\Report;
 use App\Models\ReportRun;
+use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Support\Str;
 
@@ -126,6 +127,16 @@ class ReportsHub extends Page
             ->replace(['_', '-'], ' ')
             ->title()
             ->toString();
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
     }
 
     protected function marketId(): ?int
