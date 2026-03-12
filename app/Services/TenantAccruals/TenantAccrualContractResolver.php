@@ -11,6 +11,8 @@ use Illuminate\Support\Collection;
 
 class TenantAccrualContractResolver
 {
+    public const LOOKBACK_MONTHS = 3;
+
     public function __construct(
         private readonly ContractDocumentClassifier $classifier,
     ) {
