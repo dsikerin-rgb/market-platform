@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Contracts\Support\Htmlable;
 
 class MarketplaceSettings extends Page
 {
@@ -105,6 +106,11 @@ class MarketplaceSettings extends Page
                 ? (bool) $settings['allow_public_sales_without_active_contracts']
                 : (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false),
         ]);
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 
     public function form(Schema $schema): Schema

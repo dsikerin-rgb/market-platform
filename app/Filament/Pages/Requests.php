@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Support\Htmlable;
 
 class Requests extends Page
 {
@@ -34,5 +35,10 @@ class Requests extends Page
     public static function shouldRegisterNavigation(): bool
     {
         return static::canAccess();
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 }

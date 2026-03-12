@@ -18,6 +18,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 
 class MarketSettings extends Page
@@ -139,6 +140,11 @@ class MarketSettings extends Page
     public static function getNavigationItems(): array
     {
         return [];
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 
     protected function getHeaderActions(): array
