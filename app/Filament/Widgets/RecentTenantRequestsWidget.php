@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class RecentTenantRequestsWidget extends BaseTableWidget
 {
-    protected static ?string $heading = 'Открытые обращения арендаторов';
+    protected static ?string $heading = null;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -180,4 +180,3 @@ class RecentTenantRequestsWidget extends BaseTableWidget
         return $tz;
     }
 }
-
