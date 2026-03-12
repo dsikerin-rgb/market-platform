@@ -215,6 +215,10 @@
             font-size: 0.82rem;
             font-weight: 700;
             line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .dark .market-attention-widget__toast-name {
@@ -223,14 +227,14 @@
 
         .market-attention-widget__toast-value {
             margin-top: 0.12rem;
-            color: rgb(15, 23, 42);
-            font-size: 0.98rem;
-            font-weight: 700;
+            color: rgb(51, 65, 85);
+            font-size: 0.84rem;
+            font-weight: 600;
             line-height: 1;
         }
 
         .dark .market-attention-widget__toast-value {
-            color: rgb(248, 250, 252);
+            color: rgb(203, 213, 225);
         }
 
         .market-attention-widget__toast-description {
@@ -238,6 +242,10 @@
             color: rgb(71, 85, 105);
             font-size: 0.72rem;
             line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
 
         .dark .market-attention-widget__toast-description {
