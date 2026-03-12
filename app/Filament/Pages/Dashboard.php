@@ -367,7 +367,11 @@ class Dashboard extends BaseDashboard
             ?? session("filament_{$panelId}_market_id")
             ?? session('filament.admin.selected_market_id');
 
-        return (int) ($value ?: 0);
+        if (filled($value)) {
+            return (int) $value;
+        }
+
+        return $this->resolveDefaultMarketId();
     }
 
     private function syncDashboardMarketId(): void
@@ -378,11 +382,24 @@ class Dashboard extends BaseDashboard
             return;
         }
 
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
         $marketId = $this->resolveSelectedMarketId();
 
         if ($marketId > 0) {
             session(['dashboard_market_id' => $marketId]);
+            session(["filament.{$panelId}.selected_market_id" => $marketId]);
+            session(["filament_{$panelId}_market_id" => $marketId]);
+            session(['filament.admin.selected_market_id' => $marketId]);
         }
+    }
+
+    private function resolveDefaultMarketId(): int
+    {
+        $marketId = Market::query()
+            ->orderBy('name')
+            ->value('id');
+
+        return $marketId ? (int) $marketId : 0;
     }
 
     private function resolveMarketTimezone(int $marketId): string
