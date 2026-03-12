@@ -636,7 +636,7 @@ class TenantContractResource extends BaseResource
                     ]),
             ])
             ->actions([
-                tap(\Filament\Tables\Actions\EditAction::make()
+                tap(\Filament\Actions\EditAction::make()
                     ->label('')
                     ->tooltip('Быстрое редактирование')
                     ->icon('heroicon-o-pencil-square')
