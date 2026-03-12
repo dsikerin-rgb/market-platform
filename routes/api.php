@@ -3,6 +3,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TelegramWebhookController;
+use App\Http\Controllers\Api\OneC\AccrualController;
 use App\Http\Controllers\Api\OneC\ContractDebtController;
 use App\Http\Controllers\Api\OneC\ContractController;
 
@@ -29,3 +30,6 @@ Route::post('1c/contract-debts', [ContractDebtController::class, 'store'])
  */
 Route::post('1c/contracts', [ContractController::class, 'store'])
     ->name('api.1c.contracts.store');
+
+Route::post('1c/accruals', [AccrualController::class, 'store'])
+    ->name('api.1c.accruals.store');
