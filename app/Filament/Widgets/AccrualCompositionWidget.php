@@ -95,7 +95,7 @@ class AccrualCompositionWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
         [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
-        [$effectiveMonthYm, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
+        [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
         try {
             $row = DB::table('tenant_accruals')
@@ -146,7 +146,7 @@ class AccrualCompositionWidget extends ChartWidget
         }
 
         if ($labels === []) {
-            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthYm, $tz));
+            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
         }
 
         return [
