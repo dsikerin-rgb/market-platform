@@ -183,15 +183,7 @@
         .market-attention-widget__toast-head {
             display: flex;
             align-items: flex-start;
-            justify-content: space-between;
             gap: 0.5rem;
-        }
-
-        .market-attention-widget__toast-meta {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            flex-shrink: 0;
         }
 
         .market-attention-widget__toast-title {
@@ -199,6 +191,7 @@
             align-items: flex-start;
             gap: 0.55rem;
             min-width: 0;
+            flex: 1;
         }
 
         .market-attention-widget__toast-icon {
@@ -213,6 +206,7 @@
 
         .market-attention-widget__toast-copy {
             min-width: 0;
+            flex: 1;
         }
 
         .market-attention-widget__toast-name {
@@ -515,20 +509,14 @@
                                             </div>
                                         </div>
 
-                                        <div class="market-attention-widget__toast-meta">
-                                            <span class="inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ring-1 ring-inset {{ $accentClasses['chip'] }}">
-                                                {{ $item['category'] }}
-                                            </span>
-
-                                            <button
-                                                type="button"
-                                                class="market-attention-widget__toast-close"
-                                                x-on:click.stop="open = false"
-                                                aria-label="Закрыть уведомление"
-                                            >
-                                                <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
-                                            </button>
-                                        </div>
+                                        <button
+                                            type="button"
+                                            class="market-attention-widget__toast-close"
+                                            x-on:click.stop="open = false"
+                                            aria-label="Закрыть уведомление"
+                                        >
+                                            <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
+                                        </button>
                                     </div>
 
                                     <p class="market-attention-widget__toast-description">{{ $item['description'] }}</p>
