@@ -267,13 +267,6 @@
                 color: #bfdbfe;
             }
 
-            .dashboard-workspace__context {
-                display: grid;
-                gap: 1.5rem;
-                grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
-                align-items: start;
-            }
-
             .dashboard-workspace__panel {
                 border-radius: 1.5rem;
                 border: 1px solid var(--dashboard-border);
@@ -307,163 +300,6 @@
 
             .dashboard-workspace__panel-body {
                 padding: 1.25rem;
-            }
-
-            .dashboard-workspace__period-panel {
-                position: relative;
-                overflow: hidden;
-            }
-
-            .dashboard-workspace__period-panel::before {
-                content: '';
-                position: absolute;
-                inset: 0 0 auto 0;
-                height: 7.5rem;
-                background:
-                    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 42%),
-                    linear-gradient(180deg, rgba(239, 246, 255, 0.95), rgba(255, 255, 255, 0));
-                pointer-events: none;
-            }
-
-            .dark .dashboard-workspace__period-panel::before {
-                background:
-                    radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 42%),
-                    linear-gradient(180deg, rgba(15, 23, 42, 0.55), rgba(15, 23, 42, 0));
-            }
-
-            .dashboard-workspace__period-head {
-                position: relative;
-                z-index: 1;
-                display: flex;
-                flex-direction: column;
-                gap: 0.9rem;
-            }
-
-            .dashboard-workspace__period-title {
-                display: flex;
-                align-items: flex-start;
-                gap: 0.9rem;
-            }
-
-            .dashboard-workspace__period-icon {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 2.75rem;
-                height: 2.75rem;
-                border-radius: 1rem;
-                background: rgba(37, 99, 235, 0.12);
-                color: #1d4ed8;
-                flex-shrink: 0;
-                box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14);
-            }
-
-            .dark .dashboard-workspace__period-icon {
-                background: rgba(59, 130, 246, 0.14);
-                color: #bfdbfe;
-                box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.2);
-            }
-
-            .dashboard-workspace__period-kicker {
-                margin: 0 0 0.3rem;
-                font-size: 0.72rem;
-                font-weight: 700;
-                letter-spacing: 0.12em;
-                text-transform: uppercase;
-                color: #2563eb;
-            }
-
-            .dark .dashboard-workspace__period-kicker {
-                color: #93c5fd;
-            }
-
-            .dashboard-workspace__period-copy h3 {
-                margin: 0;
-                font-size: 1.12rem;
-                font-weight: 700;
-                color: var(--dashboard-heading);
-            }
-
-            .dashboard-workspace__period-copy p {
-                margin: 0.35rem 0 0;
-                font-size: 0.9rem;
-                line-height: 1.55;
-                color: var(--dashboard-muted);
-            }
-
-            .dashboard-workspace__period-meta {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.65rem;
-                align-items: center;
-            }
-
-            .dashboard-workspace__period-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.45rem;
-                padding: 0.45rem 0.75rem;
-                border-radius: 999px;
-                border: 1px solid rgba(37, 99, 235, 0.2);
-                background: rgba(37, 99, 235, 0.08);
-                color: #1d4ed8;
-                font-size: 0.78rem;
-                font-weight: 700;
-            }
-
-            .dark .dashboard-workspace__period-badge {
-                border-color: rgba(96, 165, 250, 0.22);
-                background: rgba(37, 99, 235, 0.12);
-                color: #dbeafe;
-            }
-
-            .dashboard-workspace__period-note {
-                font-size: 0.78rem;
-                color: var(--dashboard-muted);
-            }
-
-            .dashboard-workspace__period-body {
-                position: relative;
-                z-index: 1;
-                padding: 1.1rem 1.25rem 1.25rem;
-            }
-
-            .dashboard-workspace__period-form {
-                border-radius: 1.25rem;
-                border: 1px solid rgba(148, 163, 184, 0.18);
-                background:
-                    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.92));
-                padding: 1rem;
-                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-            }
-
-            .dark .dashboard-workspace__period-form {
-                border-color: rgba(71, 85, 105, 0.45);
-                background:
-                    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(15, 23, 42, 0.62));
-                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-            }
-
-            .dashboard-workspace__period-form .fi-fo-field-wrp-label,
-            .dashboard-workspace__period-form .fi-fo-field-wrp-label span {
-                font-weight: 700;
-                color: var(--dashboard-heading);
-            }
-
-            .dashboard-workspace__period-form .fi-input-wrp,
-            .dashboard-workspace__period-form .fi-select-input-ctn {
-                border-radius: 0.95rem;
-            }
-
-            .dashboard-workspace__period-form .fi-input-wrp {
-                border-color: rgba(148, 163, 184, 0.2);
-                background: rgba(255, 255, 255, 0.88);
-                box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.35);
-            }
-
-            .dark .dashboard-workspace__period-form .fi-input-wrp {
-                border-color: rgba(71, 85, 105, 0.5);
-                background: rgba(15, 23, 42, 0.72);
             }
 
             .dashboard-workspace__section-head {
@@ -633,10 +469,6 @@
             }
 
             @media (max-width: 1023px) {
-                .dashboard-workspace__context {
-                    grid-template-columns: minmax(0, 1fr);
-                }
-
                 .dashboard-workspace__stats {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                     min-width: 100%;
@@ -726,50 +558,16 @@
                 </div>
             </section>
 
-            <div class="dashboard-workspace__context">
-                @if ($workspaceHeaderWidgets !== [])
-                    <div>
-                        <x-filament-widgets::widgets
-                            :columns="1"
-                            :data="$widgetData"
-                            :widgets="$workspaceHeaderWidgets"
-                            class="dashboard-workspace__widgets"
-                        />
-                    </div>
-                @endif
-
-                <section class="dashboard-workspace__panel dashboard-workspace__period-panel">
-                    <div class="dashboard-workspace__panel-head">
-                        <div class="dashboard-workspace__period-head">
-                            <div class="dashboard-workspace__period-title">
-                                <div class="dashboard-workspace__period-icon">
-                                    <x-filament::icon icon="heroicon-o-funnel" class="h-5 w-5" />
-                                </div>
-
-                                <div class="dashboard-workspace__period-copy">
-                                    <div class="dashboard-workspace__period-kicker">Панель фильтра</div>
-                                    <h3>Отчётный период</h3>
-                                    <p>Один переключатель для финансовых и отчётных срезов дашборда.</p>
-                                </div>
-                            </div>
-
-                            <div class="dashboard-workspace__period-meta">
-                                <span class="dashboard-workspace__period-badge">
-                                    <x-filament::icon icon="heroicon-o-calendar-days" class="h-4 w-4" />
-                                    {{ $hero['period_label'] }}
-                                </span>
-                                <span class="dashboard-workspace__period-note">Обновляет связанные виджеты без смены структуры страницы.</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="dashboard-workspace__period-body">
-                        <div class="dashboard-workspace__period-form">
-                            {{ $this->filtersForm }}
-                        </div>
-                    </div>
-                </section>
-            </div>
+            @if ($workspaceHeaderWidgets !== [])
+                <div>
+                    <x-filament-widgets::widgets
+                        :columns="1"
+                        :data="$widgetData"
+                        :widgets="$workspaceHeaderWidgets"
+                        class="dashboard-workspace__widgets"
+                    />
+                </div>
+            @endif
 
             @foreach ($contentSections as $section)
                 <section class="dashboard-workspace__panel">
