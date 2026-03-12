@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\TenantAccruals\Tables;
 
 use App\Models\MarketLocation;
+use App\Models\TenantAccrual;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -22,7 +25,7 @@ class TenantAccrualsTable
                     ->label('Рынок')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->visible(fn () => (bool) Filament::auth()->user()?->isSuperAdmin() && blank(static::selectedMarketIdFromSession())),
+                    ->visible(fn (): bool => (bool) Filament::auth()->user()?->isSuperAdmin() && blank(static::selectedMarketIdFromSession())),
 
                 TextColumn::make('period')
                     ->label('Период')
@@ -47,6 +50,26 @@ class TenantAccrualsTable
                     })
                     ->toggleable(),
 
+                TextColumn::make('contract_link_status')
+                    ->label('Связь с договором')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'Точное совпадение',
+                        TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED => 'Разрешено по контексту',
+                        TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS => 'Неоднозначно',
+                        TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED => 'Без договора',
+                        default => 'Не проверено',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'success',
+                        TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED => 'info',
+                        TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS => 'warning',
+                        TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED => 'danger',
+                        default => 'gray',
+                    })
+                    ->tooltip(fn (TenantAccrual $record): ?string => $record->contract_link_note ?: null)
+                    ->toggleable(),
+
                 TextColumn::make('tenant.name')
                     ->label('Арендатор')
                     ->sortable()
@@ -59,6 +82,13 @@ class TenantAccrualsTable
                     ->searchable()
                     ->placeholder('—')
                     ->toggleable(),
+
+                TextColumn::make('contract_external_id')
+                    ->label('ID договора 1С')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn (): bool => (bool) Filament::auth()->user()?->isSuperAdmin()),
 
                 TextColumn::make('marketSpace.location.name')
                     ->label('Локация')
@@ -83,7 +113,7 @@ class TenantAccrualsTable
                 TextColumn::make('rent_amount')
                     ->label('Аренда')
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
                     ->toggleable(),
@@ -91,7 +121,7 @@ class TenantAccrualsTable
                 TextColumn::make('utilities_amount')
                     ->label('Коммунальные')
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
                     ->toggleable(),
@@ -99,7 +129,7 @@ class TenantAccrualsTable
                 TextColumn::make('electricity_amount')
                     ->label('Электроэнергия')
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
                     ->toggleable(),
@@ -107,7 +137,7 @@ class TenantAccrualsTable
                 TextColumn::make('management_fee')
                     ->label('Управление')
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -115,8 +145,8 @@ class TenantAccrualsTable
                 TextColumn::make('total')
                     ->label('Итого')
                     ->alignEnd()
-                    ->getStateUsing(fn ($record) => $record->total_with_vat ?? $record->total_no_vat)
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->getStateUsing(fn (TenantAccrual $record) => $record->total_with_vat ?? $record->total_no_vat)
+                    ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable(query: function (Builder $query, string $direction): Builder {
                         return $query->orderByRaw(
                             'COALESCE(total_with_vat, total_no_vat) ' . ($direction === 'asc' ? 'ASC' : 'DESC')
@@ -128,7 +158,7 @@ class TenantAccrualsTable
                 TextColumn::make('status')
                     ->label('Состояние строки')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
                         'imported' => 'Импортировано',
                         'adjusted' => 'Скорректировано',
                         'manual' => 'Вручную',
@@ -158,12 +188,14 @@ class TenantAccrualsTable
                             $query->where('market_id', $marketId);
                         }
 
-                        $periods = $query->orderByDesc('period')
+                        $periods = $query
+                            ->orderByDesc('period')
                             ->limit(48)
                             ->pluck('period')
                             ->all();
 
                         $options = [];
+
                         foreach ($periods as $period) {
                             $key = is_string($period) ? $period : (string) $period;
                             $options[$key] = substr($key, 0, 7);
@@ -202,7 +234,7 @@ class TenantAccrualsTable
                             return $query;
                         }
 
-                        return $query->whereHas('marketSpace', function (Builder $marketSpaceQuery) use ($value) {
+                        return $query->whereHas('marketSpace', function (Builder $marketSpaceQuery) use ($value): void {
                             $marketSpaceQuery->where('location_id', (int) $value);
                         });
                     }),
@@ -212,7 +244,17 @@ class TenantAccrualsTable
                     ->options([
                         '1c' => '1С',
                         'excel' => 'Исторический импорт',
+                        'csv' => 'Исторический импорт',
                         'manual' => 'Вручную',
+                    ]),
+
+                SelectFilter::make('contract_link_status')
+                    ->label('Связь с договором')
+                    ->options([
+                        TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'Точное совпадение',
+                        TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED => 'Разрешено по контексту',
+                        TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS => 'Неоднозначно',
+                        TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED => 'Без договора',
                     ]),
 
                 TernaryFilter::make('has_contract')
@@ -220,9 +262,9 @@ class TenantAccrualsTable
                     ->trueLabel('Только с договором')
                     ->falseLabel('Только без договора')
                     ->queries(
-                        true: fn (Builder $query) => $query->whereNotNull('tenant_contract_id'),
-                        false: fn (Builder $query) => $query->whereNull('tenant_contract_id'),
-                        blank: fn (Builder $query) => $query,
+                        true: fn (Builder $query): Builder => $query->whereNotNull('tenant_contract_id'),
+                        false: fn (Builder $query): Builder => $query->whereNull('tenant_contract_id'),
+                        blank: fn (Builder $query): Builder => $query,
                     ),
 
                 TernaryFilter::make('has_market_space')
@@ -230,9 +272,9 @@ class TenantAccrualsTable
                     ->trueLabel('Только с местом')
                     ->falseLabel('Только без места')
                     ->queries(
-                        true: fn (Builder $query) => $query->whereNotNull('market_space_id'),
-                        false: fn (Builder $query) => $query->whereNull('market_space_id'),
-                        blank: fn (Builder $query) => $query,
+                        true: fn (Builder $query): Builder => $query->whereNotNull('market_space_id'),
+                        false: fn (Builder $query): Builder => $query->whereNull('market_space_id'),
+                        blank: fn (Builder $query): Builder => $query,
                     ),
             ])
             ->recordActions([

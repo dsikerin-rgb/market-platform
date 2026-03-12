@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -76,6 +77,8 @@ class BackfillTenantAccrualContractsCommandTest extends TestCase
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
             'tenant_contract_id' => $contract->id,
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED,
+            'contract_link_source' => 'tenant_space_period',
         ]);
     }
 
@@ -150,6 +153,8 @@ class BackfillTenantAccrualContractsCommandTest extends TestCase
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
             'tenant_contract_id' => null,
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS,
+            'contract_link_source' => 'tenant_space_period',
         ]);
     }
 }

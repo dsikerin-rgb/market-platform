@@ -1,12 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\TenantAccruals\Pages;
 
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
+use App\Models\TenantAccrual;
 use Filament\Resources\Pages\ListRecords;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
+use RuntimeException;
 
 class ListTenantAccruals extends ListRecords
 {
@@ -63,20 +67,34 @@ class ListTenantAccruals extends ListRecords
             $tabs['one_c'] = $this->makeTab(
                 $tabClass,
                 '1С',
-                fn (Builder $query) => $query->where('source', '1c')
+                fn (Builder $query) => $query->where('source', '1c'),
             );
         }
 
         $tabs['without_contract'] = $this->makeTab(
             $tabClass,
             'Без договора',
-            fn (Builder $query) => $query->whereNull('tenant_contract_id')
+            fn (Builder $query) => $query
+                ->where('source', '1c')
+                ->where(function (Builder $builder): void {
+                    $builder
+                        ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)
+                        ->orWhereNull('contract_link_status');
+                }),
+        );
+
+        $tabs['ambiguous'] = $this->makeTab(
+            $tabClass,
+            'Неоднозначные',
+            fn (Builder $query) => $query
+                ->where('source', '1c')
+                ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS),
         );
 
         $tabs['history'] = $this->makeTab(
             $tabClass,
             'Исторический импорт',
-            fn (Builder $query) => $query->where('source', '!=', '1c')
+            fn (Builder $query) => $query->where('source', '!=', '1c'),
         );
 
         $tabs['all'] = $tabClass::make('Все начисления');
@@ -94,7 +112,7 @@ class ListTenantAccruals extends ListRecords
             return \Filament\Resources\Components\Tab::class;
         }
 
-        throw new \RuntimeException('Filament Tab class not found for this version.');
+        throw new RuntimeException('Filament Tab class not found for this version.');
     }
 
     protected function makeTab(string $tabClass, string $label, ?callable $modifyQueryUsing = null): object
@@ -110,7 +128,11 @@ class ListTenantAccruals extends ListRecords
 
     private function resolveDefaultTab(): string
     {
-        return $this->hasOneCAccruals() ? 'one_c' : 'all';
+        if ($this->hasOneCAccruals()) {
+            return 'one_c';
+        }
+
+        return 'all';
     }
 
     private function hasOneCAccruals(): bool

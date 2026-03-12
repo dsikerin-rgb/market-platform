@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Models\TenantAccrual;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -49,6 +50,9 @@ class BackfillTenantAccrualContractsCommand extends Command
             'mode' => $execute ? 'execute' : 'dry-run',
             'rows' => $rows->count(),
             'matched' => 0,
+            'exact' => 0,
+            'resolved' => 0,
+            'ambiguous' => 0,
             'updated' => 0,
             'unresolved' => 0,
         ];
@@ -57,22 +61,45 @@ class BackfillTenantAccrualContractsCommand extends Command
 
         foreach ($rows as $row) {
             $period = CarbonImmutable::parse((string) $row->period);
-            $tenantContractId = $resolver->resolve(
+            $match = $resolver->resolveMatch(
                 $marketId,
                 (int) $row->tenant_id,
                 (int) $row->market_space_id,
                 $period,
             );
 
-            if (! $tenantContractId) {
+            if (! $match->isLinked()) {
+                if ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS) {
+                    $stats['ambiguous']++;
+                }
+
                 $stats['unresolved']++;
+
+                if ($execute) {
+                    DB::table('tenant_accruals')
+                        ->where('id', (int) $row->id)
+                        ->update([
+                            'contract_link_status' => $match->status,
+                            'contract_link_source' => $match->source,
+                            'contract_link_note' => $match->note,
+                            'updated_at' => now(),
+                        ]);
+                }
+
                 continue;
             }
 
             $stats['matched']++;
+            if ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_EXACT) {
+                $stats['exact']++;
+            } else {
+                $stats['resolved']++;
+            }
+
             $samples[] = [
                 'tenant_accrual_id' => (int) $row->id,
-                'tenant_contract_id' => $tenantContractId,
+                'tenant_contract_id' => $match->tenantContractId,
+                'contract_link_status' => $match->status,
                 'period' => (string) $row->period,
             ];
 
@@ -83,7 +110,10 @@ class BackfillTenantAccrualContractsCommand extends Command
             DB::table('tenant_accruals')
                 ->where('id', (int) $row->id)
                 ->update([
-                    'tenant_contract_id' => $tenantContractId,
+                    'tenant_contract_id' => $match->tenantContractId,
+                    'contract_link_status' => $match->status,
+                    'contract_link_source' => $match->source,
+                    'contract_link_note' => $match->note,
                     'updated_at' => now(),
                 ]);
 

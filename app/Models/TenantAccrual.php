@@ -10,6 +10,11 @@ class TenantAccrual extends Model
 {
     protected $table = 'tenant_accruals';
 
+    public const CONTRACT_LINK_STATUS_EXACT = 'exact';
+    public const CONTRACT_LINK_STATUS_RESOLVED = 'resolved';
+    public const CONTRACT_LINK_STATUS_UNMATCHED = 'unmatched';
+    public const CONTRACT_LINK_STATUS_AMBIGUOUS = 'ambiguous';
+
     // Filament сохраняет через mass assignment.
     // Нам нужно разрешить сохранение хотя бы notes.
     protected $guarded = [];
