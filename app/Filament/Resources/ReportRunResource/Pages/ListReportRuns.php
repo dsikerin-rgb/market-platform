@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ReportRunResource\Pages;
 
 use App\Filament\Resources\ReportRunResource;
-use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
 class ListReportRuns extends ListRecords
@@ -19,17 +18,6 @@ class ListReportRuns extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        $createAction = Actions\CreateAction::make()
-            ->label('Создать запуск');
-
-        if (method_exists($createAction, 'slideOver')) {
-            $createAction->slideOver();
-        }
-
-        if (method_exists($createAction, 'modalWidth')) {
-            $createAction->modalWidth('5xl');
-        }
-
-        return [$createAction];
+        return [];
     }
 }

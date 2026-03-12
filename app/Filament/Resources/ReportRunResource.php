@@ -8,10 +8,10 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class ReportRunResource extends BaseResource
 {
@@ -44,7 +44,6 @@ class ReportRunResource extends BaseResource
         return filled($value) ? (int) $value : null;
     }
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -53,6 +52,7 @@ class ReportRunResource extends BaseResource
             'report.market.name',
         ];
     }
+
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
@@ -80,26 +80,32 @@ class ReportRunResource extends BaseResource
                 })
                 ->required()
                 ->searchable()
-                ->preload(),
+                ->preload()
+                ->disabled(),
 
             Forms\Components\DateTimePicker::make('started_at')
                 ->label('Начало')
-                ->required(),
+                ->required()
+                ->disabled(),
 
             Forms\Components\DateTimePicker::make('finished_at')
-                ->label('Завершение'),
+                ->label('Завершение')
+                ->disabled(),
 
             Forms\Components\TextInput::make('status')
                 ->label('Статус')
-                ->maxLength(255),
+                ->maxLength(255)
+                ->disabled(),
 
             Forms\Components\TextInput::make('file_path')
                 ->label('Файл')
-                ->maxLength(255),
+                ->maxLength(255)
+                ->disabled(),
 
             Forms\Components\Textarea::make('error')
                 ->label('Ошибка')
-                ->rows(3),
+                ->rows(3)
+                ->disabled(),
         ];
 
         if (class_exists(Forms\Components\Grid::class)) {
@@ -115,7 +121,7 @@ class ReportRunResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        $table = $table
+        return $table
             ->columns([
                 TextColumn::make('report.market.name')
                     ->label('Рынок')
@@ -130,7 +136,8 @@ class ReportRunResource extends BaseResource
 
                 TextColumn::make('status')
                     ->label('Статус')
-                    ->sortable(),
+                    ->sortable()
+                    ->badge(),
 
                 TextColumn::make('started_at')
                     ->label('Начало')
@@ -142,51 +149,22 @@ class ReportRunResource extends BaseResource
                     ->dateTime()
                     ->sortable(),
 
-                IconColumn::make('file_path')
+                TextColumn::make('file_path')
                     ->label('Файл')
-                    ->boolean(fn (?string $state) => filled($state)),
+                    ->formatStateUsing(fn (?string $state): string => filled($state) ? basename($state) : '—')
+                    ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
+                    ->toggleable(),
+
+                TextColumn::make('error')
+                    ->label('Ошибка')
+                    ->formatStateUsing(fn (?string $state): string => filled($state) ? Str::limit($state, 80) : '—')
+                    ->tooltip(fn (?string $state): ?string => filled($state) ? $state : null)
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->recordUrl(null);
-
-        $actions = [];
-
-        if (class_exists(\Filament\Actions\EditAction::class)) {
-            $editAction = \Filament\Actions\EditAction::make()->label('Редактировать');
-
-            if (method_exists($editAction, 'slideOver')) {
-                $editAction->slideOver();
-            }
-
-            if (method_exists($editAction, 'modalWidth')) {
-                $editAction->modalWidth('5xl');
-            }
-
-            $actions[] = $editAction;
-        } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $editAction = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
-
-            if (method_exists($editAction, 'slideOver')) {
-                $editAction->slideOver();
-            }
-
-            if (method_exists($editAction, 'modalWidth')) {
-                $editAction->modalWidth('5xl');
-            }
-
-            $actions[] = $editAction;
-        }
-
-        if (class_exists(\Filament\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
-        } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
-        }
-
-        if (! empty($actions)) {
-            $table = $table->actions($actions);
-        }
-
-        return $table;
+            ->recordUrl(null)
+            ->emptyStateHeading('Запусков отчётов ещё нет')
+            ->emptyStateDescription('Это служебный журнал выполнений. Записи появляются автоматически после запусков отчётов.');
     }
 
     public static function getRelations(): array
@@ -198,8 +176,6 @@ class ReportRunResource extends BaseResource
     {
         return [
             'index' => Pages\ListReportRuns::route('/'),
-            'create' => Pages\CreateReportRun::route('/create'),
-            'edit' => Pages\EditReportRun::route('/{record}/edit'),
         ];
     }
 
@@ -238,42 +214,16 @@ class ReportRunResource extends BaseResource
 
     public static function canCreate(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return false;
     }
 
     public static function canEdit($record): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        $report = $record->report;
-
-        return $report && $user->market_id && $report->market_id === $user->market_id;
+        return false;
     }
 
     public static function canDelete($record): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        $report = $record->report;
-
-        return $report && $user->market_id && $report->market_id === $user->market_id;
+        return false;
     }
 }
