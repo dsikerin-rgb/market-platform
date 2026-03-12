@@ -13,6 +13,8 @@ use Filament\Widgets\ChartWidget;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'Заполняемость торговых мест';
 
     protected function getType(): string

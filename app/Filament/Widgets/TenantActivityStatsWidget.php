@@ -20,6 +20,8 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
 
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'Оперативная активность';
 
     public static function canView(): bool

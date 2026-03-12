@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Schema;
 
 class OneCDebtSnapshotsHistoryWidget extends ChartWidget
 {
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'История 1С-снимков задолженности';
 
     protected int|string|array $columnSpan = [

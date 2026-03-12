@@ -17,6 +17,8 @@ class RevenueYearChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
 
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'Начислено по 1С и охват мест за 13 месяцев';
 
     protected int|string|array $columnSpan = [

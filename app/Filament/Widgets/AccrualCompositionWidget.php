@@ -16,6 +16,8 @@ class AccrualCompositionWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
 
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'Структура начислений';
 
     protected int|string|array $columnSpan = [
