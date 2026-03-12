@@ -7,7 +7,6 @@ namespace App\Services\TenantAccruals;
 use App\Models\TenantContract;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Collection;
 
 class TenantAccrualContractResolver
 {
@@ -24,8 +23,34 @@ class TenantAccrualContractResolver
         ?int $marketSpaceId,
         CarbonImmutable $period,
     ): ?int {
+        return $this->resolveMatch($marketId, $tenantId, $marketSpaceId, $period)->tenantContractId;
+    }
+
+    public function resolveMatch(
+        int $marketId,
+        ?int $tenantId,
+        ?int $marketSpaceId,
+        CarbonImmutable $period,
+        ?string $contractExternalId = null,
+    ): TenantAccrualContractMatch {
+        $contractExternalId = trim((string) $contractExternalId);
+
+        if ($contractExternalId !== '') {
+            $exactContractId = TenantContract::query()
+                ->where('market_id', $marketId)
+                ->where('external_id', $contractExternalId)
+                ->value('id');
+
+            if ($exactContractId) {
+                return TenantAccrualContractMatch::exact((int) $exactContractId);
+            }
+        }
+
         if (! $tenantId || ! $marketSpaceId) {
-            return null;
+            return TenantAccrualContractMatch::unmatched(
+                source: $contractExternalId !== '' ? 'contract_external_id' : 'none',
+                note: 'missing_tenant_or_market_space',
+            );
         }
 
         $contracts = TenantContract::query()
@@ -47,7 +72,10 @@ class TenantAccrualContractResolver
             ]);
 
         if ($contracts->isEmpty()) {
-            return null;
+            return TenantAccrualContractMatch::unmatched(
+                source: 'tenant_space_period',
+                note: $contractExternalId !== '' ? 'contract_external_id_missing_no_space_match' : 'no_contracts_for_tenant_and_space',
+            );
         }
 
         $primary = $contracts
@@ -64,14 +92,20 @@ class TenantAccrualContractResolver
             ->values();
 
         if ($primary->isEmpty()) {
-            return null;
+            return TenantAccrualContractMatch::unmatched(
+                source: 'tenant_space_period',
+                note: 'no_primary_contracts',
+            );
         }
 
         if ($primary->count() === 1) {
             /** @var TenantContract $resolved */
             $resolved = $primary->first()['contract'];
 
-            return (int) $resolved->id;
+            return TenantAccrualContractMatch::resolved(
+                tenantContractId: (int) $resolved->id,
+                note: $contractExternalId !== '' ? 'resolved_without_direct_contract_card' : null,
+            );
         }
 
         $periodEnd = $period->endOfMonth()->format('Y-m-d');
@@ -100,7 +134,9 @@ class TenantAccrualContractResolver
             ->values();
 
         if ($dated->isEmpty()) {
-            return null;
+            return TenantAccrualContractMatch::ambiguous(
+                note: 'multiple_primary_contracts_without_effective_date',
+            );
         }
 
         $bestDate = (string) $dated->first()['effective_date'];
@@ -109,12 +145,17 @@ class TenantAccrualContractResolver
             ->values();
 
         if ($best->count() !== 1) {
-            return null;
+            return TenantAccrualContractMatch::ambiguous(
+                note: 'multiple_primary_contracts_same_effective_date',
+            );
         }
 
         /** @var TenantContract $resolved */
         $resolved = $best->first()['contract'];
 
-        return (int) $resolved->id;
+        return TenantAccrualContractMatch::resolved(
+            tenantContractId: (int) $resolved->id,
+            note: $contractExternalId !== '' ? 'resolved_without_direct_contract_card' : 'resolved_by_latest_effective_date',
+        );
     }
 }

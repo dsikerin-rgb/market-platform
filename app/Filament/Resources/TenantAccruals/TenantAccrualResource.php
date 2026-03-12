@@ -48,7 +48,6 @@ class TenantAccrualResource extends BaseResource
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
         $key = "filament_{$panelId}_market_id";
-
         $value = session($key);
 
         return filled($value) ? (int) $value : null;

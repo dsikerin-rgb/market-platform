@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -106,6 +107,9 @@ class OneCAccrualImportTest extends TestCase
             'market_id' => $this->market->id,
             'tenant_id' => $tenant->id,
             'tenant_contract_id' => $contract->id,
+            'contract_external_id' => 'contract-001',
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+            'contract_link_source' => 'contract_external_id',
             'market_space_id' => $space->id,
             'period' => '2026-03-01',
             'source' => '1c',
@@ -186,6 +190,9 @@ class OneCAccrualImportTest extends TestCase
         $this->assertDatabaseHas('tenant_accruals', [
             'market_id' => $this->market->id,
             'tenant_id' => $tenant->id,
+            'contract_external_id' => 'contract-002',
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+            'contract_link_source' => 'contract_external_id',
             'period' => '2026-03-01',
             'rent_amount' => 11900,
             'total_no_vat' => 12300,

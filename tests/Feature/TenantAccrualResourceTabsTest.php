@@ -60,7 +60,7 @@ class TenantAccrualResourceTabsTest extends TestCase
             ->assertDontSee('>1С<', false);
     }
 
-    public function test_page_shows_one_c_tab_when_one_c_accruals_exist(): void
+    public function test_page_shows_one_c_tabs_when_one_c_accruals_exist(): void
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -80,6 +80,7 @@ class TenantAccrualResourceTabsTest extends TestCase
             'period' => '2026-03-01',
             'source' => '1c',
             'status' => 'imported',
+            'contract_link_status' => 'ambiguous',
             'currency' => 'RUB',
             'source_row_hash' => hash('sha256', '1c-row-1'),
             'created_at' => now(),
@@ -99,6 +100,8 @@ class TenantAccrualResourceTabsTest extends TestCase
         $this->get(TenantAccrualResource::getUrl('index'))
             ->assertOk()
             ->assertSee('1С')
+            ->assertSee('Без договора')
+            ->assertSee('Неоднозначные')
             ->assertSee('Все начисления');
     }
 }

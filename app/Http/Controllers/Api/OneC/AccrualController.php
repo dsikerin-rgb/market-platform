@@ -9,6 +9,7 @@ use App\Models\IntegrationExchange;
 use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Carbon\CarbonImmutable;
@@ -181,6 +182,9 @@ class AccrualController extends Controller
             $tenantsCreated = 0;
             $tenantsUpdatedByInn = 0;
             $linkedContracts = 0;
+            $exactContractLinks = 0;
+            $resolvedContractLinks = 0;
+            $ambiguousContracts = 0;
             $resolvedSpaces = 0;
             $unresolvedContracts = 0;
             $unresolvedSpaces = 0;
@@ -230,30 +234,28 @@ class AccrualController extends Controller
                     }
                 }
 
-                $tenantContractId = null;
-                if ($contractExternalId !== '') {
-                    $tenantContractId = TenantContract::query()
-                        ->where('market_id', $marketId)
-                        ->where('external_id', $contractExternalId)
-                        ->value('id');
-                }
+                $match = $contractResolver->resolveMatch(
+                    marketId: $marketId,
+                    tenantId: (int) $tenant->id,
+                    marketSpaceId: $marketSpaceId,
+                    period: CarbonImmutable::createFromFormat('Y-m-d', $periodDate),
+                    contractExternalId: $contractExternalId !== '' ? $contractExternalId : null,
+                );
 
-                if (! $tenantContractId && $marketSpaceId) {
-                    $resolvedId = $contractResolver->resolve(
-                        $marketId,
-                        (int) $tenant->id,
-                        $marketSpaceId,
-                        CarbonImmutable::createFromFormat('Y-m-d', $periodDate),
-                    );
+                $tenantContractId = $match->tenantContractId;
 
-                    if ($resolvedId) {
-                        $tenantContractId = $resolvedId;
-                    }
-                }
-
-                if ($tenantContractId) {
+                if ($match->isLinked()) {
                     $linkedContracts++;
-                } elseif ($contractExternalId !== '') {
+
+                    if ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_EXACT) {
+                        $exactContractLinks++;
+                    } else {
+                        $resolvedContractLinks++;
+                    }
+                } elseif ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS) {
+                    $ambiguousContracts++;
+                    $unresolvedContracts++;
+                } elseif ($contractExternalId !== '' || $marketSpaceId) {
                     $unresolvedContracts++;
                 }
 
@@ -281,7 +283,11 @@ class AccrualController extends Controller
                     ],
                     [
                         'tenant_id' => (int) $tenant->id,
+                        'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
                         'tenant_contract_id' => $tenantContractId,
+                        'contract_link_status' => $match->status,
+                        'contract_link_source' => $match->source,
+                        'contract_link_note' => $match->note,
                         'market_space_id' => $marketSpaceId,
                         'source_place_code' => $sourcePlaceCode !== '' ? $sourcePlaceCode : null,
                         'source_place_name' => $sourcePlaceName !== '' ? $sourcePlaceName : null,
@@ -322,6 +328,9 @@ class AccrualController extends Controller
             $warnings = [
                 'space_key_collisions' => $keysWithCollisions,
                 'contracts_linked' => $linkedContracts,
+                'contracts_linked_exact' => $exactContractLinks,
+                'contracts_linked_resolved' => $resolvedContractLinks,
+                'contracts_ambiguous' => $ambiguousContracts,
                 'spaces_resolved' => $resolvedSpaces,
                 'contracts_unresolved' => $unresolvedContracts,
                 'spaces_unresolved' => $unresolvedSpaces,
