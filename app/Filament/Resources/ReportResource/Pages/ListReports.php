@@ -19,9 +19,17 @@ class ListReports extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make()
-                ->label('Создать отчёт'),
-        ];
+        $createAction = Actions\CreateAction::make()
+            ->label('Создать отчёт');
+
+        if (method_exists($createAction, 'slideOver')) {
+            $createAction->slideOver();
+        }
+
+        if (method_exists($createAction, 'modalWidth')) {
+            $createAction->modalWidth('5xl');
+        }
+
+        return [$createAction];
     }
 }

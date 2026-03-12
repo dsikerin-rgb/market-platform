@@ -19,9 +19,17 @@ class ListMarketLocationTypes extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make()
-                ->label('Создать тип'),
-        ];
+        $createAction = Actions\CreateAction::make()
+            ->label('Создать тип');
+
+        if (method_exists($createAction, 'slideOver')) {
+            $createAction->slideOver();
+        }
+
+        if (method_exists($createAction, 'modalWidth')) {
+            $createAction->modalWidth('3xl');
+        }
+
+        return [$createAction];
     }
 }

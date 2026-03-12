@@ -230,8 +230,17 @@ class MarketplaceSlideResource extends BaseResource
                     ->label('Активен')
                     ->boolean(),
             ])
+            ->recordUrl(null)
             ->actions([
-                \Filament\Actions\EditAction::make()->label('Редактировать'),
+                tap(\Filament\Actions\EditAction::make()->label('Редактировать'), function ($action): void {
+                    if (method_exists($action, 'slideOver')) {
+                        $action->slideOver();
+                    }
+
+                    if (method_exists($action, 'modalWidth')) {
+                        $action->modalWidth('5xl');
+                    }
+                }),
                 \Filament\Actions\DeleteAction::make()->label('Удалить'),
             ]);
     }

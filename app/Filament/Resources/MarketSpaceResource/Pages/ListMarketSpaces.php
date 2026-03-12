@@ -21,10 +21,18 @@ class ListMarketSpaces extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make()
-                ->label('Создать торговое место'),
-        ];
+        $createAction = Actions\CreateAction::make()
+            ->label('Создать торговое место');
+
+        if (method_exists($createAction, 'slideOver')) {
+            $createAction->slideOver();
+        }
+
+        if (method_exists($createAction, 'modalWidth')) {
+            $createAction->modalWidth('7xl');
+        }
+
+        return [$createAction];
     }
 
     protected function getHeaderWidgets(): array

@@ -1060,17 +1060,37 @@ class MarketSpaceResource extends BaseResource
 
         // Icon-only actions (no text), keep tooltips for usability
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()
+            $editAction = \Filament\Actions\EditAction::make()
                 ->label('')
                 ->tooltip('Редактировать')
                 ->icon('heroicon-o-pencil-square')
                 ->iconButton();
+
+            if (method_exists($editAction, 'slideOver')) {
+                $editAction->slideOver();
+            }
+
+            if (method_exists($editAction, 'modalWidth')) {
+                $editAction->modalWidth('7xl');
+            }
+
+            $actions[] = $editAction;
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()
+            $editAction = \Filament\Tables\Actions\EditAction::make()
                 ->label('')
                 ->tooltip('Редактировать')
                 ->icon('heroicon-o-pencil-square')
                 ->iconButton();
+
+            if (method_exists($editAction, 'slideOver')) {
+                $editAction->slideOver();
+            }
+
+            if (method_exists($editAction, 'modalWidth')) {
+                $editAction->modalWidth('7xl');
+            }
+
+            $actions[] = $editAction;
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
