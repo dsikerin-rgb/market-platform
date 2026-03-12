@@ -14,11 +14,11 @@ class ListOperations extends ListRecords
 {
     protected static string $resource = OperationResource::class;
 
-    protected static ?string $title = 'Операции';
+    protected static ?string $title = 'Журнал операций';
 
     public function getBreadcrumb(): string
     {
-        return 'Операции';
+        return 'Журнал операций';
     }
 
     protected function getHeaderActions(): array
@@ -41,7 +41,17 @@ class ListOperations extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Журнал локальных управленческих действий. Финансовая истина по договорам, начислениям и долгам остаётся в 1С.';
+        return 'Служебный журнал локальных управленческих действий. Договоры, начисления, оплаты и долги ведутся в 1С.';
+    }
+
+    public function getEmptyStateHeading(): ?string
+    {
+        return 'Журнал пока пуст';
+    }
+
+    public function getEmptyStateDescription(): ?string
+    {
+        return 'Для выбранного рынка ещё не создавались управленческие операции. Этот раздел используется как служебный журнал и не заменяет договорный или финансовый контур 1С.';
     }
 
     private function exportUrl(): string
