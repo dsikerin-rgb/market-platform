@@ -6,16 +6,6 @@
             max-width: 1080px;
             margin: 0 auto;
         }
-        .settings-hub-intro {
-            padding: 18px 20px;
-            border-radius: 18px;
-            border: 1px solid rgba(156, 163, 175, .24);
-            background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(248,250,252,.92));
-        }
-        .dark .settings-hub-intro {
-            background: linear-gradient(180deg, rgba(17,24,39,.82), rgba(15,23,42,.76));
-            border-color: rgba(55, 65, 81, .7);
-        }
         .settings-hub-grid {
             display: grid;
             gap: 14px;
@@ -70,14 +60,6 @@
     </style>
 
     <div class="settings-hub">
-        <div class="settings-hub-intro">
-            <div class="text-lg font-semibold">Единый вход в настройки</div>
-            <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Боковое меню сокращено до одного понятного раздела. Здесь собраны настройки рынка,
-                маркетплейса и промо-слоя, чтобы не раздувать навигацию и не перегружать пользователя.
-            </div>
-        </div>
-
         <div class="settings-hub-grid">
             @if (\App\Filament\Pages\MarketSettings::canAccess())
                 <a href="{{ $this->getMarketSettingsUrl() }}" class="settings-card">
@@ -94,17 +76,6 @@
                     <div class="settings-card-title">Настройки маркетплейса</div>
                     <div class="settings-card-text">
                         Бренд, логотип, hero-блок, поведение главной страницы и параметры инфо-слайдера.
-                    </div>
-                    <div class="settings-card-footer">Открыть</div>
-                </a>
-            @endif
-
-            @if (\App\Filament\Resources\MarketplaceSlideResource::canViewAny())
-                <a href="{{ $this->getMarketplaceSlidesUrl() }}" class="settings-card">
-                    <div class="settings-card-title">Слайды маркетплейса</div>
-                    <div class="settings-card-text">
-                        Управляемые информационные и промо-слайды главной страницы. Это отдельный слой, не
-                        заменяющий календарные акции и события.
                     </div>
                     <div class="settings-card-footer">Открыть</div>
                 </a>
