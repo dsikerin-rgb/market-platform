@@ -410,36 +410,28 @@ class TenantResource extends BaseResource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('accruals_last_period')
-                    ->label('Последнее начисление')
+                TextColumn::make('financial_snapshot_at')
+                    ->label('Снимок 1С')
                     ->formatStateUsing(function ($state): string {
                         if (! filled($state)) {
                             return '—';
                         }
 
                         try {
-                            return Carbon::parse((string) $state)->format('Y-m');
+                            return Carbon::parse((string) $state)->format('d.m.Y H:i');
                         } catch (\Throwable) {
                             return (string) $state;
                         }
                     })
                     ->sortable(),
 
-                TextColumn::make('accruals_count')
-                    ->label('Начислений')
-                    ->numeric()
-                    ->sortable()
-                    ->alignCenter(),
+                TextColumn::make('financial_accrued_sum')
+                    ->label('Начислено (1С)')
+                    ->money('RUB', locale: 'ru')
+                    ->sortable(),
 
-                TextColumn::make('accruals_distinct_spaces_count')
-                    ->label('Мест (в начисл.)')
-                    ->numeric()
-                    ->sortable()
-                    ->alignCenter()
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('accruals_total_with_vat_sum')
-                    ->label('Сумма начислений')
+                TextColumn::make('financial_debt_sum')
+                    ->label('Долг (1С)')
                     ->money('RUB', locale: 'ru')
                     ->sortable(),
 
@@ -493,7 +485,7 @@ class TenantResource extends BaseResource
                         'ИП' => 'ИП (legacy)',
                     ]),
             ])
-            ->defaultSort('accruals_total_with_vat_sum', 'desc')
+            ->defaultSort('financial_debt_sum', 'desc')
             ->toolbarActions($toolbarActions)
             ->recordUrl(fn (Tenant $record): string => static::getUrl('edit', ['record' => $record]));
     }
@@ -779,7 +771,7 @@ class TenantResource extends BaseResource
             return $query->whereRaw('1 = 0');
         }
 
-        return static::withAccrualMetrics($query);
+        return static::withFinancialMetrics($query);
     }
 
     /**
@@ -836,17 +828,76 @@ class TenantResource extends BaseResource
         }
     }
 
-    protected static function withAccrualMetrics(Builder $query): Builder
+    protected static function withFinancialMetrics(Builder $query): Builder
     {
-        $base = DB::table('tenant_accruals as ta')
-            ->whereColumn('ta.tenant_id', 'tenants.id')
-            ->whereColumn('ta.market_id', 'tenants.market_id');
+        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+            return $query->addSelect([
+                'financial_snapshot_at' => DB::raw('NULL'),
+                'financial_accrued_sum' => DB::raw('0'),
+                'financial_debt_sum' => DB::raw('0'),
+            ]);
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasAccruedAmount = static::hasColumn('contract_debts', 'accrued_amount');
+        $hasDebtAmount = static::hasColumn('contract_debts', 'debt_amount');
+
+        $snapshotSubquery = DB::table('contract_debts as cd')
+            ->whereColumn('cd.tenant_id', 'tenants.id');
+
+        if ($hasMarketId) {
+            $snapshotSubquery->whereColumn('cd.market_id', 'tenants.market_id');
+        }
+
+        if ($hasCalculatedAt) {
+            $snapshotSubquery->selectRaw('MAX(cd.calculated_at)');
+        } else {
+            $snapshotSubquery->selectRaw('NULL');
+        }
+
+        $latestSnapshotConstraint = function ($query, string $alias) use ($hasCalculatedAt, $hasMarketId): void {
+            if (! $hasCalculatedAt) {
+                return;
+            }
+
+            $query->where("{$alias}.calculated_at", '=', function ($sub) use ($hasMarketId): void {
+                $sub->from('contract_debts as cd2')
+                    ->selectRaw('MAX(cd2.calculated_at)')
+                    ->whereColumn('cd2.tenant_id', 'tenants.id');
+
+                if ($hasMarketId) {
+                    $sub->whereColumn('cd2.market_id', 'tenants.market_id');
+                }
+            });
+        };
+
+        $accruedSubquery = DB::table('contract_debts as cd')
+            ->whereColumn('cd.tenant_id', 'tenants.id');
+
+        if ($hasMarketId) {
+            $accruedSubquery->whereColumn('cd.market_id', 'tenants.market_id');
+        }
+
+        $latestSnapshotConstraint($accruedSubquery, 'cd');
+
+        $debtSubquery = DB::table('contract_debts as cd')
+            ->whereColumn('cd.tenant_id', 'tenants.id');
+
+        if ($hasMarketId) {
+            $debtSubquery->whereColumn('cd.market_id', 'tenants.market_id');
+        }
+
+        $latestSnapshotConstraint($debtSubquery, 'cd');
 
         return $query->addSelect([
-            'accruals_count' => (clone $base)->selectRaw('COUNT(*)'),
-            'accruals_last_period' => (clone $base)->selectRaw('MAX(period)'),
-            'accruals_total_with_vat_sum' => (clone $base)->selectRaw('COALESCE(SUM(total_with_vat), 0)'),
-            'accruals_distinct_spaces_count' => (clone $base)->selectRaw('COUNT(DISTINCT ta.market_space_id)'),
+            'financial_snapshot_at' => $snapshotSubquery,
+            'financial_accrued_sum' => $hasAccruedAmount
+                ? $accruedSubquery->selectRaw('COALESCE(SUM(cd.accrued_amount), 0)')
+                : DB::raw('0'),
+            'financial_debt_sum' => $hasDebtAmount
+                ? $debtSubquery->selectRaw('COALESCE(SUM(cd.debt_amount), 0)')
+                : DB::raw('0'),
         ]);
     }
 
