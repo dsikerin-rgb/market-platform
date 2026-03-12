@@ -9,7 +9,7 @@ class ViewOperation extends ViewRecord
 {
     protected static string $resource = OperationResource::class;
 
-    protected static ?string $title = 'Операция';
+    protected static ?string $title = 'Управленческая операция';
 
     public function getBreadcrumb(): string
     {

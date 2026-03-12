@@ -22,9 +22,9 @@ class TenantAccrualResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'source_place_name';
 
-    protected static ?string $modelLabel = 'Начисление';
-    protected static ?string $pluralModelLabel = 'Начисления';
-    protected static ?string $navigationLabel = 'Начисления';
+    protected static ?string $modelLabel = 'Строка начисления';
+    protected static ?string $pluralModelLabel = 'Детализация начислений';
+    protected static ?string $navigationLabel = 'Детализация начислений';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 

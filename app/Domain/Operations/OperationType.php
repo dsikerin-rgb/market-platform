@@ -35,4 +35,25 @@ final class OperationType
     {
         return array_keys(self::labels());
     }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function managementLabels(): array
+    {
+        return array_intersect_key(self::labels(), array_flip(self::managementValues()));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function managementValues(): array
+    {
+        return [
+            self::SPACE_ATTRS_CHANGE,
+            self::ELECTRICITY_INPUT,
+            self::ACCRUAL_ADJUSTMENT,
+            self::PERIOD_CLOSE,
+        ];
+    }
 }

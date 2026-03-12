@@ -94,6 +94,15 @@ class TenantContractResource extends BaseResource
         return filled($value) ? (int) $value : null;
     }
 
+    protected static function canViewTechnicalFields(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return (bool) $user
+            && method_exists($user, 'isSuperAdmin')
+            && $user->isSuperAdmin();
+    }
+
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -133,18 +142,21 @@ class TenantContractResource extends BaseResource
                     Forms\Components\TextInput::make('place_token_display')
                         ->label('Токен места')
                         ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
+                        ->visible(fn (): bool => static::canViewTechnicalFields())
                         ->disabled()
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('space_group_display')
                         ->label('Группа мест')
                         ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_token'] ?: '—'))
+                        ->visible(fn (): bool => static::canViewTechnicalFields())
                         ->disabled()
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('space_group_segments_display')
                         ->label('Сегменты в группе')
                         ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_segments'] ?: '—'))
+                        ->visible(fn (): bool => static::canViewTechnicalFields())
                         ->disabled()
                         ->dehydrated(false),
 
@@ -164,6 +176,7 @@ class TenantContractResource extends BaseResource
                         ->label('Техническая дата 1С')
                         ->helperText('Не используется как основная дата договора. Для истории приоритет у даты из номера договора.')
                         ->formatStateUsing(fn (?TenantContract $record): string => $record?->starts_at?->format('d.m.Y') ?: '—')
+                        ->visible(fn (): bool => static::canViewTechnicalFields())
                         ->disabled()
                         ->dehydrated(false),
 
@@ -176,6 +189,7 @@ class TenantContractResource extends BaseResource
                     Forms\Components\TextInput::make('status_display')
                         ->label('Статус договора')
                         ->formatStateUsing(fn (?TenantContract $record): string => static::contractStatusLabel($record?->status))
+                        ->visible(fn (): bool => static::canViewTechnicalFields())
                         ->disabled()
                         ->dehydrated(false),
 
@@ -355,6 +369,7 @@ class TenantContractResource extends BaseResource
     public static function table(Table $table): Table
     {
         $user = Filament::auth()->user();
+        $isSuperAdmin = (bool) ($user && $user->isSuperAdmin());
 
         return $table
             ->columns([
@@ -408,7 +423,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('place_token')
                     ->label('Токен места')
                     ->state(fn (TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => $isSuperAdmin),
 
                 TextColumn::make('document_date')
                     ->label('Дата из номера')
@@ -418,13 +434,16 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('effective_order_date')
                     ->label('Дата для цепочки')
                     ->state(fn (TenantContract $record): string => static::effectiveOrderDateLabel($record))
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => $isSuperAdmin),
 
                 TextColumn::make('date_consistency')
                     ->label('Дата 1С / БД')
                     ->state(fn (TenantContract $record): string => static::dateConsistencyLabel($record))
                     ->badge()
-                    ->color(fn (TenantContract $record): string => static::dateConsistencyColor($record)),
+                    ->color(fn (TenantContract $record): string => static::dateConsistencyColor($record))
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => $isSuperAdmin),
 
                 TextColumn::make('market_space_link')
                     ->label('Текущее место')
@@ -451,6 +470,7 @@ class TenantContractResource extends BaseResource
                     ->date('d.m.Y')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => $isSuperAdmin)
                     ->placeholder('—'),
 
                 TextColumn::make('ends_at')
@@ -466,7 +486,8 @@ class TenantContractResource extends BaseResource
                     ->badge()
                     ->color(fn (?string $state): string => static::contractStatusColor($state))
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn () => $isSuperAdmin),
 
                 IconColumn::make('is_active')
                     ->label('Активен')

@@ -10,21 +10,21 @@ class ListTenantAccruals extends ListRecords
 {
     protected static string $resource = TenantAccrualResource::class;
 
-    protected static ?string $title = 'Начисления';
+    protected static ?string $title = 'Детализация начислений';
 
     public function getBreadcrumb(): string
     {
-        return 'Начисления';
+        return 'Детализация начислений';
     }
 
     protected function getHeaderActions(): array
     {
-        // Создание вручную отключено: источник — импорт из Excel/CSV.
+        // Создание вручную отключено: строки приходят импортом.
         return [];
     }
 
     public function getSubheading(): ?string
     {
-        return 'Данные формируются импортом из Excel/CSV. Для просмотра открой запись, для заметок используй поле “Примечания”.';
+        return 'Страница показывает детализированный слой начислений. Источник строки может быть 1С или исторический CSV-импорт; договоры и задолженности остаются финансовой истиной 1С.';
     }
 }

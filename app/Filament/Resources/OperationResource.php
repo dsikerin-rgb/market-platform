@@ -37,9 +37,9 @@ class OperationResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'type';
 
-    protected static ?string $modelLabel = 'Операция';
-    protected static ?string $pluralModelLabel = 'Операции';
-    protected static ?string $navigationLabel = 'Операции';
+    protected static ?string $modelLabel = 'Управленческая операция';
+    protected static ?string $pluralModelLabel = 'Управленческие операции';
+    protected static ?string $navigationLabel = 'Управленческие операции';
 
     // Filament v4 требует именно UnitEnum|string|null
     protected static \UnitEnum|string|null $navigationGroup = null;
@@ -109,10 +109,16 @@ class OperationResource extends BaseResource
 
         $typeSelect = Forms\Components\Select::make('type')
             ->label('Тип операции')
-            ->options(OperationType::labels())
-            ->default(fn () => request()->query('type'))
+            ->options(OperationType::managementLabels())
+            ->default(function () {
+                $requestedType = (string) request()->query('type');
+
+                return in_array($requestedType, OperationType::managementValues(), true)
+                    ? $requestedType
+                    : null;
+            })
             ->hintIcon('heroicon-m-question-mark-circle')
-            ->hintIconTooltip('Выберите действие. Для карточки торгового места используйте операции по месту.')
+            ->hintIconTooltip('Этот журнал предназначен только для локальных управленческих действий. Договоры, ставка аренды и финансовая истина остаются в 1С.')
             ->required();
 
         static::makeLive($typeSelect);
@@ -375,10 +381,7 @@ class OperationResource extends BaseResource
                         ->placeholder('Кратко укажите причину изменения…')
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('Причина фиксируется в payload операции для аудита.')
-                        ->visible(fn (Get $get): bool => in_array((string) $get('type'), [
-                            OperationType::TENANT_SWITCH,
-                            OperationType::ACCRUAL_ADJUSTMENT,
-                        ], true)),
+                        ->visible(fn (Get $get): bool => (string) $get('type') === OperationType::ACCRUAL_ADJUSTMENT),
 
                     Forms\Components\TextInput::make('payload.period')
                         ->label('Период закрытия (YYYY-MM-01)')
@@ -429,8 +432,8 @@ class OperationResource extends BaseResource
                         ->hiddenLabel()
                         ->content(fn (): HtmlString => new HtmlString(
                             '<div style="font-size:13px;opacity:.8;">' .
-                            '1С остается источником финансовой истины. Операции используются как управленческий слой для карточки места и сценариев работы. ' .
-                            'Для отмены используйте компенсирующую операцию, а не ручное переписывание истории.' .
+                            '1С остается источником финансовой истины. Этот журнал используется только для локальных управленческих действий по месту и периоду. ' .
+                            'Смена арендатора и ставка аренды больше не ведутся через операции. Для отмены используйте компенсирующую операцию, а не ручное переписывание истории.' .
                             '</div>'
                         )),
                 ])
@@ -608,7 +611,9 @@ class OperationResource extends BaseResource
             return false;
         }
 
-        return $record instanceof Operation && (string) $record->status === 'draft';
+        return $record instanceof Operation
+            && in_array((string) $record->type, OperationType::managementValues(), true)
+            && (string) $record->status === 'draft';
     }
 
     public static function canView($record): bool

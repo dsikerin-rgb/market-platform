@@ -13,7 +13,7 @@ class CreateOperation extends BaseCreateRecord
 {
     protected static string $resource = OperationResource::class;
 
-    protected static ?string $title = 'Создать операцию';
+    protected static ?string $title = 'Создать управленческую операцию';
 
     protected ?string $returnUrl = null;
 
@@ -39,7 +39,7 @@ class CreateOperation extends BaseCreateRecord
     protected function afterCreate(): void
     {
         Notification::make()
-            ->title('Операция создана')
+            ->title('Управленческая операция создана')
             ->success()
             ->send();
     }

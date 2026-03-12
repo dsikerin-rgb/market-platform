@@ -9,6 +9,7 @@ use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketAttentionWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
+use App\Filament\Widgets\AccrualCompositionWidget;
 use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
@@ -291,6 +292,17 @@ class Dashboard extends BaseDashboard
                     ],
                 ]
                 + array_slice($widgets, 2, null, true);
+        }
+
+        if (class_exists(AccrualCompositionWidget::class)) {
+            $widgets = array_slice($widgets, 0, 3, true)
+                + [
+                    'accrual_composition' => [
+                        'class' => AccrualCompositionWidget::class,
+                        'label' => 'Структура начислений',
+                    ],
+                ]
+                + array_slice($widgets, 3, null, true);
         }
 
         return $widgets;

@@ -37,6 +37,23 @@ class TenantAccrualsTable
                     ->sortable()
                     ->toggleable(),
 
+                TextColumn::make('source')
+                    ->label('Источник')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        '1c' => '1С',
+                        'excel' => 'CSV / Excel',
+                        'manual' => 'Вручную',
+                        default => $state ?: '—',
+                    })
+                    ->color(fn (?string $state): string => match ($state) {
+                        '1c' => 'success',
+                        'excel' => 'warning',
+                        'manual' => 'gray',
+                        default => 'gray',
+                    })
+                    ->toggleable(),
+
                 TextColumn::make('marketSpace.location.name')
                     ->label('Локация')
                     ->sortable()
@@ -63,11 +80,17 @@ class TenantAccrualsTable
                     ->placeholder('—')
                     ->toggleable(),
 
+                TextColumn::make('tenantContract.number')
+                    ->label('Договор')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(),
+
                 TextColumn::make('source_place_name')
                     ->label('Название отдела')
                     ->searchable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('activity_type')
                     ->label('Вид деятельности')
@@ -137,7 +160,7 @@ class TenantAccrualsTable
                     ->toggleable(),
 
                 TextColumn::make('status')
-                    ->label('Статус')
+                    ->label('Состояние строки')
                     ->badge()
                     ->formatStateUsing(fn (?string $state) => $statusOptions[$state ?? ''] ?? ($state ?: '—'))
                     ->sortable()
@@ -215,10 +238,18 @@ class TenantAccrualsTable
                     }),
 
                 SelectFilter::make('status')
-                    ->label('Статус')
+                    ->label('Состояние строки')
                     ->options([
                         'imported' => 'Импортировано',
                         'adjusted' => 'Скорректировано',
+                        'manual' => 'Вручную',
+                    ]),
+
+                SelectFilter::make('source')
+                    ->label('Источник')
+                    ->options([
+                        '1c' => '1С',
+                        'excel' => 'CSV / Excel',
                         'manual' => 'Вручную',
                     ]),
 
@@ -229,6 +260,16 @@ class TenantAccrualsTable
                     ->queries(
                         true: fn (Builder $q) => $q->whereNotNull('market_space_id'),
                         false: fn (Builder $q) => $q->whereNull('market_space_id'),
+                        blank: fn (Builder $q) => $q,
+                    ),
+
+                TernaryFilter::make('has_contract')
+                    ->label('Есть договор')
+                    ->trueLabel('Только с договором')
+                    ->falseLabel('Только без договора')
+                    ->queries(
+                        true: fn (Builder $q) => $q->whereNotNull('tenant_contract_id'),
+                        false: fn (Builder $q) => $q->whereNull('tenant_contract_id'),
                         blank: fn (Builder $q) => $q,
                     ),
 

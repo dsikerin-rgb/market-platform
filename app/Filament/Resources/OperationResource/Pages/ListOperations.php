@@ -12,11 +12,11 @@ class ListOperations extends ListRecords
 {
     protected static string $resource = OperationResource::class;
 
-    protected static ?string $title = 'Операции';
+    protected static ?string $title = 'Управленческие операции';
 
     public function getBreadcrumb(): string
     {
-        return 'Операции';
+        return 'Управленческие операции';
     }
 
     protected function getHeaderActions(): array
@@ -35,6 +35,11 @@ class ListOperations extends ListRecords
         }
 
         return $actions;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return 'Журнал локальных управленческих действий. Договоры, долги и ставка аренды определяются 1С.';
     }
 
     private function exportUrl(): string
