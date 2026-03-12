@@ -635,6 +635,27 @@ class TenantContractResource extends BaseResource
                         TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует',
                     ]),
             ])
+            ->actions([
+                tap(\Filament\Tables\Actions\EditAction::make()
+                    ->label('')
+                    ->tooltip('Быстрое редактирование')
+                    ->icon('heroicon-o-pencil-square')
+                    ->iconButton(), function ($action): void {
+                        if (method_exists($action, 'slideOver')) {
+                            $action->slideOver();
+                        }
+
+                        if (method_exists($action, 'modalWidth')) {
+                            $action->modalWidth('7xl');
+                        }
+                    }),
+                \Filament\Tables\Actions\Action::make('open_card')
+                    ->label('')
+                    ->tooltip('Открыть карточку')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->iconButton()
+                    ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
+            ])
             ->defaultSort('id', 'desc')
             ->recordUrl(fn (TenantContract $record): ?string => static::canEdit($record)
                 ? static::getUrl('edit', ['record' => $record])

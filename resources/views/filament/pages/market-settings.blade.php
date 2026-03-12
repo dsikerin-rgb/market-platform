@@ -1,138 +1,21 @@
-﻿{{-- resources/views/filament/pages/market-settings.blade.php --}}
-
 <x-filament-panels::page>
-    <style>
-        .ms-page {
-            padding-bottom: 28px;
-        }
+    @include('filament.partials.admin-workspace-styles')
 
-        .ms-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            max-width: 960px;
-            margin: 0 auto;
-        }
+    @php
+        $personalChannels = (array) data_get($data ?? [], 'personal_notification_channels', []);
+        $marketplaceSlides = $marketplaceSlidesPreview ?? [];
+    @endphp
 
-        .ms-tools {
-            border: 1px solid rgba(156, 163, 175, .25);
-            border-radius: 12px;
-            background: rgba(255, 255, 255, .8);
-            overflow: hidden;
-        }
-
-        .dark .ms-tools {
-            border-color: rgba(55, 65, 81, .85);
-            background: rgba(17, 24, 39, .5);
-        }
-
-        .ms-tools > summary {
-            cursor: pointer;
-            list-style: none;
-            padding: 12px 14px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .ms-tools > summary::-webkit-details-marker {
-            display: none;
-        }
-
-        .ms-tools-body {
-            border-top: 1px solid rgba(156, 163, 175, .2);
-            padding: 12px;
-            display: grid;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
-            gap: 10px;
-        }
-
-        @media (min-width: 768px) {
-            .ms-tools-body {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        @media (min-width: 1280px) {
-            .ms-tools-body {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-        }
-
-        .ms-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            min-height: 38px;
-            padding: 8px 10px;
-            border: 1px solid rgba(156, 163, 175, .24);
-            border-radius: 10px;
-            text-decoration: none;
-            color: inherit;
-            background: rgba(255, 255, 255, .5);
-            font-size: 13px;
-            line-height: 1.2;
-        }
-
-        .dark .ms-link {
-            border-color: rgba(55, 65, 81, .75);
-            background: rgba(17, 24, 39, .35);
-        }
-
-        .ms-link:hover {
-            background: rgba(107, 114, 128, .1);
-        }
-
-        .dark .ms-link:hover {
-            background: rgba(255, 255, 255, .06);
-        }
-
-        .ms-actions {
-            border-radius: 12px;
-            border: 1px solid rgba(156, 163, 175, .25);
-            background: rgba(255, 255, 255, .72);
-            backdrop-filter: blur(6px);
-            padding: 14px 16px;
-            box-shadow: 0 1px 2px rgba(0,0,0,.06);
-            margin-top: 4px;
-        }
-
-        .dark .ms-actions {
-            border-color: rgba(55, 65, 81, .8);
-            background: rgba(17, 24, 39, .52);
-            box-shadow: 0 1px 2px rgba(0,0,0,.3);
-        }
-
-        @media (min-width: 1024px) {
-            .ms-actions {
-                position: sticky;
-                bottom: 20px;
-                z-index: 20;
-            }
-        }
-
-        .ms-actions-row {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            justify-content: flex-start;
-            flex-wrap: wrap;
-        }
-    </style>
-
-    <div class="mx-auto max-w-6xl ms-page">
+    <div class="aw-shell">
         @if (empty($market))
-            <div class="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300">
-                <div class="flex items-start gap-3">
-                    <x-filament::icon icon="heroicon-o-exclamation-triangle" class="mt-0.5 h-5 w-5 text-gray-500" />
-
-                    <div class="space-y-1">
-                        <div class="font-medium text-gray-900 dark:text-gray-100">Рынок не выбран</div>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                            @if (!empty($isSuperAdmin) && $isSuperAdmin)
-                                Выберите рынок в переключателе и откройте страницу снова.
+            <div class="aw-panel">
+                <div class="aw-panel-body">
+                    <div class="aw-empty">
+                        <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-8 w-8 text-amber-500" />
+                        <div class="aw-empty-title">Рынок не выбран</div>
+                        <div class="aw-empty-copy">
+                            @if (! empty($isSuperAdmin) && $isSuperAdmin)
+                                Выберите рынок в переключателе сверху и откройте страницу снова.
                             @else
                                 У текущего пользователя не задан рынок.
                             @endif
@@ -141,106 +24,188 @@
                 </div>
             </div>
         @else
-            <form wire:submit.prevent="save" class="ms-form">
-                {{ $this->form }}
+            <div class="aw-hero">
+                <div class="aw-hero-grid">
+                    <div class="aw-hero-copy">
+                        <div class="aw-hero-title">
+                            <div class="aw-hero-icon">
+                                <x-filament::icon icon="heroicon-m-cog-6-tooth" class="h-6 w-6" />
+                            </div>
 
-                <details class="ms-tools">
-                    <summary>
-                        <span>Быстрые переходы</span>
-                        <x-filament::icon icon="heroicon-o-chevron-down" class="h-4 w-4 text-gray-500" />
-                    </summary>
+                            <div>
+                                <h2 class="aw-hero-heading">Настройки</h2>
+                                <p class="aw-hero-subheading">Рынок: {{ $market->name }}</p>
+                            </div>
+                        </div>
 
-                    <div class="ms-tools-body">
-                        @if (! empty($marketsUrl))
-                            <a class="ms-link" href="{{ $marketsUrl }}">
-                                <x-filament::icon icon="heroicon-o-building-storefront" class="h-4 w-4 text-gray-500" />
-                                <span>Рынки</span>
-                            </a>
-                        @endif
+                        <div class="aw-inline-actions">
+                            @if (! empty($userNotificationSettingsUrl))
+                                <a href="{{ $userNotificationSettingsUrl }}" class="aw-chip">
+                                    <x-filament::icon icon="heroicon-m-bell-alert" class="h-4 w-4" />
+                                    Кабинет уведомлений
+                                </a>
+                            @endif
 
-                        @if (! empty($locationTypesUrl))
-                            <a class="ms-link" href="{{ $locationTypesUrl }}">
-                                <x-filament::icon icon="heroicon-o-rectangle-group" class="h-4 w-4 text-gray-500" />
-                                <span>Типы локаций</span>
-                            </a>
-                        @endif
+                            @if (! empty($marketMapViewerUrl))
+                                <a href="{{ $marketMapViewerUrl }}" class="aw-chip" target="_blank" rel="noopener">
+                                    <x-filament::icon icon="heroicon-m-map" class="h-4 w-4" />
+                                    Карта рынка
+                                </a>
+                            @endif
 
-                        @if (! empty($spaceTypesUrl))
-                            <a class="ms-link" href="{{ $spaceTypesUrl }}">
-                                <x-filament::icon icon="heroicon-o-banknotes" class="h-4 w-4 text-gray-500" />
-                                <span>Типы мест</span>
-                            </a>
-                        @endif
-
-                        @if (! empty($staffUrl))
-                            <a class="ms-link" href="{{ $staffUrl }}">
-                                <x-filament::icon icon="heroicon-o-users" class="h-4 w-4 text-gray-500" />
-                                <span>Сотрудники</span>
-                            </a>
-                        @endif
-
-                        @if (! empty($tenantUrl))
-                            <a class="ms-link" href="{{ $tenantUrl }}">
-                                <x-filament::icon icon="heroicon-o-user-group" class="h-4 w-4 text-gray-500" />
-                                <span>Арендаторы</span>
-                            </a>
-                        @endif
-
-                        @if (! empty($permissionsUrl))
-                            <a class="ms-link" href="{{ $permissionsUrl }}">
-                                <x-filament::icon icon="heroicon-o-key" class="h-4 w-4 text-gray-500" />
-                                <span>Права</span>
-                            </a>
-                        @endif
-
-                        @if (! empty($rolesUrl))
-                            <a class="ms-link" href="{{ $rolesUrl }}">
-                                <x-filament::icon icon="heroicon-o-shield-check" class="h-4 w-4 text-gray-500" />
-                                <span>Роли</span>
-                            </a>
-                        @endif
-
-                        @if (! empty($integrationExchangesUrl))
-                            <a class="ms-link" href="{{ $integrationExchangesUrl }}">
-                                <x-filament::icon icon="heroicon-o-arrows-right-left" class="h-4 w-4 text-gray-500" />
-                                <span>Интеграции</span>
-                            </a>
-                        @endif
+                            @if (! empty($marketplaceSettingsUrl))
+                                <a href="{{ $marketplaceSettingsUrl }}" class="aw-chip">
+                                    <x-filament::icon icon="heroicon-m-shopping-bag" class="h-4 w-4" />
+                                    Маркетплейс
+                                </a>
+                            @endif
+                        </div>
                     </div>
-                </details>
 
-                <div class="ms-actions">
-                    <div class="ms-actions-row">
-                        @if (!empty($canEditMarket) && $canEditMarket)
-                            <x-filament::button
-                                type="submit"
-                                color="primary"
-                                icon="heroicon-o-check"
-                                wire:loading.attr="disabled"
-                            >
-                                Сохранить
-                            </x-filament::button>
+                    <div class="aw-stat-grid">
+                        <div class="aw-stat-card">
+                            <div class="aw-stat-label">Рынок</div>
+                            <div class="aw-stat-value">{{ $market->id }}</div>
+                        </div>
 
-                            <div class="text-sm text-gray-600 dark:text-gray-400">
-                                Изменения применяются после сохранения.
-                            </div>
-                        @else
-                            <x-filament::button
-                                type="button"
-                                color="gray"
-                                icon="heroicon-o-eye"
-                                disabled
-                            >
-                                Только просмотр
-                            </x-filament::button>
+                        <div class="aw-stat-card">
+                            <div class="aw-stat-label">Каналы уведомлений</div>
+                            <div class="aw-stat-value">{{ count($personalChannels) }}</div>
+                        </div>
 
-                            <div class="text-sm text-gray-600 dark:text-gray-400">
-                                Доступно только для просмотра.
-                            </div>
-                        @endif
+                        <div class="aw-stat-card">
+                            <div class="aw-stat-label">Слайды маркетплейса</div>
+                            <div class="aw-stat-value">{{ $marketplaceSlidesCount ?? 0 }}</div>
+                        </div>
+
+                        <div class="aw-stat-card">
+                            <div class="aw-stat-label">Активные слайды</div>
+                            <div class="aw-stat-value">{{ $marketplaceActiveSlidesCount ?? 0 }}</div>
+                        </div>
                     </div>
                 </div>
-            </form>
+            </div>
+
+            <div class="aw-grid">
+                <div class="aw-column aw-column--sidebar">
+                    <div class="aw-panel">
+                        <div class="aw-panel-head">
+                            <div>
+                                <h3 class="aw-panel-title">Кабинет уведомлений</h3>
+                                <p class="aw-panel-copy">Личные каналы, темы и статус Telegram текущего пользователя.</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-panel-body">
+                            <div class="aw-list">
+                                <div class="aw-list-item">
+                                    <div>
+                                        <p class="aw-list-title">Текущий статус</p>
+                                        <div class="aw-list-copy">{!! $this->renderPersonalNotificationStatus() !!}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="aw-inline-actions">
+                                @if (! empty($userNotificationSettingsUrl))
+                                    <a href="{{ $userNotificationSettingsUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon">
+                                            <x-filament::icon icon="heroicon-m-bell" class="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p class="aw-link-title">Полный кабинет уведомлений</p>
+                                            <p class="aw-link-copy">Откройте Telegram, QR-код и расширенные личные настройки.</p>
+                                            <div class="aw-link-meta">Открыть кабинет</div>
+                                        </div>
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="aw-panel">
+                        <div class="aw-panel-head">
+                            <div>
+                                <h3 class="aw-panel-title">Быстрые переходы</h3>
+                                <p class="aw-panel-copy">Частые разделы без разрастания боковой навигации.</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-panel-body">
+                            <div class="aw-action-grid">
+                                @if (! empty($staffUrl))
+                                    <a href="{{ $staffUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-users" class="h-5 w-5" /></div>
+                                        <div>
+                                            <p class="aw-link-title">Сотрудники</p>
+                                            <p class="aw-link-copy">Внутренние пользователи рынка и управляющей компании.</p>
+                                        </div>
+                                    </a>
+                                @endif
+
+                                @if (! empty($tenantUrl))
+                                    <a href="{{ $tenantUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-user-group" class="h-5 w-5" /></div>
+                                        <div>
+                                            <p class="aw-link-title">Арендаторы</p>
+                                            <p class="aw-link-copy">Карточки арендаторов, долги, договоры и связи с местами.</p>
+                                        </div>
+                                    </a>
+                                @endif
+
+                                @if (! empty($integrationExchangesUrl))
+                                    <a href="{{ $integrationExchangesUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-arrows-right-left" class="h-5 w-5" /></div>
+                                        <div>
+                                            <p class="aw-link-title">Интеграции</p>
+                                            <p class="aw-link-copy">Журнал обменов и результаты последних загрузок из 1С.</p>
+                                        </div>
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="aw-column aw-column--content">
+                    <form wire:submit.prevent="save" class="aw-panel">
+                        <div class="aw-panel-head">
+                            <div>
+                                <h3 class="aw-panel-title">Параметры рынка</h3>
+                                <p class="aw-panel-copy">Основные справочные и операционные настройки рынка, уведомлений и дашборда.</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-panel-body">
+                            {{ $this->form }}
+                        </div>
+
+                        <div class="aw-panel-body">
+                            <div class="aw-sticky-actions">
+                                <div class="aw-actions-row">
+                                    @if (!empty($canEditMarket) && $canEditMarket)
+                                        <x-filament::button type="submit" color="primary" icon="heroicon-o-check" wire:loading.attr="disabled">
+                                            Сохранить
+                                        </x-filament::button>
+
+                                        <div class="text-sm text-slate-500 dark:text-slate-400">
+                                            Изменения применяются сразу после сохранения.
+                                        </div>
+                                    @else
+                                        <x-filament::button type="button" color="gray" icon="heroicon-o-eye" disabled>
+                                            Только просмотр
+                                        </x-filament::button>
+
+                                        <div class="text-sm text-slate-500 dark:text-slate-400">
+                                            Для этой роли доступен только просмотр параметров рынка.
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
         @endif
     </div>
 </x-filament-panels::page>

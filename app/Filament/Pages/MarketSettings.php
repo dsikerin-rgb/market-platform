@@ -5,9 +5,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\MarketplaceSlideResource;
 use App\Models\Market;
+use App\Models\MarketplaceSlide;
 use App\Models\User;
 use App\Support\UserNotificationPreferences;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -15,6 +18,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 
 class MarketSettings extends Page
@@ -49,6 +53,16 @@ class MarketSettings extends Page
     public ?string $rolesUrl = null;
     public ?string $integrationExchangesUrl = null;
     public ?string $userNotificationSettingsUrl = null;
+    public ?string $marketplaceSettingsUrl = null;
+    public ?string $marketplaceSlidesUrl = null;
+    public ?string $marketplacePublicUrl = null;
+    public int $marketplaceSlidesCount = 0;
+    public int $marketplaceActiveSlidesCount = 0;
+
+    /**
+     * @var list<array{id:int,title:string,badge:string,theme:string,is_active:bool,sort_order:int}>
+     */
+    public array $marketplaceSlidesPreview = [];
 
     /**
      * URL страницы просмотра карты.
@@ -82,6 +96,18 @@ class MarketSettings extends Page
         'dashboard_enabled_widgets' => [],
         'personal_notification_channels' => ['database'],
         'personal_notification_topics' => [],
+        'brand_name' => 'Маркетплейс Экоярмарки',
+        'logo_path' => null,
+        'hero_title' => 'Покупки на Экоярмарке в одном месте',
+        'hero_subtitle' => 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+        'public_phone' => '+7 (3852) 55-67-55',
+        'public_email' => 'Ekobarnaul22@yandex.ru',
+        'public_address' => null,
+        'slider_enabled' => true,
+        'slider_autoplay_enabled' => true,
+        'slider_autoplay_interval_ms' => 7000,
+        'legacy_site_merge_enabled' => true,
+        'allow_public_sales_without_active_contracts' => false,
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -116,6 +142,63 @@ class MarketSettings extends Page
         return [];
     }
 
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
+    }
+
+    protected function getHeaderActions(): array
+    {
+        if (! $this->market) {
+            return [];
+        }
+
+        return [
+            Action::make('createMarketplaceSlide')
+                ->label('Добавить слайд')
+                ->icon('heroicon-o-photo')
+                ->color('primary')
+                ->visible(fn (): bool => $this->canEditMarket)
+                ->modalHeading('Новый слайд маркетплейса')
+                ->modalDescription('Быстрое добавление промо-слайда прямо со страницы настроек рынка.')
+                ->form($this->marketplaceSlideActionForm())
+                ->action(function (array $data): void {
+                    abort_unless($this->market, 404);
+                    abort_unless($this->canEditMarket, 403);
+
+                    MarketplaceSlide::query()->create([
+                        'market_id' => $this->market->id,
+                        'title' => trim((string) ($data['title'] ?? '')),
+                        'badge' => trim((string) ($data['badge'] ?? '')),
+                        'description' => trim((string) ($data['description'] ?? '')),
+                        'image_path' => $data['image_path'] ?? null,
+                        'theme' => $data['theme'] ?? 'info',
+                        'cta_label' => trim((string) ($data['cta_label'] ?? '')),
+                        'cta_url' => trim((string) ($data['cta_url'] ?? '')),
+                        'placement' => 'home_info_carousel',
+                        'audience' => 'all',
+                        'sort_order' => max(0, (int) ($data['sort_order'] ?? 0)),
+                        'starts_at' => $data['starts_at'] ?? null,
+                        'ends_at' => $data['ends_at'] ?? null,
+                        'is_active' => (bool) ($data['is_active'] ?? true),
+                    ]);
+
+                    $this->hydrateMarketplacePreview();
+
+                    Notification::make()
+                        ->title('Слайд добавлен')
+                        ->success()
+                        ->send();
+                }),
+            Action::make('openMarketplaceSlides')
+                ->label('Все слайды')
+                ->icon('heroicon-o-arrow-top-right-on-square')
+                ->url(fn (): ?string => $this->marketplaceSlidesUrl)
+                ->visible(fn (): bool => filled($this->marketplaceSlidesUrl))
+                ->openUrlInNewTab(),
+        ];
+    }
+
     public function mount(): void
     {
         $user = Filament::auth()->user();
@@ -131,8 +214,10 @@ class MarketSettings extends Page
         $this->canEditMarket = $this->resolveCanEditMarket();
 
         $this->fillQuickLinks();
+        $this->hydrateMarketplacePreview();
 
         $settings = (array) ($this->market->settings ?? []);
+        $marketplaceSettings = (array) ($settings['marketplace'] ?? []);
         $currentUser = Filament::auth()->user();
         $preferences = app(UserNotificationPreferences::class);
         $rawNotificationPreferences = $currentUser instanceof User
@@ -207,6 +292,22 @@ class MarketSettings extends Page
             ),
             'personal_notification_channels' => $personalChannels,
             'personal_notification_topics' => $personalTopics,
+            'brand_name' => trim((string) ($marketplaceSettings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
+            'logo_path' => $marketplaceSettings['logo_path'] ?? null,
+            'hero_title' => trim((string) ($marketplaceSettings['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
+            'hero_subtitle' => trim((string) ($marketplaceSettings['hero_subtitle'] ?? '')) ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+            'public_phone' => trim((string) ($marketplaceSettings['public_phone'] ?? '+7 (3852) 55-67-55')),
+            'public_email' => trim((string) ($marketplaceSettings['public_email'] ?? 'Ekobarnaul22@yandex.ru')),
+            'public_address' => trim((string) ($marketplaceSettings['public_address'] ?? ($this->market->address ?? ''))),
+            'slider_enabled' => array_key_exists('slider_enabled', $marketplaceSettings) ? (bool) $marketplaceSettings['slider_enabled'] : true,
+            'slider_autoplay_enabled' => array_key_exists('slider_autoplay_enabled', $marketplaceSettings) ? (bool) $marketplaceSettings['slider_autoplay_enabled'] : true,
+            'slider_autoplay_interval_ms' => is_numeric($marketplaceSettings['slider_autoplay_interval_ms'] ?? null)
+                ? (int) $marketplaceSettings['slider_autoplay_interval_ms']
+                : 7000,
+            'legacy_site_merge_enabled' => array_key_exists('legacy_site_merge_enabled', $marketplaceSettings) ? (bool) $marketplaceSettings['legacy_site_merge_enabled'] : true,
+            'allow_public_sales_without_active_contracts' => array_key_exists('allow_public_sales_without_active_contracts', $marketplaceSettings)
+                ? (bool) $marketplaceSettings['allow_public_sales_without_active_contracts']
+                : (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false),
             'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['grace_days']
                 : 5,
@@ -267,6 +368,144 @@ class MarketSettings extends Page
                                 'default' => 12,
                                 'lg' => 4,
                             ]),
+                    ])
+                    ->columns(12),
+
+                Section::make('Настройки кабинета уведомлений')
+                    ->description('Личные уведомления текущего пользователя. Полный Telegram-блок и QR-код доступны в отдельном кабинете уведомлений.')
+                    ->schema([
+                        Forms\Components\Placeholder::make('personal_notification_status')
+                            ->label('Текущий статус')
+                            ->content(fn (): HtmlString => $this->renderPersonalNotificationStatus())
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 5,
+                            ]),
+                        Forms\Components\CheckboxList::make('personal_notification_channels')
+                            ->label('Каналы доставки')
+                            ->options(UserNotificationPreferences::channelLabels())
+                            ->columns(3)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 7,
+                            ]),
+                        Forms\Components\CheckboxList::make('personal_notification_topics')
+                            ->label('События')
+                            ->options(fn (): array => $this->personalNotificationTopicOptions())
+                            ->columns(2)
+                            ->columnSpanFull(),
+                        Forms\Components\Placeholder::make('personal_notification_link')
+                            ->hiddenLabel()
+                            ->content(fn (): HtmlString => $this->renderNotificationCabinetLink())
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(12),
+
+                Section::make('Настройки маркетплейса')
+                    ->description('Бренд, публичные контакты, hero-блок и правила публикации продавцов. Слайды управляются прямо отсюда и через быстрые действия в шапке.')
+                    ->schema([
+                        Forms\Components\TextInput::make('brand_name')
+                            ->label('Название маркетплейса')
+                            ->required()
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\FileUpload::make('logo_path')
+                            ->label('Логотип')
+                            ->image()
+                            ->imageEditor()
+                            ->disk('public')
+                            ->directory('marketplace/brand')
+                            ->visibility('public')
+                            ->maxSize(5120)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\TextInput::make('public_phone')
+                            ->label('Телефон')
+                            ->placeholder('+7 (3852) 55-67-55')
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+                        Forms\Components\TextInput::make('public_email')
+                            ->label('Email')
+                            ->email()
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+                        Forms\Components\TextInput::make('public_address')
+                            ->label('Публичный адрес')
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 4,
+                            ]),
+                        Forms\Components\TextInput::make('hero_title')
+                            ->label('Заголовок hero-блока')
+                            ->required()
+                            ->maxLength(255)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
+                        Forms\Components\Textarea::make('hero_subtitle')
+                            ->label('Подзаголовок hero-блока')
+                            ->rows(3)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
+                        Forms\Components\Toggle::make('slider_enabled')
+                            ->label('Показывать слайдер на главной')
+                            ->default(true)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+                        Forms\Components\Toggle::make('slider_autoplay_enabled')
+                            ->label('Включить автопрокрутку')
+                            ->default(true)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+                        Forms\Components\TextInput::make('slider_autoplay_interval_ms')
+                            ->label('Интервал автопрокрутки')
+                            ->numeric()
+                            ->minValue(4000)
+                            ->maxValue(20000)
+                            ->step(500)
+                            ->suffix('мс')
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+                        Forms\Components\Toggle::make('legacy_site_merge_enabled')
+                            ->label('Fallback на стартовые слайды')
+                            ->helperText('Если активных слайдов нет, маркетплейс может показать базовый набор по умолчанию.')
+                            ->default(true)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
+                        Forms\Components\Toggle::make('allow_public_sales_without_active_contracts')
+                            ->label('Показывать продавцов без активного договора')
+                            ->helperText('Временный режим для запуска или на случай сбоев интеграции.')
+                            ->default(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
                     ])
                     ->columns(12),
 
@@ -475,38 +714,6 @@ class MarketSettings extends Page
                     ->collapsible()
                     ->collapsed(),
 
-                Section::make('Настройки кабинета уведомлений')
-                    ->description('Личные уведомления текущего пользователя. Полный Telegram-блок и QR-код доступны в отдельном кабинете уведомлений.')
-                    ->schema([
-                        Forms\Components\Placeholder::make('personal_notification_status')
-                            ->label('Текущий статус')
-                            ->content(fn (): HtmlString => $this->renderPersonalNotificationStatus())
-                            ->columnSpan([
-                                'default' => 12,
-                                'lg' => 5,
-                            ]),
-                        Forms\Components\CheckboxList::make('personal_notification_channels')
-                            ->label('Каналы доставки')
-                            ->options(UserNotificationPreferences::channelLabels())
-                            ->columns(3)
-                            ->columnSpan([
-                                'default' => 12,
-                                'lg' => 7,
-                            ]),
-                        Forms\Components\CheckboxList::make('personal_notification_topics')
-                            ->label('События')
-                            ->options(fn (): array => $this->personalNotificationTopicOptions())
-                            ->columns(2)
-                            ->columnSpanFull(),
-                        Forms\Components\Placeholder::make('personal_notification_link')
-                            ->hiddenLabel()
-                            ->content(fn (): HtmlString => $this->renderNotificationCabinetLink())
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(12)
-                    ->collapsible()
-                    ->collapsed(),
-
                 Section::make('Главная страница')
                     ->description('Настройте, какие виджеты показывать на главной странице для этого рынка.')
                     ->schema([
@@ -665,6 +872,20 @@ class MarketSettings extends Page
                 ),
             ],
         );
+        $settings['marketplace'] = [
+            'brand_name' => trim((string) ($state['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
+            'logo_path' => $state['logo_path'] ?? null,
+            'hero_title' => trim((string) ($state['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
+            'hero_subtitle' => trim((string) ($state['hero_subtitle'] ?? '')),
+            'public_phone' => trim((string) ($state['public_phone'] ?? '')),
+            'public_email' => trim((string) ($state['public_email'] ?? '')),
+            'public_address' => trim((string) ($state['public_address'] ?? '')),
+            'slider_enabled' => (bool) ($state['slider_enabled'] ?? true),
+            'slider_autoplay_enabled' => (bool) ($state['slider_autoplay_enabled'] ?? true),
+            'slider_autoplay_interval_ms' => max(4000, min((int) ($state['slider_autoplay_interval_ms'] ?? 7000), 20000)),
+            'legacy_site_merge_enabled' => (bool) ($state['legacy_site_merge_enabled'] ?? true),
+            'allow_public_sales_without_active_contracts' => (bool) ($state['allow_public_sales_without_active_contracts'] ?? false),
+        ];
         $yellowAfterDays = is_numeric($state['debt_monitoring_yellow_after_days'] ?? null)
             ? max(1, min(60, (int) $state['debt_monitoring_yellow_after_days']))
             : 1;
@@ -698,6 +919,7 @@ class MarketSettings extends Page
 
         $this->market->save();
         $this->savePersonalNotificationSettings($state);
+        $this->hydrateMarketplacePreview();
 
         Notification::make()
             ->title('Сохранено')
@@ -826,6 +1048,66 @@ class MarketSettings extends Page
         return $normalized === [] ? $allowed : $normalized;
     }
 
+    /**
+     * @return array<int, Forms\Components\Component>
+     */
+    protected function marketplaceSlideActionForm(): array
+    {
+        return [
+            Forms\Components\TextInput::make('title')
+                ->label('Заголовок')
+                ->required()
+                ->maxLength(255)
+                ->columnSpanFull(),
+            Forms\Components\TextInput::make('badge')
+                ->label('Метка')
+                ->maxLength(255),
+            Forms\Components\Select::make('theme')
+                ->label('Тема')
+                ->options([
+                    'info' => 'Инфо',
+                    'buyer' => 'Покупатели',
+                    'seller' => 'Продавцы',
+                    'partner' => 'Партнёры',
+                ])
+                ->default('info')
+                ->required(),
+            Forms\Components\Textarea::make('description')
+                ->label('Описание')
+                ->rows(3)
+                ->columnSpanFull(),
+            Forms\Components\FileUpload::make('image_path')
+                ->label('Изображение')
+                ->image()
+                ->imageEditor()
+                ->disk('public')
+                ->directory('marketplace/slides')
+                ->visibility('public')
+                ->maxSize(5120)
+                ->columnSpanFull(),
+            Forms\Components\TextInput::make('cta_label')
+                ->label('Текст кнопки')
+                ->maxLength(255),
+            Forms\Components\TextInput::make('cta_url')
+                ->label('Ссылка кнопки')
+                ->maxLength(2048),
+            Forms\Components\TextInput::make('sort_order')
+                ->label('Порядок')
+                ->numeric()
+                ->default(0)
+                ->required(),
+            Forms\Components\Toggle::make('is_active')
+                ->label('Активен')
+                ->default(true),
+            Forms\Components\DateTimePicker::make('starts_at')
+                ->label('Показ с')
+                ->seconds(false),
+            Forms\Components\DateTimePicker::make('ends_at')
+                ->label('Показ до')
+                ->seconds(false),
+        ];
+    }
+
     protected function fillQuickLinks(): void
     {
         $this->marketsUrl = $this->isSuperAdmin
@@ -871,10 +1153,60 @@ class MarketSettings extends Page
         }
 
         try {
+            $this->marketplaceSettingsUrl = \App\Filament\Pages\MarketplaceSettings::getUrl();
+        } catch (\Throwable) {
+            $this->marketplaceSettingsUrl = null;
+        }
+
+        try {
+            $this->marketplaceSlidesUrl = MarketplaceSlideResource::getUrl('index');
+        } catch (\Throwable) {
+            $this->marketplaceSlidesUrl = null;
+        }
+
+        try {
+            $this->marketplacePublicUrl = route('marketplace.entry');
+        } catch (\Throwable) {
+            $this->marketplacePublicUrl = null;
+        }
+
+        try {
             $this->marketMapViewerUrl = route('filament.admin.market-map');
         } catch (\Throwable) {
             $this->marketMapViewerUrl = null;
         }
+    }
+
+    protected function hydrateMarketplacePreview(): void
+    {
+        if (! $this->market) {
+            $this->marketplaceSlidesCount = 0;
+            $this->marketplaceActiveSlidesCount = 0;
+            $this->marketplaceSlidesPreview = [];
+
+            return;
+        }
+
+        $query = MarketplaceSlide::query()
+            ->where('market_id', $this->market->id);
+
+        $this->marketplaceSlidesCount = (clone $query)->count();
+        $this->marketplaceActiveSlidesCount = (clone $query)->where('is_active', true)->count();
+        $this->marketplaceSlidesPreview = (clone $query)
+            ->orderByDesc('is_active')
+            ->orderBy('sort_order')
+            ->orderByDesc('id')
+            ->limit(4)
+            ->get(['id', 'title', 'badge', 'theme', 'is_active', 'sort_order'])
+            ->map(static fn (MarketplaceSlide $slide): array => [
+                'id' => $slide->id,
+                'title' => (string) $slide->title,
+                'badge' => (string) ($slide->badge ?? ''),
+                'theme' => (string) ($slide->theme ?? 'info'),
+                'is_active' => (bool) $slide->is_active,
+                'sort_order' => (int) ($slide->sort_order ?? 0),
+            ])
+            ->all();
     }
 
     /**

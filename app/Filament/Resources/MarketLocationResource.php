@@ -210,7 +210,19 @@ class MarketLocationResource extends BaseResource
                     ->label('Активен')
                     ->boolean(),
             ])
-            ->recordUrl(fn (MarketLocation $record): string => static::getUrl('edit', ['record' => $record]));
+            ->recordUrl(null)
+            ->actions([
+                tap(\Filament\Actions\EditAction::make()->label('Редактировать'), function ($action): void {
+                    if (method_exists($action, 'slideOver')) {
+                        $action->slideOver();
+                    }
+
+                    if (method_exists($action, 'modalWidth')) {
+                        $action->modalWidth('4xl');
+                    }
+                }),
+                \Filament\Actions\DeleteAction::make()->label('Удалить'),
+            ]);
     }
 
     public static function getRelations(): array

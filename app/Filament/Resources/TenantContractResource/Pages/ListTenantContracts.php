@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TenantContractResource\Pages;
 
 use App\Filament\Resources\TenantContractResource;
+use App\Filament\Widgets\TenantContractsWorkspaceWidget;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Contracts\Support\Htmlable;
 
 class ListTenantContracts extends ListRecords
 {
@@ -25,6 +27,23 @@ class ListTenantContracts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            TenantContractsWorkspaceWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 
     public function getTabs(): array

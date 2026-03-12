@@ -4,28 +4,43 @@
 
 @section('content')
     @php
+        use Illuminate\Support\Str;
+
         $marketSlug = $market->slug;
+        $featuredLead = $featuredProducts->first();
+        $featuredSecondary = $featuredProducts->slice(1, 3);
+        $latestCards = $latestProducts->take(8);
+        $topStoresPreview = $topStores->take(4);
+        $headlineAnnouncements = $announcements->take(3);
+        $slides = collect($infoSlides ?? [])->values();
+
         $heroStats = [
             [
-                'label' => 'Витрин',
+                'label' => 'Витрины',
                 'value' => $topStores->count(),
+                'hint' => 'Продавцы с активными товарами',
                 'url' => $topStores->count() > 0
                     ? '#marketplace-stores'
                     : route('marketplace.catalog', ['marketSlug' => $marketSlug]),
             ],
             [
-                'label' => 'Товаров',
+                'label' => 'Товары',
                 'value' => $latestProducts->count(),
+                'hint' => 'Последние публикации',
                 'url' => route('marketplace.catalog', ['marketSlug' => $marketSlug]),
             ],
             [
-                'label' => 'Анонсов',
+                'label' => 'Анонсы',
                 'value' => $announcements->count(),
+                'hint' => 'События и новости рынка',
                 'url' => route('marketplace.announcements', ['marketSlug' => $marketSlug]),
             ],
             [
                 'label' => 'Избранное',
                 'value' => $marketplaceFavoriteCount ?? 0,
+                'hint' => $marketplaceCurrentUserCanUseBuyer
+                    ? 'Ваши сохранённые позиции'
+                    : 'Войдите, чтобы сохранять товары',
                 'url' => $marketplaceCurrentUserCanUseBuyer
                     ? route('marketplace.buyer.favorites', ['marketSlug' => $marketSlug])
                     : route('marketplace.login', ['marketSlug' => $marketSlug]),
@@ -34,534 +49,1130 @@
     @endphp
 
     <style>
-        .mp-hero-grid {
-            padding: 24px;
+        .mp-home {
             display: grid;
-            grid-template-columns: 1.2fr .8fr;
-            gap: 14px;
-            align-items: center;
+            gap: 20px;
         }
 
-        .mp-hero-stats {
+        .mp-home-priority-grid {
             display: grid;
-            grid-template-columns: repeat(2, 96px);
-            justify-content: end;
+            grid-template-columns: minmax(0, 1.28fr) minmax(320px, .72fr);
+            gap: 18px;
+            align-items: start;
+        }
+
+        .mp-home-priority-side {
+            display: grid;
+            gap: 16px;
+        }
+
+        .mp-home-shortcuts {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .mp-home-shortcut {
+            display: grid;
+            gap: 8px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid #d7e4f5;
+            background: linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 10px 24px rgba(15, 54, 96, .07);
+        }
+
+        .mp-home-shortcut h3 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.15;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-shortcut p {
+            margin: 0;
+            color: #5d6b86;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .mp-home-hero {
+            position: relative;
+            overflow: hidden;
+            border-radius: 30px;
+            border: 1px solid rgba(105, 161, 224, .34);
+            background:
+                radial-gradient(circle at top left, rgba(132, 211, 255, .36), transparent 28%),
+                radial-gradient(circle at bottom right, rgba(255, 153, 54, .18), transparent 26%),
+                linear-gradient(135deg, #0d1e39 0%, #123969 45%, #0d8be0 100%);
+            color: #fff;
+            box-shadow: 0 24px 60px rgba(13, 37, 73, .24);
+        }
+
+        .mp-home-hero::before,
+        .mp-home-hero::after {
+            content: '';
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .mp-home-hero::before {
+            top: -120px;
+            right: -40px;
+            width: 320px;
+            height: 320px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, 0));
+        }
+
+        .mp-home-hero::after {
+            left: 45%;
+            bottom: -92px;
+            width: 210px;
+            height: 210px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .18);
+            background: rgba(255, 255, 255, .06);
+            transform: translateX(-50%);
+        }
+
+        .mp-home-hero__grid {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: minmax(0, 1.06fr) minmax(360px, .94fr);
+            gap: 20px;
+            padding: 22px;
+        }
+
+        .mp-home-hero__eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .2);
+            background: rgba(255, 255, 255, .1);
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .mp-home-hero__title {
+            margin: 14px 0 0;
+            max-width: 760px;
+            font-size: clamp(28px, 3.8vw, 42px);
+            line-height: 1.06;
+            letter-spacing: -.04em;
+            font-weight: 900;
+        }
+
+        .mp-home-hero__subtitle {
+            margin: 16px 0 0;
+            max-width: 640px;
+            color: rgba(237, 246, 255, .92);
+            font-size: 17px;
+            line-height: 1.6;
+        }
+
+        .mp-home-hero__actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 22px;
+        }
+
+        .mp-home-hero__btn {
+            border-radius: 14px;
+            padding: 12px 16px;
+            font-weight: 800;
+            box-shadow: none;
+        }
+
+        .mp-home-hero__btn--solid {
+            background: #fff;
+            border-color: transparent;
+            color: #123261;
+        }
+
+        .mp-home-hero__btn--ghost {
+            background: rgba(255, 255, 255, .1);
+            color: #fff;
+            border-color: rgba(255, 255, 255, .26);
+        }
+
+        .mp-home-pulse {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .mp-home-pulse__item {
+            min-width: 136px;
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(7, 20, 40, .25);
+            border: 1px solid rgba(255, 255, 255, .12);
+        }
+
+        .mp-home-pulse__label {
+            color: rgba(222, 236, 255, .8);
+            font-size: 12px;
+        }
+
+        .mp-home-pulse__value {
+            margin-top: 6px;
+            font-size: 24px;
+            line-height: 1;
+            font-weight: 900;
+        }
+
+        .mp-home-showcase {
+            display: grid;
+            gap: 14px;
+            align-content: start;
+        }
+
+        .mp-home-highlight {
+            display: grid;
+            grid-template-columns: 1.12fr .88fr;
+            gap: 14px;
+        }
+
+        .mp-home-lead-card,
+        .mp-home-mini-card,
+        .mp-home-news-card {
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: rgba(8, 20, 40, .32);
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+        }
+
+        .mp-home-lead-card {
+            overflow: hidden;
+            display: grid;
+            grid-template-rows: 210px auto;
+            min-height: 100%;
+        }
+
+        .mp-home-lead-card__media {
+            background: linear-gradient(160deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .06));
+            overflow: hidden;
+        }
+
+        .mp-home-lead-card__media img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .mp-home-lead-card__body {
+            display: grid;
+            gap: 10px;
+            padding: 16px;
+        }
+
+        .mp-home-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, .14);
+            background: rgba(255, 255, 255, .11);
+            color: #dcecff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .mp-home-lead-card__title,
+        .mp-home-mini-card__title {
+            margin: 0;
+            font-weight: 900;
+            color: #fff;
+            line-height: 1.14;
+        }
+
+        .mp-home-lead-card__title {
+            font-size: 24px;
+        }
+
+        .mp-home-mini-card__title {
+            font-size: 19px;
+        }
+
+        .mp-home-lead-card__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            color: rgba(223, 238, 255, .86);
+            font-size: 13px;
+        }
+
+        .mp-home-mini-stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        .mp-home-mini-card {
+            display: grid;
+            gap: 10px;
+            padding: 16px;
+        }
+
+        .mp-home-news-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .mp-home-news-card {
+            display: grid;
+            gap: 8px;
+            padding: 16px;
+            color: #fff;
+        }
+
+        .mp-home-news-card__date {
+            color: rgba(223, 238, 255, .78);
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .mp-home-news-card__title {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.2;
+            font-weight: 900;
+        }
+
+        .mp-home-news-card__text {
+            color: rgba(236, 245, 255, .88);
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .mp-home-stats-strip {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .mp-home-stat-link {
+            display: grid;
+            gap: 8px;
+            padding: 16px 18px;
+            border-radius: 20px;
+            border: 1px solid #d7e4f5;
+            background: linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 10px 24px rgba(15, 54, 96, .07);
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .mp-home-stat-link:hover {
+            transform: translateY(-2px);
+            border-color: #a9caef;
+            box-shadow: 0 14px 32px rgba(15, 54, 96, .14);
+        }
+
+        .mp-home-stat-link__label {
+            color: #6680a2;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .mp-home-stat-link__value {
+            font-size: 34px;
+            line-height: 1;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-stat-link__hint {
+            color: #5d6b86;
+            line-height: 1.45;
+            font-size: 14px;
+        }
+
+        .mp-home-panel {
+            display: grid;
+            gap: 0;
+            border-radius: 24px;
+            border: 1px solid #d7e4f5;
+            background: linear-gradient(180deg, #ffffff, #f8fbff);
+            box-shadow: 0 12px 32px rgba(15, 54, 96, .08);
+            overflow: hidden;
+        }
+
+        .mp-home-panel__head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 22px 18px;
+            border-bottom: 1px solid #e5eef9;
+        }
+
+        .mp-home-panel__eyebrow {
+            color: #0a84d6;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+
+        .mp-home-panel__title {
+            margin: 6px 0 0;
+            font-size: 28px;
+            line-height: 1.08;
+            letter-spacing: -.03em;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-panel__text {
+            margin: 8px 0 0;
+            max-width: 720px;
+            color: #61718b;
+            line-height: 1.58;
+        }
+
+        .mp-home-panel__body {
+            padding: 20px;
+        }
+
+        .mp-home-slider {
+            position: relative;
+            display: grid;
+            gap: 14px;
+        }
+
+        .mp-home-slider__viewport {
+            overflow: hidden;
+        }
+
+        .mp-home-slider__track {
+            display: flex;
+            gap: 16px;
+            transition: transform .35s ease;
+            will-change: transform;
+        }
+
+        .mp-home-slide {
+            min-width: min(100%, 460px);
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 180px;
+            gap: 16px;
+            align-items: stretch;
+            border-radius: 22px;
+            border: 1px solid #d9e6f7;
+            background: linear-gradient(145deg, #f9fcff, #eff6ff);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
+            padding: 18px;
+        }
+
+        .mp-home-slide__badge {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eaf5ff;
+            color: #0f5c9c;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .mp-home-slide__title {
+            margin: 10px 0 0;
+            font-size: 26px;
+            line-height: 1.1;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-slide__description {
+            margin: 10px 0 0;
+            color: #5d6b86;
+            line-height: 1.56;
+        }
+
+        .mp-home-slide__media {
+            border-radius: 18px;
+            overflow: hidden;
+            background: linear-gradient(155deg, #dff0ff, #b8dfff);
+            min-height: 180px;
+        }
+
+        .mp-home-slide__media img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        .mp-home-slider__actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .mp-home-slider__dots {
+            display: flex;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
-        .mp-hero-stat {
-            min-height: 0;
-            aspect-ratio: 1 / 1;
-            background: rgba(255,255,255,.16);
-            border: 1px solid rgba(255,255,255,.35);
-            border-radius: 16px;
-            padding: 14px;
-            color: #fff;
+        .mp-home-slider__dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            border: none;
+            background: #c7d8ef;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .mp-home-slider__dot.is-active {
+            width: 28px;
+            background: linear-gradient(140deg, #0a84d6, #10b2d8);
+        }
+
+        .mp-home-slider__nav {
             display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            box-shadow: 0 10px 24px rgba(12, 62, 109, .14);
-            transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+            gap: 8px;
         }
 
-        .mp-hero-stat:hover {
-            transform: translateY(-2px);
-            background: rgba(255,255,255,.22);
-            box-shadow: 0 14px 28px rgba(12, 62, 109, .18);
+        .mp-home-slider__nav .mp-btn {
+            border-radius: 999px;
+            padding: 9px 12px;
         }
 
-        .mp-hero-stat__label {
-            font-size: 11px;
-            opacity: .92;
+        .mp-home-signal {
+            display: grid;
+            gap: 12px;
+            border-radius: 22px;
+            border: 1px solid #ffd5b0;
+            background: linear-gradient(145deg, #fff8ef, #fff3e5);
+            box-shadow: 0 10px 26px rgba(255, 138, 0, .1);
+            padding: 18px;
         }
 
-        .mp-hero-stat__value {
+        .mp-home-signal__eyebrow {
+            color: #b86800;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+        }
+
+        .mp-home-signal__title {
+            margin: 0;
             font-size: 24px;
+            line-height: 1.14;
             font-weight: 900;
-            line-height: 1;
+            color: #10294c;
         }
 
-        @media (max-width: 980px) {
-            .mp-hero-grid {
+        .mp-home-signal__text {
+            color: #5f6f89;
+            line-height: 1.56;
+        }
+
+        .mp-home-featured-grid,
+        .mp-home-latest-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .mp-home-store-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .mp-home-store-card {
+            display: grid;
+            gap: 10px;
+            padding: 18px;
+            border-radius: 20px;
+            border: 1px solid #d8e5f6;
+            background: linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 10px 24px rgba(15, 54, 96, .07);
+        }
+
+        .mp-home-store-card__kicker {
+            color: #6480a3;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+
+        .mp-home-store-card__title {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.12;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-store-card__text {
+            color: #61718b;
+            line-height: 1.5;
+        }
+
+        .mp-home-cta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .mp-home-cta-card {
+            position: relative;
+            overflow: hidden;
+            display: grid;
+            gap: 10px;
+            padding: 20px;
+            border-radius: 24px;
+            border: 1px solid #d7e4f5;
+            background: linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 12px 28px rgba(15, 54, 96, .08);
+        }
+
+        .mp-home-cta-card::after {
+            content: '';
+            position: absolute;
+            right: -28px;
+            bottom: -28px;
+            width: 120px;
+            height: 120px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(16, 178, 216, .16), transparent 68%);
+            pointer-events: none;
+        }
+
+        .mp-home-cta-card__title {
+            margin: 0;
+            font-size: 22px;
+            line-height: 1.16;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-cta-card__text {
+            color: #5d6b86;
+            line-height: 1.55;
+        }
+
+        @media (max-width: 1180px) {
+            .mp-home-priority-grid,
+            .mp-home-hero__grid,
+            .mp-home-highlight,
+            .mp-home-slide {
                 grid-template-columns: 1fr;
             }
 
-            .mp-hero-stats {
-                justify-content: start;
+            .mp-home-featured-grid,
+            .mp-home-latest-grid,
+            .mp-home-store-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .mp-home-news-grid {
+                grid-template-columns: 1fr;
             }
         }
 
-        @media (max-width: 560px) {
-            .mp-hero-grid {
-                padding: 18px;
+        @media (max-width: 900px) {
+            .mp-home-stats-strip,
+            .mp-home-cta-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .mp-hero-stats {
-                grid-template-columns: repeat(2, 82px);
-                gap: 6px;
+            .mp-home-featured-grid,
+            .mp-home-latest-grid,
+            .mp-home-store-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 720px) {
+            .mp-home-hero__grid {
+                padding: 20px;
             }
 
-            .mp-hero-stat {
-                padding: 10px;
-                border-radius: 12px;
+            .mp-home-shortcuts,
+            .mp-home-pulse {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .mp-hero-stat__label {
-                font-size: 10px;
+            .mp-home-stats-strip,
+            .mp-home-cta-grid,
+            .mp-home-featured-grid,
+            .mp-home-latest-grid,
+            .mp-home-store-grid {
+                grid-template-columns: 1fr;
             }
 
-            .mp-hero-stat__value {
-                font-size: 20px;
+            .mp-home-stat-link__value {
+                font-size: 28px;
             }
         }
     </style>
 
-    <section class="mp-card" style="padding:0;overflow:hidden;background:linear-gradient(120deg,#0a84d6,#10b2d8 60%,#7bd5ff);color:#fff;">
-        <div class="mp-hero-grid">
-            <div>
-                <div style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;">Городская Экоярмарка</div>
-                <h1 class="mp-page-title" style="color:#fff;margin-top:8px;">{{ $marketplaceSettings['hero_title'] }}</h1>
-                <p style="margin:10px 0 0;max-width:620px;color:#e8f7ff;">
-                    {{ $marketplaceSettings['hero_subtitle'] }}
-                </p>
-                <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-                    <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
-                    <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
+    <div class="mp-home">
+        <section class="mp-home-priority-grid">
+            <article class="mp-home-panel">
+                <div class="mp-home-section__header">
+                    <div>
+                        <span class="mp-home-kicker">Витрина маркетплейса</span>
+                        <h2 class="mp-home-section__title">Товары на первом экране</h2>
+                    </div>
+                    <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug]) }}">Открыть каталог</a>
+                </div>
+
+                <div class="mp-home-products">
+                    @forelse($featuredProducts as $product)
+                        @include('marketplace.partials.product-card', ['product' => $product])
+                    @empty
+                        <div class="mp-home-empty">
+                            <h3>Пока нет опубликованных товаров</h3>
+                            <p>Как только продавцы добавят новые карточки, маркетплейс начнёт наполняться витриной.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </article>
+
+            <div class="mp-home-priority-side">
+                <article class="mp-home-panel">
+                    <div class="mp-home-section__header">
+                        <div>
+                            <span class="mp-home-kicker">Свежие поступления</span>
+                            <h2 class="mp-home-section__title">Новые товары</h2>
+                        </div>
+                        <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug, 'sort' => 'new']) }}">Смотреть всё</a>
+                    </div>
+
+                    <div class="mp-home-products mp-home-products--compact">
+                        @forelse($latestCards->take(4) as $product)
+                            @include('marketplace.partials.product-card', ['product' => $product])
+                        @empty
+                            <div class="mp-home-empty">
+                                <h3>Новых карточек пока нет</h3>
+                                <p>После первой публикации продавцов здесь появятся свежие позиции.</p>
+                            </div>
+                        @endforelse
+                    </div>
+                </article>
+
+                <div class="mp-home-shortcuts">
+                    <a class="mp-home-shortcut" href="{{ route('marketplace.map', ['marketSlug' => $marketSlug]) }}">
+                        <span class="mp-home-kicker">Карта</span>
+                        <h3>Найти продавца на схеме рынка</h3>
+                        <p>Быстрый переход к карте с местами, магазинами и ориентиром по локациям.</p>
+                    </a>
+
+                    <a class="mp-home-shortcut" href="{{ route('marketplace.announcements', ['marketSlug' => $marketSlug]) }}">
+                        <span class="mp-home-kicker">Объявления</span>
+                        <h3>Посмотреть новости и акции</h3>
+                        <p>Санитарные уведомления, события и важные сообщения рынка в одном разделе.</p>
+                    </a>
                 </div>
             </div>
-            <div class="mp-hero-stats">
-                @foreach($heroStats as $stat)
-                    <a class="mp-hero-stat" href="{{ $stat['url'] }}">
-                        <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
-                        <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
-                    </a>
-                @endforeach
-            </div>
-        </div>
-    </section>
+        </section>
 
-    @if(collect($infoSlides)->isNotEmpty())
-        <section class="mp-card">
-            <style>
-                .mp-slider {
-                    position: relative;
-                    display: grid;
-                    gap: 12px;
-                }
-                .mp-slider__viewport {
-                    overflow: hidden;
-                }
-                .mp-slider__track {
-                    display: grid;
-                    grid-auto-flow: column;
-                    grid-auto-columns: calc(33.333% - 8px);
-                    gap: 12px;
-                    overflow-x: auto;
-                    scroll-snap-type: x mandatory;
-                    scrollbar-width: none;
-                    scroll-behavior: smooth;
-                    padding-bottom: 4px;
-                }
-                .mp-slider__track::-webkit-scrollbar {
-                    display: none;
-                }
-                .mp-slider__card {
-                    scroll-snap-align: start;
-                    min-height: 218px;
-                    border-radius: 18px;
-                    border: 1px solid #d9e6f7;
-                    background: linear-gradient(180deg, #ffffff, #f7fbff);
-                    box-shadow: 0 8px 24px rgba(17, 32, 59, .06);
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                }
-                .mp-slider__card[data-theme="buyer"] {
-                    background: linear-gradient(180deg, #eff8ff, #ffffff);
-                }
-                .mp-slider__card[data-theme="seller"] {
-                    background: linear-gradient(180deg, #f7f5ff, #ffffff);
-                }
-                .mp-slider__card[data-theme="partner"] {
-                    background: linear-gradient(180deg, #fef7ec, #ffffff);
-                }
-                .mp-slider__media {
-                    height: 140px;
-                    background: #dfefff;
-                }
-                .mp-slider__media img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    display: block;
-                }
-                .mp-slider__body {
-                    padding: 16px;
-                    display: flex;
-                    flex: 1;
-                    flex-direction: column;
-                    gap: 10px;
-                }
-                .mp-slider__title {
-                    margin: 0;
-                    font-size: 21px;
-                    line-height: 1.2;
-                }
-                .mp-slider__text {
-                    margin: 0;
-                    color: var(--muted);
-                    line-height: 1.45;
-                }
-                .mp-slider__footer {
-                    margin-top: auto;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 10px;
-                }
-                .mp-slider__controls {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 12px;
-                }
-                .mp-slider__nav {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .mp-slider__arrow {
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 999px;
-                    border: 1px solid #cfe2f7;
-                    background: #fff;
-                    color: var(--text);
-                    font-weight: 800;
-                    cursor: pointer;
-                }
-                .mp-slider__dots {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
-                }
-                .mp-slider__dot {
-                    width: 9px;
-                    height: 9px;
-                    border-radius: 999px;
-                    border: none;
-                    background: #c6d9ee;
-                    cursor: pointer;
-                }
-                .mp-slider__dot.is-active {
-                    width: 28px;
-                    background: linear-gradient(140deg, var(--brand), var(--brand-2));
-                }
-                @media (max-width: 1100px) {
-                    .mp-slider__track {
-                        grid-auto-columns: calc(50% - 6px);
-                    }
-                }
-                @media (max-width: 760px) {
-                    .mp-slider__track {
-                        grid-auto-columns: 100%;
-                    }
-                    .mp-slider__controls {
-                        flex-direction: column;
-                        align-items: stretch;
-                    }
-                }
-            </style>
+        <section class="mp-home-hero">
+            <div class="mp-home-hero__grid">
+                <div>
+                    <span class="mp-home-hero__eyebrow">ЭкоЯрмарка · Маркетплейс</span>
+                    <h1 class="mp-home-hero__title">{{ $marketplaceSettings['hero_title'] }}</h1>
+                    <p class="mp-home-hero__subtitle">{{ $marketplaceSettings['hero_subtitle'] }}</p>
 
-            <div class="mp-slider"
-                 data-mp-slider
-                 data-autoplay="{{ !empty($marketplaceSettings['slider_autoplay_enabled']) ? '1' : '0' }}"
-                 data-interval="{{ (int) ($marketplaceSettings['slider_autoplay_interval_ms'] ?? 7000) }}">
-                <div class="mp-slider__viewport">
-                    <div class="mp-slider__track" data-mp-slider-track>
-                        @foreach($infoSlides as $slide)
-                            @php($imageUrl = is_object($slide) ? $slide->image_url : ($slide['image_url'] ?? null))
-                            @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
-                            @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
-                            @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
-                            @php($ctaLabel = is_object($slide) ? ($slide->cta_label ?? null) : ($slide['cta_label'] ?? null))
-                            @php($ctaUrl = is_object($slide) ? ($slide->cta_url ?? null) : ($slide['cta_url'] ?? null))
-                            <article class="mp-slider__card" data-theme="{{ $theme }}">
-                                @if(filled($imageUrl))
-                                    <div class="mp-slider__media">
-                                        <img src="{{ $imageUrl }}" alt="{{ $title }}">
-                                    </div>
+                    <div class="mp-home-hero__actions">
+                        <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--solid"
+                           href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug]) }}">
+                            Смотреть каталог
+                        </a>
+                        <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--ghost"
+                           href="{{ route('marketplace.map', ['marketSlug' => $marketSlug]) }}">
+                            Карта рынка
+                        </a>
+                        @if($marketplaceCurrentUserCanUseBuyer)
+                            <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--ghost"
+                               href="{{ route('marketplace.buyer.dashboard', ['marketSlug' => $marketSlug]) }}">
+                                Кабинет покупателя
+                            </a>
+                        @endif
+                    </div>
+
+                    <div class="mp-home-pulse">
+                        @if(filled($publicAddress))
+                            <div class="mp-home-pulse__item">
+                                <div class="mp-home-pulse__label">Адрес</div>
+                                <div class="mp-home-pulse__value" style="font-size:16px;line-height:1.35;">{{ $publicAddress }}</div>
+                            </div>
+                        @endif
+                        @if(filled($publicPhone))
+                            <div class="mp-home-pulse__item">
+                                <div class="mp-home-pulse__label">Контакт</div>
+                                <div class="mp-home-pulse__value" style="font-size:18px;">{{ $publicPhone }}</div>
+                            </div>
+                        @endif
+                        <div class="mp-home-pulse__item">
+                            <div class="mp-home-pulse__label">Витрины продавцов</div>
+                            <div class="mp-home-pulse__value">{{ $topStores->count() }}</div>
+                        </div>
+                        <div class="mp-home-pulse__item">
+                            <div class="mp-home-pulse__label">Новых товаров</div>
+                            <div class="mp-home-pulse__value">{{ $latestProducts->count() }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mp-home-showcase">
+                    <div class="mp-home-highlight">
+                        <article class="mp-home-lead-card">
+                            <div class="mp-home-lead-card__media">
+                                @if($featuredLead && is_array($featuredLead->images ?? null) && !empty($featuredLead->images[0]))
+                                    <img src="{{ $featuredLead->images[0] }}" alt="{{ $featuredLead->title }}">
                                 @endif
-                                <div class="mp-slider__body">
-                                    <h3 class="mp-slider__title">{{ $title }}</h3>
-                                    @if(filled($description))
-                                        <p class="mp-slider__text">{{ $description }}</p>
+                            </div>
+                            <div class="mp-home-lead-card__body">
+                                <span class="mp-home-kicker">Рекомендуем</span>
+                                <h2 class="mp-home-lead-card__title">{{ $featuredLead?->title ?: 'Новые предложения от продавцов ЭкоЯрмарки' }}</h2>
+                                <div class="mp-home-lead-card__meta">
+                                    @if($featuredLead)
+                                        <span>{{ $featuredLead->tenant->short_name ?: $featuredLead->tenant->name }}</span>
+                                        @if($featuredLead->price !== null)
+                                            <span>{{ number_format((float) $featuredLead->price, 2, ',', ' ') }} ₽</span>
+                                        @endif
+                                    @else
+                                        <span>Товары, витрины и события в одном окне</span>
                                     @endif
-                                    <div class="mp-slider__footer">
-                                        @if(filled($ctaLabel) && filled($ctaUrl))
-                                            <a class="mp-btn" href="{{ $ctaUrl }}">{{ $ctaLabel }}</a>
-                                        @else
-                                            <span></span>
+                                </div>
+                                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                                    @if($featuredLead)
+                                        <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--solid"
+                                           href="{{ route('marketplace.product.show', ['marketSlug' => $marketSlug, 'productSlug' => $featuredLead->slug]) }}">
+                                            Открыть товар
+                                        </a>
+                                    @endif
+                                    <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--ghost"
+                                       href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug]) }}">
+                                        Все предложения
+                                    </a>
+                                </div>
+                            </div>
+                        </article>
+
+                        <div class="mp-home-mini-stack">
+                            @foreach($featuredSecondary as $product)
+                                <article class="mp-home-mini-card">
+                                    <span class="mp-home-kicker">В фокусе</span>
+                                    <h3 class="mp-home-mini-card__title">{{ $product->title }}</h3>
+                                    <div class="mp-home-lead-card__meta">
+                                        <span>{{ $product->tenant->short_name ?: $product->tenant->name }}</span>
+                                        @if($product->price !== null)
+                                            <span>{{ number_format((float) $product->price, 2, ',', ' ') }} ₽</span>
                                         @endif
                                     </div>
+                                    <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--ghost"
+                                       href="{{ route('marketplace.product.show', ['marketSlug' => $marketSlug, 'productSlug' => $product->slug]) }}">
+                                        Смотреть карточку
+                                    </a>
+                                </article>
+                            @endforeach
+                            @if($featuredSecondary->isEmpty())
+                                <article class="mp-home-mini-card">
+                                    <span class="mp-home-kicker">Навигация</span>
+                                    <h3 class="mp-home-mini-card__title">Открывайте магазины, каталог и карту рынка без лишних переходов</h3>
+                                    <div class="mp-home-lead-card__meta">
+                                        <span>Главная собрана как витрина: смотреть, сравнивать, быстро выбирать.</span>
+                                    </div>
+                                </article>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="mp-home-announcement-list">
+                        @forelse($headlineAnnouncements as $announcement)
+                            <article class="mp-home-announcement-card">
+                                <span class="mp-home-kicker">{{ $announcement->category?->label() ?? 'Сообщение' }}</span>
+                                <h3 class="mp-home-announcement-card__title">{{ $announcement->title }}</h3>
+                                <p class="mp-home-announcement-card__text">
+                                    {{ Str::limit(strip_tags($announcement->body ?? ''), 120) ?: 'Открыть карточку объявления и посмотреть детали.' }}
+                                </p>
+                                <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--ghost"
+                                   href="{{ route('marketplace.announcement.show', ['marketSlug' => $marketSlug, 'announcementSlug' => $announcement->slug]) }}">
+                                    Читать
+                                </a>
+                            </article>
+                        @empty
+                            <article class="mp-home-announcement-card">
+                                <span class="mp-home-kicker">Инфо-блок</span>
+                                <h3 class="mp-home-announcement-card__title">Актуальные объявления рынка будут появляться здесь</h3>
+                                <p class="mp-home-announcement-card__text">
+                                    Пока список короткий, но витрина уже готова под новости, санитарные объявления и акции.
+                                </p>
+                            </article>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mp-home-strip">
+            @foreach($heroStats as $stat)
+                <article class="mp-home-strip-card">
+                    <div class="mp-home-strip-card__label">{{ $stat['label'] }}</div>
+                    <div class="mp-home-strip-card__value">{{ $stat['value'] }}</div>
+                </article>
+            @endforeach
+        </section>
+
+        @if($slides->isNotEmpty())
+            <section class="mp-home-section">
+                <div class="mp-home-section__header">
+                    <div>
+                        <span class="mp-home-kicker">Промо и навигация</span>
+                        <h2 class="mp-home-section__title">Информационные и промо-слайды</h2>
+                    </div>
+                    @if($slides->count() > 1)
+                        <div class="mp-home-slider__controls">
+                            <button type="button" class="mp-home-slider__nav" data-slide-prev aria-label="Предыдущий слайд">‹</button>
+                            <button type="button" class="mp-home-slider__nav" data-slide-next aria-label="Следующий слайд">›</button>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="mp-home-slider" data-slider>
+                    <div class="mp-home-slider__track" data-slider-track>
+                        @foreach($slides as $slide)
+                            <article class="mp-home-slide">
+                                <div class="mp-home-slide__content">
+                                    @if(!empty($slide['badge']))
+                                        <span class="mp-home-kicker">{{ $slide['badge'] }}</span>
+                                    @endif
+                                    <h3 class="mp-home-slide__title">{{ $slide['title'] }}</h3>
+                                    @if(!empty($slide['description']))
+                                        <p class="mp-home-slide__text">{{ $slide['description'] }}</p>
+                                    @endif
+                                    @if(!empty($slide['cta_url']) && !empty($slide['cta_label']))
+                                        <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--solid" href="{{ $slide['cta_url'] }}">
+                                            {{ $slide['cta_label'] }}
+                                        </a>
+                                    @endif
                                 </div>
+                                @if(!empty($slide['image_url']))
+                                    <div class="mp-home-slide__media">
+                                        <img src="{{ $slide['image_url'] }}" alt="{{ $slide['title'] }}">
+                                    </div>
+                                @endif
                             </article>
                         @endforeach
                     </div>
-                </div>
-                <div class="mp-slider__controls">
-                    <div class="mp-slider__nav">
-                        <button class="mp-slider__arrow" type="button" data-mp-slider-prev>&lsaquo;</button>
-                        <button class="mp-slider__arrow" type="button" data-mp-slider-next>&rsaquo;</button>
-                    </div>
-                    <div class="mp-slider__dots" data-mp-slider-dots></div>
-                </div>
-            </div>
-        </section>
-    @endif
 
-    @if(!empty($nearestSanitaryAnnouncement))
-        <section class="mp-card" style="border-color:#f9d48c;background:linear-gradient(180deg,#fff9e8,#fffdf4);">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                    @if($slides->count() > 1)
+                        <div class="mp-home-slider__dots">
+                            @foreach($slides as $index => $slide)
+                                <button type="button"
+                                        class="mp-home-slider__dot{{ $index === 0 ? ' is-active' : '' }}"
+                                        data-slide-dot="{{ $index }}"
+                                        aria-label="Слайд {{ $index + 1 }}"></button>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            </section>
+        @endif
+
+        @if($nearestSanitaryAnnouncement)
+            <section class="mp-home-signal">
                 <div>
-                    <div class="mp-badge" style="background:#fff3ce;border-color:#f2cd75;color:#6b4c00;">Ближайший санитарный день</div>
-                    <h2 class="mp-page-title" style="font-size:24px;margin-top:10px;">{{ $nearestSanitaryAnnouncement->title }}</h2>
-                    <p class="mp-page-sub" style="margin:8px 0 0;max-width:760px;">
-                        {{ $nearestSanitaryAnnouncement->excerpt ?: 'Плановый санитарный день. Проверьте режим работы и ограничения заранее.' }}
+                    <span class="mp-home-kicker">Важное объявление</span>
+                    <h2 class="mp-home-section__title">{{ $nearestSanitaryAnnouncement->title }}</h2>
+                    <p class="mp-home-signal__text">
+                        {{ Str::limit(strip_tags($nearestSanitaryAnnouncement->body ?? ''), 220) }}
                     </p>
                 </div>
-                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
-                    <span class="mp-badge" style="font-size:14px;padding:8px 12px;">
-                        {{ optional($nearestSanitaryAnnouncement->starts_at)->format('d.m.Y') ?? 'Дата уточняется' }}
-                    </span>
-                    @php($nearestSanitaryUrl = filled($nearestSanitaryAnnouncement->slug ?? null)
-                        ? route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => (string) $nearestSanitaryAnnouncement->slug])
-                        : route('marketplace.announcements', ['marketSlug' => $market->slug]))
-                    <a class="mp-btn" href="{{ $nearestSanitaryUrl }}">Подробнее</a>
-                </div>
-            </div>
-        </section>
-    @endif
+                <a class="mp-btn mp-home-hero__btn mp-home-hero__btn--solid"
+                   href="{{ route('marketplace.announcement.show', ['marketSlug' => $marketSlug, 'announcementSlug' => $nearestSanitaryAnnouncement->slug]) }}">
+                    Открыть объявление
+                </a>
+            </section>
+        @endif
 
-    @if($announcements->count() > 0)
-        <section class="mp-card">
-            <div class="mp-page-head">
-                <div>
-                    <h2 class="mp-page-title" style="font-size:26px;">Анонсы и события</h2>
-                    <p class="mp-page-sub">Праздники, акции, санитарные дни и новости Экоярмарки.</p>
+        <section class="mp-home-grid">
+            <article class="mp-home-panel">
+                <div class="mp-home-section__header">
+                    <div>
+                        <span class="mp-home-kicker">Продавцы</span>
+                        <h2 class="mp-home-section__title">Магазины и арендаторы</h2>
+                    </div>
+                    <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug, 'tab' => 'stores']) }}">Все магазины</a>
                 </div>
-                <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $market->slug]) }}">Все анонсы</a>
-            </div>
-            <div class="mp-grid">
-                @foreach($announcements->take(4) as $announcement)
-                    @php($hasImage = filled($announcement->cover_image_url))
-                    <article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;{{ $hasImage ? 'padding:0;overflow:hidden;display:block;' : 'padding:12px;display:flex;flex-direction:column;gap:8px;' }}">
-                        @if($announcement->cover_image_url)
-                            <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
-                               style="height:220px;overflow:hidden;position:relative;display:block;">
-                                <img src="{{ $announcement->cover_image_url }}" alt="{{ $announcement->title }}" style="width:100%;height:100%;object-fit:cover;">
-                                @php($startDate = optional($announcement->starts_at)->format('d.m'))
-                                @php($endDate = optional($announcement->ends_at)->format('d.m'))
-                                @php($fallbackDate = optional($announcement->published_at)->format('d.m') ?: optional($announcement->created_at)->format('d.m'))
-                                @php($dateLabel = ((string) $announcement->kind === 'promo' && filled($startDate) && filled($endDate)) ? ($startDate . ' - ' . $endDate) : ($startDate ?: $fallbackDate))
-                                @if(filled($dateLabel))
-                                    <span style="position:absolute;right:10px;bottom:10px;color:#fff;padding:8px 11px;border-radius:8px;background:rgba(17,32,59,.42);backdrop-filter:blur(3px);display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:82%;">
-                                        <span style="font-weight:800;font-size:22px;line-height:1;">{{ $dateLabel }}</span>
-                                        <span style="font-weight:700;font-size:16px;line-height:1.2;text-align:right;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ $announcement->title }}</span>
-                                    </span>
+
+                <div class="mp-home-store-list">
+                    @forelse($topStoresPreview as $store)
+                        <a class="mp-home-store-card" href="{{ route('marketplace.store.show', ['marketSlug' => $marketSlug, 'tenantSlug' => $store->slug ?: $store->getKey()]) }}">
+                            <div class="mp-home-store-card__title">{{ $store->short_name ?: $store->name }}</div>
+                            <div class="mp-home-store-card__meta">
+                                <span>{{ $store->products_count }} товаров</span>
+                                @if($store->marketSpace)
+                                    <span>{{ $store->marketSpace->name ?: $store->marketSpace->number }}</span>
                                 @endif
-                            </a>
-                        @else
-                            <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
-                               style="font-size:18px;font-weight:800;line-height:1.25;">
-                                {{ $announcement->title }}
-                            </a>
-                            @if(filled($announcement->excerpt))
-                                <p class="mp-muted" style="margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
-                                    {{ $announcement->excerpt }}
-                                </p>
-                            @endif
-                        @endif
-                    </article>
-                @endforeach
-            </div>
-        </section>
-    @endif
-
-    @if($featuredProducts->count() > 0)
-        <section class="mp-card">
-            <div class="mp-page-head">
-                <div>
-                    <h2 class="mp-page-title" style="font-size:26px;">Рекомендуем</h2>
-                    <p class="mp-page-sub">Подборка актуальных предложений продавцов Экоярмарки.</p>
+                            </div>
+                        </a>
+                    @empty
+                        <div class="mp-home-empty">
+                            <h3>Магазины скоро появятся</h3>
+                            <p>Когда продавцы оформят витрины, здесь появится короткий каталог арендаторов рынка.</p>
+                        </div>
+                    @endforelse
                 </div>
-            </div>
-            <div class="mp-grid">
-                @foreach($featuredProducts as $product)
-                    @include('marketplace.partials.product-card', ['product' => $product])
-                @endforeach
-            </div>
+            </article>
         </section>
-    @endif
 
-    <section class="mp-card">
-        <div class="mp-page-head">
-            <div>
-                <h2 class="mp-page-title" style="font-size:26px;">Новые товары</h2>
-                <p class="mp-page-sub">Последние добавления по Экоярмарке.</p>
-            </div>
-            <a class="mp-btn mp-btn-brand" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Открыть каталог</a>
-        </div>
-        <div class="mp-grid">
-            @foreach($latestProducts as $product)
-                @include('marketplace.partials.product-card', ['product' => $product])
-            @endforeach
-        </div>
-    </section>
-
-    @if($topStores->count() > 0)
-        <section id="marketplace-stores" class="mp-card">
-            <div class="mp-page-head">
-                <div>
-                    <h2 class="mp-page-title" style="font-size:26px;">Витрины продавцов</h2>
-                    <p class="mp-page-sub">Активные продавцы с публичными карточками и товарами.</p>
+        <section class="mp-home-grid mp-home-grid--secondary">
+            <article class="mp-home-panel">
+                <div class="mp-home-section__header">
+                    <div>
+                        <span class="mp-home-kicker">Объявления</span>
+                        <h2 class="mp-home-section__title">Что важно знать перед визитом</h2>
+                    </div>
+                    <a class="mp-home-inline-link" href="{{ route('marketplace.announcements', ['marketSlug' => $marketSlug]) }}">Все объявления</a>
                 </div>
-            </div>
-            <div class="mp-grid">
-                @foreach($topStores as $store)
-                    @php($storeRouteKey = filled($store->slug ?? null) ? (string) $store->slug : (string) $store->id)
-                    <article style="background:var(--surface-soft);border:1px solid #d5e5f8;border-radius:14px;padding:14px;">
-                        <h3 style="margin:0 0 8px;font-size:20px;">{{ $store->short_name ?: $store->name }}</h3>
-                        <p class="mp-muted" style="margin:0 0 12px;">Товаров: {{ (int) ($store->active_products_count ?? 0) }}</p>
-                        <a class="mp-btn" href="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $storeRouteKey]) }}">Перейти в витрину</a>
-                    </article>
-                @endforeach
-            </div>
+
+                <div class="mp-home-info-list">
+                    @forelse($announcements as $announcement)
+                        <a class="mp-home-info-card" href="{{ route('marketplace.announcement.show', ['marketSlug' => $marketSlug, 'announcementSlug' => $announcement->slug]) }}">
+                            <div class="mp-home-info-card__eyebrow">
+                                <span>{{ $announcement->category?->label() ?? 'Объявление' }}</span>
+                                <span>{{ optional($announcement->starts_at)->format('d.m.Y') }}</span>
+                            </div>
+                            <h3>{{ $announcement->title }}</h3>
+                            <p>{{ Str::limit(strip_tags($announcement->body ?? ''), 150) }}</p>
+                        </a>
+                    @empty
+                        <div class="mp-home-empty">
+                            <h3>Нет свежих объявлений</h3>
+                            <p>Когда рынок опубликует новости или напоминания, они появятся здесь.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </article>
+
+            <article class="mp-home-panel">
+                <div class="mp-home-section__header">
+                    <div>
+                        <span class="mp-home-kicker">Свежие поступления</span>
+                        <h2 class="mp-home-section__title">Новые товары</h2>
+                    </div>
+                    <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug, 'sort' => 'new']) }}">Смотреть всё</a>
+                </div>
+
+                <div class="mp-home-products mp-home-products--compact">
+                    @forelse($latestCards as $product)
+                        @include('marketplace.partials.product-card', ['product' => $product])
+                    @empty
+                        <div class="mp-home-empty">
+                            <h3>Свежих карточек пока нет</h3>
+                            <p>Как только продавцы обновят витрины, здесь появятся новые товары.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </article>
         </section>
-    @endif
 
-    @push('scripts')
-        <script>
-            (function () {
-                document.querySelectorAll('[data-mp-slider]').forEach(function (slider) {
-                    const track = slider.querySelector('[data-mp-slider-track]');
-                    const prev = slider.querySelector('[data-mp-slider-prev]');
-                    const next = slider.querySelector('[data-mp-slider-next]');
-                    const dots = slider.querySelector('[data-mp-slider-dots]');
+        <section class="mp-home-cta-grid">
+            <a class="mp-home-cta-card" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug]) }}">
+                <span class="mp-home-kicker">Каталог</span>
+                <h3>Искать по товарам и продавцам</h3>
+                <p>Полная витрина предложений рынка с фильтрами, категориями и переходом в карточки продавцов.</p>
+            </a>
 
-                    if (!track) {
-                        return;
-                    }
+            <a class="mp-home-cta-card" href="{{ route('marketplace.map', ['marketSlug' => $marketSlug]) }}">
+                <span class="mp-home-kicker">Карта</span>
+                <h3>Найти продавца на схеме рынка</h3>
+                <p>Переход к карте рынка, где можно быстро найти магазины и понять локацию перед визитом.</p>
+            </a>
 
-                    const cards = Array.from(track.children);
-                    if (cards.length === 0) {
-                        return;
-                    }
+            <a class="mp-home-cta-card" href="{{ route('marketplace.announcements', ['marketSlug' => $marketSlug]) }}">
+                <span class="mp-home-kicker">Информация</span>
+                <h3>Следить за объявлениями и акциями</h3>
+                <p>Санитарные уведомления, режим работы, промо и общие новости — всё в отдельной ленте.</p>
+            </a>
 
-                    let current = 0;
-                    let timer = null;
-                    const autoplay = slider.dataset.autoplay === '1';
-                    const interval = Math.max(parseInt(slider.dataset.interval || '7000', 10), 4000);
-
-                    const measureStep = function () {
-                        if (!cards[0]) {
-                            return 0;
-                        }
-
-                        const style = window.getComputedStyle(track);
-                        const gap = parseFloat(style.columnGap || style.gap || '0');
-
-                        return cards[0].getBoundingClientRect().width + gap;
-                    };
-
-                    const renderDots = function () {
-                        if (!dots) {
-                            return;
-                        }
-
-                        dots.innerHTML = '';
-                        cards.forEach(function (_, index) {
-                            const dot = document.createElement('button');
-                            dot.type = 'button';
-                            dot.className = 'mp-slider__dot' + (index === current ? ' is-active' : '');
-                            dot.addEventListener('click', function () {
-                                scrollToIndex(index);
-                            });
-                            dots.appendChild(dot);
-                        });
-                    };
-
-                    const scrollToIndex = function (index) {
-                        const step = measureStep();
-                        current = Math.max(0, Math.min(index, cards.length - 1));
-                        track.scrollTo({ left: step * current, behavior: 'smooth' });
-                        renderDots();
-                    };
-
-                    const syncCurrent = function () {
-                        const step = measureStep();
-                        if (step <= 0) {
-                            return;
-                        }
-
-                        current = Math.max(0, Math.min(Math.round(track.scrollLeft / step), cards.length - 1));
-                        renderDots();
-                    };
-
-                    const stopAutoplay = function () {
-                        if (timer) {
-                            window.clearInterval(timer);
-                            timer = null;
-                        }
-                    };
-
-                    const startAutoplay = function () {
-                        stopAutoplay();
-
-                        if (!autoplay || cards.length < 2) {
-                            return;
-                        }
-
-                        timer = window.setInterval(function () {
-                            const nextIndex = current >= cards.length - 1 ? 0 : current + 1;
-                            scrollToIndex(nextIndex);
-                        }, interval);
-                    };
-
-                    prev && prev.addEventListener('click', function () {
-                        scrollToIndex(current <= 0 ? cards.length - 1 : current - 1);
-                    });
-
-                    next && next.addEventListener('click', function () {
-                        scrollToIndex(current >= cards.length - 1 ? 0 : current + 1);
-                    });
-
-                    track.addEventListener('scroll', function () {
-                        window.requestAnimationFrame(syncCurrent);
-                    }, { passive: true });
-
-                    slider.addEventListener('mouseenter', stopAutoplay);
-                    slider.addEventListener('mouseleave', startAutoplay);
-                    slider.addEventListener('touchstart', stopAutoplay, { passive: true });
-                    slider.addEventListener('touchend', startAutoplay, { passive: true });
-
-                    document.addEventListener('visibilitychange', function () {
-                        if (document.hidden) {
-                            stopAutoplay();
-                        } else {
-                            startAutoplay();
-                        }
-                    });
-
-                    window.addEventListener('resize', function () {
-                        scrollToIndex(current);
-                    });
-
-                    renderDots();
-                    startAutoplay();
-                });
-            }());
-        </script>
-    @endpush
+            <a class="mp-home-cta-card" href="{{ $marketplaceCurrentUserCanUseBuyer ? route('marketplace.buyer.dashboard', ['marketSlug' => $marketSlug]) : route('marketplace.login', ['marketSlug' => $marketSlug]) }}">
+                <span class="mp-home-kicker">Кабинет</span>
+                <h3>Сохранять избранное и возвращаться к подборке</h3>
+                <p>Личный кабинет покупателя с избранными товарами, быстрыми переходами и будущими заявками.</p>
+            </a>
+        </section>
+    </div>
 @endsection
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const slider = document.querySelector('[data-slider]');
+
+            if (!slider) {
+                return;
+            }
+
+            const track = slider.querySelector('[data-slider-track]');
+            const dots = Array.from(slider.querySelectorAll('[data-slide-dot]'));
+            const nextBtn = slider.querySelector('[data-slide-next]');
+            const prevBtn = slider.querySelector('[data-slide-prev]');
+
+            if (!track) {
+                return;
+            }
+
+            const slides = Array.from(track.children);
+            let activeIndex = 0;
+
+            const render = () => {
+                track.style.transform = `translateX(-${activeIndex * 100}%)`;
+
+                dots.forEach((dot, index) => {
+                    dot.classList.toggle('is-active', index === activeIndex);
+                });
+            };
+
+            nextBtn?.addEventListener('click', () => {
+                activeIndex = (activeIndex + 1) % slides.length;
+                render();
+            });
+
+            prevBtn?.addEventListener('click', () => {
+                activeIndex = (activeIndex - 1 + slides.length) % slides.length;
+                render();
+            });
+
+            dots.forEach((dot, index) => {
+                dot.addEventListener('click', () => {
+                    activeIndex = index;
+                    render();
+                });
+            });
+
+            render();
+        });
+    </script>
+@endpush

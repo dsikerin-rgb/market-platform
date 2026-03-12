@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReportRunResource extends BaseResource
 {
-    
+    protected static ?string $slug = 'report-runs';
 
     protected static ?string $model = ReportRun::class;
 
@@ -146,16 +146,34 @@ class ReportRunResource extends BaseResource
                     ->label('Файл')
                     ->boolean(fn (?string $state) => filled($state)),
             ])
-            ->recordUrl(fn (ReportRun $record): ?string => static::canEdit($record)
-                ? static::getUrl('edit', ['record' => $record])
-                : null);
+            ->recordUrl(null);
 
         $actions = [];
 
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+            $editAction = \Filament\Actions\EditAction::make()->label('Редактировать');
+
+            if (method_exists($editAction, 'slideOver')) {
+                $editAction->slideOver();
+            }
+
+            if (method_exists($editAction, 'modalWidth')) {
+                $editAction->modalWidth('5xl');
+            }
+
+            $actions[] = $editAction;
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+            $editAction = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+
+            if (method_exists($editAction, 'slideOver')) {
+                $editAction->slideOver();
+            }
+
+            if (method_exists($editAction, 'modalWidth')) {
+                $editAction->modalWidth('5xl');
+            }
+
+            $actions[] = $editAction;
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {

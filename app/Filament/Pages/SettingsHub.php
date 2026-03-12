@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\MarketplaceSlideResource;
 use App\Filament\Resources\Roles\RoleResource;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Support\Htmlable;
 
 class SettingsHub extends Page
 {
@@ -28,6 +29,7 @@ class SettingsHub extends Page
     {
         return MarketSettings::canAccess()
             || MarketplaceSettings::canAccess()
+            || ReportsHub::canAccess()
             || MarketplaceSlideResource::canViewAny()
             || RoleResource::canViewAny();
     }
@@ -50,5 +52,15 @@ class SettingsHub extends Page
     public function getRolesUrl(): string
     {
         return RoleResource::getUrl('index');
+    }
+
+    public function getReportsUrl(): string
+    {
+        return ReportsHub::getUrl();
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 }

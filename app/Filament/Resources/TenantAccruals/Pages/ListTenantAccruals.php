@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\TenantAccruals\Pages;
 
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
+use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Contracts\Support\Htmlable;
 
 class ListTenantAccruals extends ListRecords
 {
@@ -30,9 +32,26 @@ class ListTenantAccruals extends ListRecords
         return [];
     }
 
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            TenantAccrualsWorkspaceWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
+
     public function getSubheading(): ?string
     {
-        return 'Детализация начислений. Вкладка 1С показывается отдельно, если в текущем контуре уже есть начисления из 1С.';
+        return null;
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 
     public function getTabs(): array

@@ -4,8 +4,11 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\ReportRunResource;
+use App\Models\Report;
+use App\Models\ReportRun;
+use Filament\Facades\Filament;
 use Filament\Pages\Page;
-use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 class ReportsHub extends Page
 {
@@ -19,6 +22,11 @@ class ReportsHub extends Page
     protected static ?string $slug = 'reports';
 
     protected string $view = 'filament.pages.reports-hub';
+
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return null;
+    }
 
     public static function canAccess(): bool
     {
@@ -55,5 +63,85 @@ class ReportsHub extends Page
     public function getRunsUrl(): string
     {
         return ReportRunResource::getUrl('index');
+    }
+
+    public function getMarketName(): string
+    {
+        return filament()->getTenant()?->name
+            ?? filament()->auth()->user()?->market?->name
+            ?? 'Выберите рынок';
+    }
+
+    public function getReportCount(): int
+    {
+        return Report::query()
+            ->when($this->marketId(), fn ($query, $marketId) => $query->where('market_id', $marketId))
+            ->count();
+    }
+
+    public function getActiveReportCount(): int
+    {
+        return Report::query()
+            ->when($this->marketId(), fn ($query, $marketId) => $query->where('market_id', $marketId))
+            ->where('is_active', true)
+            ->count();
+    }
+
+    public function getRunCount(): int
+    {
+        return ReportRun::query()
+            ->whereHas('report', fn ($query) => $query->when($this->marketId(), fn ($subQuery, $marketId) => $subQuery->where('market_id', $marketId)))
+            ->count();
+    }
+
+    public function getFailedRunCount(): int
+    {
+        return ReportRun::query()
+            ->whereHas('report', fn ($query) => $query->when($this->marketId(), fn ($subQuery, $marketId) => $subQuery->where('market_id', $marketId)))
+            ->whereIn('status', ['failed', 'error'])
+            ->count();
+    }
+
+    public function getLastRunLabel(): ?string
+    {
+        $lastRun = ReportRun::query()
+            ->whereHas('report', fn ($query) => $query->when($this->marketId(), fn ($subQuery, $marketId) => $subQuery->where('market_id', $marketId)))
+            ->latest('started_at')
+            ->first(['started_at']);
+
+        return $lastRun?->started_at?->timezone(config('app.timezone'))->format('d.m.Y H:i');
+    }
+
+    public function getLatestRunStatusLabel(): ?string
+    {
+        $lastRun = ReportRun::query()
+            ->whereHas('report', fn ($query) => $query->when($this->marketId(), fn ($subQuery, $marketId) => $subQuery->where('market_id', $marketId)))
+            ->latest('started_at')
+            ->first(['status']);
+
+        if (! filled($lastRun?->status)) {
+            return null;
+        }
+
+        return Str::of((string) $lastRun->status)
+            ->replace(['_', '-'], ' ')
+            ->title()
+            ->toString();
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
+    }
+
+    protected function marketId(): ?int
+    {
+        return static::selectedMarketIdFromSession()
+            ?? filament()->auth()->user()?->market_id;
     }
 }
