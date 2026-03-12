@@ -628,7 +628,7 @@
 
                                 <div class="market-attention-widget__toast-actions">
                                     <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action market-attention-widget__toast-action--primary" x-on:click.stop>
-                                        {{ $item['action_label'] }}
+                                        Открыть
                                     </a>
 
                                     <button
