@@ -454,7 +454,7 @@ class EditStaff extends BaseEditRecord
 
             DeleteAction::make()
                 ->label('Удалить сотрудника')
-                ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
+                ->visible(fn (): bool => StaffResource::canDelete($this->record)),
         ];
     }
 

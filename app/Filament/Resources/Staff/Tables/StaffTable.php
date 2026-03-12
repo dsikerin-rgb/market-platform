@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Staff\Tables;
 
+use App\Filament\Resources\Staff\StaffResource;
 use App\Support\RoleScenarioCatalog;
 use Filament\Facades\Filament;
 use Filament\Tables;
@@ -15,23 +16,22 @@ class StaffTable
 
         $recordActions = [];
 
-        // Edit action (разные версии Filament)
         if (class_exists(\Filament\Actions\EditAction::class)) {
             $recordActions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
             $recordActions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
         }
 
-        // Delete action — только super-admin
-        if ((bool) $user && $user->isSuperAdmin()) {
-            if (class_exists(\Filament\Actions\DeleteAction::class)) {
-                $recordActions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
-            } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-                $recordActions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
-            }
+        if (class_exists(\Filament\Actions\DeleteAction::class)) {
+            $recordActions[] = \Filament\Actions\DeleteAction::make()
+                ->label('Удалить')
+                ->visible(fn ($record): bool => StaffResource::canDelete($record));
+        } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
+            $recordActions[] = \Filament\Tables\Actions\DeleteAction::make()
+                ->label('Удалить')
+                ->visible(fn ($record): bool => StaffResource::canDelete($record));
         }
 
-        // Toolbar bulk actions — только super-admin (и только если классы существуют)
         $toolbarActions = [];
         $bulkDelete = null;
 
@@ -47,8 +47,6 @@ class StaffTable
                     $toolbarActions[] = \Filament\Actions\BulkActionGroup::make([$bulkDelete]);
                 } elseif (class_exists(\Filament\Tables\Actions\BulkActionGroup::class)) {
                     $toolbarActions[] = \Filament\Tables\Actions\BulkActionGroup::make([$bulkDelete]);
-                } else {
-                    // если группировки нет — просто не показываем bulk
                 }
             }
         }

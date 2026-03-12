@@ -55,6 +55,14 @@ class StaffResourceScopeTest extends TestCase
             'email' => 'tenant-employee@example.test',
         ]);
 
+        $merchantRole = Role::findOrCreate('merchant', 'web');
+        $merchantUser = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'tenant-merchant@cabinet.local',
+        ]);
+        $merchantUser->assignRole($merchantRole);
+
         $this->actingAs($actor);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
@@ -66,6 +74,7 @@ class StaffResourceScopeTest extends TestCase
         $this->assertContains((int) $internalStaff->id, $visibleStaffIds);
         $this->assertContains((int) $actor->id, $visibleStaffIds);
         $this->assertNotContains((int) $tenantEmployee->id, $visibleStaffIds);
+        $this->assertNotContains((int) $merchantUser->id, $visibleStaffIds);
     }
 
     public function test_system_agent_is_hidden_for_market_admin_but_visible_for_super_admin(): void
@@ -154,5 +163,37 @@ class StaffResourceScopeTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $this->assertTrue(StaffResource::canDelete($staff));
+    }
+
+    public function test_market_admin_cannot_delete_merchant_user_from_staff_resource(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $marketAdminRole = Role::findOrCreate('market-admin', 'web');
+        $merchantRole = Role::findOrCreate('merchant', 'web');
+        $staffViewAny = Permission::findOrCreate('staff.viewAny', 'web');
+        $marketAdminRole->givePermissionTo($staffViewAny);
+
+        $marketAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-admin-merchant-delete@example.test',
+        ]);
+        $marketAdmin->assignRole($marketAdminRole);
+
+        $merchant = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'merchant-hidden@cabinet.local',
+        ]);
+        $merchant->assignRole($merchantRole);
+
+        $this->actingAs($marketAdmin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $this->assertFalse(StaffResource::canDelete($merchant));
     }
 }
