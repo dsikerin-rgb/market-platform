@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Resources\MarketHolidayResource\Pages;
 
 use App\Filament\Resources\MarketHolidayResource;
+use App\Filament\Widgets\MarketCalendarWorkspaceWidget;
 use App\Models\MarketHoliday;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Carbon;
 
 class ListMarketHolidays extends ListRecords
@@ -41,6 +43,23 @@ class ListMarketHolidays extends ListRecords
     public function getTitle(): string
     {
         return $this->viewMode === 'calendar' ? 'Календарь событий' : 'Календарь';
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            MarketCalendarWorkspaceWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 
     public function getView(): string
