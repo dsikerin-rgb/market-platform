@@ -51,6 +51,7 @@ class MarketAttentionWidget extends Widget
         if (! $user) {
             return [
                 'items' => [],
+                'signalsCount' => 0,
                 'emptyHeading' => 'Нет данных для пользователя',
                 'emptyDescription' => 'Войдите в систему заново.',
             ];
@@ -64,6 +65,7 @@ class MarketAttentionWidget extends Widget
         if ($marketId <= 0 || ! $market) {
             return [
                 'items' => [],
+                'signalsCount' => 0,
                 'emptyHeading' => 'Сначала выберите рынок',
                 'emptyDescription' => 'После выбора рынка критичные сигналы появятся автоматически.',
             ];
@@ -74,6 +76,7 @@ class MarketAttentionWidget extends Widget
 
         return [
             'items' => $items,
+            'signalsCount' => count($items),
             'marketName' => $market->name,
             'emptyHeading' => 'Критичных сигналов нет',
             'emptyDescription' => 'По текущему рынку сейчас нет задач, которые требуют немедленного внимания.',
@@ -85,6 +88,8 @@ class MarketAttentionWidget extends Widget
      *   title:string,
      *   value:string,
      *   tone:string,
+     *   icon:string,
+     *   category:string,
      *   description:string,
      *   action_label:string,
      *   action_url:string
@@ -113,6 +118,8 @@ class MarketAttentionWidget extends Widget
                     title: 'Ошибки интеграций',
                     value: (string) $recentExchangeErrors,
                     tone: 'danger',
+                    icon: 'heroicon-m-bolt',
+                    category: '1С',
                     description: 'Есть обмены 1С со статусом ошибки за последние 7 дней.',
                     actionLabel: 'Открыть журнал интеграций',
                     actionUrl: IntegrationExchangeResource::getUrl('index'),
@@ -128,6 +135,8 @@ class MarketAttentionWidget extends Widget
                     title: 'Договоры без места',
                     value: (string) $contractsWithoutSpace,
                     tone: 'warning',
+                    icon: 'heroicon-m-map-pin',
+                    category: 'Договоры',
                     description: 'Договоры в финансовом контуре ещё не привязаны к торговым местам.',
                     actionLabel: 'Открыть договоры',
                     actionUrl: $this->appendQueryString(
@@ -146,6 +155,8 @@ class MarketAttentionWidget extends Widget
                     title: 'Начисления без договора',
                     value: (string) $accrualsWithoutContract,
                     tone: 'warning',
+                    icon: 'heroicon-m-banknotes',
+                    category: 'Начисления',
                     description: 'Строки начислений ещё не удалось безопасно привязать к договору.',
                     actionLabel: 'Открыть начисления',
                     actionUrl: TenantAccrualResource::getUrl('index'),
@@ -161,6 +172,8 @@ class MarketAttentionWidget extends Widget
                     title: 'Срочные обращения',
                     value: (string) $criticalRequests,
                     tone: 'danger',
+                    icon: 'heroicon-m-chat-bubble-left-right',
+                    category: 'Обращения',
                     description: 'Открытые обращения с высоким или критичным приоритетом.',
                     actionLabel: 'Открыть обращения',
                     actionUrl: Requests::getUrl(),
@@ -176,6 +189,8 @@ class MarketAttentionWidget extends Widget
                     title: 'Просроченные задачи',
                     value: (string) $overdueTasks,
                     tone: 'warning',
+                    icon: 'heroicon-m-clock',
+                    category: 'Задачи',
                     description: 'Открытые задачи, срок которых уже истёк.',
                     actionLabel: 'Открыть задачи',
                     actionUrl: TaskResource::getUrl('index'),
@@ -191,6 +206,8 @@ class MarketAttentionWidget extends Widget
      *   title:string,
      *   value:string,
      *   tone:string,
+     *   icon:string,
+     *   category:string,
      *   description:string,
      *   action_label:string,
      *   action_url:string
@@ -200,6 +217,8 @@ class MarketAttentionWidget extends Widget
         string $title,
         string $value,
         string $tone,
+        string $icon,
+        string $category,
         string $description,
         string $actionLabel,
         string $actionUrl,
@@ -208,6 +227,8 @@ class MarketAttentionWidget extends Widget
             'title' => $title,
             'value' => $value,
             'tone' => $tone,
+            'icon' => $icon,
+            'category' => $category,
             'description' => $description,
             'action_label' => $actionLabel,
             'action_url' => $actionUrl,
