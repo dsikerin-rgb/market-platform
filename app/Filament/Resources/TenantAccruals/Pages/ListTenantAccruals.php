@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\TenantAccruals\Pages;
 
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
+use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -28,6 +29,18 @@ class ListTenantAccruals extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            TenantAccrualsWorkspaceWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
     }
 
     public function getSubheading(): ?string
