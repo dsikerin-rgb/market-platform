@@ -300,7 +300,6 @@
             align-items: center;
             justify-content: center;
             padding: 0.65rem 0.45rem;
-            color: rgb(37, 99, 235);
             font-size: 0.76rem;
             font-weight: 700;
             line-height: 1.2;
@@ -308,12 +307,26 @@
             transition: background-color 160ms ease, color 160ms ease;
         }
 
+        .market-attention-widget__toast-action--primary {
+            color: rgb(37, 99, 235);
+        }
+
+        .market-attention-widget__toast-action--secondary {
+            color: rgb(15, 23, 42);
+            background: rgba(15, 23, 42, 0.04);
+        }
+
         .market-attention-widget__toast-action + .market-attention-widget__toast-action {
             border-top: 1px solid rgba(148, 163, 184, 0.18);
         }
 
-        .dark .market-attention-widget__toast-action {
+        .dark .market-attention-widget__toast-action--primary {
             color: rgb(147, 197, 253);
+        }
+
+        .dark .market-attention-widget__toast-action--secondary {
+            color: rgb(248, 250, 252);
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .dark .market-attention-widget__toast-action + .market-attention-widget__toast-action {
@@ -612,11 +625,11 @@
                                 </div>
 
                                 <div class="market-attention-widget__toast-actions">
-                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action" x-on:click.stop>
+                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action market-attention-widget__toast-action--primary" x-on:click.stop>
                                         {{ $item['action_label'] }}
                                     </a>
 
-                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action {{ $accentClasses['status'] }}" x-on:click.stop>
+                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action market-attention-widget__toast-action--secondary" x-on:click.stop>
                                         Требует решения
                                     </a>
                                 </div>
