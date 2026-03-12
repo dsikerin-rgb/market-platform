@@ -180,7 +180,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-arrow-down-circle',
         );
         $stats[] = $this->makeStat(
-            label: 'К оплате за месяц',
+            label: 'Долг на конец месяца',
             value: $this->formatMoney($debtValue) . ' ₽',
             description: $reportDesc,
             url: $accrualsUrl,
@@ -216,7 +216,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
-        $stats[] = $this->makeStat('К оплате за месяц', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
+        $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
 
         return $stats;
     }
