@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 
 use App\Models\Market;
 use App\Models\User;
+use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -47,6 +48,7 @@ class MarketSettings extends Page
     public ?string $permissionsUrl = null;
     public ?string $rolesUrl = null;
     public ?string $integrationExchangesUrl = null;
+    public ?string $userNotificationSettingsUrl = null;
 
     /**
      * URL страницы просмотра карты.
@@ -78,6 +80,8 @@ class MarketSettings extends Page
         'notification_channels_tasks' => ['database'],
         'notification_channels_reminders' => ['database'],
         'dashboard_enabled_widgets' => [],
+        'personal_notification_channels' => ['database'],
+        'personal_notification_topics' => [],
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -129,6 +133,35 @@ class MarketSettings extends Page
         $this->fillQuickLinks();
 
         $settings = (array) ($this->market->settings ?? []);
+        $currentUser = Filament::auth()->user();
+        $preferences = app(UserNotificationPreferences::class);
+        $rawNotificationPreferences = $currentUser instanceof User
+            ? (array) ($currentUser->notification_preferences ?? [])
+            : [];
+        $personalChannels = $currentUser instanceof User
+            ? $preferences->normalizeChannels($rawNotificationPreferences['channels'] ?? [])
+            : [];
+
+        if ($currentUser instanceof User && $personalChannels === []) {
+            $personalChannels = $preferences->defaultChannelsForUser($currentUser);
+        }
+
+        $personalTopics = $currentUser instanceof User
+            ? (array_key_exists('topics', $rawNotificationPreferences)
+                ? $preferences->normalizeTopics($rawNotificationPreferences['topics'])
+                : UserNotificationPreferences::defaultTopicsForUser($currentUser))
+            : [];
+
+        if ($currentUser instanceof User) {
+            $personalTopics = array_values(array_intersect(
+                $personalTopics,
+                UserNotificationPreferences::visibleTopicsForUser($currentUser),
+            ));
+
+            if ($personalTopics === []) {
+                $personalTopics = UserNotificationPreferences::defaultTopicsForUser($currentUser);
+            }
+        }
 
         $this->form->fill([
             'name' => $this->market->name,
@@ -172,6 +205,8 @@ class MarketSettings extends Page
             'dashboard_enabled_widgets' => $this->normalizeDashboardWidgetSelection(
                 data_get($settings, 'dashboard.enabled_widgets')
             ),
+            'personal_notification_channels' => $personalChannels,
+            'personal_notification_topics' => $personalTopics,
             'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['grace_days']
                 : 5,
@@ -440,6 +475,38 @@ class MarketSettings extends Page
                     ->collapsible()
                     ->collapsed(),
 
+                Section::make('Настройки кабинета уведомлений')
+                    ->description('Личные уведомления текущего пользователя. Полный Telegram-блок и QR-код доступны в отдельном кабинете уведомлений.')
+                    ->schema([
+                        Forms\Components\Placeholder::make('personal_notification_status')
+                            ->label('Текущий статус')
+                            ->content(fn (): HtmlString => $this->renderPersonalNotificationStatus())
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 5,
+                            ]),
+                        Forms\Components\CheckboxList::make('personal_notification_channels')
+                            ->label('Каналы доставки')
+                            ->options(UserNotificationPreferences::channelLabels())
+                            ->columns(3)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 7,
+                            ]),
+                        Forms\Components\CheckboxList::make('personal_notification_topics')
+                            ->label('События')
+                            ->options(fn (): array => $this->personalNotificationTopicOptions())
+                            ->columns(2)
+                            ->columnSpanFull(),
+                        Forms\Components\Placeholder::make('personal_notification_link')
+                            ->hiddenLabel()
+                            ->content(fn (): HtmlString => $this->renderNotificationCabinetLink())
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(12)
+                    ->collapsible()
+                    ->collapsed(),
+
                 Section::make('Главная страница')
                     ->description('Настройте, какие виджеты показывать на главной странице для этого рынка.')
                     ->schema([
@@ -630,6 +697,7 @@ class MarketSettings extends Page
         ]);
 
         $this->market->save();
+        $this->savePersonalNotificationSettings($state);
 
         Notification::make()
             ->title('Сохранено')
@@ -797,6 +865,12 @@ class MarketSettings extends Page
         ], 'index');
 
         try {
+            $this->userNotificationSettingsUrl = \App\Filament\Pages\UserNotificationSettings::getUrl();
+        } catch (\Throwable) {
+            $this->userNotificationSettingsUrl = null;
+        }
+
+        try {
             $this->marketMapViewerUrl = route('filament.admin.market-map');
         } catch (\Throwable) {
             $this->marketMapViewerUrl = null;
@@ -855,6 +929,108 @@ class MarketSettings extends Page
             'padding:.55rem .95rem;border-radius:.75rem;font-weight:600;text-decoration:none;">' .
                 '<span class="fi-btn-label">&#1050;&#1072;&#1088;&#1090;&#1072;</span>' .
             '</a>'
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $state
+     */
+    protected function savePersonalNotificationSettings(array $state): void
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User || ! $user->canSelfManageNotificationPreferences()) {
+            return;
+        }
+
+        $preferences = app(UserNotificationPreferences::class);
+        $raw = (array) ($user->notification_preferences ?? []);
+        $selfManage = (bool) ($raw['self_manage'] ?? false);
+
+        if ($user->isSuperAdmin() || $user->isMarketAdmin()) {
+            $selfManage = true;
+        }
+
+        $normalized = $preferences->normalizeForStorage([
+            'self_manage' => $selfManage,
+            'channels' => $state['personal_notification_channels'] ?? [],
+            'topics' => $state['personal_notification_topics'] ?? [],
+        ], $selfManage, UserNotificationPreferences::defaultTopicsForUser($user));
+
+        $normalized['topics'] = array_values(array_intersect(
+            $normalized['topics'],
+            UserNotificationPreferences::visibleTopicsForUser($user),
+        ));
+
+        if ($normalized['channels'] === []) {
+            $normalized['channels'] = $preferences->defaultChannelsForUser($user);
+        }
+
+        if ($normalized['topics'] === []) {
+            $normalized['topics'] = UserNotificationPreferences::defaultTopicsForUser($user);
+        }
+
+        $user->forceFill([
+            'notification_preferences' => $normalized,
+        ])->save();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function personalNotificationTopicOptions(): array
+    {
+        $user = Filament::auth()->user();
+        $labels = UserNotificationPreferences::topicLabels();
+
+        if (! $user instanceof User) {
+            return $labels;
+        }
+
+        return array_intersect_key(
+            $labels,
+            array_flip(UserNotificationPreferences::visibleTopicsForUser($user)),
+        );
+    }
+
+    protected function renderPersonalNotificationStatus(): HtmlString
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user instanceof User) {
+            return new HtmlString('<div class="text-sm text-gray-500">Пользователь не определён.</div>');
+        }
+
+        $status = filled($user->telegram_chat_id)
+            ? 'Telegram подключён'
+            : 'Telegram не подключён';
+        $meta = filled($user->telegram_chat_id)
+            ? 'chat_id: '.e((string) $user->telegram_chat_id)
+            : 'Для подключения Telegram откройте полный кабинет уведомлений.';
+
+        return new HtmlString(
+            '<div class="space-y-2">'.
+                '<div class="text-sm font-medium text-gray-900 dark:text-gray-100">'.$status.'</div>'.
+                '<div class="text-sm text-gray-600 dark:text-gray-400">'.$meta.'</div>'.
+            '</div>'
+        );
+    }
+
+    protected function renderNotificationCabinetLink(): HtmlString
+    {
+        if (blank($this->userNotificationSettingsUrl)) {
+            return new HtmlString('<div class="text-sm text-gray-500">Полный кабинет уведомлений сейчас недоступен.</div>');
+        }
+
+        $href = e($this->userNotificationSettingsUrl);
+
+        return new HtmlString(
+            '<div class="flex flex-wrap items-center gap-3">'.
+                '<div class="text-sm text-gray-600 dark:text-gray-400">Для подключения Telegram, QR-кода и расширенных подсказок откройте полный кабинет уведомлений.</div>'.
+                '<a href="'.$href.'" class="fi-btn fi-btn-color-gray fi-btn-size-sm" style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.5rem .85rem;border-radius:.75rem;font-weight:600;text-decoration:none;">'.
+                    '<span class="fi-btn-label">Открыть кабинет уведомлений</span>'.
+                '</a>'.
+            '</div>'
         );
     }
 
