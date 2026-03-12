@@ -1,5 +1,4 @@
 <?php
-# app/Filament/Resources/TenantAccruals/Tables/TenantAccrualsTable.php
 
 namespace App\Filament\Resources\TenantAccruals\Tables;
 
@@ -16,12 +15,6 @@ class TenantAccrualsTable
 {
     public static function configure(Table $table): Table
     {
-        $statusOptions = [
-            'imported' => 'Импортировано',
-            'adjusted' => 'Скорректировано',
-            'manual' => 'Вручную',
-        ];
-
         return $table
             ->defaultSort('period', 'desc')
             ->columns([
@@ -42,16 +35,29 @@ class TenantAccrualsTable
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
                         '1c' => '1С',
-                        'excel' => 'CSV / Excel',
+                        'excel', 'csv' => 'Исторический импорт',
                         'manual' => 'Вручную',
                         default => $state ?: '—',
                     })
                     ->color(fn (?string $state): string => match ($state) {
                         '1c' => 'success',
-                        'excel' => 'warning',
+                        'excel', 'csv' => 'warning',
                         'manual' => 'gray',
                         default => 'gray',
                     })
+                    ->toggleable(),
+
+                TextColumn::make('tenant.name')
+                    ->label('Арендатор')
+                    ->sortable()
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(),
+
+                TextColumn::make('tenantContract.number')
+                    ->label('Договор')
+                    ->searchable()
+                    ->placeholder('—')
                     ->toggleable(),
 
                 TextColumn::make('marketSpace.location.name')
@@ -67,37 +73,6 @@ class TenantAccrualsTable
                     ->placeholder('—')
                     ->toggleable(),
 
-                TextColumn::make('source_place_code')
-                    ->label('Код места (из файла)')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('tenant.name')
-                    ->label('Арендатор')
-                    ->sortable()
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(),
-
-                TextColumn::make('tenantContract.number')
-                    ->label('Договор')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(),
-
-                TextColumn::make('source_place_name')
-                    ->label('Название отдела')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('activity_type')
-                    ->label('Вид деятельности')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
                 TextColumn::make('area_sqm')
                     ->label('Площадь, м²')
                     ->numeric(decimalPlaces: 2)
@@ -105,16 +80,24 @@ class TenantAccrualsTable
                     ->placeholder('—')
                     ->toggleable(),
 
-                TextColumn::make('rent_rate')
-                    ->label('Ставка')
-                    ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state, suffix: ' ₽/м²'))
-                    ->sortable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
                 TextColumn::make('rent_amount')
                     ->label('Аренда')
+                    ->alignEnd()
+                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->sortable()
+                    ->placeholder('—')
+                    ->toggleable(),
+
+                TextColumn::make('utilities_amount')
+                    ->label('Коммунальные')
+                    ->alignEnd()
+                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
+                    ->sortable()
+                    ->placeholder('—')
+                    ->toggleable(),
+
+                TextColumn::make('electricity_amount')
+                    ->label('Электроэнергия')
                     ->alignEnd()
                     ->formatStateUsing(fn ($state) => static::formatMoney($state))
                     ->sortable()
@@ -129,29 +112,12 @@ class TenantAccrualsTable
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('utilities_amount')
-                    ->label('Коммуналка')
-                    ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
-                    ->sortable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('electricity_amount')
-                    ->label('Эл-во')
-                    ->alignEnd()
-                    ->formatStateUsing(fn ($state) => static::formatMoney($state))
-                    ->sortable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
                 TextColumn::make('total')
                     ->label('Итого')
                     ->alignEnd()
                     ->getStateUsing(fn ($record) => $record->total_with_vat ?? $record->total_no_vat)
                     ->formatStateUsing(fn ($state) => static::formatMoney($state))
                     ->sortable(query: function (Builder $query, string $direction): Builder {
-                        // сортируем по total_with_vat, иначе total_no_vat
                         return $query->orderByRaw(
                             'COALESCE(total_with_vat, total_no_vat) ' . ($direction === 'asc' ? 'ASC' : 'DESC')
                         );
@@ -162,12 +128,16 @@ class TenantAccrualsTable
                 TextColumn::make('status')
                     ->label('Состояние строки')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => $statusOptions[$state ?? ''] ?? ($state ?: '—'))
-                    ->sortable()
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'imported' => 'Импортировано',
+                        'adjusted' => 'Скорректировано',
+                        'manual' => 'Вручную',
+                        default => $state ?: '—',
+                    })
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('source_file')
-                    ->label('Файл')
+                    ->label('Файл / пакет')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
@@ -182,24 +152,24 @@ class TenantAccrualsTable
                     ->label('Период')
                     ->options(function (): array {
                         $marketId = static::resolveMarketIdForCurrentUser();
-                        $q = DB::table('tenant_accruals')->select('period')->distinct();
+                        $query = DB::table('tenant_accruals')->select('period')->distinct();
 
                         if ($marketId) {
-                            $q->where('market_id', $marketId);
+                            $query->where('market_id', $marketId);
                         }
 
-                        $periods = $q->orderByDesc('period')
+                        $periods = $query->orderByDesc('period')
                             ->limit(48)
                             ->pluck('period')
                             ->all();
 
-                        $out = [];
-                        foreach ($periods as $p) {
-                            $key = is_string($p) ? $p : (string) $p; // обычно YYYY-MM-DD
-                            $out[$key] = substr($key, 0, 7);         // YYYY-MM
+                        $options = [];
+                        foreach ($periods as $period) {
+                            $key = is_string($period) ? $period : (string) $period;
+                            $options[$key] = substr($key, 0, 7);
                         }
 
-                        return $out;
+                        return $options;
                     })
                     ->query(function (Builder $query, array $data): Builder {
                         $value = $data['value'] ?? null;
@@ -232,68 +202,47 @@ class TenantAccrualsTable
                             return $query;
                         }
 
-                        return $query->whereHas('marketSpace', function (Builder $q) use ($value) {
-                            $q->where('location_id', (int) $value);
+                        return $query->whereHas('marketSpace', function (Builder $marketSpaceQuery) use ($value) {
+                            $marketSpaceQuery->where('location_id', (int) $value);
                         });
                     }),
-
-                SelectFilter::make('status')
-                    ->label('Состояние строки')
-                    ->options([
-                        'imported' => 'Импортировано',
-                        'adjusted' => 'Скорректировано',
-                        'manual' => 'Вручную',
-                    ]),
 
                 SelectFilter::make('source')
                     ->label('Источник')
                     ->options([
                         '1c' => '1С',
-                        'excel' => 'CSV / Excel',
+                        'excel' => 'Исторический импорт',
                         'manual' => 'Вручную',
                     ]),
-
-                TernaryFilter::make('has_market_space')
-                    ->label('Есть место')
-                    ->trueLabel('Только с местом')
-                    ->falseLabel('Только без места')
-                    ->queries(
-                        true: fn (Builder $q) => $q->whereNotNull('market_space_id'),
-                        false: fn (Builder $q) => $q->whereNull('market_space_id'),
-                        blank: fn (Builder $q) => $q,
-                    ),
 
                 TernaryFilter::make('has_contract')
                     ->label('Есть договор')
                     ->trueLabel('Только с договором')
                     ->falseLabel('Только без договора')
                     ->queries(
-                        true: fn (Builder $q) => $q->whereNotNull('tenant_contract_id'),
-                        false: fn (Builder $q) => $q->whereNull('tenant_contract_id'),
-                        blank: fn (Builder $q) => $q,
+                        true: fn (Builder $query) => $query->whereNotNull('tenant_contract_id'),
+                        false: fn (Builder $query) => $query->whereNull('tenant_contract_id'),
+                        blank: fn (Builder $query) => $query,
                     ),
 
-                TernaryFilter::make('has_total')
-                    ->label('Есть сумма')
-                    ->trueLabel('Только с итогом')
-                    ->falseLabel('Только без итога')
+                TernaryFilter::make('has_market_space')
+                    ->label('Есть место')
+                    ->trueLabel('Только с местом')
+                    ->falseLabel('Только без места')
                     ->queries(
-                        true: fn (Builder $q) => $q->where(function (Builder $qq) {
-                            $qq->whereNotNull('total_with_vat')->orWhereNotNull('total_no_vat');
-                        }),
-                        false: fn (Builder $q) => $q->whereNull('total_with_vat')->whereNull('total_no_vat'),
-                        blank: fn (Builder $q) => $q,
+                        true: fn (Builder $query) => $query->whereNotNull('market_space_id'),
+                        false: fn (Builder $query) => $query->whereNull('market_space_id'),
+                        blank: fn (Builder $query) => $query,
                     ),
             ])
             ->recordActions([
                 static::editAction(),
             ])
-            ->toolbarActions([]); // bulk delete запрещаем (история импорта)
+            ->toolbarActions([]);
     }
 
     private static function editAction()
     {
-        // Совместимость с разными версиями Filament
         if (class_exists(\Filament\Actions\EditAction::class)) {
             return \Filament\Actions\EditAction::make()
                 ->label('')
@@ -339,12 +288,12 @@ class TenantAccrualsTable
             return '—';
         }
 
-        $v = (float) $state;
+        $value = (float) $state;
 
-        if (abs($v) < 0.00001) {
+        if (abs($value) < 0.00001) {
             return '—';
         }
 
-        return number_format($v, 2, ',', ' ') . $suffix;
+        return number_format($value, 2, ',', ' ') . $suffix;
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Filament\Resources\OperationResource\Pages;
 
 use App\Filament\Resources\OperationResource;
@@ -12,18 +14,18 @@ class ListOperations extends ListRecords
 {
     protected static string $resource = OperationResource::class;
 
-    protected static ?string $title = 'Управленческие операции';
+    protected static ?string $title = 'Операции';
 
     public function getBreadcrumb(): string
     {
-        return 'Управленческие операции';
+        return 'Операции';
     }
 
     protected function getHeaderActions(): array
     {
         $actions = [
             Actions\CreateAction::make()
-                ->label('Создать операцию'),
+                ->label('Новая операция'),
         ];
 
         if (class_exists(\Filament\Actions\Action::class)) {
@@ -39,7 +41,7 @@ class ListOperations extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Журнал локальных управленческих действий. Договоры, долги и ставка аренды определяются 1С.';
+        return 'Журнал локальных управленческих действий. Финансовая истина по договорам, начислениям и долгам остаётся в 1С.';
     }
 
     private function exportUrl(): string
