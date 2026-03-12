@@ -34,10 +34,7 @@
 
                             <div>
                                 <h2 class="aw-hero-heading">Настройки</h2>
-                                <p class="aw-hero-subheading">
-                                    Рынок: {{ $market->name }}. Здесь собраны ключевые параметры рынка, кабинет уведомлений
-                                    и маркетплейс, чтобы не заставлять пользователя ходить по разным экранам без необходимости.
-                                </p>
+                                <p class="aw-hero-subheading">Рынок: {{ $market->name }}</p>
                             </div>
                         </div>
 
@@ -171,80 +168,6 @@
                 </div>
 
                 <div class="aw-column aw-column--content">
-                    <div class="aw-panel">
-                        <div class="aw-panel-head">
-                            <div>
-                                <h3 class="aw-panel-title">Маркетплейс и промо-слой</h3>
-                                <p class="aw-panel-copy">Поля маркетплейса редактируются прямо в общей форме ниже, а здесь остаются быстрые действия и preview по слайдам.</p>
-                            </div>
-                        </div>
-
-                        <div class="aw-panel-body">
-                            <div class="aw-action-grid">
-                                @if (! empty($marketplaceSettingsUrl))
-                                    <a href="{{ $marketplaceSettingsUrl }}" class="aw-link-card">
-                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-shopping-bag" class="h-5 w-5" /></div>
-                                        <div>
-                                            <p class="aw-link-title">Полный экран маркетплейса</p>
-                                            <p class="aw-link-copy">Расширенный экран с теми же полями и отдельным рабочим пространством для маркетплейса.</p>
-                                            <div class="aw-link-meta">Открыть отдельный экран</div>
-                                        </div>
-                                    </a>
-                                @endif
-
-                                @if (! empty($marketplaceSlidesUrl))
-                                    <a href="{{ $marketplaceSlidesUrl }}" class="aw-link-card">
-                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-photo" class="h-5 w-5" /></div>
-                                        <div>
-                                            <p class="aw-link-title">Слайды маркетплейса</p>
-                                            <p class="aw-link-copy">Полный CRUD для баннеров, промо-карточек и порядка показа.</p>
-                                            <div class="aw-link-meta">Открыть слайды</div>
-                                        </div>
-                                    </a>
-                                @endif
-
-                                @if (! empty($marketplacePublicUrl))
-                                    <a href="{{ $marketplacePublicUrl }}" class="aw-link-card" target="_blank" rel="noopener">
-                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-arrow-top-right-on-square" class="h-5 w-5" /></div>
-                                        <div>
-                                            <p class="aw-link-title">Открыть маркетплейс</p>
-                                            <p class="aw-link-copy">Проверить публичный вид витрины и главный экран покупателей.</p>
-                                            <div class="aw-link-meta">Открыть в новой вкладке</div>
-                                        </div>
-                                    </a>
-                                @endif
-                            </div>
-
-                            <div class="aw-inline-actions" style="margin-top: 1.25rem;">
-                                <span class="aw-chip">Всего слайдов: {{ $marketplaceSlidesCount ?? 0 }}</span>
-                                <span class="aw-chip">Активных: {{ $marketplaceActiveSlidesCount ?? 0 }}</span>
-                            </div>
-
-                            @if ($marketplaceSlides !== [])
-                                <div class="aw-list" style="margin-top: 1.25rem;">
-                                    @foreach ($marketplaceSlides as $slide)
-                                        <div class="aw-list-item">
-                                            <div>
-                                                <p class="aw-list-title">{{ $slide['title'] }}</p>
-                                                <p class="aw-list-copy">
-                                                    Тема: {{ $slide['theme'] }}@if($slide['badge'] !== '') • Метка: {{ $slide['badge'] }}@endif • Порядок: {{ $slide['sort_order'] }}
-                                                </p>
-                                            </div>
-
-                                            <span class="aw-chip">{{ $slide['is_active'] ? 'Активен' : 'Черновик' }}</span>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @else
-                                <div class="aw-empty" style="margin-top: 1.25rem;">
-                                    <x-filament::icon icon="heroicon-o-photo" class="h-8 w-8 text-slate-400" />
-                                    <div class="aw-empty-title">Слайды ещё не добавлены</div>
-                                    <div class="aw-empty-copy">Создайте первый промо-слайд прямо из раздела маркетплейса.</div>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-
                     <form wire:submit.prevent="save" class="aw-panel">
                         <div class="aw-panel-head">
                             <div>
