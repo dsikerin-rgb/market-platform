@@ -289,6 +289,7 @@
             display: grid;
             grid-template-rows: 1fr 1fr;
             border-left: 1px solid rgba(148, 163, 184, 0.18);
+            background: inherit;
         }
 
         .dark .market-attention-widget__toast-actions {
@@ -300,6 +301,7 @@
             align-items: center;
             justify-content: center;
             padding: 0.65rem 0.45rem;
+            background: transparent;
             font-size: 0.76rem;
             font-weight: 700;
             line-height: 1.2;
@@ -359,11 +361,11 @@
         }
 
         .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
-            background: rgba(15, 23, 42, 0.03);
+            background: transparent;
         }
 
         .dark .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
-            background: rgba(59, 130, 246, 0.08);
+            background: transparent;
         }
 
         .market-attention-widget__toast-empty {
