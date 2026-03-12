@@ -36,6 +36,31 @@
             opacity: 0.45;
         }
 
+        .market-attention-widget__heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .market-attention-widget__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .market-attention-widget__pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            border-radius: 9999px;
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
         .market-attention-widget__card {
             position: relative;
             overflow: hidden;
@@ -90,23 +115,6 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .market-attention-widget__meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .market-attention-widget__pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.375rem;
-            border-radius: 9999px;
-            padding: 0.375rem 0.75rem;
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 0.01em;
-        }
-
         .market-attention-widget__empty {
             border-radius: 1.25rem;
             border: 1px dashed rgba(34, 197, 94, 0.35);
@@ -134,8 +142,8 @@
             <div class="market-attention-widget__mesh"></div>
 
             <div class="relative z-10 space-y-5">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="space-y-3">
+                <div class="market-attention-widget__heading">
+                    <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-3">
                             <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-warning-500/10 text-warning-600 ring-1 ring-inset ring-warning-500/15 dark:bg-warning-400/10 dark:text-warning-300 dark:ring-warning-400/20">
                                 <x-filament::icon icon="heroicon-m-shield-exclamation" class="h-6 w-6" />
@@ -154,10 +162,6 @@
                                     @endisset
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">
-                            Карточки ниже показывают только сигналы, которые требуют действия. Каждая карточка открывает нужный раздел сразу в рабочем контуре.
                         </div>
                     </div>
 
@@ -274,17 +278,13 @@
                                         </p>
                                     </div>
 
-                                    <div class="mt-auto flex items-center justify-between gap-3 pt-1">
+                                    <div class="mt-auto pt-1">
                                         <span class="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium shadow-sm transition {{ $accentClasses['cta'] }}">
-                                            {{ $item['action_label'] }}
+                                            Перейти
                                             <x-filament::icon
                                                 icon="heroicon-m-arrow-up-right"
                                                 class="market-attention-widget__cta-icon h-4 w-4 transition-transform"
                                             />
-                                        </span>
-
-                                        <span class="text-xs font-medium uppercase tracking-[0.18em] text-gray-400 transition group-hover:text-gray-500 dark:text-gray-500 dark:group-hover:text-gray-400">
-                                            Перейти
                                         </span>
                                     </div>
                                 </div>
