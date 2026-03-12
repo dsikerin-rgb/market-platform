@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -43,29 +47,29 @@ class RevenueYearChartWidget extends ChartWidget
         );
     }
 
-    public function getDescription(): ?string
+    public function getDescription(): string|Htmlable|null
     {
         $user = Filament::auth()->user();
+
         if (! $user) {
             return null;
         }
 
         $marketId = $this->resolveMarketIdForWidget($user);
+
         if (! $marketId) {
             return null;
         }
 
-        $market = Market::query()
-            ->select(['id', 'name', 'timezone'])
-            ->find($marketId);
+        $oneCUrl = e(TenantAccrualResource::getUrl('index'));
+        $spacesUrl = e(MarketSpaceResource::getUrl('index'));
 
-        if (! $market) {
-            return null;
-        }
-
-        $tz = $this->resolveTimezone($market->timezone);
-
-        return 'Локация: ' . (string) $market->name . ' • TZ: ' . $tz . ' • Источник: 1С';
+        return new HtmlString(
+            "\u{0418}\u{0441}\u{0442}\u{043e}\u{0447}\u{043d}\u{0438}\u{043a}: "
+            . "<a href=\"" . $oneCUrl . "\" class=\"font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300\">1\u{0421}-\u{043d}\u{0430}\u{0447}\u{0438}\u{0441}\u{043b}\u{0435}\u{043d}\u{0438}\u{044f}</a>"
+            . " \u{2022} "
+            . "<a href=\"" . $spacesUrl . "\" class=\"font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300\">\u{0444}\u{043e}\u{043d}\u{0434} \u{043c}\u{0435}\u{0441}\u{0442}</a>"
+        );
     }
 
     protected function getData(): array

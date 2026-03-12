@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -42,7 +45,7 @@ class AccrualCompositionWidget extends ChartWidget
         );
     }
 
-    public function getDescription(): ?string
+    public function getDescription(): string|Htmlable|null
     {
         $user = Filament::auth()->user();
 
@@ -68,9 +71,16 @@ class AccrualCompositionWidget extends ChartWidget
         [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
         [$effectiveMonthYm] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
-        return 'Локация: ' . (string) $market->name
-            . ' • ' . $this->formatMonthLabel($effectiveMonthYm, $tz)
-            . ' • Источник: детализация начислений';
+        $periodLabel = e($this->formatMonthLabel($effectiveMonthYm, $tz));
+        $sourceUrl = e(TenantAccrualResource::getUrl('index'));
+
+        return new HtmlString(
+            $periodLabel
+            . " \u{2022} \u{0418}\u{0441}\u{0442}\u{043e}\u{0447}\u{043d}\u{0438}\u{043a}: "
+            . '<a href="' . $sourceUrl . '" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">'
+            . "\u{0434}\u{0435}\u{0442}\u{0430}\u{043b}\u{0438}\u{0437}\u{0430}\u{0446}\u{0438}\u{044f} \u{043d}\u{0430}\u{0447}\u{0438}\u{0441}\u{043b}\u{0435}\u{043d}\u{0438}\u{0439}"
+            . '</a>'
+        );
     }
 
     protected function getData(): array

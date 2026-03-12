@@ -5,9 +5,12 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Resources\MarketSpaceResource;
 use App\Models\MarketSpace;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
@@ -27,6 +30,29 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         return (bool) $user && (
             (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             || (bool) $user->market_id
+        );
+    }
+
+
+    public function getDescription(): string|Htmlable|null
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        $marketId = $this->resolveMarketIdForWidget($user);
+
+        if (! $marketId) {
+            return null;
+        }
+
+        $sourceUrl = e(MarketSpaceResource::getUrl('index'));
+
+        return new HtmlString(
+            "\u{0418}\u{0441}\u{0442}\u{043e}\u{0447}\u{043d}\u{0438}\u{043a}: "
+            . "<a href=\"" . $sourceUrl . "\" class=\"font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300\">\u{0444}\u{043e}\u{043d}\u{0434} \u{043c}\u{0435}\u{0441}\u{0442}</a>"
         );
     }
 
