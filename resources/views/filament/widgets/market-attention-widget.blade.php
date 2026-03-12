@@ -1,5 +1,9 @@
 <x-filament::section>
     <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
         .market-attention-widget {
             position: relative;
         }
@@ -420,6 +424,8 @@
             default => 'сигналов',
         };
         $useToastStack = app()->environment('staging');
+        $dismissUserKey = (string) (auth()->id() ?? 'guest');
+        $dismissMarketKey = filled($marketName ?? null) ? (string) $marketName : 'no-market';
     @endphp
 
     <div class="market-attention-widget">
@@ -492,6 +498,17 @@
                         @foreach ($items as $item)
                             @php
                                 $tone = $item['tone'] ?? 'gray';
+                                $dismissStorageKey = implode(':', [
+                                    'market-attention-dismiss',
+                                    $dismissUserKey,
+                                    $dismissMarketKey,
+                                    md5(json_encode([
+                                        'title' => $item['title'] ?? null,
+                                        'value' => $item['value'] ?? null,
+                                        'description' => $item['description'] ?? null,
+                                        'action_url' => $item['action_url'] ?? null,
+                                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
+                                ]);
 
                                 $accentClasses = match ($tone) {
                                     'danger' => [
@@ -526,7 +543,36 @@
                             @endphp
 
                             <div
-                                x-data="{ open: true }"
+                                x-data="{
+                                    open: true,
+                                    storageKey: @js($dismissStorageKey),
+                                    init() {
+                                        try {
+                                            const dismissedUntil = Number(window.localStorage.getItem(this.storageKey) || 0);
+
+                                            if (dismissedUntil > Date.now()) {
+                                                this.open = false;
+
+                                                return;
+                                            }
+
+                                            window.localStorage.removeItem(this.storageKey);
+                                        } catch (error) {
+                                        }
+                                    },
+                                    dismiss() {
+                                        this.open = false;
+
+                                        try {
+                                            const now = new Date();
+                                            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+                                            window.localStorage.setItem(this.storageKey, String(tomorrow.getTime()));
+                                        } catch (error) {
+                                        }
+                                    }
+                                }"
+                                x-cloak
                                 x-show="open"
                                 x-transition.opacity.duration.200ms
                                 class="market-attention-widget__card market-attention-widget__card--toast group no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
@@ -555,7 +601,7 @@
                                         <button
                                             type="button"
                                             class="market-attention-widget__toast-close"
-                                            x-on:click.stop="open = false"
+                                            x-on:click.stop="dismiss()"
                                             aria-label="Закрыть уведомление"
                                         >
                                             <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
