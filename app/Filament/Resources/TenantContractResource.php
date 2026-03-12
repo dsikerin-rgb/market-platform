@@ -649,7 +649,7 @@ class TenantContractResource extends BaseResource
                             $action->modalWidth('7xl');
                         }
                     }),
-                \Filament\Tables\Actions\Action::make('open_card')
+                \Filament\Actions\Action::make('open_card')
                     ->label('')
                     ->tooltip('Открыть карточку')
                     ->icon('heroicon-o-arrow-top-right-on-square')
