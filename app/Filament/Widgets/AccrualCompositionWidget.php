@@ -43,11 +43,13 @@ class AccrualCompositionWidget extends ChartWidget
     public function getDescription(): ?string
     {
         $user = Filament::auth()->user();
+
         if (! $user) {
             return null;
         }
 
         $marketId = $this->resolveMarketIdForWidget($user);
+
         if (! $marketId) {
             return null;
         }
@@ -61,10 +63,11 @@ class AccrualCompositionWidget extends ChartWidget
         }
 
         $tz = $this->resolveTimezone($market->timezone);
-        [$monthYm] = $this->resolveMonthRange($tz);
+        [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
+        [$effectiveMonthYm] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
         return 'Локация: ' . (string) $market->name
-            . ' • ' . $this->formatMonthLabel($monthYm, $tz)
+            . ' • ' . $this->formatMonthLabel($effectiveMonthYm, $tz)
             . ' • Источник: детализация начислений';
     }
 
@@ -91,12 +94,13 @@ class AccrualCompositionWidget extends ChartWidget
             ->find($marketId);
 
         $tz = $this->resolveTimezone($market?->timezone);
-        [$monthYm, $monthStart] = $this->resolveMonthRange($tz);
+        [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
+        [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
         try {
             $row = DB::table('tenant_accruals')
                 ->where('market_id', $marketId)
-                ->where('period', $monthStart->toDateString())
+                ->where('period', $effectiveMonthStart->toDateString())
                 ->selectRaw('
                     COALESCE(SUM(rent_amount), 0) as rent_total,
                     COALESCE(SUM(utilities_amount), 0) as utilities_total,
@@ -142,7 +146,7 @@ class AccrualCompositionWidget extends ChartWidget
         }
 
         if ($labels === []) {
-            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($monthYm, $tz));
+            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
         }
 
         return [
@@ -263,6 +267,52 @@ class AccrualCompositionWidget extends ChartWidget
         $end = $start->addMonth();
 
         return [$monthYm, $start, $end];
+    }
+
+    /**
+     * @return array{0:string,1:CarbonImmutable}
+     */
+    private function resolveEffectiveMonthRange(int $marketId, string $selectedMonthYm, CarbonImmutable $selectedMonthStart, string $tz): array
+    {
+        if ($this->hasAccrualRows($marketId, $selectedMonthStart)) {
+            return [$selectedMonthYm, $selectedMonthStart];
+        }
+
+        $latestMonth = $this->findLatestAccrualMonth($marketId);
+
+        if ($latestMonth === null) {
+            return [$selectedMonthYm, $selectedMonthStart];
+        }
+
+        try {
+            return [
+                $latestMonth,
+                CarbonImmutable::createFromFormat('Y-m', $latestMonth, $tz)->startOfMonth(),
+            ];
+        } catch (\Throwable) {
+            return [$selectedMonthYm, $selectedMonthStart];
+        }
+    }
+
+    private function hasAccrualRows(int $marketId, CarbonImmutable $monthStart): bool
+    {
+        return DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->where('period', $monthStart->toDateString())
+            ->exists();
+    }
+
+    private function findLatestAccrualMonth(int $marketId): ?string
+    {
+        $period = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->max('period');
+
+        if (! is_string($period) || $period === '') {
+            return null;
+        }
+
+        return substr($period, 0, 7);
     }
 
     private function formatMonthLabel(string $ym, string $tz): string
