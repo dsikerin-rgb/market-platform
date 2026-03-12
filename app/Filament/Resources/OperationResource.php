@@ -37,9 +37,9 @@ class OperationResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'type';
 
-    protected static ?string $modelLabel = 'Управленческая операция';
-    protected static ?string $pluralModelLabel = 'Управленческие операции';
-    protected static ?string $navigationLabel = 'Управленческие операции';
+    protected static ?string $modelLabel = 'Операция журнала';
+    protected static ?string $pluralModelLabel = 'Журнал операций';
+    protected static ?string $navigationLabel = 'Журнал операций';
 
     // Filament v4 требует именно UnitEnum|string|null
     protected static \UnitEnum|string|null $navigationGroup = null;
@@ -591,14 +591,14 @@ class OperationResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return (bool) $user && $user->isSuperAdmin();
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin'));
+        return (bool) $user && $user->isSuperAdmin();
     }
 
     public static function canEdit($record): bool
@@ -609,7 +609,7 @@ class OperationResource extends BaseResource
             return false;
         }
 
-        if (! ($user->isSuperAdmin() || $user->hasRole('market-admin'))) {
+        if (! $user->isSuperAdmin()) {
             return false;
         }
 
@@ -622,15 +622,12 @@ class OperationResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
-            return false;
-        }
+        return (bool) $user && $user->isSuperAdmin();
+    }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $record instanceof Operation && (int) $record->market_id === (int) $user->market_id;
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canViewAny();
     }
 
     public static function resolveMarketId(): int
