@@ -1052,7 +1052,9 @@ class MarketSpaceResource extends BaseResource
                             ->all();
                     }),
             ])
-            ->recordUrl(null);
+            ->recordUrl(fn (MarketSpace $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null);
 
         $actions = [];
 
