@@ -69,6 +69,17 @@ class ListTenantAccruals extends ListRecords
                 '1С',
                 fn (Builder $query) => $query->where('source', '1c'),
             );
+
+            $tabs['linked'] = $this->makeTab(
+                $tabClass,
+                'Связаны с договором',
+                fn (Builder $query) => $query
+                    ->where('source', '1c')
+                    ->whereIn('contract_link_status', [
+                        TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+                        TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED,
+                    ]),
+            );
         }
 
         $tabs['without_contract'] = $this->makeTab(
