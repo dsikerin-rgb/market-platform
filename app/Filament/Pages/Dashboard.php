@@ -333,7 +333,7 @@ class Dashboard extends BaseDashboard
             'links' => [
                 [
                     'title' => 'Обращения',
-                    'description' => 'Открыть сервисный поток арендаторов и разбирать срочные темы без обхода меню.',
+                    'description' => 'Открыть обращения арендаторов и проверить срочные вопросы.',
                     'meta' => $openRequests > 0
                         ? number_format($openRequests, 0, ',', ' ') . ' открыто'
                         : 'Открыть раздел',
@@ -351,7 +351,7 @@ class Dashboard extends BaseDashboard
                 ],
                 [
                     'title' => 'Начисления',
-                    'description' => 'Перейти в слой 1С-начислений, чтобы проверить контур и расхождения по периоду.',
+                    'description' => 'Открыть начисления из 1С и проверить суммы за выбранный период.',
                     'meta' => $periodLabel,
                     'url' => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index'),
                     'icon' => 'heroicon-o-banknotes',
