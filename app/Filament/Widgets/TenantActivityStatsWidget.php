@@ -75,14 +75,19 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
 
         [$financialContourContracts, $financialContourWithoutSpace] = $this->resolveFinancialContourStats($marketId);
 
-        return [
+        $stats = [
             Stat::make('Открытых обращений', $openRequests)
                 ->description('Текущее количество незакрытых обращений'),
             Stat::make('Договоров в финансовом контуре', $financialContourContracts)
                 ->description('Есть в долгах 1С или связаны с начислениями'),
-            Stat::make('Без привязки к месту', $financialContourWithoutSpace)
-                ->description('Требуют разбора в договорах'),
         ];
+
+        if ($isSuperAdmin) {
+            $stats[] = Stat::make('Без привязки к месту', $financialContourWithoutSpace)
+                ->description('Требуют разбора в договорах');
+        }
+
+        return $stats;
     }
 
     private function resolveTimezone(?string $marketTimezone): string
@@ -204,8 +209,14 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         $stats = [
             Stat::make('Открытых обращений', 0),
             Stat::make('Договоров в финансовом контуре', 0),
-            Stat::make('Без привязки к месту', 0),
         ];
+
+        $user = Filament::auth()->user();
+        $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+        if ($isSuperAdmin) {
+            $stats[] = Stat::make('Без привязки к месту', 0);
+        }
 
         if ($note) {
             $stats[0] = $stats[0]->description($note);
