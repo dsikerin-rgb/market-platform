@@ -7,12 +7,14 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
+use App\Filament\Widgets\TasksWorkspaceWidget;
 use App\Models\MarketHoliday;
 use App\Models\Task;
 use App\Support\TaskCalendarFilters;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 
@@ -54,6 +56,23 @@ class ListTasks extends ListRecords
     public function getBreadcrumb(): string
     {
         return $this->getTitle();
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            TasksWorkspaceWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 
     public function getDefaultActiveTab(): string|int|null
