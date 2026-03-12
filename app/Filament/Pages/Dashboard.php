@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Filament\Widgets\MarketOverviewStatsWidget;
+use App\Filament\Widgets\MarketAttentionWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
@@ -248,6 +249,10 @@ class Dashboard extends BaseDashboard
     public static function getAvailableDashboardWidgets(): array
     {
         $widgets = [
+            'attention' => [
+                'class' => MarketAttentionWidget::class,
+                'label' => 'Требует внимания',
+            ],
             'overview' => [
                 'class' => MarketOverviewStatsWidget::class,
                 'label' => 'Ключевые показатели',
