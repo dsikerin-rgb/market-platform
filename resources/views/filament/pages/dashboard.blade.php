@@ -159,14 +159,29 @@
             }
 
             .dashboard-workspace__stat {
+                display: block;
                 border-radius: 1rem;
                 padding: 0.95rem 1rem;
                 border: 1px solid var(--dashboard-border);
                 background: rgba(255, 255, 255, 0.55);
+                color: inherit;
+                text-decoration: none;
+                transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
             }
 
             .dark .dashboard-workspace__stat {
                 background: rgba(15, 23, 42, 0.55);
+            }
+
+            .dashboard-workspace__stat:hover {
+                transform: translateY(-1px);
+                border-color: var(--dashboard-border-strong);
+                box-shadow: 0 16px 36px rgba(15, 23, 42, 0.10);
+                background: rgba(255, 255, 255, 0.7);
+            }
+
+            .dark .dashboard-workspace__stat:hover {
+                background: rgba(15, 23, 42, 0.68);
             }
 
             .dashboard-workspace__stat-label {
@@ -531,12 +546,12 @@
 
                     <div class="dashboard-workspace__stats">
                         @foreach ($hero['stats'] as $stat)
-                            <div class="dashboard-workspace__stat">
+                            <a href="{{ $stat['url'] }}" class="dashboard-workspace__stat focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
                                 <div class="dashboard-workspace__stat-label">{{ $stat['label'] }}</div>
                                 <div class="dashboard-workspace__stat-value{{ $stat['tone'] !== 'neutral' ? ' is-' . $stat['tone'] : '' }}">
                                     {{ $stat['value'] }}
                                 </div>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 </div>

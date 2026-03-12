@@ -243,7 +243,7 @@ class Dashboard extends BaseDashboard
      *     market_name: string,
      *     market_selected: bool,
      *     period_label: string,
-     *     stats: array<int, array{label: string, value: string, tone: string}>,
+     *     stats: array<int, array{label: string, value: string, tone: string, url: string}>,
      *     links: array<int, array{title: string, description: string, meta: string, url: string, icon: string}>
      * }
      */
@@ -309,21 +309,25 @@ class Dashboard extends BaseDashboard
                     'label' => 'Арендаторы',
                     'value' => number_format($tenantsCount, 0, ',', ' '),
                     'tone' => 'neutral',
+                    'url' => \App\Filament\Resources\TenantResource::getUrl('index'),
                 ],
                 [
                     'label' => 'Свободные места',
                     'value' => number_format($vacantSpaces, 0, ',', ' '),
                     'tone' => $vacantSpaces > 0 ? 'success' : 'neutral',
+                    'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
                 ],
                 [
                     'label' => 'Открытые обращения',
                     'value' => number_format($openRequests, 0, ',', ' '),
                     'tone' => $openRequests > 0 ? 'warning' : 'neutral',
+                    'url' => \App\Filament\Pages\Requests::getUrl(),
                 ],
                 [
                     'label' => 'Просроченные задачи',
                     'value' => number_format($overdueTasks, 0, ',', ' '),
                     'tone' => $overdueTasks > 0 ? 'danger' : 'neutral',
+                    'url' => \App\Filament\Resources\TaskResource::getUrl('index'),
                 ],
             ],
             'links' => [
