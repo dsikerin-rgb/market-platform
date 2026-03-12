@@ -137,19 +137,522 @@
         $commentedCount = $tickets->where('comments_count', '>', 0)->count();
     @endphp
 
-    <div class="space-y-6">
-        <section
-            class="rounded-3xl border border-gray-200/80 bg-gradient-to-br from-white via-white to-gray-50/80 px-5 py-5 shadow-sm dark:border-white/10 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950"
-        >
-            <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div class="space-y-3">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-500/10 text-primary-600 dark:bg-primary-400/15 dark:text-primary-300">
+    <style>
+        .requests-workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .requests-hero {
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 1.5rem;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.08), transparent 28%),
+                radial-gradient(circle at top right, rgba(16, 185, 129, 0.09), transparent 24%),
+                linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.92));
+            padding: 1.5rem;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+        }
+
+        .requests-hero-row {
+            display: flex;
+            gap: 1.25rem;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .requests-hero-main {
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+            max-width: 44rem;
+        }
+
+        .requests-hero-title {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .requests-hero-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 3rem;
+            height: 3rem;
+            border-radius: 1rem;
+            background: rgba(59, 130, 246, 0.12);
+            color: rgb(147, 197, 253);
+        }
+
+        .requests-hero-copy h2 {
+            margin: 0;
+            font-size: 2rem;
+            line-height: 1.1;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .requests-hero-copy p {
+            margin: 0.35rem 0 0;
+            font-size: 0.95rem;
+            color: #94a3b8;
+        }
+
+        .requests-filter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            align-self: flex-start;
+            padding: 0.5rem 0.85rem;
+            border-radius: 999px;
+            border: 1px solid rgba(59, 130, 246, 0.28);
+            background: rgba(37, 99, 235, 0.12);
+            color: #dbeafe;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .requests-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.85rem;
+            min-width: min(100%, 28rem);
+        }
+
+        .requests-stat {
+            border-radius: 1rem;
+            padding: 0.95rem 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .requests-stat-label {
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+
+        .requests-stat-value {
+            margin-top: 0.3rem;
+            font-size: 1.75rem;
+            line-height: 1;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .requests-stat-value.is-warning { color: #fbbf24; }
+        .requests-stat-value.is-primary { color: #60a5fa; }
+        .requests-stat-value.is-success { color: #34d399; }
+
+        .requests-layout {
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+        }
+
+        .requests-section-heading {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+
+        .requests-empty {
+            display: flex;
+            min-height: 18rem;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            padding: 2rem 1.5rem;
+            border-radius: 1rem;
+            border: 1px dashed rgba(148, 163, 184, 0.28);
+            background: rgba(148, 163, 184, 0.08);
+            text-align: center;
+        }
+
+        .requests-empty-icon {
+            display: flex;
+            width: 3rem;
+            height: 3rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1rem;
+            background: rgba(148, 163, 184, 0.14);
+            color: #94a3b8;
+        }
+
+        .requests-empty-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .requests-empty-copy {
+            font-size: 0.9rem;
+            color: #94a3b8;
+        }
+
+        .requests-ticket-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 76vh;
+            overflow-y: auto;
+            padding-right: 0.25rem;
+        }
+
+        .requests-ticket-card {
+            display: block;
+            padding: 1rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.68);
+            text-decoration: none;
+            transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+        }
+
+        .requests-ticket-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(96, 165, 250, 0.34);
+            background: rgba(15, 23, 42, 0.78);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+        }
+
+        .requests-ticket-card.is-selected {
+            border-color: rgba(96, 165, 250, 0.5);
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
+            box-shadow: 0 18px 40px rgba(59, 130, 246, 0.14);
+        }
+
+        .requests-ticket-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.85rem;
+        }
+
+        .requests-ticket-avatar {
+            display: flex;
+            width: 2.5rem;
+            height: 2.5rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.9rem;
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5e1;
+            flex-shrink: 0;
+        }
+
+        .requests-ticket-card.is-selected .requests-ticket-avatar {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .requests-ticket-body {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            flex: 1;
+        }
+
+        .requests-ticket-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.72rem;
+            color: #94a3b8;
+        }
+
+        .requests-ticket-subject {
+            margin-top: 0.25rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f8fafc;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .requests-ticket-tags {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.78rem;
+            color: #cbd5e1;
+        }
+
+        .requests-comment-count {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5e1;
+            font-weight: 600;
+        }
+
+        .requests-details {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .requests-details-card {
+            border-radius: 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.72);
+            padding: 1.25rem;
+        }
+
+        .requests-details-top {
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .requests-details-title {
+            margin: 0.35rem 0 0;
+            font-size: 1.4rem;
+            line-height: 1.2;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .requests-details-description {
+            margin: 0.35rem 0 0;
+            max-width: 48rem;
+            white-space: pre-wrap;
+            font-size: 0.93rem;
+            line-height: 1.65;
+            color: #cbd5e1;
+        }
+
+        .requests-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            min-width: min(100%, 20rem);
+        }
+
+        .requests-meta-card {
+            padding: 0.8rem 0.9rem;
+            border-radius: 0.9rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .requests-meta-label {
+            font-size: 0.68rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+
+        .requests-meta-value {
+            margin-top: 0.35rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .requests-thread {
+            border-radius: 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            background: rgba(15, 23, 42, 0.58);
+            padding: 1rem;
+        }
+
+        .requests-thread-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .requests-thread-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .requests-thread-subtitle {
+            margin-top: 0.2rem;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        .requests-thread-count {
+            border-radius: 999px;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #cbd5e1;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+        }
+
+        .requests-thread-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 48vh;
+            overflow-y: auto;
+            padding-right: 0.25rem;
+        }
+
+        .requests-thread-row {
+            display: flex;
+        }
+
+        .requests-thread-row.is-own {
+            justify-content: flex-end;
+        }
+
+        .requests-message {
+            max-width: 48rem;
+            border-radius: 1rem;
+            padding: 0.9rem 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(255, 255, 255, 0.04);
+            color: #f8fafc;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+        }
+
+        .requests-message.is-own {
+            background: linear-gradient(180deg, #2563eb, #1d4ed8);
+            border-color: rgba(96, 165, 250, 0.32);
+        }
+
+        .requests-message-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            margin-bottom: 0.45rem;
+            font-size: 0.74rem;
+            color: #94a3b8;
+        }
+
+        .requests-message.is-own .requests-message-meta {
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .requests-message-body {
+            white-space: pre-wrap;
+            font-size: 0.93rem;
+            line-height: 1.65;
+        }
+
+        .requests-composer {
+            border-radius: 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            background: rgba(15, 23, 42, 0.72);
+            padding: 1rem;
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+        }
+
+        .requests-composer-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .requests-composer-label {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .requests-composer-note {
+            font-size: 0.78rem;
+            color: #94a3b8;
+        }
+
+        .requests-composer textarea {
+            width: 100%;
+            min-height: 7rem;
+            resize: vertical;
+            border-radius: 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(2, 6, 23, 0.62);
+            color: #f8fafc;
+            padding: 0.9rem 1rem;
+            font-size: 0.92rem;
+            line-height: 1.6;
+            outline: none;
+        }
+
+        .requests-composer textarea::placeholder {
+            color: #64748b;
+        }
+
+        .requests-composer textarea:focus {
+            border-color: rgba(96, 165, 250, 0.52);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+        }
+
+        .requests-composer-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 0.85rem;
+        }
+
+        @media (max-width: 1279px) {
+            .requests-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .requests-hero {
+                padding: 1.15rem;
+            }
+
+            .requests-stat-grid,
+            .requests-meta-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .requests-stat-grid,
+            .requests-meta-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .requests-hero-copy h2 {
+                font-size: 1.65rem;
+            }
+
+            .requests-composer-head,
+            .requests-thread-head {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+
+    <div class="requests-workspace">
+        <section class="requests-hero">
+            <div class="requests-hero-row">
+                <div class="requests-hero-main">
+                    <div class="requests-hero-title">
+                        <div class="requests-hero-icon">
                             <x-filament::icon icon="heroicon-m-chat-bubble-left-right" class="h-6 w-6" />
                         </div>
-                        <div>
-                            <h2 class="text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">Обращения</h2>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Рабочий центр по обращениям арендаторов и внутренней переписке.</p>
+                        <div class="requests-hero-copy">
+                            <h2>Обращения</h2>
+                            <p>Рабочий центр по обращениям арендаторов и внутренней переписке.</p>
                         </div>
                     </div>
 
@@ -157,35 +660,35 @@
                         @php
                             $tenantTitle = trim((string) ($tenantFilter?->short_name ?? $tenantFilter?->name ?? ''));
                         @endphp
-                        <div class="inline-flex items-center gap-2 rounded-full border border-primary-200/80 bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700 dark:border-primary-400/20 dark:bg-primary-400/10 dark:text-primary-200">
+                        <div class="requests-filter-pill">
                             <x-filament::icon icon="heroicon-m-funnel" class="h-4 w-4" />
                             <span>Фильтр по арендатору: {{ $tenantTitle !== '' ? $tenantTitle : ('арендатор #' . $tenantFilterId) }}</span>
                         </div>
                     @endif
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[28rem]">
-                    <div class="rounded-2xl border border-gray-200/70 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Всего</div>
-                        <div class="mt-1 text-2xl font-semibold text-gray-950 dark:text-white">{{ $tickets->count() }}</div>
+                <div class="requests-stat-grid">
+                    <div class="requests-stat">
+                        <div class="requests-stat-label">Всего</div>
+                        <div class="requests-stat-value">{{ $tickets->count() }}</div>
                     </div>
-                    <div class="rounded-2xl border border-gray-200/70 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Новые</div>
-                        <div class="mt-1 text-2xl font-semibold text-warning-600 dark:text-warning-400">{{ $newCount }}</div>
+                    <div class="requests-stat">
+                        <div class="requests-stat-label">Новые</div>
+                        <div class="requests-stat-value is-warning">{{ $newCount }}</div>
                     </div>
-                    <div class="rounded-2xl border border-gray-200/70 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">В работе</div>
-                        <div class="mt-1 text-2xl font-semibold text-primary-600 dark:text-primary-300">{{ $inProgressCount }}</div>
+                    <div class="requests-stat">
+                        <div class="requests-stat-label">В работе</div>
+                        <div class="requests-stat-value is-primary">{{ $inProgressCount }}</div>
                     </div>
-                    <div class="rounded-2xl border border-gray-200/70 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
-                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">С ответами</div>
-                        <div class="mt-1 text-2xl font-semibold text-success-600 dark:text-success-400">{{ $commentedCount }}</div>
+                    <div class="requests-stat">
+                        <div class="requests-stat-label">С ответами</div>
+                        <div class="requests-stat-value is-success">{{ $commentedCount }}</div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <div class="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <div class="requests-layout">
             <x-filament::section>
                 <x-slot name="heading">
                     <div class="flex items-center gap-2">
@@ -199,17 +702,17 @@
                 </x-slot>
 
                 @if ($tickets->isEmpty())
-                    <div class="flex min-h-[18rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-300/80 bg-gray-50/70 px-6 py-10 text-center dark:border-white/10 dark:bg-white/[0.03]">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-200/70 text-gray-500 dark:bg-white/10 dark:text-gray-400">
+                    <div class="requests-empty">
+                        <div class="requests-empty-icon">
                             <x-filament::icon icon="heroicon-m-chat-bubble-left-ellipsis" class="h-6 w-6" />
                         </div>
-                        <div class="space-y-1">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white">Нет диалогов</div>
-                            <div class="text-sm text-gray-500 dark:text-gray-400">По текущему фильтру ещё нет обращений или переписки.</div>
+                        <div>
+                            <div class="requests-empty-title">Нет диалогов</div>
+                            <div class="requests-empty-copy">По текущему фильтру ещё нет обращений или переписки.</div>
                         </div>
                     </div>
                 @else
-                    <div class="space-y-3 max-h-[76vh] overflow-y-auto pr-1">
+                    <div class="requests-ticket-list">
                         @foreach ($tickets as $ticket)
                             @php
                                 $isSelected = $selectedTicket && (int) $selectedTicket->id === (int) $ticket->id;
@@ -223,34 +726,34 @@
 
                             <a
                                 href="{{ \App\Filament\Pages\Requests::getUrl(parameters: $ticketUrlParams) }}"
-                                class="group block rounded-2xl border p-4 transition duration-200 {{ $isSelected ? 'border-primary-300 bg-primary-50/90 shadow-sm dark:border-primary-500/40 dark:bg-primary-500/10' : 'border-gray-200/80 bg-white/80 hover:border-primary-200 hover:bg-gray-50 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-primary-500/25 dark:hover:bg-white/[0.05]' }}"
+                                class="requests-ticket-card {{ $isSelected ? 'is-selected' : '' }}"
                             >
-                                <div class="flex items-start gap-3">
-                                    <div class="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl {{ $isSelected ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-300' }}">
+                                <div class="requests-ticket-row">
+                                    <div class="requests-ticket-avatar">
                                         <x-filament::icon :icon="$categoryBadge['icon']" class="h-5 w-5" />
                                     </div>
 
-                                    <div class="min-w-0 flex-1 space-y-3">
-                                        <div class="flex items-start justify-between gap-3">
-                                            <div class="min-w-0">
-                                                <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                    <div class="requests-ticket-body">
+                                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;">
+                                            <div style="min-width:0;">
+                                                <div class="requests-ticket-meta">
                                                     <span class="font-medium">#{{ $ticket->id }}</span>
                                                     <span>•</span>
                                                     <span>{{ $ticket->updated_at?->format('d.m.Y H:i') }}</span>
                                                 </div>
-                                                <div class="mt-1 truncate text-sm font-semibold text-gray-950 dark:text-white">
+                                                <div class="requests-ticket-subject">
                                                     {{ $ticket->subject ?: 'Без темы' }}
                                                 </div>
                                             </div>
 
-                                            <div class="shrink-0">
+                                            <div style="flex-shrink:0;">
                                                 <x-filament::badge :color="$statusBadge['color']">
                                                     {{ $statusLabels[$status] ?? $status }}
                                                 </x-filament::badge>
                                             </div>
                                         </div>
 
-                                        <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <div class="requests-ticket-tags">
                                             <x-filament::badge :color="$categoryBadge['color']">
                                                 {{ $categoryLabels[$category] ?? 'Другое' }}
                                             </x-filament::badge>
@@ -258,7 +761,7 @@
                                             <span class="truncate">{{ $tenantName }}</span>
 
                                             @if (($ticket->comments_count ?? 0) > 0)
-                                                <span class="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                                                <span class="requests-comment-count">
                                                     <x-filament::icon icon="heroicon-m-chat-bubble-left-ellipsis" class="h-3.5 w-3.5" />
                                                     {{ $ticket->comments_count }}
                                                 </span>
@@ -274,7 +777,7 @@
 
             <x-filament::section>
                 <x-slot name="heading">
-                    <div class="flex items-center gap-2">
+                    <div class="requests-section-heading">
                         <x-filament::icon icon="heroicon-m-chat-bubble-left-right" class="h-5 w-5 text-primary-500" />
                         <span>Переписка</span>
                     </div>
@@ -285,13 +788,13 @@
                 </x-slot>
 
                 @if (! $selectedTicket)
-                    <div class="flex min-h-[28rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-300/80 bg-gray-50/70 px-6 py-10 text-center dark:border-white/10 dark:bg-white/[0.03]">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-200/70 text-gray-500 dark:bg-white/10 dark:text-gray-400">
+                    <div class="requests-empty" style="min-height:28rem;">
+                        <div class="requests-empty-icon">
                             <x-filament::icon icon="heroicon-m-chat-bubble-left-right" class="h-6 w-6" />
                         </div>
-                        <div class="space-y-1">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white">Диалог не выбран</div>
-                            <div class="text-sm text-gray-500 dark:text-gray-400">Откройте нужное обращение слева, чтобы посмотреть переписку и ответить.</div>
+                        <div>
+                            <div class="requests-empty-title">Диалог не выбран</div>
+                            <div class="requests-empty-copy">Откройте нужное обращение слева, чтобы посмотреть переписку и ответить.</div>
                         </div>
                     </div>
                 @else
@@ -305,12 +808,12 @@
                         $priority = (string) ($selectedTicket->priority ?? 'normal');
                     @endphp
 
-                    <div class="space-y-4">
-                        <div class="rounded-2xl border border-gray-200/80 bg-white/70 p-5 dark:border-white/10 dark:bg-white/[0.03]">
-                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                <div class="space-y-3">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <div class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <div class="requests-details">
+                        <div class="requests-details-card">
+                            <div class="requests-details-top">
+                                <div style="display:flex;flex-direction:column;gap:.75rem;">
+                                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;">
+                                        <div class="requests-ticket-meta" style="font-weight:600;">
                                             Обращение #{{ $selectedTicket->id }}
                                         </div>
 
@@ -327,75 +830,75 @@
                                         </x-filament::badge>
                                     </div>
 
-                                    <div class="space-y-1">
-                                        <h3 class="text-xl font-semibold tracking-tight text-gray-950 dark:text-white">
+                                    <div>
+                                        <h3 class="requests-details-title">
                                             {{ $selectedTicket->subject ?: 'Без темы' }}
                                         </h3>
 
                                         @if (filled($selectedTicket->description))
-                                            <p class="max-w-3xl whitespace-pre-wrap text-sm leading-6 text-gray-600 dark:text-gray-300">
+                                            <p class="requests-details-description">
                                                 {{ $selectedTicket->description }}
                                             </p>
                                         @endif
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-2 gap-3 sm:min-w-[20rem]">
-                                    <div class="rounded-2xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-                                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Арендатор</div>
-                                        <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ $tenantName }}</div>
+                                <div class="requests-meta-grid">
+                                    <div class="requests-meta-card">
+                                        <div class="requests-meta-label">Арендатор</div>
+                                        <div class="requests-meta-value">{{ $tenantName }}</div>
                                     </div>
-                                    <div class="rounded-2xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-                                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Назначен</div>
-                                        <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ $assignedTo !== '' ? $assignedTo : 'Не назначен' }}</div>
+                                    <div class="requests-meta-card">
+                                        <div class="requests-meta-label">Назначен</div>
+                                        <div class="requests-meta-value">{{ $assignedTo !== '' ? $assignedTo : 'Не назначен' }}</div>
                                     </div>
-                                    <div class="rounded-2xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-                                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Создано</div>
-                                        <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ $selectedTicket->created_at?->format('d.m.Y H:i') }}</div>
+                                    <div class="requests-meta-card">
+                                        <div class="requests-meta-label">Создано</div>
+                                        <div class="requests-meta-value">{{ $selectedTicket->created_at?->format('d.m.Y H:i') }}</div>
                                     </div>
-                                    <div class="rounded-2xl border border-gray-200/80 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-                                        <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Последнее обновление</div>
-                                        <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ $selectedTicket->updated_at?->format('d.m.Y H:i') }}</div>
+                                    <div class="requests-meta-card">
+                                        <div class="requests-meta-label">Последнее обновление</div>
+                                        <div class="requests-meta-value">{{ $selectedTicket->updated_at?->format('d.m.Y H:i') }}</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="rounded-2xl border border-gray-200/80 bg-gray-50/60 p-4 dark:border-white/10 dark:bg-white/[0.02]">
-                            <div class="mb-4 flex items-center justify-between gap-3">
+                        <div class="requests-thread">
+                            <div class="requests-thread-head">
                                 <div>
-                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Лента сообщений</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Сообщения идут в хронологическом порядке.</p>
+                                    <h4 class="requests-thread-title">Лента сообщений</h4>
+                                    <p class="requests-thread-subtitle">Сообщения идут в хронологическом порядке.</p>
                                 </div>
-                                <div class="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-500 shadow-sm ring-1 ring-gray-200/80 dark:bg-white/5 dark:text-gray-300 dark:ring-white/10">
+                                <div class="requests-thread-count">
                                     {{ $comments->count() }} в ленте
                                 </div>
                             </div>
 
-                            <div class="space-y-3 max-h-[48vh] overflow-y-auto pr-1">
+                            <div class="requests-thread-list">
                                 @forelse ($comments as $comment)
                                     @php
                                         $isOwn = $user && (int) $comment->user_id === (int) $user->id;
                                     @endphp
 
-                                    <div class="flex {{ $isOwn ? 'justify-end' : 'justify-start' }}">
-                                        <div class="max-w-3xl rounded-2xl px-4 py-3 shadow-sm ring-1 {{ $isOwn ? 'bg-primary-500 text-white ring-primary-400/30' : 'bg-white text-gray-900 ring-gray-200/80 dark:bg-white/[0.06] dark:text-gray-100 dark:ring-white/10' }}">
-                                            <div class="mb-2 flex items-center gap-2 text-xs {{ $isOwn ? 'text-white/80' : 'text-gray-500 dark:text-gray-400' }}">
+                                    <div class="requests-thread-row {{ $isOwn ? 'is-own' : '' }}">
+                                        <div class="requests-message {{ $isOwn ? 'is-own' : '' }}">
+                                            <div class="requests-message-meta">
                                                 <span class="font-medium">{{ $comment->user?->name ?? 'Пользователь' }}</span>
                                                 <span>•</span>
                                                 <span>{{ $comment->created_at?->format('d.m.Y H:i') }}</span>
                                             </div>
-                                            <div class="whitespace-pre-wrap text-sm leading-6">{{ $comment->body }}</div>
+                                            <div class="requests-message-body">{{ $comment->body }}</div>
                                         </div>
                                     </div>
                                 @empty
-                                    <div class="flex min-h-[14rem] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-300/80 bg-white/60 px-6 py-10 text-center dark:border-white/10 dark:bg-white/[0.03]">
-                                        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-200/70 text-gray-500 dark:bg-white/10 dark:text-gray-400">
+                                    <div class="requests-empty" style="min-height:14rem;">
+                                        <div class="requests-empty-icon" style="width:2.5rem;height:2.5rem;">
                                             <x-filament::icon icon="heroicon-m-chat-bubble-bottom-center-text" class="h-5 w-5" />
                                         </div>
-                                        <div class="space-y-1">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">Пока нет сообщений</div>
-                                            <div class="text-sm text-gray-500 dark:text-gray-400">Напишите первый ответ, чтобы начать переписку.</div>
+                                        <div>
+                                            <div class="requests-empty-title">Пока нет сообщений</div>
+                                            <div class="requests-empty-copy">Напишите первый ответ, чтобы начать переписку.</div>
                                         </div>
                                     </div>
                                 @endforelse
@@ -405,16 +908,16 @@
                         <form
                             method="POST"
                             action="{{ route('filament.admin.requests.comment', ['ticket' => (int) $selectedTicket->id]) }}"
-                            class="rounded-2xl border border-gray-200/80 bg-white/80 p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.03]"
+                            class="requests-composer"
                         >
                             @csrf
 
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between gap-3">
-                                    <label class="text-sm font-semibold text-gray-900 dark:text-white">
+                            <div>
+                                <div class="requests-composer-head">
+                                    <label class="requests-composer-label">
                                         Ответ в диалог
                                     </label>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    <div class="requests-composer-note">
                                         Отправка сразу добавит сообщение в выбранное обращение
                                     </div>
                                 </div>
@@ -424,14 +927,13 @@
                                     rows="4"
                                     required
                                     placeholder="Опишите решение, уточнение или следующий шаг."
-                                    class="fi-input block w-full rounded-2xl border-gray-300 bg-white px-4 py-3 text-sm shadow-sm transition focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-900"
                                 >{{ old('body') }}</textarea>
 
                                 @error('body')
                                     <div class="text-sm text-danger-600">{{ $message }}</div>
                                 @enderror
 
-                                <div class="flex justify-end">
+                                <div class="requests-composer-actions">
                                     <x-filament::button type="submit" icon="heroicon-o-paper-airplane">
                                         Отправить сообщение
                                     </x-filament::button>
