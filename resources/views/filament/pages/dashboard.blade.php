@@ -536,20 +536,7 @@
 
                             <div class="dashboard-workspace__hero-copy">
                                 <h2>{{ $hero['title'] }}</h2>
-                                <p>{{ $hero['subtitle'] }}</p>
                             </div>
-                        </div>
-
-                        <div class="dashboard-workspace__hero-pills">
-                            <span class="dashboard-workspace__pill">
-                                <x-filament::icon icon="heroicon-o-building-storefront" class="h-4 w-4" />
-                                {{ $hero['market_name'] }}
-                            </span>
-
-                            <span class="dashboard-workspace__pill">
-                                <x-filament::icon icon="heroicon-o-calendar-days" class="h-4 w-4" />
-                                {{ $hero['period_label'] }}
-                            </span>
                         </div>
                     </div>
 
