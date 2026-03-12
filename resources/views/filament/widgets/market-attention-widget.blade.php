@@ -494,6 +494,11 @@
                                 x-transition.opacity.duration.200ms
                                 class="market-attention-widget__card market-attention-widget__card--toast group no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                                 style="{{ $accentClasses['style'] }}"
+                                role="link"
+                                tabindex="0"
+                                x-on:click="window.location.href = @js($item['action_url'])"
+                                x-on:keydown.enter.prevent="window.location.href = @js($item['action_url'])"
+                                x-on:keydown.space.prevent="window.location.href = @js($item['action_url'])"
                             >
                                 <span class="market-attention-widget__glow"></span>
 
@@ -518,7 +523,7 @@
                                             <button
                                                 type="button"
                                                 class="market-attention-widget__toast-close"
-                                                x-on:click="open = false"
+                                                x-on:click.stop="open = false"
                                                 aria-label="Закрыть уведомление"
                                             >
                                                 <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
@@ -530,13 +535,13 @@
                                 </div>
 
                                 <div class="market-attention-widget__toast-actions">
-                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action">
+                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action" x-on:click.stop>
                                         {{ $item['action_label'] }}
                                     </a>
 
-                                    <span class="market-attention-widget__toast-action {{ $accentClasses['status'] }}">
+                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action {{ $accentClasses['status'] }}" x-on:click.stop>
                                         Требует решения
-                                    </span>
+                                    </a>
                                 </div>
                             </div>
                         @endforeach
