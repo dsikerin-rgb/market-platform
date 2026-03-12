@@ -657,7 +657,9 @@ class TenantContractResource extends BaseResource
                     ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
             ])
             ->defaultSort('id', 'desc')
-            ->recordUrl(null);
+            ->recordUrl(fn (TenantContract $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null);
     }
 
     public static function getRelations(): array
