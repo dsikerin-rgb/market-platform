@@ -151,7 +151,7 @@
             width: min(100%, 21rem);
             min-height: 5.6rem;
             border-radius: 0.9rem;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.96));
+            background: rgb(255, 255, 255);
             box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.55);
             opacity: 0;
             transform: translate3d(2.5rem, 0, 0) scale(0.98);
@@ -313,7 +313,7 @@
 
         .market-attention-widget__toast-action--secondary {
             color: rgb(15, 23, 42);
-            background: rgba(15, 23, 42, 0.04);
+            background: transparent;
         }
 
         .market-attention-widget__toast-action + .market-attention-widget__toast-action {
@@ -359,7 +359,7 @@
         }
 
         .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
-            background: rgba(37, 99, 235, 0.05);
+            background: rgba(15, 23, 42, 0.03);
         }
 
         .dark .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
