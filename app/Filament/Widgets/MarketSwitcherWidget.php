@@ -53,7 +53,21 @@ class MarketSwitcherWidget extends Widget
             $value = session('filament.admin.selected_market_id');
         }
 
-        $this->selectedMarketId = filled($value) ? (int) $value : null;
+        if (filled($value)) {
+            $this->selectedMarketId = (int) $value;
+        } else {
+            $this->selectedMarketId = $this->resolveDefaultMarketId();
+
+            if ($this->selectedMarketId) {
+                session(['dashboard_market_id' => $this->selectedMarketId]);
+                session([$this->sessionKey() => $this->selectedMarketId]);
+
+                $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+                session(["filament_{$panelId}_market_id" => $this->selectedMarketId]);
+                session(['filament.admin.selected_market_id' => $this->selectedMarketId]);
+            }
+        }
+
         $this->returnUrl = request()->fullUrl();
 
         // Если рынок уже выбран, но месяц не задан/битый — выставим последний месяц с данными.
@@ -128,6 +142,15 @@ class MarketSwitcherWidget extends Widget
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
         return "filament.{$panelId}.selected_market_id";
+    }
+
+    private function resolveDefaultMarketId(): ?int
+    {
+        $marketId = Market::query()
+            ->orderBy('name')
+            ->value('id');
+
+        return $marketId ? (int) $marketId : null;
     }
 
     private function resolveMarketTimezone(int $marketId): string

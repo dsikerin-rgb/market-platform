@@ -200,7 +200,20 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
             $value = session('filament.admin.selected_market_id');
         }
 
-        return filled($value) ? (int) $value : null;
+        if (filled($value)) {
+            return (int) $value;
+        }
+
+        return $this->resolveDefaultMarketId();
+    }
+
+    private function resolveDefaultMarketId(): ?int
+    {
+        $marketId = Market::query()
+            ->orderBy('id')
+            ->value('id');
+
+        return $marketId ? (int) $marketId : null;
     }
 
     private function resolveTimezone(?string $marketTimezone): string
