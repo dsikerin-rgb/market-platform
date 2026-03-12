@@ -50,6 +50,15 @@ class StaffResource extends BaseResource
         return filled($value) ? (int) $value : null;
     }
 
+    protected static function applyInternalStaffScope(Builder $query): Builder
+    {
+        return $query->where(function (Builder $staffOnly): void {
+            $staffOnly
+                ->whereNull('tenant_id')
+                ->orWhere('tenant_id', 0);
+        });
+    }
+
     /**
      * Пункт меню видят те, у кого есть staff.viewAny
      */
@@ -99,7 +108,7 @@ class StaffResource extends BaseResource
      */
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = static::applyInternalStaffScope(parent::getEloquentQuery());
         $user = Filament::auth()->user();
 
         if (! $user) {
