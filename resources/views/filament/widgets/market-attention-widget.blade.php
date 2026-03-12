@@ -631,9 +631,13 @@
                                         {{ $item['action_label'] }}
                                     </a>
 
-                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action market-attention-widget__toast-action--secondary" x-on:click.stop>
-                                        Требует решения
-                                    </a>
+                                    <button
+                                        type="button"
+                                        class="market-attention-widget__toast-action market-attention-widget__toast-action--secondary"
+                                        x-on:click.stop="dismiss()"
+                                    >
+                                        Скрыть
+                                    </button>
                                 </div>
                             </div>
                         @endforeach
