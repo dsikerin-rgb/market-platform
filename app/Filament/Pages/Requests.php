@@ -1,5 +1,4 @@
 <?php
-# app/Filament/Pages/Requests.php
 
 declare(strict_types=1);
 
@@ -16,7 +15,6 @@ class Requests extends Page
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-inbox';
 
-    // В одну группу с "Задачами"
     protected static \UnitEnum|string|null $navigationGroup = null;
 
     protected static ?int $navigationSort = 90;
