@@ -223,7 +223,10 @@ class StaffResource extends BaseResource
             return false;
         }
 
-        if (! $user->can('staff.delete')) {
+        $canDeleteByRole = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $canDeleteByPermission = method_exists($user, 'can') && $user->can('staff.delete');
+
+        if (! $canDeleteByRole && ! $canDeleteByPermission) {
             return false;
         }
 

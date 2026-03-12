@@ -125,4 +125,34 @@ class StaffResourceScopeTest extends TestCase
         $this->assertContains((int) $systemAgent->id, $superAdminVisibleStaffIds);
         $this->assertTrue(StaffResource::canEdit($systemAgent));
     }
+
+    public function test_market_admin_can_delete_regular_staff_in_own_market_by_role(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $marketAdminRole = Role::findOrCreate('market-admin', 'web');
+        $staffViewAny = Permission::findOrCreate('staff.viewAny', 'web');
+        $marketAdminRole->givePermissionTo($staffViewAny);
+
+        $marketAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-admin-delete@example.test',
+        ]);
+        $marketAdmin->assignRole($marketAdminRole);
+
+        $staff = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'staff-delete@example.test',
+        ]);
+
+        $this->actingAs($marketAdmin);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $this->assertTrue(StaffResource::canDelete($staff));
+    }
 }

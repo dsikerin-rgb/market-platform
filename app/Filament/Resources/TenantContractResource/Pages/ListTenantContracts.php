@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TenantContractResource\Pages;
 
 use App\Filament\Resources\TenantContractResource;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -29,24 +30,36 @@ class ListTenantContracts extends ListRecords
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
-
-        return [
+        $tabs = [
             'operational' => $this->makeTab(
                 $tabClass,
-                'Финансовый контур',
+                'Рабочий контур',
                 fn (Builder $query) => TenantContractResource::applyOperationalContractsScope($query, true)
             ),
-            'financial' => $this->makeTab(
+            'operational_unmapped' => $this->makeTab(
+                $tabClass,
+                'Без привязки к месту',
+                fn (Builder $query) => TenantContractResource::applyOperationalContractsScope(
+                    $query->whereNull('market_space_id'),
+                    true
+                )
+            ),
+        ];
+
+        if ($this->canSeeTechnicalTabs()) {
+            $tabs['financial'] = $this->makeTab(
                 $tabClass,
                 'Последняя задолженность',
                 fn (Builder $query) => TenantContractResource::applyLatestDebtSnapshotScope($query, true)
-            ),
-            'accruals' => $this->makeTab(
+            );
+
+            $tabs['accruals'] = $this->makeTab(
                 $tabClass,
                 'Договоры из начислений',
                 fn (Builder $query) => TenantContractResource::applyAccrualHistoryScope($query, true)
-            ),
-            'mapping_candidates' => $this->makeTab(
+            );
+
+            $tabs['mapping_candidates'] = $this->makeTab(
                 $tabClass,
                 'Основные кандидаты на привязку',
                 fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
@@ -57,13 +70,9 @@ class ListTenantContracts extends ListRecords
                     'needs_mapping',
                     true
                 )
-            ),
-            'operational_unmapped' => $this->makeTab(
-                $tabClass,
-                'Финансовый контур без места',
-                fn (Builder $query) => TenantContractResource::applyOperationalContractsScope($query->whereNull('market_space_id'), true)
-            ),
-            'overlaps' => $this->makeTab(
+            );
+
+            $tabs['overlaps'] = $this->makeTab(
                 $tabClass,
                 'С наложением',
                 fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
@@ -71,8 +80,9 @@ class ListTenantContracts extends ListRecords
                     'has_overlap',
                     true
                 )
-            ),
-            'review' => $this->makeTab(
+            );
+
+            $tabs['review'] = $this->makeTab(
                 $tabClass,
                 'Требуют разбора',
                 fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
@@ -80,9 +90,12 @@ class ListTenantContracts extends ListRecords
                     'needs_review',
                     true
                 )
-            ),
-            'all' => $tabClass::make('Все договоры'),
-        ];
+            );
+        }
+
+        $tabs['all'] = $tabClass::make('Все договоры');
+
+        return $tabs;
     }
 
     protected static function resolveTabClass(): string
@@ -107,5 +120,14 @@ class ListTenantContracts extends ListRecords
         }
 
         return $tab;
+    }
+
+    private function canSeeTechnicalTabs(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return (bool) $user
+            && method_exists($user, 'isSuperAdmin')
+            && $user->isSuperAdmin();
     }
 }

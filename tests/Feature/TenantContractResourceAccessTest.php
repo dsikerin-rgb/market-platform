@@ -70,6 +70,64 @@ class TenantContractResourceAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_market_admin_sees_only_operational_contract_tabs(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('market-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'market-admin-contract-tabs@example.test',
+        ]);
+        $user->assignRole('market-admin');
+
+        $this->actingAs($user);
+
+        $this->get(TenantContractResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Рабочий контур')
+            ->assertSee('Без привязки к месту')
+            ->assertSee('Все договоры')
+            ->assertDontSee('Последняя задолженность')
+            ->assertDontSee('Договоры из начислений')
+            ->assertDontSee('Основные кандидаты на привязку')
+            ->assertDontSee('С наложением')
+            ->assertDontSee('Требуют разбора');
+    }
+
+    public function test_super_admin_sees_technical_contract_tabs(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'super-admin-contract-tabs@example.test',
+        ]);
+        $user->assignRole('super-admin');
+
+        $this->actingAs($user);
+
+        $this->get(TenantContractResource::getUrl('index'))
+            ->assertOk()
+            ->assertSee('Рабочий контур')
+            ->assertSee('Последняя задолженность')
+            ->assertSee('Договоры из начислений')
+            ->assertSee('Основные кандидаты на привязку')
+            ->assertSee('С наложением')
+            ->assertSee('Требуют разбора');
+    }
+
     public function test_market_admin_can_open_contract_card_for_local_mapping(): void
     {
         $market = Market::query()->create([
