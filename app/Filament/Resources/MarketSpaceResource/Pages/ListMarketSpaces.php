@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Widgets\MarketSpacesWorkspaceWidget;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\Support\Htmlable;
 
 class ListMarketSpaces extends ListRecords
 {
@@ -23,5 +25,22 @@ class ListMarketSpaces extends ListRecords
             Actions\CreateAction::make()
                 ->label('Создать торговое место'),
         ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            MarketSpacesWorkspaceWidget::class,
+        ];
+    }
+
+    public function getHeaderWidgetsColumns(): int|array
+    {
+        return 1;
+    }
+
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
     }
 }
