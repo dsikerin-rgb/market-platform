@@ -149,7 +149,7 @@ class Dashboard extends BaseDashboard
 
     public function shouldUseWorkspaceDashboard(): bool
     {
-        return app()->environment('staging');
+        return app()->environment(['staging', 'production']);
     }
 
     /**
