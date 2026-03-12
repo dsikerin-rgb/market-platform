@@ -5,9 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Models\Market;
 use App\Models\MarketSpace;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 
@@ -30,39 +28,6 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             || (bool) $user->market_id
         );
-    }
-
-    public function getDescription(): ?string
-    {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return null;
-        }
-
-        $marketId = $this->resolveMarketIdForWidget($user);
-
-        if (! $marketId) {
-            return null;
-        }
-
-        $market = Market::query()
-            ->select(['id', 'name', 'timezone'])
-            ->find($marketId);
-
-        $tz = $this->resolveTimezone($market?->timezone);
-        $marketName = trim((string) ($market?->name ?? ''));
-
-        $parts = [];
-
-        if ($marketName !== '') {
-            $parts[] = 'Локация: ' . $marketName;
-        }
-
-        $parts[] = 'Текущее состояние';
-        $parts[] = 'TZ: ' . $tz;
-
-        return implode(' • ', $parts);
     }
 
     protected function getOptions(): array
@@ -154,23 +119,6 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             ?? session('filament.admin.selected_market_id');
 
         return filled($value) ? (int) $value : null;
-    }
-
-    private function resolveTimezone(?string $marketTimezone): string
-    {
-        $tz = trim((string) $marketTimezone);
-
-        if ($tz === '') {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
-
-        try {
-            CarbonImmutable::now($tz);
-        } catch (\Throwable) {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
-
-        return $tz;
     }
 
     private function emptyChart(string $label = 'Нет данных'): array
