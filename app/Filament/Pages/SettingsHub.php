@@ -29,6 +29,7 @@ class SettingsHub extends Page
     {
         return MarketSettings::canAccess()
             || MarketplaceSettings::canAccess()
+            || ReportsHub::canAccess()
             || MarketplaceSlideResource::canViewAny()
             || RoleResource::canViewAny();
     }
@@ -51,6 +52,11 @@ class SettingsHub extends Page
     public function getRolesUrl(): string
     {
         return RoleResource::getUrl('index');
+    }
+
+    public function getReportsUrl(): string
+    {
+        return ReportsHub::getUrl();
     }
 
     public function getHeading(): string|Htmlable|null

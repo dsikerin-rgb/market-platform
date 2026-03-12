@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReportResource extends BaseResource
 {
-    
+    protected static ?string $slug = 'report-templates';
 
     protected static ?string $model = Report::class;
 

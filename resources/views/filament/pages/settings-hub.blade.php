@@ -90,6 +90,16 @@
                     <div class="settings-card-footer">Открыть</div>
                 </a>
             @endif
+            @if (\App\Filament\Pages\ReportsHub::canAccess())
+                <a href="{{ $this->getReportsUrl() }}" class="settings-card">
+                    <div class="settings-card-title">Отчётность</div>
+                    <div class="settings-card-text">
+                        Шаблоны отчётов, расписания, получатели и история запусков. Служебный раздел для настройки
+                        и контроля регламентной отчётности без отдельного пункта в основном меню.
+                    </div>
+                    <div class="settings-card-footer">Открыть</div>
+                </a>
+            @endif
         </div>
     </div>
 </x-filament-panels::page>

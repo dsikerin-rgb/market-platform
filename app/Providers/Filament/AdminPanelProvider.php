@@ -10,6 +10,7 @@ use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\MarketplaceSettings;
 use App\Filament\Pages\OpsDiagnostics;
+use App\Filament\Pages\ReportsHub;
 use App\Filament\Pages\Requests;
 use App\Filament\Pages\SettingsHub;
 use App\Filament\Pages\UserNotificationSettings;
@@ -136,6 +137,7 @@ class AdminPanelProvider extends PanelProvider
                 SettingsHub::class,
                 MarketSettings::class,
                 MarketplaceSettings::class,
+                ReportsHub::class,
                 Requests::class,
                 OpsDiagnostics::class,
                 UserNotificationSettings::class,

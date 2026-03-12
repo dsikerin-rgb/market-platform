@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReportRunResource extends BaseResource
 {
-    
+    protected static ?string $slug = 'report-runs';
 
     protected static ?string $model = ReportRun::class;
 
