@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class RecentTenantRequestsWidget extends BaseTableWidget
 {
-    protected static ?string $heading = null;
+    protected static ?string $heading = '';
 
     protected int|string|array $columnSpan = 'full';
 
