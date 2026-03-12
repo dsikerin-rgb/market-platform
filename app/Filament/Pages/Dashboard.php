@@ -151,8 +151,7 @@ class Dashboard extends BaseDashboard
         };
 
         return $schema->schema([
-            Section::make('Отчётный месяц')
-                ->description('Фильтр применяется к отчётным виджетам (начисления/отчётные показатели/история). Оперативные показатели “сейчас” от месяца не зависят.')
+            Section::make()
                 ->columnSpanFull()
                 ->extraAttributes([
                     'class' => 'dashboard-period-filter',
@@ -165,7 +164,9 @@ class Dashboard extends BaseDashboard
                 ])
                 ->schema([
                     Select::make('month')
-                        ->hiddenLabel()
+                        ->label('Отчётный месяц')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Фильтр применяется к отчётным виджетам (начисления/отчётные показатели/история).')
                         ->placeholder('Выберите месяц')
                         ->options(fn (): array => $this->getMonthOptions(
                             $this->resolveMarketId(),
