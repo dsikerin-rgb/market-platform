@@ -171,12 +171,12 @@ class AdminPanelProvider extends PanelProvider
                         '<div class="flex items-center mr-3">' .
                             '<a href="' . e($mapUrl) . '" target="_blank" rel="noopener" ' .
                                 'class="fi-btn fi-btn-size-sm fi-btn-color-primary fi-color-primary" ' .
-                                'style="white-space:nowrap;">' .
+                                'style="white-space:nowrap;background:#16a34a;border-color:#15803d;color:#fff;box-shadow:0 10px 30px rgba(22,163,74,.2);">' .
                                 '&#1050;&#1072;&#1088;&#1090;&#1072;' .
                             '</a>' .
                             '<a href="' . e($marketplaceUrl) . '" target="_blank" rel="noopener" ' .
                                 'class="fi-btn fi-btn-size-sm fi-btn-color-gray ml-2" ' .
-                                'style="white-space:nowrap;margin-left:8px;">' .
+                                'style="white-space:nowrap;margin-left:8px;background:#2563eb;border-color:#1d4ed8;color:#fff;box-shadow:0 10px 30px rgba(37,99,235,.2);">' .
                                 '&#1052;&#1072;&#1088;&#1082;&#1077;&#1090;&#1087;&#1083;&#1077;&#1081;&#1089;' .
                             '</a>' .
                         '</div>'
