@@ -187,6 +187,13 @@
             gap: 0.75rem;
         }
 
+        .market-attention-widget__toast-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
         .market-attention-widget__toast-title {
             display: flex;
             align-items: flex-start;
@@ -278,6 +285,31 @@
 
         .dark .market-attention-widget__toast-action + .market-attention-widget__toast-action {
             border-top-color: rgba(71, 85, 105, 0.45);
+        }
+
+        .market-attention-widget__toast-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            color: rgb(100, 116, 139);
+            transition: background-color 160ms ease, color 160ms ease;
+        }
+
+        .market-attention-widget__toast-close:hover {
+            background: rgba(148, 163, 184, 0.14);
+            color: rgb(15, 23, 42);
+        }
+
+        .dark .market-attention-widget__toast-close {
+            color: rgb(148, 163, 184);
+        }
+
+        .dark .market-attention-widget__toast-close:hover {
+            background: rgba(148, 163, 184, 0.14);
+            color: rgb(248, 250, 252);
         }
 
         .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
@@ -456,8 +488,10 @@
                                 };
                             @endphp
 
-                            <a
-                                href="{{ $item['action_url'] }}"
+                            <div
+                                x-data="{ open: true }"
+                                x-show="open"
+                                x-transition.opacity.duration.200ms
                                 class="market-attention-widget__card market-attention-widget__card--toast group no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                                 style="{{ $accentClasses['style'] }}"
                             >
@@ -476,24 +510,35 @@
                                             </div>
                                         </div>
 
-                                        <span class="inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ring-1 ring-inset {{ $accentClasses['chip'] }}">
-                                            {{ $item['category'] }}
-                                        </span>
+                                        <div class="market-attention-widget__toast-meta">
+                                            <span class="inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ring-1 ring-inset {{ $accentClasses['chip'] }}">
+                                                {{ $item['category'] }}
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                class="market-attention-widget__toast-close"
+                                                x-on:click="open = false"
+                                                aria-label="Закрыть уведомление"
+                                            >
+                                                <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <p class="market-attention-widget__toast-description">{{ $item['description'] }}</p>
                                 </div>
 
                                 <div class="market-attention-widget__toast-actions">
-                                    <span class="market-attention-widget__toast-action">
+                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action">
                                         {{ $item['action_label'] }}
-                                    </span>
+                                    </a>
 
                                     <span class="market-attention-widget__toast-action {{ $accentClasses['status'] }}">
                                         Требует решения
                                     </span>
                                 </div>
-                            </a>
+                            </div>
                         @endforeach
                     </div>
                 @else

@@ -5,6 +5,11 @@
         @php
             $hero = $this->getWorkspaceHeroData();
             $sections = $this->getWorkspaceDashboardSections();
+            $attentionSection = collect($sections)->firstWhere('key', 'attention');
+            $contentSections = array_values(array_filter(
+                $sections,
+                static fn (array $section): bool => $section['key'] !== 'attention',
+            ));
             $workspaceHeaderWidgets = $this->getWorkspaceHeaderWidgets();
             $widgetData = [
                 ...$this->getWidgetData(),
@@ -387,6 +392,75 @@
                 box-shadow: none;
             }
 
+            .dashboard-workspace__attention-overlay {
+                position: fixed;
+                top: 5.75rem;
+                right: 1.5rem;
+                z-index: 40;
+                width: min(calc(100vw - 2rem), 32rem);
+                pointer-events: none;
+            }
+
+            .dashboard-workspace__attention-overlay .dashboard-workspace__widgets.fi-wi {
+                display: block;
+            }
+
+            .dashboard-workspace__attention-overlay .fi-wi-widget {
+                pointer-events: auto;
+            }
+
+            .dashboard-workspace__attention-overlay .fi-section {
+                border: none !important;
+                background: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .dashboard-workspace__attention-overlay .fi-section-content-ctn,
+            .dashboard-workspace__attention-overlay .fi-section-content {
+                padding: 0 !important;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__surface {
+                padding: 0;
+                border: none;
+                background: transparent;
+                box-shadow: none;
+                overflow: visible;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__mesh {
+                display: none;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-layout {
+                display: block;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-layout > :first-child {
+                display: none;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack {
+                align-items: stretch;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__card--toast {
+                width: 100%;
+                max-width: none;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2) {
+                margin-right: 0.5rem;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3) {
+                margin-right: 1rem;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
+                margin-right: 1.5rem;
+            }
+
             @media (max-width: 1279px) {
                 .dashboard-workspace__links {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -402,6 +476,12 @@
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                     min-width: 100%;
                 }
+
+                .dashboard-workspace__attention-overlay {
+                    top: 5rem;
+                    right: 1rem;
+                    width: min(calc(100vw - 1.5rem), 30rem);
+                }
             }
 
             @media (max-width: 767px) {
@@ -409,10 +489,35 @@
                 .dashboard-workspace__stats {
                     grid-template-columns: minmax(0, 1fr);
                 }
+
+                .dashboard-workspace__attention-overlay {
+                    top: auto;
+                    right: 0.75rem;
+                    bottom: 1rem;
+                    left: 0.75rem;
+                    width: auto;
+                }
+
+                .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2),
+                .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3),
+                .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
+                    margin-right: 0;
+                }
             }
         </style>
 
         <div class="dashboard-workspace">
+            @if ($attentionSection && $attentionSection['widgets'] !== [])
+                <div class="dashboard-workspace__attention-overlay">
+                    <x-filament-widgets::widgets
+                        :columns="1"
+                        :data="$widgetData"
+                        :widgets="$attentionSection['widgets']"
+                        class="dashboard-workspace__widgets"
+                    />
+                </div>
+            @endif
+
             <section class="dashboard-workspace__hero">
                 <div class="dashboard-workspace__hero-row">
                     <div class="dashboard-workspace__hero-main">
@@ -495,7 +600,7 @@
                 </section>
             </div>
 
-            @foreach ($sections as $section)
+            @foreach ($contentSections as $section)
                 <section class="dashboard-workspace__panel">
                     <div class="dashboard-workspace__panel-head">
                         <div class="dashboard-workspace__section-head">
