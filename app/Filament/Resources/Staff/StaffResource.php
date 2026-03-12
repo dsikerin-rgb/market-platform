@@ -8,6 +8,7 @@ use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Filament\Resources\Staff\Schemas\StaffForm;
 use App\Filament\Resources\Staff\Tables\StaffTable;
 use App\Models\User;
+use App\Support\SystemAgentService;
 use BackedEnum;
 use Filament\Facades\Filament;
 use App\Filament\Resources\BaseResource;
@@ -59,6 +60,26 @@ class StaffResource extends BaseResource
         });
     }
 
+    protected static function applyVisibleStaffScope(Builder $query, ?User $user): Builder
+    {
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $visible): void {
+            $visible
+                ->whereNull('email')
+                ->orWhere('email', 'not like', '%@' . SystemAgentService::EMAIL_DOMAIN);
+        });
+    }
+
+    protected static function isSystemAgentRecord(User $record): bool
+    {
+        $email = mb_strtolower(trim((string) ($record->email ?? '')));
+
+        return $email !== '' && str_ends_with($email, '@' . SystemAgentService::EMAIL_DOMAIN);
+    }
+
     /**
      * Пункт меню видят те, у кого есть staff.viewAny
      */
@@ -108,8 +129,11 @@ class StaffResource extends BaseResource
      */
     public static function getEloquentQuery(): Builder
     {
-        $query = static::applyInternalStaffScope(parent::getEloquentQuery());
         $user = Filament::auth()->user();
+        $query = static::applyVisibleStaffScope(
+            static::applyInternalStaffScope(parent::getEloquentQuery()),
+            $user,
+        );
 
         if (! $user) {
             return $query->whereRaw('1 = 0');
@@ -160,6 +184,14 @@ class StaffResource extends BaseResource
             return false;
         }
 
+        if (
+            ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            && $record instanceof User
+            && static::isSystemAgentRecord($record)
+        ) {
+            return false;
+        }
+
         // Никто кроме super-admin не должен редактировать super-admin
         if (
             ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
@@ -192,6 +224,14 @@ class StaffResource extends BaseResource
         }
 
         if (! $user->can('staff.delete')) {
+            return false;
+        }
+
+        if (
+            ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            && $record instanceof User
+            && static::isSystemAgentRecord($record)
+        ) {
             return false;
         }
 
