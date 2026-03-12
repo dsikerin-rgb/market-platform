@@ -637,10 +637,10 @@ class TenantContractResource extends BaseResource
             ])
             ->actions([
                 tap(\Filament\Actions\EditAction::make()
-                    ->label('')
+                    ->label('Быстрое редактирование')
                     ->tooltip('Быстрое редактирование')
                     ->icon('heroicon-o-pencil-square')
-                    ->iconButton(), function ($action): void {
+                    ->color('gray'), function ($action): void {
                         if (method_exists($action, 'slideOver')) {
                             $action->slideOver();
                         }
@@ -650,16 +650,14 @@ class TenantContractResource extends BaseResource
                         }
                     }),
                 \Filament\Actions\Action::make('open_card')
-                    ->label('')
+                    ->label('Карточка')
                     ->tooltip('Открыть карточку')
                     ->icon('heroicon-o-arrow-top-right-on-square')
-                    ->iconButton()
+                    ->color('primary')
                     ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
             ])
             ->defaultSort('id', 'desc')
-            ->recordUrl(fn (TenantContract $record): ?string => static::canEdit($record)
-                ? static::getUrl('edit', ['record' => $record])
-                : null);
+            ->recordUrl(null);
     }
 
     public static function getRelations(): array

@@ -1052,19 +1052,17 @@ class MarketSpaceResource extends BaseResource
                             ->all();
                     }),
             ])
-            ->recordUrl(fn (MarketSpace $record): ?string => static::canEdit($record)
-                ? static::getUrl('edit', ['record' => $record])
-                : null);
+            ->recordUrl(null);
 
         $actions = [];
 
         // Icon-only actions (no text), keep tooltips for usability
         if (class_exists(\Filament\Actions\EditAction::class)) {
             $editAction = \Filament\Actions\EditAction::make()
-                ->label('')
+                ->label('Быстрое редактирование')
                 ->tooltip('Редактировать')
                 ->icon('heroicon-o-pencil-square')
-                ->iconButton();
+                ->color('gray');
 
             if (method_exists($editAction, 'slideOver')) {
                 $editAction->slideOver();
@@ -1077,10 +1075,10 @@ class MarketSpaceResource extends BaseResource
             $actions[] = $editAction;
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
             $editAction = \Filament\Tables\Actions\EditAction::make()
-                ->label('')
+                ->label('Быстрое редактирование')
                 ->tooltip('Редактировать')
                 ->icon('heroicon-o-pencil-square')
-                ->iconButton();
+                ->color('gray');
 
             if (method_exists($editAction, 'slideOver')) {
                 $editAction->slideOver();
@@ -1092,6 +1090,13 @@ class MarketSpaceResource extends BaseResource
 
             $actions[] = $editAction;
         }
+
+        $actions[] = Action::make('open_card')
+            ->label('Карточка')
+            ->tooltip('Открыть карточку')
+            ->icon('heroicon-o-arrow-top-right-on-square')
+            ->color('primary')
+            ->url(fn (MarketSpace $record): string => static::getUrl('edit', ['record' => $record]));
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
             $actions[] = \Filament\Actions\DeleteAction::make()
