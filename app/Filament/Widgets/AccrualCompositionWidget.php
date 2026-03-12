@@ -7,6 +7,7 @@ namespace App\Filament\Widgets;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
+use Filament\Support\RawJs;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Facades\DB;
@@ -166,26 +167,67 @@ class AccrualCompositionWidget extends ChartWidget
         ];
     }
 
-    protected function getOptions(): array
+    protected function getOptions(): array|RawJs
     {
-        return [
-            'responsive' => true,
-            'maintainAspectRatio' => true,
-            'aspectRatio' => 1.2,
-            'plugins' => [
-                'legend' => [
-                    'display' => true,
-                    'position' => 'bottom',
-                    'labels' => [
-                        'boxWidth' => 10,
-                        'boxHeight' => 10,
-                        'padding' => 10,
-                        'font' => ['size' => 11],
-                    ],
-                ],
-            ],
-            'cutout' => '58%',
-        ];
+        return RawJs::make(<<<'JS'
+            {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 1.2,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 10,
+                            boxHeight: 10,
+                            padding: 10,
+                            font: { size: 11 },
+                            generateLabels(chart) {
+                                const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                const data = Array.isArray(chart?.data?.datasets?.[0]?.data) ? chart.data.datasets[0].data : [];
+                                const total = data.reduce((sum, value) => sum + (Number(value) || 0), 0);
+                                const percentFormat = new Intl.NumberFormat('ru-RU', {
+                                    minimumFractionDigits: 1,
+                                    maximumFractionDigits: 1,
+                                });
+
+                                return original.map((item, index) => {
+                                    const value = Number(data[index] || 0);
+                                    const percent = total > 0 ? (value / total) * 100 : 0;
+
+                                    return {
+                                        ...item,
+                                        text: `${item.text} ${percentFormat.format(percent)}%`,
+                                    };
+                                });
+                            },
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                const data = Array.isArray(context?.dataset?.data) ? context.dataset.data : [];
+                                const total = data.reduce((sum, value) => sum + (Number(value) || 0), 0);
+                                const value = Number(context?.raw || 0);
+                                const percent = total > 0 ? (value / total) * 100 : 0;
+                                const percentFormat = new Intl.NumberFormat('ru-RU', {
+                                    minimumFractionDigits: 1,
+                                    maximumFractionDigits: 1,
+                                });
+                                const valueFormat = new Intl.NumberFormat('ru-RU', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                });
+
+                                return `${context.label}: ${valueFormat.format(value)} (${percentFormat.format(percent)}%)`;
+                            },
+                        },
+                    },
+                },
+                cutout: '58%',
+            }
+        JS);
     }
 
     private function resolveMarketIdForWidget($user): ?int

@@ -362,25 +362,6 @@
                 color: var(--dashboard-muted);
             }
 
-            .dashboard-workspace__section-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.45rem;
-                padding: 0.45rem 0.75rem;
-                border-radius: 999px;
-                border: 1px solid rgba(37, 99, 235, 0.22);
-                background: rgba(37, 99, 235, 0.08);
-                color: #1d4ed8;
-                font-size: 0.78rem;
-                font-weight: 600;
-            }
-
-            .dark .dashboard-workspace__section-badge {
-                border-color: rgba(59, 130, 246, 0.28);
-                background: rgba(37, 99, 235, 0.12);
-                color: #dbeafe;
-            }
-
             .dashboard-workspace__widgets.fi-wi {
                 gap: 1rem;
             }
@@ -599,10 +580,6 @@
                                 </div>
                             </div>
 
-                            <span class="dashboard-workspace__section-badge">
-                                <x-filament::icon icon="heroicon-o-squares-2x2" class="h-4 w-4" />
-                                {{ count($section['widgets']) }} блоков
-                            </span>
                         </div>
                     </div>
 
