@@ -151,7 +151,7 @@
             box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.55);
             opacity: 0;
             transform: translate3d(2.5rem, 0, 0) scale(0.98);
-            animation: market-attention-toast-in 560ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+            animation: market-attention-toast-in 780ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
         }
 
         .dark .market-attention-widget__card--toast {
@@ -181,21 +181,21 @@
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2) {
             margin-right: 0.55rem;
-            animation-delay: 90ms;
+            animation-delay: 140ms;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3) {
             margin-right: 1.1rem;
-            animation-delay: 180ms;
+            animation-delay: 280ms;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
             margin-right: 1.65rem;
-            animation-delay: 270ms;
+            animation-delay: 420ms;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(5) {
-            animation-delay: 360ms;
+            animation-delay: 560ms;
         }
 
         .market-attention-widget__toast-main {
