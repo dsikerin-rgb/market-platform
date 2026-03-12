@@ -7,7 +7,6 @@ namespace App\Filament\Widgets;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
-use Filament\Support\RawJs;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Support\Facades\DB;
@@ -120,37 +119,48 @@ class AccrualCompositionWidget extends ChartWidget
         $electricity = (float) ($row->electricity_total ?? 0);
         $management = (float) ($row->management_total ?? 0);
 
-        $labels = [];
+        $segments = [];
         $data = [];
         $colors = [];
 
         if ($rent > 0) {
-            $labels[] = 'Аренда';
+            $segments[] = 'Аренда';
             $data[] = round($rent, 2);
             $colors[] = '#f59e0b';
         }
 
         if ($utilities > 0) {
-            $labels[] = 'Коммунальные';
+            $segments[] = 'Коммунальные';
             $data[] = round($utilities, 2);
             $colors[] = '#60a5fa';
         }
 
         if ($electricity > 0) {
-            $labels[] = 'Электроэнергия';
+            $segments[] = 'Электроэнергия';
             $data[] = round($electricity, 2);
             $colors[] = '#34d399';
         }
 
         if ($management > 0) {
-            $labels[] = 'Управление';
+            $segments[] = 'Управление';
             $data[] = round($management, 2);
             $colors[] = '#a78bfa';
         }
 
-        if ($labels === []) {
+        if ($segments === []) {
             return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
         }
+
+        $total = array_sum($data);
+        $labels = array_map(
+            static function (string $label, float|int $value) use ($total): string {
+                $percent = $total > 0 ? ($value / $total) * 100 : 0;
+
+                return sprintf('%s %.1f%%', $label, $percent);
+            },
+            $segments,
+            $data,
+        );
 
         return [
             'labels' => $labels,
@@ -167,67 +177,26 @@ class AccrualCompositionWidget extends ChartWidget
         ];
     }
 
-    protected function getOptions(): array|RawJs
+    protected function getOptions(): array
     {
-        return RawJs::make(<<<'JS'
-            {
-                responsive: true,
-                maintainAspectRatio: true,
-                aspectRatio: 1.2,
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom',
-                        labels: {
-                            boxWidth: 10,
-                            boxHeight: 10,
-                            padding: 10,
-                            font: { size: 11 },
-                            generateLabels(chart) {
-                                const original = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-                                const data = Array.isArray(chart?.data?.datasets?.[0]?.data) ? chart.data.datasets[0].data : [];
-                                const total = data.reduce((sum, value) => sum + (Number(value) || 0), 0);
-                                const percentFormat = new Intl.NumberFormat('ru-RU', {
-                                    minimumFractionDigits: 1,
-                                    maximumFractionDigits: 1,
-                                });
-
-                                return original.map((item, index) => {
-                                    const value = Number(data[index] || 0);
-                                    const percent = total > 0 ? (value / total) * 100 : 0;
-
-                                    return {
-                                        ...item,
-                                        text: `${item.text} ${percentFormat.format(percent)}%`,
-                                    };
-                                });
-                            },
-                        },
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label(context) {
-                                const data = Array.isArray(context?.dataset?.data) ? context.dataset.data : [];
-                                const total = data.reduce((sum, value) => sum + (Number(value) || 0), 0);
-                                const value = Number(context?.raw || 0);
-                                const percent = total > 0 ? (value / total) * 100 : 0;
-                                const percentFormat = new Intl.NumberFormat('ru-RU', {
-                                    minimumFractionDigits: 1,
-                                    maximumFractionDigits: 1,
-                                });
-                                const valueFormat = new Intl.NumberFormat('ru-RU', {
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 2,
-                                });
-
-                                return `${context.label}: ${valueFormat.format(value)} (${percentFormat.format(percent)}%)`;
-                            },
-                        },
-                    },
-                },
-                cutout: '58%',
-            }
-        JS);
+        return [
+            'responsive' => true,
+            'maintainAspectRatio' => true,
+            'aspectRatio' => 1.2,
+            'plugins' => [
+                'legend' => [
+                    'display' => true,
+                    'position' => 'bottom',
+                    'labels' => [
+                        'boxWidth' => 10,
+                        'boxHeight' => 10,
+                        'padding' => 10,
+                        'font' => ['size' => 11],
+                    ],
+                ],
+            ],
+            'cutout' => '58%',
+        ];
     }
 
     private function resolveMarketIdForWidget($user): ?int
