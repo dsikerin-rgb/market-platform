@@ -54,6 +54,49 @@
             gap: 20px;
         }
 
+        .mp-home-priority-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.28fr) minmax(320px, .72fr);
+            gap: 18px;
+            align-items: start;
+        }
+
+        .mp-home-priority-side {
+            display: grid;
+            gap: 16px;
+        }
+
+        .mp-home-shortcuts {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .mp-home-shortcut {
+            display: grid;
+            gap: 8px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid #d7e4f5;
+            background: linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 10px 24px rgba(15, 54, 96, .07);
+        }
+
+        .mp-home-shortcut h3 {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.15;
+            font-weight: 900;
+            color: #10294c;
+        }
+
+        .mp-home-shortcut p {
+            margin: 0;
+            color: #5d6b86;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
         .mp-home-hero {
             position: relative;
             overflow: hidden;
@@ -100,7 +143,7 @@
             display: grid;
             grid-template-columns: minmax(0, 1.06fr) minmax(360px, .94fr);
             gap: 20px;
-            padding: 28px;
+            padding: 22px;
         }
 
         .mp-home-hero__eyebrow {
@@ -118,10 +161,10 @@
         }
 
         .mp-home-hero__title {
-            margin: 16px 0 0;
+            margin: 14px 0 0;
             max-width: 760px;
-            font-size: clamp(34px, 4.9vw, 56px);
-            line-height: 1.02;
+            font-size: clamp(28px, 3.8vw, 42px);
+            line-height: 1.06;
             letter-spacing: -.04em;
             font-weight: 900;
         }
@@ -635,6 +678,7 @@
         }
 
         @media (max-width: 1180px) {
+            .mp-home-priority-grid,
             .mp-home-hero__grid,
             .mp-home-highlight,
             .mp-home-slide {
@@ -670,6 +714,7 @@
                 padding: 20px;
             }
 
+            .mp-home-shortcuts,
             .mp-home-pulse {
                 display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -690,6 +735,66 @@
     </style>
 
     <div class="mp-home">
+        <section class="mp-home-priority-grid">
+            <article class="mp-home-panel">
+                <div class="mp-home-section__header">
+                    <div>
+                        <span class="mp-home-kicker">Витрина маркетплейса</span>
+                        <h2 class="mp-home-section__title">Товары на первом экране</h2>
+                    </div>
+                    <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug]) }}">Открыть каталог</a>
+                </div>
+
+                <div class="mp-home-products">
+                    @forelse($featuredProducts as $product)
+                        @include('marketplace.partials.product-card', ['product' => $product])
+                    @empty
+                        <div class="mp-home-empty">
+                            <h3>Пока нет опубликованных товаров</h3>
+                            <p>Как только продавцы добавят новые карточки, маркетплейс начнёт наполняться витриной.</p>
+                        </div>
+                    @endforelse
+                </div>
+            </article>
+
+            <div class="mp-home-priority-side">
+                <article class="mp-home-panel">
+                    <div class="mp-home-section__header">
+                        <div>
+                            <span class="mp-home-kicker">Свежие поступления</span>
+                            <h2 class="mp-home-section__title">Новые товары</h2>
+                        </div>
+                        <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug, 'sort' => 'new']) }}">Смотреть всё</a>
+                    </div>
+
+                    <div class="mp-home-products mp-home-products--compact">
+                        @forelse($latestCards->take(4) as $product)
+                            @include('marketplace.partials.product-card', ['product' => $product])
+                        @empty
+                            <div class="mp-home-empty">
+                                <h3>Новых карточек пока нет</h3>
+                                <p>После первой публикации продавцов здесь появятся свежие позиции.</p>
+                            </div>
+                        @endforelse
+                    </div>
+                </article>
+
+                <div class="mp-home-shortcuts">
+                    <a class="mp-home-shortcut" href="{{ route('marketplace.map', ['marketSlug' => $marketSlug]) }}">
+                        <span class="mp-home-kicker">Карта</span>
+                        <h3>Найти продавца на схеме рынка</h3>
+                        <p>Быстрый переход к карте с местами, магазинами и ориентиром по локациям.</p>
+                    </a>
+
+                    <a class="mp-home-shortcut" href="{{ route('marketplace.announcements', ['marketSlug' => $marketSlug]) }}">
+                        <span class="mp-home-kicker">Объявления</span>
+                        <h3>Посмотреть новости и акции</h3>
+                        <p>Санитарные уведомления, события и важные сообщения рынка в одном разделе.</p>
+                    </a>
+                </div>
+            </div>
+        </section>
+
         <section class="mp-home-hero">
             <div class="mp-home-hero__grid">
                 <div>
@@ -912,27 +1017,6 @@
         @endif
 
         <section class="mp-home-grid">
-            <article class="mp-home-panel">
-                <div class="mp-home-section__header">
-                    <div>
-                        <span class="mp-home-kicker">В центре внимания</span>
-                        <h2 class="mp-home-section__title">Популярные предложения</h2>
-                    </div>
-                    <a class="mp-home-inline-link" href="{{ route('marketplace.catalog', ['marketSlug' => $marketSlug]) }}">В каталог</a>
-                </div>
-
-                <div class="mp-home-products">
-                    @forelse($featuredProducts as $product)
-                        @include('marketplace.partials.product-card', ['product' => $product])
-                    @empty
-                        <div class="mp-home-empty">
-                            <h3>Пока нет выделенных предложений</h3>
-                            <p>Когда продавцы добавят витрины и публикации, здесь появятся главные карточки маркетплейса.</p>
-                        </div>
-                    @endforelse
-                </div>
-            </article>
-
             <article class="mp-home-panel">
                 <div class="mp-home-section__header">
                     <div>
