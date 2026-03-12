@@ -1,30 +1,29 @@
 <?php
-# app/Filament/Resources/TenantAccruals/TenantAccrualResource.php
 
 namespace App\Filament\Resources\TenantAccruals;
 
+use App\Filament\Resources\BaseResource;
 use App\Filament\Resources\TenantAccruals\Pages\EditTenantAccrual;
 use App\Filament\Resources\TenantAccruals\Pages\ListTenantAccruals;
 use App\Filament\Resources\TenantAccruals\Schemas\TenantAccrualForm;
 use App\Filament\Resources\TenantAccruals\Tables\TenantAccrualsTable;
 use App\Models\TenantAccrual;
 use Filament\Facades\Filament;
-use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 class TenantAccrualResource extends BaseResource
 {
-    
-
     protected static ?string $model = TenantAccrual::class;
 
     protected static ?string $recordTitleAttribute = 'source_place_name';
 
-    protected static ?string $modelLabel = 'Строка начисления';
-    protected static ?string $pluralModelLabel = 'Детализация начислений';
-    protected static ?string $navigationLabel = 'Детализация начислений';
+    protected static ?string $modelLabel = 'Начисление';
+
+    protected static ?string $pluralModelLabel = 'Начисления';
+
+    protected static ?string $navigationLabel = 'Начисления';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 
@@ -55,19 +54,18 @@ class TenantAccrualResource extends BaseResource
         return filled($value) ? (int) $value : null;
     }
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
-            'source_place_name',
-            'source_place_code',
-            'activity_type',
             'tenant.name',
+            'tenantContract.number',
             'marketSpace.number',
             'market.name',
             'period',
+            'source_file',
         ];
     }
+
     public static function form(Schema $schema): Schema
     {
         return TenantAccrualForm::configure($schema);
@@ -85,7 +83,6 @@ class TenantAccrualResource extends BaseResource
 
     public static function getPages(): array
     {
-        // Создание начислений вручную отключаем: источник — импорт.
         return [
             'index' => ListTenantAccruals::route('/'),
             'edit' => EditTenantAccrual::route('/{record}/edit'),
@@ -125,7 +122,6 @@ class TenantAccrualResource extends BaseResource
 
     public static function canCreate(): bool
     {
-        // Начисления создаются только импортом.
         return false;
     }
 
@@ -146,7 +142,6 @@ class TenantAccrualResource extends BaseResource
 
     public static function canDelete($record): bool
     {
-        // Удаление начислений в прототипе запрещаем (чтобы не потерять историю импорта).
         return false;
     }
 }

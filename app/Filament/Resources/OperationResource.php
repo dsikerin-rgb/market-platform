@@ -530,7 +530,7 @@ class OperationResource extends BaseResource
 
                 SelectFilter::make('type')
                     ->label('Тип')
-                    ->options(OperationType::labels()),
+                    ->options(OperationType::managementLabels()),
 
                 SelectFilter::make('entity_type')
                     ->label('Объект')
@@ -571,6 +571,8 @@ class OperationResource extends BaseResource
         if (! $user) {
             return $query->whereRaw('1 = 0');
         }
+
+        $query->whereIn('type', OperationType::managementValues());
 
         if ($user->isSuperAdmin()) {
             $marketId = static::resolveMarketId();
