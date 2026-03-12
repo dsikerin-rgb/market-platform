@@ -70,11 +70,13 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz);
         $monthLabel = $this->formatMonthLabel($monthYm, $tz);
 
-        $reportRows = $this->countAccrualRowsForMonth($marketId, $monthYm, $monthStart, $monthEnd);
+        $financialSummary = $this->resolveFinancialSummaryForMonth($marketId, $monthYm, $monthStart, $monthEnd);
+        $reportRows = $financialSummary['rows'];
         $hasReportData = is_int($reportRows) && $reportRows > 0;
 
-        $accrued = $this->sumAccruedForMonth($marketId, $monthYm, $monthStart, $monthEnd);
-        $paid = $this->sumPaidForMonth($marketId, $monthYm, $monthStart, $monthEnd);
+        $accrued = $financialSummary['accrued'];
+        $paid = $financialSummary['paid'];
+        $debt = $financialSummary['debt'];
 
         $tenantsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
@@ -107,10 +109,12 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             );
         }
 
-        $reportDesc = $hasReportData ? $monthLabel : ($monthLabel . ' · нет начислений');
+        $reportDesc = $hasReportData
+            ? ($monthLabel . ' · ' . $financialSummary['source'])
+            : ($monthLabel . ' · нет финансовых данных');
         $accruedValue = $accrued ?? 0.0;
         $paidValue = $paid ?? 0.0;
-        $debtValue = $accruedValue - $paidValue;
+        $debtValue = $debt ?? ($accruedValue - $paidValue);
         $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
         $occupancyRate = $totalSpaces > 0
             ? round(($occupiedSpaces / $totalSpaces) * 100)
@@ -475,6 +479,85 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
     private function sumPaidForMonth(int $marketId, string $monthYm, CarbonImmutable $start, CarbonImmutable $end): ?float
     {
         return $this->sumMoneyFromAccruals($marketId, $monthYm, $start, $end, 'paid');
+    }
+
+    /**
+     * @return array{rows:?int,accrued:?float,paid:?float,debt:?float,source:string}
+     */
+    private function resolveFinancialSummaryForMonth(int $marketId, string $monthYm, CarbonImmutable $start, CarbonImmutable $end): array
+    {
+        $debtSummary = $this->sumMoneyFromDebtSnapshots($marketId, $monthYm);
+
+        if ($debtSummary['rows'] !== null && $debtSummary['rows'] > 0) {
+            return $debtSummary + ['source' => '1С'];
+        }
+
+        return [
+            'rows' => $this->countAccrualRowsForMonth($marketId, $monthYm, $start, $end),
+            'accrued' => $this->sumAccruedForMonth($marketId, $monthYm, $start, $end),
+            'paid' => $this->sumPaidForMonth($marketId, $monthYm, $start, $end),
+            'debt' => null,
+            'source' => 'витрина начислений',
+        ];
+    }
+
+    /**
+     * @return array{rows:?int,accrued:?float,paid:?float,debt:?float}
+     */
+    private function sumMoneyFromDebtSnapshots(int $marketId, string $monthYm): array
+    {
+        if (! Schema::hasTable('contract_debts')) {
+            return ['rows' => null, 'accrued' => null, 'paid' => null, 'debt' => null];
+        }
+
+        try {
+            $rows = DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->where('period', $monthYm)
+                ->orderBy('contract_external_id')
+                ->orderByDesc('calculated_at')
+                ->get([
+                    'contract_external_id',
+                    'accrued_amount',
+                    'paid_amount',
+                    'debt_amount',
+                ]);
+        } catch (\Throwable) {
+            return ['rows' => null, 'accrued' => null, 'paid' => null, 'debt' => null];
+        }
+
+        $latestByContract = [];
+
+        foreach ($rows as $row) {
+            $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
+
+            if ($contractExternalId === '' || array_key_exists($contractExternalId, $latestByContract)) {
+                continue;
+            }
+
+            $latestByContract[$contractExternalId] = $row;
+        }
+
+        if ($latestByContract === []) {
+            return ['rows' => 0, 'accrued' => 0.0, 'paid' => 0.0, 'debt' => 0.0];
+        }
+
+        $accrued = 0.0;
+        $paid = 0.0;
+        $debt = 0.0;
+
+        foreach ($latestByContract as $row) {
+            $accrued += (float) ($row->accrued_amount ?? 0);
+            $paid += (float) ($row->paid_amount ?? 0);
+            $debt += (float) ($row->debt_amount ?? 0);
+        }
+
+        return [
+            'rows' => count($latestByContract),
+            'accrued' => $accrued,
+            'paid' => $paid,
+            'debt' => $debt,
+        ];
     }
 
     private function sumMoneyFromAccruals(
