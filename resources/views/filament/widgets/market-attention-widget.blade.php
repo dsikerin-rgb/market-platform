@@ -129,7 +129,7 @@
 
         .market-attention-widget__toast-layout {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
+            grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
             gap: 1.5rem;
             align-items: start;
         }
@@ -143,10 +143,10 @@
 
         .market-attention-widget__card--toast {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 8rem;
-            width: min(100%, 28rem);
-            min-height: 7.5rem;
-            border-radius: 1.1rem;
+            grid-template-columns: minmax(0, 1fr) 6rem;
+            width: min(100%, 21rem);
+            min-height: 5.6rem;
+            border-radius: 0.9rem;
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.96));
             box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.55);
         }
@@ -160,15 +160,15 @@
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2) {
-            margin-right: 0.75rem;
+            margin-right: 0.55rem;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3) {
-            margin-right: 1.5rem;
+            margin-right: 1.1rem;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
-            margin-right: 2.25rem;
+            margin-right: 1.65rem;
         }
 
         .market-attention-widget__toast-main {
@@ -176,28 +176,28 @@
             z-index: 1;
             display: flex;
             flex-direction: column;
-            gap: 0.85rem;
-            padding: 1rem 1rem 1rem 1.15rem;
+            gap: 0.6rem;
+            padding: 0.75rem 0.8rem 0.75rem 0.9rem;
         }
 
         .market-attention-widget__toast-head {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
 
         .market-attention-widget__toast-meta {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.35rem;
             flex-shrink: 0;
         }
 
         .market-attention-widget__toast-title {
             display: flex;
             align-items: flex-start;
-            gap: 0.75rem;
+            gap: 0.55rem;
             min-width: 0;
         }
 
@@ -205,9 +205,9 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 2.5rem;
-            height: 2.5rem;
-            border-radius: 0.9rem;
+            width: 1.9rem;
+            height: 1.9rem;
+            border-radius: 0.7rem;
             flex-shrink: 0;
         }
 
@@ -218,7 +218,7 @@
         .market-attention-widget__toast-name {
             margin: 0;
             color: rgb(15, 23, 42);
-            font-size: 0.98rem;
+            font-size: 0.82rem;
             font-weight: 700;
             line-height: 1.25;
         }
@@ -228,9 +228,9 @@
         }
 
         .market-attention-widget__toast-value {
-            margin-top: 0.18rem;
+            margin-top: 0.12rem;
             color: rgb(15, 23, 42);
-            font-size: 1.2rem;
+            font-size: 0.98rem;
             font-weight: 700;
             line-height: 1;
         }
@@ -242,8 +242,8 @@
         .market-attention-widget__toast-description {
             margin: 0;
             color: rgb(71, 85, 105);
-            font-size: 0.84rem;
-            line-height: 1.5;
+            font-size: 0.72rem;
+            line-height: 1.4;
         }
 
         .dark .market-attention-widget__toast-description {
@@ -266,9 +266,9 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0.9rem 0.75rem;
+            padding: 0.65rem 0.45rem;
             color: rgb(37, 99, 235);
-            font-size: 0.95rem;
+            font-size: 0.76rem;
             font-weight: 700;
             line-height: 1.2;
             text-align: center;
@@ -291,8 +291,8 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 2rem;
-            height: 2rem;
+            width: 1.6rem;
+            height: 1.6rem;
             border-radius: 999px;
             color: rgb(100, 116, 139);
             transition: background-color 160ms ease, color 160ms ease;

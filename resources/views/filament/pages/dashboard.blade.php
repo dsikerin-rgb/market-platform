@@ -396,9 +396,10 @@
                 position: fixed;
                 top: 5.75rem;
                 right: 1.5rem;
-                z-index: 40;
-                width: min(calc(100vw - 2rem), 32rem);
+                z-index: 120;
+                width: min(calc(100vw - 2rem), 24rem);
                 pointer-events: none;
+                isolation: isolate;
             }
 
             .dashboard-workspace__attention-overlay .dashboard-workspace__widgets.fi-wi {
@@ -406,6 +407,13 @@
             }
 
             .dashboard-workspace__attention-overlay .fi-wi-widget {
+                pointer-events: auto;
+            }
+
+            .dashboard-workspace__attention-overlay .market-attention-widget,
+            .dashboard-workspace__attention-overlay .market-attention-widget__surface,
+            .dashboard-workspace__attention-overlay .market-attention-widget__toast-stack,
+            .dashboard-workspace__attention-overlay .market-attention-widget__card--toast {
                 pointer-events: auto;
             }
 
@@ -480,7 +488,7 @@
                 .dashboard-workspace__attention-overlay {
                     top: 5rem;
                     right: 1rem;
-                    width: min(calc(100vw - 1.5rem), 30rem);
+                    width: min(calc(100vw - 1.5rem), 22rem);
                 }
             }
 
