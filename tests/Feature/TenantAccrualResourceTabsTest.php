@@ -17,7 +17,7 @@ class TenantAccrualResourceTabsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_page_falls_back_to_available_tabs_when_one_c_accruals_are_absent(): void
+    public function test_page_keeps_one_c_tabs_visible_even_when_one_c_accruals_are_absent(): void
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -55,9 +55,12 @@ class TenantAccrualResourceTabsTest extends TestCase
 
         $this->get(TenantAccrualResource::getUrl('index'))
             ->assertOk()
+            ->assertSee('1С')
+            ->assertSee('Связаны с договором')
+            ->assertSee('Без договора')
+            ->assertSee('Неоднозначные')
             ->assertSee('Исторический импорт')
-            ->assertSee('Все начисления')
-            ->assertDontSee('>1С<', false);
+            ->assertSee('Все начисления');
     }
 
     public function test_page_shows_one_c_tabs_when_one_c_accruals_exist(): void
