@@ -147,7 +147,9 @@ class MarketLocationTypeResource extends BaseResource
                     ->label('Активен')
                     ->boolean(),
             ])
-            ->recordUrl(null);
+            ->recordUrl(fn (MarketLocationType $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null);
 
         $actions = [];
 

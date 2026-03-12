@@ -160,7 +160,9 @@ class ReportResource extends BaseResource
                     ->dateTime()
                     ->sortable(),
             ])
-            ->recordUrl(null);
+            ->recordUrl(fn (Report $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null);
 
         $actions = [];
 

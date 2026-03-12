@@ -210,7 +210,9 @@ class MarketLocationResource extends BaseResource
                     ->label('Активен')
                     ->boolean(),
             ])
-            ->recordUrl(null)
+            ->recordUrl(fn (MarketLocation $record): ?string => static::canEdit($record)
+                ? static::getUrl('edit', ['record' => $record])
+                : null)
             ->actions([
                 tap(\Filament\Actions\EditAction::make()->label('Редактировать'), function ($action): void {
                     if (method_exists($action, 'slideOver')) {
