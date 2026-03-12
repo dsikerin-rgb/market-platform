@@ -226,7 +226,6 @@ class Dashboard extends BaseDashboard
                 ],
                 'widgets' => $this->resolveVisibleWorkspaceWidgets([
                     RecentTenantRequestsWidget::class,
-                    TenantActivityStatsWidget::class,
                 ]),
             ],
         ];
