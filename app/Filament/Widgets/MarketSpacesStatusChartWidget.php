@@ -106,10 +106,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         }
 
         $occupiedSpaces = (clone $baseQuery)
-            ->where(function ($query): void {
-                $query->whereNotNull('tenant_id')
-                    ->orWhere('status', 'occupied');
-            })
+            ->where('status', 'occupied')
             ->count();
 
         $occupiedSpaces = max($occupiedSpaces, 0);
