@@ -63,21 +63,11 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
             ->find($marketId);
 
         $tz = $this->resolveTimezone($market?->timezone);
-        [$monthStartTz, $monthEndTz] = $this->resolveMonthRange($tz);
-
-        $monthStartUtc = $monthStartTz->utc();
-        $monthEndUtc = $monthEndTz->utc();
 
         $requestsQuery = TenantRequest::query()->where('market_id', $marketId);
         $requestsTable = (new TenantRequest())->getTable();
         $requestsStatusCol = $this->pickFirstExistingColumn($requestsTable, ['status']) ?? 'status';
-        $requestsCreatedCol = $this->pickFirstExistingColumn($requestsTable, ['created_at']) ?? 'created_at';
         $closedStatuses = ['resolved', 'closed'];
-
-        $requestsCreatedInMonth = (clone $requestsQuery)
-            ->where($requestsCreatedCol, '>=', $monthStartUtc)
-            ->where($requestsCreatedCol, '<', $monthEndUtc)
-            ->count();
 
         $openRequests = (clone $requestsQuery)
             ->whereNotIn($requestsStatusCol, $closedStatuses)
@@ -88,8 +78,6 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         return [
             Stat::make('Открытых обращений', $openRequests)
                 ->description('Текущее количество незакрытых обращений'),
-            Stat::make('Новых обращений за месяц', $requestsCreatedInMonth)
-                ->description('Созданы в выбранном месяце'),
             Stat::make('Договоров в финансовом контуре', $financialContourContracts)
                 ->description('Есть в долгах 1С или связаны с начислениями'),
             Stat::make('Без привязки к месту', $financialContourWithoutSpace)
@@ -215,7 +203,6 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
     {
         $stats = [
             Stat::make('Открытых обращений', 0),
-            Stat::make('Новых обращений за месяц', 0),
             Stat::make('Договоров в финансовом контуре', 0),
             Stat::make('Без привязки к месту', 0),
         ];
