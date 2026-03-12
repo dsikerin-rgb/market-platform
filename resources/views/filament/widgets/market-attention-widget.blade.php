@@ -183,20 +183,21 @@
             }
         }
 
-        .market-attention-widget__toast-transition-leave {
-            transition:
-                opacity 780ms cubic-bezier(0.2, 0.9, 0.2, 1),
-                transform 780ms cubic-bezier(0.2, 0.9, 0.2, 1);
+        @keyframes market-attention-toast-out {
+            0% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate3d(2.5rem, 0, 0) scale(0.98);
+            }
         }
 
-        .market-attention-widget__toast-transition-leave-start {
-            opacity: 1;
-            transform: translate3d(0, 0, 0) scale(1);
-        }
-
-        .market-attention-widget__toast-transition-leave-end {
-            opacity: 0;
-            transform: translate3d(2.5rem, 0, 0) scale(0.98);
+        .market-attention-widget__card--toast.market-attention-widget__card--toast-dismissing {
+            pointer-events: none;
+            animation: market-attention-toast-out 780ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
         }
 
         .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2) {
@@ -576,6 +577,7 @@
                             <div
                                 x-data="{
                                     open: true,
+                                    closing: false,
                                     storageKey: @js($dismissStorageKey),
                                     init() {
                                         try {
@@ -592,7 +594,11 @@
                                         }
                                     },
                                     dismiss() {
-                                        this.open = false;
+                                        if (this.closing) {
+                                            return;
+                                        }
+
+                                        this.closing = true;
 
                                         try {
                                             const now = new Date();
@@ -601,13 +607,15 @@
                                             window.localStorage.setItem(this.storageKey, String(tomorrow.getTime()));
                                         } catch (error) {
                                         }
+
+                                        window.setTimeout(() => {
+                                            this.open = false;
+                                        }, 780);
                                     }
                                 }"
                                 x-cloak
                                 x-show="open"
-                                x-transition:leave="market-attention-widget__toast-transition-leave"
-                                x-transition:leave-start="market-attention-widget__toast-transition-leave-start"
-                                x-transition:leave-end="market-attention-widget__toast-transition-leave-end"
+                                x-bind:class="{ 'market-attention-widget__card--toast-dismissing': closing }"
                                 class="market-attention-widget__card market-attention-widget__card--toast group no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                                 style="{{ $accentClasses['style'] }}"
                                 role="link"
