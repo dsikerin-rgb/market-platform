@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\MarketplaceSlideResource;
 use App\Models\Market;
+use App\Models\MarketplaceSlide;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -31,6 +33,19 @@ class MarketplaceSettings extends Page
     public ?Market $market = null;
 
     public bool $isSuperAdmin = false;
+
+    public ?string $slidesUrl = null;
+
+    public ?string $publicMarketplaceUrl = null;
+
+    public int $slidesCount = 0;
+
+    public int $activeSlidesCount = 0;
+
+    /**
+     * @var array<int, array<string, mixed>>
+     */
+    public array $slidesPreview = [];
 
     /**
      * @var array<string, mixed>
@@ -70,6 +85,7 @@ class MarketplaceSettings extends Page
         abort_unless($this->market, 404);
 
         $settings = (array) (($this->market->settings ?? [])['marketplace'] ?? []);
+        $this->hydrateSlidePreview();
 
         $this->form->fill([
             'brand_name' => trim((string) ($settings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
@@ -115,7 +131,7 @@ class MarketplaceSettings extends Page
                         Forms\Components\TextInput::make('public_phone')
                             ->label('Телефон')
                             ->placeholder('+7 (3852) 55-67-55')
-                            ->helperText('Можно указывать номер в обычном формате: +7 (3852) 55-67-55')
+                            ->helperText('Укажите основной публичный номер для покупателей и арендаторов.')
                             ->maxLength(255),
 
                         Forms\Components\TextInput::make('public_email')
@@ -131,7 +147,7 @@ class MarketplaceSettings extends Page
                     ->columns(2),
 
                 Section::make('Главный экран')
-                    ->description('Этот блок управляет главным сообщением маркетплейса. Календарные акции, праздники и санитарные дни продолжают публиковаться отдельно в разделе анонсов и событий.')
+                    ->description('Этот блок управляет главным сообщением маркетплейса. Календарные акции, праздники и санитарные дни публикуются отдельно в разделе анонсов и событий.')
                     ->schema([
                         Forms\Components\TextInput::make('hero_title')
                             ->label('Заголовок hero-блока')
@@ -146,8 +162,8 @@ class MarketplaceSettings extends Page
                     ])
                     ->columns(2),
 
-                Section::make('Слайдер информации')
-                    ->description('Слайды дополняют главную страницу маркетплейса и не заменяют события из календаря. Календарь остаётся отдельным слоем публикаций.')
+                Section::make('Слайды маркетплейса')
+                    ->description('Слайды дополняют главную страницу маркетплейса и не заменяют календарные анонсы. Здесь управляются только промо-карточки и информационные баннеры.')
                     ->schema([
                         Forms\Components\Toggle::make('slider_enabled')
                             ->label('Показывать слайдер на главной')
@@ -177,7 +193,7 @@ class MarketplaceSettings extends Page
                     ->schema([
                         Forms\Components\Toggle::make('allow_public_sales_without_active_contracts')
                             ->label('Показывать товары и витрины без действующих договоров')
-                            ->helperText('Временный режим для запуска или сбоя интеграции. Если включён, публичный маркетплейс не будет скрывать продавцов без активного договора в системе.')
+                            ->helperText('Временный режим для запуска или сбоя интеграции. Если включён, маркетплейс не скрывает продавцов без активного договора в системе.')
                             ->default(false),
                     ])
                     ->columns(2),
@@ -207,6 +223,7 @@ class MarketplaceSettings extends Page
 
         $this->market->settings = $settings;
         $this->market->save();
+        $this->hydrateSlidePreview();
 
         Notification::make()
             ->title('Настройки маркетплейса сохранены')
@@ -280,5 +297,51 @@ class MarketplaceSettings extends Page
         );
 
         return $hasRoleAccess || $hasPermissionAccess;
+    }
+
+    protected function hydrateSlidePreview(): void
+    {
+        if (! $this->market) {
+            $this->slidesCount = 0;
+            $this->activeSlidesCount = 0;
+            $this->slidesPreview = [];
+            $this->slidesUrl = null;
+            $this->publicMarketplaceUrl = null;
+
+            return;
+        }
+
+        $slidesQuery = MarketplaceSlide::query()
+            ->where('market_id', $this->market->id);
+
+        $this->slidesCount = (clone $slidesQuery)->count();
+        $this->activeSlidesCount = (clone $slidesQuery)->where('is_active', true)->count();
+        $this->slidesPreview = (clone $slidesQuery)
+            ->orderByDesc('is_active')
+            ->orderBy('sort_order')
+            ->orderByDesc('id')
+            ->limit(4)
+            ->get(['id', 'title', 'badge', 'theme', 'is_active', 'sort_order'])
+            ->map(static fn (MarketplaceSlide $slide): array => [
+                'id' => $slide->id,
+                'title' => (string) $slide->title,
+                'badge' => (string) ($slide->badge ?? ''),
+                'theme' => (string) ($slide->theme ?? 'info'),
+                'is_active' => (bool) $slide->is_active,
+                'sort_order' => (int) ($slide->sort_order ?? 0),
+            ])
+            ->all();
+
+        try {
+            $this->slidesUrl = MarketplaceSlideResource::getUrl('index');
+        } catch (\Throwable) {
+            $this->slidesUrl = null;
+        }
+
+        try {
+            $this->publicMarketplaceUrl = route('marketplace.entry');
+        } catch (\Throwable) {
+            $this->publicMarketplaceUrl = null;
+        }
     }
 }
