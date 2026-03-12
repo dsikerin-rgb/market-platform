@@ -12,7 +12,13 @@ class ListTenantAccruals extends ListRecords
 
     protected static ?string $title = 'Начисления';
 
-    public ?string $activeTab = 'one_c';
+    public ?string $activeTab = null;
+
+    public function mount(): void
+    {
+        parent::mount();
+        $this->activeTab = $this->resolveDefaultTab();
+    }
 
     public function getBreadcrumb(): string
     {
@@ -26,31 +32,37 @@ class ListTenantAccruals extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Детализация начислений из 1С и исторического импорта. Для договоров и задолженности используйте 1С-контур.';
+        return 'Детализация начислений. Вкладка 1С показывается отдельно, если в текущем контуре уже есть начисления из 1С.';
     }
 
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
+        $tabs = [];
 
-        return [
-            'one_c' => $this->makeTab(
+        if ($this->hasOneCAccruals()) {
+            $tabs['one_c'] = $this->makeTab(
                 $tabClass,
                 '1С',
                 fn (Builder $query) => $query->where('source', '1c')
-            ),
-            'without_contract' => $this->makeTab(
-                $tabClass,
-                'Без договора',
-                fn (Builder $query) => $query->whereNull('tenant_contract_id')
-            ),
-            'history' => $this->makeTab(
-                $tabClass,
-                'Исторический импорт',
-                fn (Builder $query) => $query->where('source', '!=', '1c')
-            ),
-            'all' => $tabClass::make('Все начисления'),
-        ];
+            );
+        }
+
+        $tabs['without_contract'] = $this->makeTab(
+            $tabClass,
+            'Без договора',
+            fn (Builder $query) => $query->whereNull('tenant_contract_id')
+        );
+
+        $tabs['history'] = $this->makeTab(
+            $tabClass,
+            'Исторический импорт',
+            fn (Builder $query) => $query->where('source', '!=', '1c')
+        );
+
+        $tabs['all'] = $tabClass::make('Все начисления');
+
+        return $tabs;
     }
 
     protected static function resolveTabClass(): string
@@ -75,5 +87,17 @@ class ListTenantAccruals extends ListRecords
         }
 
         return $tab;
+    }
+
+    private function resolveDefaultTab(): string
+    {
+        return $this->hasOneCAccruals() ? 'one_c' : 'all';
+    }
+
+    private function hasOneCAccruals(): bool
+    {
+        return TenantAccrualResource::getEloquentQuery()
+            ->where('source', '1c')
+            ->exists();
     }
 }
