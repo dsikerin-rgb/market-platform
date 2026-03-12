@@ -100,6 +100,7 @@ class TenantAccrualResourceTabsTest extends TestCase
         $this->get(TenantAccrualResource::getUrl('index'))
             ->assertOk()
             ->assertSee('1С')
+            ->assertSee('Связаны с договором')
             ->assertSee('Без договора')
             ->assertSee('Неоднозначные')
             ->assertSee('Все начисления');
