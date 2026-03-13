@@ -9,7 +9,6 @@ use App\Filament\Auth\Login as AdminLogin;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\MarketplaceSettings;
-use App\Filament\Pages\OneCFinance;
 use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Pages\ReportsHub;
 use App\Filament\Pages\Requests;
@@ -138,7 +137,6 @@ class AdminPanelProvider extends PanelProvider
                 SettingsHub::class,
                 MarketSettings::class,
                 MarketplaceSettings::class,
-                OneCFinance::class,
                 ReportsHub::class,
                 Requests::class,
                 OpsDiagnostics::class,
