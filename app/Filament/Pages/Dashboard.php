@@ -13,6 +13,7 @@ use App\Filament\Widgets\AccrualCompositionWidget;
 use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
+use App\Models\ContractDebt;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -513,7 +514,7 @@ class Dashboard extends BaseDashboard
         // 2) contract_debts (1С)
         if (DbSchema::hasTable('contract_debts') && DbSchema::hasColumn('contract_debts', 'market_id')) {
             try {
-                $v = DB::table('contract_debts')
+                $v = ContractDebt::query()
                     ->where('market_id', $marketId)
                     ->orderByDesc('period')
                     ->value('period');
@@ -588,7 +589,7 @@ class Dashboard extends BaseDashboard
             && DbSchema::hasColumn('contract_debts', 'period')
         ) {
             try {
-                $raw = DB::table('contract_debts')
+                $raw = ContractDebt::query()
                     ->where('market_id', $marketId)
                     ->select('period')
                     ->distinct()

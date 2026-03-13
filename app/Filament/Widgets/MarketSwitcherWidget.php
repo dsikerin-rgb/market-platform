@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Models\Market;
+use App\Models\ContractDebt;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -213,7 +214,7 @@ class MarketSwitcherWidget extends Widget
 
         if (DbSchema::hasTable('contract_debts') && DbSchema::hasColumn('contract_debts', 'market_id') && DbSchema::hasColumn('contract_debts', 'period')) {
             try {
-                $v = DB::table('contract_debts')
+                $v = ContractDebt::query()
                     ->where('market_id', $marketId)
                     ->orderByDesc('period')
                     ->value('period');
