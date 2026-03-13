@@ -92,7 +92,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        [, $endMonthStart] = $this->resolveEndMonth($tz);
+        [, $endMonthStart] = $this->resolveEndMonth($marketId, $tz);
 
         $months = [];
         $cursor = $endMonthStart->subMonths(12);
@@ -266,7 +266,7 @@ class RevenueYearChartWidget extends ChartWidget
     /**
      * @return array{0:string,1:CarbonImmutable}
      */
-    private function resolveEndMonth(string $tz): array
+    private function resolveEndMonth(int $marketId, string $tz): array
     {
         $raw = null;
 
@@ -292,9 +292,54 @@ class RevenueYearChartWidget extends ChartWidget
             ? $raw
             : CarbonImmutable::now($tz)->format('Y-m');
 
+        if (! $this->hasDebtRowsForMonth($marketId, $ym)) {
+            $latestDebtMonth = $this->findLatestDebtMonth($marketId);
+
+            if ($latestDebtMonth !== null) {
+                $ym = $latestDebtMonth;
+            }
+        }
+
         $start = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
 
         return [$ym, $start];
+    }
+
+    private function hasDebtRowsForMonth(int $marketId, string $monthYm): bool
+    {
+        if ($marketId <= 0 || ! preg_match('/^\d{4}-\d{2}$/', $monthYm)) {
+            return false;
+        }
+
+        try {
+            return DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->where('period', $monthYm)
+                ->exists();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function findLatestDebtMonth(int $marketId): ?string
+    {
+        if ($marketId <= 0) {
+            return null;
+        }
+
+        try {
+            $period = DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->max('period');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! is_string($period) || ! preg_match('/^\d{4}-\d{2}$/', $period)) {
+            return null;
+        }
+
+        return $period;
     }
 
     private function formatMonthLabel(string $ym, string $tz): string
