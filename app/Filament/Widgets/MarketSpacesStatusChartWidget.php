@@ -5,14 +5,17 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
-use App\Models\Market;
+use App\Filament\Resources\MarketSpaceResource;
 use App\Models\MarketSpace;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'Заполняемость торговых мест';
 
     protected function getType(): string
@@ -30,7 +33,8 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         );
     }
 
-    public function getDescription(): ?string
+
+    public function getDescription(): string|Htmlable|null
     {
         $user = Filament::auth()->user();
 
@@ -44,23 +48,12 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             return null;
         }
 
-        $market = Market::query()
-            ->select(['id', 'name', 'timezone'])
-            ->find($marketId);
+        $sourceUrl = e(MarketSpaceResource::getUrl('index'));
 
-        $tz = $this->resolveTimezone($market?->timezone);
-        $marketName = trim((string) ($market?->name ?? ''));
-
-        $parts = [];
-
-        if ($marketName !== '') {
-            $parts[] = 'Локация: ' . $marketName;
-        }
-
-        $parts[] = 'Текущее состояние';
-        $parts[] = 'TZ: ' . $tz;
-
-        return implode(' • ', $parts);
+        return new HtmlString(
+            "\u{0418}\u{0441}\u{0442}\u{043e}\u{0447}\u{043d}\u{0438}\u{043a}: "
+            . "<a href=\"" . $sourceUrl . "\" class=\"font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300\">\u{0444}\u{043e}\u{043d}\u{0434} \u{043c}\u{0435}\u{0441}\u{0442}</a>"
+        );
     }
 
     protected function getOptions(): array
@@ -152,23 +145,6 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             ?? session('filament.admin.selected_market_id');
 
         return filled($value) ? (int) $value : null;
-    }
-
-    private function resolveTimezone(?string $marketTimezone): string
-    {
-        $tz = trim((string) $marketTimezone);
-
-        if ($tz === '') {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
-
-        try {
-            CarbonImmutable::now($tz);
-        } catch (\Throwable) {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
-
-        return $tz;
     }
 
     private function emptyChart(string $label = 'Нет данных'): array
