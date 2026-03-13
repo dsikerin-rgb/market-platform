@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\Tenant;
+use App\Models\ContractDebt;
 use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
@@ -1152,7 +1153,7 @@ class TenantResource extends BaseResource
             $cdHasPaid = static::hasColumn('contract_debts', 'paid_amount');
             $cdHasDebt = static::hasColumn('contract_debts', 'debt_amount');
 
-            $debtsBase = DB::table('contract_debts')
+            $debtsBase = ContractDebt::query()
                 ->where('tenant_id', (int) $record->id);
 
             if ($cdHasMarketId) {
@@ -2008,7 +2009,7 @@ class TenantResource extends BaseResource
         $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
         $hasPeriod = static::hasColumn('contract_debts', 'period');
 
-        $base = DB::table('contract_debts')
+        $base = ContractDebt::query()
             ->where('tenant_id', (int) $record->id);
 
         if ($hasMarketId) {

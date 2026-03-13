@@ -2,6 +2,7 @@
 
 namespace App\Services\Debt;
 
+use App\Models\ContractDebt;
 use App\Models\Tenant;
 use App\Models\Market;
 use Carbon\Carbon;
@@ -182,8 +183,8 @@ class DebtStatusResolver
             );
         }
 
-        // Запрашиваем долги по contract_external_id
-        $query = DB::table('contract_debts')
+        // Запрашиваем долги по contract_external_id через модель
+        $query = ContractDebt::query()
             ->whereIn('contract_external_id', $contractExternalIds->all())
             ->where('market_id', $marketId);
 
@@ -586,7 +587,7 @@ class DebtStatusResolver
             return null;
         }
 
-        $query = DB::table('contract_debts');
+        $query = ContractDebt::query();
 
         // Поиск по external_id или one_c_uid
         if ($hasTenantExternalId) {

@@ -8,6 +8,7 @@ use App\Filament\Pages\Requests;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
+use App\Models\ContractDebt;
 use App\Models\Market;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -87,7 +88,7 @@ class TenantsWorkspaceWidget extends Widget
             return 0;
         }
 
-        $latestSnapshotAt = DB::table('contract_debts')
+        $latestSnapshotAt = ContractDebt::query()
             ->where('market_id', $marketId)
             ->max('calculated_at');
 
@@ -95,7 +96,7 @@ class TenantsWorkspaceWidget extends Widget
             return 0;
         }
 
-        return (int) DB::table('contract_debts')
+        return (int) ContractDebt::query()
             ->where('market_id', $marketId)
             ->where('calculated_at', $latestSnapshotAt)
             ->where('debt_amount', '>', 0)
@@ -122,7 +123,7 @@ class TenantsWorkspaceWidget extends Widget
             return 'Нет данных';
         }
 
-        $latestSnapshotAt = DB::table('contract_debts')
+        $latestSnapshotAt = ContractDebt::query()
             ->where('market_id', $marketId)
             ->max('calculated_at');
 

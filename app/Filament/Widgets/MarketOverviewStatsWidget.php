@@ -9,6 +9,7 @@ use App\Filament\Resources\MarketResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantResource;
+use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
@@ -511,7 +512,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         try {
-            $rows = DB::table('contract_debts')
+            $rows = ContractDebt::query()
                 ->where('market_id', $marketId)
                 ->where('period', $monthYm)
                 ->orderBy('contract_external_id')

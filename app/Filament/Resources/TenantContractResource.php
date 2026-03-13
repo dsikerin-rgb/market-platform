@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantContractResource\Pages;
+use App\Models\ContractDebt;
 use App\Models\MarketSpace;
 use App\Models\TenantContract;
 use App\Services\MarketSpaces\SpaceGroupResolver;
@@ -913,7 +914,7 @@ class TenantContractResource extends BaseResource
             return;
         }
 
-        $latestCalculatedAt = DB::table('contract_debts')
+        $latestCalculatedAt = ContractDebt::query()
             ->where('market_id', $marketId)
             ->max('calculated_at');
 
@@ -923,7 +924,7 @@ class TenantContractResource extends BaseResource
             return;
         }
 
-        $externalIds = DB::table('contract_debts')
+        $externalIds = ContractDebt::query()
             ->where('market_id', $marketId)
             ->where('calculated_at', $latestCalculatedAt)
             ->whereNotNull('contract_external_id')
@@ -973,7 +974,7 @@ class TenantContractResource extends BaseResource
             return;
         }
 
-        $externalIds = DB::table('contract_debts')
+        $externalIds = ContractDebt::query()
             ->where('market_id', $marketId)
             ->whereNotNull('contract_external_id')
             ->pluck('contract_external_id')
