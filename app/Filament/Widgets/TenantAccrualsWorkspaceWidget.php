@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Pages\OneCFinance;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Models\Market;
 use App\Models\TenantAccrual;
@@ -76,7 +77,7 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'operationalDebt' => $operationalSnapshot['debt'],
             'operationalReady' => $operationalSnapshot['ready'],
             'issues' => $this->topIssueNotes($oneCQuery),
-            'oneCUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $oneC > 0 ? 'one_c' : $primaryDetailTab]),
+            'oneCUrl' => OneCFinance::getUrl(),
             'linkedUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $linked > 0 ? 'linked' : $primaryDetailTab]),
             'withoutContractUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => ($unmatched + $unchecked) > 0 ? 'without_contract' : $primaryDetailTab]),
             'ambiguousUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $ambiguous > 0 ? 'ambiguous' : $primaryDetailTab]),

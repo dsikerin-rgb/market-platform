@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TenantAccruals\Pages;
 
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
+use App\Filament\Widgets\OneCContractDebtsTableWidget;
 use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
 use App\Models\TenantAccrual;
 use Filament\Resources\Pages\ListRecords;
@@ -48,6 +49,7 @@ class ListTenantAccruals extends ListRecords
     {
         return [
             TenantAccrualsWorkspaceWidget::class,
+            OneCContractDebtsTableWidget::class,
         ];
     }
 

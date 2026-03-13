@@ -353,7 +353,7 @@ class Dashboard extends BaseDashboard
                     'title' => 'Начисления',
                     'description' => 'Открыть начисления из 1С и проверить суммы за выбранный период.',
                     'meta' => $periodLabel,
-                    'url' => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index'),
+                    'url' => \App\Filament\Pages\OneCFinance::getUrl(),
                     'icon' => 'heroicon-o-banknotes',
                 ],
                 [
