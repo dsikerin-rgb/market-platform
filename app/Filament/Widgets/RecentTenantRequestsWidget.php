@@ -10,12 +10,13 @@ use App\Models\TenantRequest;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseTableWidget;
 use Illuminate\Database\Eloquent\Builder;
 
 class RecentTenantRequestsWidget extends BaseTableWidget
 {
-    protected static ?string $heading = 'Открытые обращения арендаторов';
+    protected static ?string $heading = '';
 
     protected int|string|array $columnSpan = 'full';
 
@@ -24,6 +25,11 @@ class RecentTenantRequestsWidget extends BaseTableWidget
     private string $marketTimezone = 'UTC';
 
     private ?string $emptyStateNote = null;
+
+    public function table(Table $table): Table
+    {
+        return $table->searchable(false);
+    }
 
     protected function getTableQuery(): Builder
     {
@@ -180,4 +186,3 @@ class RecentTenantRequestsWidget extends BaseTableWidget
         return $tz;
     }
 }
-

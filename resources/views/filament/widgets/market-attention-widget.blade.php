@@ -1,5 +1,9 @@
 <x-filament::section>
     <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
         .market-attention-widget {
             position: relative;
         }
@@ -126,6 +130,322 @@
             border-color: rgba(34, 197, 94, 0.28);
             background: rgba(21, 128, 61, 0.12);
         }
+
+        .market-attention-widget__toast-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        .market-attention-widget__toast-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.85rem;
+        }
+
+        .market-attention-widget__card--toast {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 6rem;
+            width: min(100%, 21rem);
+            min-height: 5.6rem;
+            border-radius: 0.9rem;
+            background: rgb(255, 255, 255);
+            box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.55);
+            opacity: 0;
+            transform: translate3d(2.5rem, 0, 0) scale(0.98);
+            animation: market-attention-toast-in 780ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+        }
+
+        .dark .market-attention-widget__card--toast {
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+        }
+
+        .market-attention-widget__card--toast:hover {
+            transform: translateY(-2px);
+        }
+
+        @keyframes market-attention-toast-in {
+            0% {
+                opacity: 0;
+                transform: translate3d(2.5rem, 0, 0) scale(0.98);
+            }
+
+            72% {
+                opacity: 1;
+                transform: translate3d(-0.16rem, 0, 0) scale(1);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+        }
+
+        @keyframes market-attention-toast-out {
+            0% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate3d(2.5rem, 0, 0) scale(0.98);
+            }
+        }
+
+        .market-attention-widget__card--toast.market-attention-widget__card--toast-dismissing {
+            pointer-events: none;
+            animation: market-attention-toast-out 780ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+        }
+
+        .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2) {
+            margin-right: 0.55rem;
+            animation-delay: 140ms;
+        }
+
+        .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3) {
+            margin-right: 1.1rem;
+            animation-delay: 280ms;
+        }
+
+        .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
+            margin-right: 1.65rem;
+            animation-delay: 420ms;
+        }
+
+        .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(5) {
+            animation-delay: 560ms;
+        }
+
+        .market-attention-widget__toast-main {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 0.75rem 0.8rem 0.75rem 0.9rem;
+        }
+
+        .market-attention-widget__toast-head {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .market-attention-widget__toast-title {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.55rem;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .market-attention-widget__toast-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.9rem;
+            height: 1.9rem;
+            border-radius: 0.7rem;
+            flex-shrink: 0;
+        }
+
+        .market-attention-widget__toast-copy {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .market-attention-widget__toast-name {
+            margin: 0;
+            color: rgb(15, 23, 42);
+            font-size: 0.82rem;
+            font-weight: 700;
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .dark .market-attention-widget__toast-name {
+            color: rgb(248, 250, 252);
+        }
+
+        .market-attention-widget__toast-value {
+            margin-top: 0.12rem;
+            color: rgb(51, 65, 85);
+            font-size: 0.84rem;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        .dark .market-attention-widget__toast-value {
+            color: rgb(203, 213, 225);
+        }
+
+        .market-attention-widget__toast-description {
+            margin: 0;
+            color: rgb(71, 85, 105);
+            font-size: 0.72rem;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .dark .market-attention-widget__toast-description {
+            color: rgb(203, 213, 225);
+        }
+
+        .market-attention-widget__toast-actions {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            border-left: 1px solid rgba(148, 163, 184, 0.18);
+            background: inherit;
+        }
+
+        .dark .market-attention-widget__toast-actions {
+            border-left-color: rgba(71, 85, 105, 0.45);
+        }
+
+        .market-attention-widget__toast-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.65rem 0.45rem;
+            background: transparent;
+            font-size: 0.76rem;
+            font-weight: 700;
+            line-height: 1.2;
+            text-align: center;
+            transition: background-color 160ms ease, color 160ms ease;
+        }
+
+        .market-attention-widget__toast-action--primary {
+            color: rgb(37, 99, 235);
+        }
+
+        .market-attention-widget__toast-action--secondary {
+            color: rgb(15, 23, 42);
+            background: transparent;
+        }
+
+        .market-attention-widget__toast-action + .market-attention-widget__toast-action {
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+
+        .dark .market-attention-widget__toast-action--primary {
+            color: rgb(147, 197, 253);
+        }
+
+        .dark .market-attention-widget__toast-action--secondary {
+            color: rgb(248, 250, 252);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .dark .market-attention-widget__toast-action + .market-attention-widget__toast-action {
+            border-top-color: rgba(71, 85, 105, 0.45);
+        }
+
+        .market-attention-widget__toast-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.6rem;
+            height: 1.6rem;
+            border-radius: 999px;
+            color: rgb(100, 116, 139);
+            transition: background-color 160ms ease, color 160ms ease;
+        }
+
+        .market-attention-widget__toast-close:hover {
+            background: rgba(148, 163, 184, 0.14);
+            color: rgb(15, 23, 42);
+        }
+
+        .dark .market-attention-widget__toast-close {
+            color: rgb(148, 163, 184);
+        }
+
+        .dark .market-attention-widget__toast-close:hover {
+            background: rgba(148, 163, 184, 0.14);
+            color: rgb(248, 250, 252);
+        }
+
+        .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
+            background: transparent;
+        }
+
+        .dark .market-attention-widget__card--toast:hover .market-attention-widget__toast-action {
+            background: transparent;
+        }
+
+        .market-attention-widget__toast-empty {
+            align-self: start;
+            max-width: 28rem;
+            margin-left: auto;
+        }
+
+        @media (max-width: 1023px) {
+            .market-attention-widget__toast-layout {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .market-attention-widget__toast-stack {
+                align-items: stretch;
+            }
+
+            .market-attention-widget__card--toast,
+            .market-attention-widget__toast-empty {
+                width: 100%;
+                max-width: none;
+            }
+
+            .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(2),
+            .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(3),
+            .market-attention-widget__toast-stack .market-attention-widget__card--toast:nth-child(4) {
+                margin-right: 0;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .market-attention-widget__card--toast {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .market-attention-widget__toast-actions {
+                grid-template-rows: none;
+                grid-template-columns: 1fr 1fr;
+                border-left: none;
+                border-top: 1px solid rgba(148, 163, 184, 0.18);
+            }
+
+            .dark .market-attention-widget__toast-actions {
+                border-top-color: rgba(71, 85, 105, 0.45);
+            }
+
+            .market-attention-widget__toast-action + .market-attention-widget__toast-action {
+                border-top: none;
+                border-left: 1px solid rgba(148, 163, 184, 0.18);
+            }
+
+            .dark .market-attention-widget__toast-action + .market-attention-widget__toast-action {
+                border-left-color: rgba(71, 85, 105, 0.45);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .market-attention-widget__card--toast {
+                opacity: 1;
+                transform: none;
+                animation: none;
+            }
+        }
     </style>
 
     @php
@@ -135,53 +455,58 @@
             in_array($signalsCount % 10, [2, 3, 4], true) && ! in_array($signalsCount % 100, [12, 13, 14], true) => 'сигнала',
             default => 'сигналов',
         };
+        $useToastStack = app()->environment(['staging', 'production']);
+        $dismissUserKey = (string) (auth()->id() ?? 'guest');
+        $dismissMarketKey = filled($marketName ?? null) ? (string) $marketName : 'no-market';
     @endphp
 
     <div class="market-attention-widget">
         <div class="market-attention-widget__surface">
             <div class="market-attention-widget__mesh"></div>
 
-            <div class="relative z-10 space-y-5">
-                <div class="market-attention-widget__heading">
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-3">
-                            <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-warning-500/10 text-warning-600 ring-1 ring-inset ring-warning-500/15 dark:bg-warning-400/10 dark:text-warning-300 dark:ring-warning-400/20">
-                                <x-filament::icon icon="heroicon-m-shield-exclamation" class="h-6 w-6" />
-                            </div>
-
-                            <div class="space-y-1">
-                                <div class="text-lg font-semibold tracking-tight text-gray-950 dark:text-white">
-                                    Требует внимания
+            <div class="relative z-10 {{ $useToastStack ? 'market-attention-widget__toast-layout' : 'space-y-5' }}">
+                <div class="{{ $useToastStack ? 'space-y-5' : '' }}">
+                    <div class="market-attention-widget__heading">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-3">
+                                <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-warning-500/10 text-warning-600 ring-1 ring-inset ring-warning-500/15 dark:bg-warning-400/10 dark:text-warning-300 dark:ring-warning-400/20">
+                                    <x-filament::icon icon="heroicon-m-shield-exclamation" class="h-6 w-6" />
                                 </div>
 
-                                <div class="text-sm text-gray-500 dark:text-gray-400">
-                                    @isset($marketName)
-                                        Рынок: {{ $marketName }}
-                                    @else
-                                        Критичные сигналы по текущему контуру рынка
-                                    @endisset
+                                <div class="space-y-1">
+                                    <div class="text-lg font-semibold tracking-tight text-gray-950 dark:text-white">
+                                        Требует внимания
+                                    </div>
+
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        @isset($marketName)
+                                            Рынок: {{ $marketName }}
+                                        @else
+                                            Критичные сигналы по текущему контуру рынка
+                                        @endisset
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="market-attention-widget__meta">
-                        <span class="market-attention-widget__pill bg-gray-950 text-white dark:bg-white dark:text-gray-950">
-                            <x-filament::icon icon="heroicon-m-bell-alert" class="h-4 w-4" />
-                            {{ $signalsCount }} {{ $signalsLabel }}
-                        </span>
-
-                        @if ($signalsCount > 0)
-                            <span class="market-attention-widget__pill bg-warning-500/12 text-warning-700 ring-1 ring-inset ring-warning-500/20 dark:bg-warning-400/12 dark:text-warning-200 dark:ring-warning-400/20">
-                                <x-filament::icon icon="heroicon-m-sparkles" class="h-4 w-4" />
-                                Требуется действие
+                        <div class="market-attention-widget__meta">
+                            <span class="market-attention-widget__pill bg-gray-950 text-white dark:bg-white dark:text-gray-950">
+                                <x-filament::icon icon="heroicon-m-bell-alert" class="h-4 w-4" />
+                                {{ $signalsCount }} {{ $signalsLabel }}
                             </span>
-                        @endif
+
+                            @if ($signalsCount > 0)
+                                <span class="market-attention-widget__pill bg-warning-500/12 text-warning-700 ring-1 ring-inset ring-warning-500/20 dark:bg-warning-400/12 dark:text-warning-200 dark:ring-warning-400/20">
+                                    <x-filament::icon icon="heroicon-m-sparkles" class="h-4 w-4" />
+                                    Требуется действие
+                                </span>
+                            @endif
+                        </div>
                     </div>
                 </div>
 
                 @if ($items === [])
-                    <div class="market-attention-widget__empty relative z-10">
+                    <div class="market-attention-widget__empty relative z-10{{ $useToastStack ? ' market-attention-widget__toast-empty' : '' }}">
                         <div class="flex items-start gap-4">
                             <div class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-success-500/12 text-success-600 ring-1 ring-inset ring-success-500/20 dark:bg-success-400/12 dark:text-success-300 dark:ring-success-400/20">
                                 <x-filament::icon icon="heroicon-m-check-badge" class="h-6 w-6" />
@@ -199,6 +524,149 @@
                                 @endif
                             </div>
                         </div>
+                    </div>
+                @elseif ($useToastStack)
+                    <div class="market-attention-widget__toast-stack">
+                        @foreach ($items as $item)
+                            @php
+                                $tone = $item['tone'] ?? 'gray';
+                                $dismissStorageKey = implode(':', [
+                                    'market-attention-dismiss',
+                                    $dismissUserKey,
+                                    $dismissMarketKey,
+                                    md5(json_encode([
+                                        'title' => $item['title'] ?? null,
+                                        'value' => $item['value'] ?? null,
+                                        'description' => $item['description'] ?? null,
+                                        'action_url' => $item['action_url'] ?? null,
+                                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
+                                ]);
+
+                                $accentClasses = match ($tone) {
+                                    'danger' => [
+                                        'chip' => 'bg-danger-500/12 text-danger-700 ring-danger-500/20 dark:bg-danger-400/12 dark:text-danger-200 dark:ring-danger-400/20',
+                                        'status' => 'bg-danger-500/10 text-danger-700 dark:bg-danger-400/10 dark:text-danger-200',
+                                        'cta' => 'bg-danger-600 text-white hover:bg-danger-500 dark:bg-danger-500 dark:hover:bg-danger-400',
+                                        'icon' => 'text-danger-600 dark:text-danger-300',
+                                        'style' => '--attention-accent:#ef4444;--attention-glow:rgba(239,68,68,0.18);',
+                                    ],
+                                    'warning' => [
+                                        'chip' => 'bg-warning-500/12 text-warning-700 ring-warning-500/20 dark:bg-warning-400/12 dark:text-warning-200 dark:ring-warning-400/20',
+                                        'status' => 'bg-warning-500/10 text-warning-700 dark:bg-warning-400/10 dark:text-warning-200',
+                                        'cta' => 'bg-warning-500 text-gray-950 hover:bg-warning-400 dark:bg-warning-400 dark:hover:bg-warning-300',
+                                        'icon' => 'text-warning-600 dark:text-warning-300',
+                                        'style' => '--attention-accent:#f59e0b;--attention-glow:rgba(245,158,11,0.20);',
+                                    ],
+                                    'success' => [
+                                        'chip' => 'bg-success-500/12 text-success-700 ring-success-500/20 dark:bg-success-400/12 dark:text-success-200 dark:ring-success-400/20',
+                                        'status' => 'bg-success-500/10 text-success-700 dark:bg-success-400/10 dark:text-success-200',
+                                        'cta' => 'bg-success-600 text-white hover:bg-success-500 dark:bg-success-500 dark:hover:bg-success-400',
+                                        'icon' => 'text-success-600 dark:text-success-300',
+                                        'style' => '--attention-accent:#22c55e;--attention-glow:rgba(34,197,94,0.18);',
+                                    ],
+                                    default => [
+                                        'chip' => 'bg-gray-500/10 text-gray-700 ring-gray-500/15 dark:bg-gray-400/10 dark:text-gray-200 dark:ring-gray-400/15',
+                                        'status' => 'bg-gray-500/10 text-gray-700 dark:bg-gray-400/10 dark:text-gray-200',
+                                        'cta' => 'bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-950 dark:hover:bg-gray-100',
+                                        'icon' => 'text-gray-700 dark:text-gray-200',
+                                        'style' => '--attention-accent:#94a3b8;--attention-glow:rgba(148,163,184,0.18);',
+                                    ],
+                                };
+                            @endphp
+
+                            <div
+                                x-data="{
+                                    open: true,
+                                    closing: false,
+                                    storageKey: @js($dismissStorageKey),
+                                    init() {
+                                        try {
+                                            const dismissedUntil = Number(window.localStorage.getItem(this.storageKey) || 0);
+
+                                            if (dismissedUntil > Date.now()) {
+                                                this.open = false;
+
+                                                return;
+                                            }
+
+                                            window.localStorage.removeItem(this.storageKey);
+                                        } catch (error) {
+                                        }
+                                    },
+                                    dismiss() {
+                                        if (this.closing) {
+                                            return;
+                                        }
+
+                                        this.closing = true;
+
+                                        try {
+                                            const now = new Date();
+                                            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+                                            window.localStorage.setItem(this.storageKey, String(tomorrow.getTime()));
+                                        } catch (error) {
+                                        }
+
+                                        window.setTimeout(() => {
+                                            this.open = false;
+                                        }, 780);
+                                    }
+                                }"
+                                x-cloak
+                                x-show="open"
+                                x-bind:class="{ 'market-attention-widget__card--toast-dismissing': closing }"
+                                class="market-attention-widget__card market-attention-widget__card--toast group no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                                style="{{ $accentClasses['style'] }}"
+                                role="link"
+                                tabindex="0"
+                                x-on:click="window.location.href = @js($item['action_url'])"
+                                x-on:keydown.enter.prevent="window.location.href = @js($item['action_url'])"
+                                x-on:keydown.space.prevent="window.location.href = @js($item['action_url'])"
+                            >
+                                <span class="market-attention-widget__glow"></span>
+
+                                <div class="market-attention-widget__toast-main">
+                                    <div class="market-attention-widget__toast-head">
+                                        <div class="market-attention-widget__toast-title">
+                                            <div class="market-attention-widget__toast-icon ring-1 ring-inset ring-white/40 dark:ring-white/10 {{ $accentClasses['chip'] }}">
+                                                <x-filament::icon :icon="$item['icon']" class="h-5 w-5 {{ $accentClasses['icon'] }}" />
+                                            </div>
+
+                                            <div class="market-attention-widget__toast-copy">
+                                                <p class="market-attention-widget__toast-name">{{ $item['title'] }}</p>
+                                                <div class="market-attention-widget__toast-value">{{ $item['value'] }}</div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            class="market-attention-widget__toast-close"
+                                            x-on:click.stop="dismiss()"
+                                            aria-label="Закрыть уведомление"
+                                        >
+                                            <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
+                                        </button>
+                                    </div>
+
+                                    <p class="market-attention-widget__toast-description">{{ $item['description'] }}</p>
+                                </div>
+
+                                <div class="market-attention-widget__toast-actions">
+                                    <a href="{{ $item['action_url'] }}" class="market-attention-widget__toast-action market-attention-widget__toast-action--primary" x-on:click.stop>
+                                        Открыть
+                                    </a>
+
+                                    <button
+                                        type="button"
+                                        class="market-attention-widget__toast-action market-attention-widget__toast-action--secondary"
+                                        x-on:click.stop="dismiss()"
+                                    >
+                                        Скрыть
+                                    </button>
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
                 @else
                     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -14,6 +14,10 @@ use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Models\Market;
+use App\Models\MarketSpace;
+use App\Models\Task;
+use App\Models\Tenant;
+use App\Models\TenantRequest;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -27,6 +31,8 @@ use Illuminate\Support\Facades\Schema as DbSchema;
 class Dashboard extends BaseDashboard
 {
     use HasFiltersForm;
+
+    protected string $view = 'filament.pages.dashboard';
 
     protected static ?string $navigationLabel = 'Панель управления';
     protected static ?string $title = 'Панель управления';
@@ -141,6 +147,228 @@ class Dashboard extends BaseDashboard
         return null;
     }
 
+    public function shouldUseWorkspaceDashboard(): bool
+    {
+        return app()->environment(['staging', 'production']);
+    }
+
+    /**
+     * @return array<int, class-string>
+     */
+    public function getWorkspaceHeaderWidgets(): array
+    {
+        if (! $this->shouldUseWorkspaceDashboard()) {
+            return [];
+        }
+
+        return $this->getMarketSwitcherWidgets();
+    }
+
+    /**
+     * @return array<int, array{
+     *     key: string,
+     *     title: string,
+     *     description: string,
+     *     icon: string,
+     *     columns: int|array<string, int>,
+     *     widgets: array<int, class-string>
+     * }>
+     */
+    public function getWorkspaceDashboardSections(): array
+    {
+        $sections = [
+            [
+                'key' => 'attention',
+                'title' => 'Критическое внимание',
+                'description' => 'Сигналы, которые требуют решения сегодня: ошибки обменов, срочные обращения и просроченные задачи.',
+                'icon' => 'heroicon-o-shield-exclamation',
+                'columns' => 1,
+                'widgets' => $this->resolveVisibleWorkspaceWidgets([
+                    MarketAttentionWidget::class,
+                ]),
+            ],
+            [
+                'key' => 'finance',
+                'title' => 'Финансы 1С',
+                'description' => 'Сводка по начислениям, покрытию 1С и динамике снимков задолженности без изменения источников данных.',
+                'icon' => 'heroicon-o-banknotes',
+                'columns' => [
+                    'md' => 2,
+                    'xl' => 3,
+                ],
+                'widgets' => $this->resolveVisibleWorkspaceWidgets([
+                    \App\Filament\Widgets\RevenueYearChartWidget::class,
+                    OneCDebtSnapshotsHistoryWidget::class,
+                    AccrualCompositionWidget::class,
+                ]),
+            ],
+            [
+                'key' => 'spaces',
+                'title' => 'Места и заполняемость',
+                'description' => 'Оперативный контур рынка: занятость, свободный фонд и базовые показатели по арендаторам и местам.',
+                'icon' => 'heroicon-o-home-modern',
+                'columns' => [
+                    'md' => 2,
+                    'xl' => 3,
+                ],
+                'widgets' => $this->resolveVisibleWorkspaceWidgets([
+                    MarketOverviewStatsWidget::class,
+                    MarketSpacesStatusChartWidget::class,
+                ]),
+            ],
+            [
+                'key' => 'requests',
+                'title' => 'Обращения арендаторов',
+                'description' => 'Открытые обращения, которые требуют разбора и ответа по текущему рынку.',
+                'icon' => 'heroicon-o-inbox',
+                'columns' => [
+                    'md' => 2,
+                ],
+                'widgets' => $this->resolveVisibleWorkspaceWidgets([
+                    RecentTenantRequestsWidget::class,
+                ]),
+            ],
+        ];
+
+        return array_values(array_filter(
+            $sections,
+            static fn (array $section): bool => $section['widgets'] !== [],
+        ));
+    }
+
+    /**
+     * @return array{
+     *     title: string,
+     *     subtitle: string,
+     *     market_name: string,
+     *     market_selected: bool,
+     *     period_label: string,
+     *     stats: array<int, array{label: string, value: string, tone: string, url: string}>,
+     *     links: array<int, array{title: string, description: string, meta: string, url: string, icon: string}>
+     * }
+     */
+    public function getWorkspaceHeroData(): array
+    {
+        $this->syncDashboardMarketId();
+
+        $marketId = $this->resolveMarketId();
+        $market = $marketId > 0
+            ? Market::query()->select(['id', 'name', 'timezone'])->find($marketId)
+            : null;
+
+        $tz = $this->resolveMarketTimezone($marketId);
+        $fallbackMonth = $this->resolveLastMonthWithData($marketId, $tz);
+        $selectedMonth = null;
+
+        if (is_array($this->filters ?? null)) {
+            $selectedMonth = $this->filters['month'] ?? null;
+        }
+
+        $month = $this->resolveMonthOrFallback($selectedMonth ?: session('dashboard_month'), $fallbackMonth);
+        $periodLabel = $this->formatWorkspaceMonthLabel($month, $tz);
+        $marketName = trim((string) ($market?->name ?? ''));
+        $marketSelected = $marketId > 0 && $marketName !== '';
+
+        $tenantsCount = 0;
+        $totalSpaces = 0;
+        $occupiedSpaces = 0;
+        $vacantSpaces = 0;
+        $openRequests = 0;
+        $overdueTasks = 0;
+
+        if ($marketId > 0) {
+            $tenantsCount = Tenant::query()
+                ->where('market_id', $marketId)
+                ->active()
+                ->count();
+
+            $spacesQuery = MarketSpace::query()->where('market_id', $marketId);
+            $totalSpaces = (clone $spacesQuery)->count();
+            $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
+            $vacantSpaces = max($totalSpaces - $occupiedSpaces, 0);
+
+            $openRequests = TenantRequest::query()
+                ->where('market_id', $marketId)
+                ->whereNotIn('status', ['resolved', 'closed'])
+                ->count();
+
+            $overdueTasks = Task::query()
+                ->where('market_id', $marketId)
+                ->overdue()
+                ->count();
+        }
+
+        return [
+            'title' => 'Управленческий центр',
+            'subtitle' => 'Главная страница в workspace-стилистике: единая точка контроля по рискам, финансам 1С, местам, обращениям и задачам.',
+            'market_name' => $marketSelected ? $marketName : 'Рынок не выбран',
+            'market_selected' => $marketSelected,
+            'period_label' => $periodLabel,
+            'stats' => [
+                [
+                    'label' => 'Арендаторы',
+                    'value' => number_format($tenantsCount, 0, ',', ' '),
+                    'tone' => 'neutral',
+                    'url' => \App\Filament\Resources\TenantResource::getUrl('index'),
+                ],
+                [
+                    'label' => 'Свободные места',
+                    'value' => number_format($vacantSpaces, 0, ',', ' '),
+                    'tone' => $vacantSpaces > 0 ? 'success' : 'neutral',
+                    'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
+                ],
+                [
+                    'label' => 'Открытые обращения',
+                    'value' => number_format($openRequests, 0, ',', ' '),
+                    'tone' => $openRequests > 0 ? 'warning' : 'neutral',
+                    'url' => \App\Filament\Pages\Requests::getUrl(),
+                ],
+                [
+                    'label' => 'Просроченные задачи',
+                    'value' => number_format($overdueTasks, 0, ',', ' '),
+                    'tone' => $overdueTasks > 0 ? 'danger' : 'neutral',
+                    'url' => \App\Filament\Resources\TaskResource::getUrl('index'),
+                ],
+            ],
+            'links' => [
+                [
+                    'title' => 'Обращения',
+                    'description' => 'Открыть обращения арендаторов и проверить срочные вопросы.',
+                    'meta' => $openRequests > 0
+                        ? number_format($openRequests, 0, ',', ' ') . ' открыто'
+                        : 'Открыть раздел',
+                    'url' => \App\Filament\Pages\Requests::getUrl(),
+                    'icon' => 'heroicon-o-inbox',
+                ],
+                [
+                    'title' => 'Задачи',
+                    'description' => 'Проверить просрочки, назначение исполнителей и оперативную загрузку команды.',
+                    'meta' => $overdueTasks > 0
+                        ? number_format($overdueTasks, 0, ',', ' ') . ' просрочено'
+                        : 'Открыть раздел',
+                    'url' => \App\Filament\Resources\TaskResource::getUrl('index'),
+                    'icon' => 'heroicon-o-clipboard-document-list',
+                ],
+                [
+                    'title' => 'Начисления',
+                    'description' => 'Открыть начисления из 1С и проверить суммы за выбранный период.',
+                    'meta' => $periodLabel,
+                    'url' => \App\Filament\Pages\OneCFinance::getUrl(),
+                    'icon' => 'heroicon-o-banknotes',
+                ],
+                [
+                    'title' => 'Торговые места',
+                    'description' => 'Открыть фонд мест и быстро оценить текущую занятость и свободный остаток.',
+                    'meta' => $totalSpaces > 0
+                        ? number_format($occupiedSpaces, 0, ',', ' ') . ' из ' . number_format($totalSpaces, 0, ',', ' ') . ' занято'
+                        : 'Открыть раздел',
+                    'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
+                    'icon' => 'heroicon-o-home-modern',
+                ],
+            ],
+        ];
+    }
+
     /**
      * Filament 4: фильтры дашборда строятся через Schema.
      */
@@ -224,13 +452,11 @@ class Dashboard extends BaseDashboard
 
     protected function getHeaderWidgets(): array
     {
-        $user = Filament::auth()->user();
-
-        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            return [MarketSwitcherWidget::class];
+        if ($this->shouldUseWorkspaceDashboard()) {
+            return [];
         }
 
-        return [];
+        return $this->getMarketSwitcherWidgets();
     }
 
     public function getWidgets(): array
@@ -242,6 +468,43 @@ class Dashboard extends BaseDashboard
         $enabledKeys = $this->resolveEnabledDashboardWidgetKeys();
 
         return array_values(array_intersect_key($widgetMap, array_flip($enabledKeys)));
+    }
+
+    /**
+     * @return array<int, class-string>
+     */
+    private function getMarketSwitcherWidgets(): array
+    {
+        $user = Filament::auth()->user();
+
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return [MarketSwitcherWidget::class];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int, class-string>  $widgets
+     * @return array<int, class-string>
+     */
+    private function resolveVisibleWorkspaceWidgets(array $widgets): array
+    {
+        return array_values(array_filter(
+            $widgets,
+            static fn (string $widget): bool => class_exists($widget) && $widget::canView(),
+        ));
+    }
+
+    private function formatWorkspaceMonthLabel(string $month, string $tz): string
+    {
+        try {
+            return CarbonImmutable::createFromFormat('Y-m', $month, $tz)
+                ->locale('ru')
+                ->translatedFormat('F Y');
+        } catch (\Throwable) {
+            return $month;
+        }
     }
 
     /**

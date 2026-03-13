@@ -25,6 +25,8 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
 
+    protected ?string $pollingInterval = null;
+
     protected ?string $heading = 'Показатели рынка';
 
     protected function getStats(): array
