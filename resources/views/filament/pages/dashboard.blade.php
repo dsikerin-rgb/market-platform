@@ -539,7 +539,11 @@
 
                 <div class="dashboard-workspace__links" style="margin-top: 1.25rem;">
                     @foreach ($hero['links'] as $link)
+                        @if(isset($link['url']) && !empty($link['url']))
                         <a href="{{ $link['url'] }}" class="dashboard-workspace__link">
+                        @else
+                        <div class="dashboard-workspace__link">
+                        @endif
                             <div class="dashboard-workspace__link-icon">
                                 <x-filament::icon :icon="$link['icon']" class="h-5 w-5" />
                             </div>
@@ -549,7 +553,11 @@
                                 <p class="dashboard-workspace__link-copy">{{ $link['description'] }}</p>
                                 <div class="dashboard-workspace__link-meta">{{ $link['meta'] }}</div>
                             </div>
+                        @if(isset($link['url']) && !empty($link['url']))
                         </a>
+                        @else
+                        </div>
+                        @endif
                     @endforeach
                 </div>
             </section>
