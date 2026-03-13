@@ -20,10 +20,18 @@ class ListTenantAccruals extends ListRecords
 
     public ?string $activeTab = null;
 
+    /** @var array<string, int>|null */
+    private ?array $tabCounts = null;
+
     public function mount(): void
     {
         parent::mount();
-        $this->activeTab = $this->resolveDefaultTab();
+
+        $availableTabs = array_keys($this->getTabs());
+
+        if (! in_array((string) $this->activeTab, $availableTabs, true)) {
+            $this->activeTab = $this->resolveDefaultTab();
+        }
     }
 
     public function getBreadcrumb(): string
@@ -61,50 +69,61 @@ class ListTenantAccruals extends ListRecords
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
+        $tabCounts = $this->resolveTabCounts();
         $tabs = [];
 
-        $tabs['one_c'] = $this->makeTab(
-            $tabClass,
-            '1С',
-            fn (Builder $query) => $query->where('source', '1c'),
-        );
+        if ($tabCounts['one_c'] > 0) {
+            $tabs['one_c'] = $this->makeTab(
+                $tabClass,
+                '1С',
+                fn (Builder $query) => $query->where('source', '1c'),
+            );
+        }
 
-        $tabs['linked'] = $this->makeTab(
-            $tabClass,
-            'Связаны с договором',
-            fn (Builder $query) => $query
-                ->where('source', '1c')
-                ->whereIn('contract_link_status', [
-                    TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
-                    TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED,
-                ]),
-        );
+        if ($tabCounts['linked'] > 0) {
+            $tabs['linked'] = $this->makeTab(
+                $tabClass,
+                'Связаны с договором',
+                fn (Builder $query) => $query
+                    ->where('source', '1c')
+                    ->whereIn('contract_link_status', [
+                        TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+                        TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED,
+                    ]),
+            );
+        }
 
-        $tabs['without_contract'] = $this->makeTab(
-            $tabClass,
-            'Без договора',
-            fn (Builder $query) => $query
-                ->where('source', '1c')
-                ->where(function (Builder $builder): void {
-                    $builder
-                        ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)
-                        ->orWhereNull('contract_link_status');
-                }),
-        );
+        if ($tabCounts['without_contract'] > 0) {
+            $tabs['without_contract'] = $this->makeTab(
+                $tabClass,
+                'Без договора',
+                fn (Builder $query) => $query
+                    ->where('source', '1c')
+                    ->where(function (Builder $builder): void {
+                        $builder
+                            ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)
+                            ->orWhereNull('contract_link_status');
+                    }),
+            );
+        }
 
-        $tabs['ambiguous'] = $this->makeTab(
-            $tabClass,
-            'Неоднозначные',
-            fn (Builder $query) => $query
-                ->where('source', '1c')
-                ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS),
-        );
+        if ($tabCounts['ambiguous'] > 0) {
+            $tabs['ambiguous'] = $this->makeTab(
+                $tabClass,
+                'Неоднозначные',
+                fn (Builder $query) => $query
+                    ->where('source', '1c')
+                    ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS),
+            );
+        }
 
-        $tabs['history'] = $this->makeTab(
-            $tabClass,
-            'Исторический импорт',
-            fn (Builder $query) => $query->where('source', '!=', '1c'),
-        );
+        if ($tabCounts['history'] > 0) {
+            $tabs['history'] = $this->makeTab(
+                $tabClass,
+                'Исторический импорт',
+                fn (Builder $query) => $query->where('source', '!=', '1c'),
+            );
+        }
 
         $tabs['all'] = $tabClass::make('Все начисления');
 
@@ -137,17 +156,55 @@ class ListTenantAccruals extends ListRecords
 
     private function resolveDefaultTab(): string
     {
-        if ($this->hasOneCAccruals()) {
+        $tabCounts = $this->resolveTabCounts();
+
+        if ($tabCounts['one_c'] > 0) {
             return 'one_c';
+        }
+
+        if ($tabCounts['history'] > 0) {
+            return 'history';
         }
 
         return 'all';
     }
 
-    private function hasOneCAccruals(): bool
+    /**
+     * @return array{one_c:int,linked:int,without_contract:int,ambiguous:int,history:int}
+     */
+    private function resolveTabCounts(): array
     {
-        return TenantAccrualResource::getEloquentQuery()
-            ->where('source', '1c')
-            ->exists();
+        if ($this->tabCounts !== null) {
+            return $this->tabCounts;
+        }
+
+        $baseQuery = TenantAccrualResource::getEloquentQuery();
+        $oneCQuery = (clone $baseQuery)->where('source', '1c');
+        $exact = (clone $oneCQuery)
+            ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_EXACT)
+            ->count();
+        $resolved = (clone $oneCQuery)
+            ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED)
+            ->count();
+
+        $this->tabCounts = [
+            'one_c' => (clone $oneCQuery)->count(),
+            'linked' => $exact + $resolved,
+            'without_contract' => (clone $oneCQuery)
+                ->where(function (Builder $builder): void {
+                    $builder
+                        ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)
+                        ->orWhereNull('contract_link_status');
+                })
+                ->count(),
+            'ambiguous' => (clone $oneCQuery)
+                ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS)
+                ->count(),
+            'history' => (clone $baseQuery)
+                ->where('source', '!=', '1c')
+                ->count(),
+        ];
+
+        return $this->tabCounts;
     }
 }

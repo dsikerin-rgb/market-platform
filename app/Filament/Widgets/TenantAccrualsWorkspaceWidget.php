@@ -12,6 +12,7 @@ use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class TenantAccrualsWorkspaceWidget extends Widget
 {
@@ -46,7 +47,8 @@ class TenantAccrualsWorkspaceWidget extends Widget
         $unmatched = (clone $oneCQuery)->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)->count();
         $unchecked = (clone $oneCQuery)->whereNull('contract_link_status')->count();
         $operationalSnapshot = $this->resolveOperationalSnapshot($marketId);
-        $detailState = $this->resolveDetailState($oneCQuery, $baseQuery);
+        $detailState = $this->resolveDetailState($oneCQuery, $baseQuery, $operationalSnapshot['period']);
+        $primaryDetailTab = $this->resolvePrimaryDetailTab($oneC, $history);
 
         return [
             'marketName' => $market?->name,
@@ -59,10 +61,13 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'ambiguous' => $ambiguous,
             'unmatched' => $unmatched,
             'unchecked' => $unchecked,
+            'hasOneCDetails' => $oneC > 0,
+            'hasHistoryDetails' => $history > 0,
             'latestPeriodLabel' => $detailState['latestPeriodLabel'],
             'detailPeriodLabel' => $detailState['latestPeriodLabel'],
             'detailSourceLabel' => $detailState['sourceLabel'],
             'detailNeedsRefresh' => $detailState['needsRefresh'],
+            'detailStatusLabel' => $detailState['statusLabel'],
             'operationalPeriodLabel' => $operationalSnapshot['periodLabel'],
             'operationalSnapshotAtLabel' => $operationalSnapshot['snapshotAtLabel'],
             'operationalRows' => $operationalSnapshot['rows'],
@@ -71,11 +76,11 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'operationalDebt' => $operationalSnapshot['debt'],
             'operationalReady' => $operationalSnapshot['ready'],
             'issues' => $this->topIssueNotes($oneCQuery),
-            'oneCUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'one_c']),
-            'linkedUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'linked']),
-            'withoutContractUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'without_contract']),
-            'ambiguousUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'ambiguous']),
-            'historyUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'history']),
+            'oneCUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $oneC > 0 ? 'one_c' : $primaryDetailTab]),
+            'linkedUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $linked > 0 ? 'linked' : $primaryDetailTab]),
+            'withoutContractUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => ($unmatched + $unchecked) > 0 ? 'without_contract' : $primaryDetailTab]),
+            'ambiguousUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $ambiguous > 0 ? 'ambiguous' : $primaryDetailTab]),
+            'historyUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => $history > 0 ? 'history' : 'all']),
             'allUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'all']),
         ];
     }
@@ -129,38 +134,53 @@ class TenantAccrualsWorkspaceWidget extends Widget
      * @return array{
      *     latestPeriodLabel: string,
      *     sourceLabel: string,
-     *     needsRefresh: bool
+     *     needsRefresh: bool,
+     *     statusLabel: string
      * }
      */
-    private function resolveDetailState(Builder $oneCQuery, Builder $baseQuery): array
+    private function resolveDetailState(Builder $oneCQuery, Builder $baseQuery, ?string $latestOperationalPeriod): array
     {
         $latestOneCPeriod = (clone $oneCQuery)->max('period');
         $latestAnyPeriod = (clone $baseQuery)->max('period');
         $latestLabel = $this->resolveLatestPeriodLabel($oneCQuery, $baseQuery);
         $sourceLabel = filled($latestOneCPeriod) ? 'детализация начислений' : 'исторический слой';
         $needsRefresh = false;
+        $statusLabel = 'Актуальна';
 
         if (filled($latestOneCPeriod) && is_string($latestOneCPeriod)) {
             try {
-                $latestMonth = Carbon::parse((string) $latestOneCPeriod)->startOfMonth();
-                $needsRefresh = $latestMonth->lt(Carbon::now()->startOfMonth());
+                $latestDetailMonth = Carbon::parse((string) $latestOneCPeriod)->startOfMonth();
+                $targetMonth = filled($latestOperationalPeriod)
+                    ? Carbon::parse((string) $latestOperationalPeriod . '-01')->startOfMonth()
+                    : Carbon::now()->startOfMonth();
+
+                $needsRefresh = $latestDetailMonth->lt($targetMonth);
             } catch (\Throwable) {
                 $needsRefresh = false;
             }
         } elseif (filled($latestAnyPeriod) && is_string($latestAnyPeriod)) {
             $sourceLabel = 'исторический слой';
+            $needsRefresh = filled($latestOperationalPeriod);
+        } elseif (filled($latestOperationalPeriod)) {
+            $needsRefresh = true;
+        }
+
+        if ($needsRefresh) {
+            $statusLabel = filled($latestOneCPeriod) ? 'Требует обновления' : '1С-детализация не загружена';
         }
 
         return [
             'latestPeriodLabel' => $latestLabel,
             'sourceLabel' => $sourceLabel,
             'needsRefresh' => $needsRefresh,
+            'statusLabel' => $statusLabel,
         ];
     }
 
     /**
      * @return array{
      *     ready: bool,
+     *     period: string|null,
      *     periodLabel: string,
      *     snapshotAtLabel: string,
      *     rows: int,
@@ -173,6 +193,7 @@ class TenantAccrualsWorkspaceWidget extends Widget
     {
         $empty = [
             'ready' => false,
+            'period' => null,
             'periodLabel' => 'Нет данных',
             'snapshotAtLabel' => 'Нет обмена',
             'rows' => 0,
@@ -181,7 +202,7 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'debt' => '—',
         ];
 
-        if ($marketId <= 0 || ! \Illuminate\Support\Facades\Schema::hasTable('contract_debts')) {
+        if ($marketId <= 0 || ! Schema::hasTable('contract_debts')) {
             return $empty;
         }
 
@@ -249,6 +270,7 @@ class TenantAccrualsWorkspaceWidget extends Widget
 
         return [
             'ready' => true,
+            'period' => $latestPeriod,
             'periodLabel' => $this->formatMonthLabel($latestPeriod),
             'snapshotAtLabel' => $this->formatDateTimeLabel($latestCalculatedAt),
             'rows' => count($latestByContract),
@@ -256,6 +278,19 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'paid' => $this->formatMoney($paid),
             'debt' => $this->formatMoney($debt),
         ];
+    }
+
+    private function resolvePrimaryDetailTab(int $oneC, int $history): string
+    {
+        if ($oneC > 0) {
+            return 'one_c';
+        }
+
+        if ($history > 0) {
+            return 'history';
+        }
+
+        return 'all';
     }
 
     private function formatMonthLabel(?string $value): string
