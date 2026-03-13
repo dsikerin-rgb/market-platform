@@ -123,7 +123,7 @@ class ContractController extends Controller
 
                     'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
 
-                    'items.*.contract_number' => ['nullable', 'string', 'max:50'],
+                    'items.*.contract_number' => ['nullable', 'string', 'max:255'],
                     'items.*.status' => ['nullable', 'string', 'max:20'],
                     'items.*.is_active' => ['nullable', 'boolean'],
 
