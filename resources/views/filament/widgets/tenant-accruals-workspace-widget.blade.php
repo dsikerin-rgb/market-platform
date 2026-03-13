@@ -13,9 +13,8 @@
                         <div>
                             <h1 class="aw-hero-heading">Начисления</h1>
                             <p class="aw-hero-subheading">
-                                Диагностический слой по 1С-начислениям и историческому импорту. Основной сценарий —
-                                контролировать, сколько строк пришло из 1С, сколько связалось с договорами и почему
-                                оставшиеся строки не удалось привязать автоматически.
+                                Сверху показан актуальный 1С-контур по начислениям, оплатам и долгу. Ниже остаётся
+                                детальная витрина начислений и проверка того, насколько строки 1С удалось связать с договорами.
                             </p>
                         </div>
                     </div>
@@ -44,6 +43,84 @@
                         <div class="aw-stat-value" style="font-size: 1.15rem;">{{ $latestPeriodLabel }}</div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <section class="aw-panel">
+            <div class="aw-panel-head">
+                <div>
+                    <h2 class="aw-panel-title">Оперативный 1С-контур</h2>
+                    <p class="aw-panel-copy">
+                        Актуальная сводка из ежедневного обмена 1С по последнему доступному периоду. Это основной слой для
+                        ответа на вопросы «сколько начислено», «сколько оплачено» и «какой остаток долга сейчас».
+                    </p>
+                </div>
+            </div>
+
+            <div class="aw-panel-body">
+                <div class="aw-stat-grid">
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Период 1С</div>
+                        <div class="aw-stat-value" style="font-size: 1.15rem;">{{ $operationalPeriodLabel }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Начислено</div>
+                        <div class="aw-stat-value">{{ $operationalAccrued }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Оплачено</div>
+                        <div class="aw-stat-value">{{ $operationalPaid }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Долг</div>
+                        <div class="aw-stat-value">{{ $operationalDebt }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Договоров в контуре</div>
+                        <div class="aw-stat-value">{{ number_format($operationalRows, 0, ',', ' ') }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Последний обмен</div>
+                        <div class="aw-stat-value" style="font-size: 1.15rem;">{{ $operationalSnapshotAtLabel }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Детализация начислений</div>
+                        <div class="aw-stat-value" style="font-size: 1.15rem;">{{ $detailPeriodLabel }}</div>
+                    </div>
+
+                    <div class="aw-stat-card">
+                        <div class="aw-stat-label">Статус витрины</div>
+                        <div class="aw-stat-value" style="font-size: 1rem;">
+                            @if ($detailNeedsRefresh)
+                                Требует обновления
+                            @else
+                                Актуальна
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                @if ($detailNeedsRefresh)
+                    <div class="aw-card-list" style="margin-top: 1.25rem;">
+                        <article class="aw-list-card aw-list-card--compact">
+                            <div class="aw-list-card-meta">
+                                <span class="aw-badge aw-badge--warning">Важное</span>
+                                <span class="aw-list-card-date">{{ $detailSourceLabel }}</span>
+                            </div>
+
+                            <div class="aw-list-card-title">
+                                Детальная страница «Начисления» пока показывает витрину только до {{ $detailPeriodLabel }}.
+                                Актуальные суммы выше уже берутся из ежедневного 1С-обмена по долгам и оплатам.
+                            </div>
+                        </article>
+                    </div>
+                @endif
             </div>
         </section>
 

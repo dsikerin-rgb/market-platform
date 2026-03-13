@@ -45,6 +45,8 @@ class TenantAccrualsWorkspaceWidget extends Widget
         $ambiguous = (clone $oneCQuery)->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS)->count();
         $unmatched = (clone $oneCQuery)->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)->count();
         $unchecked = (clone $oneCQuery)->whereNull('contract_link_status')->count();
+        $operationalSnapshot = $this->resolveOperationalSnapshot($marketId);
+        $detailState = $this->resolveDetailState($oneCQuery, $baseQuery);
 
         return [
             'marketName' => $market?->name,
@@ -57,7 +59,17 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'ambiguous' => $ambiguous,
             'unmatched' => $unmatched,
             'unchecked' => $unchecked,
-            'latestPeriodLabel' => $this->resolveLatestPeriodLabel($oneCQuery, $baseQuery),
+            'latestPeriodLabel' => $detailState['latestPeriodLabel'],
+            'detailPeriodLabel' => $detailState['latestPeriodLabel'],
+            'detailSourceLabel' => $detailState['sourceLabel'],
+            'detailNeedsRefresh' => $detailState['needsRefresh'],
+            'operationalPeriodLabel' => $operationalSnapshot['periodLabel'],
+            'operationalSnapshotAtLabel' => $operationalSnapshot['snapshotAtLabel'],
+            'operationalRows' => $operationalSnapshot['rows'],
+            'operationalAccrued' => $operationalSnapshot['accrued'],
+            'operationalPaid' => $operationalSnapshot['paid'],
+            'operationalDebt' => $operationalSnapshot['debt'],
+            'operationalReady' => $operationalSnapshot['ready'],
             'issues' => $this->topIssueNotes($oneCQuery),
             'oneCUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'one_c']),
             'linkedUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'linked']),
@@ -111,6 +123,170 @@ class TenantAccrualsWorkspaceWidget extends Widget
         } catch (\Throwable) {
             return (string) $latestPeriod;
         }
+    }
+
+    /**
+     * @return array{
+     *     latestPeriodLabel: string,
+     *     sourceLabel: string,
+     *     needsRefresh: bool
+     * }
+     */
+    private function resolveDetailState(Builder $oneCQuery, Builder $baseQuery): array
+    {
+        $latestOneCPeriod = (clone $oneCQuery)->max('period');
+        $latestAnyPeriod = (clone $baseQuery)->max('period');
+        $latestLabel = $this->resolveLatestPeriodLabel($oneCQuery, $baseQuery);
+        $sourceLabel = filled($latestOneCPeriod) ? 'детализация начислений' : 'исторический слой';
+        $needsRefresh = false;
+
+        if (filled($latestOneCPeriod) && is_string($latestOneCPeriod)) {
+            try {
+                $latestMonth = Carbon::parse((string) $latestOneCPeriod)->startOfMonth();
+                $needsRefresh = $latestMonth->lt(Carbon::now()->startOfMonth());
+            } catch (\Throwable) {
+                $needsRefresh = false;
+            }
+        } elseif (filled($latestAnyPeriod) && is_string($latestAnyPeriod)) {
+            $sourceLabel = 'исторический слой';
+        }
+
+        return [
+            'latestPeriodLabel' => $latestLabel,
+            'sourceLabel' => $sourceLabel,
+            'needsRefresh' => $needsRefresh,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     ready: bool,
+     *     periodLabel: string,
+     *     snapshotAtLabel: string,
+     *     rows: int,
+     *     accrued: string,
+     *     paid: string,
+     *     debt: string
+     * }
+     */
+    private function resolveOperationalSnapshot(int $marketId): array
+    {
+        $empty = [
+            'ready' => false,
+            'periodLabel' => 'Нет данных',
+            'snapshotAtLabel' => 'Нет обмена',
+            'rows' => 0,
+            'accrued' => '—',
+            'paid' => '—',
+            'debt' => '—',
+        ];
+
+        if ($marketId <= 0 || ! \Illuminate\Support\Facades\Schema::hasTable('contract_debts')) {
+            return $empty;
+        }
+
+        try {
+            $latestPeriod = DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->max('period');
+        } catch (\Throwable) {
+            return $empty;
+        }
+
+        if (! is_string($latestPeriod) || ! preg_match('/^\d{4}-\d{2}$/', $latestPeriod)) {
+            return $empty;
+        }
+
+        try {
+            $rows = DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->where('period', $latestPeriod)
+                ->orderBy('contract_external_id')
+                ->orderByDesc('calculated_at')
+                ->get([
+                    'contract_external_id',
+                    'accrued_amount',
+                    'paid_amount',
+                    'debt_amount',
+                    'calculated_at',
+                ]);
+        } catch (\Throwable) {
+            return $empty;
+        }
+
+        $latestByContract = [];
+
+        foreach ($rows as $row) {
+            $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
+
+            if ($contractExternalId === '' || array_key_exists($contractExternalId, $latestByContract)) {
+                continue;
+            }
+
+            $latestByContract[$contractExternalId] = $row;
+        }
+
+        if ($latestByContract === []) {
+            return $empty;
+        }
+
+        $accrued = 0.0;
+        $paid = 0.0;
+        $debt = 0.0;
+        $latestCalculatedAt = null;
+
+        foreach ($latestByContract as $row) {
+            $accrued += (float) ($row->accrued_amount ?? 0);
+            $paid += (float) ($row->paid_amount ?? 0);
+            $debt += (float) ($row->debt_amount ?? 0);
+
+            $candidate = $row->calculated_at ?? null;
+
+            if ($candidate && ($latestCalculatedAt === null || (string) $candidate > (string) $latestCalculatedAt)) {
+                $latestCalculatedAt = (string) $candidate;
+            }
+        }
+
+        return [
+            'ready' => true,
+            'periodLabel' => $this->formatMonthLabel($latestPeriod),
+            'snapshotAtLabel' => $this->formatDateTimeLabel($latestCalculatedAt),
+            'rows' => count($latestByContract),
+            'accrued' => $this->formatMoney($accrued),
+            'paid' => $this->formatMoney($paid),
+            'debt' => $this->formatMoney($debt),
+        ];
+    }
+
+    private function formatMonthLabel(?string $value): string
+    {
+        if (! filled($value)) {
+            return 'Нет данных';
+        }
+
+        try {
+            return Carbon::parse((string) $value . '-01')->format('m.Y');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private function formatDateTimeLabel(?string $value): string
+    {
+        if (! filled($value)) {
+            return 'Нет обмена';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('d.m.Y H:i');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private function formatMoney(float $value): string
+    {
+        return number_format($value, 0, ',', ' ') . ' ₽';
     }
 
     private function resolveMarketId(): int
