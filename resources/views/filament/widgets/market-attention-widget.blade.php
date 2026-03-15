@@ -455,7 +455,7 @@
             in_array($signalsCount % 10, [2, 3, 4], true) && ! in_array($signalsCount % 100, [12, 13, 14], true) => 'сигнала',
             default => 'сигналов',
         };
-        $useToastStack = app()->environment(['staging', 'production']);
+        $useToastStack = app()->environment(['local', 'staging', 'production']);
         $dismissUserKey = (string) (auth()->id() ?? 'guest');
         $dismissMarketKey = filled($marketName ?? null) ? (string) $marketName : 'no-market';
     @endphp
