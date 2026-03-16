@@ -225,6 +225,19 @@ class TenantResource extends BaseResource
                             ]),
                     ]),
 
+                Tab::make('Начисления')
+                    ->schema([
+                        Section::make('Начисления 1С')
+                            ->description('Реестр начислений арендатора из tenant_accruals. Здесь начисления видны в админке, а не только в кабинете арендатора.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('accruals_registry')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsRegistry($record))
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
+
                 Tab::make('Контакты')
                     ->schema([
                         Section::make('Контактные данные')
@@ -1887,6 +1900,266 @@ class TenantResource extends BaseResource
         return new HtmlString($html);
     }
 
+    private static function renderAccrualsRegistry(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Начисления появятся после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('tenant_accruals')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица tenant_accruals ещё не создана.</div>');
+        }
+
+        $summary = static::accrualSummaryData($record);
+
+        if ((int) ($summary['count'] ?? 0) === 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет начислений.</div>');
+        }
+
+        $taHasPeriod = static::hasColumn('tenant_accruals', 'period');
+        $taHasAccrualDate = static::hasColumn('tenant_accruals', 'accrual_date');
+        $taHasTotalWithVat = static::hasColumn('tenant_accruals', 'total_with_vat');
+        $taHasAmount = static::hasColumn('tenant_accruals', 'amount');
+        $taHasTenantContractId = static::hasColumn('tenant_accruals', 'tenant_contract_id');
+        $taHasMarketSpaceId = static::hasColumn('tenant_accruals', 'market_space_id');
+        $taHasSourcePlaceName = static::hasColumn('tenant_accruals', 'source_place_name');
+        $taHasSourcePlaceCode = static::hasColumn('tenant_accruals', 'source_place_code');
+        $taHasSourceContractNumber = static::hasColumn('tenant_accruals', 'source_contract_number');
+
+        $msHasDisplayName = static::hasColumn('market_spaces', 'display_name');
+        $msHasNumber = static::hasColumn('market_spaces', 'number');
+        $msHasCode = static::hasColumn('market_spaces', 'code');
+
+        $rowsBase = DB::table('tenant_accruals as ta')
+            ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'ta.tenant_contract_id')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'ta.market_space_id')
+            ->where('ta.market_id', (int) $record->market_id)
+            ->where('ta.tenant_id', (int) $record->id);
+
+        $select = ['ta.id'];
+
+        if ($taHasPeriod) {
+            $select[] = 'ta.period';
+        }
+        if ($taHasAccrualDate) {
+            $select[] = 'ta.accrual_date';
+        }
+        if ($taHasTenantContractId) {
+            $select[] = 'ta.tenant_contract_id';
+        }
+        if ($taHasMarketSpaceId) {
+            $select[] = 'ta.market_space_id';
+        }
+        if ($taHasTotalWithVat) {
+            $select[] = 'ta.total_with_vat';
+        }
+        if ($taHasAmount) {
+            $select[] = 'ta.amount';
+        }
+        if ($taHasSourcePlaceName) {
+            $select[] = 'ta.source_place_name';
+        }
+        if ($taHasSourcePlaceCode) {
+            $select[] = 'ta.source_place_code';
+        }
+        if ($taHasSourceContractNumber) {
+            $select[] = 'ta.source_contract_number';
+        }
+
+        $select[] = 'tc.number as contract_number';
+
+        if ($msHasDisplayName) {
+            $select[] = 'ms.display_name as space_display_name';
+        }
+        if ($msHasNumber) {
+            $select[] = 'ms.number as space_number';
+        }
+        if ($msHasCode) {
+            $select[] = 'ms.code as space_code';
+        }
+
+        if ($taHasPeriod) {
+            $rowsBase->orderByDesc('ta.period');
+        }
+        if ($taHasAccrualDate) {
+            $rowsBase->orderByDesc('ta.accrual_date');
+        }
+        $rowsBase->orderByDesc('ta.id');
+
+        $rows = $rowsBase
+            ->limit(200)
+            ->get($select);
+
+        $base = DB::table('tenant_accruals')
+            ->where('market_id', (int) $record->market_id)
+            ->where('tenant_id', (int) $record->id);
+
+        $withoutContractTotal = $taHasTenantContractId
+            ? (int) ((clone $base)->whereNull('tenant_contract_id')->count())
+            : 0;
+
+        $withoutSpaceTotal = $taHasMarketSpaceId
+            ? (int) ((clone $base)->whereNull('market_space_id')->count())
+            : 0;
+
+        $contractsTabBaseUrl = '?tab=dogovory::data::tab';
+        try {
+            $contractsTabBaseUrl = static::getUrl('edit', [
+                'record' => (int) $record->id,
+                'tab' => 'dogovory::data::tab',
+            ]);
+        } catch (\Throwable) {
+            // keep fallback
+        }
+
+        $summaryCards = [
+            ['label' => 'Всего начислений', 'value' => (string) ($summary['count'] ?? 0)],
+            ['label' => 'Последний период', 'value' => (string) ($summary['last_period_label'] ?? '—')],
+            ['label' => 'Сумма за всё время', 'value' => static::formatRub((float) ($summary['sum_all'] ?? 0))],
+            ['label' => 'Сумма за последний период', 'value' => static::formatRub((float) ($summary['sum_last'] ?? 0))],
+            ['label' => 'Строк в последнем периоде', 'value' => (string) ($summary['count_last_period'] ?? 0)],
+            ['label' => 'Без привязки к месту (последний период)', 'value' => (string) ($summary['without_space'] ?? 0)],
+        ];
+
+        $summaryHtml = '';
+        foreach ($summaryCards as $card) {
+            $summaryHtml .= '<div class="tenant-accruals__summary-card">'
+                . '<div class="tenant-accruals__summary-label">' . e((string) $card['label']) . '</div>'
+                . '<div class="tenant-accruals__summary-value">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $warn = '';
+        if ($withoutContractTotal > 0) {
+            $warn .= '<div class="tenant-accruals__warn">Есть начисления без привязки к договору: <strong>'
+                . e((string) $withoutContractTotal)
+                . '</strong>. Их видно в кабинете, но для админской аналитики лучше связать с tenant_contracts.</div>';
+        }
+
+        if ($withoutSpaceTotal > 0) {
+            $warn .= '<div class="tenant-accruals__warn">Есть начисления без привязки к торговому месту: <strong>'
+                . e((string) $withoutSpaceTotal)
+                . '</strong>. По таким строкам разложение по местам неполное.</div>';
+        }
+
+        $tableRows = '';
+        foreach ($rows as $row) {
+            $periodRaw = $row->period ?? $row->accrual_date ?? null;
+            $periodLabel = '—';
+            if (filled($periodRaw)) {
+                try {
+                    $periodLabel = Carbon::parse((string) $periodRaw)->format('m.Y');
+                } catch (\Throwable) {
+                    $periodLabel = (string) $periodRaw;
+                }
+            }
+
+            $contractId = (int) ($row->tenant_contract_id ?? 0);
+            $contractNumber = trim((string) ($row->contract_number ?? ''));
+            $sourceContractNumber = trim((string) ($row->source_contract_number ?? ''));
+
+            if ($contractId > 0) {
+                $contractCell = '<a href="' . e($contractsTabBaseUrl) . '#tenant-contract-' . $contractId . '" class="tenant-accruals__link">'
+                    . e($contractNumber !== '' ? $contractNumber : ('Договор #' . $contractId))
+                    . '</a>';
+            } elseif ($sourceContractNumber !== '') {
+                $contractCell = '<span class="tenant-accruals__warn-badge">Без связи</span><div class="tenant-accruals__subtext">' . e($sourceContractNumber) . '</div>';
+            } else {
+                $contractCell = '<span class="tenant-accruals__warn-badge">Без связи</span>';
+            }
+
+            $spaceId = (int) ($row->market_space_id ?? 0);
+            $spaceDisplayName = trim((string) ($row->space_display_name ?? ''));
+            $spaceNumber = trim((string) ($row->space_number ?? ''));
+            $spaceCode = trim((string) ($row->space_code ?? ''));
+            $sourcePlaceName = trim((string) ($row->source_place_name ?? ''));
+            $sourcePlaceCode = trim((string) ($row->source_place_code ?? ''));
+
+            $spaceLabel = $spaceDisplayName !== ''
+                ? $spaceDisplayName
+                : ($spaceNumber !== '' ? $spaceNumber : ($spaceCode !== '' ? $spaceCode : 'Не привязано'));
+
+            if ($spaceId > 0) {
+                $spaceUrl = null;
+                try {
+                    $spaceUrl = route('filament.admin.resources.market-spaces.edit', ['record' => $spaceId]);
+                } catch (\Throwable) {
+                    $spaceUrl = null;
+                }
+
+                $spaceCell = $spaceUrl
+                    ? '<a href="' . e($spaceUrl) . '" class="tenant-accruals__link">' . e($spaceLabel) . '</a>'
+                    : e($spaceLabel);
+            } else {
+                $sourcePlaceLabel = trim(trim($sourcePlaceCode . ' ' . $sourcePlaceName));
+                $spaceCell = '<span class="tenant-accruals__warn-badge">Не привязано</span>';
+                if ($sourcePlaceLabel !== '') {
+                    $spaceCell .= '<div class="tenant-accruals__subtext">' . e($sourcePlaceLabel) . '</div>';
+                }
+            }
+
+            $amountValue = $taHasTotalWithVat
+                ? (float) ($row->total_with_vat ?? 0)
+                : (float) ($row->amount ?? 0);
+
+            $tableRows .= '
+                <tr>
+                    <td>' . e($periodLabel) . '</td>
+                    <td>' . $contractCell . '</td>
+                    <td>' . $spaceCell . '</td>
+                    <td class="tenant-accruals__num">' . e(static::formatRub($amountValue)) . '</td>
+                </tr>
+            ';
+        }
+
+        $style = '
+<style>
+.tenant-accruals{display:flex;flex-direction:column;gap:12px}
+.tenant-accruals__summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.tenant-accruals__summary-card{border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;background:rgba(0,0,0,.02)}
+.dark .tenant-accruals__summary-card{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
+.tenant-accruals__summary-label{font-size:12px;opacity:.72;line-height:1.2}
+.tenant-accruals__summary-value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2}
+.tenant-accruals__warn{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
+.dark .tenant-accruals__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
+.tenant-accruals__table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(0,0,0,.10)}
+.dark .tenant-accruals__table-wrap{border-color:rgba(255,255,255,.12)}
+.tenant-accruals table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.tenant-accruals thead th{padding:10px 12px;font-weight:700;white-space:nowrap;text-align:left;border-bottom:1px solid rgba(0,0,0,.08);background:rgba(0,0,0,.03)}
+.dark .tenant-accruals thead th{border-bottom-color:rgba(255,255,255,.10);background:rgba(255,255,255,.04)}
+.tenant-accruals tbody td{padding:10px 12px;vertical-align:top;border-top:1px solid rgba(0,0,0,.08)}
+.dark .tenant-accruals tbody td{border-top-color:rgba(255,255,255,.10)}
+.tenant-accruals tbody tr:first-child td{border-top:none}
+.tenant-accruals__num{text-align:right;white-space:nowrap}
+.tenant-accruals__link{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.tenant-accruals__warn-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;border:1px solid rgba(245,158,11,.45);background:rgba(245,158,11,.10);font-size:12px;font-weight:700}
+.tenant-accruals__subtext{margin-top:4px;font-size:12px;opacity:.72;line-height:1.35}
+</style>';
+
+        $html = $style . '
+<div class="tenant-accruals">
+    <div class="tenant-accruals__summary">' . $summaryHtml . '</div>
+    ' . $warn . '
+    <div class="tenant-accruals__table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Период</th>
+                    <th>Договор</th>
+                    <th>Торговое место</th>
+                    <th class="tenant-accruals__num">Сумма с НДС</th>
+                </tr>
+            </thead>
+            <tbody>
+                ' . ($tableRows !== '' ? $tableRows : '<tr><td colspan="4" style="padding:12px;opacity:.85;">Нет строк для отображения.</td></tr>') . '
+            </tbody>
+        </table>
+    </div>
+</div>';
+
+        return new HtmlString($html);
+    }
+
     private static function renderContractStatusBadge(?string $status): string
     {
         $s = trim((string) $status);
@@ -2198,7 +2471,6 @@ class TenantResource extends BaseResource
 
         return $market->settings['debt_monitoring']['tenant_aggregate_mode'] ?? 'worst';
     }
-
 
     /**
      * Получить severity статуса.
