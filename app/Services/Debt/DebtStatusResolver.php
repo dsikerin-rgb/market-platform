@@ -473,6 +473,45 @@ class DebtStatusResolver
         }
 
         if ($debtsData['rows']->isEmpty()) {
+            $accrualsFallback = $this->fetchAccrualsFallbackData($tenant);
+
+            if ($accrualsFallback !== null && $accrualsFallback['count'] > 0) {
+                $dueDate = $this->calculateDueDateFromAccruals($accrualsFallback, $graceDays);
+
+                if ($dueDate === null) {
+                    return $this->makeResult(
+                        mode: 'auto',
+                        status: self::STATUS_GREEN,
+                        label: $labels[self::STATUS_GREEN],
+                        updatedAt: $accrualsFallback['updated_at_label'],
+                        source: 'Fallback: tenant_accruals, строк в contract_debts нет',
+                        severity: 0
+                    );
+                }
+
+                $now = Carbon::now();
+
+                if ($now->gt($dueDate)) {
+                    return $this->makeResult(
+                        mode: 'auto',
+                        status: self::STATUS_GREEN,
+                        label: $labels[self::STATUS_GREEN],
+                        updatedAt: $accrualsFallback['updated_at_label'],
+                        source: 'Fallback: tenant_accruals, строк в contract_debts нет',
+                        severity: 0
+                    );
+                }
+
+                return $this->makeResult(
+                    mode: 'auto',
+                    status: self::STATUS_PENDING,
+                    label: $labels[self::STATUS_PENDING],
+                    updatedAt: $accrualsFallback['updated_at_label'],
+                    source: 'Fallback: tenant_accruals, строк в contract_debts нет',
+                    severity: 1
+                );
+            }
+
             // Нет записей по арендатору — это gray (данные есть, но записей нет)
             return $this->makeResult(
                 mode: 'auto',
@@ -644,6 +683,86 @@ class DebtStatusResolver
             'has_created_at' => $hasCreatedAt,
             'has_period' => $hasPeriod,
         ];
+    }
+
+    /**
+     * Получить fallback-данные из tenant_accruals, если contract_debts пуст.
+     *
+     * @return array{count:int,last_period:?string,last_accrual_date:?string,updated_at_label:?string}|null
+     */
+    private function fetchAccrualsFallbackData(Tenant $tenant): ?array
+    {
+        if (!Schema::hasTable('tenant_accruals')) {
+            return null;
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->where('market_id', $tenant->market_id)
+            ->where('tenant_id', $tenant->id);
+
+        $count = (clone $query)->count();
+
+        if ($count === 0) {
+            return null;
+        }
+
+        $hasPeriod = Schema::hasColumn('tenant_accruals', 'period');
+        $hasAccrualDate = Schema::hasColumn('tenant_accruals', 'accrual_date');
+
+        $lastPeriod = $hasPeriod ? (clone $query)->max('period') : null;
+        $lastAccrualDate = $hasAccrualDate ? (clone $query)->max('accrual_date') : null;
+
+        $updatedAtLabel = null;
+        if ($lastAccrualDate) {
+            try {
+                $updatedAtLabel = Carbon::parse($lastAccrualDate)->format('d.m.Y');
+            } catch (\Throwable) {
+                $updatedAtLabel = (string) $lastAccrualDate;
+            }
+        } elseif ($lastPeriod) {
+            $updatedAtLabel = (string) $lastPeriod;
+        }
+
+        return [
+            'count' => $count,
+            'last_period' => $lastPeriod ? (string) $lastPeriod : null,
+            'last_accrual_date' => $lastAccrualDate ? (string) $lastAccrualDate : null,
+            'updated_at_label' => $updatedAtLabel,
+        ];
+    }
+
+    /**
+     * Рассчитать дату оплаты из accruals.
+     *
+     * @param array $data
+     * @param int $graceDays
+     * @return Carbon|null
+     */
+    private function calculateDueDateFromAccruals(array $data, int $graceDays): ?Carbon
+    {
+        $lastAccrualDate = $data['last_accrual_date'] ?? null;
+        if ($lastAccrualDate) {
+            try {
+                return Carbon::parse($lastAccrualDate)->addDays($graceDays);
+            } catch (\Throwable) {
+                // continue
+            }
+        }
+
+        $lastPeriod = $data['last_period'] ?? null;
+        if ($lastPeriod) {
+            try {
+                if (preg_match('/^\d{4}-\d{2}/', (string) $lastPeriod) === 1) {
+                    return Carbon::createFromFormat('Y-m-d', substr((string) $lastPeriod, 0, 7) . '-01')
+                        ->startOfMonth()
+                        ->addDays($graceDays);
+                }
+            } catch (\Throwable) {
+                // continue
+            }
+        }
+
+        return null;
     }
 
     /**
