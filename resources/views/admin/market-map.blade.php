@@ -2386,6 +2386,7 @@
               let line4 = '';
               let line5 = '';
               let line6 = '';
+              let line7 = '';
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
