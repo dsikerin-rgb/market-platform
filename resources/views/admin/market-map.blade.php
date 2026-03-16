@@ -2432,64 +2432,76 @@
                     : null;
                   const debtSource = hit.debt_status_source || '';
 
+                  // Объяснение режима (отдельная строка, не затирается)
+                  let scopeExplanation = '';
+
                   if (debtScope === 'space') {
                     // Точный статус по месту
                     if (debtStatus === 'green') {
                       line4 = 'Статус по месту: Нет задолженности';
-                      line5 = debtMode === 'manual' ? 'Статус задан вручную' : 'Подтверждено по договору 1С';
+                      scopeExplanation = debtMode === 'manual' ? 'Статус задан вручную' : 'Связь с местом подтверждена в 1С';
                     } else if (debtStatus === 'pending') {
                       line4 = 'Статус по месту: Срок не нарушен';
-                      line5 = 'Подтверждено по договору 1С';
+                      scopeExplanation = 'Связь с местом подтверждена в 1С';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус по месту: ' + escapeHtml(debtLabel))
                         : ('Просрочка по месту: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
-                      line5 = debtMode === 'manual' ? 'Статус задан вручную' : 'Подтверждено по договору 1С';
+                      scopeExplanation = debtMode === 'manual' ? 'Статус задан вручную' : 'Связь с местом подтверждена в 1С';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус по месту: Нет данных 1С';
-                      line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                      scopeExplanation = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
                     } else {
                       line4 = debtLabel ? ('Задолженность по месту: ' + escapeHtml(debtLabel)) : 'Задолженность по месту: —';
-                      line5 = '';
+                      scopeExplanation = '';
                     }
                   } else if (debtScope === 'tenant_fallback') {
                     // Статус арендатора (нет точной связи с местом)
                     if (debtStatus === 'green') {
                       line4 = 'Статус арендатора: Нет задолженности';
-                      line5 = 'Нет точной связи с местом';
+                      scopeExplanation = 'Нет точной связи с местом';
                     } else if (debtStatus === 'pending') {
                       line4 = 'Статус арендатора: Срок не нарушен';
-                      line5 = 'Нет точной связи с местом';
+                      scopeExplanation = 'Нет точной связи с местом';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус арендатора: ' + escapeHtml(debtLabel))
                         : ('Просрочка арендатора: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
-                      line5 = 'Нет точной связи с местом';
+                      scopeExplanation = 'Нет точной связи с местом';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус арендатора: Нет данных 1С';
-                      line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                      scopeExplanation = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
                     } else {
                       line4 = debtLabel ? ('Задолженность арендатора: ' + escapeHtml(debtLabel)) : 'Задолженность арендатора: —';
-                      line5 = 'Нет точной связи с местом';
+                      scopeExplanation = 'Нет точной связи с местом';
                     }
                   } else {
                     // scope=none или неизвестный
                     if (debtStatus === 'gray') {
                       line4 = 'Статус: Нет данных';
-                      line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                      scopeExplanation = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
                     } else {
                       line4 = debtLabel ? ('Статус: ' + escapeHtml(debtLabel)) : 'Статус: —';
-                      line5 = '';
+                      scopeExplanation = '';
                     }
                   }
 
+                  // line5 — объяснение режима (если есть)
+                  line5 = scopeExplanation;
+
+                  // line6 — ставка аренды (если есть)
                   if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
-                    line5 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
+                    line6 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
+                  } else {
+                    line6 = '';
                   }
 
+                  // line7 — начисления (если есть)
                   if (currentAccrualTotal !== null && Number.isFinite(currentAccrualTotal)) {
                     const accrualSuffix = currentAccrualMode === 'latest' ? 'последний период' : currentAccrualPeriod;
-                    line6 = 'Начислено' + (accrualSuffix ? ' (' + escapeHtml(accrualSuffix) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
+                    line7 = 'Начислено' + (accrualSuffix ? ' (' + escapeHtml(accrualSuffix) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
+                  } else {
+                    line7 = '';
                   }
                 }
               } else {
@@ -2545,6 +2557,7 @@
                 (line4 ? '<div class="row">' + line4 + '</div>' : '') +
                 (line5 ? '<div class="row">' + line5 + '</div>' : '') +
                 (line6 ? '<div class="row">' + line6 + '</div>' : '') +
+                (line7 ? '<div class="row">' + line7 + '</div>' : '') +
                 (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
                 actions
               );
