@@ -800,6 +800,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'updated_at' => null,
                         'source' => null,
                         'severity' => 0,
+                        'extra' => ['scope' => 'none'],
                     ]);
 
             $rentRateValue = $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null;
@@ -816,6 +817,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     }
                 }
             }
+
+            // Определяем scope из extra или по умолчанию
+            $debtScope = $resolvedDebt['extra']['scope'] ?? 'none';
 
             return [
                 'id' => (int) $s->id,
@@ -843,11 +847,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_updated_at' => $resolvedDebt['updated_at'],
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
+                'debt_status_scope' => $debtScope,
 
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
                 'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
+                'space_is_active' => $space?->is_active ?? false,
+                'space_is_occupied' => $space?->tenant_id !== null,
                 'space_rent_rate_value' => $rentRateValue,
                 'space_rent_rate_unit' => $rentRateUnit,
             ];
@@ -1307,6 +1314,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_updated_at' => $resolvedDebt['updated_at'],
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
+                'debt_status_scope' => $resolvedDebt['extra']['scope'] ?? 'none',
 
                 'debt' => null,
                 'color' => null,

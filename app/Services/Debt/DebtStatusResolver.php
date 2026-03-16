@@ -78,7 +78,7 @@ class DebtStatusResolver
     /**
      * Рассчитать статус для конкретного торгового места.
      *
-     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int}
+     * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int,extra:?array}
      */
     public function resolveForMarketSpace(int $marketSpaceId, int $marketId): array
     {
@@ -88,14 +88,27 @@ class DebtStatusResolver
         $space = DB::table('market_spaces')
             ->where('id', $marketSpaceId)
             ->where('market_id', $marketId)
-            ->first(['tenant_id']);
+            ->first(['tenant_id', 'is_active']);
 
+        // Место не найдено или нет арендатора — нейтральный результат (scope=none)
         if (!$space || !$space->tenant_id) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
                 label: 'Нет арендатора',
-                severity: 0
+                severity: 0,
+                extra: ['scope' => 'none']
+            );
+        }
+
+        // Место не активно — нейтральный результат (scope=none)
+        if (!$space->is_active) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Место не активно',
+                severity: 0,
+                extra: ['scope' => 'none']
             );
         }
 
@@ -105,7 +118,8 @@ class DebtStatusResolver
                 mode: 'auto',
                 status: self::STATUS_GRAY,
                 label: 'Арендатор не найден',
-                severity: 0
+                severity: 0,
+                extra: ['scope' => 'none']
             );
         }
 
@@ -116,55 +130,44 @@ class DebtStatusResolver
             ->whereNotNull('external_id')
             ->pluck('external_id');
 
+        // Точной связи с местом нет — используем tenant-fallback
         if ($contractExternalIds->isEmpty()) {
-            $activeSpacesCount = DB::table('market_spaces')
-                ->where('market_id', $marketId)
-                ->where('tenant_id', (int) $tenant->id)
-                ->where('is_active', true)
-                ->count();
+            $tenantResolved = $this->resolve($tenant);
+            $tenantStatus = $tenantResolved['status'] ?? null;
 
-            if ($activeSpacesCount > 1) {
-                $tenantResolved = $this->resolve($tenant);
-                $tenantStatus = $tenantResolved['status'] ?? null;
-
-                if (in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING], true)) {
-                    return $this->makeResult(
-                        mode: 'auto',
-                        status: $tenantStatus,
-                        label: $tenantStatus === self::STATUS_PENDING ? $labels[self::STATUS_PENDING] : $labels[self::STATUS_GREEN],
-                        updatedAt: $tenantResolved['updated_at'] ?? null,
-                        source: 'tenant-level fallback: место не определено',
-                        severity: (int) ($tenantResolved['severity'] ?? 0)
-                    );
-                }
-
-                if (in_array($tenantStatus, [self::STATUS_ORANGE, self::STATUS_RED], true)) {
-                    return $this->makeResult(
-                        mode: 'auto',
-                        status: self::STATUS_GRAY,
-                        label: $labels[self::STATUS_GRAY],
-                        updatedAt: $tenantResolved['updated_at'] ?? null,
-                        source: 'у арендатора есть просрочка, но конкретное место не определено',
-                        severity: 0
-                    );
-                }
+            // Проверяем валидность tenant-level статуса
+            if (in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
+                return $this->makeResult(
+                    mode: $tenantResolved['mode'],
+                    status: $tenantResolved['status'],
+                    label: $tenantResolved['label'],
+                    updatedAt: $tenantResolved['updated_at'],
+                    source: 'tenant-fallback: нет точной связи с местом',
+                    severity: $tenantResolved['severity'],
+                    extra: ['scope' => 'tenant_fallback']
+                );
             }
 
+            // tenant-fallback невалиден — нейтральный результат
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: 'Нет договора 1С для места',
-                severity: 0
+                label: 'Нет данных 1С',
+                source: 'tenant-fallback недоступен',
+                severity: 0,
+                extra: ['scope' => 'none']
             );
         }
 
         // Проверяем наличие таблицы contract_debts
         if (!Schema::hasTable('contract_debts')) {
+            // Таблица отсутствует — нейтральный результат (scope=none)
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
                 label: 'Таблица contract_debts отсутствует',
-                severity: 0
+                severity: 0,
+                extra: ['scope' => 'none']
             );
         }
 
@@ -175,11 +178,13 @@ class DebtStatusResolver
         $hasPeriod = Schema::hasColumn('contract_debts', 'period');
 
         if (!$hasDebt) {
+            // Поле отсутствует — нейтральный результат (scope=none)
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
                 label: 'Нет поля debt_amount',
-                severity: 0
+                severity: 0,
+                extra: ['scope' => 'none']
             );
         }
 
@@ -221,14 +226,31 @@ class DebtStatusResolver
         $rows = $query->get(['debt_amount', 'period']);
 
         if ($rows->isEmpty()) {
-            // Нет записей 1С для контрактов этого места — это gray
+            // Нет записей 1С для контрактов этого места — используем tenant-fallback
+            $tenantResolved = $this->resolve($tenant);
+            $tenantStatus = $tenantResolved['status'] ?? null;
+
+            // Проверяем валидность tenant-level статуса
+            if (in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
+                return $this->makeResult(
+                    mode: $tenantResolved['mode'],
+                    status: $tenantResolved['status'],
+                    label: $tenantResolved['label'],
+                    updatedAt: $tenantResolved['updated_at'],
+                    source: 'tenant-fallback: нет точных данных по месту',
+                    severity: $tenantResolved['severity'],
+                    extra: ['scope' => 'tenant_fallback']
+                );
+            }
+
+            // tenant-fallback невалиден — нейтральный результат
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: 'Нет данных 1С по договору',
-                updatedAt: $snapshotLabel,
-                source: 'contract_debts: пусто',
-                severity: 0
+                label: 'Нет данных 1С',
+                source: 'tenant-fallback недоступен',
+                severity: 0,
+                extra: ['scope' => 'none']
             );
         }
 
@@ -242,7 +264,8 @@ class DebtStatusResolver
                 label: $labels[self::STATUS_GREEN],
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
-                severity: 0
+                severity: 0,
+                extra: ['scope' => 'space']
             );
         }
 
@@ -261,7 +284,8 @@ class DebtStatusResolver
                 label: 'Не удалось определить срок оплаты',
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts: нет дат',
-                severity: 0
+                severity: 0,
+                extra: ['scope' => 'space']
             );
         }
 
@@ -275,7 +299,8 @@ class DebtStatusResolver
                 label: $labels[self::STATUS_PENDING],
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
-                severity: 1
+                severity: 1,
+                extra: ['scope' => 'space']
             );
         }
 
@@ -289,7 +314,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 3,
-                extra: ['overdue_days' => $daysOverdue]
+                extra: ['overdue_days' => $daysOverdue, 'scope' => 'space']
             );
         }
 
@@ -301,7 +326,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 2,
-                extra: ['overdue_days' => $daysOverdue]
+                extra: ['overdue_days' => $daysOverdue, 'scope' => 'space']
             );
         }
 
@@ -313,7 +338,7 @@ class DebtStatusResolver
             updatedAt: $snapshotLabel,
             source: 'contract_debts',
             severity: 1,
-            extra: ['overdue_days' => max(0, $daysOverdue)]
+            extra: ['overdue_days' => max(0, $daysOverdue), 'scope' => 'space']
         );
     }
 
