@@ -2425,35 +2425,62 @@
                   const debtStatus = hit.debt_status || null;
                   const debtLabel = hit.debt_status_label || '';
                   const debtMode = hit.debt_status_mode || 'auto';
+                  const debtScope = hit.debt_status_scope || 'none';
                   const overdueDays = hit.debt_overdue_days !== null && hit.debt_overdue_days !== undefined ? Number(hit.debt_overdue_days) : null;
                   const overdueDaysLabel = overdueDays !== null && Number.isFinite(overdueDays)
                     ? String(Math.max(0, Math.round(overdueDays)))
                     : null;
                   const debtSource = hit.debt_status_source || '';
 
-                  if (debtStatus === 'green') {
-                    line4 = 'Статус: Нет задолженности';
-                    line5 = debtMode === 'manual' ? 'Статус задан вручную' : '';
-                  } else if (debtStatus === 'pending') {
-                    line4 = 'Статус: Срок не нарушен';
-                    line5 = 'Начисление есть, просрочки нет';
-                  } else if (debtStatus === 'orange' || debtStatus === 'red') {
-                    line4 = debtMode === 'manual'
-                      ? ('Статус: ' + escapeHtml(debtLabel))
-                      : ('Просрочка: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
-                    if (overdueDaysLabel !== null) {
-                      line5 = '';
-                    } else if (debtMode === 'manual') {
-                      line5 = 'Статус задан вручную';
+                  if (debtScope === 'space') {
+                    // Точный статус по месту
+                    if (debtStatus === 'green') {
+                      line4 = 'Статус по месту: Нет задолженности';
+                      line5 = debtMode === 'manual' ? 'Статус задан вручную' : 'Подтверждено по договору 1С';
+                    } else if (debtStatus === 'pending') {
+                      line4 = 'Статус по месту: Срок не нарушен';
+                      line5 = 'Подтверждено по договору 1С';
+                    } else if (debtStatus === 'orange' || debtStatus === 'red') {
+                      line4 = debtMode === 'manual'
+                        ? ('Статус по месту: ' + escapeHtml(debtLabel))
+                        : ('Просрочка по месту: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
+                      line5 = debtMode === 'manual' ? 'Статус задан вручную' : 'Подтверждено по договору 1С';
+                    } else if (debtStatus === 'gray') {
+                      line4 = 'Статус по месту: Нет данных 1С';
+                      line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
                     } else {
+                      line4 = debtLabel ? ('Задолженность по месту: ' + escapeHtml(debtLabel)) : 'Задолженность по месту: —';
                       line5 = '';
                     }
-                  } else if (debtStatus === 'gray') {
-                    line4 = 'Статус: Нет данных 1С';
-                    line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                  } else if (debtScope === 'tenant_fallback') {
+                    // Статус арендатора (нет точной связи с местом)
+                    if (debtStatus === 'green') {
+                      line4 = 'Статус арендатора: Нет задолженности';
+                      line5 = 'Нет точной связи с местом';
+                    } else if (debtStatus === 'pending') {
+                      line4 = 'Статус арендатора: Срок не нарушен';
+                      line5 = 'Нет точной связи с местом';
+                    } else if (debtStatus === 'orange' || debtStatus === 'red') {
+                      line4 = debtMode === 'manual'
+                        ? ('Статус арендатора: ' + escapeHtml(debtLabel))
+                        : ('Просрочка арендатора: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
+                      line5 = 'Нет точной связи с местом';
+                    } else if (debtStatus === 'gray') {
+                      line4 = 'Статус арендатора: Нет данных 1С';
+                      line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                    } else {
+                      line4 = debtLabel ? ('Задолженность арендатора: ' + escapeHtml(debtLabel)) : 'Задолженность арендатора: —';
+                      line5 = 'Нет точной связи с местом';
+                    }
                   } else {
-                    line4 = debtLabel ? ('Задолженность: ' + escapeHtml(debtLabel)) : 'Задолженность: —';
-                    line5 = '';
+                    // scope=none или неизвестный
+                    if (debtStatus === 'gray') {
+                      line4 = 'Статус: Нет данных';
+                      line5 = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                    } else {
+                      line4 = debtLabel ? ('Статус: ' + escapeHtml(debtLabel)) : 'Статус: —';
+                      line5 = '';
+                    }
                   }
 
                   if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
