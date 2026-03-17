@@ -11,6 +11,7 @@ use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
+use App\Services\TenantContracts\SafeContractSpaceLinker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,7 @@ class ContractController extends Controller
      *
      * ВАЖНО: если ключ места неоднозначный (коллизия) — НЕ привязываем договор к месту.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, SafeContractSpaceLinker $safeLinker): JsonResponse
     {
         $startedAt = now();
 
@@ -197,6 +198,11 @@ class ContractController extends Controller
             $missingSpaceKey = 0;           // нет market_space_code в payload
             $spaceNotFound = 0;             // ключ есть, но место не найдено
             $spaceAmbiguous = 0;            // ключ матчится на несколько мест
+
+            // Safe auto-link статистика
+            $safeLinkedContracts = 0;       // привязано через safe linker
+            $safeLinkedByBridge = 0;        // привязано через bridge rule
+            $safeLinkedByNumber = 0;        // привязано через number rule
 
             // Примеры проблемных ключей для диагностики
             $missingKeysSample = [];
@@ -440,6 +446,20 @@ class ContractController extends Controller
 
                 $contract->save();
 
+                // Safe auto-link for contracts without market_space_id
+                if ($contract->market_space_id === null) {
+                    $linkResult = $safeLinker->link($contract);
+                    if ($linkResult['state'] === 'matched') {
+                        $safeLinker->apply($contract, $linkResult);
+                        $safeLinkedContracts++;
+                        if ($linkResult['source'] === 'bridge') {
+                            $safeLinkedByBridge++;
+                        } elseif ($linkResult['source'] === 'number') {
+                            $safeLinkedByNumber++;
+                        }
+                    }
+                }
+
                 if ($wasRecentlyCreated) {
                     $created++;
                 } else {
@@ -489,6 +509,11 @@ class ContractController extends Controller
                 'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
                 'space_key_collisions' => $keysWithCollisions,
                 'linkage_stats' => $linkageStats,
+                'safe_auto_link' => [
+                    'linked_total' => $safeLinkedContracts,
+                    'linked_by_bridge' => $safeLinkedByBridge,
+                    'linked_by_number' => $safeLinkedByNumber,
+                ],
             ];
 
             if ($diagnostics !== []) {
