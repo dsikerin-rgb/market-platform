@@ -47,7 +47,10 @@ class LinkContractSpacesCommand extends Command
             'skipped_multi_place' => 0,
         ];
 
-        $samples = [];
+        $matchedSamples = [];
+        $skippedSamples = [];
+        $matchedSampleLimit = 30;
+        $skippedSampleLimit = 30;
 
         foreach ($contracts as $contract) {
             $result = $linker->link($contract);
@@ -76,8 +79,8 @@ class LinkContractSpacesCommand extends Command
                     $sample['applied'] = null;
                 }
 
-                if (count($samples) < 50) {
-                    $samples[] = $sample;
+                if (count($matchedSamples) < $matchedSampleLimit) {
+                    $matchedSamples[] = $sample;
                 }
             } else {
                 // Count skip reasons
@@ -96,8 +99,8 @@ class LinkContractSpacesCommand extends Command
                     $stats['skipped_no_match']++;
                 }
 
-                if (count($samples) < 50 && in_array($reason, ['non_primary_excluded', 'bridge_multi_primary', 'number_ambiguous'])) {
-                    $samples[] = $sample;
+                if (count($skippedSamples) < $skippedSampleLimit && in_array($reason, ['non_primary_excluded', 'bridge_multi_primary', 'number_ambiguous'])) {
+                    $skippedSamples[] = $sample;
                 }
             }
         }
@@ -122,20 +125,16 @@ class LinkContractSpacesCommand extends Command
         $totalLinked = $stats['linked_by_bridge'] + $stats['linked_by_number'];
         if ($totalLinked > 0) {
             $this->output->writeln('## Sample Links');
-            foreach ($samples as $sample) {
-                if ($sample['state'] === 'matched') {
-                    $this->output->writeln(json_encode($sample, JSON_UNESCAPED_UNICODE));
-                }
+            foreach ($matchedSamples as $sample) {
+                $this->output->writeln(json_encode($sample, JSON_UNESCAPED_UNICODE));
             }
             $this->output->writeln('');
         }
 
         if ($stats['skipped_non_primary'] > 0 || $stats['skipped_ambiguous'] > 0 || $stats['skipped_multi_primary'] > 0) {
             $this->output->writeln('## Sample Skipped');
-            foreach ($samples as $sample) {
-                if ($sample['state'] === 'not_matched') {
-                    $this->output->writeln(json_encode($sample, JSON_UNESCAPED_UNICODE));
-                }
+            foreach ($skippedSamples as $sample) {
+                $this->output->writeln(json_encode($sample, JSON_UNESCAPED_UNICODE));
             }
             $this->output->writeln('');
         }
