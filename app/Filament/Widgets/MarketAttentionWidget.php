@@ -124,7 +124,10 @@ class MarketAttentionWidget extends Widget
                     category: '1С',
                     description: 'Есть обмены 1С со статусом ошибки за последние 7 дней.',
                     actionLabel: 'Открыть журнал интеграций',
-                    actionUrl: IntegrationExchangeResource::getUrl('index'),
+                    actionUrl: $this->appendQueryString(
+                        IntegrationExchangeResource::getUrl('index'),
+                        ['tableFilters' => ['status' => ['value' => IntegrationExchange::STATUS_ERROR]]]
+                    ),
                 );
             }
         }
@@ -161,7 +164,10 @@ class MarketAttentionWidget extends Widget
                     category: 'Начисления',
                     description: 'Строки начислений ещё не удалось безопасно привязать к договору.',
                     actionLabel: 'Открыть начисления',
-                    actionUrl: TenantAccrualResource::getUrl('index'),
+                    actionUrl: $this->appendQueryString(
+                        TenantAccrualResource::getUrl('index'),
+                        ['activeTab' => 'without_contract']
+                    ),
                 );
             }
         }
