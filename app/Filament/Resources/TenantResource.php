@@ -5,8 +5,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
-use App\Models\Tenant;
 use App\Models\ContractDebt;
+use App\Models\Market;
+use App\Models\Tenant;
 use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
@@ -510,6 +511,16 @@ class TenantResource extends BaseResource
                         false: fn (Builder $query): Builder => static::applyHasDebtFilter($query, false),
                         blank: fn (Builder $query): Builder => $query,
                     ),
+                TernaryFilter::make('has_critical_debt')
+                    ->label('Критичная просрочка (1С)')
+                    ->placeholder('Все')
+                    ->trueLabel('Только red')
+                    ->falseLabel('Только без red')
+                    ->queries(
+                        true: fn (Builder $query): Builder => static::applyCriticalDebtFilter($query),
+                        false: fn (Builder $query): Builder => static::excludeCriticalDebtFilter($query),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
             ])
             ->defaultSort('financial_debt_sum', 'desc')
             ->toolbarActions($toolbarActions)
@@ -799,7 +810,9 @@ class TenantResource extends BaseResource
 
         $query = static::withFinancialMetrics($query);
 
-        if (request()->boolean('with_debt')) {
+        if (request()->boolean('with_red_debt')) {
+            $query = static::applyCriticalDebtFilter($query);
+        } elseif (request()->boolean('with_debt')) {
             $query = static::applyHasDebtFilter($query, true);
         }
 
@@ -953,6 +966,168 @@ class TenantResource extends BaseResource
         }
 
         return $query->whereNotExists($existsQuery);
+    }
+
+    public static function applyCriticalDebtFilter(Builder $query, ?int $marketId = null): Builder
+    {
+        $tenantTable = $query->getModel()->getTable();
+        $hasManualDebtStatus = static::hasColumn($tenantTable, 'debt_status');
+        $autoExistsQuery = static::buildAutoCriticalDebtExistsQuery($tenantTable, $marketId);
+
+        if (! $hasManualDebtStatus && $autoExistsQuery === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $scope) use ($tenantTable, $hasManualDebtStatus, $autoExistsQuery): void {
+            if ($hasManualDebtStatus) {
+                $scope->where("{$tenantTable}.debt_status", 'red');
+            }
+
+            if ($autoExistsQuery !== null) {
+                $scope->orWhere(function (Builder $autoScope) use ($tenantTable, $hasManualDebtStatus, $autoExistsQuery): void {
+                    if ($hasManualDebtStatus) {
+                        $autoScope->whereNull("{$tenantTable}.debt_status");
+                    }
+
+                    $autoScope->whereExists($autoExistsQuery);
+                });
+            }
+        });
+    }
+
+    public static function excludeCriticalDebtFilter(Builder $query, ?int $marketId = null): Builder
+    {
+        $tenantTable = $query->getModel()->getTable();
+        $hasManualDebtStatus = static::hasColumn($tenantTable, 'debt_status');
+        $autoExistsQuery = static::buildAutoCriticalDebtExistsQuery($tenantTable, $marketId);
+
+        return $query->where(function (Builder $scope) use ($tenantTable, $hasManualDebtStatus, $autoExistsQuery): void {
+            if ($hasManualDebtStatus) {
+                $scope->where("{$tenantTable}.debt_status", '!=', 'red')
+                    ->orWhereNull("{$tenantTable}.debt_status");
+            }
+
+            if ($autoExistsQuery !== null) {
+                $scope->whereNotExists($autoExistsQuery);
+            }
+        });
+    }
+
+    public static function countActiveTenantsWithCriticalDebt(int $marketId): int
+    {
+        if ($marketId <= 0) {
+            return 0;
+        }
+
+        $query = Tenant::query()
+            ->where('market_id', $marketId)
+            ->where('is_active', true);
+
+        return (int) static::applyCriticalDebtFilter($query, $marketId)->count();
+    }
+
+    private static function buildAutoCriticalDebtExistsQuery(string $tenantTable, ?int $marketId = null): ?\Illuminate\Database\Query\Builder
+    {
+        $marketId ??= static::resolveCurrentTenantMarketId();
+
+        if (
+            $marketId <= 0
+            || ! DbSchema::hasTable('contract_debts')
+            || ! static::hasColumn('contract_debts', 'tenant_id')
+            || ! static::hasColumn('contract_debts', 'debt_amount')
+        ) {
+            return null;
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasDueDate = static::hasColumn('contract_debts', 'due_date');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+        $settings = static::resolveDebtMonitoringSettings($marketId);
+        $graceDays = max(0, (int) ($settings['grace_days'] ?? 5));
+        $redAfterDays = max(1, (int) ($settings['red_after_days'] ?? 30));
+        $now = Carbon::now();
+
+        $aggregateQuery = DB::query()
+            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->selectRaw('cd.tenant_id, cd.market_id, COALESCE(SUM(cd.debt_amount), 0) as total_debt')
+            ->whereNotNull('cd.tenant_id')
+            ->groupBy('cd.tenant_id', 'cd.market_id');
+
+        if ($hasDueDate) {
+            $aggregateQuery->selectRaw('MAX(cd.due_date) as latest_due_date');
+        }
+
+        if ($hasCalculatedAt) {
+            $aggregateQuery->selectRaw('MAX(cd.calculated_at) as latest_calculated_at');
+        }
+
+        if ($hasCreatedAt) {
+            $aggregateQuery->selectRaw('MAX(cd.created_at) as latest_created_at');
+        }
+
+        if ($hasPeriod) {
+            $aggregateQuery->selectRaw('MAX(cd.period) as latest_period');
+        }
+
+        $existsQuery = DB::query()
+            ->fromSub($aggregateQuery, 'critical_debt_state')
+            ->selectRaw('1')
+            ->whereColumn('critical_debt_state.tenant_id', "{$tenantTable}.id")
+            ->where('critical_debt_state.total_debt', '>', 0);
+
+        if ($hasMarketId) {
+            $existsQuery->whereColumn('critical_debt_state.market_id', "{$tenantTable}.market_id");
+        }
+
+        if ($hasDueDate) {
+            return $existsQuery->where('critical_debt_state.latest_due_date', '<=', $now->copy()->subDays($redAfterDays));
+        }
+
+        if ($hasCalculatedAt) {
+            return $existsQuery->where('critical_debt_state.latest_calculated_at', '<=', $now->copy()->subDays($graceDays + $redAfterDays));
+        }
+
+        if ($hasCreatedAt) {
+            return $existsQuery->where('critical_debt_state.latest_created_at', '<=', $now->copy()->subDays($graceDays + $redAfterDays));
+        }
+
+        if ($hasPeriod) {
+            return $existsQuery->where('critical_debt_state.latest_period', '<=', $now->copy()->subDays($graceDays + $redAfterDays)->format('Y-m'));
+        }
+
+        return null;
+    }
+
+    private static function resolveCurrentTenantMarketId(): int
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return 0;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return (int) (static::selectedMarketIdFromSession() ?: 0);
+        }
+
+        return (int) ($user->market_id ?: 0);
+    }
+
+    /**
+     * @return array{grace_days:int,red_after_days:int}
+     */
+    private static function resolveDebtMonitoringSettings(int $marketId): array
+    {
+        $market = Market::query()->find($marketId);
+        $settings = is_array($market?->settings) ? $market->settings : [];
+        $debtMonitoring = is_array($settings['debt_monitoring'] ?? null) ? $settings['debt_monitoring'] : [];
+
+        return [
+            'grace_days' => (int) ($debtMonitoring['grace_days'] ?? 5),
+            'red_after_days' => (int) ($debtMonitoring['red_after_days'] ?? 30),
+        ];
     }
 
     private static function accrualSummaryData(Tenant $record): array

@@ -23,6 +23,14 @@ class ListTenants extends ListRecords
     {
         parent::mount();
 
+        if (request()->boolean('with_red_debt')) {
+            $currentCriticalValue = $this->tableFilters['has_critical_debt']['value'] ?? null;
+
+            if (blank($currentCriticalValue)) {
+                $this->tableFilters['has_critical_debt']['value'] = '1';
+            }
+        }
+
         if (! request()->boolean('with_debt')) {
             return;
         }
