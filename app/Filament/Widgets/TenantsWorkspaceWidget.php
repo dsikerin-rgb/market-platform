@@ -53,6 +53,7 @@ class TenantsWorkspaceWidget extends Widget
             'withCabinet' => $withCabinet,
             'latestSnapshotLabel' => $latestSnapshotLabel,
             'allUrl' => TenantResource::getUrl('index'),
+            'createUrl' => TenantResource::canCreate() ? TenantResource::getUrl('create') : null,
             'contractsUrl' => TenantContractResource::getUrl('index'),
             'accrualsUrl' => TenantAccrualResource::getUrl('index'),
             'requestsUrl' => Requests::getUrl(),

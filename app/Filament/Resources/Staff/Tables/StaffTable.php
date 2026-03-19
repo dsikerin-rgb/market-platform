@@ -17,18 +17,28 @@ class StaffTable
         $recordActions = [];
 
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $recordActions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+            $recordActions[] = \Filament\Actions\EditAction::make()
+                ->iconButton()
+                ->label('')
+                ->tooltip('Редактировать');
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $recordActions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+            $recordActions[] = \Filament\Tables\Actions\EditAction::make()
+                ->iconButton()
+                ->label('')
+                ->tooltip('Редактировать');
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
             $recordActions[] = \Filament\Actions\DeleteAction::make()
-                ->label('Удалить')
+                ->iconButton()
+                ->label('')
+                ->tooltip('Удалить')
                 ->visible(fn ($record): bool => StaffResource::canDelete($record));
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
             $recordActions[] = \Filament\Tables\Actions\DeleteAction::make()
-                ->label('Удалить')
+                ->iconButton()
+                ->label('')
+                ->tooltip('Удалить')
                 ->visible(fn ($record): bool => StaffResource::canDelete($record));
         }
 
