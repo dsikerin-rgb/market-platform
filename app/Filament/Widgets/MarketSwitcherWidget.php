@@ -129,9 +129,6 @@ class MarketSwitcherWidget extends Widget
                 ->orderBy('name')
                 ->pluck('name', 'id')
                 ->all(),
-
-            // Текст лучше показывать отдельным абзацем/подсказкой с отступом (чинится в blade).
-            'appliesNote' => 'Применяется к данным панели (виджеты и списки ресурсов).',
         ];
     }
 
