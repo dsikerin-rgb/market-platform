@@ -14,7 +14,7 @@
                             <h1 class="aw-hero-heading">Задачи</h1>
                             <p class="aw-hero-subheading">
                                 Рабочий контур задач рынка: открытые, просроченные, критичные и требующие назначения.
-                                Переключение между списком и календарём остаётся в действиях страницы.
+                                Переключение между списком и календарём, а также создание новых задач доступно в быстрых переходах.
                             </p>
                         </div>
                     </div>
@@ -52,12 +52,22 @@
                     <div class="aw-panel-head">
                         <div>
                             <h2 class="aw-panel-title">Быстрые переходы</h2>
-                            <p class="aw-panel-copy">Открывайте нужный режим работы сразу из шапки задач.</p>
+                            <p class="aw-panel-copy">Открывайте нужный режим работы и создавайте задачи без лишней навигации по странице.</p>
                         </div>
                     </div>
 
                     <div class="aw-panel-body">
                         <div class="aw-action-grid">
+                            <a href="{{ $createUrl }}" class="aw-link-card">
+                                <div class="aw-link-icon">
+                                    <x-filament::icon icon="heroicon-o-plus" class="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p class="aw-link-title">Создать задачу</p>
+                                    <p class="aw-link-copy">Быстрое создание новой задачи с постановкой срока и исполнителя.</p>
+                                </div>
+                            </a>
+
                             <a href="{{ $listUrl }}" class="aw-link-card">
                                 <div class="aw-link-icon">
                                     <x-filament::icon icon="heroicon-o-list-bullet" class="h-5 w-5" />
@@ -103,11 +113,6 @@
 
                     <div class="aw-panel-body">
                         <div class="aw-stat-grid">
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Всего</div>
-                                <div class="aw-stat-value">{{ number_format($total, 0, ',', ' ') }}</div>
-                            </div>
-
                             <div class="aw-stat-card">
                                 <div class="aw-stat-label">В работе</div>
                                 <div class="aw-stat-value">{{ number_format($inProgress, 0, ',', ' ') }}</div>
