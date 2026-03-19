@@ -64,7 +64,7 @@ class DebtStatusResolverTest extends TestCase
 
         $this->assertEquals('manual', $result['mode']);
         $this->assertEquals('orange', $result['status']);
-        $this->assertEquals('Задолженность до 3 месяцев', $result['label']);
+        $this->assertEquals('Просрочка до 89 дн.', $result['label']);
     }
 
     public function test_manual_status_red(): void
@@ -80,7 +80,7 @@ class DebtStatusResolverTest extends TestCase
 
         $this->assertEquals('manual', $result['mode']);
         $this->assertEquals('red', $result['status']);
-        $this->assertEquals('Задолженность свыше 3 месяцев', $result['label']);
+        $this->assertEquals('Просрочка от 90 дн.', $result['label']);
     }
 
     public function test_auto_status_green_no_debt(): void
@@ -113,6 +113,49 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('auto', $result['mode']);
         $this->assertEquals('green', $result['status']);
         $this->assertEquals('Нет задолженности', $result['label']);
+    }
+
+    public function test_auto_status_uses_latest_debt_version_per_contract_identity(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Test tenant',
+            'external_id' => 'test-004b',
+            'debt_status' => null,
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'period' => '2026-03',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => Carbon::now()->subDays(35),
+            'created_at' => Carbon::now()->subDays(35),
+            'hash' => sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|0|10000'),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'period' => '2026-03',
+            'accrued_amount' => 10000,
+            'paid_amount' => 10000,
+            'debt_amount' => 0,
+            'calculated_at' => Carbon::now()->subDay(),
+            'created_at' => Carbon::now()->subDay(),
+            'hash' => sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|10000|0'),
+        ]);
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('green', $result['status']);
     }
 
     public function test_auto_status_pending_not_due_yet(): void
@@ -176,7 +219,7 @@ class DebtStatusResolverTest extends TestCase
 
         $this->assertEquals('auto', $result['mode']);
         $this->assertEquals('orange', $result['status']);
-        $this->assertEquals('Задолженность до 3 месяцев', $result['label']);
+        $this->assertEquals('Просрочка до 89 дн.', $result['label']);
     }
 
     public function test_auto_status_red_overdue_90_days_or_more(): void
@@ -208,7 +251,7 @@ class DebtStatusResolverTest extends TestCase
 
         $this->assertEquals('auto', $result['mode']);
         $this->assertEquals('red', $result['status']);
-        $this->assertEquals('Задолженность свыше 3 месяцев', $result['label']);
+        $this->assertEquals('Просрочка от 90 дн.', $result['label']);
     }
 
     public function test_auto_status_gray_no_records(): void
@@ -264,7 +307,7 @@ class DebtStatusResolverTest extends TestCase
 
         $this->assertEquals('auto', $result['mode']);
         $this->assertEquals('orange', $result['status']);
-        $this->assertEquals('Задолженность до 3 месяцев', $result['label']);
+        $this->assertEquals('Просрочка до 89 дн.', $result['label']);
     }
 
     public function test_severity_levels(): void

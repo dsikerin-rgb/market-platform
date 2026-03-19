@@ -10,7 +10,6 @@ use App\Filament\Resources\TaskResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
-use App\Models\ContractDebt;
 use App\Models\IntegrationExchange;
 use App\Models\Market;
 use App\Models\TenantContract;
@@ -176,22 +175,23 @@ class MarketAttentionWidget extends Widget
         }
 
         if ($isSuperAdmin || $isMarketAdmin) {
-            $tenantsWithDebt = $this->countTenantsWithDebt($marketId);
+            $tenantsWithDebt = $this->countTenantsWithCriticalDebt($marketId);
 
             if ($tenantsWithDebt > 0) {
                 $items[] = $this->makeItem(
-                    title: 'Арендаторы с долгом',
+                    title: 'Арендаторы с критичной просрочкой',
                     value: (string) $tenantsWithDebt,
                     tone: 'danger',
                     icon: 'heroicon-m-banknotes',
                     category: 'Долги 1С',
-                    description: 'Арендаторы с задолженностью по последнему снимку 1С.',
+                    description: 'Только арендаторы с red-статусом по порогам просрочки текущего рынка.',
                     actionLabel: 'Открыть арендаторов',
                     actionUrl: $this->appendQueryString(
                         TenantResource::getUrl('index'),
                         [
+                            'with_red_debt' => 1,
                             'tableFilters' => [
-                                'has_debt' => ['value' => 1],
+                                'has_critical_debt' => ['value' => 1],
                             ],
                         ]
                     ),
@@ -381,26 +381,9 @@ class MarketAttentionWidget extends Widget
             ->count();
     }
 
-    private function countTenantsWithDebt(int $marketId): int
+    private function countTenantsWithCriticalDebt(int $marketId): int
     {
-        if (! Schema::hasTable('contract_debts')) {
-            return 0;
-        }
-
-        $latestCalculatedAt = ContractDebt::query()
-            ->where('market_id', $marketId)
-            ->max('calculated_at');
-
-        if (! $latestCalculatedAt) {
-            return 0;
-        }
-
-        return (int) ContractDebt::query()
-            ->where('market_id', $marketId)
-            ->where('calculated_at', $latestCalculatedAt)
-            ->where('debt_amount', '>', 0)
-            ->distinct('tenant_id')
-            ->count('tenant_id');
+        return TenantResource::countActiveTenantsWithCriticalDebt($marketId);
     }
 
     /**

@@ -276,6 +276,21 @@ class Dashboard extends BaseDashboard
         $vacantSpaces = 0;
         $openRequests = 0;
         $overdueTasks = 0;
+        $vacantSpacesUrl = $this->appendQueryString(
+            \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
+            [
+                'only_vacant' => 1,
+                'tableFilters' => [
+                    'status' => ['value' => 'vacant'],
+                ],
+            ],
+        );
+        $accrualsUrl = $this->appendQueryString(
+            \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index'),
+            ['tab' => 'one_c'],
+        );
+        $accrualsMonth = $this->resolveLatestOneCAccrualMonth($marketId, $tz) ?? $month;
+        $accrualsPeriodLabel = $this->formatWorkspaceMonthLabel($accrualsMonth, $tz);
 
         if ($marketId > 0) {
             $tenantsCount = Tenant::query()
@@ -286,7 +301,7 @@ class Dashboard extends BaseDashboard
             $spacesQuery = MarketSpace::query()->where('market_id', $marketId);
             $totalSpaces = (clone $spacesQuery)->count();
             $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
-            $vacantSpaces = max($totalSpaces - $occupiedSpaces, 0);
+            $vacantSpaces = (clone $spacesQuery)->where('status', 'vacant')->count();
 
             $openRequests = TenantRequest::query()
                 ->where('market_id', $marketId)
@@ -316,7 +331,7 @@ class Dashboard extends BaseDashboard
                     'label' => 'Свободные места',
                     'value' => number_format($vacantSpaces, 0, ',', ' '),
                     'tone' => $vacantSpaces > 0 ? 'success' : 'neutral',
-                    'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
+                    'url' => $vacantSpacesUrl,
                 ],
                 [
                     'label' => 'Открытые обращения',
@@ -353,7 +368,8 @@ class Dashboard extends BaseDashboard
                 [
                     'title' => 'Начисления',
                     'description' => 'Открыть начисления из 1С и проверить суммы за выбранный период.',
-                    'meta' => $periodLabel,
+                    'meta' => $accrualsPeriodLabel,
+                    'url' => $accrualsUrl,
                     'icon' => 'heroicon-o-banknotes',
                 ],
                 [
@@ -966,5 +982,58 @@ class Dashboard extends BaseDashboard
         }
 
         return null;
+    }
+
+    private function resolveLatestOneCAccrualMonth(int $marketId, string $tz): ?string
+    {
+        if (
+            $marketId <= 0
+            || ! DbSchema::hasTable('tenant_accruals')
+            || ! DbSchema::hasColumn('tenant_accruals', 'market_id')
+            || ! DbSchema::hasColumn('tenant_accruals', 'period')
+        ) {
+            return null;
+        }
+
+        try {
+            $query = DB::table('tenant_accruals')
+                ->where('market_id', $marketId)
+                ->whereNotNull('period');
+
+            if (DbSchema::hasColumn('tenant_accruals', 'source')) {
+                $query->where('source', '1c');
+            }
+
+            if (DbSchema::hasColumn('tenant_accruals', 'imported_at')) {
+                $query->orderByDesc('imported_at');
+            } elseif (DbSchema::hasColumn('tenant_accruals', 'created_at')) {
+                $query->orderByDesc('created_at');
+            } else {
+                $query->orderByDesc('period');
+            }
+
+            $value = $query->value('period');
+
+            return $this->normalizeYm($value, $tz);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $query
+     */
+    private function appendQueryString(string $baseUrl, array $query): string
+    {
+        $queryString = http_build_query(array_filter(
+            $query,
+            static fn (mixed $value): bool => $value !== null && $value !== '',
+        ));
+
+        if ($queryString === '') {
+            return $baseUrl;
+        }
+
+        return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $queryString;
     }
 }

@@ -14,6 +14,21 @@ class ListMarketSpaces extends ListRecords
 
     protected static ?string $title = 'Торговые места';
 
+    public function mount(): void
+    {
+        parent::mount();
+
+        if (! request()->boolean('only_vacant')) {
+            return;
+        }
+
+        $currentValue = $this->tableFilters['status']['value'] ?? null;
+
+        if (blank($currentValue)) {
+            $this->tableFilters['status']['value'] = 'vacant';
+        }
+    }
+
     public function getBreadcrumb(): string
     {
         return 'Торговые места';
@@ -32,7 +47,7 @@ class ListMarketSpaces extends ListRecords
             $createAction->modalWidth('7xl');
         }
 
-        return [$createAction];
+        return [];
     }
 
     protected function getHeaderWidgets(): array

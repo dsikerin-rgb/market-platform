@@ -154,8 +154,8 @@ class MarketMapDebtBySpaceTest extends TestCase
         // space1 должен иметь orange (долг 35 дней)
         $this->assertEquals('orange', $space1Shape['debt_status']);
 
-        // space2 должен иметь gray (нет записей 1С для контракта)
-        $this->assertEquals('gray', $space2Shape['debt_status']);
+        // space2 идёт через tenant-fallback и наследует проблемный статус арендатора
+        $this->assertEquals('orange', $space2Shape['debt_status']);
     }
 
     /**

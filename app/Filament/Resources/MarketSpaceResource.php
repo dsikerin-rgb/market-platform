@@ -1042,6 +1042,10 @@ class MarketSpaceResource extends BaseResource
                             return [];
                         }
 
+                        if (! SchemaFacade::hasColumn('market_spaces', 'space_group_token')) {
+                            return [];
+                        }
+
                         return DB::table('market_spaces')
                             ->where('market_id', (int) $marketId)
                             ->whereNotNull('space_group_token')
@@ -1140,23 +1144,33 @@ class MarketSpaceResource extends BaseResource
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
 
+        $applyOnlyVacant = static function (Builder $builder): Builder {
+            if (! request()->boolean('only_vacant')) {
+                return $builder;
+            }
+
+            return $builder->where('status', 'vacant');
+        };
+
         if (! $user) {
-            return $query->whereRaw('1 = 0');
+            return $applyOnlyVacant($query->whereRaw('1 = 0'));
         }
 
         if ($user->isSuperAdmin()) {
             $selectedMarketId = static::selectedMarketIdFromSession();
 
-            return filled($selectedMarketId)
+            $query = filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
                 : $query;
+
+            return $applyOnlyVacant($query);
         }
 
         if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
+            return $applyOnlyVacant($query->where('market_id', $user->market_id));
         }
 
-        return $query->whereRaw('1 = 0');
+        return $applyOnlyVacant($query->whereRaw('1 = 0'));
     }
 
     public static function canViewAny(): bool

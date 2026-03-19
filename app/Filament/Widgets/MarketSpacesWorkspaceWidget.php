@@ -10,6 +10,7 @@ use App\Filament\Resources\TenantResource;
 use App\Models\Market;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
+use Illuminate\Support\Facades\Schema;
 
 class MarketSpacesWorkspaceWidget extends Widget
 {
@@ -37,7 +38,9 @@ class MarketSpacesWorkspaceWidget extends Widget
         $occupied = (clone $spacesQuery)->where('status', 'occupied')->count();
         $vacant = (clone $spacesQuery)->where('status', 'vacant')->count();
         $maintenance = (clone $spacesQuery)->where('status', 'maintenance')->count();
-        $grouped = (clone $spacesQuery)->whereNotNull('space_group_token')->count();
+        $grouped = Schema::hasColumn('market_spaces', 'space_group_token')
+            ? (clone $spacesQuery)->whereNotNull('space_group_token')->count()
+            : 0;
 
         return [
             'marketName' => $market?->name,

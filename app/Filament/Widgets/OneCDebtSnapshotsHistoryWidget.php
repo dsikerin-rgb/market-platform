@@ -8,6 +8,7 @@ use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -75,38 +76,17 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
             return $this->emptyChart('Выберите рынок');
         }
 
-        if (! Schema::hasTable('one_c_import_logs')) {
-            return $this->emptyChart('Нет логов 1С');
-        }
-
         $market = Market::query()
             ->select(['id', 'timezone'])
             ->find($marketId);
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        try {
-            $rows = DB::table('one_c_import_logs')
-                ->where('market_id', $marketId)
-                ->where('endpoint', '/api/1c/contract-debts')
-                ->orderByDesc(DB::raw('COALESCE(calculated_at, created_at)'))
-                ->limit(12)
-                ->get([
-                    'calculated_at',
-                    'created_at',
-                    'received',
-                    'inserted',
-                    'skipped',
-                ]);
-        } catch (\Throwable) {
-            return $this->emptyChart('Не удалось прочитать логи 1С');
-        }
+        $rows = $this->loadRecentDebtImports($marketId);
 
         if ($rows->isEmpty()) {
             return $this->emptyChart('Нет импортов задолженности 1С');
         }
-
-        $rows = $rows->reverse()->values();
 
         return [
             'labels' => $rows->map(fn ($row): string => $this->formatSnapshotLabel($row, $tz))->all(),
@@ -235,7 +215,7 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
 
     private function formatSnapshotLabel(object $row, string $tz): string
     {
-        $value = $row->calculated_at ?? $row->created_at ?? null;
+        $value = $row->snapshot_at ?? $row->created_at ?? $row->calculated_at ?? null;
 
         try {
             if ($value !== null) {
@@ -248,6 +228,126 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
         }
 
         return 'Импорт';
+    }
+
+    private function loadRecentDebtImports(int $marketId)
+    {
+        $exchangeRows = $this->loadRecentDebtImportsFromExchanges($marketId);
+
+        if ($exchangeRows->isNotEmpty()) {
+            return $exchangeRows;
+        }
+
+        return $this->loadRecentDebtImportsFromOneCLogs($marketId);
+    }
+
+    private function loadRecentDebtImportsFromExchanges(int $marketId)
+    {
+        if (! Schema::hasTable('integration_exchanges')) {
+            return collect();
+        }
+
+        try {
+            $rows = DB::table('integration_exchanges')
+                ->where('market_id', $marketId)
+                ->where('direction', 'in')
+                ->where('entity_type', 'contract_debts')
+                ->where('status', 'ok')
+                ->orderByDesc(DB::raw('COALESCE(finished_at, started_at, created_at)'))
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get([
+                    'payload',
+                    'finished_at',
+                    'started_at',
+                    'created_at',
+                ]);
+        } catch (\Throwable) {
+            return collect();
+        }
+
+        return $rows
+            ->reverse()
+            ->values()
+            ->map(function (object $row): object {
+                $payload = $this->decodePayloadToArray($row->payload ?? null);
+
+                return (object) [
+                    'snapshot_at' => $row->finished_at ?? $row->started_at ?? $row->created_at ?? null,
+                    'created_at' => $row->created_at ?? null,
+                    'received' => $this->payloadInt($payload, 'received'),
+                    'inserted' => $this->payloadInt($payload, 'inserted'),
+                    'skipped' => $this->payloadInt($payload, 'skipped'),
+                ];
+            });
+    }
+
+    private function loadRecentDebtImportsFromOneCLogs(int $marketId)
+    {
+        if (! Schema::hasTable('one_c_import_logs')) {
+            return collect();
+        }
+
+        try {
+            $rows = DB::table('one_c_import_logs')
+                ->where('market_id', $marketId)
+                ->where('status', 'ok')
+                ->where('endpoint', 'like', '%contract-debts%')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get([
+                    'created_at',
+                    'calculated_at',
+                    'received',
+                    'inserted',
+                    'skipped',
+                ]);
+        } catch (\Throwable) {
+            return collect();
+        }
+
+        return $rows->reverse()->values();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodePayloadToArray(mixed $payload): array
+    {
+        if (is_array($payload)) {
+            return $payload;
+        }
+
+        if (is_string($payload) && trim($payload) !== '') {
+            $decoded = json_decode($payload, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function payloadInt(array $payload, string $key, int $default = 0): int
+    {
+        $value = Arr::get($payload, $key);
+
+        if ($value === null) {
+            return $default;
+        }
+
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && trim($value) !== '' && is_numeric(trim($value))) {
+            return (int) trim($value);
+        }
+
+        return $default;
     }
 
     private function emptyChart(string $label): array

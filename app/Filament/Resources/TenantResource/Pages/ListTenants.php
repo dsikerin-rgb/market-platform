@@ -19,6 +19,29 @@ class ListTenants extends ListRecords
         return 'Арендаторы';
     }
 
+    public function mount(): void
+    {
+        parent::mount();
+
+        if (request()->boolean('with_red_debt')) {
+            $currentCriticalValue = $this->tableFilters['has_critical_debt']['value'] ?? null;
+
+            if (blank($currentCriticalValue)) {
+                $this->tableFilters['has_critical_debt']['value'] = '1';
+            }
+        }
+
+        if (! request()->boolean('with_debt')) {
+            return;
+        }
+
+        $currentValue = $this->tableFilters['has_debt']['value'] ?? null;
+
+        if (blank($currentValue)) {
+            $this->tableFilters['has_debt']['value'] = '1';
+        }
+    }
+
     protected function getHeaderActions(): array
     {
         return [
