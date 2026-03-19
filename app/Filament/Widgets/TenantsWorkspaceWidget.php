@@ -90,8 +90,11 @@ class TenantsWorkspaceWidget extends Widget
 
         return (int) DB::query()
             ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->join('tenants', 'tenants.id', '=', 'cd.tenant_id')
             ->where('cd.debt_amount', '>', 0)
             ->whereNotNull('cd.tenant_id')
+            ->where('tenants.market_id', $marketId)
+            ->where('tenants.is_active', true)
             ->distinct()
             ->count('cd.tenant_id');
     }
