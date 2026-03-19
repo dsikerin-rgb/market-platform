@@ -23,7 +23,10 @@ class ListTenantAccruals extends ListRecords
     public function mount(): void
     {
         parent::mount();
-        $this->activeTab = $this->resolveDefaultTab();
+
+        if (blank($this->activeTab)) {
+            $this->activeTab = $this->resolveDefaultTab();
+        }
     }
 
     public function getBreadcrumb(): string
