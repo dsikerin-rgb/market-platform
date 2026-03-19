@@ -514,52 +514,28 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         try {
-            $rows = ContractDebt::query()
-                ->where('market_id', $marketId)
+            $base = DB::query()
+                ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
                 ->where('period', $monthYm)
-                ->orderBy('contract_external_id')
-                ->orderByDesc('calculated_at')
-                ->get([
-                    'contract_external_id',
-                    'accrued_amount',
-                    'paid_amount',
-                    'debt_amount',
-                ]);
+                ->selectRaw('COUNT(*) as rows_count')
+                ->selectRaw('COALESCE(SUM(accrued_amount), 0) as accrued_sum')
+                ->selectRaw('COALESCE(SUM(paid_amount), 0) as paid_sum')
+                ->selectRaw('COALESCE(SUM(debt_amount), 0) as debt_sum');
+
+            $row = $base->first();
         } catch (\Throwable) {
             return ['rows' => null, 'accrued' => null, 'paid' => null, 'debt' => null];
         }
 
-        $latestByContract = [];
-
-        foreach ($rows as $row) {
-            $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
-
-            if ($contractExternalId === '' || array_key_exists($contractExternalId, $latestByContract)) {
-                continue;
-            }
-
-            $latestByContract[$contractExternalId] = $row;
-        }
-
-        if ($latestByContract === []) {
+        if (! $row || (int) ($row->rows_count ?? 0) === 0) {
             return ['rows' => 0, 'accrued' => 0.0, 'paid' => 0.0, 'debt' => 0.0];
         }
 
-        $accrued = 0.0;
-        $paid = 0.0;
-        $debt = 0.0;
-
-        foreach ($latestByContract as $row) {
-            $accrued += (float) ($row->accrued_amount ?? 0);
-            $paid += (float) ($row->paid_amount ?? 0);
-            $debt += (float) ($row->debt_amount ?? 0);
-        }
-
         return [
-            'rows' => count($latestByContract),
-            'accrued' => $accrued,
-            'paid' => $paid,
-            'debt' => $debt,
+            'rows' => (int) ($row->rows_count ?? 0),
+            'accrued' => (float) ($row->accrued_sum ?? 0),
+            'paid' => (float) ($row->paid_sum ?? 0),
+            'debt' => (float) ($row->debt_sum ?? 0),
         ];
     }
 

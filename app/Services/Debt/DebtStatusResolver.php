@@ -189,9 +189,8 @@ class DebtStatusResolver
         }
 
         // Запрашиваем долги по contract_external_id через модель
-        $query = ContractDebt::query()
-            ->whereIn('contract_external_id', $contractExternalIds->all())
-            ->where('market_id', $marketId);
+        $query = ContractDebt::currentStateQuery($marketId)
+            ->whereIn('cd.contract_external_id', $contractExternalIds->all());
 
         // Определяем последний snapshot
         $snapshotLabel = null;
@@ -223,7 +222,15 @@ class DebtStatusResolver
             }
         }
 
-        $rows = $query->get(['debt_amount', 'period']);
+        $fields = ['debt_amount', 'period'];
+        if ($hasCalculatedAt) {
+            $fields[] = 'calculated_at';
+        }
+        if ($hasCreatedAt) {
+            $fields[] = 'created_at';
+        }
+
+        $rows = $query->get($fields);
 
         if ($rows->isEmpty()) {
             // Нет записей 1С для контрактов этого места — используем tenant-fallback
@@ -651,7 +658,7 @@ class DebtStatusResolver
             return null;
         }
 
-        $query = ContractDebt::query();
+        $query = ContractDebt::currentStateQuery((int) $tenant->market_id);
 
         // Поиск по external_id или one_c_uid
         if ($hasTenantExternalId) {
@@ -661,23 +668,18 @@ class DebtStatusResolver
             if ($externalId !== '' || $oneCUid !== '') {
                 $query->where(function ($q) use ($externalId, $oneCUid) {
                     if ($externalId !== '') {
-                        $q->where('tenant_external_id', $externalId);
+                        $q->where('cd.tenant_external_id', $externalId);
                     }
                     if ($oneCUid !== '') {
-                        $q->orWhere('tenant_external_id', $oneCUid);
+                        $q->orWhere('cd.tenant_external_id', $oneCUid);
                     }
                 });
             } else {
-                $query->where('tenant_id', $tenant->id);
+                $query->where('cd.tenant_id', $tenant->id);
             }
         } else {
-            $query->where('tenant_id', $tenant->id);
+            $query->where('cd.tenant_id', $tenant->id);
         }
-
-        if ($hasMarketId) {
-            $query->where('market_id', $tenant->market_id);
-        }
-
         // Получаем поля
         $fields = ['debt_amount'];
         if ($hasDueDate) $fields[] = 'due_date';

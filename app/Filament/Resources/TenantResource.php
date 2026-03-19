@@ -874,8 +874,10 @@ class TenantResource extends BaseResource
         $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
         $hasAccruedAmount = static::hasColumn('contract_debts', 'accrued_amount');
         $hasDebtAmount = static::hasColumn('contract_debts', 'debt_amount');
+        $currentDebts = ContractDebt::currentStateQuery(null);
 
-        $snapshotSubquery = DB::table('contract_debts as cd')
+        $snapshotSubquery = DB::query()
+            ->fromSub($currentDebts, 'cd')
             ->whereColumn('cd.tenant_id', 'tenants.id');
 
         if ($hasMarketId) {
@@ -888,39 +890,21 @@ class TenantResource extends BaseResource
             $snapshotSubquery->selectRaw('NULL');
         }
 
-        $latestSnapshotConstraint = function ($query, string $alias) use ($hasCalculatedAt, $hasMarketId): void {
-            if (! $hasCalculatedAt) {
-                return;
-            }
-
-            $query->where("{$alias}.calculated_at", '=', function ($sub) use ($hasMarketId): void {
-                $sub->from('contract_debts as cd2')
-                    ->selectRaw('MAX(cd2.calculated_at)')
-                    ->whereColumn('cd2.tenant_id', 'tenants.id');
-
-                if ($hasMarketId) {
-                    $sub->whereColumn('cd2.market_id', 'tenants.market_id');
-                }
-            });
-        };
-
-        $accruedSubquery = DB::table('contract_debts as cd')
+        $accruedSubquery = DB::query()
+            ->fromSub($currentDebts, 'cd')
             ->whereColumn('cd.tenant_id', 'tenants.id');
 
         if ($hasMarketId) {
             $accruedSubquery->whereColumn('cd.market_id', 'tenants.market_id');
         }
 
-        $latestSnapshotConstraint($accruedSubquery, 'cd');
-
-        $debtSubquery = DB::table('contract_debts as cd')
+        $debtSubquery = DB::query()
+            ->fromSub($currentDebts, 'cd')
             ->whereColumn('cd.tenant_id', 'tenants.id');
 
         if ($hasMarketId) {
             $debtSubquery->whereColumn('cd.market_id', 'tenants.market_id');
         }
-
-        $latestSnapshotConstraint($debtSubquery, 'cd');
 
         return $query->addSelect([
             'financial_snapshot_at' => $snapshotSubquery,
@@ -954,42 +938,14 @@ class TenantResource extends BaseResource
         $hasPeriod = static::hasColumn('contract_debts', 'period');
         $tenantTable = $query->getModel()->getTable();
 
-        $existsQuery = DB::table('contract_debts as cd')
+        $existsQuery = DB::query()
+            ->fromSub(ContractDebt::currentStateQuery(null), 'cd')
             ->selectRaw('1')
             ->whereColumn('cd.tenant_id', "{$tenantTable}.id")
             ->where('cd.debt_amount', '>', 0);
 
         if ($hasMarketId) {
             $existsQuery->whereColumn('cd.market_id', "{$tenantTable}.market_id");
-        }
-
-        if ($hasCalculatedAt) {
-            $existsQuery->where('cd.calculated_at', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
-                $sub->from('contract_debts as snap')
-                    ->selectRaw('MAX(snap.calculated_at)');
-
-                if ($hasMarketId) {
-                    $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
-                }
-            });
-        } elseif ($hasCreatedAt) {
-            $existsQuery->where('cd.created_at', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
-                $sub->from('contract_debts as snap')
-                    ->selectRaw('MAX(snap.created_at)');
-
-                if ($hasMarketId) {
-                    $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
-                }
-            });
-        } elseif ($hasPeriod) {
-            $existsQuery->where('cd.period', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
-                $sub->from('contract_debts as snap')
-                    ->selectRaw('MAX(snap.period)');
-
-                if ($hasMarketId) {
-                    $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
-                }
-            });
         }
 
         if ($withDebt) {
@@ -1245,17 +1201,13 @@ class TenantResource extends BaseResource
             $cdHasPaid = static::hasColumn('contract_debts', 'paid_amount');
             $cdHasDebt = static::hasColumn('contract_debts', 'debt_amount');
 
-            $debtsBase = ContractDebt::query()
-                ->where('tenant_id', (int) $record->id);
-
-            if ($cdHasMarketId) {
-                $debtsBase->where('market_id', (int) $record->market_id);
-            }
+            $debtsBase = DB::query()
+                ->fromSub(ContractDebt::currentStateQuery((int) $record->market_id), 'cd')
+                ->where('cd.tenant_id', (int) $record->id);
 
             if ($cdHasCalculatedAt) {
                 $latest = (clone $debtsBase)->max('calculated_at');
                 if ($latest) {
-                    $debtsBase->where('calculated_at', $latest);
                     try {
                         $paymentsSnapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
                     } catch (\Throwable) {
@@ -1265,7 +1217,6 @@ class TenantResource extends BaseResource
             } elseif ($cdHasCreatedAt) {
                 $latest = (clone $debtsBase)->max('created_at');
                 if ($latest) {
-                    $debtsBase->where('created_at', $latest);
                     try {
                         $paymentsSnapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
                     } catch (\Throwable) {
@@ -1275,7 +1226,6 @@ class TenantResource extends BaseResource
             } elseif ($cdHasPeriod) {
                 $latest = (clone $debtsBase)->max('period');
                 if ($latest) {
-                    $debtsBase->where('period', $latest);
                     $paymentsSnapshotLabel = (string) $latest;
                 }
             }
@@ -2361,18 +2311,14 @@ class TenantResource extends BaseResource
         $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
         $hasPeriod = static::hasColumn('contract_debts', 'period');
 
-        $base = ContractDebt::query()
-            ->where('tenant_id', (int) $record->id);
-
-        if ($hasMarketId) {
-            $base->where('market_id', (int) $record->market_id);
-        }
+        $base = DB::query()
+            ->fromSub(ContractDebt::currentStateQuery((int) $record->market_id), 'cd')
+            ->where('cd.tenant_id', (int) $record->id);
 
         $snapshotLabel = null;
         if ($hasCalculatedAt) {
             $latest = (clone $base)->max('calculated_at');
             if ($latest) {
-                $base->where('calculated_at', $latest);
                 try {
                     $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
                 } catch (\Throwable) {
@@ -2382,7 +2328,6 @@ class TenantResource extends BaseResource
         } elseif ($hasCreatedAt) {
             $latest = (clone $base)->max('created_at');
             if ($latest) {
-                $base->where('created_at', $latest);
                 try {
                     $snapshotLabel = Carbon::parse((string) $latest)->format('d.m.Y H:i');
                 } catch (\Throwable) {
@@ -2392,7 +2337,6 @@ class TenantResource extends BaseResource
         } elseif ($hasPeriod) {
             $latest = (clone $base)->max('period');
             if ($latest) {
-                $base->where('period', $latest);
                 $snapshotLabel = (string) $latest;
             }
         }

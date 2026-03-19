@@ -88,20 +88,12 @@ class TenantsWorkspaceWidget extends Widget
             return 0;
         }
 
-        $latestSnapshotAt = ContractDebt::query()
-            ->where('market_id', $marketId)
-            ->max('calculated_at');
-
-        if (! filled($latestSnapshotAt)) {
-            return 0;
-        }
-
-        return (int) ContractDebt::query()
-            ->where('market_id', $marketId)
-            ->where('calculated_at', $latestSnapshotAt)
-            ->where('debt_amount', '>', 0)
+        return (int) DB::query()
+            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->where('cd.debt_amount', '>', 0)
+            ->whereNotNull('cd.tenant_id')
             ->distinct()
-            ->count('tenant_id');
+            ->count('cd.tenant_id');
     }
 
     private function countTenantsWithCabinetUsers(int $marketId): int

@@ -388,20 +388,12 @@ class MarketAttentionWidget extends Widget
             return 0;
         }
 
-        $latestCalculatedAt = ContractDebt::query()
-            ->where('market_id', $marketId)
-            ->max('calculated_at');
-
-        if (! $latestCalculatedAt) {
-            return 0;
-        }
-
-        return (int) ContractDebt::query()
-            ->where('market_id', $marketId)
-            ->where('calculated_at', $latestCalculatedAt)
-            ->where('debt_amount', '>', 0)
-            ->distinct('tenant_id')
-            ->count('tenant_id');
+        return (int) \Illuminate\Support\Facades\DB::query()
+            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->where('cd.debt_amount', '>', 0)
+            ->whereNotNull('cd.tenant_id')
+            ->distinct()
+            ->count('cd.tenant_id');
     }
 
     /**
