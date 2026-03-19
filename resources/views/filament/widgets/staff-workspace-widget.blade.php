@@ -110,11 +110,6 @@
                     <div class="aw-panel-body">
                         <div class="aw-stat-grid">
                             <div class="aw-stat-card">
-                                <div class="aw-stat-label">Администраторы</div>
-                                <div class="aw-stat-value">{{ number_format($admins, 0, ',', ' ') }}</div>
-                            </div>
-
-                            <div class="aw-stat-card">
                                 <div class="aw-stat-label">Менеджеры</div>
                                 <div class="aw-stat-value">{{ number_format($managers, 0, ',', ' ') }}</div>
                             </div>
@@ -124,10 +119,6 @@
                                 <div class="aw-stat-value">{{ number_format($operators, 0, ',', ' ') }}</div>
                             </div>
 
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Приглашения</div>
-                                <div class="aw-stat-value">{{ number_format($pendingInvitations, 0, ',', ' ') }}</div>
-                            </div>
                         </div>
                     </div>
                 </section>
