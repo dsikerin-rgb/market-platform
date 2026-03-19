@@ -65,9 +65,11 @@ class TenantResource extends BaseResource
     protected static function selectedMarketIdFromSession(): ?int
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
+        $value =
+            session('dashboard_market_id')
+            ?? session("filament.{$panelId}.selected_market_id")
+            ?? session("filament_{$panelId}_market_id")
+            ?? session('filament.admin.selected_market_id');
 
         return filled($value) ? (int) $value : null;
     }
