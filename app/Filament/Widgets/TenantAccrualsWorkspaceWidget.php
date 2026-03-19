@@ -59,12 +59,12 @@ class TenantAccrualsWorkspaceWidget extends Widget
             'unchecked' => $unchecked,
             'latestPeriodLabel' => $this->resolveLatestPeriodLabel($oneCQuery, $baseQuery),
             'issues' => $this->topIssueNotes($oneCQuery),
-            'oneCUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'one_c']),
-            'linkedUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'linked']),
-            'withoutContractUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'without_contract']),
-            'ambiguousUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'ambiguous']),
-            'historyUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'history']),
-            'allUrl' => TenantAccrualResource::getUrl('index', ['activeTab' => 'all']),
+            'oneCUrl' => TenantAccrualResource::getUrl('index', ['tab' => 'one_c']),
+            'linkedUrl' => TenantAccrualResource::getUrl('index', ['tab' => 'linked']),
+            'withoutContractUrl' => TenantAccrualResource::getUrl('index', ['tab' => 'without_contract']),
+            'ambiguousUrl' => TenantAccrualResource::getUrl('index', ['tab' => 'ambiguous']),
+            'historyUrl' => TenantAccrualResource::getUrl('index', ['tab' => 'history']),
+            'allUrl' => TenantAccrualResource::getUrl('index', ['tab' => 'all']),
         ];
     }
 

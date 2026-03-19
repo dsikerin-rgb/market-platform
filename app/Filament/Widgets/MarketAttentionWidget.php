@@ -149,7 +149,7 @@ class MarketAttentionWidget extends Widget
                     actionLabel: 'Открыть договоры',
                     actionUrl: $this->appendQueryString(
                         TenantContractResource::getUrl('index'),
-                        ['activeTab' => 'operational_unmapped']
+                        ['tab' => 'operational_unmapped']
                     ),
                 );
             }
@@ -169,7 +169,7 @@ class MarketAttentionWidget extends Widget
                     actionLabel: 'Открыть начисления',
                     actionUrl: $this->appendQueryString(
                         TenantAccrualResource::getUrl('index'),
-                        ['activeTab' => 'without_contract']
+                        ['tab' => 'without_contract']
                     ),
                 );
             }
@@ -187,7 +187,14 @@ class MarketAttentionWidget extends Widget
                     category: 'Долги 1С',
                     description: 'Арендаторы с задолженностью по последнему снимку 1С.',
                     actionLabel: 'Открыть арендаторов',
-                    actionUrl: TenantResource::getUrl('index'),
+                    actionUrl: $this->appendQueryString(
+                        TenantResource::getUrl('index'),
+                        [
+                            'tableFilters' => [
+                                'has_debt' => ['value' => 1],
+                            ],
+                        ]
+                    ),
                 );
             }
         }
@@ -221,7 +228,10 @@ class MarketAttentionWidget extends Widget
                     category: 'Задачи',
                     description: 'Открытые задачи, срок которых уже истёк.',
                     actionLabel: 'Открыть задачи',
-                    actionUrl: TaskResource::getUrl('index'),
+                    actionUrl: $this->appendQueryString(
+                        TaskResource::getUrl('index'),
+                        ['tab' => 'overdue']
+                    ),
                 );
             }
         }

@@ -17,7 +17,23 @@ class ListTenantContracts extends ListRecords
 
     protected static ?string $title = 'Договоры';
 
+    protected array $queryString = [
+        'activeTab' => ['as' => 'tab', 'except' => 'operational'],
+    ];
+
     public ?string $activeTab = 'operational';
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        $legacyTab = request()->query('activeTab');
+        $currentTab = request()->query('tab');
+
+        if (filled($legacyTab) && blank($currentTab)) {
+            $this->activeTab = (string) $legacyTab;
+        }
+    }
 
     public function getBreadcrumb(): string
     {
