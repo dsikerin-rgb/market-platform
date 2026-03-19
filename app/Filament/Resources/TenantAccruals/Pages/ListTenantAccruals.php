@@ -18,11 +18,22 @@ class ListTenantAccruals extends ListRecords
 
     protected static ?string $title = 'Начисления';
 
+    protected array $queryString = [
+        'activeTab' => ['as' => 'tab'],
+    ];
+
     public ?string $activeTab = null;
 
     public function mount(): void
     {
         parent::mount();
+
+        $legacyTab = request()->query('activeTab');
+        $currentTab = request()->query('tab');
+
+        if (filled($legacyTab) && blank($currentTab)) {
+            $this->activeTab = (string) $legacyTab;
+        }
 
         if (blank($this->activeTab)) {
             $this->activeTab = $this->resolveDefaultTab();
