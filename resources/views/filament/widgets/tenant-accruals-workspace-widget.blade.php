@@ -138,16 +138,6 @@
                     <div class="aw-panel-body">
                         <div class="aw-stat-grid">
                             <div class="aw-stat-card">
-                                <div class="aw-stat-label">Точное совпадение</div>
-                                <div class="aw-stat-value">{{ number_format($exact, 0, ',', ' ') }}</div>
-                            </div>
-
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Разрешены по правилам</div>
-                                <div class="aw-stat-value">{{ number_format($resolved, 0, ',', ' ') }}</div>
-                            </div>
-
-                            <div class="aw-stat-card">
                                 <div class="aw-stat-label">Неоднозначные</div>
                                 <div class="aw-stat-value">{{ number_format($ambiguous, 0, ',', ' ') }}</div>
                             </div>
