@@ -190,6 +190,7 @@ class MarketAttentionWidget extends Widget
                     actionUrl: $this->appendQueryString(
                         TenantResource::getUrl('index'),
                         [
+                            'with_debt' => 1,
                             'tableFilters' => [
                                 'has_debt' => ['value' => 1],
                             ],

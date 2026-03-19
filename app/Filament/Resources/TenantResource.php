@@ -797,7 +797,13 @@ class TenantResource extends BaseResource
             return $query->whereRaw('1 = 0');
         }
 
-        return static::withFinancialMetrics($query);
+        $query = static::withFinancialMetrics($query);
+
+        if (request()->boolean('with_debt')) {
+            $query = static::applyHasDebtFilter($query, true);
+        }
+
+        return $query;
     }
 
     /**
