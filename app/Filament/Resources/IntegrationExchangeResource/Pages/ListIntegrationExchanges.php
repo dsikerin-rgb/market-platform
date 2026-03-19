@@ -46,8 +46,20 @@ class ListIntegrationExchanges extends ListRecords
      */
     protected function getTableQuery(): Builder
     {
-        return parent::getTableQuery()
+        $query = parent::getTableQuery()
             ->orderByDesc('started_at');
+
+        if (request()->boolean('recent_errors')) {
+            $since = now()->subDays(7);
+
+            $query->where('status', IntegrationExchange::STATUS_ERROR)
+                ->where(function (Builder $builder) use ($since): void {
+                    $builder->where('finished_at', '>=', $since)
+                        ->orWhere('created_at', '>=', $since);
+                });
+        }
+
+        return $query;
     }
 
     protected function getTableFilters(): array
