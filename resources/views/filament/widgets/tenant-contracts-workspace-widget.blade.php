@@ -141,11 +141,6 @@
                                 <div class="aw-stat-label">Исключены из привязки</div>
                                 <div class="aw-stat-value">{{ number_format($excludedCount, 0, ',', ' ') }}</div>
                             </div>
-
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Ручная фиксация</div>
-                                <div class="aw-stat-value">{{ number_format($manualCount, 0, ',', ' ') }}</div>
-                            </div>
                         </div>
 
                         @if ($canSeeTechnicalTabs)
