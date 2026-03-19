@@ -47,7 +47,7 @@ class ListMarketSpaces extends ListRecords
             $createAction->modalWidth('7xl');
         }
 
-        return [$createAction];
+        return [];
     }
 
     protected function getHeaderWidgets(): array

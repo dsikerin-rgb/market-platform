@@ -126,15 +126,6 @@
                                 <div class="aw-stat-value">{{ number_format($maintenance, 0, ',', ' ') }}</div>
                             </div>
 
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Свободные</div>
-                                <div class="aw-stat-value">{{ number_format($vacant, 0, ',', ' ') }}</div>
-                            </div>
-
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Занятые</div>
-                                <div class="aw-stat-value">{{ number_format($occupied, 0, ',', ' ') }}</div>
-                            </div>
                         </div>
                     </div>
                 </section>
