@@ -68,6 +68,18 @@
                                 </div>
                             </a>
 
+                            @if ($createUrl)
+                                <a href="{{ $createUrl }}" class="aw-link-card">
+                                    <div class="aw-link-icon">
+                                        <x-filament::icon icon="heroicon-o-plus" class="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <p class="aw-link-title">Создать арендатора</p>
+                                        <p class="aw-link-copy">Добавление новой карточки арендатора в базу рынка.</p>
+                                    </div>
+                                </a>
+                            @endif
+
                             <a href="{{ $contractsUrl }}" class="aw-link-card">
                                 <div class="aw-link-icon">
                                     <x-filament::icon icon="heroicon-o-document-text" class="h-5 w-5" />
@@ -128,11 +140,6 @@
                             <div class="aw-stat-card">
                                 <div class="aw-stat-label">С доступом в кабинет</div>
                                 <div class="aw-stat-value">{{ number_format($withCabinet, 0, ',', ' ') }}</div>
-                            </div>
-
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">С долгом 1С</div>
-                                <div class="aw-stat-value">{{ number_format($withDebt, 0, ',', ' ') }}</div>
                             </div>
                         </div>
                     </div>
