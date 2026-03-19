@@ -62,7 +62,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         // Текущее занято/свободно берём из статуса мест (операционная истина внутри платформы).
         $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
-        $freeSpaces = max($totalSpaces - $occupiedSpaces, 0);
+        $freeSpaces = (clone $spacesQuery)->where('status', 'vacant')->count();
 
         $tenantsNow = $this->countTenantsActiveOnDate($marketId, $now);
         if ($tenantsNow === null) {

@@ -98,29 +98,47 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             return $this->emptyChart('Нет торговых мест');
         }
 
-        $occupiedSpaces = (clone $baseQuery)
-            ->where('status', 'occupied')
-            ->count();
+        $occupiedSpaces = max((clone $baseQuery)->where('status', 'occupied')->count(), 0);
+        $vacantSpaces = max((clone $baseQuery)->where('status', 'vacant')->count(), 0);
+        $maintenanceSpaces = max((clone $baseQuery)->where('status', 'maintenance')->count(), 0);
 
-        $occupiedSpaces = max($occupiedSpaces, 0);
-        $freeSpaces = max($totalSpaces - $occupiedSpaces, 0);
+        $labels = [];
+        $data = [];
+        $backgroundColor = [];
+        $borderColor = [];
+
+        if ($vacantSpaces > 0) {
+            $labels[] = 'Свободно (' . $vacantSpaces . ')';
+            $data[] = $vacantSpaces;
+            $backgroundColor[] = '#94A3B8';
+            $borderColor[] = '#FFFFFF';
+        }
+
+        if ($occupiedSpaces > 0) {
+            $labels[] = 'Занято (' . $occupiedSpaces . ')';
+            $data[] = $occupiedSpaces;
+            $backgroundColor[] = '#22C55E';
+            $borderColor[] = '#FFFFFF';
+        }
+
+        if ($maintenanceSpaces > 0) {
+            $labels[] = 'На обслуживании (' . $maintenanceSpaces . ')';
+            $data[] = $maintenanceSpaces;
+            $backgroundColor[] = '#A855F7';
+            $borderColor[] = '#FFFFFF';
+        }
+
+        if ($data === []) {
+            return $this->emptyChart('Нет данных по статусам');
+        }
 
         return [
-            'labels' => [
-                'Свободно (' . $freeSpaces . ')',
-                'Занято (' . $occupiedSpaces . ')',
-            ],
+            'labels' => $labels,
             'datasets' => [
                 [
-                    'data' => [$freeSpaces, $occupiedSpaces],
-                    'backgroundColor' => [
-                        '#94A3B8',
-                        '#22C55E',
-                    ],
-                    'borderColor' => [
-                        '#FFFFFF',
-                        '#FFFFFF',
-                    ],
+                    'data' => $data,
+                    'backgroundColor' => $backgroundColor,
+                    'borderColor' => $borderColor,
                     'borderWidth' => 2,
                     'hoverOffset' => 6,
                 ],
