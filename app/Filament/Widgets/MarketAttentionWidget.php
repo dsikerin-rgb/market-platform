@@ -126,7 +126,10 @@ class MarketAttentionWidget extends Widget
                     actionLabel: 'Открыть журнал интеграций',
                     actionUrl: $this->appendQueryString(
                         IntegrationExchangeResource::getUrl('index'),
-                        ['tableFilters' => ['status' => ['value' => IntegrationExchange::STATUS_ERROR]]]
+                        [
+                            'tableFilters' => ['status' => ['value' => IntegrationExchange::STATUS_ERROR]],
+                            'recent_errors' => 1,
+                        ]
                     ),
                 );
             }
