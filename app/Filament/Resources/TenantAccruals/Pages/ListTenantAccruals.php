@@ -7,6 +7,8 @@ namespace App\Filament\Resources\TenantAccruals\Pages;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
 use App\Models\TenantAccrual;
+use App\Services\TenantAccruals\TenantAccrualContractResolver;
+use Carbon\CarbonImmutable;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -98,12 +100,8 @@ class ListTenantAccruals extends ListRecords
             $tabClass,
             'Без договора',
             fn (Builder $query) => $query
-                ->where('source', '1c')
-                ->where(function (Builder $builder): void {
-                    $builder
-                        ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED)
-                        ->orWhereNull('contract_link_status');
-                }),
+                ->where('period', '>=', $this->resolveWithoutContractSincePeriod())
+                ->whereNull('tenant_contract_id'),
         );
 
         $tabs['ambiguous'] = $this->makeTab(
@@ -163,5 +161,15 @@ class ListTenantAccruals extends ListRecords
         return TenantAccrualResource::getEloquentQuery()
             ->where('source', '1c')
             ->exists();
+    }
+
+    private function resolveWithoutContractSincePeriod(): string
+    {
+        $lookbackMonths = TenantAccrualContractResolver::LOOKBACK_MONTHS;
+
+        return CarbonImmutable::now()
+            ->startOfMonth()
+            ->subMonths($lookbackMonths - 1)
+            ->toDateString();
     }
 }

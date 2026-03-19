@@ -958,8 +958,7 @@ class TenantResource extends BaseResource
         if ($hasCalculatedAt) {
             $existsQuery->where('cd.calculated_at', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
                 $sub->from('contract_debts as snap')
-                    ->selectRaw('MAX(snap.calculated_at)')
-                    ->whereColumn('snap.tenant_id', "{$tenantTable}.id");
+                    ->selectRaw('MAX(snap.calculated_at)');
 
                 if ($hasMarketId) {
                     $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
@@ -968,8 +967,7 @@ class TenantResource extends BaseResource
         } elseif ($hasCreatedAt) {
             $existsQuery->where('cd.created_at', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
                 $sub->from('contract_debts as snap')
-                    ->selectRaw('MAX(snap.created_at)')
-                    ->whereColumn('snap.tenant_id', "{$tenantTable}.id");
+                    ->selectRaw('MAX(snap.created_at)');
 
                 if ($hasMarketId) {
                     $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
@@ -978,8 +976,7 @@ class TenantResource extends BaseResource
         } elseif ($hasPeriod) {
             $existsQuery->where('cd.period', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
                 $sub->from('contract_debts as snap')
-                    ->selectRaw('MAX(snap.period)')
-                    ->whereColumn('snap.tenant_id', "{$tenantTable}.id");
+                    ->selectRaw('MAX(snap.period)');
 
                 if ($hasMarketId) {
                     $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
