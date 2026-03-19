@@ -158,6 +158,8 @@ class AccrualCompositionWidget extends ChartWidget
             return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
         }
 
+        $labels = $this->withPercentageLabels($labels, $data);
+
         return [
             'labels' => $labels,
             'datasets' => [
@@ -171,6 +173,40 @@ class AccrualCompositionWidget extends ChartWidget
                 ],
             ],
         ];
+    }
+
+    /**
+     * @param  array<int, string>  $labels
+     * @param  array<int, float|int>  $data
+     * @return array<int, string>
+     */
+    private function withPercentageLabels(array $labels, array $data): array
+    {
+        $total = array_sum($data);
+
+        if ($total <= 0) {
+            return $labels;
+        }
+
+        $result = [];
+
+        foreach ($labels as $index => $label) {
+            $value = (float) ($data[$index] ?? 0.0);
+            $percent = ($value / $total) * 100;
+
+            $result[] = sprintf('%s (%s%%)', $label, $this->formatPercent($percent));
+        }
+
+        return $result;
+    }
+
+    private function formatPercent(float $value): string
+    {
+        if (abs($value - round($value)) < 0.0001) {
+            return (string) (int) round($value);
+        }
+
+        return number_format($value, 1, '.', '');
     }
 
     protected function getOptions(): array
