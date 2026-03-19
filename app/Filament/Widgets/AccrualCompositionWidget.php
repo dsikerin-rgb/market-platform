@@ -68,7 +68,7 @@ class AccrualCompositionWidget extends ChartWidget
 
         return 'Локация: ' . (string) $market->name
             . ' • ' . $this->formatMonthLabel($effectiveMonthYm, $tz)
-            . ' • Источник: детализация начислений';
+            . ' • Источник: 1С (детализация начислений)';
     }
 
     protected function getData(): array
@@ -98,14 +98,14 @@ class AccrualCompositionWidget extends ChartWidget
         [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
         try {
-            $row = DB::table('tenant_accruals')
-                ->where('market_id', $marketId)
+            $row = $this->accrualsBaseQuery($marketId)
                 ->where('period', $effectiveMonthStart->toDateString())
                 ->selectRaw('
                     COALESCE(SUM(rent_amount), 0) as rent_total,
                     COALESCE(SUM(utilities_amount), 0) as utilities_total,
                     COALESCE(SUM(electricity_amount), 0) as electricity_total,
-                    COALESCE(SUM(management_fee), 0) as management_total
+                    COALESCE(SUM(management_fee), 0) as management_total,
+                    COALESCE(SUM(total_with_vat), 0) as total_with_vat
                 ')
                 ->first();
         } catch (\Throwable) {
@@ -116,6 +116,9 @@ class AccrualCompositionWidget extends ChartWidget
         $utilities = (float) ($row->utilities_total ?? 0);
         $electricity = (float) ($row->electricity_total ?? 0);
         $management = (float) ($row->management_total ?? 0);
+        $totalWithVat = (float) ($row->total_with_vat ?? 0);
+        $knownTotal = $rent + $utilities + $electricity + $management;
+        $other = max(0.0, round($totalWithVat - $knownTotal, 2));
 
         $labels = [];
         $data = [];
@@ -143,6 +146,12 @@ class AccrualCompositionWidget extends ChartWidget
             $labels[] = 'Управление';
             $data[] = round($management, 2);
             $colors[] = '#a78bfa';
+        }
+
+        if ($other > 0) {
+            $labels[] = 'Прочее';
+            $data[] = $other;
+            $colors[] = '#94a3b8';
         }
 
         if ($labels === []) {
@@ -296,23 +305,43 @@ class AccrualCompositionWidget extends ChartWidget
 
     private function hasAccrualRows(int $marketId, CarbonImmutable $monthStart): bool
     {
-        return DB::table('tenant_accruals')
-            ->where('market_id', $marketId)
+        return $this->accrualsBaseQuery($marketId)
             ->where('period', $monthStart->toDateString())
             ->exists();
     }
 
     private function findLatestAccrualMonth(int $marketId): ?string
     {
-        $period = DB::table('tenant_accruals')
-            ->where('market_id', $marketId)
-            ->max('period');
+        $query = $this->accrualsBaseQuery($marketId)
+            ->whereNotNull('period');
+
+        if (Schema::hasColumn('tenant_accruals', 'imported_at')) {
+            $query->orderByDesc('imported_at');
+        } elseif (Schema::hasColumn('tenant_accruals', 'created_at')) {
+            $query->orderByDesc('created_at');
+        } else {
+            $query->orderByDesc('period');
+        }
+
+        $period = $query->value('period');
 
         if (! is_string($period) || $period === '') {
             return null;
         }
 
         return substr($period, 0, 7);
+    }
+
+    private function accrualsBaseQuery(int $marketId)
+    {
+        $query = DB::table('tenant_accruals')
+            ->where('market_id', $marketId);
+
+        if (Schema::hasColumn('tenant_accruals', 'source')) {
+            $query->where('source', '1c');
+        }
+
+        return $query;
     }
 
     private function formatMonthLabel(string $ym, string $tz): string
