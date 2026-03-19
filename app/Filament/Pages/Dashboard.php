@@ -1004,9 +1004,15 @@ class Dashboard extends BaseDashboard
                 $query->where('source', '1c');
             }
 
-            $value = $query
-                ->orderByDesc('period')
-                ->value('period');
+            if (DbSchema::hasColumn('tenant_accruals', 'imported_at')) {
+                $query->orderByDesc('imported_at');
+            } elseif (DbSchema::hasColumn('tenant_accruals', 'created_at')) {
+                $query->orderByDesc('created_at');
+            } else {
+                $query->orderByDesc('period');
+            }
+
+            $value = $query->value('period');
 
             return $this->normalizeYm($value, $tz);
         } catch (\Throwable) {
