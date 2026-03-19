@@ -498,6 +498,16 @@ class TenantResource extends BaseResource
                         'АО' => 'АО (legacy)',
                         'ИП' => 'ИП (legacy)',
                     ]),
+                TernaryFilter::make('has_debt')
+                    ->label('Есть долг (1С)')
+                    ->placeholder('Все')
+                    ->trueLabel('Только с долгом')
+                    ->falseLabel('Только без долга')
+                    ->queries(
+                        true: fn (Builder $query): Builder => static::applyHasDebtFilter($query, true),
+                        false: fn (Builder $query): Builder => static::applyHasDebtFilter($query, false),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
             ])
             ->defaultSort('financial_debt_sum', 'desc')
             ->toolbarActions($toolbarActions)
@@ -920,6 +930,70 @@ class TenantResource extends BaseResource
      *
      * @return array<string, mixed>
      */
+    private static function applyHasDebtFilter(Builder $query, bool $withDebt): Builder
+    {
+        if (
+            ! DbSchema::hasTable('contract_debts')
+            || ! static::hasColumn('contract_debts', 'tenant_id')
+            || ! static::hasColumn('contract_debts', 'debt_amount')
+        ) {
+            return $withDebt ? $query->whereRaw('1 = 0') : $query;
+        }
+
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+        $tenantTable = $query->getModel()->getTable();
+
+        $existsQuery = DB::table('contract_debts as cd')
+            ->selectRaw('1')
+            ->whereColumn('cd.tenant_id', "{$tenantTable}.id")
+            ->where('cd.debt_amount', '>', 0);
+
+        if ($hasMarketId) {
+            $existsQuery->whereColumn('cd.market_id', "{$tenantTable}.market_id");
+        }
+
+        if ($hasCalculatedAt) {
+            $existsQuery->where('cd.calculated_at', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
+                $sub->from('contract_debts as snap')
+                    ->selectRaw('MAX(snap.calculated_at)')
+                    ->whereColumn('snap.tenant_id', "{$tenantTable}.id");
+
+                if ($hasMarketId) {
+                    $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
+                }
+            });
+        } elseif ($hasCreatedAt) {
+            $existsQuery->where('cd.created_at', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
+                $sub->from('contract_debts as snap')
+                    ->selectRaw('MAX(snap.created_at)')
+                    ->whereColumn('snap.tenant_id', "{$tenantTable}.id");
+
+                if ($hasMarketId) {
+                    $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
+                }
+            });
+        } elseif ($hasPeriod) {
+            $existsQuery->where('cd.period', '=', function ($sub) use ($tenantTable, $hasMarketId): void {
+                $sub->from('contract_debts as snap')
+                    ->selectRaw('MAX(snap.period)')
+                    ->whereColumn('snap.tenant_id', "{$tenantTable}.id");
+
+                if ($hasMarketId) {
+                    $sub->whereColumn('snap.market_id', "{$tenantTable}.market_id");
+                }
+            });
+        }
+
+        if ($withDebt) {
+            return $query->whereExists($existsQuery);
+        }
+
+        return $query->whereNotExists($existsQuery);
+    }
+
     private static function accrualSummaryData(Tenant $record): array
     {
         $cacheKey = (string) $record->market_id . ':' . (string) $record->id;

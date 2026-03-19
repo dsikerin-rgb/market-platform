@@ -68,7 +68,7 @@ class TenantContractsWorkspaceWidget extends Widget
 
     private function tabUrl(string $tab): string
     {
-        return TenantContractResource::getUrl('index') . '?activeTab=' . urlencode($tab);
+        return TenantContractResource::getUrl('index') . '?tab=' . urlencode($tab);
     }
 
     private function canSeeTechnicalTabs(): bool
