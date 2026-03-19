@@ -34,7 +34,6 @@ class TasksWorkspaceWidget extends Widget
 
         $baseQuery = TaskResource::getEloquentQuery();
 
-        $total = (clone $baseQuery)->count();
         $open = (clone $baseQuery)->open()->count();
         $inProgress = (clone $baseQuery)->inWork()->count();
         $overdue = (clone $baseQuery)->overdue()->count();
@@ -49,13 +48,13 @@ class TasksWorkspaceWidget extends Widget
 
         return [
             'marketName' => $market?->name,
-            'total' => $total,
             'open' => $open,
             'inProgress' => $inProgress,
             'overdue' => $overdue,
             'urgent' => $urgent,
             'unassigned' => $unassigned,
             'nearestDeadline' => $this->formatDeadline($nearestDeadline),
+            'createUrl' => TaskResource::getUrl('create'),
             'listUrl' => TaskResource::getUrl('index'),
             'calendarUrl' => TaskResource::getUrl('index', ['view' => 'calendar']),
             'requestsUrl' => Requests::getUrl(),

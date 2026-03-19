@@ -47,7 +47,6 @@ class OperationResource extends BaseResource
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 100;
 
-    
     public static function getGloballySearchableAttributes(): array
     {
         return [
@@ -627,7 +626,7 @@ class OperationResource extends BaseResource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canViewAny();
+        return false;
     }
 
     public static function resolveMarketId(): int
