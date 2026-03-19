@@ -11,7 +11,6 @@ use App\Filament\Widgets\TasksWorkspaceWidget;
 use App\Models\MarketHoliday;
 use App\Models\Task;
 use App\Support\TaskCalendarFilters;
-use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
@@ -170,78 +169,9 @@ class ListTasks extends ListRecords
         ];
     }
 
-    /**
-     * ✅ CreateAction остаётся тут — это Filament CreateAction modal.
-     * ✅ Кнопки "Список" и "Календарь" показываем ВСЕГДА.
-     * ✅ Переключение делаем на /admin/tasks?view=calendar, сохраняя tab=...
-     */
     protected function getHeaderActions(): array
     {
-        $actions = [
-            Actions\CreateAction::make()
-                ->label('Создать')
-                ->icon('heroicon-o-plus'),
-        ];
-
-        if (! class_exists(Actions\Action::class)) {
-            return $actions;
-        }
-
-        $actions[] = Actions\Action::make('view_list')
-            ->label('Список')
-            ->icon('heroicon-o-list-bullet')
-            ->url(fn (): string => $this->urlForView('list'))
-            ->color($this->viewMode === 'list' ? 'primary' : 'gray');
-
-        $actions[] = Actions\Action::make('view_calendar')
-            ->label('Календарь')
-            ->icon('heroicon-o-calendar-days')
-            ->url(fn (): string => $this->urlForView('calendar'))
-            ->color($this->viewMode === 'calendar' ? 'primary' : 'gray');
-
-        return $actions;
-    }
-
-    /**
-     * URL переключения вида.
-     * - Сохраняем tab=... (и вообще все "не календарные" параметры).
-     * - Для list чистим календарные GET-фильтры, чтобы не тянуть мусор.
-     */
-    private function urlForView(string $mode): string
-    {
-        $query = request()->query();
-
-        // пагинация таблицы календарю не нужна; и наоборот
-        unset($query['page']);
-
-        // Календарные фильтры (это НЕ табы). Их чистим при возврате в список.
-        $calendarKeys = [
-            'assigned',
-            'observing',
-            'coexecuting',
-            'holidays',
-            'promotions',
-            'overdue',    // календарный чекбокс "Только просроченные" — НЕ таб overdue
-            'status',
-            'priority',
-            'search',
-            'date',
-            'holiday_id',
-        ];
-
-        if ($mode === 'list') {
-            unset($query['view']);
-            foreach ($calendarKeys as $k) {
-                unset($query[$k]);
-            }
-        } else {
-            $query['view'] = 'calendar';
-        }
-
-        // База — URL списка задач.
-        $base = TaskResource::getUrl('index');
-
-        return count($query) ? ($base . '?' . http_build_query($query)) : $base;
+        return [];
     }
 
     /**
