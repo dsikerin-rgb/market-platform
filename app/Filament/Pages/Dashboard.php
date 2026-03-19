@@ -279,6 +279,7 @@ class Dashboard extends BaseDashboard
         $vacantSpacesUrl = $this->appendQueryString(
             \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
             [
+                'only_vacant' => 1,
                 'tableFilters' => [
                     'status' => ['value' => 'vacant'],
                 ],
