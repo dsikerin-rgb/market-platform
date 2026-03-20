@@ -208,10 +208,10 @@ class AccrualsReconcileCommand extends Command
             ->selectRaw('
                 ta.tenant_id,
                 t.name as tenant_name,
-                SUM(CASE WHEN ta.source = "1c" THEN 1 ELSE 0 END) as rows_1c,
-                SUM(CASE WHEN ta.source IN ("excel", "csv") THEN 1 ELSE 0 END) as rows_csv,
-                COALESCE(SUM(CASE WHEN ta.source = "1c" THEN ta.total_with_vat ELSE 0 END), 0) as sum_1c,
-                COALESCE(SUM(CASE WHEN ta.source IN ("excel", "csv") THEN ta.total_with_vat ELSE 0 END), 0) as sum_csv
+                SUM(CASE WHEN ta.source = \'1c\' THEN 1 ELSE 0 END) as rows_1c,
+                SUM(CASE WHEN ta.source IN (\'excel\', \'csv\') THEN 1 ELSE 0 END) as rows_csv,
+                COALESCE(SUM(CASE WHEN ta.source = \'1c\' THEN ta.total_with_vat ELSE 0 END), 0) as sum_1c,
+                COALESCE(SUM(CASE WHEN ta.source IN (\'excel\', \'csv\') THEN ta.total_with_vat ELSE 0 END), 0) as sum_csv
             ')
             ->groupBy('ta.tenant_id', 't.name')
             ->orderByDesc('sum_1c');
