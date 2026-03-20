@@ -24,6 +24,8 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema as DbSchema;
+use Throwable;
 
 class TenantContractResource extends BaseResource
 {
@@ -63,6 +65,9 @@ class TenantContractResource extends BaseResource
 
     /** @var array<string, array<string, list<int>>> */
     private static array $workbenchIdsCache = [];
+
+    /** @var array<string, list<string>> */
+    private static array $tableColumnsCache = [];
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -230,6 +235,7 @@ class TenantContractResource extends BaseResource
                         ])
                         ->default(TenantContract::SPACE_MAPPING_MODE_AUTO)
                         ->native(false)
+                        ->visible(fn (): bool => static::hasTenantContractColumn('space_mapping_mode'))
                         ->helperText('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
 
                     Forms\Components\Checkbox::make('limit_spaces_to_contract_tenant')
@@ -395,8 +401,25 @@ class TenantContractResource extends BaseResource
                     ->placeholder('—')
                     ->wrap(),
 
+                TextColumn::make('document_type')
+                    ->label('Тип документа')
+                    ->state(fn (TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
+                    ->badge()
+                    ->color(fn (TenantContract $record): string => static::documentTypeColor((string) static::classificationForRecord($record)['category'])),
+
+                TextColumn::make('document_date')
+                    ->label('Дата из номера')
+                    ->state(fn (TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
+                    ->toggleable(),
+
+                TextColumn::make('market_space_link')
+                    ->label('Текущее место')
+                    ->state(fn (TenantContract $record): string => static::spaceLabel($record))
+                    ->placeholder('—')
+                    ->toggleable(),
+
                 TextColumn::make('ordering_status')
-                    ->label('Статус упорядочивания')
+                    ->label('Готовность к привязке')
                     ->state(fn (TenantContract $record): string => static::orderingMeta($record)['label'])
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::orderingMeta($record)['color']),
@@ -415,22 +438,11 @@ class TenantContractResource extends BaseResource
                     ->color(fn (TenantContract $record): string => static::overlapColor($record))
                     ->toggleable(),
 
-                TextColumn::make('document_type')
-                    ->label('Тип документа')
-                    ->state(fn (TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
-                    ->badge()
-                    ->color(fn (TenantContract $record): string => static::documentTypeColor((string) static::classificationForRecord($record)['category'])),
-
                 TextColumn::make('place_token')
                     ->label('Токен места')
                     ->state(fn (TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => $isSuperAdmin),
-
-                TextColumn::make('document_date')
-                    ->label('Дата из номера')
-                    ->state(fn (TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
-                    ->toggleable(),
 
                 TextColumn::make('effective_order_date')
                     ->label('Дата для цепочки')
@@ -446,25 +458,20 @@ class TenantContractResource extends BaseResource
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => $isSuperAdmin),
 
-                TextColumn::make('market_space_link')
-                    ->label('Текущее место')
-                    ->state(fn (TenantContract $record): string => static::spaceLabel($record))
-                    ->placeholder('—')
-                    ->toggleable(),
-
                 TextColumn::make('latest_debt_snapshot')
-                    ->label('В последней задолженности')
+                    ->label('Есть в выгрузке долга')
                     ->state(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'Да' : 'Нет')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'success' : 'gray')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('space_mapping_mode')
                     ->label('Режим привязки')
                     ->state(fn (TenantContract $record): string => static::spaceMappingModeLabel($record->space_mapping_mode))
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::spaceMappingModeColor($record->space_mapping_mode))
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visible(fn (): bool => static::hasTenantContractColumn('space_mapping_mode')),
 
                 TextColumn::make('starts_at')
                     ->label('Техническая дата 1С')
@@ -634,7 +641,19 @@ class TenantContractResource extends BaseResource
                         TenantContract::SPACE_MAPPING_MODE_AUTO => 'Авто',
                         TenantContract::SPACE_MAPPING_MODE_MANUAL => 'Ручная фиксация',
                         TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует',
-                    ]),
+                    ])
+                    ->query(static function (Builder $query, array $data): Builder {
+                        if (! static::hasTenantContractColumn('space_mapping_mode')) {
+                            return $query;
+                        }
+
+                        $value = trim((string) ($data['value'] ?? ''));
+
+                        return $value !== ''
+                            ? $query->where('space_mapping_mode', $value)
+                            : $query;
+                    })
+                    ->visible(fn (): bool => static::hasTenantContractColumn('space_mapping_mode')),
             ])
             ->actions([
                 tap(\Filament\Actions\EditAction::make()
@@ -1185,18 +1204,23 @@ class TenantContractResource extends BaseResource
             $query->where('market_id', $marketId);
         }
 
-        $records = $query->get([
+        $recordColumns = [
             'id',
             'market_id',
             'market_space_id',
-            'space_mapping_mode',
             'number',
             'starts_at',
             'ends_at',
             'signed_at',
             'status',
             'is_active',
-        ]);
+        ];
+
+        if (static::hasTenantContractColumn('space_mapping_mode')) {
+            $recordColumns[] = 'space_mapping_mode';
+        }
+
+        $records = $query->get($recordColumns);
 
         $marketIds = $records
             ->pluck('market_id')
@@ -1766,5 +1790,24 @@ class TenantContractResource extends BaseResource
         }
 
         return implode(' · ', array_values(array_unique($parts)));
+    }
+
+    public static function hasTenantContractColumn(string $column): bool
+    {
+        try {
+            if (! DbSchema::hasTable('tenant_contracts')) {
+                return false;
+            }
+
+            $columns = static::$tableColumnsCache['tenant_contracts'] ?? null;
+            if ($columns === null) {
+                $columns = DbSchema::getColumnListing('tenant_contracts');
+                static::$tableColumnsCache['tenant_contracts'] = $columns;
+            }
+
+            return in_array($column, $columns, true);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

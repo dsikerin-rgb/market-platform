@@ -8,8 +8,8 @@ use App\Filament\Resources\TenantContractResource;
 use App\Filament\Widgets\TenantContractsWorkspaceWidget;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
 
 class ListTenantContracts extends ListRecords
 {
@@ -40,6 +40,11 @@ class ListTenantContracts extends ListRecords
         return 'Договоры';
     }
 
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
+
     protected function getHeaderActions(): array
     {
         return [];
@@ -62,6 +67,11 @@ class ListTenantContracts extends ListRecords
         return null;
     }
 
+    public function getDefaultActiveTab(): string|int|null
+    {
+        return 'operational';
+    }
+
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
@@ -82,21 +92,9 @@ class ListTenantContracts extends ListRecords
         ];
 
         if ($this->canSeeTechnicalTabs()) {
-            $tabs['financial'] = $this->makeTab(
-                $tabClass,
-                'Последняя задолженность',
-                fn (Builder $query) => TenantContractResource::applyLatestDebtSnapshotScope($query, true)
-            );
-
-            $tabs['accruals'] = $this->makeTab(
-                $tabClass,
-                'Договоры из начислений',
-                fn (Builder $query) => TenantContractResource::applyAccrualHistoryScope($query, true)
-            );
-
             $tabs['mapping_candidates'] = $this->makeTab(
                 $tabClass,
-                'Основные кандидаты на привязку',
+                'Кандидаты на привязку',
                 fn (Builder $query) => TenantContractResource::applyWorkbenchBucketScope(
                     TenantContractResource::applyOperationalContractsScope(
                         TenantContractResource::applyWorkbenchBucketScope($query, 'primary_contract', true),
@@ -115,6 +113,18 @@ class ListTenantContracts extends ListRecords
                     'has_overlap',
                     true
                 )
+            );
+
+            $tabs['financial'] = $this->makeTab(
+                $tabClass,
+                'Есть в последней выгрузке долга',
+                fn (Builder $query) => TenantContractResource::applyLatestDebtSnapshotScope($query, true)
+            );
+
+            $tabs['accruals'] = $this->makeTab(
+                $tabClass,
+                'Найдены по начислениям',
+                fn (Builder $query) => TenantContractResource::applyAccrualHistoryScope($query, true)
             );
 
             $tabs['review'] = $this->makeTab(
@@ -164,5 +174,13 @@ class ListTenantContracts extends ListRecords
         return (bool) $user
             && method_exists($user, 'isSuperAdmin')
             && $user->isSuperAdmin();
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-contracts-list-page',
+        ];
     }
 }
