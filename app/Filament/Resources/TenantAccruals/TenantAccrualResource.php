@@ -12,9 +12,13 @@ use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema as DbSchema;
+use Throwable;
 
 class TenantAccrualResource extends BaseResource
 {
+    private static array $tableColumnsCache = [];
+
     protected static ?string $model = TenantAccrual::class;
 
     protected static ?string $recordTitleAttribute = 'source_place_name';
@@ -73,6 +77,19 @@ class TenantAccrualResource extends BaseResource
     public static function table(Table $table): Table
     {
         return TenantAccrualsTable::configure($table);
+    }
+
+    public static function hasTenantAccrualColumn(string $column): bool
+    {
+        if (array_key_exists($column, static::$tableColumnsCache)) {
+            return static::$tableColumnsCache[$column];
+        }
+
+        try {
+            return static::$tableColumnsCache[$column] = DbSchema::hasColumn('tenant_accruals', $column);
+        } catch (Throwable) {
+            return static::$tableColumnsCache[$column] = false;
+        }
     }
 
     public static function getRelations(): array
