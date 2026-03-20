@@ -935,7 +935,7 @@ class TenantResource extends BaseResource
      *
      * @return array<string, mixed>
      */
-    private static function applyHasDebtFilter(Builder $query, bool $withDebt): Builder
+    public static function applyHasDebtFilter(Builder $query, bool $withDebt): Builder
     {
         if (
             ! DbSchema::hasTable('contract_debts')
