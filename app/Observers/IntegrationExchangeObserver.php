@@ -8,6 +8,8 @@ use App\Models\IntegrationExchange;
 use App\Models\User;
 use App\Notifications\OneCIntegrationExchangeNotification;
 use App\Support\UserNotificationPreferences;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class IntegrationExchangeObserver
 {
@@ -32,7 +34,18 @@ class IntegrationExchangeObserver
                 continue;
             }
 
-            $superAdmin->notify($notification);
+            try {
+                $superAdmin->notify($notification);
+            } catch (Throwable $e) {
+                Log::warning('OneC integration notification delivery failed', [
+                    'exchange_id' => (int) $exchange->id,
+                    'entity_type' => (string) $exchange->entity_type,
+                    'status' => (string) $exchange->status,
+                    'notifiable_user_id' => (int) $superAdmin->id,
+                    'exception_class' => $e::class,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 

@@ -219,4 +219,66 @@ class OneCIntegrationExchangeNotificationTest extends TestCase
 
         Notification::assertNotSentTo($superAdmin, OneCIntegrationExchangeNotification::class);
     }
+
+    public function test_notification_channel_failure_does_not_break_exchange_update(): void
+    {
+        config([
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = Market::query()->create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'telegram_chat_id' => '123456',
+            'notification_preferences' => [
+                'self_manage' => true,
+                'channels' => ['telegram'],
+                'topics' => UserNotificationPreferences::TOPICS,
+            ],
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        app()->bind(TelegramChannel::class, function (): object {
+            return new class {
+                public function send(object $notifiable, object $notification): void
+                {
+                    throw new \RuntimeException('simulated telegram timeout');
+                }
+            };
+        });
+
+        $exchange = IntegrationExchange::query()->create([
+            'market_id' => (int) $market->id,
+            'direction' => IntegrationExchange::DIRECTION_IN,
+            'entity_type' => 'accruals',
+            'status' => IntegrationExchange::STATUS_IN_PROGRESS,
+            'payload' => [
+                'endpoint' => '/api/1c/accruals',
+            ],
+            'started_at' => now()->subSecond(),
+        ]);
+
+        $exchange->forceFill([
+            'status' => IntegrationExchange::STATUS_OK,
+            'finished_at' => now(),
+            'payload' => [
+                'endpoint' => '/api/1c/accruals',
+                'received' => 10,
+                'inserted' => 10,
+                'skipped' => 0,
+            ],
+        ])->save();
+
+        $exchange->refresh();
+        $this->assertSame(IntegrationExchange::STATUS_OK, $exchange->status);
+        $this->assertNotNull($exchange->finished_at);
+    }
 }
