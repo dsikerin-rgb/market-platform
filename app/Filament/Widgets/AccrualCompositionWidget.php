@@ -34,10 +34,19 @@ class AccrualCompositionWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
+        $hasAccess = (bool) $user && (
             (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             || (bool) ($user->market_id ?? null)
         );
+
+        if (! $hasAccess) {
+            return false;
+        }
+
+        /** @var self $widget */
+        $widget = app(static::class);
+
+        return $widget->hasDetailBreakdownForCurrentContext($user);
     }
 
     public function getDescription(): ?string
@@ -97,28 +106,21 @@ class AccrualCompositionWidget extends ChartWidget
         [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
         [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
-        try {
-            $row = $this->accrualsBaseQuery($marketId)
-                ->where('period', $effectiveMonthStart->toDateString())
-                ->selectRaw('
-                    COALESCE(SUM(rent_amount), 0) as rent_total,
-                    COALESCE(SUM(utilities_amount), 0) as utilities_total,
-                    COALESCE(SUM(electricity_amount), 0) as electricity_total,
-                    COALESCE(SUM(management_fee), 0) as management_total,
-                    COALESCE(SUM(total_with_vat), 0) as total_with_vat
-                ')
-                ->first();
-        } catch (\Throwable) {
+        $totals = $this->loadAccrualTotals($marketId, $effectiveMonthStart);
+
+        if ($totals === null) {
             return $this->emptyChart('Не удалось прочитать начисления');
         }
 
-        $rent = (float) ($row->rent_total ?? 0);
-        $utilities = (float) ($row->utilities_total ?? 0);
-        $electricity = (float) ($row->electricity_total ?? 0);
-        $management = (float) ($row->management_total ?? 0);
-        $totalWithVat = (float) ($row->total_with_vat ?? 0);
-        $knownTotal = $rent + $utilities + $electricity + $management;
-        $other = max(0.0, round($totalWithVat - $knownTotal, 2));
+        if (! $totals['has_rows']) {
+            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
+        }
+
+        $rent = $totals['rent'];
+        $utilities = $totals['utilities'];
+        $electricity = $totals['electricity'];
+        $management = $totals['management'];
+        $other = $totals['other'];
 
         $labels = [];
         $data = [];
@@ -207,6 +209,111 @@ class AccrualCompositionWidget extends ChartWidget
         }
 
         return number_format($value, 1, '.', '');
+    }
+
+    private function hasDetailBreakdownForCurrentContext($user): bool
+    {
+        if (! Schema::hasTable('tenant_accruals')) {
+            return false;
+        }
+
+        $marketId = $this->resolveMarketIdForWidget($user);
+
+        if (! $marketId) {
+            return false;
+        }
+
+        $market = Market::query()
+            ->select(['id', 'timezone'])
+            ->find($marketId);
+
+        $tz = $this->resolveTimezone($market?->timezone);
+        [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
+        [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
+
+        $totals = $this->loadAccrualTotals($marketId, $effectiveMonthStart);
+
+        if ($totals === null || ! $totals['has_rows']) {
+            return false;
+        }
+
+        return $this->hasDetailBreakdown($totals);
+    }
+
+    /**
+     * @return array{
+     *   has_rows: bool,
+     *   rent: float,
+     *   utilities: float,
+     *   electricity: float,
+     *   management: float,
+     *   total_with_vat: float,
+     *   other: float
+     * }|null
+     */
+    private function loadAccrualTotals(int $marketId, CarbonImmutable $monthStart): ?array
+    {
+        try {
+            $row = $this->accrualsBaseQuery($marketId)
+                ->where('period', $monthStart->toDateString())
+                ->selectRaw('
+                    COUNT(*) as rows_count,
+                    COALESCE(SUM(rent_amount), 0) as rent_total,
+                    COALESCE(SUM(utilities_amount), 0) as utilities_total,
+                    COALESCE(SUM(electricity_amount), 0) as electricity_total,
+                    COALESCE(SUM(management_fee), 0) as management_total,
+                    COALESCE(SUM(total_with_vat), 0) as total_with_vat
+                ')
+                ->first();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $rent = (float) ($row->rent_total ?? 0);
+        $utilities = (float) ($row->utilities_total ?? 0);
+        $electricity = (float) ($row->electricity_total ?? 0);
+        $management = (float) ($row->management_total ?? 0);
+        $totalWithVat = (float) ($row->total_with_vat ?? 0);
+
+        return [
+            'has_rows' => (int) ($row->rows_count ?? 0) > 0,
+            'rent' => $rent,
+            'utilities' => $utilities,
+            'electricity' => $electricity,
+            'management' => $management,
+            'total_with_vat' => $totalWithVat,
+            'other' => $this->calculateOtherAmount($rent, $utilities, $electricity, $management, $totalWithVat),
+        ];
+    }
+
+    /**
+     * @param array{
+     *   rent: float,
+     *   utilities: float,
+     *   electricity: float,
+     *   management: float,
+     *   total_with_vat: float,
+     *   other: float
+     * } $totals
+     */
+    private function hasDetailBreakdown(array $totals): bool
+    {
+        return $totals['utilities'] > 0
+            || $totals['electricity'] > 0
+            || $totals['management'] > 0
+            || $totals['other'] > 0;
+    }
+
+    private function calculateOtherAmount(
+        float $rent,
+        float $utilities,
+        float $electricity,
+        float $management,
+        float $totalWithVat
+    ): float {
+        $knownTotal = $rent + $utilities + $electricity + $management;
+
+        return max(0.0, round($totalWithVat - $knownTotal, 2));
     }
 
     protected function getOptions(): array
