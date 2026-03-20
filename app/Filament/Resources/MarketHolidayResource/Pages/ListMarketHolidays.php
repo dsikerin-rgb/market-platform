@@ -7,7 +7,6 @@ namespace App\Filament\Resources\MarketHolidayResource\Pages;
 use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Widgets\MarketCalendarWorkspaceWidget;
 use App\Models\MarketHoliday;
-use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Carbon;
@@ -43,6 +42,11 @@ class ListMarketHolidays extends ListRecords
     public function getTitle(): string
     {
         return $this->viewMode === 'calendar' ? 'Календарь событий' : 'Календарь';
+    }
+
+    public function getBreadcrumbs(): array
+    {
+        return [];
     }
 
     protected function getHeaderWidgets(): array
@@ -84,27 +88,15 @@ class ListMarketHolidays extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        $actions = [
-            Actions\CreateAction::make()
-                ->label('Добавить')
-                ->icon('heroicon-o-plus'),
+        return [];
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-market-holidays-list-page',
         ];
-
-        if (class_exists(Actions\Action::class)) {
-            $actions[] = Actions\Action::make('view_list')
-                ->label('Список')
-                ->icon('heroicon-o-list-bullet')
-                ->url(fn (): string => $this->urlForView('list'))
-                ->color($this->viewMode === 'list' ? 'primary' : 'gray');
-
-            $actions[] = Actions\Action::make('view_calendar')
-                ->label('Календарь')
-                ->icon('heroicon-o-calendar-days')
-                ->url(fn (): string => $this->urlForView('calendar'))
-                ->color($this->viewMode === 'calendar' ? 'primary' : 'gray');
-        }
-
-        return $actions;
     }
 
     private function urlForView(string $mode): string

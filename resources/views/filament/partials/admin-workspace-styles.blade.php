@@ -625,4 +625,294 @@
     .fi-resource-contracts-list-page .fi-sc-tabs + .fi-ta {
         margin-top: 0;
     }
+
+    .aw-shell--spaces {
+        gap: 1.1rem;
+    }
+
+    .aw-hero--spaces {
+        padding: 1.2rem 1.25rem;
+    }
+
+    .aw-hero-stack--spaces {
+        display: grid;
+        gap: 0.95rem;
+    }
+
+    .aw-hero-copy--spaces {
+        max-width: 56rem;
+    }
+
+    .aw-hero-actions--spaces {
+        grid-template-columns: repeat(auto-fit, minmax(16rem, max-content));
+        gap: 0.85rem;
+        justify-content: start;
+    }
+
+    .aw-link-card--space-action {
+        min-height: 0;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .aw-link-card--space-primary {
+        border-color: rgba(37, 99, 235, 0.18);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+    }
+
+    html.dark .aw-link-card--space-primary {
+        border-color: rgba(59, 130, 246, 0.22);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.8));
+    }
+
+    .aw-link-icon--space-action {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.85rem;
+    }
+
+    .aw-link-copy--space-action {
+        margin-top: 0.25rem;
+        line-height: 1.45;
+    }
+
+    .fi-resource-market-spaces-list-page .fi-sc-tabs {
+        margin-top: 0.25rem;
+        margin-bottom: 0.85rem;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-market-spaces-list-page .fi-sc-tabs .fi-tabs {
+        margin-inline: 0;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-market-spaces-list-page .fi-sc-tabs + .fi-ta {
+        margin-top: 0;
+    }
+
+    .aw-shell--accruals {
+        gap: 1.1rem;
+    }
+
+    .aw-hero--accruals {
+        padding: 1.2rem 1.25rem;
+    }
+
+    .aw-hero-stack--accruals {
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .aw-hero-copy--accruals {
+        max-width: 58rem;
+    }
+
+    .aw-inline-actions--accruals {
+        margin-top: 0.1rem;
+    }
+
+    .aw-chip--accruals-context {
+        border-color: rgba(37, 99, 235, 0.16);
+        background: rgba(255, 255, 255, 0.72);
+        color: #1e3a8a;
+    }
+
+    html.dark .aw-chip--accruals-context {
+        border-color: rgba(59, 130, 246, 0.24);
+        background: rgba(15, 23, 42, 0.56);
+        color: #dbeafe;
+    }
+
+    .fi-resource-accruals-list-page .fi-sc-tabs {
+        margin-top: 0.1rem;
+        margin-bottom: 0.8rem;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-accruals-list-page .fi-sc-tabs .fi-tabs {
+        margin-inline: 0;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-accruals-list-page .fi-sc-tabs + .fi-ta {
+        margin-top: 0;
+    }
+
+    .aw-shell--calendar {
+        gap: 1.1rem;
+    }
+
+    .aw-hero--calendar {
+        padding: 1.2rem 1.25rem;
+    }
+
+    .aw-hero-stack--calendar {
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .aw-hero-copy--calendar {
+        max-width: 58rem;
+    }
+
+    .aw-calendar-toolbar {
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .aw-calendar-toolbar__top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .aw-calendar-toolbar__main {
+        display: grid;
+        gap: 0.9rem;
+        min-width: 0;
+        justify-items: start;
+    }
+
+    .aw-inline-actions--calendar {
+        margin-top: 0;
+    }
+
+    .aw-link-card--calendar-primary {
+        border-color: rgba(37, 99, 235, 0.18);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+    }
+
+    html.dark .aw-link-card--calendar-primary {
+        border-color: rgba(59, 130, 246, 0.22);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.8));
+    }
+
+    .aw-link-icon--calendar-action {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.85rem;
+    }
+
+    .aw-link-copy--calendar-action {
+        margin-top: 0.25rem;
+        line-height: 1.45;
+    }
+
+    .aw-calendar-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 3.5rem;
+        margin-left: auto;
+        padding: 0.7rem 1rem;
+        border-radius: 1rem;
+        border: 1px solid rgba(37, 99, 235, 0.18);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+        color: #0f172a;
+        font-size: 1rem;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    .aw-calendar-cta:hover {
+        transform: translateY(-1px);
+        border-color: rgba(37, 99, 235, 0.28);
+        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.10);
+    }
+
+    html.dark .aw-calendar-cta {
+        border-color: rgba(59, 130, 246, 0.22);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.8));
+        color: #f8fafc;
+        box-shadow: 0 12px 24px rgba(2, 6, 23, 0.22);
+    }
+
+    .aw-view-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        width: max-content;
+        max-width: 100%;
+        padding: 0.25rem;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.72);
+    }
+
+    html.dark .aw-view-switch {
+        border-color: rgba(148, 163, 184, 0.18);
+        background: rgba(15, 23, 42, 0.56);
+    }
+
+    .aw-view-switch__item {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 6rem;
+        padding: 0.5rem 0.85rem;
+        border-radius: 999px;
+        color: #475569;
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    }
+
+    html.dark .aw-view-switch__item {
+        color: #cbd5e1;
+    }
+
+    .aw-view-switch__item:hover {
+        color: #0f172a;
+    }
+
+    html.dark .aw-view-switch__item:hover {
+        color: #f8fafc;
+    }
+
+    .aw-view-switch__item.is-active {
+        background: #2563eb;
+        color: #fff;
+        box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
+    }
+
+    .aw-chip--calendar-context {
+        border-color: rgba(37, 99, 235, 0.16);
+        background: rgba(255, 255, 255, 0.72);
+        color: #1e3a8a;
+    }
+
+    html.dark .aw-chip--calendar-context {
+        border-color: rgba(59, 130, 246, 0.24);
+        background: rgba(15, 23, 42, 0.56);
+        color: #dbeafe;
+    }
+
+    @media (max-width: 767px) {
+        .aw-calendar-toolbar__top {
+            align-items: stretch;
+        }
+
+        .aw-calendar-toolbar__main {
+            min-width: 0;
+        }
+
+        .aw-calendar-cta {
+            width: 100%;
+            justify-content: center;
+            margin-left: 0;
+        }
+    }
 </style>

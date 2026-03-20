@@ -51,6 +51,7 @@ class TenantAccrualsTable
                     ->toggleable(),
 
                 TextColumn::make('contract_link_status')
+                    ->visible(fn (): bool => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::hasTenantAccrualColumn('contract_link_status'))
                     ->label('Связь с договором')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
@@ -249,6 +250,7 @@ class TenantAccrualsTable
                     ]),
 
                 SelectFilter::make('contract_link_status')
+                    ->visible(fn (): bool => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::hasTenantAccrualColumn('contract_link_status'))
                     ->label('Связь с договором')
                     ->options([
                         TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'Точное совпадение',

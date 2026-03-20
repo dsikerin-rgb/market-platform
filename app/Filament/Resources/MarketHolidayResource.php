@@ -270,12 +270,6 @@ class MarketHolidayResource extends BaseResource
             ->modifyQueryUsing(fn (Builder $query): Builder => static::scopeUpcoming($query))
             ->defaultSort('starts_at', 'asc')
             ->columns([
-                TextColumn::make('market.name')
-                    ->label('Рынок')
-                    ->sortable()
-                    ->searchable()
-                    ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
-
                 TextColumn::make('title')
                     ->label('Название')
                     ->html()
