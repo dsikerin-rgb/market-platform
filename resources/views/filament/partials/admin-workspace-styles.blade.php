@@ -411,4 +411,218 @@
         gap: 0.85rem;
         align-items: center;
     }
+
+    .aw-shell--staff {
+        gap: 1.25rem;
+    }
+
+    .aw-hero--staff {
+        padding: 1.25rem;
+    }
+
+    .aw-hero-stack--staff {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .aw-hero-copy--staff {
+        max-width: 52rem;
+    }
+
+    .aw-hero-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+        align-content: start;
+    }
+
+    .aw-hero-actions > :only-child {
+        grid-column: 1 / -1;
+    }
+
+    .aw-hero-actions--staff {
+        grid-template-columns: repeat(auto-fit, minmax(16rem, max-content));
+        gap: 0.85rem;
+        justify-content: start;
+    }
+
+    .aw-link-card--staff-action {
+        min-height: 0;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .aw-link-card--staff-inline {
+        max-width: 23rem;
+    }
+
+    .aw-link-head--staff {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+    }
+
+    .aw-link-icon--staff-action {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.85rem;
+    }
+
+    .aw-link-copy--staff-action {
+        margin-top: 0.25rem;
+        line-height: 1.45;
+    }
+
+    .aw-chip--staff-alert {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.72rem;
+        line-height: 1;
+        color: #b45309;
+        border-color: rgba(245, 158, 11, 0.28);
+        background: rgba(245, 158, 11, 0.12);
+    }
+
+    html.dark .aw-chip--staff-alert {
+        color: #fde68a;
+        border-color: rgba(245, 158, 11, 0.34);
+        background: rgba(245, 158, 11, 0.16);
+    }
+
+    .fi-resource-staff-list-page .fi-sc-tabs {
+        margin-top: 0.25rem;
+        margin-bottom: 0.85rem;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-staff-list-page .fi-sc-tabs .fi-tabs {
+        margin-inline: 0;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-staff-list-page .fi-sc-tabs + .fi-ta {
+        margin-top: 0;
+    }
+
+    .aw-shell--tenants {
+        gap: 1.25rem;
+    }
+
+    .aw-hero--tenants {
+        padding: 1.25rem;
+    }
+
+    .aw-hero-stack--tenants {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .aw-hero-copy--tenants {
+        max-width: 56rem;
+    }
+
+    .aw-hero-actions--tenants {
+        grid-template-columns: repeat(auto-fit, minmax(16rem, max-content));
+        gap: 0.85rem;
+        justify-content: start;
+    }
+
+    .aw-link-card--tenant-action {
+        min-height: 0;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .aw-link-card--tenant-primary {
+        border-color: rgba(37, 99, 235, 0.18);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+    }
+
+    html.dark .aw-link-card--tenant-primary {
+        border-color: rgba(59, 130, 246, 0.22);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.8));
+    }
+
+    .aw-link-icon--tenant-action {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.85rem;
+    }
+
+    .aw-link-copy--tenant-action {
+        margin-top: 0.25rem;
+        line-height: 1.45;
+    }
+
+    .fi-resource-tenants-list-page .fi-sc-tabs {
+        margin-top: 0.25rem;
+        margin-bottom: 0.85rem;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-tenants-list-page .fi-sc-tabs .fi-tabs {
+        margin-inline: 0;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-tenants-list-page .fi-sc-tabs + .fi-ta {
+        margin-top: 0;
+    }
+
+    .aw-shell--contracts {
+        gap: 1.1rem;
+    }
+
+    .aw-hero--contracts {
+        padding: 1.2rem 1.25rem;
+    }
+
+    .aw-hero-stack--contracts {
+        display: grid;
+        gap: 0.9rem;
+    }
+
+    .aw-hero-copy--contracts {
+        max-width: 58rem;
+    }
+
+    .aw-inline-actions--contracts {
+        margin-top: 0.15rem;
+    }
+
+    .aw-chip--contracts-context {
+        border-color: rgba(37, 99, 235, 0.16);
+        background: rgba(255, 255, 255, 0.72);
+        color: #1e3a8a;
+    }
+
+    html.dark .aw-chip--contracts-context {
+        border-color: rgba(59, 130, 246, 0.24);
+        background: rgba(15, 23, 42, 0.56);
+        color: #dbeafe;
+    }
+
+    .fi-resource-contracts-list-page .fi-sc-tabs {
+        margin-top: 0.1rem;
+        margin-bottom: 0.8rem;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-contracts-list-page .fi-sc-tabs .fi-tabs {
+        margin-inline: 0;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-contracts-list-page .fi-sc-tabs + .fi-ta {
+        margin-top: 0;
+    }
 </style>
