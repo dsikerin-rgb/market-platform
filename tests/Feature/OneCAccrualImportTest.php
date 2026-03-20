@@ -10,8 +10,11 @@ use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
+use App\Models\IntegrationExchange;
+use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\TestCase;
 
 class OneCAccrualImportTest extends TestCase
@@ -198,5 +201,126 @@ class OneCAccrualImportTest extends TestCase
             'total_no_vat' => 12300,
             'total_with_vat' => 12300,
         ]);
+    }
+
+    public function test_sequence_preflight_corrects_lag_and_import_stays_successful(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Sequence preflight test is for PostgreSQL only.');
+        }
+
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'ООО Sequence Test',
+            'external_id' => 'tenant-seq-1',
+            'inn' => '444444444444',
+        ]);
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ];
+
+        $basePayload = [
+            'calculated_at' => '2026-03-20 10:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-seq-1',
+                    'period' => '2026-03',
+                    'market_space_code' => 'ТЕСТ/1',
+                    'source_place_code' => 'ТЕСТ/1',
+                    'source_place_name' => 'ТЕСТ/1',
+                    'activity_type' => 'rent',
+                    'tenant_name' => 'ООО Sequence Test',
+                    'inn' => '444444444444',
+                    'rent_amount' => 1000,
+                    'utilities_amount' => 0,
+                    'electricity_amount' => 0,
+                    'total_no_vat' => 1000,
+                    'total_with_vat' => 1000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ];
+
+        $payload1 = $basePayload;
+        $payload1['items'][0]['contract_external_id'] = 'seq-contract-1';
+        $this->postJson(route('api.1c.accruals.store'), $payload1, $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 1);
+
+        $payload2 = $basePayload;
+        $payload2['items'][0]['contract_external_id'] = 'seq-contract-2';
+        $this->postJson(route('api.1c.accruals.store'), $payload2, $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 1);
+
+        $sequenceName = DB::scalar("select pg_get_serial_sequence('tenant_accruals', 'id')");
+        $this->assertIsString($sequenceName);
+        DB::selectOne('select setval(?::regclass, 1, true)', [$sequenceName]);
+
+        $payload3 = $basePayload;
+        $payload3['items'][0]['contract_external_id'] = 'seq-contract-3';
+
+        $this->postJson(route('api.1c.accruals.store'), $payload3, $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 1)
+            ->assertJsonPath('warnings.sequence_preflight.corrected', true);
+
+        $this->assertSame(3, DB::table('tenant_accruals')->count());
+    }
+
+    public function test_import_exception_rolls_back_and_marks_exchange_as_error(): void
+    {
+        $this->mock(TenantAccrualContractResolver::class, function ($mock): void {
+            $mock->shouldReceive('resolveMatch')
+                ->andThrow(new RuntimeException('forced accrual resolver failure'));
+        });
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ];
+
+        $response = $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-03-20 10:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-error-1',
+                    'contract_external_id' => 'contract-error-1',
+                    'period' => '2026-03',
+                    'source_place_name' => 'ERROR/1',
+                    'activity_type' => 'rent',
+                    'tenant_name' => 'ООО Error Test',
+                    'inn' => '555555555555',
+                    'rent_amount' => 1500,
+                    'utilities_amount' => 0,
+                    'electricity_amount' => 0,
+                    'total_no_vat' => 1500,
+                    'total_with_vat' => 1500,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], $headers);
+
+        $response->assertStatus(500);
+        $this->assertSame(0, DB::table('tenant_accruals')->count());
+
+        $exchange = IntegrationExchange::query()
+            ->where('entity_type', 'accruals')
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($exchange);
+        $this->assertSame(IntegrationExchange::STATUS_ERROR, $exchange->status);
+        $this->assertNotNull($exchange->finished_at);
+        $this->assertStringContainsString('forced accrual resolver failure', (string) $exchange->error);
+        $this->assertSame(
+            0,
+            IntegrationExchange::query()
+                ->where('entity_type', 'accruals')
+                ->where('status', IntegrationExchange::STATUS_IN_PROGRESS)
+                ->count()
+        );
     }
 }
