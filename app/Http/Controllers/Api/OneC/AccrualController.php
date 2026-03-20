@@ -31,6 +31,7 @@ class AccrualController extends Controller
     {
         $startedAt = now();
         $exchange = null;
+        $sequencePreflight = [];
 
         try {
             $token = $this->extractBearerToken($request);
@@ -190,6 +191,7 @@ class AccrualController extends Controller
             $unresolvedSpaces = 0;
             $notFoundTenants = [];
             $now = now();
+            $sequencePreflight = $this->syncTenantAccrualPrimaryKeySequence();
 
             DB::beginTransaction();
 
@@ -334,6 +336,7 @@ class AccrualController extends Controller
                 'spaces_resolved' => $resolvedSpaces,
                 'contracts_unresolved' => $unresolvedContracts,
                 'spaces_unresolved' => $unresolvedSpaces,
+                'sequence_preflight' => $sequencePreflight,
             ];
 
             if ($notFoundTenants !== []) {
@@ -366,6 +369,7 @@ class AccrualController extends Controller
                     'updated' => $updated,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'sequence_preflight' => $sequencePreflight,
                     'warnings' => $warnings,
                     'ip' => $request->ip(),
                 ],
@@ -391,6 +395,16 @@ class AccrualController extends Controller
 
             return response()->json($response);
         } catch (Throwable $e) {
+            $rolledBack = false;
+            if (DB::transactionLevel() > 0) {
+                try {
+                    DB::rollBack();
+                    $rolledBack = true;
+                } catch (Throwable) {
+                    // ignore rollback failure, keep original exception flow
+                }
+            }
+
             $items = $request->input('items');
             $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
 
@@ -405,24 +419,49 @@ class AccrualController extends Controller
                 'error_message' => $e->getMessage(),
                 'meta' => [
                     'exception_class' => $e::class,
+                    'rolled_back' => $rolledBack,
+                    'sequence_preflight' => $sequencePreflight,
                     'ip' => $request->ip(),
                 ],
             ]);
 
             if ($exchange) {
-                $exchange->status = IntegrationExchange::STATUS_ERROR;
-                $exchange->finished_at = now();
-                $exchange->error = $e->getMessage();
-                $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                    'status' => 'exception',
-                    'http_status' => Response::HTTP_INTERNAL_SERVER_ERROR,
-                    'received' => is_array($items) ? count($items) : 0,
-                    'inserted' => 0,
-                    'skipped' => 0,
-                    'duration_ms' => $durationMs,
-                    'exception_class' => $e::class,
-                ]);
-                $exchange->save();
+                try {
+                    $exchange->status = IntegrationExchange::STATUS_ERROR;
+                    $exchange->finished_at = now();
+                    $exchange->error = $e->getMessage();
+                    $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                        'status' => 'exception',
+                        'http_status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                        'received' => is_array($items) ? count($items) : 0,
+                        'inserted' => 0,
+                        'skipped' => 0,
+                        'duration_ms' => $durationMs,
+                        'exception_class' => $e::class,
+                        'rolled_back' => $rolledBack,
+                        'sequence_preflight' => $sequencePreflight,
+                    ]);
+                    $exchange->save();
+                } catch (Throwable $exchangeSaveException) {
+                    $this->writeImportLog([
+                        'status' => 'exchange_finalize_error',
+                        'endpoint' => self::ENDPOINT,
+                        'http_status' => Response::HTTP_INTERNAL_SERVER_ERROR,
+                        'received' => is_array($items) ? count($items) : 0,
+                        'inserted' => 0,
+                        'skipped' => 0,
+                        'calculated_at' => is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null,
+                        'error_message' => $exchangeSaveException->getMessage(),
+                        'meta' => [
+                            'exchange_id' => (int) $exchange->id,
+                            'original_exception_class' => $e::class,
+                            'exchange_exception_class' => $exchangeSaveException::class,
+                            'rolled_back' => $rolledBack,
+                            'sequence_preflight' => $sequencePreflight,
+                            'ip' => $request->ip(),
+                        ],
+                    ]);
+                }
             }
 
             throw $e;
@@ -580,6 +619,80 @@ class AccrualController extends Controller
         $currency = strtoupper(trim((string) ($value ?? 'RUB')));
 
         return $currency !== '' ? $currency : 'RUB';
+    }
+
+    private function syncTenantAccrualPrimaryKeySequence(): array
+    {
+        $driver = DB::connection()->getDriverName();
+        $meta = [
+            'checked' => false,
+            'corrected' => false,
+            'driver' => $driver,
+        ];
+
+        if ($driver !== 'pgsql') {
+            $meta['reason'] = 'non_pgsql';
+
+            return $meta;
+        }
+
+        if (! Schema::hasTable('tenant_accruals')) {
+            $meta['reason'] = 'table_missing';
+
+            return $meta;
+        }
+
+        try {
+            $sequence = DB::scalar("select pg_get_serial_sequence('tenant_accruals', 'id')");
+
+            if (! is_string($sequence) || trim($sequence) === '') {
+                $meta['reason'] = 'sequence_not_found';
+
+                return $meta;
+            }
+
+            $meta['checked'] = true;
+            $meta['sequence'] = $sequence;
+
+            $maxIdRaw = DB::table('tenant_accruals')->max('id');
+            $maxId = is_numeric($maxIdRaw) ? (int) $maxIdRaw : 0;
+
+            $schemaName = 'public';
+            $sequenceName = $sequence;
+            if (str_contains($sequence, '.')) {
+                [$schemaName, $sequenceName] = explode('.', $sequence, 2);
+            }
+
+            $schemaName = trim($schemaName, '"');
+            $sequenceName = trim($sequenceName, '"');
+
+            $sequenceRow = DB::selectOne(
+                'select last_value from pg_sequences where schemaname = ? and sequencename = ? limit 1',
+                [$schemaName, $sequenceName]
+            );
+
+            $lastValueBefore = isset($sequenceRow->last_value) ? (int) $sequenceRow->last_value : 0;
+            $lastValueAfter = $lastValueBefore;
+
+            if ($lastValueBefore < $maxId) {
+                $setValue = DB::selectOne(
+                    'select setval(?::regclass, ?, true) as value',
+                    [$sequence, $maxId]
+                );
+                $lastValueAfter = isset($setValue->value) ? (int) $setValue->value : $maxId;
+                $meta['corrected'] = true;
+            }
+
+            $meta['max_id'] = $maxId;
+            $meta['last_value_before'] = $lastValueBefore;
+            $meta['last_value_after'] = $lastValueAfter;
+
+            return $meta;
+        } catch (Throwable $e) {
+            $meta['error'] = $e->getMessage();
+
+            return $meta;
+        }
     }
 
     private function makeAccrualHash(
