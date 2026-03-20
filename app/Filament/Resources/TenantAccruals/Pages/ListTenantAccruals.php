@@ -42,9 +42,9 @@ class ListTenantAccruals extends ListRecords
         }
     }
 
-    public function getBreadcrumb(): string
+    public function getBreadcrumbs(): array
     {
-        return 'Начисления';
+        return [];
     }
 
     protected function getHeaderActions(): array
@@ -78,23 +78,26 @@ class ListTenantAccruals extends ListRecords
     {
         $tabClass = static::resolveTabClass();
         $tabs = [];
+        $hasContractLinkStatus = TenantAccrualResource::hasTenantAccrualColumn('contract_link_status');
 
         $tabs['one_c'] = $this->makeTab(
             $tabClass,
-            '1С',
+            'Из 1С',
             fn (Builder $query) => $query->where('source', '1c'),
         );
 
-        $tabs['linked'] = $this->makeTab(
-            $tabClass,
-            'Связаны с договором',
-            fn (Builder $query) => $query
-                ->where('source', '1c')
-                ->whereIn('contract_link_status', [
-                    TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
-                    TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED,
-                ]),
-        );
+        if ($hasContractLinkStatus) {
+            $tabs['linked'] = $this->makeTab(
+                $tabClass,
+                'Связаны с договором',
+                fn (Builder $query) => $query
+                    ->where('source', '1c')
+                    ->whereIn('contract_link_status', [
+                        TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+                        TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED,
+                    ]),
+            );
+        }
 
         $tabs['without_contract'] = $this->makeTab(
             $tabClass,
@@ -104,19 +107,15 @@ class ListTenantAccruals extends ListRecords
                 ->whereNull('tenant_contract_id'),
         );
 
-        $tabs['ambiguous'] = $this->makeTab(
-            $tabClass,
-            'Неоднозначные',
-            fn (Builder $query) => $query
-                ->where('source', '1c')
-                ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS),
-        );
-
-        $tabs['history'] = $this->makeTab(
-            $tabClass,
-            'Исторический импорт',
-            fn (Builder $query) => $query->where('source', '!=', '1c'),
-        );
+        if ($hasContractLinkStatus) {
+            $tabs['ambiguous'] = $this->makeTab(
+                $tabClass,
+                'Неоднозначные',
+                fn (Builder $query) => $query
+                    ->where('source', '1c')
+                    ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS),
+            );
+        }
 
         $tabs['all'] = $tabClass::make('Все начисления');
 
@@ -145,6 +144,14 @@ class ListTenantAccruals extends ListRecords
         }
 
         return $tab;
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-accruals-list-page',
+        ];
     }
 
     private function resolveDefaultTab(): string
