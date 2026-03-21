@@ -26,6 +26,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
@@ -389,6 +390,7 @@ class TaskResource extends BaseResource
 
         $dueAtEditable = $inline(
             Forms\Components\DateTimePicker::make('due_at')
+                ->default(fn () => static::resolvePrefilledDueAt())
                 ->label('Дедлайн')
                 ->seconds(false)
                 ->helperText('Можно оставить пустым и назначить позже.')
@@ -868,6 +870,8 @@ class TaskResource extends BaseResource
             $createdAtColumn->tooltip(fn ($state): ?string => $state ? $state->diffForHumans() : null);
         }
 
+        $createdAtColumn = static::toggleable($createdAtColumn, true);
+
         $creatorColumn = TextColumn::make('created_by_user_id')
             ->label('Постановщик')
             ->sortable()
@@ -880,6 +884,8 @@ class TaskResource extends BaseResource
 
                 return filled($state) ? ('Пользователь #' . (int) $state) : '—';
             });
+
+        $creatorColumn = static::toggleable($creatorColumn, true);
 
         $statusColumn = TextColumn::make('status')
             ->label('Статус')
@@ -973,16 +979,18 @@ class TaskResource extends BaseResource
             $commentsColumn->tooltip('Количество комментариев');
         }
 
+        $commentsColumn = static::toggleable($commentsColumn, true);
+
         $table = $table
             ->columns([
                 $marketColumn,
                 $titleColumn,
-                $createdAtColumn,
-                $creatorColumn,
                 $statusColumn,
                 $priorityColumn,
                 $assigneeColumn,
                 $dueColumn,
+                $createdAtColumn,
+                $creatorColumn,
                 $sourceColumn,
                 $commentsColumn,
             ])
@@ -1004,6 +1012,27 @@ class TaskResource extends BaseResource
                             : $query,
                         blank: fn (Builder $query) => $query,
                     ),
+
+                SelectFilter::make('participation')
+                    ->label('Участие')
+                    ->options([
+                        'coexecuting' => 'Соисполняю',
+                        'watching' => 'Наблюдаю',
+                    ])
+                    ->query(function (Builder $query, array $data): void {
+                        $value = $data['value'] ?? null;
+                        $userId = Filament::auth()->id();
+
+                        if (! $userId || blank($value)) {
+                            return;
+                        }
+
+                        match ($value) {
+                            'coexecuting' => $query->coexecuting((int) $userId),
+                            'watching' => $query->watching((int) $userId),
+                            default => null,
+                        };
+                    }),
 
                 SelectFilter::make('status')
                     ->label('Статус')
@@ -1526,5 +1555,30 @@ class TaskResource extends BaseResource
         }
 
         return $labels;
+    }
+
+    protected static function resolvePrefilledDueAt(): ?Carbon
+    {
+        $dueAt = request()->query('due_at');
+
+        if (is_string($dueAt) && $dueAt !== '') {
+            try {
+                return Carbon::parse($dueAt);
+            } catch (\Throwable) {
+                // ignore invalid query value
+            }
+        }
+
+        $date = request()->query('date');
+
+        if (is_string($date) && $date !== '') {
+            try {
+                return Carbon::parse($date)->setTime(9, 0);
+            } catch (\Throwable) {
+                // ignore invalid query value
+            }
+        }
+
+        return null;
     }
 }

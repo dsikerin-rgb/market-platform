@@ -1,0 +1,6 @@
+app/Filament/Pages/Dashboard.php.bak.
+app/Filament/Pages/OneCFinance.php
+app/Filament/Widgets/OneCContractDebtsTableWidget.php
+app/Models/ContractDebt.php
+resources/views/filament/pages/dashboard.blade.php
+resources/views/filament/pages/one-c-finance.blade.php

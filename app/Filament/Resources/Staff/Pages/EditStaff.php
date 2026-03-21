@@ -7,6 +7,7 @@ use App\Filament\Resources\Staff\StaffResource;
 use App\Notifications\TelegramConnectLinkNotification;
 use App\Notifications\TelegramTestNotification;
 use App\Support\QrCodeDataUriGenerator;
+use App\Support\StaffConversationService;
 use App\Support\TelegramChatLinkService;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
@@ -73,6 +74,51 @@ class EditStaff extends BaseEditRecord
         $user = Filament::auth()->user();
 
         return [
+            Action::make('write_to_staff')
+                ->label('Написать сотруднику')
+                ->icon('heroicon-o-paper-airplane')
+                ->color('primary')
+                ->visible(fn (): bool => (bool) $user
+                    && (method_exists($this->record, 'getKey'))
+                    && (int) $this->record->getKey() !== (int) ($user->id ?? 0)
+                    && (
+                        $user->isSuperAdmin()
+                        || (
+                            $user->isMarketAdmin()
+                            && (int) ($user->market_id ?? 0) === (int) ($this->record->market_id ?? 0)
+                        )
+                    ))
+                ->modalHeading('Написать сотруднику')
+                ->modalSubmitActionLabel('Отправить')
+                ->form([
+                    Forms\Components\TextInput::make('subject')
+                        ->label('Тема (необязательно)')
+                        ->maxLength(255)
+                        ->helperText('Если тема пустая, заголовок будет собран из первого сообщения.'),
+                    Forms\Components\Textarea::make('body')
+                        ->label('Сообщение')
+                        ->required()
+                        ->rows(4)
+                        ->placeholder('Напишите сообщение сотруднику...'),
+                ])
+                ->action(function (array $data) use ($user) {
+                    if (! $user) {
+                        return;
+                    }
+
+                    $conversation = app(StaffConversationService::class)->startConversation(
+                        $user,
+                        $this->record,
+                        trim((string) ($data['subject'] ?? '')),
+                        trim((string) ($data['body'] ?? '')),
+                    );
+
+                    return redirect()->to(url('/admin/requests?' . http_build_query([
+                        'channel' => 'staff',
+                        'conversation_id' => (int) $conversation->id,
+                    ])));
+                }),
+
             Action::make('password_settings')
                 ->label('Пароль')
                 ->icon('heroicon-o-key')

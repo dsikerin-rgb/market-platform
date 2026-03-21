@@ -8,6 +8,11 @@
             viewMode: 'list',
             monthLabel: @js($initialMonthLabel),
             defaultMonthLabel: @js($initialMonthLabel),
+            isNavigating: false,
+            setMode(mode) {
+                this.viewMode = mode;
+                this.isNavigating = true;
+            },
             updateFromUrl() {
                 const params = new URLSearchParams(window.location.search);
 
@@ -32,7 +37,15 @@
                 this.monthLabel = formatted.charAt(0).toUpperCase() + formatted.slice(1);
             },
         }"
-        x-init="updateFromUrl(); window.addEventListener('livewire:navigated', () => updateFromUrl())"
+        x-on:aw-calendar-month-change.window="monthLabel = $event.detail.monthLabel; isNavigating = true"
+        x-init="
+            updateFromUrl();
+            window.addEventListener('livewire:navigating', () => { isNavigating = true; });
+            window.addEventListener('livewire:navigated', () => {
+                updateFromUrl();
+                isNavigating = false;
+            });
+        "
     >
         <section class="aw-hero aw-hero--calendar">
             <div class="aw-hero-stack--calendar">
@@ -43,9 +56,9 @@
                         </div>
 
                         <div>
-                            <h1 class="aw-hero-heading">Календарь</h1>
+                            <h1 class="aw-hero-heading">События</h1>
                             <p class="aw-hero-subheading">
-                                Календарь праздников, промо-активностей и внутренних событий рынка.
+                                Праздники, промо-активности и внутренние события рынка в формате списка или календаря.
                             </p>
                         </div>
                     </div>
@@ -54,10 +67,12 @@
                 <div class="aw-calendar-toolbar">
                     <div class="aw-calendar-toolbar__top">
                         <div class="aw-calendar-toolbar__main">
-                            <div class="aw-view-switch" role="tablist" aria-label="Режим просмотра календаря">
+                            <div class="aw-view-switch" role="tablist" aria-label="Режим просмотра событий">
                                 <a
                                     href="{{ $listUrl }}"
                                     class="aw-view-switch__item"
+                                    wire:navigate
+                                    x-on:click="setMode('list')"
                                     :class="{ 'is-active': viewMode === 'list' }"
                                     :aria-current="viewMode === 'list' ? 'page' : 'false'"
                                 >
@@ -66,6 +81,8 @@
                                 <a
                                     href="{{ $calendarUrl }}"
                                     class="aw-view-switch__item"
+                                    wire:navigate
+                                    x-on:click="setMode('calendar')"
                                     :class="{ 'is-active': viewMode === 'calendar' }"
                                     :aria-current="viewMode === 'calendar' ? 'page' : 'false'"
                                 >
@@ -73,7 +90,7 @@
                                 </a>
                             </div>
 
-                            <div class="aw-inline-actions aw-inline-actions--calendar">
+                            <div class="aw-inline-actions aw-inline-actions--calendar" :class="{ 'is-pending': isNavigating }">
                                 <span class="aw-chip aw-chip--calendar-context">
                                     Текущий месяц: <span x-text="monthLabel"></span>
                                 </span>

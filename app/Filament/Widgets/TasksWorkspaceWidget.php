@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Filament\Pages\Requests;
+use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Resources\TaskResource;
-use App\Models\Market;
-use App\Models\Task;
-use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
-use Illuminate\Support\Carbon;
 
 class TasksWorkspaceWidget extends Widget
 {
@@ -20,6 +17,8 @@ class TasksWorkspaceWidget extends Widget
 
     protected static ?int $sort = -100;
 
+    public string $viewMode = 'list';
+
     public static function canView(): bool
     {
         return TaskResource::canViewAny();
@@ -27,68 +26,39 @@ class TasksWorkspaceWidget extends Widget
 
     protected function getViewData(): array
     {
-        $marketId = $this->resolveMarketId();
-        $market = $marketId > 0
-            ? Market::query()->select(['id', 'name'])->find($marketId)
-            : null;
+        $viewMode = $this->viewMode;
 
-        $baseQuery = TaskResource::getEloquentQuery();
+        if (! in_array($viewMode, ['list', 'calendar'], true)) {
+            $viewMode = request()->query('view', 'list');
+        }
 
-        $open = (clone $baseQuery)->open()->count();
-        $inProgress = (clone $baseQuery)->inWork()->count();
-        $overdue = (clone $baseQuery)->overdue()->count();
-        $urgent = (clone $baseQuery)->urgent()->count();
-        $unassigned = (clone $baseQuery)->unassigned()->count();
-
-        $nearestDeadline = (clone $baseQuery)
-            ->open()
-            ->whereNotNull('due_at')
-            ->orderBy('due_at')
-            ->value('due_at');
+        if (! in_array($viewMode, ['list', 'calendar'], true)) {
+            $viewMode = 'list';
+        }
 
         return [
-            'marketName' => $market?->name,
-            'open' => $open,
-            'inProgress' => $inProgress,
-            'overdue' => $overdue,
-            'urgent' => $urgent,
-            'unassigned' => $unassigned,
-            'nearestDeadline' => $this->formatDeadline($nearestDeadline),
+            'viewMode' => $viewMode,
             'createUrl' => TaskResource::getUrl('create'),
-            'listUrl' => TaskResource::getUrl('index'),
-            'calendarUrl' => TaskResource::getUrl('index', ['view' => 'calendar']),
+            'listUrl' => $this->urlForView('list'),
+            'calendarUrl' => $this->urlForView('calendar'),
+            'eventsUrl' => MarketHolidayResource::getUrl('index'),
             'requestsUrl' => Requests::getUrl(),
         ];
     }
 
-    private function formatDeadline(mixed $value): string
+    private function urlForView(string $mode): string
     {
-        if (! filled($value)) {
-            return 'Нет дедлайнов';
+        $query = [];
+        $tab = request()->query('tab');
+
+        if (filled($tab) && $tab !== 'all') {
+            $query['tab'] = (string) $tab;
         }
 
-        try {
-            return Carbon::parse((string) $value)->format('d.m.Y H:i');
-        } catch (\Throwable) {
-            return (string) $value;
-        }
-    }
-
-    private function resolveMarketId(): int
-    {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return 0;
+        if ($mode === 'calendar') {
+            $query['view'] = 'calendar';
         }
 
-        if (! $user->isSuperAdmin()) {
-            return (int) ($user->market_id ?: 0);
-        }
-
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $value = session("filament_{$panelId}_market_id");
-
-        return filled($value) ? (int) $value : 0;
+        return TaskResource::getUrl('index', $query);
     }
 }

@@ -22,16 +22,69 @@
 
         // Подсказка: если каким-то образом сюда попали без view=calendar — всё равно форсируем.
         $keepView = $keepView === 'calendar' ? 'calendar' : 'calendar';
+        $taskCreateUrl = \App\Filament\Resources\TaskResource::canCreate()
+            ? \App\Filament\Resources\TaskResource::getUrl('create')
+            : null;
+        $eventCreateUrl = \App\Filament\Resources\MarketHolidayResource::canCreate()
+            ? \App\Filament\Resources\MarketHolidayResource::getUrl('create')
+            : null;
     @endphp
 
-    <div class="task-calendar-page">
+    <div
+        class="task-calendar-page"
+        x-data="{
+            pickerOpen: false,
+            pickedLabel: '',
+            taskCreateBase: @js($taskCreateUrl),
+            eventCreateBase: @js($eventCreateUrl),
+            taskCreateHref: '#',
+            eventCreateHref: '#',
+            buildUrl(base, params) {
+                if (! base) {
+                    return '#';
+                }
+
+                const url = new URL(base, window.location.origin);
+
+                Object.entries(params).forEach(([key, value]) => {
+                    if (value) {
+                        url.searchParams.set(key, value);
+                    }
+                });
+
+                return url.toString();
+            },
+            openCreatePicker(detail) {
+                const date = detail?.date ?? '';
+
+                if (! date || (! this.taskCreateBase && ! this.eventCreateBase)) {
+                    return;
+                }
+
+                this.pickedLabel = detail?.label ?? date;
+                this.taskCreateHref = this.buildUrl(this.taskCreateBase, {
+                    due_at: detail?.dueAt ?? '',
+                    date: date,
+                });
+                this.eventCreateHref = this.buildUrl(this.eventCreateBase, {
+                    date: date,
+                });
+                this.pickerOpen = true;
+            },
+            closeCreatePicker() {
+                this.pickerOpen = false;
+            },
+        }"
+        x-on:task-calendar-date-picked.window="openCreatePicker($event.detail)"
+        x-on:keydown.escape.window="closeCreatePicker()"
+    >
         <style>
             /* ============================================================
              * Task Calendar page (без Tailwind utilities)
              * ============================================================ */
 
             .task-calendar-page {
-                --tc-gap: 16px;
+                --tc-gap: 12px;
                 --tc-radius: 14px;
                 --tc-border: rgba(148, 163, 184, .20);
                 --tc-border-dark: rgba(148, 163, 184, .14);
@@ -47,13 +100,136 @@
                 align-items: start;
             }
 
-            @media (min-width: 1024px) {
-                .task-calendar-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
-                .task-calendar-col-filters { grid-column: span 3 / span 3; }
-                .task-calendar-col-calendar { grid-column: span 6 / span 6; }
-                .task-calendar-col-nodue   { grid-column: span 3 / span 3; }
+            .tc-filter-bar {
+                display: grid;
+                gap: 8px;
+            }
 
-                .task-calendar-sticky { position: sticky; top: 16px; }
+            .tc-toolbar-form {
+                display: grid;
+                gap: 8px;
+            }
+
+            .tc-primary-tabs {
+                width: max-content;
+                max-width: 100%;
+                overflow-x: auto;
+            }
+
+            .tc-primary-tabs .fi-tabs {
+                width: max-content;
+                max-width: 100%;
+                margin-inline: 0;
+            }
+
+            .tc-toolbar-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 10px;
+            }
+
+            .tc-toggle-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                min-width: 0;
+            }
+
+            .tc-toolbar-side {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+                margin-left: auto;
+            }
+
+            .tc-toggle {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 36px;
+                padding: 6px 10px;
+                border: 1px solid var(--tc-border);
+                border-radius: 999px;
+                background: rgba(255, 255, 255, .02);
+                cursor: pointer;
+                user-select: none;
+                transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+                font-size: 13px;
+                font-weight: 500;
+            }
+
+            .tc-toggle:hover {
+                background: var(--tc-bg-hover);
+            }
+
+            .tc-toggle input[type="checkbox"] {
+                width: 16px;
+                height: 16px;
+                margin: 0;
+            }
+
+            .tc-advanced {
+                position: relative;
+            }
+
+            .tc-advanced-summary {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                min-height: 36px;
+                padding: 6px 10px;
+                border: 1px solid var(--tc-border);
+                border-radius: 999px;
+                background: rgba(255, 255, 255, .02);
+                cursor: pointer;
+                list-style: none;
+                font-size: 13px;
+                font-weight: 600;
+            }
+
+            .tc-advanced-summary::after {
+                content: '▾';
+                font-size: 12px;
+                color: var(--tc-muted);
+                transition: transform .15s ease;
+            }
+
+            .tc-advanced.is-open .tc-advanced-summary::after {
+                transform: rotate(180deg);
+            }
+
+            .tc-advanced-panel {
+                position: absolute;
+                top: calc(100% + 8px);
+                right: 0;
+                z-index: 30;
+                width: min(44rem, 92vw);
+            }
+
+            .tc-advanced-body {
+                display: grid;
+                gap: 14px;
+                padding: 14px;
+                border: 1px solid var(--tc-border);
+                border-radius: 14px;
+                background: rgba(255, 255, 255, .98);
+                box-shadow: 0 20px 40px rgba(15, 23, 42, .10);
+                backdrop-filter: blur(8px);
+            }
+
+            .tc-advanced-grid {
+                display: grid;
+                gap: 14px;
+            }
+
+            @media (min-width: 768px) {
+                .tc-advanced-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                    align-items: start;
+                }
             }
 
             .tc-form { display: flex; flex-direction: column; gap: 14px; }
@@ -108,29 +284,12 @@
 
             .tc-actions { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 2px; }
 
-            .tc-task-list { display: flex; flex-direction: column; gap: 10px; }
-
-            .tc-task-card {
-                display: block;
-                padding: 10px 12px;
-                border: 1px solid var(--tc-border);
-                border-radius: 12px;
-                background: var(--tc-bg);
-                text-decoration: none;
-                transition: background-color .15s ease, border-color .15s ease;
+            .tc-section-divider {
+                width: 100%;
+                height: 1px;
+                margin: 2px 0;
+                background: var(--tc-border);
             }
-
-            .tc-task-card:hover { background: var(--tc-bg-hover); }
-
-            .tc-task-title {
-                font-weight: 600;
-                font-size: 13px;
-                line-height: 1.35;
-                color: inherit;
-                margin: 0 0 4px 0;
-            }
-
-            .tc-task-meta { font-size: 12px; color: var(--tc-muted); line-height: 1.35; }
 
             /* ============================================================
              * FullCalendar cosmetics (чтобы не выглядел “чужеродно”)
@@ -253,6 +412,48 @@
                 color: rgba(226, 232, 240, .92);
             }
 
+            .tc-create-picker-backdrop {
+                position: fixed;
+                inset: 0;
+                z-index: 70;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 16px;
+                background: rgba(15, 23, 42, .20);
+            }
+
+            .tc-create-picker {
+                width: 100%;
+                max-width: 360px;
+                display: grid;
+                gap: 14px;
+                padding: 16px;
+                border: 1px solid var(--tc-border);
+                border-radius: 16px;
+                background: rgba(255, 255, 255, .98);
+                box-shadow: 0 24px 48px rgba(15, 23, 42, .16);
+                backdrop-filter: blur(10px);
+            }
+
+            .tc-create-picker-title {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 700;
+                line-height: 1.3;
+            }
+
+            .tc-create-picker-text {
+                font-size: 13px;
+                line-height: 1.4;
+                color: var(--tc-muted);
+            }
+
+            .tc-create-picker-actions {
+                display: grid;
+                gap: 10px;
+            }
+
             .tc-modal-row strong { font-weight: 600; color: rgba(226, 232, 240, 1); }
 
             .tc-modal-actions {
@@ -265,164 +466,192 @@
             html.dark .task-calendar-page .tc-control,
             html.dark .task-calendar-page .tc-control-multi,
             html.dark .task-calendar-page .tc-check,
-            html.dark .task-calendar-page .tc-task-card,
             html.dark .task-calendar-page .tc-modal-close {
                 border-color: var(--tc-border-dark);
+            }
+
+            html.dark .task-calendar-page .tc-advanced-body {
+                background: rgba(15, 23, 42, .96);
+                box-shadow: 0 20px 40px rgba(2, 6, 23, .32);
+            }
+
+            @media (max-width: 767px) {
+                .tc-toolbar-side {
+                    margin-left: 0;
+                }
+
+                .tc-toolbar-row {
+                    align-items: stretch;
+                }
+
+                .tc-advanced-panel {
+                    left: 0;
+                    right: auto;
+                    width: min(100vw - 2rem, 32rem);
+                }
             }
         </style>
 
         <div class="task-calendar-grid">
-            {{-- Filters --}}
-            <div class="task-calendar-col-filters">
-                <div class="task-calendar-sticky">
-                    <x-filament::section>
-                        <x-slot name="heading">Фильтры</x-slot>
-                        <x-slot name="description">Настрой отображение задач и праздников в календаре.</x-slot>
+            <div class="tc-filter-bar">
+                <div class="tc-primary-tabs">
+                    <x-filament::tabs>
+                        @foreach ($calendarTabs as $tab)
+                            <x-filament::tabs.item
+                                :active="$tab['active']"
+                                :href="$tab['url']"
+                                tag="a"
+                            >
+                                {{ $tab['label'] }}
+                            </x-filament::tabs.item>
+                        @endforeach
+                    </x-filament::tabs>
+                </div>
 
-                        <form method="GET" class="tc-form">
-                            {{-- КРИТИЧНО: сохраняем режим календаря и tab при submit --}}
-                            <input type="hidden" name="view" value="calendar" />
-                            @if ($keepTab)
-                                <input type="hidden" name="tab" value="{{ $keepTab }}" />
-                            @endif
+                <form method="GET" class="tc-toolbar-form">
+                    <input type="hidden" name="view" value="calendar" />
+                    @if ($keepTab)
+                        <input type="hidden" name="tab" value="{{ $keepTab }}" />
+                    @endif
 
-                            @if(! empty($filters['date']))
-                                <input type="hidden" name="date" value="{{ $filters['date'] }}" />
-                            @endif
+                    @if (! empty($filters['date']))
+                        <input type="hidden" name="date" value="{{ $filters['date'] }}" />
+                    @endif
 
-                            <div class="tc-field">
-                                <div class="tc-label">Показывать</div>
+                    <div class="tc-toolbar-row">
+                        <div class="tc-toggle-row">
+                            <input type="hidden" name="holidays" value="0">
+                            <label class="tc-toggle">
+                                <input type="checkbox" name="holidays" value="1" @checked($filters['holidays']) onchange="this.form.submit()">
+                                <span>Праздники рынка</span>
+                            </label>
 
-                                <div class="tc-checklist">
-                                    <input type="hidden" name="assigned" value="0">
-                                    <label class="tc-check">
-                                        <input type="checkbox" name="assigned" value="1" @checked($filters['assigned'])>
-                                        <span>Поручено мне</span>
-                                    </label>
+                            <input type="hidden" name="promotions" value="0">
+                            <label class="tc-toggle">
+                                <input type="checkbox" name="promotions" value="1" @checked($filters['promotions'] ?? true) onchange="this.form.submit()">
+                                <span>Акции рынка</span>
+                            </label>
+                        </div>
 
-                                    <input type="hidden" name="observing" value="0">
-                                    <label class="tc-check">
-                                        <input type="checkbox" name="observing" value="1" @checked($filters['observing'])>
-                                        <span>Наблюдаю</span>
-                                    </label>
+                        <div class="tc-toolbar-side">
+                            <div
+                                class="tc-advanced"
+                                x-data="{ open: {{ ! empty($filters['statuses']) || ! empty($filters['priorities']) ? 'true' : 'false' }} }"
+                                x-on:click.outside="open = false"
+                                x-on:keydown.escape.window="open = false"
+                                :class="{ 'is-open': open }"
+                            >
+                                <button
+                                    type="button"
+                                    class="tc-advanced-summary"
+                                    x-on:click="open = !open"
+                                    x-bind:aria-expanded="open ? 'true' : 'false'"
+                                >
+                                    <span>Дополнительно</span>
+                                </button>
 
-                                    <input type="hidden" name="coexecuting" value="0">
-                                    <label class="tc-check">
-                                        <input type="checkbox" name="coexecuting" value="1" @checked($filters['coexecuting'])>
-                                        <span>Соисполняю</span>
-                                    </label>
+                                <div class="tc-advanced-panel" x-show="open" x-cloak>
+                                    <div class="tc-advanced-body">
+                                    <div class="tc-advanced-grid">
+                                        <div class="tc-field">
+                                            <label class="tc-label" for="status">Статус</label>
+                                            <select id="status" name="status[]" multiple class="tc-control-multi">
+                                                @foreach ($statusOptions as $value => $label)
+                                                    <option value="{{ $value }}" @selected(in_array($value, $filters['statuses'], true))>
+                                                        {{ $label }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="tc-help">Можно выбрать несколько значений.</div>
+                                        </div>
 
-                                    <input type="hidden" name="holidays" value="0">
-                                    <label class="tc-check">
-                                        <input type="checkbox" name="holidays" value="1" @checked($filters['holidays'])>
-                                        <span>Праздники рынка</span>
-                                    </label>
+                                        <div class="tc-field">
+                                            <label class="tc-label" for="priority">Приоритет</label>
+                                            <select id="priority" name="priority[]" multiple class="tc-control-multi">
+                                                @foreach ($priorityOptions as $value => $label)
+                                                    <option value="{{ $value }}" @selected(in_array($value, $filters['priorities'], true))>
+                                                        {{ $label }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            <div class="tc-help">Можно выбрать несколько значений.</div>
+                                        </div>
+                                    </div>
 
-                                    <input type="hidden" name="promotions" value="0">
-                                    <label class="tc-check">
-                                        <input type="checkbox" name="promotions" value="1" @checked($filters['promotions'] ?? true)>
-                                        <span>Акции рынка</span>
-                                    </label>
+                                    <div class="tc-actions">
+                                        <x-filament::button type="submit" color="primary" size="sm">
+                                            Применить
+                                        </x-filament::button>
 
-                                    <input type="hidden" name="overdue" value="0">
-                                    <label class="tc-check">
-                                        <input type="checkbox" name="overdue" value="1" @checked($filters['overdue'])>
-                                        <span>Только просроченные</span>
-                                    </label>
+                                        <x-filament::button
+                                            type="button"
+                                            color="gray"
+                                            size="sm"
+                                            onclick="window.location='{{ $resetUrl }}'"
+                                        >
+                                            Сбросить
+                                        </x-filament::button>
+                                    </div>
+                                </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
 
-                            <div class="tc-field">
-                                <label class="tc-label" for="status">Статус</label>
-                                <select id="status" name="status[]" multiple class="tc-control-multi">
-                                    @foreach ($statusOptions as $value => $label)
-                                        <option value="{{ $value }}" @selected(in_array($value, $filters['statuses'], true))>
-                                            {{ $label }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="tc-help">Можно выбрать несколько значений.</div>
-                            </div>
+            <x-filament::section>
+                <x-slot name="heading">Календарь задач</x-slot>
 
-                            <div class="tc-field">
-                                <label class="tc-label" for="priority">Приоритет</label>
-                                <select id="priority" name="priority[]" multiple class="tc-control-multi">
-                                    @foreach ($priorityOptions as $value => $label)
-                                        <option value="{{ $value }}" @selected(in_array($value, $filters['priorities'], true))>
-                                            {{ $label }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="tc-help">Можно выбрать несколько значений.</div>
-                            </div>
+                {{-- Здесь CreateAction-модалка НЕ живёт. Она в header actions страницы ListTasks --}}
+                @livewire(\App\Filament\Widgets\TaskCalendarWidget::class)
+            </x-filament::section>
+        </div>
 
-                            <div class="tc-field">
-                                <label class="tc-label" for="search">Поиск по названию</label>
-                                <input
-                                    id="search"
-                                    type="text"
-                                    name="search"
-                                    value="{{ $filters['search'] }}"
-                                    class="tc-control"
-                                    placeholder="Например: холодильник, павильон 12…"
-                                >
-                            </div>
-
-                            <div class="tc-actions">
-                                <x-filament::button type="submit" color="primary" size="sm">
-                                    Применить
-                                </x-filament::button>
-
-                                <x-filament::button
-                                    type="button"
-                                    color="gray"
-                                    size="sm"
-                                    onclick="window.location='{{ $resetUrl }}'"
-                                >
-                                    Сбросить
-                                </x-filament::button>
-                            </div>
-                        </form>
-                    </x-filament::section>
+        <div
+            class="tc-create-picker-backdrop"
+            x-show="pickerOpen"
+            x-cloak
+            x-on:click.self="closeCreatePicker()"
+        >
+            <div class="tc-create-picker">
+                <div>
+                    <h3 class="tc-create-picker-title">Создать на дату</h3>
+                    <div class="tc-create-picker-text" x-text="pickedLabel"></div>
                 </div>
-            </div>
 
-            {{-- Calendar --}}
-            <div class="task-calendar-col-calendar">
-                <x-filament::section>
-                    <x-slot name="heading">Календарь задач</x-slot>
-
-                    {{-- Здесь CreateAction-модалка НЕ живёт. Она в header actions страницы ListTasks --}}
-                    @livewire(\App\Filament\Widgets\TaskCalendarWidget::class)
-                </x-filament::section>
-            </div>
-
-            {{-- No due --}}
-            <div class="task-calendar-col-nodue">
-                <x-filament::section>
-                    <x-slot name="heading">Без дедлайна</x-slot>
-                    <x-slot name="description">Последние задачи без даты исполнения (до 50 шт.).</x-slot>
-
-                    @if (empty($tasksWithoutDue))
-                        <div style="font-size: 13px; color: rgba(148, 163, 184, .9);">
-                            Нет задач без дедлайна.
-                        </div>
-                    @else
-                        <div class="tc-task-list">
-                            @foreach ($tasksWithoutDue as $task)
-                                <a
-                                    href="{{ \App\Filament\Resources\TaskResource::getUrl(\App\Filament\Resources\TaskResource::canEdit($task) ? 'edit' : 'view', ['record' => $task]) }}"
-                                    class="tc-task-card"
-                                >
-                                    <div class="tc-task-title">{{ $task->title }}</div>
-                                    <div class="tc-task-meta">
-                                        {{ \App\Models\Task::STATUS_LABELS[$task->status] ?? $task->status }}
-                                    </div>
-                                </a>
-                            @endforeach
-                        </div>
+                <div class="tc-create-picker-actions">
+                    @if ($taskCreateUrl)
+                        <x-filament::button
+                            tag="a"
+                            color="primary"
+                            size="sm"
+                            x-bind:href="taskCreateHref"
+                        >
+                            Создать задачу
+                        </x-filament::button>
                     @endif
-                </x-filament::section>
+
+                    @if ($eventCreateUrl)
+                        <x-filament::button
+                            tag="a"
+                            color="gray"
+                            size="sm"
+                            x-bind:href="eventCreateHref"
+                        >
+                            Создать событие
+                        </x-filament::button>
+                    @endif
+
+                    <x-filament::button
+                        type="button"
+                        color="gray"
+                        size="sm"
+                        x-on:click="closeCreatePicker()"
+                    >
+                        Отмена
+                    </x-filament::button>
+                </div>
             </div>
         </div>
 
