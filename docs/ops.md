@@ -1,10 +1,106 @@
 # Operations Runbook
 
-**Market Platform** — цифровая система управления рынком.
+**Market Platform** — цифровая системы управления рынком.
 
-Документ: окружения и пути, домены/HTTPS, Redis-изоляция, Horizon (очереди), staging deploy webhook и диагностика типовых проблем.
+Документ: окружения и пути, домены/HTTPS, Redis-изоляция, Horizon (очереди), staging deploy webhook и диагностика типововых проблем.
 
 Секреты и пароли в репозитории не храним — только в `.env` на сервере.
+
+---
+
+## 0) Safe auto-link tenant_contracts -> market_spaces
+
+**Назначение:** автоматическая привязка договоров к местам при импорте или массовом apply.
+
+### 0.1) Правила автопривязки
+
+* Новые договоры без места могут автопривязываться сразу при импорте
+* Автопривязка разрешена **только для high-confidence кейсов**
+* **Safe rules:**
+  * `auto_bridge` — tenant имеет ровно 1 primary contract без места + ровно 1 exact place bridge из accruals (source_place_code → market_space)
+  * `auto_number` — contract.number exact/normalized содержит ровно 1 code/number места арендатора
+* Автопривязка **только для primary_contract**
+* **Non-primary** автоматически не привязываем (supplemental, service, penalty, placeholder, unknown)
+* **Ambiguous / no_match / multi_primary** автоматически не привязываем
+
+### 0.2) Контроль-барьер перед apply
+
+Перед массовым apply на окружении:
+
+1. Показать DB target:
+   ```bash
+   php artisan tinker --execute="
+   echo 'db_connection='.config('database.default').PHP_EOL;
+   echo 'db_host='.config('database.connections.'.config('database.default').'.host').PHP_EOL;
+   echo 'db_database='.config('database.connections.'.config('database.default').'.database').PHP_EOL;
+   "
+   ```
+2. Показать размер БД:
+   ```bash
+   php artisan tinker --execute="
+   use Illuminate\Support\Facades\DB;
+   \$result = DB::select('SELECT pg_size_pretty(pg_database_size(current_database())) as size')[0];
+   echo 'database_size='.\$result->size.PHP_EOL;
+   "
+   ```
+3. Сделать backup:
+   ```bash
+   mkdir -p /var/www/market/backups
+   pg_dump -h 127.0.0.1 -U market_user -d market -Fc -f /var/www/market/backups/prod_before_contract_space_apply_\$(date +%Y-%m-%d_%H-%M-%S).dump
+   ls -lh /var/www/market/backups | tail -3
+   ```
+4. Сначала выполнить preview:
+   ```bash
+   php artisan contracts:link-spaces --market=1
+   ```
+5. Потом apply:
+   ```bash
+   php artisan contracts:link-spaces --market=1 --apply
+   ```
+6. Потом post-check конкретных contract_id:
+   ```bash
+   php artisan tinker --execute="
+   use Illuminate\Support\Facades\DB;
+   \$ids = [327, 536, 949, 1151, 1181, 1380];
+   \$rows = DB::table('tenant_contracts')->whereIn('id', \$ids)->orderBy('id')->get(['id', 'tenant_id', 'market_space_id', 'space_mapping_mode']);
+   foreach (\$rows as \$row) { echo json_encode(\$row, JSON_UNESCAPED_UNICODE).PHP_EOL; }
+   "
+   ```
+
+### 0.3) Карта: отображение статусов
+
+* **exact link** (space-exact) → показываем долг по месту (статус из contract_debts по этому месту)
+* **tenant_fallback** → показываем статус арендатора (когда нет точной связи с местом)
+* **Свободные/неактивные места** не красим долгом арендатора (scope=none)
+* **Спорные случаи** не должны насильно превращаться в "точный долг по месту"
+
+### 0.4) Стратегическое решение (что ПОКА НЕ внедряем)
+
+**Не внедряем сейчас:**
+
+* **Группы торговых мест** как обязательный слой привязки договоров
+* **Временные слои / исторические составы мест** (когда место меняло границы/номер)
+* **Массовый аудит всех бумажных договоров** для принудительной привязки
+
+**Текущая рабочая стратегия:**
+
+Используем **простую модель привязки** с тремя категориями:
+
+1. **Точная привязка к месту** (exact link) — договор однозначно матчится на место по номеру/коду
+2. **Привязка только к арендатору** (tenant fallback) — договор привязан к арендатору, но не к конкретному месту
+3. **Спорный кейс / требует ручного разбора** — ambiguous, multi_primary, no_match
+
+**Правила:**
+
+* Safe auto-link применяем **только для high-confidence кейсов** (auto_bridge, auto_number)
+* Всё **неоднозначное автоматически не привязываем** (оставляем на ручной разбор)
+
+**Причина решения:**
+
+* Раздел групп мест ещё не доведён до конца
+* Временные слои сильно усложнят проект (историчность, версионирование, миграции)
+* Эффект сейчас не оправдывает стоимость внедрения (большинство кейсов покрывается простой моделью)
+* Сначала нужно **стабилизировать базовую модель** и накопить статистику спорных случаев
 
 ---
 

@@ -745,6 +745,89 @@
         margin-top: 0;
     }
 
+    .aw-shell--tasks {
+        gap: 1.1rem;
+    }
+
+    .aw-hero--tasks {
+        padding: 1.2rem 1.25rem;
+    }
+
+    .aw-hero-stack--tasks {
+        display: grid;
+        gap: 0.95rem;
+    }
+
+    .aw-hero-copy--tasks {
+        max-width: 58rem;
+    }
+
+    .aw-tasks-toolbar {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .aw-tasks-toolbar__main {
+        display: grid;
+        gap: 0.85rem;
+        justify-items: start;
+        min-width: 0;
+    }
+
+    .aw-inline-actions--tasks {
+        margin-top: 0;
+        align-items: stretch;
+    }
+
+    .aw-link-card--task-action {
+        min-height: 0;
+        gap: 0.75rem;
+        align-items: center;
+        padding: 0.8rem 0.95rem;
+    }
+
+    .aw-link-card--task-primary {
+        border-color: rgba(37, 99, 235, 0.18);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96));
+    }
+
+    html.dark .aw-link-card--task-primary {
+        border-color: rgba(59, 130, 246, 0.22);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.8));
+    }
+
+    .aw-link-icon--task-action {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.85rem;
+    }
+
+    .aw-link-copy--task-action {
+        margin-top: 0.2rem;
+        line-height: 1.45;
+    }
+
+    .fi-resource-tasks-list-page .fi-sc-tabs {
+        margin-top: 0.15rem;
+        margin-bottom: 0.85rem;
+        justify-self: start;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-tasks-list-page .fi-sc-tabs .fi-tabs {
+        margin-inline: 0;
+        width: max-content;
+        max-width: 100%;
+    }
+
+    .fi-resource-tasks-list-page .fi-sc-tabs + .fi-ta {
+        margin-top: 0;
+    }
+
     .aw-shell--calendar {
         gap: 1.1rem;
     }
@@ -892,6 +975,7 @@
         border-color: rgba(37, 99, 235, 0.16);
         background: rgba(255, 255, 255, 0.72);
         color: #1e3a8a;
+        transition: opacity 150ms ease, transform 150ms ease;
     }
 
     html.dark .aw-chip--calendar-context {
@@ -900,7 +984,74 @@
         color: #dbeafe;
     }
 
+    .aw-inline-actions--calendar.is-pending .aw-chip--calendar-context {
+        opacity: 0.72;
+        transform: translateY(1px);
+    }
+
+    .aw-content-switcher {
+        position: relative;
+        min-height: 12rem;
+    }
+
+    .aw-content-switcher__body {
+        transition: opacity 150ms ease, transform 150ms ease;
+    }
+
+    .aw-content-switcher__body.is-loading {
+        opacity: 0.42;
+        transform: translateY(4px);
+    }
+
+    .aw-content-switcher__overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 1.25rem;
+        pointer-events: none;
+    }
+
+    .aw-content-switcher__spinner {
+        width: 2rem;
+        height: 2rem;
+        border: 2px solid rgba(37, 99, 235, 0.18);
+        border-top-color: #2563eb;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+        animation: aw-spin 0.7s linear infinite;
+    }
+
+    html.dark .aw-content-switcher__spinner {
+        border-color: rgba(59, 130, 246, 0.22);
+        border-top-color: #60a5fa;
+        background: rgba(15, 23, 42, 0.76);
+        box-shadow: 0 12px 24px rgba(2, 6, 23, 0.18);
+    }
+
+    @keyframes aw-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
     @media (max-width: 767px) {
+        .aw-tasks-toolbar {
+            align-items: stretch;
+        }
+
+        .aw-inline-actions--tasks {
+            width: 100%;
+            flex-direction: column;
+        }
+
+        .aw-link-card--task-action {
+            width: 100%;
+        }
+
         .aw-calendar-toolbar__top {
             align-items: stretch;
         }

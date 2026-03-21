@@ -15,7 +15,7 @@ class ListMarketHolidays extends ListRecords
 {
     protected static string $resource = MarketHolidayResource::class;
 
-    protected static ?string $title = 'Календарь';
+    protected static ?string $title = 'События';
 
     protected array $queryString = [
         'viewMode' => ['as' => 'view', 'except' => 'list'],
@@ -41,7 +41,7 @@ class ListMarketHolidays extends ListRecords
 
     public function getTitle(): string
     {
-        return $this->viewMode === 'calendar' ? 'Календарь событий' : 'Календарь';
+        return $this->viewMode === 'calendar' ? 'Календарь событий' : 'События';
     }
 
     public function getBreadcrumbs(): array
@@ -68,11 +68,7 @@ class ListMarketHolidays extends ListRecords
 
     public function getView(): string
     {
-        if ($this->viewMode === 'calendar') {
-            return 'filament.resources.market-holiday-resource.pages.calendar';
-        }
-
-        return parent::getView();
+        return 'filament.resources.market-holiday-resource.pages.index';
     }
 
     protected function getViewData(): array
@@ -205,6 +201,8 @@ class ListMarketHolidays extends ListRecords
             'weeks' => $weeks,
             'weekdays' => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
             'currentMonth' => $monthStart->format('Y-m'),
+            'prevMonthLabel' => $monthStart->copy()->subMonth()->translatedFormat('F Y'),
+            'nextMonthLabel' => $monthStart->copy()->addMonth()->translatedFormat('F Y'),
             'prevMonthUrl' => $this->urlForCalendarMonth($monthStart->copy()->subMonth()),
             'nextMonthUrl' => $this->urlForCalendarMonth($monthStart->copy()->addMonth()),
         ];

@@ -10,9 +10,9 @@ use Illuminate\Contracts\Support\Htmlable;
 
 class Requests extends Page
 {
-    protected static ?string $title = 'Обращения';
+    protected static ?string $title = 'Диалоги';
 
-    protected static ?string $navigationLabel = 'Обращения';
+    protected static ?string $navigationLabel = 'Диалоги';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-inbox';
 

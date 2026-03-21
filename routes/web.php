@@ -35,9 +35,12 @@ use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
 use App\Models\TenantContract;
+use App\Models\StaffConversation;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Models\User;
 use App\Services\Debt\DebtAggregator;
+use App\Support\StaffConversationService;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
@@ -137,10 +140,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $validated = $request->validate([
             'tenant_id' => ['required', 'integer', 'exists:tenants,id'],
-            'subject' => ['required', 'string', 'max:255'],
+            'subject' => ['nullable', 'string', 'max:255'],
             'description' => ['required', 'string'],
-            'category' => ['nullable', 'string', 'in:repair,cleaning,payment,other'],
-            'priority' => ['nullable', 'string', 'in:low,normal,high,urgent'],
         ]);
 
         $tenant = Tenant::query()->whereKey((int) $validated['tenant_id'])->firstOrFail();
@@ -149,13 +150,25 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $sameMarket = (int) ($user->market_id ?? 0) === (int) $tenant->market_id;
         abort_unless($isSuperAdmin || $sameMarket, 403);
 
+        $description = trim((string) $validated['description']);
+        $subject = trim((string) ($validated['subject'] ?? ''));
+
+        if ($subject === '') {
+            $normalizedDescription = preg_replace('/\s+/u', ' ', $description) ?? '';
+            $subject = trim((string) $normalizedDescription);
+        }
+
+        if ($subject === '') {
+            $subject = 'Новый диалог';
+        }
+
         $ticket = Ticket::query()->create([
             'market_id' => (int) $tenant->market_id,
             'tenant_id' => (int) $tenant->id,
-            'subject' => trim((string) $validated['subject']),
-            'description' => trim((string) $validated['description']),
-            'category' => (string) ($validated['category'] ?? 'other'),
-            'priority' => (string) ($validated['priority'] ?? 'normal'),
+            'subject' => mb_substr($subject, 0, 255),
+            'description' => $description,
+            'category' => 'other',
+            'priority' => 'normal',
             'status' => 'new',
         ]);
 
@@ -166,6 +179,40 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ])))
             ->with('status', 'Диалог с арендатором создан.');
     })->name('filament.admin.requests.start');
+
+    Route::post('/admin/requests/staff/start', function (Request $request, StaffConversationService $service) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $validated = $request->validate([
+            'recipient_user_id' => ['required', 'integer', 'exists:users,id'],
+            'body' => ['required', 'string'],
+        ]);
+
+        $recipient = User::query()
+            ->whereKey((int) $validated['recipient_user_id'])
+            ->whereNull('tenant_id')
+            ->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) ($recipient->market_id ?? 0);
+        abort_unless($isSuperAdmin || $sameMarket, 403);
+        abort_if((int) $recipient->id === (int) $user->id, 422, 'Нельзя начать диалог с самим собой.');
+
+        $conversation = $service->startConversation(
+            $user,
+            $recipient,
+            '',
+            trim((string) $validated['body']),
+        );
+
+        return redirect()
+            ->to(url('/admin/requests?' . http_build_query([
+                'channel' => 'staff',
+                'conversation_id' => (int) $conversation->id,
+            ])))
+            ->with('status', 'Диалог с сотрудником создан.');
+    })->name('filament.admin.requests.staff.start');
 
     Route::post('/admin/requests/{ticket}/comment', function (Request $request, int $ticket) {
         $user = Filament::auth()->user();
@@ -179,7 +226,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $validated = $request->validate([
             'body' => ['required', 'string'],
+            'tenant_id' => ['nullable', 'integer'],
+            'status_redirect' => ['nullable', 'string'],
+            'q' => ['nullable', 'string'],
         ]);
+
+        $statusBefore = (string) $ticketModel->status;
 
         TicketComment::query()->create([
             'ticket_id' => (int) $ticketModel->id,
@@ -187,15 +239,200 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'body' => trim((string) $validated['body']),
         ]);
 
-        $ticketModel->touch();
+        if ($statusBefore === 'new') {
+            $ticketModel->status = 'in_progress';
+            $ticketModel->save();
+        } else {
+            $ticketModel->touch();
+        }
+
+        $params = ['ticket_id' => (int) $ticketModel->id];
+
+        $tenantId = is_numeric($validated['tenant_id'] ?? null) ? (int) $validated['tenant_id'] : 0;
+        if ($tenantId > 0) {
+            $params['tenant_id'] = $tenantId;
+        }
+
+        $redirectStatus = $statusBefore === 'new'
+            ? 'in_progress'
+            : trim((string) ($validated['status_redirect'] ?? ''));
+        if ($redirectStatus !== '' && $redirectStatus !== 'all') {
+            $params['status'] = $redirectStatus;
+        }
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        if ($search !== '') {
+            $params['q'] = $search;
+        }
 
         return redirect()
-            ->to(url('/admin/requests?' . http_build_query([
-                'tenant_id' => (int) ($ticketModel->tenant_id ?? 0),
-                'ticket_id' => (int) $ticketModel->id,
-            ])))
+            ->to(url('/admin/requests?' . http_build_query($params)))
             ->with('status', 'Сообщение добавлено.');
     })->name('filament.admin.requests.comment');
+
+    Route::post('/admin/requests/staff/{conversation}/comment', function (Request $request, int $conversation, StaffConversationService $service) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $conversationModel = StaffConversation::query()->whereKey($conversation)->firstOrFail();
+        abort_unless($service->canAccessConversation($user, $conversationModel), 403);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string'],
+            'q' => ['nullable', 'string'],
+        ]);
+
+        $service->addMessage($conversationModel, $user, trim((string) $validated['body']));
+
+        $params = [
+            'channel' => 'staff',
+            'conversation_id' => (int) $conversationModel->id,
+        ];
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        if ($search !== '') {
+            $params['q'] = $search;
+        }
+
+        return redirect()
+            ->to(url('/admin/requests?' . http_build_query($params)))
+            ->with('status', 'Сообщение добавлено.');
+    })->name('filament.admin.requests.staff.comment');
+
+    Route::post('/admin/requests/{ticket}/assign', function (Request $request, int $ticket) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $ticketModel = Ticket::query()->whereKey($ticket)->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
+        abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
+
+        $validated = $request->validate([
+            'assigned_to' => ['nullable', 'integer'],
+            'tenant_id' => ['nullable', 'integer'],
+            'status' => ['nullable', 'string'],
+            'status_value' => ['nullable', 'string'],
+            'status_redirect' => ['nullable', 'string'],
+            'q' => ['nullable', 'string'],
+        ]);
+
+        $assigneeId = is_numeric($validated['assigned_to'] ?? null)
+            ? (int) $validated['assigned_to']
+            : null;
+
+        if ($assigneeId !== null && $assigneeId > 0) {
+            $assigneeExists = User::query()
+                ->whereKey($assigneeId)
+                ->where('market_id', (int) $ticketModel->market_id)
+                ->whereNull('tenant_id')
+                ->exists();
+
+            if (! $assigneeExists) {
+                abort(422, 'Выбранный сотрудник недоступен для назначения.');
+            }
+        } else {
+            $assigneeId = null;
+        }
+
+        $allowedStatuses = [
+            'new',
+            'in_progress',
+            'on_hold',
+            'resolved',
+            'closed',
+            'cancelled',
+        ];
+
+        $statusValue = trim((string) ($validated['status_value'] ?? ''));
+        if ($statusValue !== '') {
+            abort_unless(in_array($statusValue, $allowedStatuses, true), 422, 'Недопустимый статус обращения.');
+            $ticketModel->status = $statusValue;
+        }
+
+        $ticketModel->assigned_to = $assigneeId;
+        $ticketModel->save();
+
+        $params = ['ticket_id' => (int) $ticketModel->id];
+
+        $tenantId = is_numeric($validated['tenant_id'] ?? null) ? (int) $validated['tenant_id'] : 0;
+        if ($tenantId > 0) {
+            $params['tenant_id'] = $tenantId;
+        }
+
+        $status = trim((string) ($validated['status_redirect'] ?? $validated['status'] ?? ''));
+        if ($status !== '') {
+            $params['status'] = $status;
+        }
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        if ($search !== '') {
+            $params['q'] = $search;
+        }
+
+        return redirect()
+            ->to(url('/admin/requests?' . http_build_query($params)))
+            ->with('status', 'Изменения сохранены.');
+    })->name('filament.admin.requests.assign');
+
+    Route::post('/admin/requests/{ticket}/status', function (Request $request, int $ticket) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $ticketModel = Ticket::query()->whereKey($ticket)->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
+        abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
+
+        $validated = $request->validate([
+            'status' => ['required', 'string'],
+            'tenant_id' => ['nullable', 'integer'],
+            'q' => ['nullable', 'string'],
+        ]);
+
+        $allowedStatuses = [
+            'new',
+            'in_progress',
+            'on_hold',
+            'resolved',
+            'closed',
+            'cancelled',
+        ];
+
+        $newStatus = trim((string) $validated['status']);
+        abort_unless(in_array($newStatus, $allowedStatuses, true), 422, 'Недопустимый статус обращения.');
+
+        $ticketModel->status = $newStatus;
+        $ticketModel->save();
+
+        $params = ['ticket_id' => (int) $ticketModel->id];
+
+        $tenantId = is_numeric($validated['tenant_id'] ?? null) ? (int) $validated['tenant_id'] : 0;
+        if ($tenantId > 0) {
+            $params['tenant_id'] = $tenantId;
+        }
+
+        $redirectStatus = match ($newStatus) {
+            'resolved', 'closed', 'cancelled' => 'closed',
+            default => $newStatus,
+        };
+        if ($redirectStatus !== 'all') {
+            $params['status'] = $redirectStatus;
+        }
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        if ($search !== '') {
+            $params['q'] = $search;
+        }
+
+        return redirect()
+            ->to(url('/admin/requests?' . http_build_query($params)))
+            ->with('status', 'Статус обращения обновлён.');
+    })->name('filament.admin.requests.status');
 
     /**
      * Переключатель рынка для super-admin (используется в topbar-user-info.blade.php).

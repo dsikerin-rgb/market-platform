@@ -16,6 +16,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
@@ -26,26 +27,31 @@ class MarketHolidayResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'title';
 
-    protected static ?string $modelLabel = 'Событие календаря';
-    protected static ?string $pluralModelLabel = 'Календарь';
-    protected static ?string $navigationLabel = 'Календарь';
+    protected static ?string $modelLabel = 'Событие';
+    protected static ?string $pluralModelLabel = 'События';
+    protected static ?string $navigationLabel = 'События';
     protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-calendar-days';
     protected static ?int $navigationSort = 70;
 
+    public static function getModelLabel(): string
+    {
+        return 'Событие';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'События';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'События';
+    }
+
     public static function shouldRegisterNavigation(): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->hasRole('market-admin');
+        return false;
     }
 
     public static function getGloballySearchableAttributes(): array
@@ -155,6 +161,7 @@ class MarketHolidayResource extends BaseResource
                         ->columnSpan(2),
 
                     Forms\Components\DatePicker::make('starts_at')
+                        ->default(fn () => static::resolvePrefilledStartDate())
                         ->label('Дата начала')
                         ->required(),
 
@@ -426,6 +433,21 @@ class MarketHolidayResource extends BaseResource
     public static function canDelete($record): bool
     {
         return static::canEdit($record);
+    }
+
+    protected static function resolvePrefilledStartDate(): ?string
+    {
+        $date = request()->query('date');
+
+        if (! is_string($date) || $date === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($date)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     protected static function selectedMarketIdFromSession(): ?int

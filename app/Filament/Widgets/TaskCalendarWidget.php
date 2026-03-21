@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use Carbon\CarbonInterface;
 use App\Filament\Resources\TaskResource;
 use App\Models\MarketHoliday;
 use App\Models\Task;
@@ -33,6 +34,22 @@ class TaskCalendarWidget extends FullCalendarWidget
     protected function modalActions(): array
     {
         return [];
+    }
+
+    public function onDateSelect(string $start, ?string $end, bool $allDay, ?array $view, ?array $resource): void
+    {
+        [$start] = $this->calculateTimezoneOffset($start, $end, $allDay);
+
+        if (! $start instanceof CarbonInterface) {
+            return;
+        }
+
+        $this->dispatch(
+            'task-calendar-date-picked',
+            date: $start->toDateString(),
+            dueAt: $allDay ? $start->copy()->setTime(9, 0)->format('Y-m-d H:i:s') : $start->format('Y-m-d H:i:s'),
+            label: $allDay ? $start->translatedFormat('d.m.Y') : $start->translatedFormat('d.m.Y H:i'),
+        );
     }
 
     public function fetchEvents(array $fetchInfo): array
@@ -209,6 +226,7 @@ class TaskCalendarWidget extends FullCalendarWidget
             'firstDay' => 1,
             'initialView' => 'dayGridMonth',
             'initialDate' => $initialDate?->toDateString(),
+            'selectable' => true,
 
             // чуть более дружелюбные настройки отображения
             'expandRows' => true,

@@ -153,7 +153,7 @@ class AdminPanelProvider extends PanelProvider
             ])
 
             ->plugins([
-                FilamentFullCalendarPlugin::make(),
+                FilamentFullCalendarPlugin::make()->selectable(),
             ])
 
             // Кнопка слева от поля global search (в topbar). НЕ сдвигает контент дашборда вниз.

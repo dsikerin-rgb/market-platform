@@ -1,7 +1,5 @@
 <?php
 
-# app/Filament/Resources/TaskResource/Pages/ListTasks.php
-
 declare(strict_types=1);
 
 namespace App\Filament\Resources\TaskResource\Pages;
@@ -16,6 +14,7 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
+use RuntimeException;
 
 class ListTasks extends ListRecords
 {
@@ -23,19 +22,13 @@ class ListTasks extends ListRecords
 
     protected static ?string $title = 'Задачи';
 
-    /**
-     * tab=... (вместо activeTab=...), и view=list|calendar.
-     * except убирает дефолт из URL.
-     */
     protected array $queryString = [
         'activeTab' => ['as' => 'tab', 'except' => 'all'],
-        'viewMode'  => ['as' => 'view', 'except' => 'list'],
+        'viewMode' => ['as' => 'view', 'except' => 'list'],
     ];
 
-    /** ✅ По умолчанию — «Все». */
     public ?string $activeTab = 'all';
 
-    /** ✅ По умолчанию — список. list|calendar */
     public string $viewMode = 'list';
 
     public function mount(): void
@@ -57,10 +50,17 @@ class ListTasks extends ListRecords
         return $this->getTitle();
     }
 
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
+
     protected function getHeaderWidgets(): array
     {
         return [
-            TasksWorkspaceWidget::class,
+            TasksWorkspaceWidget::make([
+                'viewMode' => $this->viewMode,
+            ]),
         ];
     }
 
@@ -79,10 +79,6 @@ class ListTasks extends ListRecords
         return 'all';
     }
 
-    /**
-     * В режиме calendar рендерим calendar.blade.php, оставаясь на /admin/tasks
-     * (главное: CreateAction остаётся в header actions этой страницы).
-     */
     public function getView(): string
     {
         if ($this->viewMode === 'calendar') {
@@ -100,18 +96,12 @@ class ListTasks extends ListRecords
             return $data;
         }
 
-        // Данные, которые ожидает calendar.blade.php
         return array_merge($data, $this->getCalendarViewData());
     }
 
-    /**
-     * Табы сверху (то, что ты назвал "фильтрами" на /admin/tasks).
-     * Это фильтры СПИСКА. Мы их не ломаем и не переиспользуем как календарные.
-     */
     public function getTabs(): array
     {
         $tabClass = static::resolveTabClass();
-
         $user = Filament::auth()->user();
 
         if (! $user) {
@@ -124,43 +114,44 @@ class ListTasks extends ListRecords
 
         return [
             'all' => $tabClass::make('Все'),
-
-            'in_progress' => $this->makeTab(
-                $tabClass,
-                'В работе',
-                fn (Builder $query) => $query->inWork()->workOrder()
-            ),
-
             'my' => $this->makeTab(
                 $tabClass,
                 'Мне назначено',
                 fn (Builder $query) => $query->assignedTo($myId)->workOrder()
             ),
-
-            'coexecuting' => $this->makeTab(
-                $tabClass,
-                'Соисполняю',
-                fn (Builder $query) => $query->coexecuting($myId)->workOrder()
-            ),
-
             'observing' => $this->makeTab(
                 $tabClass,
                 'Наблюдаю',
-                fn (Builder $query) => $query->watching($myId)->workOrder()
-            ),
+                fn (Builder $query) => $query->where(function (Builder $builder) use ($myId): void {
+                    $builder->whereHas('observers', fn (Builder $q) => $q->whereKey($myId));
 
+                    if (Task::supportsWatchers()) {
+                        $builder->orWhereHas('watchers', fn (Builder $q) => $q->whereKey($myId));
+                    }
+                })->workOrder()
+            ),
+            'coexecuting' => $this->makeTab(
+                $tabClass,
+                'Соисполняю',
+                fn (Builder $query) => $query
+                    ->whereHas('coexecutors', fn (Builder $q) => $q->whereKey($myId))
+                    ->workOrder()
+            ),
+            'in_progress' => $this->makeTab(
+                $tabClass,
+                'В работе',
+                fn (Builder $query) => $query->inWork()->workOrder()
+            ),
             'overdue' => $this->makeTab(
                 $tabClass,
                 'Просроченные',
                 fn (Builder $query) => $query->overdue()->workOrder()
             ),
-
             'unassigned' => $this->makeTab(
                 $tabClass,
                 'Без исполнителя',
                 fn (Builder $query) => $query->unassigned()->workOrder()
             ),
-
             'urgent' => $this->makeTab(
                 $tabClass,
                 'Критичные',
@@ -174,32 +165,10 @@ class ListTasks extends ListRecords
         return [];
     }
 
-    /**
-     * Данные для calendar.blade.php
-     */
     private function getCalendarViewData(): array
     {
         $user = Filament::auth()->user();
         $filters = TaskCalendarFilters::fromRequest();
-
-        $tasksWithoutDue = [];
-
-        if ($user) {
-            $query = TaskCalendarFilters::applyToTaskQuery(
-                TaskResource::getEloquentQuery(),
-                $filters,
-                $user,
-            )
-                ->whereNull('due_at')
-                ->orderByDesc('created_at');
-
-            // Если включено "просроченные" (календарный чекбокс) — задачи без дедлайна не показываем.
-            if (! empty($filters['overdue'])) {
-                $query->whereRaw('1 = 0');
-            }
-
-            $tasksWithoutDue = $query->limit(50)->get();
-        }
 
         $isSuperAdmin = (bool) $user
             && method_exists($user, 'isSuperAdmin')
@@ -211,7 +180,7 @@ class ListTasks extends ListRecords
         if ($holidayId && $user) {
             $selectedHoliday = MarketHoliday::query()
                 ->whereKey((int) $holidayId)
-                ->when(! $isSuperAdmin, fn ($q) => $q->where('market_id', (int) $user->market_id))
+                ->when(! $isSuperAdmin, fn ($query) => $query->where('market_id', (int) $user->market_id))
                 ->first();
         }
 
@@ -220,10 +189,10 @@ class ListTasks extends ListRecords
             || (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
         );
 
-        // URL закрытия модалки праздника: сохраняем всё, кроме holiday_id
         $holidayCloseUrl = url()->current();
         $queryWithoutHoliday = Arr::except(request()->query(), ['holiday_id']);
-        if (count($queryWithoutHoliday)) {
+
+        if (count($queryWithoutHoliday) > 0) {
             $holidayCloseUrl .= '?' . http_build_query($queryWithoutHoliday);
         }
 
@@ -231,7 +200,7 @@ class ListTasks extends ListRecords
             'filters' => $filters,
             'statusOptions' => Task::STATUS_LABELS,
             'priorityOptions' => Task::PRIORITY_LABELS,
-            'tasksWithoutDue' => $tasksWithoutDue,
+            'calendarTabs' => $this->getCalendarTabsData(),
             'selectedHoliday' => $selectedHoliday,
             'holidayCloseUrl' => $holidayCloseUrl,
             'canEditHoliday' => $canEditHoliday,
@@ -239,9 +208,32 @@ class ListTasks extends ListRecords
     }
 
     /**
-     * Filament v4: Filament\Schemas\Components\Tabs\Tab
-     * Filament v3: Filament\Resources\Components\Tab
+     * @return list<array{key: string, label: string, url: string, active: bool}>
      */
+    private function getCalendarTabsData(): array
+    {
+        $query = Arr::except(request()->query(), ['page', 'tab']);
+        $query['view'] = 'calendar';
+
+        return collect($this->getTabs())
+            ->map(function (object $tab, string $key) use ($query): array {
+                $tabQuery = $query;
+
+                if ($key !== 'all') {
+                    $tabQuery['tab'] = $key;
+                }
+
+                return [
+                    'key' => $key,
+                    'label' => method_exists($tab, 'getLabel') ? (string) $tab->getLabel() : $key,
+                    'url' => TaskResource::getUrl('index', $tabQuery),
+                    'active' => ($this->activeTab ?? 'all') === $key,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     protected static function resolveTabClass(): string
     {
         if (class_exists(\Filament\Schemas\Components\Tabs\Tab::class)) {
@@ -252,12 +244,9 @@ class ListTasks extends ListRecords
             return \Filament\Resources\Components\Tab::class;
         }
 
-        throw new \RuntimeException('Filament Tab class not found for this version.');
+        throw new RuntimeException('Filament Tab class not found for this version.');
     }
 
-    /**
-     * Безопасный конструктор табов: поддержка разных версий Filament и единый стиль.
-     */
     protected function makeTab(string $tabClass, string $label, ?callable $modifyQueryUsing = null): object
     {
         $tab = $tabClass::make($label);
@@ -267,5 +256,13 @@ class ListTasks extends ListRecords
         }
 
         return $tab;
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-tasks-list-page',
+        ];
     }
 }
