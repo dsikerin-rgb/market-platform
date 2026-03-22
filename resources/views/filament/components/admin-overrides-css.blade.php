@@ -213,4 +213,103 @@ html:not([data-admin-overrides="0"]) .fi-sidebar a[href$="/admin/settings"],
 html:not([data-admin-overrides="0"]) .fi-sidebar a[href$="/admin/markets"]{
   margin-top: .85rem;
 }
+
+/* ====================================================================== */
+/* === Tenant accrual edit: calm, card-based layout                      === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page{
+  --accrual-surface: #ffffff;
+  --accrual-surface-muted: #f8fafc;
+  --accrual-border: #dbe4f0;
+  --accrual-border-strong: #c5d4e8;
+  --accrual-heading: #0f172a;
+  --accrual-text: #334155;
+  --accrual-label: #64748b;
+  --accrual-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-header{
+  background: linear-gradient(125deg, #f3f7ff 0%, #e5eefc 100%);
+  border: 1px solid var(--accrual-border-strong);
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-header .fi-header-heading{
+  color: var(--accrual-heading);
+  letter-spacing: -0.01em;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-header .fi-header-subheading{
+  color: var(--accrual-text);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section{
+  background: var(--accrual-surface);
+  border: 1px solid var(--accrual-border);
+  border-radius: 1rem;
+  box-shadow: var(--accrual-shadow);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border-bottom: 1px solid #e4ebf7;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section-header-heading{
+  color: var(--accrual-heading);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section-header-description{
+  color: var(--accrual-text);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section-content{
+  background: var(--accrual-surface-muted);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-fo-field-wrp-label{
+  color: var(--accrual-label);
+  font-weight: 600;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-input-wrp{
+  border-color: #cfd9e8;
+  background: #ffffff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-input-wrp:focus-within{
+  border-color: #5f8fdc;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page input[readonly],
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page textarea[readonly]{
+  background: #f2f6fc !important;
+  color: #475569 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-badge{
+  border: 1px solid #cfdcf0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-actions.fi-sticky{
+  margin-top: .5rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-actions.fi-sticky .fi-ac{
+  border-radius: .95rem;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+@media (max-width: 1024px){
+  html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-header{
+    padding: .85rem 1rem;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section{
+    border-radius: .85rem;
+  }
+}
 </style>

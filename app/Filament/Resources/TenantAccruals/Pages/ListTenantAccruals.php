@@ -40,6 +40,10 @@ class ListTenantAccruals extends ListRecords
         if (blank($this->activeTab)) {
             $this->activeTab = $this->resolveDefaultTab();
         }
+
+        if ($this->activeTab === 'ambiguous' && ! $this->hasAmbiguousOneCAccruals()) {
+            $this->activeTab = $this->resolveDefaultTab();
+        }
     }
 
     public function getBreadcrumbs(): array
@@ -79,6 +83,7 @@ class ListTenantAccruals extends ListRecords
         $tabClass = static::resolveTabClass();
         $tabs = [];
         $hasContractLinkStatus = TenantAccrualResource::hasTenantAccrualColumn('contract_link_status');
+        $hasAmbiguousOneC = $hasContractLinkStatus && $this->hasAmbiguousOneCAccruals();
 
         $tabs['one_c'] = $this->makeTab(
             $tabClass,
@@ -107,7 +112,7 @@ class ListTenantAccruals extends ListRecords
                 ->whereNull('tenant_contract_id'),
         );
 
-        if ($hasContractLinkStatus) {
+        if ($hasAmbiguousOneC) {
             $tabs['ambiguous'] = $this->makeTab(
                 $tabClass,
                 'Неоднозначные',
@@ -167,6 +172,18 @@ class ListTenantAccruals extends ListRecords
     {
         return TenantAccrualResource::getEloquentQuery()
             ->where('source', '1c')
+            ->exists();
+    }
+
+    private function hasAmbiguousOneCAccruals(): bool
+    {
+        if (! TenantAccrualResource::hasTenantAccrualColumn('contract_link_status')) {
+            return false;
+        }
+
+        return TenantAccrualResource::getEloquentQuery()
+            ->where('source', '1c')
+            ->where('contract_link_status', TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS)
             ->exists();
     }
 

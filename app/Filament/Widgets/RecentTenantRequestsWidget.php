@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Pages\Requests;
 use App\Models\Market;
 use App\Models\TenantRequest;
 use Carbon\CarbonImmutable;
@@ -28,7 +29,29 @@ class RecentTenantRequestsWidget extends BaseTableWidget
 
     public function table(Table $table): Table
     {
-        return $table->searchable(false);
+        return $table
+            ->searchable(false)
+            ->recordUrl(function (TenantRequest $record): ?string {
+                $params = [
+                    'channel' => 'tenants',
+                ];
+
+                $ticketId = (int) ($record->ticket_id ?? 0);
+                if ($ticketId > 0) {
+                    $params['ticket_id'] = $ticketId;
+                } else {
+                    $tenantId = (int) ($record->tenant_id ?? 0);
+                    if ($tenantId > 0) {
+                        $params['tenant_id'] = $tenantId;
+                    }
+                }
+
+                try {
+                    return Requests::getUrl(parameters: $params);
+                } catch (\Throwable) {
+                    return null;
+                }
+            });
     }
 
     protected function getTableQuery(): Builder

@@ -219,6 +219,12 @@
             'mine' => 'Мои',
         ];
 
+        $staffConversationsAvailable = \Illuminate\Support\Facades\Schema::hasTable('staff_conversations')
+            && \Illuminate\Support\Facades\Schema::hasTable('staff_conversation_messages');
+        $staffConversationsUnavailableReason = $staffConversationsAvailable
+            ? null
+            : 'Staff channel is unavailable: run migrations for staff_conversations tables.';
+
         $staffStatusFilter = (string) request('status', 'all');
         if (! array_key_exists($staffStatusFilter, $staffStatusTabs)) {
             $staffStatusFilter = 'all';
@@ -228,7 +234,7 @@
         $selectedConversation = null;
         $conversationMessages = collect();
 
-        if ($channel === 'staff') {
+        if ($channel === 'staff' && $staffConversationsAvailable) {
             $staffQuery = \App\Models\StaffConversation::query()
                 ->with(['starter:id,name', 'recipient:id,name'])
                 ->withCount('messages')
@@ -367,6 +373,11 @@
 
     <style>
         .requests-workspace {
+            --requests-accent: #1d4ed8;
+            --requests-accent-soft: rgba(37, 99, 235, 0.12);
+            --requests-radius-xl: 1rem;
+            --requests-radius-lg: 0.875rem;
+            --requests-radius-md: 0.75rem;
             --requests-border: rgba(15, 23, 42, 0.10);
             --requests-border-strong: rgba(37, 99, 235, 0.22);
             --requests-surface: #ffffff;
@@ -391,6 +402,8 @@
         }
 
         .dark .requests-workspace {
+            --requests-accent: #93c5fd;
+            --requests-accent-soft: rgba(59, 130, 246, 0.20);
             --requests-border: rgba(148, 163, 184, 0.18);
             --requests-border-strong: rgba(96, 165, 250, 0.34);
             --requests-surface: rgba(15, 23, 42, 0.72);
@@ -433,7 +446,7 @@
 
         .requests-hero {
             border: 1px solid var(--requests-border-strong);
-            border-radius: 1.25rem;
+            border-radius: var(--requests-radius-xl);
             background:
                 radial-gradient(circle at top right, rgba(191, 219, 254, 0.42), transparent 36%),
                 linear-gradient(180deg, #eff6ff, #dbeafe);
@@ -470,7 +483,7 @@
             gap: 0.35rem;
             padding: 0.35rem;
             border: 1px solid var(--requests-border);
-            border-radius: 1rem;
+            border-radius: var(--requests-radius-lg);
             background: var(--requests-surface);
         }
 
@@ -524,7 +537,7 @@
         .requests-toolbar-actions {
             display: flex;
             align-items: center;
-            gap: 0.65rem;
+            gap: 0.9rem;
             flex-wrap: wrap;
             margin-left: auto;
         }
@@ -537,19 +550,32 @@
             align-items: center;
             justify-content: center;
             padding: 1.5rem;
-            background: rgba(15, 23, 42, 0.56);
-            backdrop-filter: blur(2px);
+            background: rgba(15, 23, 42, 0.58);
+            backdrop-filter: blur(4px) saturate(1.05);
         }
 
         .requests-modal-panel {
-            width: min(960px, 100%);
+            width: min(860px, 100%);
             max-height: calc(100vh - 3rem);
             overflow: auto;
-            border-radius: 1rem;
-            border: 1px solid var(--requests-border);
-            background: var(--requests-surface);
-            box-shadow: 0 30px 64px rgba(15, 23, 42, 0.28);
-            padding: 1rem 1.1rem;
+            border-radius: var(--requests-radius-xl);
+            border: 1px solid var(--requests-border-strong);
+            background:
+                radial-gradient(circle at top right, #dbeafe 0%, #eff6ff 26%, transparent 52%),
+                linear-gradient(180deg, #f8fbff, #ffffff);
+            box-shadow:
+                0 30px 64px rgba(15, 23, 42, 0.24),
+                0 8px 22px rgba(37, 99, 235, 0.10);
+            padding: 1.15rem 1.2rem;
+        }
+
+        .dark .requests-modal-panel {
+            background:
+                radial-gradient(circle at top right, rgba(59, 130, 246, 0.22), transparent 40%),
+                linear-gradient(180deg, #1e293b, #0f172a);
+            box-shadow:
+                0 30px 64px rgba(2, 6, 23, 0.56),
+                0 10px 24px rgba(15, 23, 42, 0.30);
         }
 
         .requests-modal-head {
@@ -562,6 +588,21 @@
 
         .requests-modal-close {
             flex-shrink: 0;
+            border-radius: var(--requests-radius-lg) !important;
+            border: 1px solid var(--requests-border) !important;
+            background: rgba(255, 255, 255, 0.72) !important;
+            color: var(--requests-muted-strong) !important;
+            box-shadow: none !important;
+        }
+
+        .requests-modal-close:hover {
+            background: var(--requests-surface-soft) !important;
+            color: var(--requests-heading) !important;
+        }
+
+        .dark .requests-modal-close {
+            background: rgba(15, 23, 42, 0.52) !important;
+            color: var(--requests-text) !important;
         }
 
         .requests-modal-actions {
@@ -576,76 +617,141 @@
         }
 
         .requests-compose-card {
-            border-radius: 1rem;
-            border: 1px solid var(--requests-border);
-            background: var(--requests-surface);
-            padding: 1rem 1.1rem;
-            box-shadow: 0 12px 24px var(--requests-shadow);
+            min-width: 0;
         }
 
         .requests-compose-head {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
-            gap: 0.75rem;
-            margin-bottom: 0.85rem;
+            gap: 0.85rem;
+            margin-bottom: 0.95rem;
+            padding-bottom: 0.7rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.24);
         }
 
         .requests-compose-title {
-            font-size: 0.95rem;
+            font-size: 1.02rem;
             font-weight: 700;
             color: var(--requests-heading);
         }
 
         .requests-compose-copy {
-            font-size: 0.78rem;
-            color: var(--requests-muted);
+            margin-top: 0.2rem;
+            max-width: 44rem;
+            font-size: 0.84rem;
+            line-height: 1.45;
+            color: var(--requests-muted-strong);
         }
 
         .requests-compose-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 0.85rem 1rem;
+            gap: 0.95rem 1rem;
         }
 
         .requests-compose-grid--single {
             grid-template-columns: 1fr;
+            max-width: 50rem;
         }
 
         .requests-compose-field {
             display: flex;
             flex-direction: column;
-            gap: 0.35rem;
+            gap: 0.38rem;
+        }
+
+        .requests-compose-field--narrow {
+            justify-self: start;
+            width: min(100%, 30rem);
+            max-width: 30rem;
+        }
+
+        .requests-compose-grid--single .requests-compose-field:not(.requests-compose-field--narrow) {
+            width: 100%;
+            max-width: none;
+            justify-self: stretch;
         }
 
         .requests-compose-field label {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 600;
-            color: var(--requests-heading);
+            letter-spacing: 0.02em;
+            color: var(--requests-muted-strong);
         }
 
         .requests-compose-field input,
         .requests-compose-field select,
         .requests-compose-field textarea {
             width: 100%;
-            border-radius: 0.9rem;
+            border-radius: var(--requests-radius-lg);
             border: 1px solid var(--requests-border);
-            background: var(--requests-surface-soft);
+            background: rgba(248, 250, 252, 0.9);
             color: var(--requests-text);
-            padding: 0.75rem 0.9rem;
-            font-size: 0.9rem;
+            padding: 0.72rem 0.9rem;
+            font-size: 0.95rem;
+            line-height: 1.45;
             outline: none;
+            transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
         }
 
         .requests-compose-field textarea {
-            min-height: 6rem;
+            min-height: 6.6rem;
+            border-radius: 1rem;
             resize: vertical;
+        }
+
+        .dark .requests-compose-field input,
+        .dark .requests-compose-field select,
+        .dark .requests-compose-field textarea {
+            background: rgba(15, 23, 42, 0.58);
+        }
+
+        .requests-compose-field input:focus,
+        .requests-compose-field select:focus,
+        .requests-compose-field textarea:focus {
+            border-color: rgba(96, 165, 250, 0.52);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
         }
 
         .requests-compose-actions {
             display: flex;
             justify-content: flex-end;
-            margin-top: 0.85rem;
+            gap: 0.6rem;
+            margin-top: 1rem;
+            padding-top: 0.72rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.22);
+            max-width: 50rem;
+        }
+
+        .requests-compose-cancel {
+            border-radius: var(--requests-radius-lg) !important;
+            border: 1px solid var(--requests-border) !important;
+            background: transparent !important;
+            color: var(--requests-muted-strong) !important;
+            box-shadow: none !important;
+        }
+
+        .requests-compose-cancel:hover {
+            background: var(--requests-surface-soft) !important;
+            color: var(--requests-heading) !important;
+        }
+
+        .requests-compose-submit {
+            border-radius: var(--requests-radius-lg) !important;
+            border-color: rgba(29, 78, 216, 0.46) !important;
+            background: linear-gradient(180deg, #2563eb, #1d4ed8) !important;
+            color: #ffffff !important;
+        }
+
+        .requests-compose-submit svg {
+            color: inherit !important;
+        }
+
+        .dark .requests-compose-submit {
+            border-color: rgba(96, 165, 250, 0.42) !important;
+            background: linear-gradient(180deg, #1d4ed8, #1e40af) !important;
+            color: #ffffff !important;
         }
 
         .requests-tabs {
@@ -655,7 +761,7 @@
             gap: 0.35rem;
             padding: 0.35rem;
             border: 1px solid var(--requests-border);
-            border-radius: 1rem;
+            border-radius: var(--requests-radius-lg);
             background: var(--requests-surface);
         }
 
@@ -665,7 +771,7 @@
             justify-content: center;
             min-height: 2.25rem;
             padding: 0.5rem 0.8rem;
-            border-radius: 0.8rem;
+            border-radius: var(--requests-radius-md);
             color: var(--requests-muted-strong);
             text-decoration: none;
             font-size: 0.92rem;
@@ -679,13 +785,13 @@
         }
 
         .requests-tab.is-active {
-            background: var(--requests-surface-strong);
-            color: #c2410c;
+            background: var(--requests-accent-soft);
+            color: var(--requests-accent);
             font-weight: 600;
         }
 
         .dark .requests-tab.is-active {
-            color: #fdba74;
+            color: var(--requests-accent);
         }
 
         .requests-search {
@@ -695,12 +801,16 @@
             flex-wrap: wrap;
         }
 
+        .requests-toolbar-actions > .requests-search {
+            margin-left: 0.35rem;
+        }
+
         .requests-search-field {
             position: relative;
             display: flex;
             align-items: center;
             min-width: 18rem;
-            max-width: 22rem;
+            max-width: 24rem;
             flex: 1 1 18rem;
         }
 
@@ -717,14 +827,47 @@
             height: 2.5rem;
             width: 100%;
             padding: 0.65rem 0.9rem 0.65rem 2.5rem;
-            border-radius: 0.9rem;
+            border-radius: var(--requests-radius-lg);
             border: 1px solid var(--requests-border);
-            background: var(--requests-surface);
+            background: var(--requests-surface-soft);
             color: var(--requests-text);
         }
 
         .requests-search input[type="search"]::placeholder {
             color: var(--requests-muted);
+        }
+
+        .requests-hero-cta {
+            border-radius: var(--requests-radius-lg) !important;
+            border-color: rgba(29, 78, 216, 0.45) !important;
+            background: linear-gradient(180deg, #2563eb, #1d4ed8) !important;
+            color: #ffffff !important;
+        }
+
+        .dark .requests-hero-cta {
+            border-color: rgba(96, 165, 250, 0.42) !important;
+            background: linear-gradient(180deg, #1d4ed8, #1e40af) !important;
+            color: #ffffff !important;
+        }
+
+        .requests-hero-cta svg {
+            color: inherit !important;
+            opacity: 0.95;
+        }
+
+        .requests-search-submit,
+        .requests-search-reset {
+            border-radius: var(--requests-radius-lg) !important;
+            border: 1px solid var(--requests-border) !important;
+            background: transparent !important;
+            color: var(--requests-muted-strong) !important;
+            box-shadow: none !important;
+        }
+
+        .requests-search-submit:hover,
+        .requests-search-reset:hover {
+            background: var(--requests-surface-soft) !important;
+            color: var(--requests-heading) !important;
         }
 
         .requests-layout {
@@ -926,11 +1069,11 @@
             border-radius: 1rem;
             border: 1px solid var(--requests-border-strong);
             background:
-                radial-gradient(circle at top right, rgba(191, 219, 254, 0.42), transparent 34%),
+                radial-gradient(circle at top right, rgba(191, 219, 254, 0.26), transparent 34%),
                 linear-gradient(180deg, rgba(239, 246, 255, 0.88), rgba(255, 255, 255, 0.96));
-            padding: 1rem 1.1rem;
+            padding: 0.95rem 1.05rem;
             box-shadow:
-                0 18px 36px rgba(37, 99, 235, 0.08),
+                0 14px 26px rgba(37, 99, 235, 0.06),
                 inset 0 1px 0 rgba(255, 255, 255, 0.55);
         }
 
@@ -946,25 +1089,44 @@
         .requests-details-top {
             display: flex;
             flex-direction: column;
-            gap: 0.85rem;
+            gap: 0.72rem;
         }
 
         .requests-details-intro {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            gap: 0.55rem;
+            gap: 0.45rem;
         }
 
         .requests-details-badges {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.35rem;
         }
 
         .requests-details-kicker {
             font-weight: 600;
+            font-size: 0.74rem;
+            color: var(--requests-muted-strong);
+            border: 1px solid var(--requests-border);
+            border-radius: 999px;
+            padding: 0.16rem 0.52rem;
+            background: rgba(148, 163, 184, 0.08);
+        }
+
+        .requests-details-badges > :not(.requests-details-kicker) {
+            border-radius: 999px;
+            min-height: 1.42rem;
+            font-size: 0.7rem;
+            letter-spacing: 0.01em;
+            padding-inline: 0.5rem;
+        }
+
+        .requests-details-badges > :nth-child(n+3) {
+            opacity: 0.8;
+            filter: saturate(0.84);
         }
 
         .requests-details-title {
@@ -992,11 +1154,11 @@
             width: 100%;
             flex-wrap: wrap;
             align-items: center;
-            gap: 0.35rem 0.6rem;
-            padding-top: 0.15rem;
-            font-size: 0.84rem;
+            gap: 0.28rem 0.52rem;
+            padding-top: 0.05rem;
+            font-size: 0.8rem;
             line-height: 1.5;
-            color: var(--requests-muted-strong);
+            color: var(--requests-muted);
         }
 
         .requests-meta-item {
@@ -1007,46 +1169,53 @@
         }
 
         .requests-meta-item strong {
-            font-weight: 600;
-            color: var(--requests-heading);
+            font-weight: 550;
+            color: var(--requests-muted-strong);
         }
 
         .requests-meta-separator {
             color: var(--requests-muted);
+            opacity: 0.65;
         }
 
         .requests-management-form {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.75rem 1rem;
-            padding-top: 0.1rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+            gap: 0.55rem 0.85rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.24);
         }
 
         .requests-management-group {
-            display: inline-flex;
-            flex-wrap: nowrap;
-            align-items: center;
-            gap: 0.55rem;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.3rem;
             min-width: 0;
         }
 
         .requests-assignee-label {
-            font-size: 0.84rem;
+            font-size: 0.75rem;
             font-weight: 600;
             white-space: nowrap;
-            color: var(--requests-heading);
+            letter-spacing: 0.02em;
+            color: var(--requests-muted-strong);
         }
 
         .requests-assignee-select {
-            min-width: 15rem;
-            max-width: 22rem;
-            height: 2.5rem;
-            padding: 0.6rem 0.8rem;
-            border-radius: 0.85rem;
+            min-width: 0;
+            width: 100%;
+            max-width: none;
+            height: 2.3rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.75rem;
             border: 1px solid var(--requests-border);
-            background: var(--requests-surface);
+            background: rgba(255, 255, 255, 0.9);
             color: var(--requests-text);
+        }
+
+        .dark .requests-assignee-select {
+            background: rgba(15, 23, 42, 0.58);
         }
 
         .requests-assignee-note {
@@ -1075,12 +1244,6 @@
             font-size: 0.95rem;
             font-weight: 700;
             color: var(--requests-heading);
-        }
-
-        .requests-thread-subtitle {
-            margin-top: 0.2rem;
-            font-size: 0.76rem;
-            color: var(--requests-muted);
         }
 
         .requests-thread-count {
@@ -1166,11 +1329,6 @@
             color: var(--requests-heading);
         }
 
-        .requests-composer-note {
-            font-size: 0.74rem;
-            color: var(--requests-muted);
-        }
-
         .requests-composer textarea {
             width: 100%;
             min-height: 6rem;
@@ -1211,6 +1369,11 @@
                 grid-template-columns: 1fr;
             }
 
+            .requests-compose-grid--single,
+            .requests-compose-actions {
+                max-width: none;
+            }
+
             .requests-search {
                 width: 100%;
             }
@@ -1237,6 +1400,10 @@
 
             .requests-management-group {
                 width: 100%;
+            }
+
+            .requests-management-form {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -1354,6 +1521,7 @@
                         type="button"
                         color="primary"
                         icon="heroicon-o-plus"
+                        class="requests-hero-cta"
                         x-on:click="openComposeModal()"
                     >
                         {{ $channel === 'staff' ? 'Новое сообщение сотруднику' : 'Новое обращение арендатору' }}
@@ -1386,7 +1554,7 @@
                         >
                     </label>
 
-                    <x-filament::button type="submit" color="gray" size="sm">
+                    <x-filament::button type="submit" color="gray" size="sm" class="requests-search-submit">
                         Найти
                     </x-filament::button>
 
@@ -1395,6 +1563,7 @@
                             tag="a"
                             color="gray"
                             size="sm"
+                            class="requests-search-reset"
                             :href="\App\Filament\Pages\Requests::getUrl(parameters: array_filter([
                                 'channel' => $channel === 'staff' ? 'staff' : null,
                                 'tenant_id' => $channel === 'tenants' && $tenantFilterId > 0 ? $tenantFilterId : null,
@@ -1450,7 +1619,7 @@
             x-on:keydown.escape.window="closeComposeModal()"
         >
         <section class="requests-compose-card requests-modal-panel" x-on:click.stop>
-            <div class="requests-compose-head">
+            <div class="requests-compose-head requests-modal-head">
                 <div>
                     <div class="requests-compose-title">
                         {{ $channel === 'staff' ? 'Новый диалог с сотрудником' : 'Новый диалог с арендатором' }}
@@ -1471,11 +1640,22 @@
             </div>
 
             @if ($channel === 'staff')
+                @if (! $staffConversationsAvailable)
+                    <div class="requests-empty">
+                        <div class="requests-empty-icon">
+                            <x-filament::icon icon="heroicon-m-exclamation-triangle" class="h-6 w-6" />
+                        </div>
+                        <div>
+                            <div class="requests-empty-title">Staff channel unavailable</div>
+                            <div class="requests-empty-copy">{{ $staffConversationsUnavailableReason }}</div>
+                        </div>
+                    </div>
+                @else
                 <form method="POST" action="{{ route('filament.admin.requests.staff.start') }}">
                     @csrf
 
                     <div class="requests-compose-grid requests-compose-grid--single">
-                        <div class="requests-compose-field">
+                        <div class="requests-compose-field requests-compose-field--narrow">
                             <label for="requests_staff_recipient_user_id">Сотрудник</label>
                             <select id="requests_staff_recipient_user_id" name="recipient_user_id" x-ref="composeFirstField" required>
                                 <option value="">Выберите сотрудника</option>
@@ -1492,20 +1672,21 @@
                     </div>
 
                     <div class="requests-compose-actions">
-                        <x-filament::button type="button" color="gray" x-on:click="closeComposeModal()">
+                        <x-filament::button type="button" color="gray" class="requests-compose-cancel" x-on:click="closeComposeModal()">
                             Отмена
                         </x-filament::button>
-                        <x-filament::button type="submit" icon="heroicon-o-paper-airplane">
+                        <x-filament::button type="submit" icon="heroicon-o-paper-airplane" class="requests-compose-submit">
                             Начать диалог
                         </x-filament::button>
                     </div>
                 </form>
+                @endif
             @else
                 <form method="POST" action="{{ route('filament.admin.requests.start') }}">
                     @csrf
 
                     <div class="requests-compose-grid requests-compose-grid--single">
-                        <div class="requests-compose-field">
+                        <div class="requests-compose-field requests-compose-field--narrow">
                             <label for="requests_tenant_id">Арендатор</label>
                             <select id="requests_tenant_id" name="tenant_id" x-ref="composeFirstField" required>
                                 <option value="">Выберите арендатора</option>
@@ -1524,10 +1705,10 @@
                     </div>
 
                     <div class="requests-compose-actions">
-                        <x-filament::button type="button" color="gray" x-on:click="closeComposeModal()">
+                        <x-filament::button type="button" color="gray" class="requests-compose-cancel" x-on:click="closeComposeModal()">
                             Отмена
                         </x-filament::button>
-                        <x-filament::button type="submit" icon="heroicon-o-paper-airplane">
+                        <x-filament::button type="submit" icon="heroicon-o-paper-airplane" class="requests-compose-submit">
                             Создать диалог
                         </x-filament::button>
                     </div>
@@ -1761,7 +1942,6 @@
                                 <div class="requests-thread-head">
                                     <div>
                                         <h4 class="requests-thread-title">Лента сообщений</h4>
-                                        <p class="requests-thread-subtitle">Внутренняя переписка сотрудников.</p>
                                     </div>
                                     <div class="requests-thread-count">
                                         {{ $conversationMessages->count() }} в ленте
@@ -1811,9 +1991,6 @@
                                         <label class="requests-composer-label">
                                             Ответ в диалог
                                         </label>
-                                        <div class="requests-composer-note">
-                                            Сообщение будет отправлено выбранному сотруднику сразу после сохранения
-                                        </div>
                                     </div>
 
                                     <textarea
@@ -2009,7 +2186,6 @@
                             <div class="requests-thread-head">
                                 <div>
                                     <h4 class="requests-thread-title">Лента сообщений</h4>
-                                    <p class="requests-thread-subtitle">Сообщения идут в хронологическом порядке.</p>
                                 </div>
                                 <div class="requests-thread-count">
                                     {{ $comments->count() }} в ленте
@@ -2068,9 +2244,6 @@
                                     <label class="requests-composer-label">
                                         Ответ в диалог
                                     </label>
-                                    <div class="requests-composer-note">
-                                        Отправка сразу добавит сообщение в выбранный диалог
-                                    </div>
                                 </div>
 
                                 <textarea

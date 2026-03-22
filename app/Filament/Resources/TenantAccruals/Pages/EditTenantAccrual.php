@@ -36,4 +36,12 @@ class EditTenantAccrual extends BaseEditRecord
     {
         return false;
     }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-accruals-edit-page',
+        ];
+    }
 }

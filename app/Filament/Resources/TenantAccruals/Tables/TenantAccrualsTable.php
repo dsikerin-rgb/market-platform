@@ -28,7 +28,7 @@ class TenantAccrualsTable
                     ->visible(fn (): bool => (bool) Filament::auth()->user()?->isSuperAdmin() && blank(static::selectedMarketIdFromSession())),
 
                 TextColumn::make('period')
-                    ->label('Период')
+                    ->label('Период начисления')
                     ->date('Y-m')
                     ->sortable()
                     ->toggleable(),
@@ -48,10 +48,11 @@ class TenantAccrualsTable
                         'manual' => 'gray',
                         default => 'gray',
                     })
-                    ->toggleable(),
+                    ->visible(false)
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('contract_link_status')
-                    ->visible(fn (): bool => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::hasTenantAccrualColumn('contract_link_status'))
+                    ->visible(false)
                     ->label('Связь с договором')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
@@ -95,7 +96,8 @@ class TenantAccrualsTable
                     ->label('Локация')
                     ->sortable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->visible(false)
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('marketSpace.number')
                     ->label('Место')
@@ -109,7 +111,8 @@ class TenantAccrualsTable
                     ->numeric(decimalPlaces: 2)
                     ->sortable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->visible(false)
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('rent_amount')
                     ->label('Аренда')
@@ -117,7 +120,8 @@ class TenantAccrualsTable
                     ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->visible(false)
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('utilities_amount')
                     ->label('Коммунальные')
@@ -180,7 +184,7 @@ class TenantAccrualsTable
             ])
             ->filters([
                 SelectFilter::make('period')
-                    ->label('Период')
+                    ->label('Период начисления')
                     ->options(function (): array {
                         $marketId = static::resolveMarketIdForCurrentUser();
                         $query = DB::table('tenant_accruals')->select('period')->distinct();
@@ -250,7 +254,10 @@ class TenantAccrualsTable
                     ]),
 
                 SelectFilter::make('contract_link_status')
-                    ->visible(fn (): bool => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::hasTenantAccrualColumn('contract_link_status'))
+                    ->visible(fn (): bool =>
+                        \App\Filament\Resources\TenantAccruals\TenantAccrualResource::hasTenantAccrualColumn('contract_link_status')
+                        && static::hasContractLinkStatusInCurrentScope(TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS)
+                    )
                     ->label('Связь с договором')
                     ->options([
                         TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'Точное совпадение',
@@ -324,6 +331,25 @@ class TenantAccrualsTable
         }
 
         return $user->market_id ? (int) $user->market_id : null;
+    }
+
+    private static function hasContractLinkStatusInCurrentScope(string $status): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->where('contract_link_status', $status);
+
+        $marketId = static::resolveMarketIdForCurrentUser();
+        if ($marketId) {
+            $query->where('market_id', $marketId);
+        }
+
+        return $query->exists();
     }
 
     private static function formatMoney($state, string $suffix = ' ₽'): string
