@@ -852,7 +852,7 @@ class TaskResource extends BaseResource
                     return null;
                 }
 
-                return Str::limit((string) $record->description, 90);
+                return static::taskDescriptionPreview((string) $record->description);
             });
         }
 
@@ -1580,5 +1580,37 @@ class TaskResource extends BaseResource
         }
 
         return null;
+    }
+
+    protected static function taskDescriptionPreview(string $description): ?string
+    {
+        $lines = preg_split('/\R/u', $description) ?: [];
+
+        $lines = array_values(array_filter(
+            $lines,
+            static function (string $line): bool {
+                $normalized = trim($line);
+
+                if ($normalized === '') {
+                    return false;
+                }
+
+                if (Str::startsWith($normalized, 'calendar_scenario=')) {
+                    return false;
+                }
+
+                if (Str::startsWith($normalized, 'Событие календаря:')) {
+                    return false;
+                }
+
+                return true;
+            }
+        ));
+
+        if ($lines === []) {
+            return null;
+        }
+
+        return Str::limit(implode(' ', $lines), 90);
     }
 }

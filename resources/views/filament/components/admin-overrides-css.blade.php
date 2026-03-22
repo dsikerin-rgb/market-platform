@@ -215,6 +215,156 @@ html:not([data-admin-overrides="0"]) .fi-sidebar a[href$="/admin/markets"]{
 }
 
 /* ====================================================================== */
+/* === Admin tables: readability-first styling                           === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-ta{
+  --admin-table-surface: #ffffff;
+  --admin-table-surface-muted: #f8fbff;
+  --admin-table-surface-hover: #f3f8ff;
+  --admin-table-border: #dbe5f1;
+  --admin-table-border-strong: #c7d6e8;
+  --admin-table-text: #0f172a;
+  --admin-table-text-muted: #64748b;
+  --admin-table-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header{
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
+  border: 1px solid var(--admin-table-border);
+  border-radius: 1rem;
+  box-shadow: var(--admin-table-shadow);
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header-heading{
+  color: var(--admin-table-text);
+  letter-spacing: -0.01em;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header-description{
+  color: var(--admin-table-text-muted);
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-content{
+  background: var(--admin-table-surface);
+  border: 1px solid var(--admin-table-border);
+  border-radius: 1rem;
+  box-shadow: var(--admin-table-shadow);
+  overflow: hidden;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-content-ctn{
+  border-radius: 1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-summary-header-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-group-header-cell{
+  background: linear-gradient(180deg, #f9fbff 0%, #f2f7ff 100%);
+  color: var(--admin-table-text-muted);
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--admin-table-border-strong);
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header-cell-sort-btn{
+  color: inherit;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-row{
+  transition: background-color .14s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-row:not(.fi-ta-summary-header-row):not(.fi-ta-group-header-row):hover{
+  background: var(--admin-table-surface-hover);
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-cell{
+  border-bottom: 1px solid rgba(219, 229, 241, 0.78);
+  vertical-align: top;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-summary-header-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-group-header-cell{
+  padding-top: .27rem;
+  padding-bottom: .27rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-summary-header-cell,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-group-header-cell{
+  padding-top: .62rem;
+  padding-bottom: .62rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-col,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text{
+  color: var(--admin-table-text);
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text:not(.fi-inline){
+  padding-top: .52rem;
+  padding-bottom: .52rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text.fi-ta-text-has-descriptions:not(.fi-ta-text-has-badges){
+  gap: .14rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text-item{
+  color: var(--admin-table-text);
+  line-height: 1.14;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text-description,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-placeholder{
+  color: var(--admin-table-text-muted);
+  line-height: 1.26;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text-description{
+  margin-top: 0;
+  font-size: .75rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-align-end .fi-ta-text-item,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-align-end .fi-ta-text-description,
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-summary-row .fi-ta-text-item{
+  font-variant-numeric: tabular-nums;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-badge{
+  border: 1px solid rgba(191, 206, 226, 0.88);
+  box-shadow: none;
+  min-height: 1.4rem;
+  padding-inline: .42rem;
+  font-size: .74rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-actions .fi-icon-btn{
+  border-radius: .75rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-empty-state{
+  background: linear-gradient(180deg, #fbfdff 0%, #f6faff 100%);
+}
+
+html:not([data-admin-overrides="0"]).dark .fi-ta,
+html:not([data-admin-overrides="0"]) .dark .fi-ta{
+  --admin-table-surface: #0f172a;
+  --admin-table-surface-muted: #111c31;
+  --admin-table-surface-hover: #13213b;
+  --admin-table-border: rgba(148, 163, 184, 0.24);
+  --admin-table-border-strong: rgba(148, 163, 184, 0.34);
+  --admin-table-text: #e5eef9;
+  --admin-table-text-muted: #9fb0c8;
+  --admin-table-shadow: 0 10px 30px rgba(2, 6, 23, 0.3);
+}
+
+/* ====================================================================== */
 /* === Tenant accrual edit: calm, card-based layout                      === */
 /* ====================================================================== */
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page{
@@ -399,6 +549,11 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-acti
 }
 
 @media (max-width: 1024px){
+  html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header,
+  html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-content{
+    border-radius: .85rem;
+  }
+
   html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-header{
     padding: .85rem 1rem;
   }
