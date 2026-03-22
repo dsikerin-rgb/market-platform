@@ -42,6 +42,10 @@ class TenantAccrualForm
                         ->label('Локация')
                         ->content(fn (?TenantAccrual $record) => $record?->marketSpace?->location?->name ?: '—'),
 
+                    Placeholder::make('tenant_contract_display')
+                        ->label('Договор (в системе)')
+                        ->content(fn (?TenantAccrual $record) => $record?->tenantContract?->number ?: '—'),
+
                     TextInput::make('source_place_code')
                         ->label('Код места из файла')
                         ->disabled($readOnly)
@@ -58,6 +62,38 @@ class TenantAccrualForm
                         ->label('Вид деятельности')
                         ->disabled($readOnly)
                         ->dehydrated(false)
+                        ->placeholder('—'),
+
+                    TextInput::make('contract_external_id')
+                        ->label('ID договора 1С')
+                        ->disabled($readOnly)
+                        ->dehydrated(false)
+                        ->placeholder('—'),
+
+                    TextInput::make('contract_link_status')
+                        ->label('Связь с договором')
+                        ->disabled($readOnly)
+                        ->dehydrated(false)
+                        ->formatStateUsing(fn (?string $state): string => match ($state) {
+                            TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'Точное совпадение',
+                            TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED => 'Разрешено по контексту',
+                            TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS => 'Неоднозначно',
+                            TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED => 'Без договора',
+                            default => $state ?: '—',
+                        }),
+
+                    TextInput::make('contract_link_source')
+                        ->label('Источник связки')
+                        ->disabled($readOnly)
+                        ->dehydrated(false)
+                        ->formatStateUsing(fn (?string $state): string => $state ?: '—'),
+
+                    Textarea::make('contract_link_note')
+                        ->label('Примечание по связке')
+                        ->disabled($readOnly)
+                        ->dehydrated(false)
+                        ->rows(2)
+                        ->columnSpan(2)
                         ->placeholder('—'),
 
                     TextInput::make('area_sqm')
@@ -137,6 +173,12 @@ class TenantAccrualForm
                         ->disabled($readOnly)
                         ->dehydrated(false)
                         ->placeholder('—'),
+
+                    TextInput::make('currency')
+                        ->label('Валюта')
+                        ->disabled($readOnly)
+                        ->dehydrated(false)
+                        ->placeholder('RUB'),
 
                     TextInput::make('total_with_vat')
                         ->label('Итого к оплате')

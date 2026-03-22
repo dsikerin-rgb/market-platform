@@ -183,6 +183,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     Route::post('/admin/requests/staff/start', function (Request $request, StaffConversationService $service) {
         $user = Filament::auth()->user();
         abort_unless($user, 403);
+        abort_unless(
+            Schema::hasTable('staff_conversations') && Schema::hasTable('staff_conversation_messages'),
+            503,
+            'Staff conversations schema is missing. Run migrations.',
+        );
 
         $validated = $request->validate([
             'recipient_user_id' => ['required', 'integer', 'exists:users,id'],
@@ -273,6 +278,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     Route::post('/admin/requests/staff/{conversation}/comment', function (Request $request, int $conversation, StaffConversationService $service) {
         $user = Filament::auth()->user();
         abort_unless($user, 403);
+        abort_unless(
+            Schema::hasTable('staff_conversations') && Schema::hasTable('staff_conversation_messages'),
+            503,
+            'Staff conversations schema is missing. Run migrations.',
+        );
 
         $conversationModel = StaffConversation::query()->whereKey($conversation)->firstOrFail();
         abort_unless($service->canAccessConversation($user, $conversationModel), 403);
