@@ -4,219 +4,124 @@
 namespace App\Filament\Resources\TenantAccruals\Schemas;
 
 use App\Models\TenantAccrual;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 class TenantAccrualForm
 {
     public static function configure(Schema $schema): Schema
     {
-        // Начисления — источник: импорт. В интерфейсе делаем карточку “для чтения”,
-        // оставляя возможность точечно править только заметки (notes).
         $readOnly = fn (): bool => true;
 
         return $schema->components([
-            Section::make('Общее')
-                ->columns(3)
+            Section::make('Сводка')
+                ->description('Ключевой контекст начисления без технического шума.')
+                ->columns(6)
+                ->columnSpanFull()
+                ->extraAttributes(['class' => 'accrual-summary-section'])
                 ->schema([
-                    DatePicker::make('period')
-                        ->label('Период')
-                        ->displayFormat('Y-m')
-                        ->disabled($readOnly)
-                        ->dehydrated(false),
+                    static::display('summary_period', 'period', 'Период начисления', fn ($value): string => $value?->format('m.Y') ?: '—'),
+                    static::display('summary_tenant', 'tenant.name', 'Арендатор'),
+                    static::display('summary_space', 'marketSpace.number', 'Место'),
+                    static::display('summary_contract', 'tenantContract.number', 'Договор'),
+                    static::displayMoney('summary_total_with_vat', 'total_with_vat', 'Итого к оплате'),
+                    static::display('summary_source', 'source', 'Источник'),
+                ]),
 
-                    Placeholder::make('tenant_display')
-                        ->label('Арендатор')
-                        ->content(fn (?TenantAccrual $record) => $record?->tenant?->name ?: '—'),
+            Section::make('Начисление')
+                ->description('Основные финансовые показатели и расчетная база.')
+                ->columns(4)
+                ->columnSpanFull()
+                ->extraAttributes(['class' => 'accrual-finance-section'])
+                ->schema([
+                    static::displayNumber('finance_rent_rate', 'rent_rate', 'Ставка'),
+                    static::displayNumber('finance_area_sqm', 'area_sqm', 'Площадь, м²'),
+                    static::display('finance_days', 'days', 'Дней', fn ($value): string => filled($value) ? (string) (int) $value : '—'),
+                    static::display('finance_currency', 'currency', 'Валюта'),
 
-                    Placeholder::make('market_space_display')
-                        ->label('Место')
-                        ->content(fn (?TenantAccrual $record) => $record?->marketSpace?->number ?: '—'),
+                    static::displayMoney('finance_rent_amount', 'rent_amount', 'Аренда'),
+                    static::displayMoney('finance_management_fee', 'management_fee', 'Управление'),
+                    static::displayMoney('finance_utilities_amount', 'utilities_amount', 'Коммунальные услуги'),
+                    static::displayMoney('finance_electricity_amount', 'electricity_amount', 'Электроэнергия'),
 
-                    Placeholder::make('location_display')
-                        ->label('Локация')
-                        ->content(fn (?TenantAccrual $record) => $record?->marketSpace?->location?->name ?: '—'),
+                    static::displayMoney('finance_cash_amount', 'cash_amount', 'Наличные'),
+                    static::displayMoney('finance_total_no_vat', 'total_no_vat', 'Итого без НДС'),
+                    static::displayNumber('finance_vat_rate', 'vat_rate', 'НДС, ставка'),
+                    static::displayMoney('finance_total_with_vat', 'total_with_vat', 'Итого к оплате'),
+                ]),
 
-                    Placeholder::make('tenant_contract_display')
-                        ->label('Договор (в системе)')
-                        ->content(fn (?TenantAccrual $record) => $record?->tenantContract?->number ?: '—'),
+            Section::make('Контекст и привязка')
+                ->description('Источник строки и диагностическая связка с договором.')
+                ->columns(3)
+                ->columnSpanFull()
+                ->extraAttributes(['class' => 'accrual-context-section'])
+                ->schema([
+                    static::display('context_location', 'marketSpace.location.name', 'Локация'),
+                    static::display('context_source_place_code', 'source_place_code', 'Код места из файла'),
+                    static::display('context_source_place_name', 'source_place_name', 'Название отдела'),
 
-                    TextInput::make('source_place_code')
-                        ->label('Код места из файла')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('source_place_name')
-                        ->label('Название отдела')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('activity_type')
-                        ->label('Вид деятельности')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('contract_external_id')
-                        ->label('ID договора 1С')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('contract_link_status')
-                        ->label('Связь с договором')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->formatStateUsing(fn (?string $state): string => match ($state) {
+                    static::display('context_activity_type', 'activity_type', 'Вид деятельности'),
+                    static::display('context_contract_external_id', 'contract_external_id', 'ID договора 1С'),
+                    static::display('context_contract_link_status', 'contract_link_status', 'Связь с договором', function ($value): string {
+                        return match ($value) {
                             TenantAccrual::CONTRACT_LINK_STATUS_EXACT => 'Точное совпадение',
                             TenantAccrual::CONTRACT_LINK_STATUS_RESOLVED => 'Разрешено по контексту',
                             TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS => 'Неоднозначно',
                             TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED => 'Без договора',
-                            default => $state ?: '—',
-                        }),
+                            default => filled($value) ? (string) $value : '—',
+                        };
+                    }),
 
-                    TextInput::make('contract_link_source')
-                        ->label('Источник связки')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->formatStateUsing(fn (?string $state): string => $state ?: '—'),
+                    static::display('context_contract_link_source', 'contract_link_source', 'Источник связки'),
 
-                    Textarea::make('contract_link_note')
+                    Placeholder::make('contract_link_note')
                         ->label('Примечание по связке')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->rows(2)
-                        ->columnSpan(2)
-                        ->placeholder('—'),
-
-                    TextInput::make('area_sqm')
-                        ->label('Площадь, м²')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('days')
-                        ->label('Дней')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-                ]),
-
-            Section::make('Начисления')
-                ->columns(3)
-                ->schema([
-                    TextInput::make('rent_rate')
-                        ->label('Ставка')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('rent_amount')
-                        ->label('Аренда')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('management_fee')
-                        ->label('Управление')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('utilities_amount')
-                        ->label('Коммунальные услуги')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('electricity_amount')
-                        ->label('Электроэнергия')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('cash_amount')
-                        ->label('Наличные')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-                ]),
-
-            Section::make('Итоги и НДС')
-                ->columns(3)
-                ->schema([
-                    TextInput::make('total_no_vat')
-                        ->label('Итого без НДС')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('vat_rate')
-                        ->label('НДС, ставка')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-
-                    TextInput::make('currency')
-                        ->label('Валюта')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('RUB'),
-
-                    TextInput::make('total_with_vat')
-                        ->label('Итого к оплате')
-                        ->numeric()
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->placeholder('—'),
-                ]),
-
-            Section::make('Скидки и комментарии')
-                ->columns(2)
-                ->schema([
-                    Textarea::make('discount_note')
-                        ->label('Скидки / доп. соглашения (из файла)')
-                        ->disabled($readOnly)
-                        ->dehydrated(false)
-                        ->rows(3)
                         ->columnSpanFull()
-                        ->placeholder('—'),
+                        ->content(function (?TenantAccrual $record): HtmlString {
+                            $text = trim((string) ($record?->contract_link_note ?? ''));
+
+                            if ($text === '') {
+                                return new HtmlString('—');
+                            }
+
+                            return new HtmlString(nl2br(e($text)));
+                        }),
+                ]),
+
+            Section::make('Комментарии')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    Placeholder::make('discount_note')
+                        ->label('Скидки / доп. соглашения (из файла)')
+                        ->content(function (?TenantAccrual $record): HtmlString {
+                            $text = trim((string) ($record?->discount_note ?? ''));
+
+                            if ($text === '') {
+                                return new HtmlString('—');
+                            }
+
+                            return new HtmlString(nl2br(e($text)));
+                        }),
 
                     Textarea::make('notes')
                         ->label('Примечания (внутренние)')
                         ->helperText('Это поле редактируется вручную и не перезаписывается импортом.')
-                        ->rows(3)
-                        ->columnSpanFull(),
+                        ->rows(4),
                 ]),
 
             Section::make('Источник и служебные поля')
                 ->collapsed()
                 ->columns(3)
+                ->columnSpanFull()
                 ->schema([
                     TextInput::make('status')
                         ->label('Статус')
-                        ->disabled($readOnly)
-                        ->dehydrated(false),
-
-                    TextInput::make('source')
-                        ->label('Источник')
                         ->disabled($readOnly)
                         ->dehydrated(false),
 
@@ -255,6 +160,7 @@ class TenantAccrualForm
 
                             if (is_string($state) && $state !== '') {
                                 $decoded = json_decode($state, true);
+
                                 if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                                     return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
                                 }
@@ -264,5 +170,50 @@ class TenantAccrualForm
                         }),
                 ]),
         ]);
+    }
+
+    private static function display(string $key, string $path, string $label, ?callable $formatter = null): Placeholder
+    {
+        return Placeholder::make($key)
+            ->label($label)
+            ->content(function (?TenantAccrual $record) use ($formatter, $path): HtmlString | string {
+                $value = data_get($record, $path);
+
+                if ($formatter) {
+                    return $formatter($value, $record);
+                }
+
+                return static::formatText($value);
+            });
+    }
+
+    private static function displayMoney(string $key, string $path, string $label): Placeholder
+    {
+        return static::display($key, $path, $label, fn ($value): string => static::formatNumber($value, 2));
+    }
+
+    private static function displayNumber(string $key, string $path, string $label): Placeholder
+    {
+        return static::display($key, $path, $label, fn ($value): string => static::formatNumber($value, 2));
+    }
+
+    private static function formatText(mixed $value): string
+    {
+        if ($value === null) {
+            return '—';
+        }
+
+        $text = trim((string) $value);
+
+        return $text !== '' ? $text : '—';
+    }
+
+    private static function formatNumber(mixed $value, int $decimals): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return number_format((float) $value, $decimals, ',', ' ');
     }
 }

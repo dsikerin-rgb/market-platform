@@ -244,6 +244,27 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-header 
   color: var(--accrual-text);
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-back-action{
+  border-radius: .9rem;
+  border: 1px solid #b9cbea !important;
+  background: linear-gradient(180deg, #f9fbff 0%, #eef4ff 100%) !important;
+  color: #1d4f91 !important;
+  box-shadow: 0 8px 20px rgba(70, 111, 176, 0.12);
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-back-action:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-back-action:focus-visible{
+  border-color: #8eafe0 !important;
+  background: linear-gradient(180deg, #f3f7ff 0%, #e6efff 100%) !important;
+  color: #143e77 !important;
+  box-shadow: 0 10px 24px rgba(70, 111, 176, 0.16);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-back-action svg{
+  color: currentColor !important;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section{
   background: var(--accrual-surface);
   border: 1px solid var(--accrual-border);
@@ -271,6 +292,80 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-fo-field-wrp-label{
   color: var(--accrual-label);
   font-weight: 600;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-in-entry{
+  gap: .35rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-in-entry-label{
+  color: var(--accrual-label);
+  font-weight: 600;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-in-entry-content{
+  color: var(--accrual-heading);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-summary-section .fi-in-entry{
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-summary-section .fi-in-entry-content{
+  font-size: 1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-summary-section [wire\\:key*="summary_total_with_vat"] .fi-in-entry-content,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-summary-section [wire\\:key*="summary_total_with_vat"] .fi-in-entry-content-ctn{
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-in-entry,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-finance-section .fi-in-entry{
+  padding: .2rem 0 .85rem;
+  border-bottom: 1px solid rgba(197, 212, 232, 0.58);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-in-entry-content,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-finance-section .fi-in-entry-content{
+  min-height: 1.45rem;
+  font-size: 1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-in-entry-content-ctn,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-finance-section .fi-in-entry-content-ctn{
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-in-entry-label,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-finance-section .fi-in-entry-label{
+  font-size: .78rem;
+  letter-spacing: .01em;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-in-entry:last-child,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-finance-section .fi-in-entry:last-child{
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-section-content,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-finance-section .fi-section-content{
+  row-gap: 1.1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section textarea,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-fo-textarea,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-context-section .fi-fo-textarea-wrp,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section textarea{
+  border-radius: .9rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-input-wrp{
@@ -310,6 +405,17 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-acti
 
   html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section{
     border-radius: .85rem;
+  }
+}
+
+/* Keep the accrual page in a single vertical flow to avoid broken card masonry */
+@media (min-width: 1025px){
+  html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-form > .grid{
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-form > .grid > *{
+    grid-column: 1 / -1 !important;
   }
 }
 </style>
