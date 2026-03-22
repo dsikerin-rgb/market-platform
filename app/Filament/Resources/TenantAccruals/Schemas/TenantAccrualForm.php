@@ -41,9 +41,6 @@ class TenantAccrualForm
                 ->schema([
                     static::displayNumber('finance_rent_rate', 'rent_rate', 'Ставка'),
                     static::displayNumber('finance_area_sqm', 'area_sqm', 'Площадь, м²'),
-                    static::display('finance_days', 'days', 'Дней', fn ($value): string => filled($value) ? (string) (int) $value : '—'),
-                    static::display('finance_currency', 'currency', 'Валюта'),
-
                     static::displayMoney('finance_rent_amount', 'rent_amount', 'Аренда'),
                     static::displayMoney('finance_management_fee', 'management_fee', 'Управление'),
                     static::displayMoney('finance_utilities_amount', 'utilities_amount', 'Коммунальные услуги'),

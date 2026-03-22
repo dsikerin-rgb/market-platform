@@ -1913,7 +1913,6 @@ class TenantResource extends BaseResource
             'tc.starts_at',
             'tc.ends_at',
             'tc.monthly_rent',
-            'tc.currency',
             'tc.is_active',
         ];
 
@@ -1998,8 +1997,7 @@ class TenantResource extends BaseResource
             $rentValue = filled($row->monthly_rent)
                 ? static::formatRub((float) $row->monthly_rent)
                 : '—';
-            $currency = trim((string) ($row->currency ?? ''));
-            $rentCell = $rentValue . ($currency !== '' ? ' ' . e($currency) : '');
+            $rentCell = $rentValue;
 
             $activeBadge = (bool) $row->is_active
                 ? '<span class="tenant-contracts__ok-badge">Активен</span>'
