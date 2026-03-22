@@ -3,19 +3,32 @@
 
 namespace App\Filament\Resources\TenantAccruals\Pages;
 
+use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use Filament\Actions;
-use App\Filament\Resources\Pages\BaseEditRecord;
 
 class EditTenantAccrual extends BaseEditRecord
 {
     protected static string $resource = TenantAccrualResource::class;
 
-    protected static ?string $title = 'Начисление';
+    protected static ?string $title = null;
+
+    public function getTitle(): string
+    {
+        return (string) static::$resource::getModelLabel();
+    }
+
+    public function getBreadcrumbs(): array
+    {
+        return [
+            static::$resource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+            $this->getBreadcrumb(),
+        ];
+    }
 
     public function getBreadcrumb(): string
     {
-        return 'Начисление';
+        return (string) static::$resource::getModelLabel() . ' #' . (int) $this->getRecord()->getKey();
     }
 
     protected function getHeaderActions(): array
@@ -24,6 +37,9 @@ class EditTenantAccrual extends BaseEditRecord
             Actions\Action::make('back')
                 ->label('К списку')
                 ->icon('heroicon-o-arrow-left')
+                ->extraAttributes([
+                    'class' => 'accrual-back-action',
+                ])
                 ->url(static::$resource::getUrl('index')),
         ];
     }
