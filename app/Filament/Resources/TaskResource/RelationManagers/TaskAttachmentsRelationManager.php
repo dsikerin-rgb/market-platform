@@ -37,6 +37,7 @@ class TaskAttachmentsRelationManager extends RelationManager
 
             // Показать пользователю имя файла, но не сохранять из формы (сохранит модель в booted()).
             Forms\Components\TextInput::make('original_name')
+                ->hidden()
                 ->label('Название')
                 ->placeholder('Имя файла (заполним автоматически)')
                 ->maxLength(255)
@@ -213,6 +214,14 @@ class TaskAttachmentsRelationManager extends RelationManager
             ->headerActions($headerActions)
             ->emptyStateActions($headerActions)
             ->defaultSort('created_at', 'desc');
+
+        if (method_exists($table, 'emptyStateHeading')) {
+            $table->emptyStateHeading('Пока нет файлов');
+        }
+
+        if (method_exists($table, 'emptyStateDescription')) {
+            $table->emptyStateDescription('Документы и материалы по задаче появятся здесь.');
+        }
 
         if (! empty($rowActions)) {
             $table = $table->actions($rowActions);

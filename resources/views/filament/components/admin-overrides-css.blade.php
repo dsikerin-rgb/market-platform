@@ -163,6 +163,751 @@ html:not([data-admin-overrides="0"]) .fi-dashboard-page .choices__inner{
   }
 }
 
+html:not([data-admin-overrides="0"]) .task-summary-compact .fi-fo-field-wrp-helper-text,
+html:not([data-admin-overrides="0"]) .task-participants-compact .fi-fo-field-wrp-helper-text{
+  display: none !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-workspace{
+  align-items: flex-start !important;
+  width: 100%;
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-main{
+  display: grid;
+  gap: .72rem;
+  width: 100%;
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-form{
+  display: grid;
+  gap: .72rem;
+  width: 100%;
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero{
+  border: 1px solid #dbe5f1;
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(circle at top right, rgba(72, 115, 191, 0.16), transparent 42%),
+    linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+  padding: 1rem 1.2rem 1.15rem;
+  width: 100%;
+  max-width: none;
+  margin: 0 0 .6rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__breadcrumbs{
+  margin-bottom: .7rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__top{
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: .85rem;
+  margin-bottom: 1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__main{
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading{
+  margin: 0;
+  font-size: clamp(1.18rem, 1.02rem + .55vw, 1.55rem) !important;
+  line-height: 1.12;
+  letter-spacing: -.02em;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__subheading{
+  margin: .45rem 0 0;
+  font-size: 1.06rem;
+  color: #475569;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__value-button,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chip--action{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button{
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
+  padding: .58rem .88rem .68rem;
+  border: 1px solid #bed0e5;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 247, 255, 1) 100%);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button .task-edit-hero__heading-text{
+  display: block;
+  font-size: clamp(1.6rem, 1.28rem + 1vw, 2.15rem);
+  line-height: 1.03;
+  font-weight: 620;
+  letter-spacing: -.015em;
+  color: #0b1630;
+  white-space: normal;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button:focus-visible{
+  border-color: #9ebae0;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description{
+  display: grid;
+  gap: .18rem;
+  margin-top: .6rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button{
+  display: grid;
+  gap: .18rem;
+  width: 100%;
+  max-width: 100%;
+  margin-top: .1rem;
+  padding: .8rem .95rem .85rem;
+  border: 1px solid #d2def0;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(245, 250, 255, 0.96) 100%);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button{
+  font-size: .93rem;
+  line-height: 1.45;
+  color: #10213a;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button:focus-visible{
+  border-color: #95b3df;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-label{
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: #6980a3;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-text{
+  font-size: .93rem;
+  line-height: 1.45;
+  color: #10213a;
+  text-align: left;
+  width: 100%;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .95rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chip{
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.7rem;
+  padding: .22rem .62rem;
+  border: 1px solid #c9d7ea;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  font-size: .76rem;
+  font-weight: 600;
+  color: #33517e;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chip--action{
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chip--action:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chip--action:focus-visible{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chip--status{
+  background: rgba(233, 242, 255, 0.98);
+  border-color: #abc2e8;
+  color: #1d4f91;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions{
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-left: auto;
+  width: min(100%, 17.2rem);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-ac{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+  width: 100%;
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-btn{
+  width: 100%;
+  min-width: 0;
+  min-height: 2.9rem;
+  border-radius: 1rem;
+  border: 1px solid #d8e2f0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  color: #1f3251 !important;
+  padding-block: .46rem !important;
+  padding-inline: .68rem !important;
+  font-size: .88rem;
+  font-weight: 640;
+  line-height: 1.15;
+  letter-spacing: -.01em;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, background-color .16s ease;
+  justify-content: center;
+  gap: .45rem;
+  text-align: center;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-btn:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-btn:focus-visible{
+  border-color: #c8d6e8 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-btn .fi-btn-icon{
+  color: inherit !important;
+  width: 1.72rem;
+  height: 1.72rem;
+  margin: 0;
+  border-radius: .72rem;
+  background: rgba(217, 229, 255, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(163, 187, 228, 0.42);
+  flex: 0 0 1.72rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-btn .fi-btn-label{
+  text-align: left;
+}
+
+@media (max-width: 1140px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions{
+    width: min(100%, 17rem);
+  }
+}
+
+@media (max-width: 860px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions{
+    width: 100%;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-ac{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-ac{
+    grid-template-columns: 1fr;
+  }
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--accept.fi-btn,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--resume.fi-btn{
+  border-color: #bfd4f3 !important;
+  background: linear-gradient(180deg, #fbfdff 0%, #edf4ff 100%) !important;
+  color: #1f4b95 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--pause.fi-btn{
+  border-color: #ead9a8 !important;
+  background: linear-gradient(180deg, #fffdf8 0%, #fff5df 100%) !important;
+  color: #8a5b08 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--complete.fi-btn{
+  border-color: #d5dce7 !important;
+  background: linear-gradient(180deg, #fcfdff 0%, #f1f5fb 100%) !important;
+  color: #39465d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--cancel.fi-btn,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--delete.fi-btn{
+  border-color: #f0c2c7 !important;
+  background: linear-gradient(180deg, #fffdfd 0%, #fff0f2 100%) !important;
+  color: #b4323d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--accept.fi-btn .fi-btn-icon,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--resume.fi-btn .fi-btn-icon{
+  background: rgba(214, 229, 255, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(146, 177, 232, 0.42);
+  color: #1f4b95 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--pause.fi-btn .fi-btn-icon{
+  background: rgba(255, 239, 200, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(220, 194, 133, 0.45);
+  color: #8a5b08 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--complete.fi-btn .fi-btn-icon{
+  background: rgba(227, 233, 241, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(173, 188, 207, 0.45);
+  color: #39465d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--cancel.fi-btn .fi-btn-icon,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .task-hero-action--delete.fi-btn .fi-btn-icon{
+  background: rgba(255, 223, 226, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(228, 152, 161, 0.42);
+  color: #b4323d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__grid{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .9rem 1rem;
+  margin: 0;
+  padding-top: .95rem;
+  border-top: 1px solid rgba(198, 212, 231, 0.86);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__item{
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__item--actionable dd{
+  display: flex;
+  align-items: flex-start;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__value-button{
+  display: inline-flex;
+  align-items: flex-start;
+  padding: 0;
+  border-bottom: 1px dashed rgba(61, 101, 161, 0.34);
+  color: #0f172a;
+  transition: color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__value-button:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__value-button:focus-visible{
+  color: #1f4b95;
+  border-bottom-color: rgba(31, 75, 149, 0.8);
+  transform: translateY(-1px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__item dt{
+  margin: 0 0 .24rem;
+  font-size: .74rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__item dd{
+  margin: 0;
+  font-size: .92rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+/* ====================================================================== */
+/* === Modals: общий стиль Filament + task-исключения                    === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-modal{
+  --modal-overlay-rgb: 15 23 42;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-close-overlay{
+  background: rgba(15, 23, 42, 0.48);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window{
+  border: 1px solid #c9d7ea;
+  border-radius: 1.35rem;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  box-shadow: 0 24px 56px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-header{
+  padding: 1.05rem 1.3rem .95rem;
+  background:
+    radial-gradient(circle at top right, rgba(72, 115, 191, 0.14), transparent 46%),
+    linear-gradient(180deg, #edf4ff 0%, #dfeaff 100%);
+  border-bottom: 1px solid #c7d6eb;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-header .fi-modal-heading{
+  font-size: 1.08rem;
+  font-weight: 720;
+  letter-spacing: -.02em;
+  color: #0f172a;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-header .fi-modal-description{
+  margin-top: .34rem;
+  font-size: .93rem;
+  line-height: 1.45;
+  color: #5b6f89;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-content{
+  padding: 1.15rem 1.3rem 1.25rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-footer{
+  padding: 1rem 1.3rem 1.15rem;
+  border-top: 1px solid #e1e8f2;
+  background: linear-gradient(180deg, #fbfdff 0%, #f6f9ff 100%);
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-footer-actions{
+  gap: .55rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window .fi-modal-close-btn{
+  color: #64748b;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window .fi-modal-close-btn:hover,
+html:not([data-admin-overrides="0"]) .fi-modal-window .fi-modal-close-btn:focus-visible{
+  color: #0f172a;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal{
+  border-color: #bfd0ea;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--wide{
+  max-width: min(92vw, 52rem);
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--compact{
+  max-width: min(92vw, 36rem);
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--confirm{
+  max-width: min(92vw, 34rem);
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--wide .fi-modal-content{
+  padding: 1.25rem 1.45rem 1.4rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--compact .fi-modal-content{
+  padding: 1.05rem 1.2rem 1.15rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--confirm .fi-modal-header{
+  background:
+    radial-gradient(circle at top right, rgba(219, 115, 129, 0.16), transparent 44%),
+    linear-gradient(180deg, #fff6f7 0%, #ffecef 100%);
+  border-bottom-color: #f2c8d0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--confirm .fi-modal-header .fi-modal-heading{
+  color: #8f2534;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-window.task-modal--confirm .fi-modal-content{
+  padding-top: 1.1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section{
+  border: 1px solid #c7d6eb !important;
+  border-radius: 1.3rem;
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.07);
+  overflow: hidden;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section > .fi-section-header{
+  position: relative;
+  padding: 1.1rem 1.3rem 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(72, 115, 191, 0.24), transparent 44%),
+    linear-gradient(180deg, #edf4ff 0%, #dfeaff 100%) !important;
+  border-bottom: 1px solid #bfd0ea !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section > .fi-section-header::before{
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(72, 115, 191, 0.55), rgba(164, 191, 244, 0.12));
+  pointer-events: none;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-section-header-heading{
+  font-size: 1.08rem;
+  letter-spacing: -.02em;
+  font-weight: 720;
+  color: #0e1c35;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section.fi-section-has-header:not(.fi-collapsed) > .fi-section-content-ctn{
+  border-top: 1px solid #e1e8f2;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section > .fi-section-content-ctn{
+  padding: 1.2rem 1.3rem 1.25rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-section-content{
+  row-gap: 1.05rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp{
+  border: 1px solid #d2deef !important;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  padding: .95rem 1rem 1rem;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp:focus-within{
+  border-color: #93b5e5 !important;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.12), 0 12px 28px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp-label{
+  font-size: .8rem;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: #4e627d;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp-content{
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-input-wrp,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-select,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-select,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-date-time-picker{
+  border-radius: .95rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-input-wrp,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-select{
+  border-color: #cfdaec;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-input-wrp:focus-within,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-select:focus-within{
+  border-color: #5f8fdc;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.12);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp-helper-text{
+  margin-top: .5rem;
+  font-size: .78rem;
+  line-height: 1.35;
+  color: #5c6a80;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar{
+  position: sticky;
+  top: 1rem;
+  width: 100%;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-tabs{
+  display: inline-flex;
+  gap: .32rem;
+  align-items: center;
+  padding: .28rem;
+  border: 1px solid #dbe5f1;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  width: fit-content;
+  max-width: 100%;
+  position: static;
+  margin: .95rem 0 0 1rem;
+  z-index: 5;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-tabs-item{
+  border-radius: .8rem;
+  min-height: 2.3rem;
+  padding: 0 .9rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-tabs-item.fi-active{
+  background: linear-gradient(180deg, #fefefe 0%, #f6f9ff 100%);
+  color: #c25b08;
+  box-shadow: inset 0 0 0 1px #e8eef8;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-resource-relation-manager + .fi-resource-relation-manager{
+  margin-top: .72rem;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-header-heading,
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-header-description{
+  display: none;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-header{
+  display: none !important;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-header .fi-ta-actions{
+  display: none !important;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-content{
+  border-top: none !important;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-sidebar{
+  position: static;
+  padding-top: 0;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-empty-state .fi-btn,
+html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-actions .fi-btn-color-warning{
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+  box-shadow: 0 12px 28px rgba(14, 116, 144, 0.08);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-header{
+  box-shadow: none;
+  border-radius: 1.05rem 1.05rem 0 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-resource-relation-manager:first-of-type .fi-ta-header{
+  border-radius: 1.05rem 1.05rem 0 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-content{
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+  max-height: 28rem;
+  overflow: auto;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-header-heading{
+  font-size: .95rem;
+  font-weight: 700;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-header-description{
+  display: none;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-empty-state{
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+  min-height: 14rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-empty-state-heading{
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-empty-state-description{
+  color: #64748b;
+}
+
+@media (max-width: 1279px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar{
+    position: static;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__top{
+    flex-direction: column;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions{
+    width: 100%;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-ac{
+    justify-content: flex-start;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero{
+    padding: .95rem 1rem 1rem;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading{
+    font-size: 1.24rem !important;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__grid{
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1540px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button{
+    max-width: 38rem;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description{
+    max-width: 44rem;
+  }
+}
+
 /* ====================================================================== */
 /* === Sticky form actions: semi-transparent bar behind Save/Cancel     === */
 /* ====================================================================== */
@@ -317,6 +1062,11 @@ html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text.fi-ta-text-has-descripti
 html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text-item{
   color: var(--admin-table-text);
   line-height: 1.14;
+}
+
+html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text.fi-ta-text-has-descriptions:not(.fi-ta-text-has-badges) > .fi-ta-text-item:first-child{
+  font-weight: 600;
+  letter-spacing: -.01em;
 }
 
 html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-text-description,
@@ -574,3 +1324,5 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-acti
   }
 }
 </style>
+
+{{-- Tabs stay in the relation-manager container and are positioned via CSS only. --}}
