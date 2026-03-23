@@ -29,7 +29,7 @@ class TenantAccrualResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Начисления';
 
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
 
     public static function shouldRegisterNavigation(): bool
     {
