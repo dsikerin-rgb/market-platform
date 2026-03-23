@@ -18,7 +18,7 @@ class TaskCommentsRelationManager extends RelationManager
     protected static string $relationship = 'comments';
 
     // Как в Битрикс24: это именно “Чат задачи”
-    protected static ?string $title = 'Чат задачи';
+    protected static ?string $title = 'Обсуждение';
 
     protected static ?string $recordTitleAttribute = 'body';
 
@@ -209,6 +209,14 @@ HTML;
             ->headerActions($headerActions)
             ->emptyStateActions($headerActions)
             ->defaultSort('created_at', 'desc');
+
+        if (method_exists($table, 'emptyStateHeading')) {
+            $table->emptyStateHeading('Пока нет сообщений');
+        }
+
+        if (method_exists($table, 'emptyStateDescription')) {
+            $table->emptyStateDescription('Начни обсуждение задачи здесь, без переходов в отдельный экран.');
+        }
 
         if (method_exists($table, 'poll')) {
             $table->poll('10s');

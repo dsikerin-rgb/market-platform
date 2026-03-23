@@ -13,6 +13,7 @@ use App\Models\Market;
 use App\Models\Task;
 use App\Models\TaskParticipant;
 use App\Models\User;
+use App\Support\SystemAgentService;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -252,22 +253,18 @@ class TaskResource extends BaseResource
                 ->dehydrated(true);
         }
 
-        $creatorDisplay = $readonlyText(
+$creatorDisplay = $readonlyText(
             'creator_display',
             'Постановщик',
             function (?Task $record) use ($user): string {
                 if ($record?->exists) {
-                    $name = $record->creator?->name;
-                    if (filled($name)) {
-                        return (string) $name;
-                    }
-
-                    return filled($record->created_by_user_id)
-                        ? ('Пользователь #' . (int) $record->created_by_user_id)
-                        : '—';
+                    return static::formatTaskUserDisplay(
+                        $record->creator?->name,
+                        filled($record->created_by_user_id) ? (int) $record->created_by_user_id : null,
+                    );
                 }
 
-                return $user?->name ?: '—';
+                return static::formatTaskUserDisplay($user?->name);
             },
             'full'
         );
@@ -303,7 +300,7 @@ class TaskResource extends BaseResource
         $descriptionReadonly = $readonlyMultiline(
             'description_readonly',
             'Описание',
-            fn (?Task $record): string => filled($record?->description) ? (string) $record->description : '—',
+            fn (?Task $record): string => static::taskDescriptionDisplay($record?->description) ?? '—',
             'full',
             fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
         );
@@ -412,36 +409,6 @@ class TaskResource extends BaseResource
             fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
         );
 
-        $assigneeEditable = $inline(
-            Forms\Components\Select::make('assignee_id')
-                ->label('Исполнитель')
-                ->placeholder('Назначить исполнителя')
-                ->relationship('assignee', 'name', function (Builder $query) use ($user) {
-                    return static::limitUsersToMarket($query, $user);
-                })
-                ->searchable()
-                ->preload()
-                ->nullable()
-                ->native(false)
-                ->helperText('Исполнитель получит уведомление при назначении.')
-                ->columnSpan([
-                    'default' => 12,
-                    'lg' => 6,
-                ])
-                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
-        );
-
-        $assigneeReadonly = $readonlyText(
-            'assignee_readonly',
-            'Исполнитель',
-            fn (?Task $record): string => $record?->assignee?->name ?: '—',
-            [
-                'default' => 12,
-                'lg' => 6,
-            ],
-            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
-        );
-
         $coexecutorsField = $inline(
             Forms\Components\Select::make('coexecutor_user_ids')
                 ->label('Соисполнители')
@@ -452,11 +419,12 @@ class TaskResource extends BaseResource
                 ->multiple()
                 ->preload()
                 ->native(false)
-                ->helperText('Соисполнители участвуют в выполнении. Если пользователь выбран и тут, и в наблюдателях — он станет соисполнителем.')
+                ->hintIcon('heroicon-m-question-mark-circle')
+                ->hintIconTooltip('Соисполнители участвуют в выполнении. Если пользователь выбран и тут, и в наблюдателях — он станет соисполнителем.')
                 ->dehydrated(false)
                 ->columnSpan([
                     'default' => 12,
-                    'lg' => 6,
+                    'lg' => 12,
                 ])
                 ->visible(fn (?Task $record, string $operation): bool => $canManageParticipants($record, $operation)),
             false
@@ -520,7 +488,7 @@ class TaskResource extends BaseResource
             fn (?Task $record): string => static::formatUsersByRole($record, Task::PARTICIPANT_ROLE_COEXECUTOR),
             [
                 'default' => 12,
-                'lg' => 6,
+                'lg' => 12,
             ],
             fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canManageParticipants($record, $operation),
         );
@@ -535,11 +503,12 @@ class TaskResource extends BaseResource
                 ->multiple()
                 ->preload()
                 ->native(false)
-                ->helperText('Наблюдатели видят задачу и получают уведомления, но не считаются исполнителями.')
+                ->hintIcon('heroicon-m-question-mark-circle')
+                ->hintIconTooltip('Наблюдатели видят задачу и получают уведомления, но не считаются исполнителями.')
                 ->dehydrated(false)
                 ->columnSpan([
                     'default' => 12,
-                    'lg' => 6,
+                    'lg' => 12,
                 ])
                 ->visible(fn (?Task $record, string $operation): bool => $canManageObservers($record, $operation)),
             false
@@ -603,9 +572,40 @@ class TaskResource extends BaseResource
             fn (?Task $record): string => static::formatUsersByRole($record, Task::PARTICIPANT_ROLE_OBSERVER),
             [
                 'default' => 12,
-                'lg' => 6,
+                'lg' => 12,
             ],
             fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canManageObservers($record, $operation),
+        );
+
+        $assigneeEditable = $inline(
+            Forms\Components\Select::make('assignee_id')
+                ->label('Исполнитель')
+                ->placeholder('Назначить исполнителя')
+                ->relationship('assignee', 'name', function (Builder $query) use ($user) {
+                    return static::limitAssignableUsersToMarket($query, $user);
+                })
+                ->searchable()
+                ->preload()
+                ->nullable()
+                ->native(false)
+                ->hintIcon('heroicon-m-question-mark-circle')
+                ->hintIconTooltip('Исполнитель получит уведомление при назначении.')
+                ->columnSpan([
+                    'default' => 12,
+                    'lg' => 12,
+                ])
+                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+        );
+
+        $assigneeReadonly = $readonlyText(
+            'assignee_readonly',
+            'Исполнитель',
+            fn (?Task $record): string => static::formatTaskUserDisplay($record?->assignee?->name),
+            [
+                'default' => 12,
+                'lg' => 12,
+            ],
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && ! $canUpdateCore($record, $operation),
         );
 
         $sourceLabel = $readonlyText(
@@ -657,8 +657,6 @@ class TaskResource extends BaseResource
                             $priorityReadonly,
                             $dueAtEditable,
                             $dueAtReadonly,
-                            $assigneeEditable,
-                            $assigneeReadonly,
                         ])
                         ->columns(12)
                         ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
@@ -668,147 +666,53 @@ class TaskResource extends BaseResource
                 ->description('Соисполнители и наблюдатели')
                 ->schema([
                     Section::make('Участники')
-                        ->schema([
-                            $coexecutorsField,
-                            $coexecutorsReadonly,
-                            $observersField,
-                            $observersReadonly,
-                            $sourceLabel,
-                        ])
-                        ->columns(12)
-                        ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
-                ]),
-        ])->skippable(false);
-
-        if (method_exists($createWizard, 'visible')) {
-            $createWizard->visible(fn (string $operation): bool => $operation === 'create');
-        }
-        if (method_exists($createWizard, 'columnSpanFull')) {
-            $createWizard->columnSpanFull();
-        }
-
-        $editSummary = Section::make('Сводка')
-            ->schema([
-                ...$marketComponents,
-                $creatorDisplay,
-                $createdAt,
-                $titleEditable,
-                $titleReadonly,
-                $descriptionEditable,
-                $descriptionReadonly,
-                $statusHiddenOnCreate,
-                $statusEditableOnEdit,
-                $statusReadonlyOnEdit,
-                $priorityEditable,
-                $priorityReadonly,
-                $dueAtEditable,
-                $dueAtReadonly,
-                $assigneeEditable,
-                $assigneeReadonly,
-            ])
-            ->columns(12);
-
-        if (method_exists($editSummary, 'extraAttributes')) {
-            $editSummary->extraAttributes([
-                'class' => 'task-summary-compact',
-            ]);
-        }
-
-        if (method_exists($editSummary, 'columnSpanFull')) {
-            $editSummary->columnSpanFull();
-        }
-
-        $tabsComponent = null;
-
-        $TabsClass = null;
-        $TabClass = null;
-
-        if (class_exists(\Filament\Schemas\Components\Tabs::class) && class_exists(\Filament\Schemas\Components\Tabs\Tab::class)) {
-            $TabsClass = \Filament\Schemas\Components\Tabs::class;
-            $TabClass = \Filament\Schemas\Components\Tabs\Tab::class;
-        } elseif (class_exists(\Filament\Forms\Components\Tabs::class) && class_exists(\Filament\Forms\Components\Tabs\Tab::class)) {
-            $TabsClass = \Filament\Forms\Components\Tabs::class;
-            $TabClass = \Filament\Forms\Components\Tabs\Tab::class;
-        }
-
-        if ($TabsClass && $TabClass) {
-            $filesHint = Forms\Components\Placeholder::make('files_tab_hint')
-                ->label('')
-                ->content('Файлы подключаются через вкладку Relation Manager “Файлы” (ниже страницы). Следующим шагом перенесём их в эту зону, если потребуется.')
-                ->columnSpanFull();
-
-            $checklistHint = Forms\Components\Placeholder::make('checklist_tab_hint')
-                ->label('')
-                ->content('Чек-лист добавим следующим модулем (пункты + отметки выполнения).')
-                ->columnSpanFull();
-
-            $historyHint = Forms\Components\Placeholder::make('history_tab_hint')
-                ->label('')
-                ->content('Историю/ленту событий добавим следующим шагом (принятие/завершение/смена статуса/изменения участников).')
-                ->columnSpanFull();
-
-            $participantsGrid = static::makeGrid(12, [
-                $coexecutorsField,
-                $coexecutorsReadonly,
-                $observersField,
-                $observersReadonly,
-                $sourceLabel,
-            ]);
-
-            if (method_exists($participantsGrid, 'columnSpanFull')) {
-                $participantsGrid->columnSpanFull();
-            }
-
-            $makeTab = static function (string $label, array $tabSchema) use ($TabClass) {
-                $tab = $TabClass::make($label);
-
-                if (method_exists($tab, 'schema')) {
-                    $tab->schema($tabSchema);
-                } elseif (method_exists($tab, 'components')) {
-                    $tab->components($tabSchema);
-                }
-
-                return $tab;
-            };
-
-            $tabsComponent = $TabsClass::make('task_tabs');
-
-            if (method_exists($tabsComponent, 'tabs')) {
-                $tabsComponent->tabs([
-                    $makeTab('Файлы', [$filesHint]),
-                    $makeTab('Чек-лист', [$checklistHint]),
-                    $makeTab('Участники', [$participantsGrid]),
-                    $makeTab('История', [$historyHint]),
-                ]);
-            }
-
-            if (method_exists($tabsComponent, 'persistTabInQueryString')) {
-                $tabsComponent->persistTabInQueryString();
-            }
-
-            if (method_exists($tabsComponent, 'columnSpanFull')) {
-                $tabsComponent->columnSpanFull();
-            }
-        }
-
-        if (! $tabsComponent) {
-            $tabsComponent = Section::make('Участники')
                 ->schema([
+                    $assigneeEditable,
+                    $assigneeReadonly,
                     $coexecutorsField,
                     $coexecutorsReadonly,
                     $observersField,
                     $observersReadonly,
-                    $sourceLabel,
                 ])
-                ->columns(12);
+                ->columns(12)
+                ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
+        ]),
+        ])->skippable(false);
 
-            if (method_exists($tabsComponent, 'columnSpanFull')) {
-                $tabsComponent->columnSpanFull();
-            }
+        $isCreateTaskRoute = request()->routeIs('filament.admin.resources.tasks.create');
+
+        if (! $isCreateTaskRoute) {
+            $createWizard = null;
+        } elseif (method_exists($createWizard, 'visible')) {
+            $createWizard->visible(fn (string $operation): bool => $operation === 'create');
+        }
+
+        if ($createWizard && method_exists($createWizard, 'columnSpanFull')) {
+            $createWizard->columnSpanFull();
+        }
+
+        $tabsComponent = Section::make('Участники')
+            ->schema([
+                $assigneeEditable,
+                $assigneeReadonly,
+                $coexecutorsField,
+                $coexecutorsReadonly,
+                $observersField,
+                $observersReadonly,
+            ])
+            ->columns(12);
+
+        if (method_exists($tabsComponent, 'extraAttributes')) {
+            $tabsComponent->extraAttributes([
+                'class' => 'task-participants-compact task-edit-section',
+            ]);
+        }
+
+        if (method_exists($tabsComponent, 'columnSpanFull')) {
+            $tabsComponent->columnSpanFull();
         }
 
         $editGrid = static::makeGrid(12, [
-            $editSummary,
             $tabsComponent,
         ]);
 
@@ -819,10 +723,10 @@ class TaskResource extends BaseResource
             $editGrid->columnSpanFull();
         }
 
-        return $schema->components([
+        return $schema->components(array_values(array_filter([
             $createWizard,
             $editGrid,
-        ]);
+        ])));
     }
 
     public static function table(Table $table): Table
@@ -872,17 +776,14 @@ class TaskResource extends BaseResource
 
         $createdAtColumn = static::toggleable($createdAtColumn, true);
 
-        $creatorColumn = TextColumn::make('created_by_user_id')
+$creatorColumn = TextColumn::make('created_by_user_id')
             ->label('Постановщик')
             ->sortable()
             ->formatStateUsing(function ($state, Task $record): string {
-                $name = $record->creator?->name;
-
-                if (filled($name)) {
-                    return (string) $name;
-                }
-
-                return filled($state) ? ('Пользователь #' . (int) $state) : '—';
+                return static::formatTaskUserDisplay(
+                    $record->creator?->name,
+                    filled($state) ? (int) $state : null,
+                );
             });
 
         $creatorColumn = static::toggleable($creatorColumn, true);
@@ -926,8 +827,9 @@ class TaskResource extends BaseResource
             });
         }
 
-        $assigneeColumn = TextColumn::make('assignee.name')
+$assigneeColumn = TextColumn::make('assignee.name')
             ->label('Исполнитель')
+            ->formatStateUsing(fn (?string $state): string => static::formatTaskUserDisplay($state))
             ->sortable()
             ->searchable();
 
@@ -1129,8 +1031,8 @@ class TaskResource extends BaseResource
     public static function getRelations(): array
     {
         return [
-            TaskAttachmentsRelationManager::class,
             TaskCommentsRelationManager::class,
+            TaskAttachmentsRelationManager::class,
         ];
     }
 
@@ -1333,7 +1235,7 @@ class TaskResource extends BaseResource
         return Market::query()->whereKey((int) $marketId)->value('name');
     }
 
-    protected static function limitUsersToMarket(Builder $query, ?User $user): Builder
+    public static function limitUsersToMarket(Builder $query, ?User $user): Builder
     {
         if (! $user) {
             return $query->whereRaw('1 = 0');
@@ -1352,6 +1254,49 @@ class TaskResource extends BaseResource
         }
 
         return $query->whereRaw('1 = 0');
+    }
+
+    public static function limitAssignableUsersToMarket(Builder $query, ?User $user): Builder
+    {
+        $query = static::limitUsersToMarket($query, $user);
+
+        $query = $query
+            ->where(function (Builder $staffOnly): void {
+                $staffOnly
+                    ->whereNull('tenant_id')
+                    ->orWhere('tenant_id', 0);
+            })
+            ->where(function (Builder $systemAgentSafe): void {
+                $systemAgentSafe
+                    ->whereNull('email')
+                    ->orWhereRaw('LOWER(email) NOT LIKE ?', ['%@' . SystemAgentService::EMAIL_DOMAIN]);
+            })
+            ->whereDoesntHave('roles', function (Builder $roleQuery): void {
+                $roleQuery->where('name', 'merchant');
+            });
+
+        if (! static::canAssignMarketAdmins($user)) {
+            $query->whereDoesntHave('roles', function (Builder $roleQuery): void {
+                $roleQuery->where('name', 'market-admin');
+            });
+        }
+
+        return $query;
+    }
+
+    protected static function canAssignMarketAdmins(?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin() || $user->hasRole('market-admin')) {
+            return true;
+        }
+
+        $email = mb_strtolower(trim((string) ($user->email ?? '')));
+
+        return $email !== '' && str_ends_with($email, '@' . SystemAgentService::EMAIL_DOMAIN);
     }
 
     protected static function isMerchantUser(User $user): bool
@@ -1517,7 +1462,7 @@ class TaskResource extends BaseResource
             ->select(['id', 'name'])
             ->orderBy('name');
 
-        $query = static::limitUsersToMarket($query, $user);
+        $query = static::limitAssignableUsersToMarket($query, $user);
 
         $search = trim((string) $search);
         if ($search !== '') {
@@ -1584,9 +1529,35 @@ class TaskResource extends BaseResource
 
     protected static function taskDescriptionPreview(string $description): ?string
     {
+        $display = static::taskDescriptionDisplay($description);
+
+        if ($display === null) {
+            return null;
+        }
+
+        return Str::limit(str_replace("\n", ' ', $display), 90);
+    }
+
+    protected static function taskDescriptionDisplay(?string $description): ?string
+    {
+        if (! is_string($description) || trim($description) === '') {
+            return null;
+        }
+
+        $lines = static::taskDescriptionLines($description);
+
+        if ($lines === []) {
+            return null;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    protected static function taskDescriptionLines(string $description): array
+    {
         $lines = preg_split('/\R/u', $description) ?: [];
 
-        $lines = array_values(array_filter(
+        return array_values(array_filter(
             $lines,
             static function (string $line): bool {
                 $normalized = trim($line);
@@ -1606,11 +1577,20 @@ class TaskResource extends BaseResource
                 return true;
             }
         ));
+    }
 
-        if ($lines === []) {
-            return null;
+    public static function formatTaskUserDisplay(?string $name, ?int $fallbackId = null): string
+    {
+        $name = trim((string) $name);
+
+        if ($name !== '') {
+            return strcasecmp($name, 'System Agent') === 0
+                ? 'Системный агент'
+                : $name;
         }
 
-        return Str::limit(implode(' ', $lines), 90);
+        return $fallbackId !== null
+            ? ('Пользователь #' . $fallbackId)
+            : '—';
     }
 }

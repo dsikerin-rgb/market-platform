@@ -260,20 +260,18 @@ if (class_exists(\Filament\Infolists\Infolist::class)) {
 
             $summary = $Section::make('Сводка')
                 ->schema([
-                    $TextEntry::make('created_by_user_id')
+$TextEntry::make('created_by_user_id')
                         ->label('Постановщик')
                         ->formatStateUsing(function ($state, Task $record): string {
-                            $name = $record->creator?->name;
-
-                            if (filled($name)) {
-                                return (string) $name;
-                            }
-
-                            return filled($state) ? ('Пользователь #' . (int) $state) : '—';
+                            return TaskResource::formatTaskUserDisplay(
+                                $record->creator?->name,
+                                filled($state) ? (int) $state : null,
+                            );
                         }),
 
                     $TextEntry::make('assignee.name')
                         ->label('Исполнитель')
+                        ->formatStateUsing(fn (?string $state): string => TaskResource::formatTaskUserDisplay($state))
                         ->default('—'),
 
                     $statusEntry,
