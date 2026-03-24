@@ -7,6 +7,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class MarketHoliday extends Model
 {
@@ -84,5 +86,20 @@ class MarketHoliday extends Model
         }
 
         return 7;
+    }
+
+    public function getCoverImageUrlAttribute(): ?string
+    {
+        $value = trim((string) ($this->cover_image ?? ''));
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (Str::startsWith($value, ['http://', 'https://', 'data:', '/'])) {
+            return $value;
+        }
+
+        return Storage::disk('public')->url($value);
     }
 }

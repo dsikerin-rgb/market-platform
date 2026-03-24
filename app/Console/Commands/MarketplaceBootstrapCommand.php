@@ -160,6 +160,15 @@ class MarketplaceBootstrapCommand extends Command
                 })
                 ->first();
 
+            // Если не нашли по slug, ищем по названию и дате начала
+            if (! $existing) {
+                $existing = MarketplaceAnnouncement::query()
+                    ->where('market_id', (int) $market->id)
+                    ->where('title', $holiday->title)
+                    ->whereDate('starts_at', $holiday->starts_at)
+                    ->first();
+            }
+
             $coverImage = $this->normalizeCoverImage(
                 MarketplaceAnnouncementImageCatalog::resolveCoverImage(
                     (string) ($holiday->title ?? ''),
