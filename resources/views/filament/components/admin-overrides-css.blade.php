@@ -811,7 +811,11 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   color: #4e627d;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-wrp-label{
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-label-col{
+  align-items: flex-start;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-label-ctn{
   display: inline-flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
@@ -823,7 +827,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   align-self: flex-start !important;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-wrp-label > *{
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-label-ctn > *{
   flex: 0 0 auto !important;
 }
 
