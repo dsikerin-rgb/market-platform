@@ -11,6 +11,7 @@ use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Marketplace\MarketplaceDemoContentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -142,10 +143,14 @@ class ProductsController extends Controller
         [$spaces, $canManageGlobalProducts] = $this->resolveAccessibleSpaces($authUser, $tenant);
         $productModel = $this->resolveProductOrFail($tenant, $spaces, $canManageGlobalProducts, $product);
         $validated = $this->validateProductPayload($request, $tenant, $spaces, $canManageGlobalProducts);
+        $showDemoContent = app(MarketplaceDemoContentService::class)->isEnabled($tenant->market);
 
         $existingImages = collect($productModel->images ?? [])
             ->filter(static fn ($path): bool => is_string($path) && $path !== '')
             ->values();
+        if ((bool) $productModel->is_demo && ! $showDemoContent) {
+            $existingImages = collect();
+        }
 
         $removeImages = $this->resolveRemovableImages($request, $existingImages);
         $remainingImagesCount = $existingImages->count() - $removeImages->count();
@@ -385,6 +390,7 @@ class ProductsController extends Controller
             'unit' => $unit !== '' ? $unit : null,
             'is_active' => (bool) ($validated['is_active'] ?? false),
             'is_featured' => (bool) ($validated['is_featured'] ?? false),
+            'is_demo' => false,
         ];
     }
 

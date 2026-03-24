@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 return [
+    'demo_content_enabled' => env('MARKETPLACE_DEMO_CONTENT_ENABLED', false),
+
     'home' => [
         // Fast rollback toggle: false returns sanitary_day cards into main feed.
         'hide_sanitary_in_feed' => env('MARKETPLACE_HOME_HIDE_SANITARY_IN_FEED', true),

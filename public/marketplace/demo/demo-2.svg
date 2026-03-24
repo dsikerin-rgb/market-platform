@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-label="Демо-товар 2">
+  <defs>
+    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7c2d12"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#g2)"/>
+  <circle cx="290" cy="190" r="170" fill="rgba(255,255,255,0.10)"/>
+  <circle cx="920" cy="720" r="240" fill="rgba(255,255,255,0.12)"/>
+  <path d="M120 640 C260 500, 410 830, 560 660 S900 560, 1080 690" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="28" stroke-linecap="round"/>
+  <text x="110" y="205" fill="#fff7ed" font-size="54" font-family="Arial, sans-serif" font-weight="700">Тёплая выкладка</text>
+  <text x="110" y="286" fill="#ffffff" font-size="92" font-family="Arial, sans-serif" font-weight="900">Сезонные продукты</text>
+  <text x="110" y="690" fill="#fff7ed" font-size="44" font-family="Arial, sans-serif" font-weight="700">Демо-изображение для витрины</text>
+</svg>

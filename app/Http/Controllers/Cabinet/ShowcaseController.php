@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MarketSpace;
 use App\Models\TenantShowcase;
 use App\Models\TenantSpaceShowcase;
+use App\Services\Marketplace\MarketplaceDemoContentService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -18,6 +19,7 @@ class ShowcaseController extends Controller
     public function edit(Request $request): View
     {
         $tenant = $request->user()->tenant;
+        $showDemoContent = app(MarketplaceDemoContentService::class)->isEnabled($tenant->market);
 
         if (! $tenant->slug) {
             $tenant->slug = $this->makeUniqueSlug($tenant->display_name ?: $tenant->name ?: 'tenant-' . $tenant->id, $tenant->id);
@@ -25,6 +27,9 @@ class ShowcaseController extends Controller
         }
 
         $showcase = TenantShowcase::query()->where('tenant_id', $tenant->id)->first();
+        if ($showcase && ! $showDemoContent && (bool) $showcase->is_demo) {
+            $showcase = null;
+        }
         $spaces = MarketSpace::query()
             ->where('tenant_id', (int) $tenant->id)
             ->when((int) ($tenant->market_id ?? 0) > 0, fn ($query) => $query->where('market_id', (int) $tenant->market_id))
@@ -41,6 +46,7 @@ class ShowcaseController extends Controller
                 ->where('tenant_id', (int) $tenant->id)
                 ->where('market_space_id', $selectedSpaceId)
                 ->where('is_active', true)
+                ->withoutDemoContent($showDemoContent)
                 ->first();
         }
 
@@ -57,6 +63,7 @@ class ShowcaseController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $tenant = $request->user()->tenant;
+        $showDemoContent = app(MarketplaceDemoContentService::class)->isEnabled($tenant->market);
         $spaceId = (int) $request->integer('space_id', 0);
         $spaceIds = MarketSpace::query()
             ->where('tenant_id', (int) $tenant->id)
@@ -91,6 +98,9 @@ class ShowcaseController extends Controller
             ]);
 
             $photos = $spaceShowcase->photos ?? [];
+            if ((bool) $spaceShowcase->is_demo && ! $showDemoContent) {
+                $photos = [];
+            }
 
             if ($request->hasFile('photos')) {
                 $photos = [];
@@ -114,6 +124,7 @@ class ShowcaseController extends Controller
                 'website' => $validated['website'] ?? null,
                 'photos' => $photos,
                 'is_active' => true,
+                'is_demo' => false,
             ]);
 
             $spaceShowcase->save();
@@ -125,6 +136,9 @@ class ShowcaseController extends Controller
 
         $showcase = TenantShowcase::query()->firstOrNew(['tenant_id' => $tenant->id]);
         $photos = $showcase->photos ?? [];
+        if ((bool) $showcase->is_demo && ! $showDemoContent) {
+            $photos = [];
+        }
 
         if ($request->hasFile('photos')) {
             $photos = [];
@@ -145,6 +159,7 @@ class ShowcaseController extends Controller
             'telegram' => $validated['telegram'] ?? null,
             'website' => $validated['website'] ?? null,
             'photos' => $photos,
+            'is_demo' => false,
         ]);
 
         $showcase->save();

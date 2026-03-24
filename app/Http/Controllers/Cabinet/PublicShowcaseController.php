@@ -7,6 +7,7 @@ use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantReview;
 use App\Services\Auth\PortalAccessService;
+use App\Services\Marketplace\MarketplaceDemoContentService;
 use Illuminate\View\View;
 
 class PublicShowcaseController extends Controller
@@ -20,6 +21,7 @@ class PublicShowcaseController extends Controller
         $market = $tenant->market()->select(['id', 'settings'])->first();
         $access = app(PortalAccessService::class);
         $allowWithoutActiveContracts = $access->allowsPublicSalesWithoutActiveContract($market);
+        $showDemoContent = app(MarketplaceDemoContentService::class)->isEnabled($market);
 
         if (! $allowWithoutActiveContracts) {
             $hasActiveContract = $tenant->contracts()
@@ -44,11 +46,14 @@ class PublicShowcaseController extends Controller
             ? $tenant->spaceShowcases()
                 ->where('market_space_id', (int) $selectedSpace->id)
                 ->where('is_active', true)
+                ->withoutDemoContent($showDemoContent)
                 ->first()
             : null;
 
         if (! $showcase) {
-            $showcase = $tenant->showcase()->first();
+            $showcase = $tenant->showcase()
+                ->withoutDemoContent($showDemoContent)
+                ->first();
         }
 
         $reviews = TenantReview::query()

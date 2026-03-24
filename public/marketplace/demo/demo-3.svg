@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-label="Демо-товар 3">
+  <defs>
+    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#g3)"/>
+  <circle cx="930" cy="170" r="240" fill="rgba(255,255,255,0.10)"/>
+  <circle cx="170" cy="750" r="220" fill="rgba(255,255,255,0.08)"/>
+  <rect x="130" y="140" width="520" height="640" rx="40" fill="rgba(255,255,255,0.12)"/>
+  <text x="170" y="240" fill="#e0f2fe" font-size="54" font-family="Arial, sans-serif" font-weight="700">Рыба и море</text>
+  <text x="170" y="332" fill="#ffffff" font-size="92" font-family="Arial, sans-serif" font-weight="900">Свежий улов</text>
+  <text x="170" y="710" fill="#e0f2fe" font-size="44" font-family="Arial, sans-serif" font-weight="700">Демо-карточка для каталога</text>
+</svg>

@@ -12,6 +12,7 @@ use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Support\MarketplaceAnnouncementImageCatalog;
+use App\Support\MarketplaceDemoAssets;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -259,12 +260,13 @@ class MarketplaceBootstrapCommand extends Command
                     'currency' => 'RUB',
                     'stock_qty' => 100,
                     'unit' => 'шт',
-                    'images' => null,
+                    'images' => [$this->demoProductImageUrl($created + 1)],
                     'attributes' => ['generated' => true],
                     'views_count' => 0,
                     'favorites_count' => 0,
                     'is_active' => true,
                     'is_featured' => $created < 8,
+                    'is_demo' => true,
                     'published_at' => now(),
                 ]);
 
@@ -287,6 +289,19 @@ class MarketplaceBootstrapCommand extends Command
         $price = is_numeric($value) ? ((float) $value / 100.0) : random_int(250, 3500);
 
         return round(max(50.0, $price), 2);
+    }
+
+    private function demoProductImageUrl(int $index): string
+    {
+        $images = MarketplaceDemoAssets::imagePaths();
+
+        if ($images === []) {
+            return '/marketplace/demo/demo-1.svg';
+        }
+
+        $normalizedIndex = max(1, $index);
+
+        return $images[($normalizedIndex - 1) % count($images)];
     }
 
     private function canonicalHolidaySource(string $source): string
