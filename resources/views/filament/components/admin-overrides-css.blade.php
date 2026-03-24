@@ -812,13 +812,19 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-wrp-label{
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: .34rem;
-  width: fit-content;
-  max-width: 100%;
-  white-space: normal;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: .34rem !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  flex: 0 0 auto !important;
+  align-self: flex-start !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-wrp-label > *{
+  flex: 0 0 auto !important;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp-content{
