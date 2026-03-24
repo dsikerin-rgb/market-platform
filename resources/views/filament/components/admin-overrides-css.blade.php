@@ -172,20 +172,34 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   align-items: flex-start !important;
   width: 100%;
   min-width: 0;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) clamp(22.5rem, 27vw, 26.25rem); /* 360px..420px */
+  gap: 1.25rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-main{
   display: grid;
-  gap: .72rem;
+  gap: .52rem;
   width: 100%;
   min-width: 0;
 }
 
+/* Fallback: если классы страницы отличаются, всё равно уплотняем поток */
+html:not([data-admin-overrides="0"]) .task-edit-main{
+  display: grid;
+  gap: .52rem;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-form{
   display: grid;
-  gap: .72rem;
+  gap: .52rem;
   width: 100%;
   min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-form{
+  display: grid;
+  gap: .52rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero{
@@ -195,10 +209,50 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
     radial-gradient(circle at top right, rgba(72, 115, 191, 0.16), transparent 42%),
     linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%);
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
-  padding: 1rem 1.2rem 1.15rem;
+  padding: 1rem 1.2rem .85rem;
   width: 100%;
   max-width: none;
-  margin: 0 0 .6rem;
+  margin: 0 0 .3rem;
+}
+
+html:not([data-admin-overrides="0"]) .task-edit-hero{
+  margin: 0 0 .3rem;
+  padding-bottom: .85rem;
+}
+
+/* ====================================================================== */
+/* === Tasks edit page: reduce Filament header/content vertical gap       === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-header,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-page-header{
+  margin-bottom: .5rem !important;
+  padding-bottom: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-header + *,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-page-header + *{
+  margin-top: 0 !important;
+}
+
+/* If the page uses a stack/gap utility, tighten it on this page only */
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-page{
+  row-gap: .75rem !important;
+}
+
+/* Last resort: kill the gap right after hero and in page content wrapper */
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero + *{
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-page-content,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-page-content-ctn,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-main-ctn{
+  padding-top: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .fi-page-content > .grid{
+  row-gap: .5rem !important;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__breadcrumbs{
@@ -220,7 +274,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading{
   margin: 0;
-  font-size: clamp(1.18rem, 1.02rem + .55vw, 1.55rem) !important;
+  font-size: clamp(0.826rem, 0.714rem + .385vw, 1.085rem) !important;
   line-height: 1.12;
   letter-spacing: -.02em;
   font-weight: 700;
@@ -246,11 +300,25 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   cursor: pointer;
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button{
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-text,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-text{
+  width: 100% !important;
+  max-width: 100% !important;
+  display: block;
+  box-sizing: border-box;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button{
   display: flex;
   align-items: flex-start;
-  width: 100%;
-  max-width: 100%;
   padding: .58rem .88rem .68rem;
   border: 1px solid #bed0e5;
   border-radius: 1rem;
@@ -259,21 +327,40 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button .task-edit-hero__heading-text{
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button .task-edit-hero__heading-text,
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-text{
   display: block;
-  font-size: clamp(1.6rem, 1.28rem + 1vw, 2.15rem);
+  font-size: clamp(1.12rem, 0.896rem + 0.7vw, 1.505rem);
   line-height: 1.03;
   font-weight: 620;
   letter-spacing: -.015em;
   color: #0b1630;
   white-space: normal;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  word-break: break-word;
 }
+
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button:hover,
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button:focus-visible{
   border-color: #9ebae0;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
-  transform: translateY(-1px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-text {
+  font-size: .93rem;
+  line-height: 1.45;
+  font-weight: 400;
+  color: #10213a;
+  text-align: left;
+  white-space: pre-wrap;
+  tab-size: 4;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description{
@@ -287,8 +374,8 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-button{
   display: grid;
   gap: .18rem;
-  width: 100%;
-  max-width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   margin-top: .1rem;
   padding: .8rem .95rem .85rem;
   border: 1px solid #d2def0;
@@ -322,9 +409,14 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description-text{
   font-size: .93rem;
   line-height: 1.45;
+  font-weight: 400;
   color: #10213a;
   text-align: left;
-  width: 100%;
+  width: 100% !important;
+  white-space: pre-wrap;
+  tab-size: 4;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__chips{
@@ -501,7 +593,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: .9rem 1rem;
   margin: 0;
-  padding-top: .95rem;
+  padding-top: .55rem;
   border-top: 1px solid rgba(198, 212, 231, 0.86);
 }
 
@@ -719,6 +811,22 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   color: #4e627d;
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-wrp-label{
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: .34rem !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  flex: 0 0 auto !important;
+  align-self: flex-start !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-participants-compact .fi-fo-field-wrp-label > *{
+  flex: 0 0 auto !important;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-section .fi-fo-field-wrp-content{
   min-width: 0;
 }
@@ -753,7 +861,9 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   top: 1rem;
   width: 100%;
   min-width: 0;
+  max-width: clamp(22.5rem, 27vw, 26.25rem); /* 360px..420px */
   align-self: flex-start;
+  height: fit-content;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-tabs{
@@ -808,7 +918,6 @@ html:not([data-admin-overrides="0"]) .task-edit-sidebar .fi-resource-relation-ma
 }
 
 html:not([data-admin-overrides="0"]) .task-edit-sidebar{
-  position: static;
   padding-top: 0;
 }
 
@@ -831,7 +940,8 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 
 html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar .fi-ta-content{
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
-  max-height: 28rem;
+  max-height: min(66vh, 42rem);
+  min-height: 16rem;
   overflow: auto;
 }
 
@@ -860,6 +970,12 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 }
 
 @media (max-width: 1279px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-workspace{
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
   html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-sidebar{
     position: static;
     width: 100% !important;
@@ -877,6 +993,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
 
   html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-ac{
     justify-content: flex-start;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__grid{
@@ -894,17 +1011,27 @@ html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-
   }
 
   html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__grid{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__actions .fi-ac{
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__grid{
     grid-template-columns: 1fr;
   }
 }
 
 @media (min-width: 1280px) and (max-width: 1540px){
   html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__heading-button{
-    max-width: 38rem;
+    max-width: none;
   }
 
   html:not([data-admin-overrides="0"]) .fi-resource-tasks.fi-resource-edit-record-page .task-edit-hero__description{
-    max-width: 44rem;
+    max-width: none;
   }
 }
 

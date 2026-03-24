@@ -290,9 +290,8 @@ class EditTask extends BaseEditRecord
 
         [, $publicDescription] = $this->splitTechnicalDescription($description);
         $display = trim($publicDescription !== '' ? $publicDescription : $description);
-        $display = preg_replace('/\s+/u', ' ', $display) ?: $display;
 
-        return (string) Str::limit($display, 120);
+        return $display;
     }
 
     private function getEditableDescriptionValue(): string
