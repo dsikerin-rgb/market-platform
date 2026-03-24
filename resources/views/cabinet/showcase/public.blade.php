@@ -13,6 +13,13 @@
         $photos = collect($showcase?->photos ?? [])
             ->filter(fn ($p) => is_string($p) && trim($p) !== '')
             ->values();
+        $resolvePhotoUrl = static function (string $photo): string {
+            if (\Illuminate\Support\Str::startsWith($photo, ['http://', 'https://', 'data:', '/'])) {
+                return $photo;
+            }
+
+            return \Illuminate\Support\Facades\Storage::url($photo);
+        };
 
         $phone = $showcase?->phone ? trim((string) $showcase->phone) : null;
         $telegramRaw = $showcase?->telegram ? trim((string) $showcase->telegram) : null;
@@ -92,14 +99,14 @@
 
         @if($photos->isNotEmpty())
             <section aria-label="Фотографии витрины" class="grid grid-cols-2 gap-3">
-                @foreach($photos as $photo)
-                    <div class="rounded-2xl overflow-hidden border bg-white shadow-sm">
-                        <img
-                            class="w-full h-36 object-cover"
-                            src="{{ \Illuminate\Support\Facades\Storage::url($photo) }}"
-                            alt="Фото витрины"
-                            loading="lazy"
-                        >
+                        @foreach($photos as $photo)
+                            <div class="rounded-2xl overflow-hidden border bg-white shadow-sm">
+                                <img
+                                    class="w-full h-36 object-cover"
+                                    src="{{ $resolvePhotoUrl($photo) }}"
+                                    alt="Фото витрины"
+                                    loading="lazy"
+                                >
                     </div>
                 @endforeach
             </section>

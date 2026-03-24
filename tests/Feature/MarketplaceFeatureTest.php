@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
+use App\Models\TenantShowcase;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -98,7 +99,7 @@ class MarketplaceFeatureTest extends TestCase
 
         $this->get(route('marketplace.buyer.dashboard', ['marketSlug' => $market->slug]))
             ->assertOk()
-            ->assertSee('Кабинет покупателя');
+            ->assertSee('Кабинет маркетплейса');
     }
 
     public function test_non_buyer_cannot_open_buyer_dashboard(): void
@@ -124,5 +125,77 @@ class MarketplaceFeatureTest extends TestCase
         $this->get(route('marketplace.buyer.dashboard', ['marketSlug' => $market->slug]))
             ->assertForbidden();
     }
-}
 
+    public function test_demo_content_can_be_toggled_on_public_pages(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Demo market',
+            'slug' => 'market-demo-toggle',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+            'settings' => [
+                'marketplace' => [
+                    'allow_public_sales_without_active_contracts' => true,
+                ],
+            ],
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Demo seller',
+            'short_name' => 'Demo',
+            'slug' => 'demo-seller',
+            'is_active' => true,
+        ]);
+
+        MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'title' => 'Demo product',
+            'slug' => 'demo-product',
+            'price' => 1000,
+            'currency' => 'RUB',
+            'stock_qty' => 10,
+            'is_active' => true,
+            'is_featured' => true,
+            'is_demo' => true,
+            'published_at' => now(),
+        ]);
+
+        TenantShowcase::query()->create([
+            'tenant_id' => (int) $tenant->id,
+            'title' => 'Demo showcase',
+            'description' => 'Demo showcase description',
+            'photos' => ['/marketplace/demo/demo-1.svg'],
+            'is_demo' => true,
+        ]);
+
+        $homeRoute = route('marketplace.home', ['marketSlug' => $market->slug]);
+        $showcaseRoute = route('cabinet.showcase.public', ['tenantSlug' => $tenant->slug]);
+
+        $this->get($homeRoute)
+            ->assertOk()
+            ->assertDontSee('Demo product');
+
+        $this->get($showcaseRoute)
+            ->assertOk()
+            ->assertDontSee('Demo showcase description');
+
+        $market->forceFill([
+            'settings' => [
+                'marketplace' => [
+                    'allow_public_sales_without_active_contracts' => true,
+                    'demo_content_enabled' => true,
+                ],
+            ],
+        ])->save();
+
+        $this->get($homeRoute)
+            ->assertOk()
+            ->assertSee('Demo product');
+
+        $this->get($showcaseRoute)
+            ->assertOk()
+            ->assertSee('Demo showcase description');
+    }
+}

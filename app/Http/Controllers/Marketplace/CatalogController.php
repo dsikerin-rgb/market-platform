@@ -17,9 +17,10 @@ class CatalogController extends BaseMarketplaceController
     {
         $market = $this->resolveMarketOrFail($marketSlug);
         $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
         $query = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
             ->with(['tenant:id,name,short_name,slug', 'category:id,name,slug']);
 
         $search = trim((string) $request->query('q', ''));
@@ -105,11 +106,11 @@ class CatalogController extends BaseMarketplaceController
         $stores = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->whereHas('marketplaceProducts', function ($q) use ($market, $allowWithoutActiveContracts): void {
-                $q->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts);
+            ->whereHas('marketplaceProducts', function ($q) use ($market, $allowWithoutActiveContracts, $showDemoContent): void {
+                $q->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent);
             })
-            ->withCount(['marketplaceProducts as active_products_count' => function ($q) use ($market, $allowWithoutActiveContracts): void {
-                $q->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts);
+            ->withCount(['marketplaceProducts as active_products_count' => function ($q) use ($market, $allowWithoutActiveContracts, $showDemoContent): void {
+                $q->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent);
             }])
             ->orderBy('name')
             ->limit(200)
