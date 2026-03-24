@@ -14,6 +14,13 @@
         $photos = collect($activeShowcase?->photos ?? [])
             ->filter(fn ($path) => is_string($path) && $path !== '')
             ->values();
+        $resolvePhotoUrl = static function (string $photo): string {
+            if (\Illuminate\Support\Str::startsWith($photo, ['http://', 'https://', 'data:', '/'])) {
+                return $photo;
+            }
+
+            return \Illuminate\Support\Facades\Storage::url($photo);
+        };
 
         $summaryClass = 'flex w-full items-center justify-between gap-3 cursor-pointer list-none';
         $sectionClass = 'rounded-3xl bg-white border border-slate-200 p-4 shadow-sm';
@@ -195,7 +202,7 @@
                 @if($photos->isNotEmpty())
                     <div class="grid grid-cols-2 gap-2">
                         @foreach($photos as $photo)
-                            @php($url = \Illuminate\Support\Facades\Storage::url($photo))
+                            @php($url = $resolvePhotoUrl($photo))
                             <div class="rounded-2xl border border-slate-200 bg-slate-50 overflow-hidden">
                                 <img class="w-full h-28 object-cover" src="{{ $url }}" alt="Фото витрины" loading="lazy">
                             </div>

@@ -9,10 +9,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class MarketplaceProduct extends Model
 {
     use HasFactory;
+
+    protected static ?bool $hasIsDemoColumn = null;
 
     /**
      * @var list<string>
@@ -36,6 +39,7 @@ class MarketplaceProduct extends Model
         'favorites_count',
         'is_active',
         'is_featured',
+        'is_demo',
         'published_at',
     ];
 
@@ -45,6 +49,7 @@ class MarketplaceProduct extends Model
         'attributes' => 'array',
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
+        'is_demo' => 'boolean',
         'published_at' => 'datetime',
     ];
 
@@ -73,11 +78,15 @@ class MarketplaceProduct extends Model
         return $this->hasMany(MarketplaceFavorite::class, 'product_id');
     }
 
-    public function scopePubliclyVisibleInMarket(Builder $query, int $marketId, bool $allowWithoutActiveContracts = false): Builder
+    public function scopePubliclyVisibleInMarket(Builder $query, int $marketId, bool $allowWithoutActiveContracts = false, bool $includeDemoContent = true): Builder
     {
         $query = $query
             ->where('market_id', $marketId)
             ->where('is_active', true);
+
+        if (! $includeDemoContent && self::hasDemoFlagColumn()) {
+            $query->where('is_demo', false);
+        }
 
         if ($allowWithoutActiveContracts) {
             return $query;
@@ -88,5 +97,23 @@ class MarketplaceProduct extends Model
                 ->where('market_id', $marketId)
                 ->where('is_active', true);
         });
+    }
+
+    public function scopeWithoutDemoContent(Builder $query, bool $includeDemoContent): Builder
+    {
+        if ($includeDemoContent || ! self::hasDemoFlagColumn()) {
+            return $query;
+        }
+
+        return $query->where('is_demo', false);
+    }
+
+    protected static function hasDemoFlagColumn(): bool
+    {
+        if (static::$hasIsDemoColumn === null) {
+            static::$hasIsDemoColumn = Schema::hasColumn('marketplace_products', 'is_demo');
+        }
+
+        return static::$hasIsDemoColumn;
     }
 }

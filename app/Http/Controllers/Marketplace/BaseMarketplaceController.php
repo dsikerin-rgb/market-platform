@@ -9,6 +9,7 @@ use App\Models\Market;
 use App\Models\MarketplaceCategory;
 use App\Models\User;
 use App\Services\Auth\PortalAccessService;
+use App\Services\Marketplace\MarketplaceDemoContentService;
 use App\Services\Marketplace\MarketplaceContextService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -131,6 +132,9 @@ abstract class BaseMarketplaceController extends Controller
             'allow_public_sales_without_active_contracts' => array_key_exists('allow_public_sales_without_active_contracts', $raw)
                 ? (bool) $raw['allow_public_sales_without_active_contracts']
                 : (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false),
+            'demo_content_enabled' => array_key_exists('demo_content_enabled', $raw)
+                ? (bool) $raw['demo_content_enabled']
+                : (bool) config('marketplace.demo_content_enabled', false),
         ];
     }
 
@@ -150,5 +154,10 @@ abstract class BaseMarketplaceController extends Controller
         }
 
         return Storage::disk('public')->url($value);
+    }
+
+    protected function marketplaceDemoContentEnabled(Market $market): bool
+    {
+        return app(MarketplaceDemoContentService::class)->isEnabled($market);
     }
 }

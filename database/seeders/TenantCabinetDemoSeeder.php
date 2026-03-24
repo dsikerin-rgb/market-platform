@@ -12,6 +12,7 @@ use App\Models\TenantShowcase;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
+use App\Support\MarketplaceDemoAssets;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
@@ -188,6 +189,7 @@ class TenantCabinetDemoSeeder extends Seeder
             'telegram' => 'https://t.me/ekoyar',
             'website' => 'https://example.com',
             'photos' => $this->seedShowcasePhotos(),
+            'is_demo' => true,
         ]);
     }
 
@@ -196,17 +198,6 @@ class TenantCabinetDemoSeeder extends Seeder
      */
     private function seedShowcasePhotos(): array
     {
-        $base64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+qXeoAAAAASUVORK5CYII=';
-        $binary = base64_decode($base64);
-
-        $paths = [];
-
-        for ($i = 1; $i <= 5; $i += 1) {
-            $path = "tenant-showcases/demo-{$i}.png";
-            Storage::disk('public')->put($path, $binary);
-            $paths[] = $path;
-        }
-
-        return $paths;
+        return MarketplaceDemoAssets::imagePaths();
     }
 }

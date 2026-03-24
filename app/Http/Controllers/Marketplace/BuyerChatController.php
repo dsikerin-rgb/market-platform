@@ -86,6 +86,7 @@ class BuyerChatController extends BaseMarketplaceController
         $buyer = $request->user();
         abort_unless($buyer, 403);
         $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
         $tenantQuery = Tenant::query()
             ->where('market_id', (int) $market->id)
@@ -116,7 +117,7 @@ class BuyerChatController extends BaseMarketplaceController
         $productSlug = trim((string) ($validated['product_slug'] ?? ''));
         if ($productSlug !== '') {
             $product = MarketplaceProduct::query()
-                ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
+                ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
                 ->where('tenant_id', (int) $tenant->id)
                 ->where('slug', $productSlug)
                 ->first();

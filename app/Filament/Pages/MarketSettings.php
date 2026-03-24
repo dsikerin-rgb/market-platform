@@ -108,6 +108,7 @@ class MarketSettings extends Page
         'slider_autoplay_interval_ms' => 7000,
         'legacy_site_merge_enabled' => true,
         'allow_public_sales_without_active_contracts' => false,
+        'demo_content_enabled' => false,
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -308,6 +309,9 @@ class MarketSettings extends Page
             'allow_public_sales_without_active_contracts' => array_key_exists('allow_public_sales_without_active_contracts', $marketplaceSettings)
                 ? (bool) $marketplaceSettings['allow_public_sales_without_active_contracts']
                 : (bool) config('marketplace.contracts.allow_public_sales_without_active_contracts', false),
+            'demo_content_enabled' => array_key_exists('demo_content_enabled', $marketplaceSettings)
+                ? (bool) $marketplaceSettings['demo_content_enabled']
+                : (bool) config('marketplace.demo_content_enabled', false),
             'debt_monitoring_grace_days' => is_numeric($settings['debt_monitoring']['grace_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['grace_days']
                 : 5,
@@ -503,6 +507,12 @@ class MarketSettings extends Page
                         Forms\Components\Toggle::make('allow_public_sales_without_active_contracts')
                             ->label('Показывать продавцов без активного договора')
                             ->helperText('Временный режим для запуска или на случай сбоев интеграции.')
+                            ->default(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
+                        Forms\Components\Toggle::make('demo_content_enabled')
+                            ->label('Показывать демо-контент')
+                            ->helperText('Когда выключено, демо-товары, демо-витрины и их изображения не показываются на публичной странице. Это удобно, когда вы уже переходите на реальные данные.')
                             ->default(false)
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpanFull(),
@@ -885,6 +895,7 @@ class MarketSettings extends Page
             'slider_autoplay_interval_ms' => max(4000, min((int) ($state['slider_autoplay_interval_ms'] ?? 7000), 20000)),
             'legacy_site_merge_enabled' => (bool) ($state['legacy_site_merge_enabled'] ?? true),
             'allow_public_sales_without_active_contracts' => (bool) ($state['allow_public_sales_without_active_contracts'] ?? false),
+            'demo_content_enabled' => (bool) ($state['demo_content_enabled'] ?? false),
         ];
         $yellowAfterDays = is_numeric($state['debt_monitoring_yellow_after_days'] ?? null)
             ? max(1, min(60, (int) $state['debt_monitoring_yellow_after_days']))

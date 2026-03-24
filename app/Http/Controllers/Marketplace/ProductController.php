@@ -17,9 +17,10 @@ class ProductController extends BaseMarketplaceController
     {
         $market = $this->resolveMarketOrFail($marketSlug);
         $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
         $product = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
             ->where('slug', $productSlug)
             ->with([
                 'tenant:id,name,short_name,slug,market_id',
@@ -49,7 +50,7 @@ class ProductController extends BaseMarketplaceController
             ->get();
 
         $relatedProducts = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
             ->whereKeyNot((int) $product->id)
             ->where(function ($query) use ($product): void {
                 $query

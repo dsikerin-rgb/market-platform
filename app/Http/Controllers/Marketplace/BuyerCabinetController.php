@@ -17,10 +17,11 @@ class BuyerCabinetController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
         $buyer = $request->user();
         abort_unless($buyer, 403);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
         $favoritesCount = (int) MarketplaceFavorite::query()
             ->where('buyer_user_id', (int) $buyer->id)
-            ->whereHas('product', fn ($q) => $q->publiclyVisibleInMarket((int) $market->id))
+            ->whereHas('product', fn ($q) => $q->publiclyVisibleInMarket((int) $market->id, false, $showDemoContent))
             ->count();
 
         $openChatsCount = (int) MarketplaceChat::query()
@@ -31,7 +32,7 @@ class BuyerCabinetController extends BaseMarketplaceController
 
         $latestFavorites = MarketplaceProduct::query()
             ->whereHas('favorites', fn ($q) => $q->where('buyer_user_id', (int) $buyer->id))
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, false, $showDemoContent)
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('id')
             ->limit(8)
@@ -65,9 +66,10 @@ class BuyerCabinetController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
         $buyer = $request->user();
         abort_unless($buyer, 403);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
         $products = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, false, $showDemoContent)
             ->whereHas('favorites', fn ($q) => $q->where('buyer_user_id', (int) $buyer->id))
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('id')

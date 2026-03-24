@@ -19,6 +19,7 @@ class StoreController extends BaseMarketplaceController
     {
         $market = $this->resolveMarketOrFail($marketSlug);
         $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
         $tenant = $this->resolveTenantByRouteKey((int) $market->id, $tenantSlug, $allowWithoutActiveContracts);
 
         $spaces = $tenant->spaces()
@@ -33,7 +34,7 @@ class StoreController extends BaseMarketplaceController
         }
 
         $productsQuery = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts)
+            ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
             ->where('tenant_id', (int) $tenant->id)
             ->with(['marketSpace:id,display_name,number,code']);
 
@@ -69,10 +70,13 @@ class StoreController extends BaseMarketplaceController
             $showcase = $tenant->spaceShowcases()
                 ->where('market_space_id', $selectedSpaceId)
                 ->where('is_active', true)
+                ->withoutDemoContent($showDemoContent)
                 ->first();
         }
         if (! $showcase) {
-            $showcase = $tenant->showcase()->first();
+            $showcase = $tenant->showcase()
+                ->withoutDemoContent($showDemoContent)
+                ->first();
         }
 
         return view('marketplace.stores.show', array_merge(

@@ -16,9 +16,10 @@ class BuyerFavoriteController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
         $buyer = $request->user();
         abort_unless($buyer, 403);
+        $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
         $product = MarketplaceProduct::query()
-            ->publiclyVisibleInMarket((int) $market->id)
+            ->publiclyVisibleInMarket((int) $market->id, false, $showDemoContent)
             ->where('slug', $productSlug)
             ->firstOrFail();
 

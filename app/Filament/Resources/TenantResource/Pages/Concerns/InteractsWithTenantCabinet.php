@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\TenantShowcase;
 use App\Models\User;
 use App\Services\Cabinet\TenantCabinetUserService;
+use App\Services\Marketplace\MarketplaceDemoContentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -112,6 +113,9 @@ trait InteractsWithTenantCabinet
             ->all();
 
         $showcase = TenantShowcase::query()->where('tenant_id', (int) $tenant->id)->first();
+        if ($showcase && ! app(MarketplaceDemoContentService::class)->isEnabled($tenant->market) && (bool) $showcase->is_demo) {
+            $showcase = null;
+        }
         if ($showcase) {
             $state['showcase_title'] = (string) ($showcase->title ?? '');
             $state['showcase_description'] = (string) ($showcase->description ?? '');
@@ -206,6 +210,7 @@ trait InteractsWithTenantCabinet
         if ($hasShowcaseInput || $showcase->exists) {
             $showcase->fill($showcaseData);
             $showcase->tenant_id = (int) $tenant->id;
+            $showcase->is_demo = false;
             $showcase->save();
         }
     }
