@@ -7,10 +7,12 @@ namespace Tests\Feature;
 use App\Models\Market;
 use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantShowcase;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -197,5 +199,125 @@ class MarketplaceFeatureTest extends TestCase
         $this->get($showcaseRoute)
             ->assertOk()
             ->assertSee('Demo showcase description');
+    }
+
+    public function test_marketplace_bootstrap_seeds_ten_demo_products_per_tenant(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Bootstrap market',
+            'slug' => 'bootstrap-market',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+        ]);
+
+        $tenantOne = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant One',
+            'short_name' => 'One',
+            'slug' => 'tenant-one',
+            'is_active' => true,
+        ]);
+
+        $tenantTwo = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant Two',
+            'short_name' => 'Two',
+            'slug' => 'tenant-two',
+            'is_active' => true,
+        ]);
+
+        MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenantOne->id,
+            'number' => 'A-1',
+            'status' => 'leased',
+        ]);
+
+        MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenantTwo->id,
+            'number' => 'B-1',
+            'status' => 'leased',
+        ]);
+
+        $this->artisan('marketplace:bootstrap', [
+            '--market' => (string) $market->id,
+            '--seed-products' => 10,
+            '--force' => true,
+        ])->assertExitCode(0);
+
+        $this->assertSame(10, MarketplaceProduct::query()
+            ->where('market_id', (int) $market->id)
+            ->where('tenant_id', (int) $tenantOne->id)
+            ->where('is_demo', true)
+            ->count());
+
+        $this->assertSame(10, MarketplaceProduct::query()
+            ->where('market_id', (int) $market->id)
+            ->where('tenant_id', (int) $tenantTwo->id)
+            ->where('is_demo', true)
+            ->count());
+    }
+
+    public function test_marketplace_bootstrap_uses_tenant_and_space_profile_for_demo_products(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Profile market',
+            'slug' => 'profile-market',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Мясная лавка Фермера',
+            'short_name' => 'Фермер',
+            'slug' => 'farmer-meat-shop',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'M-12',
+            'display_name' => 'Мясной отдел',
+            'activity_type' => 'мясо и колбасы',
+            'status' => 'leased',
+        ]);
+
+        $this->artisan('marketplace:bootstrap', [
+            '--market' => (string) $market->id,
+            '--seed-products' => 3,
+            '--force' => true,
+        ])->assertExitCode(0);
+
+        $products = MarketplaceProduct::query()
+            ->where('market_id', (int) $market->id)
+            ->where('tenant_id', (int) $tenant->id)
+            ->where('market_space_id', (int) $space->id)
+            ->where('is_demo', true)
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(3, $products);
+
+        $meatCategory = MarketplaceCategory::query()
+            ->where('market_id', null)
+            ->where('name', 'Мясо и рыба')
+            ->first();
+
+        $this->assertNotNull($meatCategory);
+        $this->assertTrue($products->every(
+            fn (MarketplaceProduct $product): bool => (int) $product->category_id === (int) $meatCategory->id
+        ));
+        $this->assertTrue($products->every(
+            fn (MarketplaceProduct $product): bool => ($product->attributes['demo_profile'] ?? null) === 'meat_fish'
+        ));
+        $this->assertTrue($products->every(
+            fn (MarketplaceProduct $product): bool => Str::contains(
+                Str::lower((string) $product->title),
+                ['мяс', 'рыб', 'колбас', 'полуфабрикат'],
+            )
+        ));
     }
 }
