@@ -401,6 +401,7 @@ final class MarketplaceMediaStorage
     private static function responseHeaders(): array
     {
         return [
+            'Content-Disposition' => 'inline',
             'Cache-Control' => 'public, max-age=604800, immutable',
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'X-Content-Type-Options' => 'nosniff',
