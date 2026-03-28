@@ -11,6 +11,8 @@ use Filament\Facades\Filament;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class NotifySuperAdminsAboutUserLogin
 {
@@ -38,7 +40,7 @@ class NotifySuperAdminsAboutUserLogin
         $notification = $this->makeNotification($actor);
 
         if (! $actor->isSuperAdmin() && $this->canReceiveSecurityNotifications($actor)) {
-            $actor->notify($notification);
+            $this->safeNotify($actor, $notification);
         }
 
         $superAdmins = User::query()
@@ -55,7 +57,22 @@ class NotifySuperAdminsAboutUserLogin
                 continue;
             }
 
-            $superAdmin->notify($notification);
+            $this->safeNotify($superAdmin, $notification);
+        }
+    }
+
+    private function safeNotify(User $recipient, UserLoggedInNotification $notification): void
+    {
+        try {
+            $recipient->notify($notification);
+        } catch (Throwable $e) {
+            Log::warning('Login notification failed; request continues.', [
+                'recipient_id' => (int) $recipient->getKey(),
+                'recipient_class' => $recipient::class,
+                'notification' => $notification::class,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 

@@ -6,6 +6,8 @@ namespace App\Notifications\Channels;
 
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class TelegramChannel
 {
@@ -13,34 +15,62 @@ class TelegramChannel
     {
         $token = trim((string) config('services.telegram.bot_token', ''));
         if ($token === '') {
-            throw new \RuntimeException('Telegram bot token is not configured.');
+            Log::warning('Telegram notification skipped: bot token is not configured.', [
+                'notification' => $notification::class,
+                'notifiable' => $notifiable::class,
+            ]);
+
+            return;
         }
 
         $chatId = trim((string) ($notifiable->telegram_chat_id ?? ''));
         if ($chatId === '') {
-            throw new \RuntimeException('telegram_chat_id is missing for notifiable user.');
+            Log::warning('Telegram notification skipped: telegram_chat_id is missing.', [
+                'notification' => $notification::class,
+                'notifiable' => $notifiable::class,
+            ]);
+
+            return;
         }
 
         $message = $this->resolveMessage($notification, $notifiable);
         $text = trim((string) ($message['text'] ?? ''));
         if ($text === '') {
-            throw new \RuntimeException('Telegram message is empty.');
+            Log::warning('Telegram notification skipped: message text is empty.', [
+                'notification' => $notification::class,
+                'notifiable' => $notifiable::class,
+            ]);
+
+            return;
         }
 
         $apiBase = rtrim((string) config('services.telegram.api_base', 'https://api.telegram.org'), '/');
-        $timeout = max(2, (int) config('services.telegram.timeout', 10));
+        $timeout = min(3, max(2, (int) config('services.telegram.timeout', 3)));
 
-        $response = Http::timeout($timeout)
-            ->asForm()
-            ->post("{$apiBase}/bot{$token}/sendMessage", [
-                'chat_id' => $chatId,
-                'text' => $text,
-                'disable_web_page_preview' => true,
+        try {
+            $response = Http::timeout($timeout)
+                ->asForm()
+                ->post("{$apiBase}/bot{$token}/sendMessage", [
+                    'chat_id' => $chatId,
+                    'text' => $text,
+                    'disable_web_page_preview' => true,
+                ]);
+
+            if (! $response->successful() || (bool) $response->json('ok') !== true) {
+                Log::warning('Telegram API returned a non-success response.', [
+                    'notification' => $notification::class,
+                    'notifiable' => $notifiable::class,
+                    'status' => $response->status(),
+                    'body' => mb_substr((string) $response->body(), 0, 1000),
+                ]);
+            }
+        } catch (Throwable $e) {
+            Log::warning('Telegram notification failed; request will continue without it.', [
+                'notification' => $notification::class,
+                'notifiable' => $notifiable::class,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
             ]);
-
-        if (! $response->successful() || (bool) $response->json('ok') !== true) {
-            $body = mb_substr((string) $response->body(), 0, 1000);
-            throw new \RuntimeException('Telegram API error: ' . $body);
         }
     }
 

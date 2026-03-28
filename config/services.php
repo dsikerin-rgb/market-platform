@@ -41,7 +41,7 @@ return [
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
         'api_base' => env('TELEGRAM_API_BASE', 'https://api.telegram.org'),
-        'timeout' => (int) env('TELEGRAM_HTTP_TIMEOUT', 10),
+        'timeout' => (int) env('TELEGRAM_HTTP_TIMEOUT', 3),
     ],
 
 ];
