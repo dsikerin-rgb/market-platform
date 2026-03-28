@@ -41,18 +41,37 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Services\Debt\DebtAggregator;
 use App\Support\StaffConversationService;
+use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\Validation\ValidationException;
 
 Route::view('/', 'welcome')->name('home');
+
+Route::get('/media/{path}', function (string $path) {
+    return MarketplaceMediaStorage::serve($path);
+})
+    ->where('path', '.*')
+    ->withoutMiddleware([
+        EncryptCookies::class,
+        AddQueuedCookiesToResponse::class,
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        VerifyCsrfToken::class,
+    ])
+    ->name('marketplace.media.proxy');
 
 Route::get('/login', function () {
     return redirect()->route('cabinet.login');

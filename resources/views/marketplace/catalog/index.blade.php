@@ -25,7 +25,7 @@
                     <option value="">Все</option>
                     @foreach($categories as $category)
                         <option value="{{ $category->slug }}" {{ $selectedCategory && $selectedCategory->id === $category->id ? 'selected' : '' }}>
-                            {{ $category->name }}
+                            {{ $category->parent_id ? '-- ' : '' }}{{ $category->name }}
                         </option>
                     @endforeach
                 </select>
@@ -75,7 +75,7 @@
                 @endforeach
             </div>
             <div style="margin-top:14px;">
-                {{ $products->links() }}
+                {{ $products->links('marketplace.partials.pagination') }}
             </div>
         @endif
     </section>

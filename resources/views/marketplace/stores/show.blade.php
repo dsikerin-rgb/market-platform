@@ -63,7 +63,9 @@
                     @include('marketplace.partials.product-card', ['product' => $product])
                 @endforeach
             </div>
-            <div style="margin-top:14px;">{{ $products->links() }}</div>
+            <div style="margin-top:14px;">
+                {{ $products->links('marketplace.partials.pagination') }}
+            </div>
         @endif
     </section>
 
