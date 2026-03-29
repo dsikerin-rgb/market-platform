@@ -258,7 +258,7 @@
 
                     <div class="mt-6 space-y-4">
                         @if($existingImages->isNotEmpty())
-                            <div class="mx-auto" style="max-width: 22rem;">
+                            <div style="max-width: 22rem;">
                                 @php
                                     $coverImage = $existingImages->first();
                                     $coverPreview = \App\Support\MarketplaceMediaStorage::previewUrl($coverImage) ?? \App\Support\MarketplaceMediaStorage::url($coverImage);
@@ -286,7 +286,7 @@
                                     </div>
                                     <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
                                         <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
-                                        <span>Удалить фото</span>
+                                        <span>Пометить на удаление</span>
                                     </div>
                                 </label>
                             </div>
@@ -311,7 +311,7 @@
                                                     <span class="text-xs font-semibold text-white">Фото {{ $index + 2 }}</span>
                                                     <span class="inline-flex items-center gap-2 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20">
                                                         <input type="checkbox" name="remove_images[]" value="{{ $imagePath }}" class="{{ $checkboxClass }}">
-                                                        Удалить
+                                                        На удаление
                                                     </span>
                                                 </div>
                                             </div>
@@ -340,6 +340,7 @@
                                 multiple
                                 accept="image/*"
                                 class="sr-only"
+                                data-product-image-input
                             >
 
                             <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100 transition group-hover:scale-[1.02]">
@@ -352,6 +353,19 @@
                                 Можно выбрать несколько файлов сразу. Подойдут JPG, PNG и WEBP.
                             </span>
                         </label>
+
+                        <div class="hidden rounded-3xl border border-emerald-200 bg-emerald-50/70 p-4" data-product-upload-preview>
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">Выбрано к загрузке</p>
+                                    <p class="mt-1 text-xs leading-5 text-slate-600">
+                                        Эти изображения появятся в карточке после нажатия «{{ $submitLabel }}».
+                                    </p>
+                                </div>
+                                <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" data-product-upload-count>0 фото</span>
+                            </div>
+                            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" data-product-upload-grid></div>
+                        </div>
                     </div>
                 </section>
 
@@ -425,4 +439,50 @@
             </div>
         </div>
     </form>
+
+    <script>
+        (() => {
+            const input = document.querySelector('[data-product-image-input]');
+            const preview = document.querySelector('[data-product-upload-preview]');
+            const grid = document.querySelector('[data-product-upload-grid]');
+            const count = document.querySelector('[data-product-upload-count]');
+
+            if (!input || !preview || !grid || !count) {
+                return;
+            }
+
+            const render = () => {
+                const files = Array.from(input.files || []).filter((file) => file.type.startsWith('image/'));
+
+                grid.innerHTML = '';
+
+                if (files.length === 0) {
+                    preview.classList.add('hidden');
+                    count.textContent = '0 фото';
+                    return;
+                }
+
+                preview.classList.remove('hidden');
+                count.textContent = files.length + ' фото';
+
+                files.forEach((file, index) => {
+                    const url = URL.createObjectURL(file);
+                    const item = document.createElement('div');
+                    item.className = 'overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm';
+                    item.innerHTML = `
+                        <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                            <img src="${url}" alt="" class="h-full w-full object-cover">
+                        </div>
+                        <div class="flex items-center justify-between gap-2 px-3 py-2">
+                            <span class="min-w-0 truncate text-xs font-semibold text-slate-700">${file.name}</span>
+                            <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">${index + 1}</span>
+                        </div>
+                    `;
+                    grid.appendChild(item);
+                });
+            };
+
+            input.addEventListener('change', render);
+        })();
+    </script>
 </x-cabinet-layout>
