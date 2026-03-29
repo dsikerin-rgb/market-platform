@@ -333,24 +333,22 @@
                             </div>
                         @endif
 
-                        <label class="group flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-sky-200 bg-sky-50/60 px-5 py-7 text-center transition hover:border-sky-400 hover:bg-sky-50">
+                        <label class="group flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-sky-200 bg-sky-50/60 px-5 py-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
                             <input
                                 type="file"
                                 name="new_images[]"
                                 multiple
                                 accept="image/*"
-                                class="sr-only"
+                                style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;"
                                 data-product-image-input
                             >
 
-                            <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100 transition group-hover:scale-[1.02]">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
-                                </svg>
+                            <span class="inline-flex items-center justify-center rounded-2xl border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-400 group-hover:text-sky-800">
+                                &#1042;&#1099;&#1073;&#1088;&#1072;&#1090;&#1100; &#1092;&#1086;&#1090;&#1086;
                             </span>
-                            <span class="mt-3 text-sm font-semibold text-slate-900">Добавить новые фото</span>
+                            <span class="mt-3 text-sm font-semibold text-slate-900" data-product-input-caption>&#1060;&#1072;&#1081;&#1083;&#1099; &#1077;&#1097;&#1077; &#1085;&#1077; &#1074;&#1099;&#1073;&#1088;&#1072;&#1085;&#1099;</span>
                             <span class="mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                                Можно выбрать несколько файлов сразу. Подойдут JPG, PNG и WEBP.
+                                &#1052;&#1086;&#1078;&#1085;&#1086; &#1074;&#1099;&#1073;&#1088;&#1072;&#1090;&#1100; &#1085;&#1077;&#1089;&#1082;&#1086;&#1083;&#1100;&#1082;&#1086; &#1092;&#1072;&#1081;&#1083;&#1086;&#1074; &#1089;&#1088;&#1072;&#1079;&#1091;. &#1055;&#1086;&#1076;&#1086;&#1081;&#1076;&#1091;&#1090; JPG, PNG &#1080; WEBP.
                             </span>
                         </label>
 
@@ -460,11 +458,15 @@
                 if (files.length === 0) {
                     preview.classList.add('hidden');
                     count.textContent = '0 фото';
+                    caption.textContent = 'Файлы еще не выбраны';
                     return;
                 }
 
                 preview.classList.remove('hidden');
                 count.textContent = files.length + ' фото';
+                caption.textContent = files.length === 1
+                    ? files[0].name
+                    : 'Выбрано файлов: ' + files.length;
 
                 files.forEach((file, index) => {
                     const url = URL.createObjectURL(file);
