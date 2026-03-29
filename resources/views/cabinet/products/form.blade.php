@@ -271,31 +271,31 @@
                                     $coverPreview = \App\Support\MarketplaceMediaStorage::previewUrl($coverImage) ?? \App\Support\MarketplaceMediaStorage::url($coverImage);
                                 @endphp
 
-                                <label class="group relative block overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-100 shadow-sm">
+                                <div class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
                                     <div class="aspect-[4/3] w-full overflow-hidden rounded-[1.75rem]">
                                         <img
                                             src="{{ $coverPreview }}"
                                             alt="Основное фото товара"
-                                            class="block h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                                            class="block h-full w-full object-cover"
                                             loading="lazy"
                                         >
                                     </div>
-                                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent p-4">
-                                        <div class="flex items-end justify-between gap-3">
+                                    <div class="space-y-3 border-t border-slate-200 px-4 py-3">
+                                        <div class="flex items-start justify-between gap-3">
                                             <div>
-                                                <p class="text-sm font-semibold text-white">Основное фото</p>
-                                                <p class="mt-1 text-xs text-slate-100">Используется как главное изображение товара</p>
+                                                <p class="text-sm font-semibold text-slate-900">Основное фото</p>
+                                                <p class="mt-1 text-xs leading-5 text-slate-500">Используется как главное изображение товара в карточке и каталоге.</p>
                                             </div>
-                                            <span class="inline-flex h-8 items-center justify-center rounded-full bg-white/15 px-3 text-xs font-semibold text-white ring-1 ring-white/20">
+                                            <span class="inline-flex h-8 items-center justify-center rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600">
                                                 1
                                             </span>
                                         </div>
+                                        <label class="inline-flex cursor-pointer items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
+                                            <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
+                                            <span>Удалить после сохранения</span>
+                                        </label>
                                     </div>
-                                    <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-lg ring-1 ring-rose-200">
-                                        <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
-                                        <span>Пометить на удаление</span>
-                                    </div>
-                                </label>
+                                </div>
                             </div>
 
                             @if($existingImages->count() > 1)
@@ -305,24 +305,27 @@
                                             $imagePreview = \App\Support\MarketplaceMediaStorage::previewUrl($imagePath) ?? \App\Support\MarketplaceMediaStorage::url($imagePath);
                                         @endphp
 
-                                        <label class="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm">
+                                        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                                             <img
                                                 src="{{ $imagePreview }}"
                                                 alt="Фото товара {{ $index + 2 }}"
-                                                class="block w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                                                class="block w-full object-cover"
                                                 style="height: 88px;"
                                                 loading="lazy"
                                             >
-                                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent p-3">
+                                            <div class="space-y-2 border-t border-slate-200 px-3 py-2">
                                                 <div class="flex items-center justify-between gap-2">
-                                                    <span class="text-xs font-semibold text-white">Фото {{ $index + 2 }}</span>
-                                                    <span class="inline-flex items-center gap-2 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200 shadow-lg">
-                                                        <input type="checkbox" name="remove_images[]" value="{{ $imagePath }}" class="{{ $checkboxClass }}">
-                                                        На удаление
+                                                    <span class="text-xs font-semibold text-slate-900">Фото {{ $index + 2 }}</span>
+                                                    <span class="inline-flex h-6 items-center justify-center rounded-full bg-slate-100 px-2 text-[11px] font-semibold text-slate-600">
+                                                        {{ $index + 2 }}
                                                     </span>
                                                 </div>
+                                                <label class="inline-flex cursor-pointer items-center gap-2 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200">
+                                                    <input type="checkbox" name="remove_images[]" value="{{ $imagePath }}" class="{{ $checkboxClass }}">
+                                                    <span>Удалить</span>
+                                                </label>
                                             </div>
-                                        </label>
+                                        </div>
                                     @endforeach
                                 </div>
                             @endif
@@ -371,7 +374,7 @@
                                 <div>
                                     <p class="text-sm font-semibold text-slate-900">Выбрано к загрузке</p>
                                     <p class="mt-1 text-xs leading-5 text-slate-600">
-                                        Эти изображения появятся в карточке после нажатия «{{ $submitLabel }}».
+                                        Эти изображения появятся в карточке после нажатия «{{ $submitLabel }}». Ненужные можно убрать до сохранения.
                                     </p>
                                 </div>
                                 <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" data-product-upload-count>0 фото</span>
@@ -485,6 +488,18 @@
                 });
             };
 
+            const assignFiles = (files) => {
+                if (typeof DataTransfer === 'undefined') {
+                    return;
+                }
+
+                const transfer = new DataTransfer();
+
+                files.forEach((file) => transfer.items.add(file));
+
+                input.files = transfer.files;
+            };
+
             const render = () => {
                 const scrollState = captureScrollState();
                 const files = Array.from(input.files || []).filter((file) => file.type.startsWith('image/'));
@@ -513,12 +528,27 @@
                         <div style="aspect-ratio: 4 / 3; overflow: hidden; background: #f8fafc;">
                             <img src="${url}" alt="" class="h-full w-full object-cover">
                         </div>
-                        <div class="flex items-center justify-between gap-2 px-3 py-2">
-                            <span class="min-w-0 truncate text-xs font-semibold text-slate-700">${file.name}</span>
-                            <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">${index + 1}</span>
+                        <div class="space-y-2 px-3 py-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="min-w-0 truncate text-xs font-semibold text-slate-700">${file.name}</span>
+                                <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">${index + 1}</span>
+                            </div>
+                            <button type="button" class="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200" data-remove-upload-index="${index}">
+                                Убрать из загрузки
+                            </button>
                         </div>
                     `;
                     grid.appendChild(item);
+                });
+
+                grid.querySelectorAll('[data-remove-upload-index]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const removeIndex = Number(button.getAttribute('data-remove-upload-index'));
+                        const nextFiles = files.filter((_, fileIndex) => fileIndex !== removeIndex);
+
+                        assignFiles(nextFiles);
+                        render();
+                    });
                 });
 
                 restoreScrollState(scrollState);
