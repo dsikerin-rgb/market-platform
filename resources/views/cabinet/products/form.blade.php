@@ -38,7 +38,7 @@
         @csrf
 
         <section class="overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-slate-50 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] md:p-6">
-            <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+            <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
                 <div class="max-w-3xl">
                     <div class="flex flex-wrap items-center gap-2">
                         <a
@@ -60,7 +60,7 @@
                         Витрина и карточка товара управляются отдельно, поэтому здесь собраны только рабочие поля.
                     </p>
 
-                    <div class="mt-4 flex flex-wrap gap-2">
+                    <div class="mt-4 flex flex-wrap gap-2 pb-2 sm:pb-3">
                         <span class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                             Категория: {{ $categoryLabel }}
                         </span>
@@ -119,7 +119,7 @@
                         </span>
                     </div>
 
-                    <div class="mt-5 space-y-4">
+                    <div class="mt-6 space-y-4">
                         <label class="block">
                             <span class="text-sm font-medium text-slate-700">Название товара</span>
                             <input
@@ -256,37 +256,40 @@
                         </span>
                     </div>
 
-                    <div class="mt-5 space-y-4">
+                    <div class="mt-6 space-y-4">
                         @if($existingImages->isNotEmpty())
-                            @php
-                                $coverImage = $existingImages->first();
-                                $coverPreview = \App\Support\MarketplaceMediaStorage::previewUrl($coverImage) ?? \App\Support\MarketplaceMediaStorage::url($coverImage);
-                            @endphp
+                            <div class="mx-auto max-w-[34rem]">
+                                @php
+                                    $coverImage = $existingImages->first();
+                                    $coverPreview = \App\Support\MarketplaceMediaStorage::previewUrl($coverImage) ?? \App\Support\MarketplaceMediaStorage::url($coverImage);
+                                @endphp
 
-                            <label class="group relative block overflow-hidden rounded-3xl border border-slate-200 bg-slate-100 shadow-sm">
-                                <img
-                                    src="{{ $coverPreview }}"
-                                    alt="Основное фото товара"
-                                    class="block w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                                    style="height: 220px;"
-                                    loading="lazy"
-                                >
-                                <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent p-4">
-                                    <div class="flex items-end justify-between gap-3">
-                                        <div>
-                                            <p class="text-sm font-semibold text-white">Основное фото</p>
-                                            <p class="mt-1 text-xs text-slate-100">Используется как главное изображение товара</p>
-                                        </div>
-                                        <span class="inline-flex h-8 items-center justify-center rounded-full bg-white/15 px-3 text-xs font-semibold text-white ring-1 ring-white/20">
-                                            1
-                                        </span>
+                                <label class="group relative block overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-100 shadow-sm">
+                                    <div class="aspect-[4/3] w-full overflow-hidden">
+                                        <img
+                                            src="{{ $coverPreview }}"
+                                            alt="Основное фото товара"
+                                            class="block h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                                            loading="lazy"
+                                        >
                                     </div>
-                                </div>
-                                <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
-                                    <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
-                                    <span>Удалить фото</span>
-                                </div>
-                            </label>
+                                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent p-4">
+                                        <div class="flex items-end justify-between gap-3">
+                                            <div>
+                                                <p class="text-sm font-semibold text-white">Основное фото</p>
+                                                <p class="mt-1 text-xs text-slate-100">Используется как главное изображение товара</p>
+                                            </div>
+                                            <span class="inline-flex h-8 items-center justify-center rounded-full bg-white/15 px-3 text-xs font-semibold text-white ring-1 ring-white/20">
+                                                1
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
+                                        <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
+                                        <span>Удалить фото</span>
+                                    </div>
+                                </label>
+                            </div>
 
                             @if($existingImages->count() > 1)
                                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-2">
