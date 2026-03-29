@@ -242,7 +242,7 @@
                 </section>
             </div>
 
-            <div class="w-full space-y-4 xl:sticky xl:top-4 xl:self-start">
+            <div class="w-full space-y-4 xl:self-start">
                 <section class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] md:p-6">
                     <div class="flex items-start justify-between gap-3">
                         <div>
@@ -258,6 +258,13 @@
 
                     <div class="mt-6 space-y-4">
                         @if($existingImages->isNotEmpty())
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                                <p class="text-sm font-semibold text-slate-900">Текущие фото</p>
+                                <p class="mt-1 text-xs leading-5 text-slate-500">
+                                    Эти изображения уже сохранены у товара. Чтобы удалить фото, отметьте его чекбоксом и нажмите «{{ $submitLabel }}».
+                                </p>
+                            </div>
+
                             <div style="max-width: 22rem;">
                                 @php
                                     $coverImage = $existingImages->first();
@@ -273,7 +280,7 @@
                                             loading="lazy"
                                         >
                                     </div>
-                                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent p-4">
+                                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent p-4">
                                         <div class="flex items-end justify-between gap-3">
                                             <div>
                                                 <p class="text-sm font-semibold text-white">Основное фото</p>
@@ -284,7 +291,7 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
+                                    <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-lg ring-1 ring-rose-200">
                                         <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
                                         <span>Пометить на удаление</span>
                                     </div>
@@ -306,10 +313,10 @@
                                                 style="height: 88px;"
                                                 loading="lazy"
                                             >
-                                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent p-3">
+                                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent p-3">
                                                 <div class="flex items-center justify-between gap-2">
                                                     <span class="text-xs font-semibold text-white">Фото {{ $index + 2 }}</span>
-                                                    <span class="inline-flex items-center gap-2 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20">
+                                                    <span class="inline-flex items-center gap-2 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200 shadow-lg">
                                                         <input type="checkbox" name="remove_images[]" value="{{ $imagePath }}" class="{{ $checkboxClass }}">
                                                         На удаление
                                                     </span>
@@ -333,13 +340,20 @@
                             </div>
                         @endif
 
-                        <label class="group flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-sky-200 bg-sky-50/60 px-5 py-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
+                        <div class="rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3">
+                            <p class="text-sm font-semibold text-slate-900">Новые фото к загрузке</p>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                Выбранные здесь файлы еще не сохранены. Они появятся в товаре только после нажатия «{{ $submitLabel }}».
+                            </p>
+                        </div>
+
+                        <label class="group relative flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-sky-200 bg-sky-50/60 px-5 py-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
                             <input
                                 type="file"
                                 name="new_images[]"
                                 multiple
                                 accept="image/*"
-                                style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;"
+                                style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;"
                                 data-product-image-input
                             >
 
@@ -445,12 +459,34 @@
             const grid = document.querySelector('[data-product-upload-grid]');
             const count = document.querySelector('[data-product-upload-count]');
             const caption = document.querySelector('[data-product-input-caption]');
+            const scrollContainer = document.querySelector('.cabinet-main');
 
             if (!input || !preview || !grid || !count || !caption) {
                 return;
             }
 
+            const captureScrollState = () => ({
+                windowY: window.scrollY || window.pageYOffset || 0,
+                containerY: scrollContainer ? scrollContainer.scrollTop : 0,
+            });
+
+            const restoreScrollState = (state) => {
+                const apply = () => {
+                    if (scrollContainer) {
+                        scrollContainer.scrollTop = state.containerY;
+                    }
+
+                    window.scrollTo(0, state.windowY);
+                };
+
+                requestAnimationFrame(() => {
+                    apply();
+                    requestAnimationFrame(apply);
+                });
+            };
+
             const render = () => {
+                const scrollState = captureScrollState();
                 const files = Array.from(input.files || []).filter((file) => file.type.startsWith('image/'));
 
                 grid.innerHTML = '';
@@ -459,6 +495,7 @@
                     preview.classList.add('hidden');
                     count.textContent = '0 фото';
                     caption.textContent = 'Файлы еще не выбраны';
+                    restoreScrollState(scrollState);
                     return;
                 }
 
@@ -483,6 +520,8 @@
                     `;
                     grid.appendChild(item);
                 });
+
+                restoreScrollState(scrollState);
             };
 
             input.addEventListener('change', render);
