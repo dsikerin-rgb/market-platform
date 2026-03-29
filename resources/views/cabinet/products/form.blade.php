@@ -257,130 +257,103 @@
                     </div>
 
                     <div class="mt-6 space-y-4">
-                        @if($existingImages->isNotEmpty())
-                            <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-                                <p class="text-sm font-semibold text-slate-900">Текущие фото</p>
-                                <p class="mt-1 text-xs leading-5 text-slate-500">
-                                    Эти изображения уже сохранены у товара. Чтобы удалить фото, отметьте его чекбоксом и нажмите «{{ $submitLabel }}».
-                                </p>
-                            </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                            <p class="text-sm font-semibold text-slate-900">Текущие фото</p>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                Нажмите на крестик у фото, чтобы удалить его сразу. Первое оставшееся фото автоматически станет основным.
+                            </p>
+                        </div>
 
-                            <div style="max-width: 22rem;">
+                        <div
+                            class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+                            data-existing-photos-grid
+                            data-image-delete-url="{{ route('cabinet.products.images.destroy', ['product' => (int) $product->id]) }}"
+                            data-csrf-token="{{ csrf_token() }}"
+                        >
+                            @foreach($existingImages as $index => $imagePath)
                                 @php
-                                    $coverImage = $existingImages->first();
-                                    $coverPreview = \App\Support\MarketplaceMediaStorage::previewUrl($coverImage) ?? \App\Support\MarketplaceMediaStorage::url($coverImage);
+                                    $imagePreview = \App\Support\MarketplaceMediaStorage::previewUrl($imagePath) ?? \App\Support\MarketplaceMediaStorage::url($imagePath);
+                                    $isCoverImage = $index === 0;
                                 @endphp
 
-                                <div class="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
-                                    <div class="aspect-[4/3] w-full overflow-hidden rounded-[1.75rem]">
+                                <article
+                                    class="group relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition"
+                                    data-existing-photo-card
+                                    data-image-path="{{ $imagePath }}"
+                                >
+                                    <div class="absolute left-3 top-3 z-10 inline-flex items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200" data-existing-photo-badge>
+                                        {{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        class="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600"
+                                        data-remove-existing-photo
+                                        aria-label="Удалить фото {{ $index + 1 }}"
+                                        title="Удалить фото"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </button>
+                                    <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
                                         <img
-                                            src="{{ $coverPreview }}"
-                                            alt="Основное фото товара"
+                                            src="{{ $imagePreview }}"
+                                            alt="{{ $isCoverImage ? 'Основное фото товара' : 'Фото товара ' . ($index + 1) }}"
                                             class="block h-full w-full object-cover"
                                             loading="lazy"
                                         >
                                     </div>
-                                    <div class="space-y-3 border-t border-slate-200 px-4 py-3">
-                                        <div class="flex items-start justify-between gap-3">
-                                            <div>
-                                                <p class="text-sm font-semibold text-slate-900">Основное фото</p>
-                                                <p class="mt-1 text-xs leading-5 text-slate-500">Используется как главное изображение товара в карточке и каталоге.</p>
-                                            </div>
-                                            <span class="inline-flex h-8 items-center justify-center rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600">
-                                                1
-                                            </span>
-                                        </div>
-                                        <label class="inline-flex cursor-pointer items-center gap-2 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200">
-                                            <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
-                                            <span>Удалить после сохранения</span>
-                                        </label>
+                                    <div class="border-t border-slate-200 px-4 py-3">
+                                        <p class="text-sm font-semibold text-slate-900" data-existing-photo-title>{{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}</p>
+                                        <p class="mt-1 text-xs leading-5 text-slate-500" data-existing-photo-description>
+                                            {{ $isCoverImage ? 'Используется как главное изображение товара.' : 'Дополнительное фото товара.' }}
+                                        </p>
                                     </div>
-                                </div>
-                            </div>
+                                </article>
+                            @endforeach
 
-                            @if($existingImages->count() > 1)
-                                <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); max-width: 22rem;">
-                                    @foreach($existingImages->skip(1) as $index => $imagePath)
-                                        @php
-                                            $imagePreview = \App\Support\MarketplaceMediaStorage::previewUrl($imagePath) ?? \App\Support\MarketplaceMediaStorage::url($imagePath);
-                                        @endphp
+                            <label class="group relative flex min-h-[16rem] cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed border-sky-200 bg-sky-50/60 p-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
+                                <input
+                                    type="file"
+                                    name="new_images[]"
+                                    multiple
+                                    accept="image/*"
+                                    style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;"
+                                    data-product-image-input
+                                >
 
-                                        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                                            <img
-                                                src="{{ $imagePreview }}"
-                                                alt="Фото товара {{ $index + 2 }}"
-                                                class="block w-full object-cover"
-                                                style="height: 88px;"
-                                                loading="lazy"
-                                            >
-                                            <div class="space-y-2 border-t border-slate-200 px-3 py-2">
-                                                <div class="flex items-center justify-between gap-2">
-                                                    <span class="text-xs font-semibold text-slate-900">Фото {{ $index + 2 }}</span>
-                                                    <span class="inline-flex h-6 items-center justify-center rounded-full bg-slate-100 px-2 text-[11px] font-semibold text-slate-600">
-                                                        {{ $index + 2 }}
-                                                    </span>
-                                                </div>
-                                                <label class="inline-flex cursor-pointer items-center gap-2 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200">
-                                                    <input type="checkbox" name="remove_images[]" value="{{ $imagePath }}" class="{{ $checkboxClass }}">
-                                                    <span>Удалить</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endif
-                        @else
-                            <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
-                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-sky-600 shadow-sm ring-1 ring-sky-100">
+                                <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm ring-1 ring-sky-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5V6.75A2.25 2.25 0 015.25 4.5h13.5A2.25 2.25 0 0121 6.75v9.75M3 16.5l4.172-4.172a2.25 2.25 0 013.182 0L12 14.75l2.646-2.422a2.25 2.25 0 013.182.1L21 16.5M8.25 10.5h.008v.008H8.25V10.5z"/>
                                     </svg>
-                                </div>
-                                <p class="mt-4 text-sm font-semibold text-slate-800">Фотографии еще не добавлены</p>
-                                <p class="mt-1 text-xs leading-5 text-slate-500">
-                                    Загрузите изображения товара, чтобы карточка выглядела аккуратнее в каталоге и на витрине.
-                                </p>
-                            </div>
-                        @endif
-
-                        <div class="rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-3">
-                            <p class="text-sm font-semibold text-slate-900">Новые фото к загрузке</p>
-                            <p class="mt-1 text-xs leading-5 text-slate-500">
-                                Выбранные здесь файлы еще не сохранены. Они появятся в товаре только после нажатия «{{ $submitLabel }}».
-                            </p>
+                                </span>
+                                <span class="mt-4 text-base font-semibold text-slate-900">Добавить фото</span>
+                                <span class="mt-2 max-w-xs text-xs leading-5 text-slate-500" data-product-input-caption>
+                                    Можно выбрать несколько файлов сразу. Подойдут JPG, PNG и WEBP.
+                                </span>
+                            </label>
                         </div>
 
-                        <label class="group relative flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-sky-200 bg-sky-50/60 px-5 py-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
-                            <input
-                                type="file"
-                                name="new_images[]"
-                                multiple
-                                accept="image/*"
-                                style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;"
-                                data-product-image-input
-                            >
-
-                            <span class="inline-flex items-center justify-center rounded-2xl border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm transition group-hover:border-sky-400 group-hover:text-sky-800">
-                                &#1042;&#1099;&#1073;&#1088;&#1072;&#1090;&#1100; &#1092;&#1086;&#1090;&#1086;
-                            </span>
-                            <span class="mt-3 text-sm font-semibold text-slate-900" data-product-input-caption>&#1060;&#1072;&#1081;&#1083;&#1099; &#1077;&#1097;&#1077; &#1085;&#1077; &#1074;&#1099;&#1073;&#1088;&#1072;&#1085;&#1099;</span>
-                            <span class="mt-1 max-w-sm text-xs leading-5 text-slate-500">
-                                &#1052;&#1086;&#1078;&#1085;&#1086; &#1074;&#1099;&#1073;&#1088;&#1072;&#1090;&#1100; &#1085;&#1077;&#1089;&#1082;&#1086;&#1083;&#1100;&#1082;&#1086; &#1092;&#1072;&#1081;&#1083;&#1086;&#1074; &#1089;&#1088;&#1072;&#1079;&#1091;. &#1055;&#1086;&#1076;&#1086;&#1081;&#1076;&#1091;&#1090; JPG, PNG &#1080; WEBP.
-                            </span>
-                        </label>
+                        <div class="{{ $existingImages->isEmpty() ? '' : 'hidden ' }}rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center" data-existing-photos-empty>
+                            <p class="text-sm font-semibold text-slate-800">Фотографии еще не добавлены</p>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                Добавьте первое фото товара, чтобы карточка выглядела аккуратнее в каталоге и на витрине.
+                            </p>
+                        </div>
 
                         <div class="hidden rounded-3xl border border-emerald-200 bg-emerald-50/70 p-4" data-product-upload-preview>
                             <div class="flex items-start justify-between gap-3">
                                 <div>
-                                    <p class="text-sm font-semibold text-slate-900">Выбрано к загрузке</p>
+                                    <p class="text-sm font-semibold text-slate-900">Новые фото</p>
                                     <p class="mt-1 text-xs leading-5 text-slate-600">
-                                        Эти изображения появятся в карточке после нажатия «{{ $submitLabel }}». Ненужные можно убрать до сохранения.
+                                        Эти изображения появятся в карточке после нажатия «{{ $submitLabel }}». Ненужные можно убрать крестиком на карточке.
                                     </p>
                                 </div>
                                 <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" data-product-upload-count>0 фото</span>
                             </div>
-                            <div class="mt-4 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); max-width: 22rem;" data-product-upload-grid></div>
+                            <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-product-upload-grid></div>
                         </div>
+
                     </div>
                 </section>
 
@@ -463,6 +436,8 @@
             const count = document.querySelector('[data-product-upload-count]');
             const caption = document.querySelector('[data-product-input-caption]');
             const scrollContainer = document.querySelector('.cabinet-main');
+            const existingPhotosGrid = document.querySelector('[data-existing-photos-grid]');
+            const existingPhotosEmpty = document.querySelector('[data-existing-photos-empty]');
 
             if (!input || !preview || !grid || !count || !caption) {
                 return;
@@ -486,6 +461,44 @@
                     apply();
                     requestAnimationFrame(apply);
                 });
+            };
+
+            const syncExistingPhotoState = () => {
+                if (!existingPhotosGrid) {
+                    return;
+                }
+
+                const cards = Array.from(existingPhotosGrid.querySelectorAll('[data-existing-photo-card]'));
+
+                cards.forEach((card, index) => {
+                    const badge = card.querySelector('[data-existing-photo-badge]');
+                    const title = card.querySelector('[data-existing-photo-title]');
+                    const description = card.querySelector('[data-existing-photo-description]');
+                    const removeButton = card.querySelector('[data-remove-existing-photo]');
+                    const isCover = index === 0;
+
+                    if (badge) {
+                        badge.textContent = isCover ? 'Основное фото' : `Фото ${index + 1}`;
+                    }
+
+                    if (title) {
+                        title.textContent = isCover ? 'Основное фото' : `Фото ${index + 1}`;
+                    }
+
+                    if (description) {
+                        description.textContent = isCover
+                            ? 'Используется как главное изображение товара.'
+                            : 'Дополнительное фото товара.';
+                    }
+
+                    if (removeButton) {
+                        removeButton.setAttribute('aria-label', `Удалить фото ${index + 1}`);
+                    }
+                });
+
+                if (existingPhotosEmpty) {
+                    existingPhotosEmpty.classList.toggle('hidden', cards.length > 0);
+                }
             };
 
             const assignFiles = (files) => {
@@ -523,19 +536,25 @@
                 files.forEach((file, index) => {
                     const url = URL.createObjectURL(file);
                     const item = document.createElement('div');
-                    item.className = 'overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm';
+                    item.className = 'relative overflow-hidden rounded-[1.5rem] border border-emerald-200 bg-white shadow-sm';
                     item.innerHTML = `
+                        <button type="button" class="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600" data-remove-upload-index="${index}" aria-label="Убрать фото ${index + 1}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                        <div class="absolute left-3 top-3 z-10 inline-flex items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+                            Новое фото
+                        </div>
                         <div style="aspect-ratio: 4 / 3; overflow: hidden; background: #f8fafc;">
                             <img src="${url}" alt="" class="h-full w-full object-cover">
                         </div>
-                        <div class="space-y-2 px-3 py-3">
+                        <div class="border-t border-emerald-200 px-4 py-3">
                             <div class="flex items-center justify-between gap-2">
-                                <span class="min-w-0 truncate text-xs font-semibold text-slate-700">${file.name}</span>
+                                <span class="min-w-0 truncate text-sm font-semibold text-slate-900">${file.name}</span>
                                 <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">${index + 1}</span>
                             </div>
-                            <button type="button" class="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200" data-remove-upload-index="${index}">
-                                Убрать из загрузки
-                            </button>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">Будет добавлено после сохранения товара.</p>
                         </div>
                     `;
                     grid.appendChild(item);
@@ -553,6 +572,62 @@
 
                 restoreScrollState(scrollState);
             };
+
+            if (existingPhotosGrid) {
+                existingPhotosGrid.querySelectorAll('[data-remove-existing-photo]').forEach((button) => {
+                    button.addEventListener('click', async () => {
+                        const card = button.closest('[data-existing-photo-card]');
+
+                        if (!card || button.dataset.loading === '1') {
+                            return;
+                        }
+
+                        const url = existingPhotosGrid.dataset.imageDeleteUrl;
+                        const csrfToken = existingPhotosGrid.dataset.csrfToken;
+                        const imagePath = card.dataset.imagePath;
+
+                        if (!url || !csrfToken || !imagePath) {
+                            return;
+                        }
+
+                        button.dataset.loading = '1';
+                        button.disabled = true;
+                        button.classList.add('opacity-60');
+
+                        try {
+                            const formData = new FormData();
+                            formData.append('_token', csrfToken);
+                            formData.append('path', imagePath);
+
+                            const response = await fetch(url, {
+                                method: 'POST',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': csrfToken,
+                                },
+                                body: formData,
+                            });
+
+                            if (!response.ok) {
+                                throw new Error('Delete failed');
+                            }
+
+                            const scrollState = captureScrollState();
+                            card.remove();
+                            syncExistingPhotoState();
+                            restoreScrollState(scrollState);
+                        } catch (error) {
+                            button.disabled = false;
+                            button.dataset.loading = '0';
+                            button.classList.remove('opacity-60');
+                            window.alert('Не удалось удалить фото. Обновите страницу и попробуйте еще раз.');
+                            return;
+                        }
+                    });
+                });
+
+                syncExistingPhotoState();
+            }
 
             input.addEventListener('change', render);
         })();

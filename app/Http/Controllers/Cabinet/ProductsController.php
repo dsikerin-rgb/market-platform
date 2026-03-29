@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Marketplace\MarketplaceDemoContentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -220,6 +221,39 @@ class ProductsController extends Controller
             ->with('success', 'Товар удалён.');
     }
 
+    public function destroyImage(Request $request, int $product): JsonResponse
+    {
+        $authUser = $request->user();
+        $tenant = $authUser->tenant;
+
+        [$spaces, $canManageGlobalProducts] = $this->resolveAccessibleSpaces($authUser, $tenant);
+        $productModel = $this->resolveProductOrFail($tenant, $spaces, $canManageGlobalProducts, $product);
+
+        $validated = $request->validate([
+            'path' => ['required', 'string'],
+        ]);
+
+        $path = trim((string) $validated['path']);
+        $images = collect($productModel->images ?? [])
+            ->filter(static fn ($imagePath): bool => is_string($imagePath) && $imagePath !== '')
+            ->values();
+
+        abort_unless($images->contains($path), 422, 'Передано неизвестное изображение.');
+
+        Storage::disk('public')->delete($path);
+
+        $productModel->images = $images
+            ->reject(static fn (string $imagePath): bool => $imagePath === $path)
+            ->values()
+            ->all();
+        $productModel->save();
+
+        return response()->json([
+            'ok' => true,
+            'images_count' => count((array) $productModel->images),
+        ]);
+    }
+
     private function resolveAccessibleSpaces(User $user, Tenant $tenant): array
     {
         $allSpaces = MarketSpace::query()
@@ -415,18 +449,10 @@ class ProductsController extends Controller
     private function resolveRemovableImages(Request $request, Collection $existingImages): Collection
     {
         $requestedRemoveImages = collect($request->input('remove_images', []))
-            ->filter(static fn ($path): bool => is_string($path) && $path !== '')
+            ->map(static fn ($path): string => is_scalar($path) ? trim((string) $path) : '')
+            ->filter(static fn (string $path): bool => $path !== '')
+            ->unique()
             ->values();
-
-        $unknownRemoveImages = $requestedRemoveImages
-            ->diff($existingImages)
-            ->values();
-
-        if ($unknownRemoveImages->isNotEmpty()) {
-            throw ValidationException::withMessages([
-                'remove_images' => 'Передан некорректный список изображений для удаления.',
-            ]);
-        }
 
         return $requestedRemoveImages
             ->intersect($existingImages)
