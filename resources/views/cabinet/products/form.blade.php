@@ -38,7 +38,7 @@
         @csrf
 
         <section class="overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-slate-50 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] md:p-6">
-            <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+            <div>
                 <div class="max-w-3xl">
                     <div class="flex flex-wrap items-center gap-2">
                         <a
@@ -60,7 +60,7 @@
                         Витрина и карточка товара управляются отдельно, поэтому здесь собраны только рабочие поля.
                     </p>
 
-                    <div class="mt-4 flex flex-wrap gap-2 pb-2 sm:pb-3">
+                    <div class="mt-4 flex flex-wrap gap-2 pb-4 sm:pb-5">
                         <span class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                             Категория: {{ $categoryLabel }}
                         </span>
@@ -81,7 +81,7 @@
                     </div>
                 </div>
 
-                <div class="grid gap-2 sm:grid-cols-2">
+                <div class="mt-2 grid gap-3 md:grid-cols-2 lg:max-w-4xl">
                     <div class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
                         <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Статус товара</div>
                         <div class="mt-2 text-lg font-semibold text-slate-900">
@@ -104,7 +104,7 @@
             </div>
         </section>
 
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.95fr)]">
+        <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,26rem)]">
             <div class="space-y-4">
                 <section class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] md:p-6">
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -242,7 +242,7 @@
                 </section>
             </div>
 
-            <div class="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            <div class="mx-auto w-full max-w-[36rem] space-y-4 xl:sticky xl:top-4 xl:max-w-none xl:self-start">
                 <section class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] md:p-6">
                     <div class="flex items-start justify-between gap-3">
                         <div>
@@ -258,7 +258,7 @@
 
                     <div class="mt-6 space-y-4">
                         @if($existingImages->isNotEmpty())
-                            <div class="mx-auto max-w-[34rem]">
+                            <div class="mx-auto max-w-[26rem]">
                                 @php
                                     $coverImage = $existingImages->first();
                                     $coverPreview = \App\Support\MarketplaceMediaStorage::previewUrl($coverImage) ?? \App\Support\MarketplaceMediaStorage::url($coverImage);
