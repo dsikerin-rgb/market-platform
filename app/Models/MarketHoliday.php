@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketplaceMediaStorage;
+use App\Support\MarketHolidayAnnouncementSync;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class MarketHoliday extends Model
 {
@@ -59,11 +60,24 @@ class MarketHoliday extends Model
                 $holiday->notify_at = null;
             }
         });
+
+        static::saved(function (self $holiday): void {
+            app(MarketHolidayAnnouncementSync::class)->sync($holiday);
+        });
+
+        static::deleted(function (self $holiday): void {
+            app(MarketHolidayAnnouncementSync::class)->delete($holiday);
+        });
     }
 
     public function market(): BelongsTo
     {
         return $this->belongsTo(Market::class);
+    }
+
+    public function announcement(): HasOne
+    {
+        return $this->hasOne(MarketplaceAnnouncement::class, 'market_holiday_id');
     }
 
     public function resolveDefaultNotifyDays(): ?int
@@ -90,16 +104,11 @@ class MarketHoliday extends Model
 
     public function getCoverImageUrlAttribute(): ?string
     {
-        $value = trim((string) ($this->cover_image ?? ''));
+        return MarketplaceMediaStorage::url($this->cover_image);
+    }
 
-        if ($value === '') {
-            return null;
-        }
-
-        if (Str::startsWith($value, ['http://', 'https://', 'data:', '/'])) {
-            return $value;
-        }
-
-        return Storage::disk('public')->url($value);
+    public function getCoverImagePreviewUrlAttribute(): ?string
+    {
+        return MarketplaceMediaStorage::previewUrl($this->cover_image);
     }
 }

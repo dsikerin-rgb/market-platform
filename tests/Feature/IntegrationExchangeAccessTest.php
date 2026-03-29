@@ -8,7 +8,9 @@ use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Models\IntegrationExchange;
 use App\Models\Market;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Cabinet\TenantImpersonationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -144,5 +146,45 @@ class IntegrationExchangeAccessTest extends TestCase
 
         $this->get(OpsDiagnostics::getUrl())
             ->assertForbidden();
+    }
+
+    public function test_admin_routes_restore_impersonator_during_tenant_impersonation(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('merchant', 'web');
+
+        $admin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'impersonator-admin@example.test',
+        ]);
+        $admin->assignRole('super-admin');
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant for impersonation',
+            'short_name' => 'Tenant for impersonation',
+            'is_active' => true,
+        ]);
+
+        $tenantUser = $tenant->users()->firstOrFail();
+
+        $this->actingAs($tenantUser);
+        $this->withSession([
+            TenantImpersonationService::SESSION_KEY => [
+                'impersonator_user_id' => (int) $admin->id,
+                'tenant_id' => (int) $tenant->id,
+                'audit_id' => 1,
+                'admin_return_url' => url('/admin'),
+            ],
+        ]);
+
+        $this->get(OpsDiagnostics::getUrl())
+            ->assertOk();
     }
 }

@@ -21,9 +21,125 @@ use Spatie\Permission\Models\Role;
 
 class MarketplaceBootstrapCommand extends Command
 {
+    /**
+     * @var array<string, array{
+     *   category:string,
+     *   keywords:list<string>,
+     *   titles:list<string>,
+     *   unit:string,
+     *   price_range:array{0:int,1:int}
+     * }>
+     */
+    private const DEMO_PRODUCT_PROFILES = [
+        'produce' => [
+            'category' => 'Овощи и фрукты',
+            'keywords' => ['овощ', 'фрукт', 'ягод', 'зелень', 'сад', 'урож', 'томат', 'яблок', 'груш', 'картоф', 'солень', 'гриб'],
+            'titles' => [
+                'Свежие овощи фермерские',
+                'Сезонные фрукты',
+                'Ягоды и зелень',
+                'Овощной набор',
+                'Фрукты для стола',
+            ],
+            'unit' => 'кг',
+            'price_range' => [120, 480],
+        ],
+        'meat_fish' => [
+            'category' => 'Мясо и рыба',
+            'keywords' => ['мяс', 'рыб', 'колбас', 'птиц', 'стейк', 'шашл', 'фарш', 'деликатес', 'икра', 'краб', 'куриц', 'яйц', 'полуфабрикат'],
+            'titles' => [
+                'Фермерское мясо охлажденное',
+                'Свежая рыба',
+                'Домашние полуфабрикаты',
+                'Фермерские колбасы',
+                'Мясной набор',
+            ],
+            'unit' => 'кг',
+            'price_range' => [320, 1450],
+        ],
+        'dairy' => [
+            'category' => 'Молочные продукты',
+            'keywords' => ['сыр', 'молок', 'творог', 'сметан', 'кефир', 'йогурт', 'масл', 'молоч', 'белорусск'],
+            'titles' => [
+                'Фермерский сыр',
+                'Творог натуральный',
+                'Сметана домашняя',
+                'Йогурт фермерский',
+                'Масло сливочное',
+            ],
+            'unit' => 'шт',
+            'price_range' => [140, 780],
+        ],
+        'grocery' => [
+            'category' => 'Бакалея',
+            'keywords' => ['бакале', 'чай', 'кофе', 'мед', 'хлеб', 'пекар', 'кондитер', 'сладост', 'круп', 'спец', 'орех', 'сухофрукт', 'варень', 'кафе', 'вино', 'напит', 'кондитерск'],
+            'titles' => [
+                'Домашний хлеб',
+                'Мед натуральный',
+                'Чай травяной',
+                'Орехи и сухофрукты',
+                'Бакалея фермерская',
+            ],
+            'unit' => 'шт',
+            'price_range' => [90, 650],
+        ],
+        'clothing' => [
+            'category' => 'Одежда и текстиль',
+            'keywords' => ['одеж', 'текстил', 'обув', 'трикотаж', 'плать', 'рубаш', 'брюк', 'куртк', 'аксессуар', 'бантик', 'детск', 'монгольск'],
+            'titles' => [
+                'Трикотаж базовый',
+                'Одежда повседневная',
+                'Текстиль для дома',
+                'Аксессуары сезонные',
+                'Коллекция текстиля',
+            ],
+            'unit' => 'шт',
+            'price_range' => [450, 3200],
+        ],
+        'home' => [
+            'category' => 'Товары для дома',
+            'keywords' => ['дом', 'хоз', 'посуд', 'декор', 'интерьер', 'быт', 'сувенир', 'подар', 'кухн', 'аптек', 'очк', 'дух', 'парфюм', 'мыл', 'зоо', 'мебел', 'чугун', 'канцеляр', 'игруш', 'хими'],
+            'titles' => [
+                'Посуда для кухни',
+                'Текстиль для дома',
+                'Декор интерьера',
+                'Хозяйственные товары',
+                'Полезные товары для дома',
+            ],
+            'unit' => 'шт',
+            'price_range' => [220, 2400],
+        ],
+        'services' => [
+            'category' => 'Услуги',
+            'keywords' => ['услуг', 'ремонт', 'ателье', 'сервис', 'достав', 'мастер', 'консульт', 'упаков', 'ключ', 'банкомат', 'офис', 'интернет магазин', 'интернет-магазин', 'игра автомат'],
+            'titles' => [
+                'Услуга доставки заказа',
+                'Индивидуальная упаковка',
+                'Подбор товара',
+                'Сервисное сопровождение',
+                'Консультация по ассортименту',
+            ],
+            'unit' => 'услуга',
+            'price_range' => [300, 3500],
+        ],
+        'default' => [
+            'category' => 'Бакалея',
+            'keywords' => [],
+            'titles' => [
+                'Популярный товар',
+                'Товар дня',
+                'Фермерский ассортимент',
+                'Выбор покупателя',
+                'Новинка витрины',
+            ],
+            'unit' => 'шт',
+            'price_range' => [150, 950],
+        ],
+    ];
+
     protected $signature = 'marketplace:bootstrap
         {--market= : Market id or slug}
-        {--seed-products=60 : Max demo products per market}
+        {--seed-products=10 : Max demo products per tenant}
         {--refresh-announcements : Sync announcements from market holidays}
         {--force : Generate demo products even if marketplace already has products}';
 
@@ -42,7 +158,7 @@ class MarketplaceBootstrapCommand extends Command
 
         $this->ensureGlobalCategories();
 
-        $seedProductsLimit = max(0, (int) $this->option('seed-products'));
+        $seedProductsPerTenant = max(0, (int) $this->option('seed-products'));
         $force = (bool) $this->option('force');
         $refreshAnnouncements = (bool) $this->option('refresh-announcements');
 
@@ -55,7 +171,7 @@ class MarketplaceBootstrapCommand extends Command
                 $this->line("  announcements synced: {$count}");
             }
 
-            $created = $this->seedDemoProducts($market, $seedProductsLimit, $force);
+            $created = $this->seedDemoProducts($market, $seedProductsPerTenant, $force);
             $this->line("  demo products created: {$created}");
         }
 
@@ -98,7 +214,11 @@ class MarketplaceBootstrapCommand extends Command
         ];
 
         foreach ($items as $item) {
-            $slug = $this->makeUniqueCategorySlug(null, (string) $item['name']);
+            $slug = Str::slug((string) $item['name']);
+            if ($slug === '') {
+                $slug = 'category-' . (int) $item['sort_order'];
+            }
+
             MarketplaceCategory::query()->updateOrCreate(
                 ['market_id' => null, 'slug' => $slug],
                 [
@@ -213,49 +333,68 @@ class MarketplaceBootstrapCommand extends Command
             return 0;
         }
 
-        $existingCount = (int) MarketplaceProduct::query()
-            ->where('market_id', (int) $market->id)
-            ->count();
-
-        if ($existingCount > 0 && ! $force) {
-            return 0;
-        }
-
         $globalCategories = MarketplaceCategory::query()
             ->whereNull('market_id')
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->get(['id', 'name']);
+            ->get(['id', 'name'])
+            ->keyBy(fn (MarketplaceCategory $category): string => $this->normalizeDemoText((string) $category->name));
 
         $tenants = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->with(['spaces:id,tenant_id,market_id,display_name,number,code'])
+            ->with(['spaces:id,tenant_id,market_id,display_name,number,code,activity_type'])
             ->orderBy('id')
             ->limit(200)
             ->get();
 
         $created = 0;
         foreach ($tenants as $tenant) {
-            if ($created >= $limit) {
-                break;
-            }
-
             $spaces = $tenant->spaces;
             if ($spaces->isEmpty()) {
                 continue;
             }
 
-            foreach ($spaces as $space) {
-                if ($created >= $limit) {
-                    break 2;
-                }
+            $tenantProductsQuery = MarketplaceProduct::query()
+                ->where('market_id', (int) $market->id)
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('is_demo', true);
 
-                $spaceLabel = trim((string) ($space->display_name ?: ($space->number ?: $space->code)));
-                $title = trim(($tenant->short_name ?: $tenant->name) . ' · ' . ($spaceLabel !== '' ? $spaceLabel : 'Торговое место'));
-                $slug = $this->makeUniqueProductSlug((int) $market->id, $title . '-' . $space->id);
-                $categoryId = optional($globalCategories->random())->id;
-                $price = $this->resolveDemoPrice((int) $market->id, (int) $tenant->id, (int) $space->id);
+            if ($force) {
+                $tenantProductsQuery->delete();
+                $existingDemoCount = 0;
+            } else {
+                $existingDemoCount = (int) $tenantProductsQuery->count();
+
+                if ($existingDemoCount >= $limit) {
+                    continue;
+                }
+            }
+
+            $productsToCreate = max(0, $limit - $existingDemoCount);
+            if ($productsToCreate === 0) {
+                continue;
+            }
+
+            $spaceItems = $spaces->values()->all();
+            $spaceCount = count($spaceItems);
+            if ($spaceCount === 0) {
+                continue;
+            }
+
+            for ($i = 0; $i < $productsToCreate; $i++) {
+                $space = $spaceItems[$i % $spaceCount];
+                $profile = $this->resolveDemoProductProfile($tenant, $space);
+                $sequence = $existingDemoCount + $i + 1;
+                $title = $this->buildDemoProductTitle($tenant, $space, $profile, $sequence);
+                $slug = $this->makeUniqueProductSlug((int) $market->id, $title . '-' . $space->id . '-' . $sequence);
+                $categoryId = $this->resolveDemoCategoryId($globalCategories, (string) $profile['category']);
+                $price = $this->resolveDemoPrice(
+                    (int) $market->id,
+                    (int) $tenant->id,
+                    (int) $space->id,
+                    $profile['price_range'],
+                );
 
                 MarketplaceProduct::query()->create([
                     'market_id' => (int) $market->id,
@@ -264,13 +403,21 @@ class MarketplaceBootstrapCommand extends Command
                     'category_id' => $categoryId ? (int) $categoryId : null,
                     'title' => Str::limit($title, 190, ''),
                     'slug' => $slug,
-                    'description' => 'Демо-карточка товара/предложения. Заполните описание, фото и условия доставки в кабинете арендатора.',
+                    'description' => $this->buildDemoProductDescription($tenant, $space, $profile),
                     'price' => $price,
                     'currency' => 'RUB',
-                    'stock_qty' => 100,
-                    'unit' => 'шт',
+                    'stock_qty' => $this->resolveDemoStockQty($profile),
+                    'unit' => (string) $profile['unit'],
                     'images' => [$this->demoProductImageUrl($created + 1)],
-                    'attributes' => ['generated' => true],
+                    'attributes' => [
+                        'generated' => true,
+                        'demo_profile' => $this->resolveDemoProfileKey($profile),
+                        'generated_from' => [
+                            'tenant' => trim((string) ($tenant->short_name ?: $tenant->name)),
+                            'space' => $this->spaceContextLabel($space),
+                            'activity_type' => trim((string) ($space->activity_type ?? '')),
+                        ],
+                    ],
                     'views_count' => 0,
                     'favorites_count' => 0,
                     'is_active' => true,
@@ -286,7 +433,128 @@ class MarketplaceBootstrapCommand extends Command
         return $created;
     }
 
-    private function resolveDemoPrice(int $marketId, int $tenantId, int $spaceId): float
+    /**
+     * @return array{
+     *   category:string,
+     *   keywords:list<string>,
+     *   titles:list<string>,
+     *   unit:string,
+     *   price_range:array{0:int,1:int}
+     * }
+     */
+    private function resolveDemoProductProfile(Tenant $tenant, object $space): array
+    {
+        $searchable = $this->normalizeDemoText(implode(' ', array_filter([
+            trim((string) ($tenant->short_name ?? '')),
+            trim((string) ($tenant->name ?? '')),
+            trim((string) ($space->display_name ?? '')),
+            trim((string) ($space->activity_type ?? '')),
+            trim((string) ($space->number ?? '')),
+            trim((string) ($space->code ?? '')),
+        ])));
+
+        foreach (self::DEMO_PRODUCT_PROFILES as $key => $profile) {
+            if ($key === 'default') {
+                continue;
+            }
+
+            foreach ($profile['keywords'] as $keyword) {
+                if ($keyword !== '' && str_contains($searchable, $this->normalizeDemoText($keyword))) {
+                    return $profile;
+                }
+            }
+        }
+
+        return self::DEMO_PRODUCT_PROFILES['default'];
+    }
+
+    private function resolveDemoProfileKey(array $profile): string
+    {
+        foreach (self::DEMO_PRODUCT_PROFILES as $key => $candidate) {
+            if ($candidate === $profile) {
+                return $key;
+            }
+        }
+
+        return 'default';
+    }
+
+    private function buildDemoProductTitle(Tenant $tenant, object $space, array $profile, int $sequence): string
+    {
+        $titles = $profile['titles'];
+        $baseTitle = $titles[($sequence - 1) % count($titles)] ?? 'Популярный товар';
+        $context = $this->spaceContextLabel($space);
+
+        if ($context === '') {
+            $context = trim((string) ($tenant->short_name ?: $tenant->name));
+        }
+
+        return trim($baseTitle . ($context !== '' ? ' - ' . $context : ''));
+    }
+
+    private function buildDemoProductDescription(Tenant $tenant, object $space, array $profile): string
+    {
+        $tenantName = trim((string) ($tenant->short_name ?: $tenant->name));
+        $spaceLabel = $this->spaceContextLabel($space);
+        $activityType = trim((string) ($space->activity_type ?? ''));
+        $category = trim((string) ($profile['category'] ?? ''));
+
+        return trim(implode(' ', array_filter([
+            $tenantName !== '' ? $tenantName . ' представляет demo-карточку товара.' : 'Demo-карточка товара.',
+            $spaceLabel !== '' ? 'Отдел: ' . $spaceLabel . '.' : null,
+            $activityType !== '' ? 'Специализация: ' . $activityType . '.' : null,
+            $category !== '' ? 'Категория: ' . $category . '.' : null,
+            'Замените название, описание, фото и цену на реальные данные арендатора.',
+        ])));
+    }
+
+    private function spaceContextLabel(object $space): string
+    {
+        foreach ([
+            trim((string) ($space->display_name ?? '')),
+            trim((string) ($space->activity_type ?? '')),
+            trim((string) ($space->number ?? '')),
+            trim((string) ($space->code ?? '')),
+        ] as $value) {
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function resolveDemoCategoryId(Collection $categories, string $categoryName): ?int
+    {
+        $category = $categories->get($this->normalizeDemoText($categoryName));
+
+        return $category instanceof MarketplaceCategory ? (int) $category->id : null;
+    }
+
+    private function resolveDemoStockQty(array $profile): int
+    {
+        $unit = trim((string) ($profile['unit'] ?? 'шт'));
+
+        return match ($unit) {
+            'кг' => random_int(15, 80),
+            'услуга' => random_int(5, 20),
+            default => random_int(20, 120),
+        };
+    }
+
+    private function normalizeDemoText(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
+
+        return trim($normalized);
+    }
+
+    /**
+     * @param array{0:int,1:int} $fallbackRange
+     */
+    private function resolveDemoPrice(int $marketId, int $tenantId, int $spaceId, array $fallbackRange): float
     {
         $value = TenantAccrual::query()
             ->where('market_id', $marketId)
@@ -295,9 +563,14 @@ class MarketplaceBootstrapCommand extends Command
             ->orderByDesc('period')
             ->value('total_with_vat');
 
-        $price = is_numeric($value) ? ((float) $value / 100.0) : random_int(250, 3500);
+        if (is_numeric($value)) {
+            return round(max(50.0, ((float) $value / 100.0)), 2);
+        }
 
-        return round(max(50.0, $price), 2);
+        $min = max(50, (int) ($fallbackRange[0] ?? 150));
+        $max = max($min, (int) ($fallbackRange[1] ?? 950));
+
+        return round((float) random_int($min, $max), 2);
     }
 
     private function demoProductImageUrl(int $index): string

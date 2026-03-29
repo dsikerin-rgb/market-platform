@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketplaceMediaStorage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class MarketplaceAnnouncement extends Model
 {
@@ -19,6 +18,7 @@ class MarketplaceAnnouncement extends Model
      */
     protected $fillable = [
         'market_id',
+        'market_holiday_id',
         'author_user_id',
         'kind',
         'title',
@@ -49,18 +49,18 @@ class MarketplaceAnnouncement extends Model
         return $this->belongsTo(User::class, 'author_user_id');
     }
 
+    public function marketHoliday(): BelongsTo
+    {
+        return $this->belongsTo(MarketHoliday::class, 'market_holiday_id');
+    }
+
     public function getCoverImageUrlAttribute(): ?string
     {
-        $value = trim((string) ($this->cover_image ?? ''));
+        return MarketplaceMediaStorage::url($this->cover_image);
+    }
 
-        if ($value === '') {
-            return null;
-        }
-
-        if (Str::startsWith($value, ['http://', 'https://', 'data:', '/'])) {
-            return $value;
-        }
-
-        return Storage::disk('public')->url($value);
+    public function getCoverImagePreviewUrlAttribute(): ?string
+    {
+        return MarketplaceMediaStorage::previewUrl($this->cover_image);
     }
 }

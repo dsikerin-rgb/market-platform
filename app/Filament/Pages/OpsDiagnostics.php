@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\IntegrationExchangeResource;
+use App\Support\AdminPanelImpersonation;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -62,7 +63,7 @@ class OpsDiagnostics extends Page
 
     public static function canAccess(): bool
     {
-        $user = Filament::auth()->user();
+        $user = AdminPanelImpersonation::resolveAdminUser(Filament::auth()->user());
 
         if (! $user) {
             return false;

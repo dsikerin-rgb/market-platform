@@ -29,12 +29,13 @@
         @else
             <div class="mp-grid">
                 @foreach($announcements as $announcement)
-                    @php($hasImage = filled($announcement->cover_image_url))
+                    @php($announcementImageUrl = $announcement->cover_image_preview_url ?? $announcement->cover_image_url)
+                    @php($hasImage = filled($announcementImageUrl))
                     <article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;{{ $hasImage ? 'padding:0;overflow:hidden;display:block;' : 'padding:12px;display:flex;flex-direction:column;gap:10px;' }}">
-                        @if($announcement->cover_image_url)
+                        @if($announcementImageUrl)
                             <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
                                style="height:240px;overflow:hidden;position:relative;display:block;">
-                                <img src="{{ $announcement->cover_image_url }}" alt="{{ $announcement->title }}" style="width:100%;height:100%;object-fit:cover;">
+                                <img src="{{ $announcementImageUrl }}" alt="{{ $announcement->title }}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async">
                                 @php($startDate = optional($announcement->starts_at)->format('d.m'))
                                 @php($endDate = optional($announcement->ends_at)->format('d.m'))
                                 @php($fallbackDate = optional($announcement->published_at)->format('d.m') ?: optional($announcement->created_at)->format('d.m'))
@@ -59,7 +60,7 @@
                 @endforeach
             </div>
             <div style="margin-top:14px;">
-                {{ $announcements->links() }}
+                {{ $announcements->links('marketplace.partials.pagination') }}
             </div>
         @endif
     </section>

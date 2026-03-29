@@ -281,7 +281,7 @@
                 <div class="mp-slider__viewport">
                     <div class="mp-slider__track" data-mp-slider-track>
                         @foreach($infoSlides as $slide)
-                            @php($imageUrl = is_object($slide) ? $slide->image_url : ($slide['image_url'] ?? null))
+                            @php($imageUrl = is_object($slide) ? ($slide->image_preview_url ?? $slide->image_url) : ($slide['image_url'] ?? null))
                             @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
                             @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
                             @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
@@ -290,7 +290,7 @@
                             <article class="mp-slider__card" data-theme="{{ $theme }}">
                                 @if(filled($imageUrl))
                                     <div class="mp-slider__media">
-                                        <img src="{{ $imageUrl }}" alt="{{ $title }}">
+                                        <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="lazy" decoding="async">
                                     </div>
                                 @endif
                                 <div class="mp-slider__body">
@@ -355,12 +355,13 @@
             </div>
             <div class="mp-grid">
                 @foreach($announcements->take(4) as $announcement)
-                    @php($hasImage = filled($announcement->cover_image_url))
+                    @php($announcementImageUrl = $announcement->cover_image_preview_url ?? $announcement->cover_image_url)
+                    @php($hasImage = filled($announcementImageUrl))
                     <article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;{{ $hasImage ? 'padding:0;overflow:hidden;display:block;' : 'padding:12px;display:flex;flex-direction:column;gap:8px;' }}">
-                        @if($announcement->cover_image_url)
+                        @if($announcementImageUrl)
                             <a href="{{ route('marketplace.announcement.show', ['marketSlug' => $market->slug, 'announcementSlug' => $announcement->slug]) }}"
                                style="height:220px;overflow:hidden;position:relative;display:block;">
-                                <img src="{{ $announcement->cover_image_url }}" alt="{{ $announcement->title }}" style="width:100%;height:100%;object-fit:cover;">
+                                <img src="{{ $announcementImageUrl }}" alt="{{ $announcement->title }}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async">
                                 @php($startDate = optional($announcement->starts_at)->format('d.m'))
                                 @php($endDate = optional($announcement->ends_at)->format('d.m'))
                                 @php($fallbackDate = optional($announcement->published_at)->format('d.m') ?: optional($announcement->created_at)->format('d.m'))

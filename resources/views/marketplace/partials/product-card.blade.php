@@ -1,18 +1,18 @@
 @php
     $image = null;
     if (is_array($product->images ?? null) && !empty($product->images[0])) {
-        $image = $product->images[0];
+        $image = \App\Support\MarketplaceMediaStorage::previewUrl($product->images[0]);
     }
 
     $title = trim((string) ($product->title ?? 'Товар'));
     $price = $product->price !== null ? number_format((float) $product->price, 2, ',', ' ') . ' ₽' : 'Цена по запросу';
 @endphp
 
-<article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:100%;">
+<article style="background:#fff;border:1px solid #d9e6f7;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;">
     <a href="{{ route('marketplace.product.show', ['marketSlug' => $market->slug, 'productSlug' => $product->slug]) }}"
-       style="display:block;aspect-ratio:4/3;background:#eef4fb;border-bottom:1px solid #d9e6f7;">
+       style="display:block;height:clamp(200px, 18vw, 260px);background:#eef4fb;border-bottom:1px solid #d9e6f7;overflow:hidden;">
         @if($image)
-            <img src="{{ $image }}" alt="{{ $title }}" style="width:100%;height:100%;object-fit:cover;">
+            <img src="{{ $image }}" alt="{{ $title }}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async">
         @else
             <div style="width:100%;height:100%;display:grid;place-items:center;color:#7f93b3;font-weight:600;">Нет фото</div>
         @endif
@@ -29,4 +29,3 @@
         </div>
     </div>
 </article>
-

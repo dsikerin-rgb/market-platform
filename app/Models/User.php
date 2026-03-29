@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\AdminPanelImpersonation;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
@@ -179,13 +180,10 @@ class User extends Authenticatable implements FilamentUser
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
+            $effectiveUser = AdminPanelImpersonation::resolveAdminUser($this);
+
             // Explicit admin roles always win, even if a legacy merchant role is also present.
-            if ($this->hasAnyRole([
-                'super-admin',
-                'market-admin',
-                'market-manager',
-                'market-operator',
-            ])) {
+            if (AdminPanelImpersonation::hasAdminPanelRole($effectiveUser)) {
                 return true;
             }
 

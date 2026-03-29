@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketplaceMediaStorage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class MarketplaceSlide extends Model
 {
@@ -49,16 +48,11 @@ class MarketplaceSlide extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        $value = trim((string) ($this->image_path ?? ''));
+        return MarketplaceMediaStorage::url($this->image_path);
+    }
 
-        if ($value === '') {
-            return null;
-        }
-
-        if (Str::startsWith($value, ['http://', 'https://', 'data:', '/'])) {
-            return $value;
-        }
-
-        return Storage::disk('public')->url($value);
+    public function getImagePreviewUrlAttribute(): ?string
+    {
+        return MarketplaceMediaStorage::previewUrl($this->image_path);
     }
 }

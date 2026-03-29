@@ -13,7 +13,9 @@ use Illuminate\Auth\Events\Login;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Mail;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -81,6 +83,59 @@ class SuperAdminLoginNotificationTest extends TestCase
             }
         );
         Notification::assertNotSentTo($actor, UserLoggedInNotification::class);
+    }
+
+    public function test_login_does_not_fail_when_telegram_is_unavailable(): void
+    {
+        Mail::fake();
+        Http::fake([
+            'api.telegram.org/*' => Http::response(['ok' => false, 'description' => 'timeout'], 500),
+        ]);
+
+        config([
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = Market::query()->create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('market-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'super-admin-telegram-off@example.test',
+            'telegram_chat_id' => '123456',
+            'notification_preferences' => [
+                'self_manage' => true,
+                'channels' => ['database', 'telegram'],
+                'topics' => UserNotificationPreferences::TOPICS,
+            ],
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        $actor = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'staff-telegram-off@example.test',
+        ]);
+        $actor->assignRole('market-admin');
+
+        $this->app->instance('request', Request::create('/admin/login', 'POST', server: [
+            'REMOTE_ADDR' => '203.0.113.40',
+            'HTTP_USER_AGENT' => 'PHPUnit Telegram Failure Test',
+        ]));
+
+        Event::dispatch(new Login('web', $actor, false));
+
+        $this->assertDatabaseHas('notifications', [
+            'type' => UserLoggedInNotification::class,
+            'notifiable_id' => $superAdmin->getKey(),
+            'notifiable_type' => User::class,
+        ]);
     }
 
     public function test_super_admin_receives_notification_for_filament_livewire_login_request(): void

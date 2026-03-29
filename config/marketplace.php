@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 return [
     'demo_content_enabled' => env('MARKETPLACE_DEMO_CONTENT_ENABLED', false),
+    'media_disk' => env('MARKETPLACE_MEDIA_DISK', 'public'),
+    'media_fallback_disk' => env('MARKETPLACE_MEDIA_FALLBACK_DISK', 'public'),
+    'demo_assets' => [
+        'localize' => env('MARKETPLACE_DEMO_ASSETS_LOCALIZE', false),
+        'directory' => env('MARKETPLACE_DEMO_ASSETS_DIRECTORY', 'marketplace-demo-assets'),
+        'timeout' => env('MARKETPLACE_DEMO_ASSETS_TIMEOUT', 15),
+        'retries' => env('MARKETPLACE_DEMO_ASSETS_RETRIES', 0),
+    ],
 
     'home' => [
         // Fast rollback toggle: false returns sanitary_day cards into main feed.
