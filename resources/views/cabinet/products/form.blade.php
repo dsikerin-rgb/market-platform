@@ -292,7 +292,7 @@
                             </div>
 
                             @if($existingImages->count() > 1)
-                                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); max-width: 22rem;">
                                     @foreach($existingImages->skip(1) as $index => $imagePath)
                                         @php
                                             $imagePreview = \App\Support\MarketplaceMediaStorage::previewUrl($imagePath) ?? \App\Support\MarketplaceMediaStorage::url($imagePath);
@@ -364,7 +364,7 @@
                                 </div>
                                 <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" data-product-upload-count>0 фото</span>
                             </div>
-                            <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3" data-product-upload-grid></div>
+                            <div class="mt-4 grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); max-width: 22rem;" data-product-upload-grid></div>
                         </div>
                     </div>
                 </section>
@@ -446,8 +446,9 @@
             const preview = document.querySelector('[data-product-upload-preview]');
             const grid = document.querySelector('[data-product-upload-grid]');
             const count = document.querySelector('[data-product-upload-count]');
+            const caption = document.querySelector('[data-product-input-caption]');
 
-            if (!input || !preview || !grid || !count) {
+            if (!input || !preview || !grid || !count || !caption) {
                 return;
             }
 
@@ -470,7 +471,7 @@
                     const item = document.createElement('div');
                     item.className = 'overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm';
                     item.innerHTML = `
-                        <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                        <div style="aspect-ratio: 4 / 3; overflow: hidden; background: #f8fafc;">
                             <img src="${url}" alt="" class="h-full w-full object-cover">
                         </div>
                         <div class="flex items-center justify-between gap-2 px-3 py-2">
