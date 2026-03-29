@@ -4,6 +4,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\RestoreAdminFromImpersonation;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -27,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Локаль не завязана на сессии — оставляем в web-стеке.
         $middleware->web(append: [
             SetLocale::class,
+            RestoreAdminFromImpersonation::class,
         ]);
 
         $middleware->alias([

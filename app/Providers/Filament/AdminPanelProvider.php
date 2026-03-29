@@ -19,6 +19,7 @@ use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
+use App\Http\Middleware\RestoreAdminFromImpersonation;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -204,6 +205,7 @@ class AdminPanelProvider extends PanelProvider
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
                 AuthenticateSession::class,
+                RestoreAdminFromImpersonation::class,
                 ShareErrorsFromSession::class,
                 VerifyCsrfToken::class,
                 SubstituteBindings::class,
