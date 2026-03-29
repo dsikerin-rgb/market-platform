@@ -280,7 +280,7 @@
                                             loading="lazy"
                                         >
                                     </div>
-                                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent p-4">
+                                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent p-4">
                                         <div class="flex items-end justify-between gap-3">
                                             <div>
                                                 <p class="text-sm font-semibold text-white">Основное фото</p>
@@ -291,7 +291,7 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur">
+                                    <div class="absolute right-3 top-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-lg ring-1 ring-rose-200">
                                         <input type="checkbox" name="remove_images[]" value="{{ $coverImage }}" class="{{ $checkboxClass }}">
                                         <span>Пометить на удаление</span>
                                     </div>
@@ -313,10 +313,10 @@
                                                 style="height: 88px;"
                                                 loading="lazy"
                                             >
-                                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent p-3">
+                                            <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950 via-slate-950/85 to-transparent p-3">
                                                 <div class="flex items-center justify-between gap-2">
                                                     <span class="text-xs font-semibold text-white">Фото {{ $index + 2 }}</span>
-                                                    <span class="inline-flex items-center gap-2 rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/20">
+                                                    <span class="inline-flex items-center gap-2 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200 shadow-lg">
                                                         <input type="checkbox" name="remove_images[]" value="{{ $imagePath }}" class="{{ $checkboxClass }}">
                                                         На удаление
                                                     </span>
