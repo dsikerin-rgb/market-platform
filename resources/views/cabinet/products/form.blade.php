@@ -265,7 +265,8 @@
                         </div>
 
                         <div
-                            class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+                            class="grid justify-start gap-3"
+                            style="grid-template-columns: repeat(auto-fit, minmax(11rem, 11rem));"
                             data-existing-photos-grid
                             data-image-delete-url="{{ route('cabinet.products.images.destroy', ['product' => (int) $product->id]) }}"
                             data-csrf-token="{{ csrf_token() }}"
@@ -277,7 +278,7 @@
                                 @endphp
 
                                 <article
-                                    class="group relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition"
+                                    class="group relative overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm transition"
                                     data-existing-photo-card
                                     data-image-path="{{ $imagePath }}"
                                 >
@@ -303,8 +304,8 @@
                                             loading="lazy"
                                         >
                                     </div>
-                                    <div class="border-t border-slate-200 px-4 py-3">
-                                        <p class="text-sm font-semibold text-slate-900" data-existing-photo-title>{{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}</p>
+                                    <div class="border-t border-slate-200 px-3 py-2.5">
+                                        <p class="text-xs font-semibold text-slate-900" data-existing-photo-title>{{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}</p>
                                         <p class="mt-1 text-xs leading-5 text-slate-500" data-existing-photo-description>
                                             {{ $isCoverImage ? 'Используется как главное изображение товара.' : 'Дополнительное фото товара.' }}
                                         </p>
@@ -312,7 +313,7 @@
                                 </article>
                             @endforeach
 
-                            <label class="group relative flex min-h-[16rem] cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed border-sky-200 bg-sky-50/60 p-6 text-center transition hover:border-sky-400 hover:bg-sky-50">
+                            <label class="group relative flex min-h-[11.5rem] cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border-2 border-dashed border-sky-200 bg-sky-50/60 p-4 text-center transition hover:border-sky-400 hover:bg-sky-50">
                                 <input
                                     type="file"
                                     name="new_images[]"
@@ -322,14 +323,14 @@
                                     data-product-image-input
                                 >
 
-                                <span class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm ring-1 ring-sky-100">
+                                <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm ring-1 ring-sky-100">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5V6.75A2.25 2.25 0 015.25 4.5h13.5A2.25 2.25 0 0121 6.75v9.75M3 16.5l4.172-4.172a2.25 2.25 0 013.182 0L12 14.75l2.646-2.422a2.25 2.25 0 013.182.1L21 16.5M8.25 10.5h.008v.008H8.25V10.5z"/>
                                     </svg>
                                 </span>
-                                <span class="mt-4 text-base font-semibold text-slate-900">Добавить фото</span>
-                                <span class="mt-2 max-w-xs text-xs leading-5 text-slate-500" data-product-input-caption>
-                                    Можно выбрать несколько файлов сразу. Подойдут JPG, PNG и WEBP.
+                                <span class="mt-3 text-sm font-semibold text-slate-900">Добавить фото</span>
+                                <span class="mt-2 max-w-[8.5rem] text-[11px] leading-4 text-slate-500" data-product-input-caption>
+                                    JPG, PNG, WEBP
                                 </span>
                             </label>
                         </div>
@@ -351,7 +352,7 @@
                                 </div>
                                 <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200" data-product-upload-count>0 фото</span>
                             </div>
-                            <div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3" data-product-upload-grid></div>
+                            <div class="mt-4 grid justify-start gap-3" style="grid-template-columns: repeat(auto-fit, minmax(11rem, 11rem));" data-product-upload-grid></div>
                         </div>
 
                     </div>
