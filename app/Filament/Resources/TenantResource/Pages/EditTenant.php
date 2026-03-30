@@ -12,6 +12,7 @@ use App\Services\Cabinet\TenantImpersonationService;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use App\Filament\Resources\Pages\BaseEditRecord;
+use Filament\Resources\Pages\Enums\ContentTabPosition;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Schema as DbSchema;
 
@@ -33,6 +34,21 @@ class EditTenant extends BaseEditRecord
         return [
             TenantResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
         ];
+    }
+
+    public function hasCombinedRelationManagerTabsWithContent(): bool
+    {
+        return true;
+    }
+
+    public function getContentTabLabel(): ?string
+    {
+        return 'Основное';
+    }
+
+    public function getContentTabPosition(): ?ContentTabPosition
+    {
+        return ContentTabPosition::Before;
     }
 
     /**
