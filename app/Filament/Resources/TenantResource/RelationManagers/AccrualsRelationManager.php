@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\TenantResource\RelationManagers;
 
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantAccruals\Tables\TenantAccrualsTable;
 use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -37,8 +38,9 @@ class AccrualsRelationManager extends RelationManager
         ])
             ->emptyStateHeading('Начислений пока нет')
             ->emptyStateDescription('После импорта или синхронизации 1С строки появятся здесь.')
-            ->recordUrl(null)
-            ->recordAction(null)
+            ->recordUrl(fn ($record): ?string => $record && TenantAccrualResource::canEdit($record)
+                ? TenantAccrualResource::getUrl('edit', ['record' => $record])
+                : null)
             ->headerActions([])
             ->bulkActions([]);
     }

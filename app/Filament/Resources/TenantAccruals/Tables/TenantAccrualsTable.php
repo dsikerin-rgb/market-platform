@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\TenantAccruals\Tables;
 
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\TenantContractResource;
 use App\Models\MarketLocation;
 use App\Models\TenantAccrual;
 use Filament\Facades\Filament;
@@ -101,6 +103,9 @@ class TenantAccrualsTable
                     ->label('Договор')
                     ->searchable()
                     ->placeholder('—')
+                    ->url(fn (TenantAccrual $record): ?string => $record->tenantContract && TenantContractResource::canEdit($record->tenantContract)
+                        ? TenantContractResource::getUrl('edit', ['record' => $record->tenantContract])
+                        : null)
                     ->toggleable(),
 
                 TextColumn::make('contract_external_id')
@@ -122,6 +127,9 @@ class TenantAccrualsTable
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
+                    ->url(fn (TenantAccrual $record): ?string => $record->marketSpace && MarketSpaceResource::canEdit($record->marketSpace)
+                        ? MarketSpaceResource::getUrl('edit', ['record' => $record->marketSpace])
+                        : null)
                     ->toggleable(),
 
                 TextColumn::make('area_sqm')
