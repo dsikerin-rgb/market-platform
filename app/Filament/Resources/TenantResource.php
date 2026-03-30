@@ -2008,6 +2008,19 @@ class TenantResource extends BaseResource
                 . '</div>';
         }
 
+        $allSpacesCount = 0;
+        foreach ($users as $user) {
+            $userId = (int) ($user->id ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
+
+            $scopedIds = isset($scopedSpaceIdsByUser[$userId]) ? array_keys($scopedSpaceIdsByUser[$userId]) : [];
+            if ($scopedIds === []) {
+                $allSpacesCount++;
+            }
+        }
+
         $style = '
 <style>
 .tenant-contact-staff{display:flex;flex-direction:column;gap:10px}
@@ -2026,10 +2039,41 @@ class TenantResource extends BaseResource
 .tenant-contact-staff__member-name{font-weight:600}
 .tenant-contact-staff__note{opacity:.75;font-size:11px}
 .tenant-contact-staff__empty{font-size:12px;opacity:.78}
+.tenant-contact-staff{display:grid;gap:12px}
+.tenant-contact-staff__summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tenant-contact-staff__metric{padding:11px 12px;border:1px solid #d7e3f2;border-radius:12px;background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%)}
+.tenant-contact-staff__metric-value{font-size:18px;font-weight:800;line-height:1;color:#0f172a}
+.tenant-contact-staff__metric-label{margin-top:5px;font-size:12px;line-height:1.3;color:#475569}
+.tenant-contact-staff__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid #d7e3f2;border-radius:14px;background:linear-gradient(180deg,#fefefe 0%,#f4f8ff 100%)}
+.tenant-contact-staff__hint{font-size:13px;line-height:1.45;color:#334155;max-width:42rem}
+.tenant-contact-staff__action{display:inline-flex;align-items:center;justify-content:center;padding:.55rem .85rem;border:1px solid #bfd2ea;border-radius:999px;background:#fff;color:#1d4ed8;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap}
+.tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.tenant-contact-staff__card{border:1px solid #d7e7f7;border-radius:14px;padding:12px;background:linear-gradient(180deg,#ffffff 0%,#f7fbff 100%);box-shadow:0 8px 22px rgba(15,23,42,.04)}
+.tenant-contact-staff__space{font-size:13px;font-weight:800;line-height:1.35;color:#0f172a}
+.tenant-contact-staff__members{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.tenant-contact-staff__member{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px;line-height:1.4;color:#1e293b}
+.tenant-contact-staff__member-link{text-decoration:underline;text-underline-offset:2px}
+.tenant-contact-staff__note{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;background:#e0efff;color:#27518f;font-size:11px;font-weight:700}
+.tenant-contact-staff__empty{font-size:12px;color:#64748b}
+@media (max-width: 960px){.tenant-contact-staff__summary{grid-template-columns:1fr}}
 </style>';
 
         $html = $style . '
 <div class="tenant-contact-staff">
+    <div class="tenant-contact-staff__summary">
+        <div class="tenant-contact-staff__metric">
+            <div class="tenant-contact-staff__metric-value">' . (int) $spaces->count() . '</div>
+            <div class="tenant-contact-staff__metric-label">Торговых мест у арендатора</div>
+        </div>
+        <div class="tenant-contact-staff__metric">
+            <div class="tenant-contact-staff__metric-value">' . (int) $users->count() . '</div>
+            <div class="tenant-contact-staff__metric-label">Сотрудников в кабинете</div>
+        </div>
+        <div class="tenant-contact-staff__metric">
+            <div class="tenant-contact-staff__metric-value">' . (int) $allSpacesCount . '</div>
+            <div class="tenant-contact-staff__metric-label">Сотрудников с доступом ко всем местам</div>
+        </div>
+    </div>
     <div class="tenant-contact-staff__head">
         <div class="tenant-contact-staff__hint">Каждая карточка показывает торговое место и дополнительных сотрудников, которым открыт доступ именно к нему. Метка “все места” означает глобальный доступ по всем точкам арендатора.</div>
     </div>
