@@ -52,6 +52,21 @@
     @endphp
 
     <style>
+        .cabinet-share-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .cabinet-share-modal:target {
+            display: flex;
+        }
+
         .showcase-page {
             display: grid;
             gap: 1rem;
@@ -431,17 +446,12 @@
                     @if ($publicUrl)
                         <div class="showcase-toolbar__actions">
                             @if($marketplaceStoreUrl)
-                                <button
-                                    type="button"
+                                <a
+                                    href="#showcase-share-modal"
                                     class="showcase-public-link"
-                                    data-share-title="QR-код витрины"
-                                    data-share-description="Покупатель сможет открыть витрину продавца по ссылке или QR-коду."
-                                    data-share-url="{{ $marketplaceStoreUrl }}"
-                                    data-share-qr="{{ $marketplaceStoreQr }}"
-                                    onclick="return window.__cabinetShowcaseShareModal ? window.__cabinetShowcaseShareModal.openFromButton(this) : false;"
                                 >
                                     Поделиться витриной
-                                </button>
+                                </a>
                             @endif
                             <a
                                 href="{{ $publicUrl }}"
@@ -624,125 +634,43 @@
     </div>
 
     @if($marketplaceStoreUrl)
-        <div id="showcase-share-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 px-4 py-6">
-            <div class="absolute inset-0" data-showcase-share-close></div>
+        <div id="showcase-share-modal" class="cabinet-share-modal">
+            <a href="#" class="absolute inset-0"></a>
             <div class="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)] md:p-6">
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Поделиться</p>
-                        <h3 class="mt-2 text-xl font-semibold text-slate-900" data-showcase-share-title></h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500" data-showcase-share-description></p>
+                        <h3 class="mt-2 text-xl font-semibold text-slate-900">QR-код витрины</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Покупатель сможет открыть витрину продавца по ссылке или QR-коду.</p>
                     </div>
-                    <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" data-showcase-share-close aria-label="Закрыть окно">
+                    <a href="#" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" aria-label="Закрыть окно">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
                         </svg>
-                    </button>
+                    </a>
                 </div>
 
                 <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                     <div class="mx-auto flex h-[18rem] w-[18rem] max-w-full items-center justify-center rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                        <img src="" alt="" class="h-full w-full object-contain" data-showcase-share-qr>
+                        <img src="{{ $marketplaceStoreQr }}" alt="QR-код витрины" class="h-full w-full object-contain">
                     </div>
                 </div>
 
                 <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ссылка</p>
-                    <p class="mt-2 break-all text-sm text-slate-700" data-showcase-share-url></p>
+                    <p class="mt-2 break-all text-sm text-slate-700">{{ $marketplaceStoreUrl }}</p>
                 </div>
 
                 <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="button" class="inline-flex flex-1 items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700" data-showcase-share-copy>
-                        Скопировать ссылку
-                    </button>
-                    <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900" data-showcase-share-close>
+                    <a href="{{ $marketplaceStoreUrl }}" target="_blank" rel="noreferrer" class="inline-flex flex-1 items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+                        Открыть ссылку
+                    </a>
+                    <a href="#" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900">
                         Закрыть
-                    </button>
+                    </a>
                 </div>
             </div>
         </div>
-
-        <script>
-            (() => {
-                const modalRoot = document.querySelector('#showcase-share-modal');
-
-                if (!modalRoot || window.__cabinetShowcaseShareModal?.bound === true) {
-                    return;
-                }
-
-                const titleNode = modalRoot.querySelector('[data-showcase-share-title]');
-                const descriptionNode = modalRoot.querySelector('[data-showcase-share-description]');
-                const qrNode = modalRoot.querySelector('[data-showcase-share-qr]');
-                const urlNode = modalRoot.querySelector('[data-showcase-share-url]');
-                const copyButton = modalRoot.querySelector('[data-showcase-share-copy]');
-
-                if (!titleNode || !descriptionNode || !qrNode || !urlNode) {
-                    return;
-                }
-
-                const closeModal = () => {
-                    modalRoot.classList.add('hidden');
-                    modalRoot.classList.remove('flex');
-                    document.body.classList.remove('overflow-hidden');
-                };
-
-                window.__cabinetShowcaseShareModal = {
-                    bound: true,
-                    openFromButton(button) {
-                        if (!button) {
-                            return false;
-                        }
-
-                        titleNode.textContent = button.dataset.shareTitle || '';
-                        descriptionNode.textContent = button.dataset.shareDescription || '';
-                        qrNode.src = button.dataset.shareQr || '';
-                        qrNode.alt = button.dataset.shareTitle || '';
-                        urlNode.textContent = button.dataset.shareUrl || '';
-
-                        if (copyButton) {
-                            copyButton.dataset.shareUrl = button.dataset.shareUrl || '';
-                            copyButton.textContent = 'Скопировать ссылку';
-                        }
-
-                        modalRoot.classList.remove('hidden');
-                        modalRoot.classList.add('flex');
-                        document.body.classList.add('overflow-hidden');
-
-                        return false;
-                    }
-                };
-
-                modalRoot.querySelectorAll('[data-showcase-share-close]').forEach((button) => {
-                    button.addEventListener('click', closeModal);
-                });
-
-                document.addEventListener('keydown', (event) => {
-                    if (event.key === 'Escape') {
-                        closeModal();
-                    }
-                });
-
-                if (copyButton) {
-                    copyButton.addEventListener('click', async () => {
-                        const url = copyButton.dataset.shareUrl || '';
-
-                        if (!url) {
-                            return;
-                        }
-
-                        try {
-                            await navigator.clipboard.writeText(url);
-                            copyButton.textContent = 'Ссылка скопирована';
-                            window.setTimeout(() => {
-                                copyButton.textContent = 'Скопировать ссылку';
-                            }, 1400);
-                        } catch (error) {
-                            window.prompt('Скопируйте ссылку вручную:', url);
-                        }
-                    });
-                }
-            })();
-        </script>
     @endif
 
     <style>
