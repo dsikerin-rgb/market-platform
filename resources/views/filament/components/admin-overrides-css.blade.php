@@ -1576,6 +1576,15 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-
   overflow: visible;
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-ta .fi-ta-content{
+  overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-ta .fi-ta-content-ctn{
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-fo-field-wrp-label{
   color: var(--tenant-edit-label);
   font-weight: 600;
