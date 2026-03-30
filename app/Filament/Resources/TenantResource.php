@@ -287,7 +287,7 @@ class TenantResource extends BaseResource
                             ->columns(2),
                     ]),
 
-                Tab::make('Кабинет')
+                Tab::make('Витрина')
                     ->schema([
                         Section::make('Витрина арендатора')
                             ->schema([
@@ -1762,7 +1762,7 @@ class TenantResource extends BaseResource
         if ($users->isEmpty()) {
             return new HtmlString(
                 '<div style="font-size:13px;opacity:.85;">Сотрудников арендатора пока нет. '
-                . '<a href="' . e($cabinetTabUrl) . '" style="text-decoration:underline;text-underline-offset:2px;">Добавить на вкладке «Кабинет»</a>.'
+                . '<a href="' . e($cabinetTabUrl) . '" style="text-decoration:underline;text-underline-offset:2px;">Добавить на вкладке «Витрина»</a>.'
                 . '</div>'
             );
         }
@@ -1883,7 +1883,7 @@ class TenantResource extends BaseResource
         $html = $style . '
 <div class="tenant-contact-staff">
     <div class="tenant-contact-staff__head">
-        <div class="tenant-contact-staff__hint">Настройка сотрудников и привязок к местам выполняется на вкладке «Кабинет».</div>
+        <div class="tenant-contact-staff__hint">Настройка сотрудников и привязок к местам выполняется на вкладке «Витрина».</div>
         <a href="' . e($cabinetTabUrl) . '" class="tenant-contact-staff__action">Управлять сотрудниками</a>
     </div>
     <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Нет данных.</div>') . '</div>
