@@ -204,4 +204,23 @@ class ContractsRelationManager extends RelationManager
 
         return number_format((float) $value, 2, ',', ' ');
     }
+
+    private static function openAction()
+    {
+        if (class_exists(\Filament\Tables\Actions\Action::class)) {
+            return \Filament\Tables\Actions\Action::make('open')
+                ->label('')
+                ->tooltip('Открыть')
+                ->icon('heroicon-o-arrow-top-right-on-square')
+                ->iconButton()
+                ->url(fn ($record): string => TenantContractResource::getUrl('edit', ['record' => $record]));
+        }
+
+        return \Filament\Actions\Action::make('open')
+            ->label('')
+            ->tooltip('Открыть')
+            ->icon('heroicon-o-arrow-top-right-on-square')
+            ->iconButton()
+            ->url(fn ($record): string => TenantContractResource::getUrl('edit', ['record' => $record]));
+    }
 }
