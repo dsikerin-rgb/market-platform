@@ -18,6 +18,7 @@ use App\Filament\Resources\BaseResource;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -314,6 +315,18 @@ class TenantResource extends BaseResource
                             ->columns(2),
 
                         static::cabinetAccessSection(),
+                    ]),
+
+                Tab::make('Обращения')
+                    ->visible(fn (string $operation): bool => $operation === 'edit')
+                    ->schema([
+                        Livewire::make(
+                            RequestsRelationManager::class,
+                            fn (?Tenant $record): array => [
+                                'ownerRecord' => $record,
+                                'pageClass' => Pages\EditTenant::class,
+                            ],
+                        )->key('tenant-requests'),
                     ]),
             ]),
         ]);
@@ -773,13 +786,6 @@ class TenantResource extends BaseResource
         }
 
         return $actions;
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            RequestsRelationManager::class,
-        ];
     }
 
     public static function getPages(): array
