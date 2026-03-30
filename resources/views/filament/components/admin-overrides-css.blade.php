@@ -1448,12 +1448,12 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-page{
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
   align-items: stretch;
-  justify-content: flex-start;
+  justify-content: start;
   gap: .95rem;
-  flex-wrap: nowrap;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
     linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
@@ -1463,18 +1463,18 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
-  order: 2;
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions-ctn{
+  grid-row: 2;
+  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
-  flex: 0 0 auto;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header > div:first-child{
-  order: 1;
+  grid-row: 1;
+  grid-column: 1 / -1;
   width: 100%;
   min-width: 0;
-  flex: 0 0 auto;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
@@ -1833,7 +1833,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .tenant-hero
     flex-wrap: wrap;
   }
 
-  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions-ctn{
     flex-basis: 100%;
   }
 
