@@ -71,8 +71,8 @@
         @csrf
 
         <section class="overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-slate-50 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] md:p-6">
-            <div>
-                <div class="max-w-3xl">
+            <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+                <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <a
                             href="{{ route('cabinet.products.index', $backParams) }}"
@@ -88,7 +88,7 @@
                     <h2 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
                         {{ $isEdit ? 'Карточка товара' : 'Добавление товара' }}
                     </h2>
-                    <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                    <p class="hidden">
                         Короткая карточка товара без лишних панелей: название, цена, фото и видимость.
                     </p>
 
@@ -113,10 +113,10 @@
                     </div>
 
                     @if($productShareUrl)
-                        <div class="mt-4 flex flex-wrap gap-2">
+                        <div class="mt-2 flex w-full justify-start xl:justify-end">
                                 <a
                                     href="#product-share-modal"
-                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
+                                    class="inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 xl:min-w-[17rem]"
                                 >
                                     Поделиться ссылкой на товар
                                 </a>
@@ -124,7 +124,7 @@
                     @endif
                 </div>
 
-                <div class="mt-4 inline-flex items-center rounded-2xl border border-white/80 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur">
+                <div class="inline-flex items-center rounded-2xl border border-white/80 bg-white/85 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur xl:min-w-[17rem] xl:justify-center">
                     {{ $currentIsActive ? 'Активен и виден покупателям' : 'Скрыт и виден только в кабинете' }}
                 </div>
             </div>
