@@ -1684,35 +1684,38 @@ class TenantContractResource extends BaseResource
             return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Цепочка не найдена.</div>');
         }
 
-        $html = '<div class="space-y-3">';
+        $html = '<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">';
+        $html .= '<table class="min-w-[920px] w-full border-collapse text-sm">';
+        $html .= '<thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">';
+        $html .= '<tr>';
+        $html .= '<th class="px-4 py-3">#</th>';
+        $html .= '<th class="px-4 py-3">Дата</th>';
+        $html .= '<th class="px-4 py-3">Договор</th>';
+        $html .= '<th class="px-4 py-3">Арендатор</th>';
+        $html .= '<th class="px-4 py-3">Место</th>';
+        $html .= '<th class="px-4 py-3">Статусы</th>';
+        $html .= '</tr>';
+        $html .= '</thead>';
+        $html .= '<tbody class="divide-y divide-gray-200">';
 
         foreach ($items as $index => $item) {
             /** @var TenantContract $chainRecord */
             $chainRecord = $item['record'];
 
             $tenantName = trim((string) ($chainRecord->tenant?->display_name ?? $chainRecord->tenant?->name ?? ''));
-            $spaceLabel = $chainRecord->market_space_id ? static::spaceLabel($chainRecord) : '';
+            $spaceLabel = $chainRecord->market_space_id ? static::spaceLabel($chainRecord) : '—';
             $isCurrent = (int) $chainRecord->id === (int) $record->id;
+            $number = trim((string) ($chainRecord->number ?? '')) !== '' ? (string) $chainRecord->number : 'Без номера';
+            $rowClass = $isCurrent ? ' bg-sky-50/60' : '';
 
-            $html .= '<div class="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">';
-            $html .= '<div class="flex flex-wrap items-start justify-between gap-3">';
-            $html .= '<div class="min-w-0 flex-1">';
-            $html .= '<div class="flex flex-wrap items-center gap-2">';
-            $html .= '<span class="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-sky-50 px-2 text-xs font-semibold text-sky-700">' . e((string) ($index + 1)) . '</span>';
-            $html .= '<span class="min-w-0 font-medium text-gray-900">' . e(trim((string) ($chainRecord->number ?? '')) !== '' ? (string) $chainRecord->number : 'Без номера') . '</span>';
-            $html .= '<span class="text-sm text-gray-500">от ' . e(static::formatClassifierDate($item['document_date'])) . '</span>';
-            $html .= '</div>';
-
-            if ($tenantName !== '') {
-                $html .= '<div class="mt-1 text-sm text-gray-600">' . e($tenantName) . '</div>';
-            }
-
-            $html .= '</div>';
-            $html .= '<div class="flex flex-wrap items-center justify-end gap-2">';
-
-            if ($spaceLabel !== '') {
-                $html .= static::historyChainChip('Место: ' . $spaceLabel, 'emerald');
-            }
+            $html .= '<tr class="align-top' . $rowClass . '">';
+            $html .= '<td class="whitespace-nowrap px-4 py-3 font-medium text-gray-900">' . e((string) ($index + 1)) . '</td>';
+            $html .= '<td class="whitespace-nowrap px-4 py-3 text-gray-700">' . e(static::formatClassifierDate($item['document_date'])) . '</td>';
+            $html .= '<td class="px-4 py-3 text-gray-900">' . e($number) . '</td>';
+            $html .= '<td class="px-4 py-3 text-gray-700">' . e($tenantName !== '' ? $tenantName : '—') . '</td>';
+            $html .= '<td class="px-4 py-3 text-gray-700">' . e($spaceLabel) . '</td>';
+            $html .= '<td class="px-4 py-3">';
+            $html .= '<div class="flex flex-wrap gap-2">';
 
             if (static::isInLatestDebtSnapshot($chainRecord)) {
                 $html .= static::historyChainChip('В последней задолженности', 'violet');
@@ -1722,11 +1725,17 @@ class TenantContractResource extends BaseResource
                 $html .= static::historyChainChip('Текущий', 'sky');
             }
 
+            if (! static::isInLatestDebtSnapshot($chainRecord) && ! $isCurrent) {
+                $html .= static::historyChainChip('—', 'gray');
+            }
+
             $html .= '</div>';
-            $html .= '</div>';
-            $html .= '</div>';
+            $html .= '</td>';
+            $html .= '</tr>';
         }
 
+        $html .= '</tbody>';
+        $html .= '</table>';
         $html .= '</div>';
 
         return new HtmlString($html);
