@@ -1448,12 +1448,11 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-page{
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  align-items: stretch;
-  justify-content: start;
-  gap: .95rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.2rem;
+  flex-wrap: wrap;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
     linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
@@ -1463,23 +1462,15 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions-ctn{
-  grid-row: 2;
-  grid-column: 1 / -1;
-  width: 100%;
-  min-width: 0;
-}
-
-html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header > div:first-child{
-  grid-row: 1;
-  grid-column: 1 / -1;
-  width: 100%;
-  min-width: 0;
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
+  flex: 1 1 52rem;
+  width: auto;
+  min-width: min(100%, 52rem);
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: .6rem;
   width: 100%;
   align-items: stretch;
@@ -1488,24 +1479,16 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
-  display: block;
-  max-width: none;
-  width: 100%;
-  font-size: clamp(1.6rem, 1.1rem + .95vw, 2.1rem);
-  line-height: 1.04;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  overflow-wrap: normal;
-  word-break: normal;
+  font-size: clamp(1.35rem, 1.15rem + 1vw, 2rem);
+  line-height: 1.02;
+  max-width: 13ch;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-subheading{
   color: var(--tenant-edit-text);
   font-size: .92rem;
   line-height: 1.45;
-  max-width: none;
-  width: 100%;
+  max-width: 36rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
@@ -1849,7 +1832,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .tenant-hero
     flex-wrap: wrap;
   }
 
-  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions-ctn{
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
     flex-basis: 100%;
   }
 
