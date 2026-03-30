@@ -1685,11 +1685,10 @@ class TenantContractResource extends BaseResource
         }
 
         $html = '<div class="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">';
-        $html .= '<table class="min-w-[1320px] w-full table-fixed border-collapse text-sm">';
+        $html .= '<table class="min-w-[1080px] w-full table-fixed border-collapse text-sm">';
         $html .= '<colgroup>';
         $html .= '<col class="w-12">';
-        $html .= '<col class="w-28">';
-        $html .= '<col class="w-[28%]">';
+        $html .= '<col class="w-[34%]">';
         $html .= '<col class="w-[28%]">';
         $html .= '<col class="w-[18%]">';
         $html .= '<col class="w-[20%]">';
@@ -1697,7 +1696,6 @@ class TenantContractResource extends BaseResource
         $html .= '<thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">';
         $html .= '<tr>';
         $html .= '<th class="px-4 py-3">#</th>';
-        $html .= '<th class="px-4 py-3">Дата</th>';
         $html .= '<th class="px-4 py-3">Договор</th>';
         $html .= '<th class="px-4 py-3">Арендатор</th>';
         $html .= '<th class="px-4 py-3">Место</th>';
@@ -1732,10 +1730,12 @@ class TenantContractResource extends BaseResource
 
             $html .= '<tr class="align-top' . $rowClass . '">';
             $html .= '<td class="whitespace-nowrap px-4 py-4 font-medium text-gray-900">' . e((string) ($index + 1)) . '</td>';
-            $html .= '<td class="whitespace-nowrap px-4 py-4 text-gray-700">' . e(static::formatClassifierDate($item['document_date'])) . '</td>';
             $html .= '<td class="px-4 py-4 text-gray-900">';
-            $html .= '<div class="space-y-1 leading-5">';
+            $html .= '<div class="space-y-1">';
+            $html .= '<div class="flex flex-wrap items-center gap-2 leading-5">';
             $html .= '<div class="font-medium">' . e($number) . '</div>';
+            $html .= '<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">' . e(static::formatClassifierDate($item['document_date'])) . '</span>';
+            $html .= '</div>';
             $html .= '<div class="text-xs text-gray-500">Начало: ' . e($chainRecord->starts_at?->format('d.m.Y') ?? '—') . '</div>';
             $html .= '</div>';
             $html .= '</td>';
@@ -1748,13 +1748,13 @@ class TenantContractResource extends BaseResource
             $html .= '</div>';
             $html .= '</td>';
             $html .= '<td class="px-4 py-4 text-gray-700">';
-            $html .= '<div class="space-y-1 leading-5">';
+            $html .= '<div class="space-y-1">';
             $html .= '<div class="font-medium">' . e($spaceLabel) . '</div>';
-            $html .= '<div class="text-xs text-gray-500">' . e(static::spaceMappingModeLabel($chainRecord->space_mapping_mode)) . '</div>';
+            $html .= '<div class="text-xs text-gray-500">Режим: ' . e(static::spaceMappingModeLabel($chainRecord->space_mapping_mode)) . '</div>';
             $html .= '</div>';
             $html .= '</td>';
             $html .= '<td class="px-4 py-4">';
-            $html .= '<div class="flex flex-wrap gap-2">' . implode('', $statusParts) . '</div>';
+            $html .= '<div class="flex flex-wrap gap-2 leading-5">' . implode('', $statusParts) . '</div>';
             $html .= '</td>';
             $html .= '</tr>';
         }
