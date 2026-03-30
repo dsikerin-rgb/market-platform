@@ -93,6 +93,7 @@ trait InteractsWithTenantCabinet
         }
 
         $user = $this->resolvePrimaryCabinetUser($tenant);
+        $spaceLabels = $this->buildTenantSpaceLabelMap($tenant);
         if ($user) {
             $state['cabinet_user_name'] = (string) ($user->name ?? '');
             $state['cabinet_user_email'] = (string) ($user->email ?? '');
@@ -100,14 +101,26 @@ trait InteractsWithTenantCabinet
 
         $state['cabinet_additional_users'] = $this->resolveAdditionalCabinetUsers($tenant, $user?->id)
             ->get()
-            ->map(static fn (User $item): array => [
-                'id' => (int) $item->id,
-                'name' => (string) ($item->name ?? ''),
-                'email' => (string) ($item->email ?? ''),
-                'password' => '',
-                'space_ids' => $item->relationLoaded('tenantSpaces')
+            ->map(function (User $item) use ($spaceLabels): array {
+                $spaceIds = $item->relationLoaded('tenantSpaces')
                     ? $item->tenantSpaces->pluck('id')->map(static fn ($id): int => (int) $id)->values()->all()
-                    : [],
+                    : [];
+                $spaceSummary = $this->summarizeTenantSpaceIds($spaceIds, $spaceLabels);
+
+                return [
+                    'id' => (int) $item->id,
+                    'name' => (string) ($item->name ?? ''),
+                    'email' => (string) ($item->email ?? ''),
+                    'password' => '',
+                    'space_ids' => $spaceIds,
+                    'space_summary' => $spaceSummary,
+                    'space_sort' => $spaceIds !== [] ? min($spaceIds) : 0,
+                ];
+            })
+            ->sortBy([
+                ['space_sort', 'asc'],
+                ['name', 'asc'],
+                ['email', 'asc'],
             ])
             ->values()
             ->all();
@@ -125,6 +138,57 @@ trait InteractsWithTenantCabinet
         }
 
         return $state;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function buildTenantSpaceLabelMap(Tenant $tenant): array
+    {
+        return MarketSpace::query()
+            ->where('tenant_id', (int) $tenant->id)
+            ->when((int) ($tenant->market_id ?? 0) > 0, fn ($query) => $query->where('market_id', (int) $tenant->market_id))
+            ->orderByRaw('COALESCE(code, number, display_name, id::text) asc')
+            ->get(['id', 'code', 'number', 'display_name'])
+            ->mapWithKeys(static function (MarketSpace $space): array {
+                $label = trim((string) ($space->code ?: $space->number ?: $space->display_name ?: ('#' . $space->id)));
+                $name = trim((string) ($space->display_name ?? ''));
+
+                return [(int) $space->id => $name !== '' ? ($label . ' · ' . $name) : $label];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $spaceIds
+     * @param  array<int, string>  $spaceLabels
+     */
+    protected function summarizeTenantSpaceIds(array $spaceIds, array $spaceLabels): string
+    {
+        if ($spaceIds === []) {
+            return 'Все места';
+        }
+
+        $labels = [];
+        foreach ($spaceIds as $spaceId) {
+            $spaceId = (int) $spaceId;
+            if ($spaceId <= 0) {
+                continue;
+            }
+
+            $labels[] = $spaceLabels[$spaceId] ?? ('#' . $spaceId);
+        }
+
+        $labels = array_values(array_filter(array_unique($labels), static fn (string $value): bool => $value !== ''));
+        if ($labels === []) {
+            return 'Все места';
+        }
+
+        if (count($labels) > 2) {
+            return $labels[0] . ' · +' . (count($labels) - 1);
+        }
+
+        return implode(' · ', $labels);
     }
 
     /**
