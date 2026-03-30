@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\TenantAccruals\Tables;
 
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\TenantContractResource;
 use App\Models\MarketLocation;
 use App\Models\TenantAccrual;
 use Filament\Facades\Filament;
@@ -101,6 +103,9 @@ class TenantAccrualsTable
                     ->label('Договор')
                     ->searchable()
                     ->placeholder('—')
+                    ->url(fn (TenantAccrual $record): ?string => $record->tenantContract && TenantContractResource::canEdit($record->tenantContract)
+                        ? TenantContractResource::getUrl('edit', ['record' => $record->tenantContract])
+                        : null)
                     ->toggleable(),
 
                 TextColumn::make('contract_external_id')
@@ -122,6 +127,9 @@ class TenantAccrualsTable
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
+                    ->url(fn (TenantAccrual $record): ?string => $record->marketSpace && MarketSpaceResource::canEdit($record->marketSpace)
+                        ? MarketSpaceResource::getUrl('edit', ['record' => $record->marketSpace])
+                        : null)
                     ->toggleable(),
 
                 TextColumn::make('area_sqm')
@@ -306,7 +314,11 @@ class TenantAccrualsTable
             ])
             ->toolbarActions([]);
 
-        if (! $readOnly) {
+        if ($readOnly) {
+            $table->recordActions([
+                static::openAction(),
+            ]);
+        } else {
             $table->recordActions([
                 static::editAction(),
             ]);
@@ -330,6 +342,25 @@ class TenantAccrualsTable
             ->tooltip('Открыть')
             ->icon('heroicon-o-pencil-square')
             ->iconButton();
+    }
+
+    private static function openAction()
+    {
+        if (class_exists(\Filament\Tables\Actions\Action::class)) {
+            return \Filament\Tables\Actions\Action::make('open')
+                ->label('')
+                ->tooltip('Открыть')
+                ->icon('heroicon-o-arrow-top-right-on-square')
+                ->iconButton()
+                ->url(fn (TenantAccrual $record): string => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('edit', ['record' => $record]));
+        }
+
+        return \Filament\Actions\Action::make('open')
+            ->label('')
+            ->tooltip('Открыть')
+            ->icon('heroicon-o-arrow-top-right-on-square')
+            ->iconButton()
+            ->url(fn (TenantAccrual $record): string => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('edit', ['record' => $record]));
     }
 
     private static function selectedMarketIdFromSession(): ?int

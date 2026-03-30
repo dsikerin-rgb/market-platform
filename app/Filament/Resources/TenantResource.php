@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\AccrualsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
+use App\Filament\Resources\TenantResource\RelationManagers\SpacesRelationManager;
 use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\Tenant;
@@ -188,11 +189,20 @@ class TenantResource extends BaseResource
                     ->schema([
                         Section::make()
                             ->schema([
-                                Forms\Components\Placeholder::make('spaces_last_period')
+                                Forms\Components\Placeholder::make('spaces_summary')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
-                                    ->content(fn (?Tenant $record) => static::renderSpacesLastPeriod($record))
+                                    ->content(fn (?Tenant $record) => static::renderSpacesSummaryCards($record))
                                     ->columnSpanFull(),
+                                Livewire::make(
+                                    SpacesRelationManager::class,
+                                    fn (?Tenant $record): array => [
+                                        'ownerRecord' => $record,
+                                        'pageClass' => Pages\EditTenant::class,
+                                    ],
+                                )
+                                    ->visible(fn (?Tenant $record): bool => $record !== null)
+                                    ->key('tenant-spaces'),
                             ]),
 
                         Section::make('Расчеты по договорам')
@@ -1224,6 +1234,68 @@ class TenantResource extends BaseResource
         self::$accrualSummaryCache[$cacheKey] = $data;
 
         return $data;
+    }
+
+    private static function renderSpacesSummaryCards(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Список площадей появится после сохранения арендатора.</div>');
+        }
+
+        $spacesQuery = DB::table('market_spaces')
+            ->where('market_id', (int) $record->market_id)
+            ->where('tenant_id', (int) $record->id);
+
+        $spacesCount = (int) (clone $spacesQuery)->count();
+
+        if ($spacesCount === 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">За арендатором пока не закреплены торговые места.</div>');
+        }
+
+        $activeCount = static::hasColumn('market_spaces', 'is_active')
+            ? (int) (clone $spacesQuery)->where('is_active', true)->count()
+            : 0;
+
+        $occupiedCount = static::hasColumn('market_spaces', 'status')
+            ? (int) (clone $spacesQuery)->whereIn('status', ['occupied'])->count()
+            : 0;
+
+        $areaColumn = static::hasColumn('market_spaces', 'area_sqm')
+            ? 'area_sqm'
+            : (static::hasColumn('market_spaces', 'area') ? 'area' : null);
+
+        $totalArea = $areaColumn
+            ? (float) ((clone $spacesQuery)->sum($areaColumn) ?? 0)
+            : 0.0;
+
+        $summaryCards = [
+            ['label' => 'Всего мест', 'value' => (string) $spacesCount],
+            ['label' => 'Активных', 'value' => (string) $activeCount],
+            ['label' => 'Занятых', 'value' => (string) $occupiedCount],
+            ['label' => 'Общая площадь', 'value' => $totalArea > 0 ? number_format($totalArea, 2, ',', ' ') . ' м²' : '—'],
+        ];
+
+        $cardsHtml = '';
+        foreach ($summaryCards as $card) {
+            $cardsHtml .= '<div class="tenant-spaces-inline-summary__card">'
+                . '<div class="tenant-spaces-inline-summary__label">' . e((string) $card['label']) . '</div>'
+                . '<div class="tenant-spaces-inline-summary__value">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
+
+        return new HtmlString(
+            '<style>
+                .tenant-spaces-inline-summary{display:flex;flex-direction:column;gap:12px}
+                .tenant-spaces-inline-summary__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+                .tenant-spaces-inline-summary__card{border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;background:rgba(0,0,0,.02)}
+                .dark .tenant-spaces-inline-summary__card{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
+                .tenant-spaces-inline-summary__label{font-size:12px;line-height:1.2;opacity:.72}
+                .tenant-spaces-inline-summary__value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2}
+            </style>
+            <div class="tenant-spaces-inline-summary">
+                <div class="tenant-spaces-inline-summary__grid">' . $cardsHtml . '</div>
+            </div>'
+        );
     }
 
     private static function renderSpacesLastPeriod(?Tenant $record): HtmlString
