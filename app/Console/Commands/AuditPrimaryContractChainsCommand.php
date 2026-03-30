@@ -16,6 +16,8 @@ class AuditPrimaryContractChainsCommand extends Command
         {--market= : Market ID (default: market_id from active 1C integration)}
         {--limit=20 : How many top groups to print}
         {--min-count=2 : Minimum contracts in a chain}
+        {--only-auto : Show only groups that can be auto-resolved}
+        {--only-ambiguous : Show only groups that still require review}
         {--include-test : Include TEST/placeholder contract numbers in output}';
 
     protected $description = 'Read-only audit of primary contract chains on the same tenant/place using document dates from contract numbers.';
@@ -25,6 +27,8 @@ class AuditPrimaryContractChainsCommand extends Command
         $marketId = $this->resolveMarketId();
         $limit = max(0, (int) $this->option('limit'));
         $minCount = max(2, (int) $this->option('min-count'));
+        $onlyAuto = (bool) $this->option('only-auto');
+        $onlyAmbiguous = (bool) $this->option('only-ambiguous');
         $includeTest = (bool) $this->option('include-test');
 
         $contracts = TenantContract::query()
@@ -53,6 +57,11 @@ class AuditPrimaryContractChainsCommand extends Command
             'groups_with_candidate' => 0,
             'groups_without_document_date' => 0,
             'groups_with_test_noise' => 0,
+            'auto_resolvable_groups' => 0,
+            'ambiguous_groups' => 0,
+            'groups_with_place_token_conflicts' => 0,
+            'groups_with_latest_date_ties' => 0,
+            'groups_with_missing_place_tokens' => 0,
         ];
 
         $groups = [];
@@ -118,18 +127,73 @@ class AuditPrimaryContractChainsCommand extends Command
                     $stats['groups_with_test_noise']++;
                 }
 
+                $distinctPlaceTokens = $contracts
+                    ->pluck('place_token')
+                    ->filter(static fn (?string $token): bool => $token !== null && $token !== '')
+                    ->unique()
+                    ->values();
+
+                $hasPlaceTokenConflict = $distinctPlaceTokens->count() > 1;
+                $missingPlaceTokenCount = $contracts->whereNull('place_token')->count();
+                $latestDateTies = $candidate !== null
+                    ? $contracts->where('document_date', $candidate['document_date'])->pluck('id')->values()->all()
+                    : [];
+                $hasLatestDateTie = count($latestDateTies) > 1;
+
+                if ($hasPlaceTokenConflict) {
+                    $stats['groups_with_place_token_conflicts']++;
+                }
+
+                if ($hasLatestDateTie) {
+                    $stats['groups_with_latest_date_ties']++;
+                }
+
+                if ($missingPlaceTokenCount > 0) {
+                    $stats['groups_with_missing_place_tokens']++;
+                }
+
+                $resolutionStatus = 'auto_single_latest_document';
+                if ($candidate === null) {
+                    $resolutionStatus = 'review_missing_document_date';
+                } elseif ($hasPlaceTokenConflict) {
+                    $resolutionStatus = 'review_mixed_place_tokens';
+                } elseif ($hasLatestDateTie) {
+                    $resolutionStatus = 'review_latest_date_tie';
+                }
+
+                $autoResolvable = $resolutionStatus === 'auto_single_latest_document';
+                if ($autoResolvable) {
+                    $stats['auto_resolvable_groups']++;
+                } else {
+                    $stats['ambiguous_groups']++;
+                }
+
                 return [
                     'tenant_id' => $group['tenant_id'],
                     'market_space_id' => $group['market_space_id'],
                     'count' => $contracts->count(),
                     'candidate_contract_id' => $candidate['id'] ?? null,
                     'candidate_document_date' => $candidate['document_date'] ?? null,
+                    'historical_contract_ids' => $candidate !== null
+                        ? $sorted
+                            ->reject(static fn (array $item): bool => $item['id'] === $candidate['id'])
+                            ->pluck('id')
+                            ->values()
+                            ->all()
+                        : $sorted->pluck('id')->values()->all(),
+                    'auto_resolvable' => $autoResolvable,
+                    'resolution_status' => $resolutionStatus,
+                    'place_tokens' => $distinctPlaceTokens->all(),
+                    'missing_place_token_count' => $missingPlaceTokenCount,
+                    'latest_date_tie_contract_ids' => $hasLatestDateTie ? $latestDateTies : [],
                     'has_test_noise' => $hasTestNoise,
                     'contracts' => $sorted->all(),
                 ];
             })
             ->filter()
-            ->sort([$this, 'compareGroups'])
+            ->when($onlyAuto, static fn (Collection $groups): Collection => $groups->where('auto_resolvable', true))
+            ->when($onlyAmbiguous, static fn (Collection $groups): Collection => $groups->where('auto_resolvable', false))
+            ->sort(fn (array $left, array $right): int => $this->compareGroups($left, $right))
             ->values();
 
         $stats['group_count'] = $preparedGroups->count();
