@@ -1684,8 +1684,16 @@ class TenantContractResource extends BaseResource
             return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Цепочка не найдена.</div>');
         }
 
-        $html = '<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">';
-        $html .= '<table class="min-w-[920px] w-full border-collapse text-sm">';
+        $html = '<div class="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">';
+        $html .= '<table class="min-w-[1320px] w-full table-fixed border-collapse text-sm">';
+        $html .= '<colgroup>';
+        $html .= '<col class="w-12">';
+        $html .= '<col class="w-28">';
+        $html .= '<col class="w-[28%]">';
+        $html .= '<col class="w-[28%]">';
+        $html .= '<col class="w-[18%]">';
+        $html .= '<col class="w-[20%]">';
+        $html .= '</colgroup>';
         $html .= '<thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">';
         $html .= '<tr>';
         $html .= '<th class="px-4 py-3">#</th>';
@@ -1703,33 +1711,50 @@ class TenantContractResource extends BaseResource
             $chainRecord = $item['record'];
 
             $tenantName = trim((string) ($chainRecord->tenant?->display_name ?? $chainRecord->tenant?->name ?? ''));
+            $tenantShort = trim((string) ($chainRecord->tenant?->short_name ?? ''));
             $spaceLabel = $chainRecord->market_space_id ? static::spaceLabel($chainRecord) : '—';
             $isCurrent = (int) $chainRecord->id === (int) $record->id;
             $number = trim((string) ($chainRecord->number ?? '')) !== '' ? (string) $chainRecord->number : 'Без номера';
             $rowClass = $isCurrent ? ' bg-sky-50/60' : '';
-
-            $html .= '<tr class="align-top' . $rowClass . '">';
-            $html .= '<td class="whitespace-nowrap px-4 py-3 font-medium text-gray-900">' . e((string) ($index + 1)) . '</td>';
-            $html .= '<td class="whitespace-nowrap px-4 py-3 text-gray-700">' . e(static::formatClassifierDate($item['document_date'])) . '</td>';
-            $html .= '<td class="px-4 py-3 text-gray-900">' . e($number) . '</td>';
-            $html .= '<td class="px-4 py-3 text-gray-700">' . e($tenantName !== '' ? $tenantName : '—') . '</td>';
-            $html .= '<td class="px-4 py-3 text-gray-700">' . e($spaceLabel) . '</td>';
-            $html .= '<td class="px-4 py-3">';
-            $html .= '<div class="flex flex-wrap gap-2">';
+            $statusParts = [];
 
             if (static::isInLatestDebtSnapshot($chainRecord)) {
-                $html .= static::historyChainChip('В последней задолженности', 'violet');
+                $statusParts[] = static::historyChainChip('В последней задолженности', 'violet');
             }
 
             if ($isCurrent) {
-                $html .= static::historyChainChip('Текущий', 'sky');
+                $statusParts[] = static::historyChainChip('Текущий', 'sky');
             }
 
-            if (! static::isInLatestDebtSnapshot($chainRecord) && ! $isCurrent) {
-                $html .= static::historyChainChip('—', 'gray');
+            if ($statusParts === []) {
+                $statusParts[] = static::historyChainChip('—', 'gray');
             }
 
+            $html .= '<tr class="align-top' . $rowClass . '">';
+            $html .= '<td class="whitespace-nowrap px-4 py-4 font-medium text-gray-900">' . e((string) ($index + 1)) . '</td>';
+            $html .= '<td class="whitespace-nowrap px-4 py-4 text-gray-700">' . e(static::formatClassifierDate($item['document_date'])) . '</td>';
+            $html .= '<td class="px-4 py-4 text-gray-900">';
+            $html .= '<div class="space-y-1 leading-5">';
+            $html .= '<div class="font-medium">' . e($number) . '</div>';
+            $html .= '<div class="text-xs text-gray-500">Начало: ' . e($chainRecord->starts_at?->format('d.m.Y') ?? '—') . '</div>';
             $html .= '</div>';
+            $html .= '</td>';
+            $html .= '<td class="px-4 py-4 text-gray-700">';
+            $html .= '<div class="space-y-1 leading-5">';
+            $html .= '<div class="font-medium">' . e($tenantName !== '' ? $tenantName : '—') . '</div>';
+            if ($tenantShort !== '' && $tenantShort !== $tenantName) {
+                $html .= '<div class="text-xs text-gray-500">' . e($tenantShort) . '</div>';
+            }
+            $html .= '</div>';
+            $html .= '</td>';
+            $html .= '<td class="px-4 py-4 text-gray-700">';
+            $html .= '<div class="space-y-1 leading-5">';
+            $html .= '<div class="font-medium">' . e($spaceLabel) . '</div>';
+            $html .= '<div class="text-xs text-gray-500">' . e(static::spaceMappingModeLabel($chainRecord->space_mapping_mode)) . '</div>';
+            $html .= '</div>';
+            $html .= '</td>';
+            $html .= '<td class="px-4 py-4">';
+            $html .= '<div class="flex flex-wrap gap-2">' . implode('', $statusParts) . '</div>';
             $html .= '</td>';
             $html .= '</tr>';
         }
