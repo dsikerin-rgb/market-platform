@@ -1455,6 +1455,18 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
+  width: 100%;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+  width: 100%;
+  align-items: stretch;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
@@ -1582,6 +1594,113 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-actio
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-actions.fi-sticky .fi-ac{
   border-radius: .95rem;
   border-color: rgba(15, 23, 42, 0.12);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn{
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.65rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "icon title"
+    "icon subtitle";
+  align-items: start;
+  justify-items: start;
+  gap: .1rem .85rem;
+  width: 100%;
+  min-height: 5.25rem;
+  padding: .9rem .95rem .95rem .85rem !important;
+  border-radius: 1rem;
+  border: 1px solid #d8e3f1 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  color: #1f3251 !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  text-align: left;
+  white-space: normal;
+  overflow: hidden;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, background-color .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn:focus-visible{
+  border-color: #c6d6e7 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-icon{
+  grid-area: icon;
+  width: 2.65rem;
+  height: 2.65rem;
+  margin: 0;
+  align-self: start;
+  justify-self: start;
+  border-radius: .9rem;
+  background: rgba(215, 227, 255, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(170, 190, 231, 0.45);
+  color: #1d4ed8 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-btn-label{
+  grid-area: title;
+  margin-top: .05rem;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.12;
+  white-space: normal;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn::after{
+  content: attr(data-subtitle);
+  grid-area: subtitle;
+  align-self: start;
+  color: #475569;
+  font-size: .84rem;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--secondary.fi-btn > .fi-icon{
+  background: rgba(215, 227, 255, 0.95);
+  color: #1d4ed8 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--primary.fi-btn > .fi-icon{
+  background: rgba(214, 229, 255, 0.95);
+  color: #1d4ed8 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--danger.fi-btn{
+  border-color: #f0c2c7 !important;
+  background: linear-gradient(180deg, #fffdfd 0%, #fff2f4 100%) !important;
+  color: #b4323d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--danger.fi-btn > .fi-icon{
+  background: rgba(255, 223, 226, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(228, 152, 161, 0.42);
+  color: #b4323d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--danger.fi-btn::after{
+  color: #9f1239;
+}
+
+@media (max-width: 1180px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
+    grid-template-columns: 1fr;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn{
+    min-height: 0;
+  }
 }
 
 @media (max-width: 1024px){
