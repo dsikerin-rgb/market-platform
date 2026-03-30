@@ -6,6 +6,8 @@ namespace App\Filament\Resources\TenantResource\RelationManagers;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantContractResource;
+use App\Models\TenantContract;
+use App\Services\TenantContracts\ContractDocumentClassifier;
 use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -58,16 +60,8 @@ class ContractsRelationManager extends RelationManager
 
                 TextColumn::make('starts_at')
                     ->label('Период')
-                    ->state(fn ($record): string => $this->periodLabel($record?->starts_at, $record?->ends_at))
-                    ->tooltip(fn ($record): ?string => $this->periodTooltip($record?->signed_at))
-                    ->sortable(),
-
-                TextColumn::make('monthly_rent')
-                    ->label('Аренда')
-                    ->state(fn ($record): string => $this->formatMoney($record?->monthly_rent))
-                    ->alignEnd()
-                    ->sortable()
-                    ->placeholder('—'),
+                    ->state(fn (?TenantContract $record): string => $this->periodLabel($record))
+                    ->tooltip(fn (?TenantContract $record): ?string => $this->periodTooltip($record)),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -160,21 +154,38 @@ class ContractsRelationManager extends RelationManager
         };
     }
 
-    private function periodLabel(mixed $startsAt, mixed $endsAt): string
+    private function periodLabel(?TenantContract $record): string
     {
-        $start = $this->formatDate($startsAt);
-        $end = $this->formatDate($endsAt);
-
-        if ($start === '—' && $end === '—') {
+        if (! $record) {
             return '—';
+        }
+
+        $start = $this->primaryPeriodStart($record);
+        $end = $this->formatDate($record->ends_at);
+
+        if ($start === '—') {
+            return '—';
+        }
+
+        if ($end === '—') {
+            return $start;
         }
 
         return $start.' - '.$end;
     }
 
-    private function periodTooltip(mixed $signedAt): ?string
+    private function periodTooltip(?TenantContract $record): ?string
     {
-        $signed = $this->formatDate($signedAt);
+        if (! $record) {
+            return null;
+        }
+
+        $documentDate = $this->documentDateFromNumber($record);
+        if ($documentDate !== null) {
+            return 'Дата из номера договора: '.$this->formatDate($documentDate);
+        }
+
+        $signed = $this->formatDate($record->signed_at);
 
         return $signed === '—' ? null : 'Подписан: '.$signed;
     }
@@ -196,13 +207,29 @@ class ContractsRelationManager extends RelationManager
         }
     }
 
-    private function formatMoney(mixed $value): string
+    private function primaryPeriodStart(TenantContract $record): string
     {
-        if (! is_numeric($value)) {
-            return '—';
+        $documentDate = $this->documentDateFromNumber($record);
+
+        if ($documentDate !== null) {
+            return $this->formatDate($documentDate);
         }
 
-        return number_format((float) $value, 2, ',', ' ');
+        $signed = $this->formatDate($record->signed_at);
+        if ($signed !== '—') {
+            return $signed;
+        }
+
+        return $this->formatDate($record->starts_at);
+    }
+
+    private function documentDateFromNumber(TenantContract $record): ?string
+    {
+        $classified = app(ContractDocumentClassifier::class)->classify((string) ($record->number ?? ''));
+
+        return filled($classified['document_date'] ?? null)
+            ? (string) $classified['document_date']
+            : null;
     }
 
     private static function openAction()
