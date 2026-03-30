@@ -61,8 +61,7 @@ class ContractsRelationManager extends RelationManager
                 TextColumn::make('starts_at')
                     ->label('Период')
                     ->state(fn (?TenantContract $record): string => $this->periodLabel($record))
-                    ->tooltip(fn (?TenantContract $record): ?string => $this->periodTooltip($record))
-                    ->sortable(),
+                    ->tooltip(fn (?TenantContract $record): ?string => $this->periodTooltip($record)),
             ])
             ->filters([
                 SelectFilter::make('status')
