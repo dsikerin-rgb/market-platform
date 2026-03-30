@@ -238,6 +238,7 @@ class MarketSpaceHistoryTest extends TestCase
             ->first();
 
         $this->assertNotNull($closedBinding?->ended_at);
+        $this->assertSame('2025-03-10 15:30:00', $closedBinding->ended_at?->format('Y-m-d H:i:s'));
         $this->assertSame('contract_rebound', $closedBinding->resolution_reason);
         $this->assertNotNull($activeBinding);
 
