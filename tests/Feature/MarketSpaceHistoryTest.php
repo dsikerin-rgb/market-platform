@@ -364,4 +364,148 @@ class MarketSpaceHistoryTest extends TestCase
         $this->assertSame('superseded_by_contract_binding', $serviceBinding->resolution_reason);
         $this->assertNotNull($primaryBinding);
     }
+
+    public function test_sync_bindings_command_preview_does_not_mutate_shadowed_service_binding(): void
+    {
+        Carbon::setTestNow('2025-03-01 09:00:00');
+
+        $market = Market::create(['name' => 'Тестовый рынок']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Тест',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'ФК1',
+            'status' => 'occupied',
+        ]);
+
+        $primary = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'Ф/К-1 от 01.01.2026',
+            'status' => 'active',
+            'starts_at' => '2025-03-01',
+            'is_active' => true,
+        ]);
+
+        $service = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'ОП Ф/К-1 от 01.01.2026',
+            'status' => 'active',
+            'starts_at' => '2025-03-01',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $service->id,
+            'started_at' => Carbon::parse('2025-03-01 00:00:00'),
+            'ended_at' => null,
+            'binding_type' => 'exact',
+            'confidence' => 'high',
+            'source' => 'tenant_contract_auto',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'contract_space_link',
+            'meta' => [],
+        ]);
+
+        $this->artisan('contracts:sync-bindings', [
+            '--market' => $market->id,
+            '--service-shadowed-only' => true,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'tenant_contract_id' => $service->id,
+            'ended_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'tenant_contract_id' => $primary->id,
+            'ended_at' => null,
+        ]);
+    }
+
+    public function test_sync_bindings_command_apply_closes_shadowed_service_binding(): void
+    {
+        Carbon::setTestNow('2025-03-01 09:00:00');
+
+        $market = Market::create(['name' => 'Тестовый рынок']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Тест',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'ФК1',
+            'status' => 'occupied',
+        ]);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'Ф/К-1 от 01.01.2026',
+            'status' => 'active',
+            'starts_at' => '2025-03-01',
+            'is_active' => true,
+        ]);
+
+        $service = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'ОП Ф/К-1 от 01.01.2026',
+            'status' => 'active',
+            'starts_at' => '2025-03-01',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $service->id,
+            'started_at' => Carbon::parse('2025-03-01 00:00:00'),
+            'ended_at' => null,
+            'binding_type' => 'exact',
+            'confidence' => 'high',
+            'source' => 'tenant_contract_auto',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'contract_space_link',
+            'meta' => [],
+        ]);
+
+        Carbon::setTestNow('2025-03-10 15:30:00');
+
+        $this->artisan('contracts:sync-bindings', [
+            '--market' => $market->id,
+            '--service-shadowed-only' => true,
+            '--apply' => true,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'tenant_contract_id' => $service->id,
+            'resolution_reason' => 'service_document_shadowed_by_primary_contract',
+        ]);
+
+        $serviceBinding = MarketSpaceTenantBinding::query()
+            ->where('tenant_contract_id', $service->id)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($serviceBinding?->ended_at);
+        $this->assertSame('2025-03-10 15:30:00', $serviceBinding->ended_at?->format('Y-m-d H:i:s'));
+    }
 }
