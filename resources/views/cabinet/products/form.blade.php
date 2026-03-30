@@ -35,18 +35,13 @@
                 ->value('slug') ?: (string) $tenant->market_id;
         }
 
-        $tenantRouteKey = filled($tenant->slug ?? null) ? (string) $tenant->slug : (string) ($tenant->id ?? '');
         $productRouteKey = filled($product->slug ?? null) ? (string) $product->slug : '';
 
-        $storeShareUrl = $isEdit && filled($marketRouteKey) && $tenantRouteKey !== ''
-            ? route('marketplace.store.show', ['marketSlug' => $marketRouteKey, 'tenantSlug' => $tenantRouteKey])
-            : null;
         $productShareUrl = $isEdit && filled($marketRouteKey) && $productRouteKey !== ''
             ? route('marketplace.product.show', ['marketSlug' => $marketRouteKey, 'productSlug' => $productRouteKey])
             : null;
 
         $qrGenerator = app(\App\Support\QrCodeDataUriGenerator::class);
-        $storeShareQr = $storeShareUrl ? $qrGenerator->generateSvgDataUri($storeShareUrl, 8) : null;
         $productShareQr = $productShareUrl ? $qrGenerator->generateSvgDataUri($productShareUrl, 8) : null;
 
         $fieldClass = 'mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100';
@@ -55,12 +50,29 @@
         $checkboxClass = 'h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-4 focus:ring-sky-100';
     @endphp
 
+    <style>
+        .cabinet-share-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .cabinet-share-modal:target {
+            display: flex;
+        }
+    </style>
+
     <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="space-y-4">
         @csrf
 
         <section class="overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-slate-50 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] md:p-6">
-            <div>
-                <div class="max-w-3xl">
+            <div class="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+                <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <a
                             href="{{ route('cabinet.products.index', $backParams) }}"
@@ -76,11 +88,11 @@
                     <h2 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
                         {{ $isEdit ? 'Карточка товара' : 'Добавление товара' }}
                     </h2>
-                    <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                        Основные поля товара, фото и настройки показа.
+                    <p class="hidden">
+                        Короткая карточка товара без лишних панелей: название, цена, фото и видимость.
                     </p>
 
-                    <div class="mt-4 flex flex-wrap gap-2 pb-4 sm:pb-5">
+                    <div class="mt-4 flex flex-wrap gap-2">
                         <span class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                             Категория: {{ $categoryLabel }}
                         </span>
@@ -100,40 +112,20 @@
                         @endif
                     </div>
 
-                    @if($productShareUrl || $storeShareUrl)
-                        <div class="flex flex-wrap gap-2 pb-2">
-                            @if($productShareUrl)
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white/90 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
-                                    data-share-open="product"
+                    @if($productShareUrl)
+                        <div class="mt-2 flex w-full justify-start xl:justify-end">
+                                <a
+                                    href="#product-share-modal"
+                                    class="inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50 xl:min-w-[17rem]"
                                 >
                                     Поделиться ссылкой на товар
-                                </button>
-                            @endif
-                            @if($storeShareUrl)
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                                    data-share-open="store"
-                                >
-                                    Поделиться витриной
-                                </button>
-                            @endif
+                                </a>
                         </div>
                     @endif
                 </div>
 
-                <div class="mt-2 max-w-sm">
-                    <div class="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Статус</div>
-                        <div class="mt-1.5 text-base font-semibold text-slate-900">
-                            {{ $currentIsActive ? 'Активен' : 'Скрыт' }}
-                        </div>
-                        <div class="mt-0.5 text-xs text-slate-600">
-                            {{ $currentIsActive ? 'Виден покупателям' : 'Виден только в кабинете' }}
-                        </div>
-                    </div>
+                <div class="inline-flex items-center rounded-2xl border border-white/80 bg-white/85 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur xl:min-w-[17rem] xl:justify-center">
+                    {{ $currentIsActive ? 'Активен и виден покупателям' : 'Скрыт и виден только в кабинете' }}
                 </div>
             </div>
         </section>
@@ -465,65 +457,44 @@
         </div>
     </form>
 
-    @if($productShareUrl || $storeShareUrl)
-        <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 px-4 py-6" data-share-modal-root>
-            <div class="absolute inset-0" data-share-close></div>
+    @if($productShareUrl)
+        <div id="product-share-modal" class="cabinet-share-modal">
+            <a href="#" class="absolute inset-0"></a>
             <div class="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)] md:p-6">
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Поделиться</p>
-                        <h3 class="mt-2 text-xl font-semibold text-slate-900" data-share-title></h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-500" data-share-description></p>
+                        <h3 class="mt-2 text-xl font-semibold text-slate-900">QR-код товара</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Покупатель сможет открыть карточку товара по ссылке или QR-коду.</p>
                     </div>
-                    <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" data-share-close aria-label="Закрыть окно">
+                    <a href="#" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" aria-label="Закрыть окно">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
                         </svg>
-                    </button>
+                    </a>
                 </div>
 
                 <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                     <div class="mx-auto flex h-[18rem] w-[18rem] max-w-full items-center justify-center rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                        <img src="" alt="" class="h-full w-full object-contain" data-share-qr>
+                        <img src="{{ $productShareQr }}" alt="QR-код товара" class="h-full w-full object-contain">
                     </div>
                 </div>
 
                 <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ссылка</p>
-                    <p class="mt-2 break-all text-sm text-slate-700" data-share-url></p>
+                    <p class="mt-2 break-all text-sm text-slate-700">{{ $productShareUrl }}</p>
                 </div>
 
                 <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="button" class="inline-flex flex-1 items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700" data-share-copy>
-                        Скопировать ссылку
-                    </button>
-                    <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900" data-share-close>
+                    <a href="{{ $productShareUrl }}" target="_blank" rel="noreferrer" class="inline-flex flex-1 items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+                        Открыть ссылку
+                    </a>
+                    <a href="#" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900">
                         Закрыть
-                    </button>
+                    </a>
                 </div>
             </div>
         </div>
-
-        <script type="application/json" data-share-config>
-            {
-                @if($productShareUrl)
-                "product": {
-                    "title": "QR-код товара",
-                    "description": "Покупатель сможет открыть карточку товара, добавить его в избранное и перейти к продавцу.",
-                    "url": @json($productShareUrl),
-                    "qr": @json($productShareQr)
-                }@if($storeShareUrl),@endif
-                @endif
-                @if($storeShareUrl)
-                "store": {
-                    "title": "QR-код витрины",
-                    "description": "Покупатель сможет открыть витрину продавца, посмотреть товары и сохранить интересующие позиции в избранное.",
-                    "url": @json($storeShareUrl),
-                    "qr": @json($storeShareQr)
-                }
-                @endif
-            }
-        </script>
     @endif
 
     <script>
@@ -793,85 +764,4 @@
         })();
     </script>
 
-    @if($productShareUrl || $storeShareUrl)
-        <script>
-            (() => {
-                const configNode = document.querySelector('[data-share-config]');
-                const modalRoot = document.querySelector('[data-share-modal-root]');
-
-                if (!configNode || !modalRoot) {
-                    return;
-                }
-
-                const config = JSON.parse(configNode.textContent || '{}');
-                const titleNode = modalRoot.querySelector('[data-share-title]');
-                const descriptionNode = modalRoot.querySelector('[data-share-description]');
-                const qrNode = modalRoot.querySelector('[data-share-qr]');
-                const urlNode = modalRoot.querySelector('[data-share-url]');
-                const copyButton = modalRoot.querySelector('[data-share-copy]');
-
-                const closeModal = () => {
-                    modalRoot.classList.add('hidden');
-                    modalRoot.classList.remove('flex');
-                    document.body.classList.remove('overflow-hidden');
-                };
-
-                const openModal = (key) => {
-                    const payload = config[key];
-
-                    if (!payload || !titleNode || !descriptionNode || !qrNode || !urlNode) {
-                        return;
-                    }
-
-                    titleNode.textContent = payload.title || '';
-                    descriptionNode.textContent = payload.description || '';
-                    qrNode.src = payload.qr || '';
-                    qrNode.alt = payload.title || '';
-                    urlNode.textContent = payload.url || '';
-
-                    if (copyButton) {
-                        copyButton.dataset.shareUrl = payload.url || '';
-                    }
-
-                    modalRoot.classList.remove('hidden');
-                    modalRoot.classList.add('flex');
-                    document.body.classList.add('overflow-hidden');
-                };
-
-                document.querySelectorAll('[data-share-open]').forEach((button) => {
-                    button.addEventListener('click', () => openModal(button.getAttribute('data-share-open')));
-                });
-
-                modalRoot.querySelectorAll('[data-share-close]').forEach((button) => {
-                    button.addEventListener('click', closeModal);
-                });
-
-                document.addEventListener('keydown', (event) => {
-                    if (event.key === 'Escape') {
-                        closeModal();
-                    }
-                });
-
-                if (copyButton) {
-                    copyButton.addEventListener('click', async () => {
-                        const url = copyButton.dataset.shareUrl || '';
-
-                        if (!url) {
-                            return;
-                        }
-
-                        try {
-                            await navigator.clipboard.writeText(url);
-                            copyButton.textContent = 'Ссылка скопирована';
-                            window.setTimeout(() => {
-                                copyButton.textContent = 'Скопировать ссылку';
-                            }, 1400);
-                        } catch (error) {
-                            window.prompt('Скопируйте ссылку вручную:', url);
-                        }
-                    });
-                }
-            })();
-        </script>
-    @endif
 </x-cabinet-layout>
