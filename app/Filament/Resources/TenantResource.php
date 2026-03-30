@@ -11,6 +11,7 @@ use App\Filament\Resources\TenantResource\RelationManagers\SpacesRelationManager
 use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\Tenant;
+use App\Services\Cabinet\TenantCabinetUserService;
 use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
@@ -1907,8 +1908,6 @@ class TenantResource extends BaseResource
             return new HtmlString('<div style="font-size:13px;opacity:.85;">У арендатора нет торговых мест.</div>');
         }
 
-        $contactsTabUrl = url('/admin/tenants/' . (int) $record->id . '/edit?tab=kontakty::data::tab');
-
         $usersQuery = DB::table('users')
             ->where('tenant_id', (int) $record->id)
             ->whereExists(function ($query): void {
@@ -1925,10 +1924,23 @@ class TenantResource extends BaseResource
             $usersQuery->where(function ($query) use ($record): void {
                 $query->where('market_id', (int) $record->market_id)
                     ->orWhereNull('market_id');
-            });
+                });
         }
 
-        $users = $usersQuery->orderBy('name')->orderBy('id')->get();
+        $primaryUserId = null;
+        try {
+            $primaryUser = app(TenantCabinetUserService::class)->resolvePrimaryUser($record);
+            $primaryUserId = $primaryUser?->id ? (int) $primaryUser->id : null;
+        } catch (\Throwable) {
+            $primaryUserId = null;
+        }
+
+        $users = $usersQuery->orderBy('name')->orderBy('id')->get()
+            ->reject(static function ($user) use ($primaryUserId): bool {
+                return $primaryUserId !== null && (int) ($user->id ?? 0) === $primaryUserId;
+            })
+            ->values();
+
         if ($users->isEmpty()) {
             return new HtmlString(
                 '<div style="font-size:13px;line-height:1.5;color:#64748b;">Дополнительные сотрудники еще не добавлены. Ниже можно создать первого сотрудника и сразу назначить ему торговые места.</div>'
@@ -1978,11 +1990,15 @@ class TenantResource extends BaseResource
             $allSpaces = $scopedIds === [];
             $effectiveIds = $allSpaces ? $spaceIds : $scopedIds;
 
+            $userRow = [
+                'id' => $userId,
+                'label' => $label,
+                'email' => $email,
+                'all_spaces' => $allSpaces,
+            ];
+
             if ($allSpaces) {
-                $globalUsers[] = [
-                    'id' => $userId,
-                    'label' => $label,
-                ];
+                $globalUsers[] = $userRow;
             }
 
             foreach ($effectiveIds as $spaceId) {
@@ -1995,21 +2011,14 @@ class TenantResource extends BaseResource
                     $staffBySpace[$spaceId] = [];
                 }
 
-                $staffBySpace[$spaceId][] = [
-                    'id' => $userId,
-                    'label' => $label,
-                    'all_spaces' => $allSpaces,
-                ];
+                $staffBySpace[$spaceId][] = $userRow;
             }
         }
 
         $globalHtml = '';
         if ($globalUsers !== []) {
             foreach ($globalUsers as $userRow) {
-                $globalHtml .= '<div class="tenant-contact-staff__global-user">'
-                    . '<span class="tenant-contact-staff__member-name">' . e((string) $userRow['label']) . '</span>'
-                    . ' <span class="tenant-contact-staff__note">(все места)</span>'
-                    . '</div>';
+                $globalHtml .= static::tenantContactStaffMemberRow($userRow, 'Все места');
             }
             $globalHtml = '<div class="tenant-contact-staff__global">'
                 . '<div class="tenant-contact-staff__global-title">Сотрудники с доступом ко всем местам</div>'
@@ -2035,17 +2044,18 @@ class TenantResource extends BaseResource
             $members = $staffBySpace[$spaceId] ?? [];
             $membersHtml = '';
             if ($members === []) {
-                $membersHtml = '<div class="tenant-contact-staff__empty">Сотрудники не назначены.</div>';
+                $membersHtml = '<div class="tenant-contact-staff__empty">Сотрудники не назначены. Добавьте первого сотрудника ниже и свяжите его с этим местом.</div>';
             } else {
                 foreach ($members as $member) {
-                    $membersHtml .= '<div class="tenant-contact-staff__member">'
-                        . '<span class="tenant-contact-staff__member-name">' . e((string) $member['label']) . '</span>'
-                        . '</div>';
+                    $membersHtml .= static::tenantContactStaffMemberRow($member, $member['all_spaces'] ? 'Все места' : $spaceLabel);
                 }
             }
 
             $cards .= '<div class="tenant-contact-staff__card">'
-                . '<div class="tenant-contact-staff__space">' . e($spaceLabel) . '</div>'
+                . '<div class="tenant-contact-staff__space">'
+                . '<span>' . e($spaceLabel) . '</span>'
+                . '<span class="tenant-contact-staff__space-count">' . e((string) count($members)) . '</span>'
+                . '</div>'
                 . '<div class="tenant-contact-staff__members">' . $membersHtml . '</div>'
                 . '</div>';
         }
@@ -2057,29 +2067,52 @@ class TenantResource extends BaseResource
 .tenant-contact-staff__hint{font-size:12px;line-height:1.45;opacity:.8;max-width:52rem}
 .tenant-contact-staff__global{padding:10px 12px;border:1px solid rgba(37,99,235,.16);border-radius:12px;background:linear-gradient(180deg,#f8fbff 0%,#eef5ff 100%)}
 .tenant-contact-staff__global-title{font-size:12px;font-weight:700;line-height:1.35;color:#1d4ed8;margin-bottom:6px}
-.tenant-contact-staff__global-list{display:flex;flex-wrap:wrap;gap:6px 12px}
-.tenant-contact-staff__global-user{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid rgba(37,99,235,.10);border-radius:10px;background:rgba(255,255,255,.72);font-size:12px;line-height:1.35}
-.tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
-.tenant-contact-staff__card{border:1px solid rgba(14,165,233,.30);border-radius:10px;padding:8px 10px;background:rgba(14,165,233,.07)}
-.dark .tenant-contact-staff__card{border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.10)}
-.tenant-contact-staff__space{font-size:12px;font-weight:700;line-height:1.3}
-.tenant-contact-staff__members{margin-top:6px;display:flex;flex-direction:column;gap:4px}
-.tenant-contact-staff__member{font-size:12px;line-height:1.35}
-.tenant-contact-staff__member-name{font-weight:600}
-.tenant-contact-staff__note{opacity:.75;font-size:11px}
-.tenant-contact-staff__empty{padding:10px 12px;border:1px dashed rgba(37,99,235,.20);border-radius:10px;background:rgba(255,255,255,.76);font-size:12px;opacity:.84}
+.tenant-contact-staff__global-list{display:flex;flex-direction:column;gap:8px}
+.tenant-contact-staff__global-user{display:flex;align-items:center;gap:10px}
+.tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.tenant-contact-staff__card{border:1px solid rgba(14,165,233,.28);border-radius:14px;padding:10px 12px;background:rgba(14,165,233,.06)}
+.dark .tenant-contact-staff__card{border-color:rgba(56,189,248,.34);background:rgba(56,189,248,.10)}
+.tenant-contact-staff__space{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;line-height:1.3}
+.tenant-contact-staff__space-count{padding:3px 8px;border-radius:999px;border:1px solid rgba(37,99,235,.14);background:rgba(255,255,255,.76);font-size:11px;font-weight:700;color:#1d4ed8;white-space:nowrap}
+.tenant-contact-staff__members{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.tenant-contact-staff__member{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 10px;border:1px solid rgba(37,99,235,.10);border-radius:12px;background:rgba(255,255,255,.80)}
+.dark .tenant-contact-staff__member{border-color:rgba(148,163,184,.18);background:rgba(15,23,42,.10)}
+.tenant-contact-staff__member-copy{min-width:0;display:flex;flex-direction:column;gap:2px;flex:1}
+.tenant-contact-staff__member-name{font-size:12px;font-weight:700;line-height:1.35;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dark .tenant-contact-staff__member-name{color:#e2e8f0}
+.tenant-contact-staff__member-email{font-size:11px;line-height:1.35;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dark .tenant-contact-staff__member-email{color:#94a3b8}
+.tenant-contact-staff__member-note{flex-shrink:0;padding:4px 8px;border-radius:999px;border:1px solid rgba(37,99,235,.16);background:rgba(255,255,255,.72);font-size:11px;font-weight:700;color:#1d4ed8;white-space:nowrap}
+.tenant-contact-staff__empty{padding:12px 12px;border:1px dashed rgba(37,99,235,.22);border-radius:12px;background:rgba(255,255,255,.84);font-size:12px;line-height:1.45;opacity:.88}
 </style>';
 
         $html = $style . '
 <div class="tenant-contact-staff">
     <div class="tenant-contact-staff__head">
-        <div class="tenant-contact-staff__hint">Каждая карточка показывает торговое место и дополнительных сотрудников, которым открыт доступ именно к нему. Метка “все места” означает глобальный доступ по всем точкам арендатора.</div>
+        <div class="tenant-contact-staff__hint">Каждая карточка показывает торговое место и сотрудников, которым открыт доступ именно к нему. Метка “все места” означает глобальный доступ по всем точкам арендатора, а основной кабинетный аккаунт здесь не показывается.</div>
     </div>
     ' . $globalHtml . '
     <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Дополнительные сотрудники пока не назначены.</div>') . '</div>
 </div>';
 
         return new HtmlString($html);
+    }
+
+    /**
+     * @param  array{id:int,label:string,email:string,all_spaces:bool}  $userRow
+     */
+    private static function tenantContactStaffMemberRow(array $userRow, string $note): string
+    {
+        $label = (string) ($userRow['label'] ?? '');
+        $email = trim((string) ($userRow['email'] ?? ''));
+
+        return '<div class="tenant-contact-staff__member">'
+            . '<div class="tenant-contact-staff__member-copy">'
+            . '<div class="tenant-contact-staff__member-name">' . e($label) . '</div>'
+            . '<div class="tenant-contact-staff__member-email">' . e($email !== '' ? $email : '—') . '</div>'
+            . '</div>'
+            . '<div class="tenant-contact-staff__member-note">' . e($note) . '</div>'
+            . '</div>';
     }
 
     private static function renderContractsBySpaces(?Tenant $record): HtmlString
