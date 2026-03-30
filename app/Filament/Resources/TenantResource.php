@@ -250,7 +250,8 @@ class TenantResource extends BaseResource
                                     ->label('Телефон'),
 
                                 Forms\Components\TextInput::make('email')
-                                    ->label('Email'),
+                                    ->label('Email')
+                                    ->autocomplete(false),
 
                                 Forms\Components\TextInput::make('contact_person')
                                     ->label('Контактное лицо'),
@@ -540,6 +541,7 @@ class TenantResource extends BaseResource
                 Forms\Components\TextInput::make('cabinet_user_email')
                     ->label('Логин (email)')
                     ->email()
+                    ->autocomplete(false)
                     ->maxLength(255)
                     ->placeholder('tenant@example.com'),
 
@@ -589,6 +591,7 @@ class TenantResource extends BaseResource
                         Forms\Components\TextInput::make('email')
                             ->label('Логин (email)')
                             ->email()
+                            ->autocomplete(false)
                             ->maxLength(255)
                             ->placeholder('employee@example.com'),
 
