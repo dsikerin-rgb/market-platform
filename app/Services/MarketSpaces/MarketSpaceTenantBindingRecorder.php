@@ -7,10 +7,16 @@ namespace App\Services\MarketSpaces;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceTenantBinding;
 use App\Models\TenantContract;
+use App\Services\TenantContracts\ContractDocumentClassifier;
 use Illuminate\Support\Facades\Auth;
 
 class MarketSpaceTenantBindingRecorder
 {
+    public function __construct(
+        private readonly ContractDocumentClassifier $classifier,
+    ) {
+    }
+
     public function syncFromSpaceSnapshot(MarketSpace $space): void
     {
         if (! $space->exists || ! $space->wasChanged('tenant_id')) {
@@ -158,6 +164,10 @@ class MarketSpaceTenantBindingRecorder
             return null;
         }
 
+        if ($this->shouldSuppressServiceDocumentBinding($contract)) {
+            return null;
+        }
+
         $startsAt = $contract->starts_at?->copy()?->startOfDay() ?? now();
         $mode = (string) ($contract->space_mapping_mode ?? '');
         $isManual = $contract->usesManualSpaceMapping();
@@ -190,6 +200,10 @@ class MarketSpaceTenantBindingRecorder
 
     private function inactiveReason(TenantContract $contract): string
     {
+        if ($this->shouldSuppressServiceDocumentBinding($contract)) {
+            return 'service_document_shadowed_by_primary_contract';
+        }
+
         if ($contract->excludesFromSpaceMapping()) {
             return 'contract_excluded_from_mapping';
         }
@@ -211,5 +225,39 @@ class MarketSpaceTenantBindingRecorder
         }
 
         return 'contract_binding_removed';
+    }
+
+    private function shouldSuppressServiceDocumentBinding(TenantContract $contract): bool
+    {
+        if (! $contract->tenant_id || ! $contract->market_space_id) {
+            return false;
+        }
+
+        $classification = $this->classifier->classify((string) ($contract->number ?? ''));
+        if (($classification['category'] ?? null) !== 'service_document') {
+            return false;
+        }
+
+        $siblings = TenantContract::query()
+            ->where('market_id', (int) $contract->market_id)
+            ->where('tenant_id', (int) $contract->tenant_id)
+            ->where('market_space_id', (int) $contract->market_space_id)
+            ->whereKeyNot($contract->getKey())
+            ->where('is_active', true)
+            ->whereNotIn('status', ['terminated', 'archived'])
+            ->get(['id', 'number', 'space_mapping_mode', 'is_active', 'status']);
+
+        foreach ($siblings as $sibling) {
+            if ($sibling->excludesFromSpaceMapping()) {
+                continue;
+            }
+
+            $siblingClassification = $this->classifier->classify((string) ($sibling->number ?? ''));
+            if (($siblingClassification['category'] ?? null) === 'primary_contract') {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
