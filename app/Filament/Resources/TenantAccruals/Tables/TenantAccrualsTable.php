@@ -314,7 +314,11 @@ class TenantAccrualsTable
             ])
             ->toolbarActions([]);
 
-        if (! $readOnly) {
+        if ($readOnly) {
+            $table->recordActions([
+                static::openAction(),
+            ]);
+        } else {
             $table->recordActions([
                 static::editAction(),
             ]);
@@ -338,6 +342,25 @@ class TenantAccrualsTable
             ->tooltip('Открыть')
             ->icon('heroicon-o-pencil-square')
             ->iconButton();
+    }
+
+    private static function openAction()
+    {
+        if (class_exists(\Filament\Tables\Actions\Action::class)) {
+            return \Filament\Tables\Actions\Action::make('open')
+                ->label('')
+                ->tooltip('Открыть')
+                ->icon('heroicon-o-arrow-top-right-on-square')
+                ->iconButton()
+                ->url(fn (TenantAccrual $record): string => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('edit', ['record' => $record]));
+        }
+
+        return \Filament\Actions\Action::make('open')
+            ->label('')
+            ->tooltip('Открыть')
+            ->icon('heroicon-o-arrow-top-right-on-square')
+            ->iconButton()
+            ->url(fn (TenantAccrual $record): string => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('edit', ['record' => $record]));
     }
 
     private static function selectedMarketIdFromSession(): ?int
