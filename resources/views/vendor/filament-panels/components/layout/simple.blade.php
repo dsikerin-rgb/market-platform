@@ -21,6 +21,11 @@
     <div class="fi-simple-layout">
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIMPLE_LAYOUT_START, scopes: $renderHookScopes) }}
 
+        @php
+            $sessionExpiredMessage = 'Сессия истекла, войдите снова.';
+            $showSessionExpiredBanner = request()->boolean('session_expired') || session('status') === $sessionExpiredMessage;
+        @endphp
+
         @if (($hasTopbar ?? true) && filament()->auth()->check())
             <div class="fi-simple-layout-header">
                 @if (filament()->hasDatabaseNotifications())
@@ -33,6 +38,14 @@
                 @if (filament()->hasUserMenu())
                     @livewire(Filament\Livewire\SimpleUserMenu::class)
                 @endif
+            </div>
+        @endif
+
+        @if ($showSessionExpiredBanner)
+            <div class="mx-auto mb-4 w-full max-w-2xl px-4">
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+                    {{ $sessionExpiredMessage }}
+                </div>
             </div>
         @endif
 

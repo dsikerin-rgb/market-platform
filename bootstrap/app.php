@@ -5,9 +5,9 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\RestoreAdminFromImpersonation;
+use App\Http\Middleware\RedirectAdminTokenMismatch;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -26,7 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
          */
 
         // Локаль не завязана на сессии — оставляем в web-стеке.
-        $middleware->web(append: [
+        $middleware->web(prepend: [
+            RedirectAdminTokenMismatch::class,
+        ], append: [
             SetLocale::class,
             RestoreAdminFromImpersonation::class,
         ]);
@@ -36,8 +38,5 @@ return Application::configure(basePath: dirname(__DIR__))
             'marketplace.buyer' => \App\Http\Middleware\EnsureMarketplaceBuyerAccess::class,
             'marketplace.ready' => \App\Http\Middleware\EnsureMarketplaceSchemaReady::class,
         ]);
-    })
-    ->withExceptions(function (Exceptions $exceptions): void {
-        //
     })
     ->create();
