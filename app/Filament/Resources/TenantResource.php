@@ -18,6 +18,7 @@ use App\Filament\Resources\BaseResource;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -148,7 +149,8 @@ class TenantResource extends BaseResource
 
                                 Forms\Components\Toggle::make('is_active')
                                     ->label('Активен')
-                                    ->default(true),
+                                    ->default(true)
+                                    ->visible(fn (string $operation): bool => $operation === 'create'),
 
                                 Forms\Components\Textarea::make('notes')
                                     ->label('Примечания')
@@ -249,14 +251,13 @@ class TenantResource extends BaseResource
                                     ->label('Телефон'),
 
                                 Forms\Components\TextInput::make('email')
-                                    ->label('Email'),
+                                    ->label('Email')
+                                    ->autocomplete(false),
 
                                 Forms\Components\TextInput::make('contact_person')
                                     ->label('Контактное лицо'),
                             ])
                             ->columns(2),
-
-                        static::cabinetAccessSection(),
 
                         Section::make('Сотрудники по торговым местам')
                             ->schema([
@@ -312,6 +313,20 @@ class TenantResource extends BaseResource
                                     ->columnSpanFull(),
                             ])
                             ->columns(2),
+
+                        static::cabinetAccessSection(),
+                    ]),
+
+                Tab::make('Обращения')
+                    ->visible(fn (string $operation): bool => $operation === 'edit')
+                    ->schema([
+                        Livewire::make(
+                            RequestsRelationManager::class,
+                            fn (?Tenant $record): array => [
+                                'ownerRecord' => $record,
+                                'pageClass' => Pages\EditTenant::class,
+                            ],
+                        )->key('tenant-requests'),
                     ]),
             ]),
         ]);
@@ -539,6 +554,7 @@ class TenantResource extends BaseResource
                 Forms\Components\TextInput::make('cabinet_user_email')
                     ->label('Логин (email)')
                     ->email()
+                    ->autocomplete(false)
                     ->maxLength(255)
                     ->placeholder('tenant@example.com'),
 
@@ -588,6 +604,7 @@ class TenantResource extends BaseResource
                         Forms\Components\TextInput::make('email')
                             ->label('Логин (email)')
                             ->email()
+                            ->autocomplete(false)
                             ->maxLength(255)
                             ->placeholder('employee@example.com'),
 
@@ -769,13 +786,6 @@ class TenantResource extends BaseResource
         }
 
         return $actions;
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            RequestsRelationManager::class,
-        ];
     }
 
     public static function getPages(): array
