@@ -1464,14 +1464,14 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
-  order: 1;
+  order: 2;
   width: 100%;
   min-width: 0;
   flex: 0 0 auto;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header > div:first-child{
-  order: 2;
+  order: 1;
   width: 100%;
   min-width: 0;
   flex: 0 0 auto;
