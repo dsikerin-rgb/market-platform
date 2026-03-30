@@ -1958,7 +1958,7 @@ class TenantResource extends BaseResource
             } else {
                 foreach ($members as $member) {
                     $membersHtml .= '<div class="tenant-contact-staff__member">'
-                        . '<a href="' . e($cabinetTabUrl) . '#cabinet-user-' . (int) ($member['id'] ?? 0) . '" class="tenant-contact-staff__member-link">'
+                        . '<a href="' . e($contactsTabUrl) . '#cabinet-user-' . (int) ($member['id'] ?? 0) . '" class="tenant-contact-staff__member-link">'
                         . e((string) $member['label'])
                         . '</a>'
                         . (! empty($member['all_spaces']) ? ' <span class="tenant-contact-staff__note">(все места)</span>' : '')
@@ -1993,7 +1993,7 @@ class TenantResource extends BaseResource
 <div class="tenant-contact-staff">
     <div class="tenant-contact-staff__head">
         <div class="tenant-contact-staff__hint">Настройка сотрудников и привязок к местам выполняется на вкладке «Кабинет».</div>
-        <a href="' . e($cabinetTabUrl) . '" class="tenant-contact-staff__action">Управлять сотрудниками</a>
+        <a href="' . e($contactsTabUrl) . '" class="tenant-contact-staff__action">Управлять сотрудниками</a>
     </div>
     <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Нет данных.</div>') . '</div>
 </div>';
