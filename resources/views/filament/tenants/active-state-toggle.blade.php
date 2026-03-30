@@ -5,7 +5,6 @@
 <button
     type="button"
     role="switch"
-    aria-checked="{{ $isActive ? 'true' : 'false' }}"
     x-data="{ active: @js($isActive), busy: false }"
     x-on:click.prevent="
         if (busy) return;
@@ -22,9 +21,9 @@
             });
     "
     x-bind:aria-checked="active ? 'true' : 'false'"
-    x-bind:class="active ? 'is-active' : 'is-inactive'"
+    x-bind:class="{ 'is-active': active, 'is-inactive': !active }"
     x-bind:disabled="busy"
-    class="tenant-hero-state-card tenant-card-action tenant-card-action--state {{ $isActive ? 'is-active' : 'is-inactive' }}"
+    class="tenant-hero-state-card tenant-card-action tenant-card-action--state"
 >
     <span class="tenant-hero-state-copy">
         <span class="tenant-hero-state-title" x-text="active ? 'Активен' : 'Неактивен'">
