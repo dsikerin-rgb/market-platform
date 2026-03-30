@@ -1553,7 +1553,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section{
   border: 1px solid var(--tenant-edit-border);
   border-radius: 1rem;
   box-shadow: var(--tenant-edit-shadow);
-  overflow: hidden;
+  overflow: visible;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-header{
@@ -1573,6 +1573,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-content{
   background: var(--tenant-edit-surface-muted);
   padding: 1.1rem;
+  overflow: visible;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-fo-field-wrp-label{
