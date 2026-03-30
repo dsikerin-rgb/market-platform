@@ -12,6 +12,7 @@ use App\Services\MarketSpaces\SpaceGroupResolver;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use Filament\Facades\Filament;
 use Filament\Forms;
+use Filament\Forms\Components\Placeholder;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
@@ -25,6 +26,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\HtmlString;
 use Throwable;
 
 class TenantContractResource extends BaseResource
@@ -366,12 +368,9 @@ class TenantContractResource extends BaseResource
             Section::make('Историческая цепочка по месту')
                 ->description('Показывает документы по тому же токену места в порядке даты из номера договора. Именно эта дата считается основной для истории.')
                 ->schema([
-                    Forms\Components\Textarea::make('history_chain_display')
+                    Placeholder::make('history_chain_display')
                         ->label('Договоры по этому месту')
-                        ->formatStateUsing(fn (?TenantContract $record): string => static::historyChainPreview($record))
-                        ->rows(12)
-                        ->disabled()
-                        ->dehydrated(false)
+                        ->content(fn (?TenantContract $record): HtmlString => static::historyChainPreview($record))
                         ->columnSpanFull(),
                 ])
                 ->columns(1),
@@ -1622,21 +1621,21 @@ class TenantContractResource extends BaseResource
         return $short !== '' ? $short : ($name !== '' ? $name : '—');
     }
 
-    private static function historyChainPreview(?TenantContract $record): string
+    private static function historyChainPreview(?TenantContract $record): HtmlString
     {
         if (! $record) {
-            return 'Нет данных.';
+            return new HtmlString('<div class="text-sm text-gray-500">Нет данных.</div>');
         }
 
         $classified = static::classificationForRecord($record);
         $token = trim((string) ($classified['place_token'] ?? ''));
 
         if ($record->excludesFromSpaceMapping()) {
-            return 'Договор явно исключен из привязки к месту и не участвует в исторической цепочке по месту.';
+            return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Договор явно исключен из привязки к месту и не участвует в исторической цепочке по месту.</div>');
         }
 
         if (! ($classified['actionable'] ?? false) || $token === '') {
-            return 'Для этого документа цепочка по месту не строится: нет надёжного токена места.';
+            return new HtmlString('<div class="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">Для этого документа цепочка по месту не строится: нет надежного токена места.</div>');
         }
 
         $contracts = TenantContract::query()
@@ -1682,41 +1681,77 @@ class TenantContractResource extends BaseResource
         });
 
         if ($items === []) {
-            return 'Цепочка не найдена.';
+            return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Цепочка не найдена.</div>');
         }
 
-        $lines = [];
+        $html = '<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">';
+        $html .= '<table class="min-w-[920px] w-full border-collapse text-sm">';
+        $html .= '<thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">';
+        $html .= '<tr>';
+        $html .= '<th class="px-4 py-3">#</th>';
+        $html .= '<th class="px-4 py-3">Дата</th>';
+        $html .= '<th class="px-4 py-3">Договор</th>';
+        $html .= '<th class="px-4 py-3">Арендатор</th>';
+        $html .= '<th class="px-4 py-3">Место</th>';
+        $html .= '<th class="px-4 py-3">Статусы</th>';
+        $html .= '</tr>';
+        $html .= '</thead>';
+        $html .= '<tbody class="divide-y divide-gray-200">';
 
         foreach ($items as $index => $item) {
             /** @var TenantContract $chainRecord */
             $chainRecord = $item['record'];
 
-            $parts = [];
-            $parts[] = sprintf('%d.', $index + 1);
-            $parts[] = static::formatClassifierDate($item['document_date']);
-            $parts[] = trim((string) ($chainRecord->number ?? '')) !== '' ? (string) $chainRecord->number : 'Без номера';
-
             $tenantName = trim((string) ($chainRecord->tenant?->display_name ?? $chainRecord->tenant?->name ?? ''));
-            if ($tenantName !== '') {
-                $parts[] = '• ' . $tenantName;
-            }
+            $spaceLabel = $chainRecord->market_space_id ? static::spaceLabel($chainRecord) : '—';
+            $isCurrent = (int) $chainRecord->id === (int) $record->id;
+            $number = trim((string) ($chainRecord->number ?? '')) !== '' ? (string) $chainRecord->number : 'Без номера';
+            $rowClass = $isCurrent ? ' bg-sky-50/60' : '';
 
-            if ($chainRecord->market_space_id) {
-                $parts[] = '• место: ' . static::spaceLabel($chainRecord);
-            }
+            $html .= '<tr class="align-top' . $rowClass . '">';
+            $html .= '<td class="whitespace-nowrap px-4 py-3 font-medium text-gray-900">' . e((string) ($index + 1)) . '</td>';
+            $html .= '<td class="whitespace-nowrap px-4 py-3 text-gray-700">' . e(static::formatClassifierDate($item['document_date'])) . '</td>';
+            $html .= '<td class="px-4 py-3 text-gray-900">' . e($number) . '</td>';
+            $html .= '<td class="px-4 py-3 text-gray-700">' . e($tenantName !== '' ? $tenantName : '—') . '</td>';
+            $html .= '<td class="px-4 py-3 text-gray-700">' . e($spaceLabel) . '</td>';
+            $html .= '<td class="px-4 py-3">';
+            $html .= '<div class="flex flex-wrap gap-2">';
 
             if (static::isInLatestDebtSnapshot($chainRecord)) {
-                $parts[] = '• в последней задолженности';
+                $html .= static::historyChainChip('В последней задолженности', 'violet');
             }
 
-            if ((int) $chainRecord->id === (int) $record->id) {
-                $parts[] = '• текущий';
+            if ($isCurrent) {
+                $html .= static::historyChainChip('Текущий', 'sky');
             }
 
-            $lines[] = implode(' ', array_filter($parts, static fn (string $part): bool => trim($part) !== ''));
+            if (! static::isInLatestDebtSnapshot($chainRecord) && ! $isCurrent) {
+                $html .= static::historyChainChip('—', 'gray');
+            }
+
+            $html .= '</div>';
+            $html .= '</td>';
+            $html .= '</tr>';
         }
 
-        return implode(PHP_EOL, $lines);
+        $html .= '</tbody>';
+        $html .= '</table>';
+        $html .= '</div>';
+
+        return new HtmlString($html);
+    }
+
+    private static function historyChainChip(string $label, string $variant = 'gray'): string
+    {
+        $classes = match ($variant) {
+            'sky' => 'border-sky-200 bg-sky-50 text-sky-700',
+            'emerald' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
+            'violet' => 'border-violet-200 bg-violet-50 text-violet-700',
+            'amber' => 'border-amber-200 bg-amber-50 text-amber-800',
+            default => 'border-gray-200 bg-gray-50 text-gray-700',
+        };
+
+        return '<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ' . $classes . '">' . e($label) . '</span>';
     }
 
     private static function chainDisplay(TenantContract $record): string
