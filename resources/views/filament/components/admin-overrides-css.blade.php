@@ -1449,9 +1449,10 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-page{
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem 1.2rem;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: .95rem;
   flex-wrap: nowrap;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
@@ -1463,14 +1464,17 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
-  flex: 0 1 55rem;
-  width: auto;
+  order: 2;
+  width: 100%;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header > div:first-child{
-  flex: 1 1 18rem;
-  min-width: 16rem;
+  order: 1;
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
@@ -1485,7 +1489,8 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
   display: block;
-  max-width: 28rem;
+  max-width: none;
+  width: 100%;
   font-size: clamp(1.6rem, 1.1rem + .95vw, 2.1rem);
   line-height: 1.04;
   white-space: normal;
@@ -1499,7 +1504,8 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   color: var(--tenant-edit-text);
   font-size: .92rem;
   line-height: 1.45;
-  max-width: 28rem;
+  max-width: none;
+  width: 100%;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
