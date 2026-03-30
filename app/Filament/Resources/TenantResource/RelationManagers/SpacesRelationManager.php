@@ -83,7 +83,7 @@ class SpacesRelationManager extends RelationManager
                     ->toggleable(),
 
                 TextColumn::make('last_period_accrual')
-                    ->label('Начислено за последний период')
+                    ->label('Начислено')
                     ->state(fn (MarketSpace $record): string => $this->formatMoney($this->lastPeriodAmountForSpace((int) $record->id)))
                     ->description(fn (): ?string => $this->lastPeriodAccrualMeta()['period_label'] !== '—'
                         ? ('Период: ' . $this->lastPeriodAccrualMeta()['period_label'])
@@ -156,12 +156,14 @@ class SpacesRelationManager extends RelationManager
                         blank: fn (Builder $query): Builder => $query,
                     ),
             ])
+            ->striped()
             ->recordUrl(fn ($record): ?string => $record && MarketSpaceResource::canEdit($record)
                 ? MarketSpaceResource::getUrl('edit', ['record' => $record])
                 : null)
             ->recordActions([
                 static::openAction(),
             ])
+            ->paginated([10, 25, 50])
             ->headerActions([])
             ->bulkActions([])
             ->emptyStateHeading('Торговых мест пока нет')
