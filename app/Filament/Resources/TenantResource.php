@@ -586,18 +586,33 @@ class TenantResource extends BaseResource
     private static function cabinetAccessSection(): Section
     {
         return Section::make('Основной доступ арендатора')
+            ->description('Основной аккаунт для входа в кабинет. Дополнительные сотрудники настраиваются ниже.')
+            ->extraAttributes(['class' => 'tenant-cabinet-access'])
             ->schema([
                 Forms\Components\TextInput::make('cabinet_user_name')
                     ->label('Имя пользователя кабинета')
                     ->maxLength(255)
-                    ->placeholder('Например: ИП Иванов И.И.'),
+                    ->placeholder('Например: ИП Иванов И.И.')
+                    ->autocomplete('new-password')
+                    ->extraInputAttributes([
+                        'data-lpignore' => 'true',
+                        'data-1p-ignore' => 'true',
+                        'data-form-type' => 'other',
+                        'spellcheck' => 'false',
+                    ]),
 
                 Forms\Components\TextInput::make('cabinet_user_email')
                     ->label('Логин (email)')
                     ->email()
-                    ->autocomplete(false)
+                    ->autocomplete('new-password')
                     ->maxLength(255)
-                    ->placeholder('tenant@example.com'),
+                    ->placeholder('tenant@example.com')
+                    ->extraInputAttributes([
+                        'data-lpignore' => 'true',
+                        'data-1p-ignore' => 'true',
+                        'data-form-type' => 'other',
+                        'spellcheck' => 'false',
+                    ]),
 
                 Forms\Components\TextInput::make('cabinet_user_password')
                     ->label('Новый пароль')
@@ -605,6 +620,13 @@ class TenantResource extends BaseResource
                     ->revealable()
                     ->minLength(8)
                     ->maxLength(255)
+                    ->autocomplete('new-password')
+                    ->extraInputAttributes([
+                        'data-lpignore' => 'true',
+                        'data-1p-ignore' => 'true',
+                        'data-form-type' => 'other',
+                        'spellcheck' => 'false',
+                    ])
                     ->helperText('Для существующего аккаунта оставьте пустым, если пароль менять не нужно.'),
             ])
             ->columns(2);
@@ -649,14 +671,27 @@ class TenantResource extends BaseResource
                 Forms\Components\TextInput::make('name')
                     ->label('Имя сотрудника')
                     ->maxLength(255)
-                    ->placeholder('Например: менеджер точки'),
+                    ->placeholder('Например: менеджер точки')
+                    ->autocomplete('new-password')
+                    ->extraInputAttributes([
+                        'data-lpignore' => 'true',
+                        'data-1p-ignore' => 'true',
+                        'data-form-type' => 'other',
+                        'spellcheck' => 'false',
+                    ]),
 
                 Forms\Components\TextInput::make('email')
                     ->label('Логин (email)')
                     ->email()
-                    ->autocomplete(false)
+                    ->autocomplete('new-password')
                     ->maxLength(255)
-                    ->placeholder('employee@example.com'),
+                    ->placeholder('employee@example.com')
+                    ->extraInputAttributes([
+                        'data-lpignore' => 'true',
+                        'data-1p-ignore' => 'true',
+                        'data-form-type' => 'other',
+                        'spellcheck' => 'false',
+                    ]),
 
                 Forms\Components\Select::make('space_ids')
                     ->label('Торговые места')
@@ -672,6 +707,13 @@ class TenantResource extends BaseResource
                     ->revealable()
                     ->maxLength(255)
                     ->minLength(8)
+                    ->autocomplete('new-password')
+                    ->extraInputAttributes([
+                        'data-lpignore' => 'true',
+                        'data-1p-ignore' => 'true',
+                        'data-form-type' => 'other',
+                        'spellcheck' => 'false',
+                    ])
                     ->suffixAction(
                         Action::make('generateAdditionalCabinetUserPassword')
                             ->label('')
@@ -2016,7 +2058,7 @@ class TenantResource extends BaseResource
 .tenant-contact-staff__global{padding:10px 12px;border:1px solid rgba(37,99,235,.16);border-radius:12px;background:linear-gradient(180deg,#f8fbff 0%,#eef5ff 100%)}
 .tenant-contact-staff__global-title{font-size:12px;font-weight:700;line-height:1.35;color:#1d4ed8;margin-bottom:6px}
 .tenant-contact-staff__global-list{display:flex;flex-wrap:wrap;gap:6px 12px}
-.tenant-contact-staff__global-user{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:1.35}
+.tenant-contact-staff__global-user{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid rgba(37,99,235,.10);border-radius:10px;background:rgba(255,255,255,.72);font-size:12px;line-height:1.35}
 .tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
 .tenant-contact-staff__card{border:1px solid rgba(14,165,233,.30);border-radius:10px;padding:8px 10px;background:rgba(14,165,233,.07)}
 .dark .tenant-contact-staff__card{border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.10)}
@@ -2025,7 +2067,7 @@ class TenantResource extends BaseResource
 .tenant-contact-staff__member{font-size:12px;line-height:1.35}
 .tenant-contact-staff__member-name{font-weight:600}
 .tenant-contact-staff__note{opacity:.75;font-size:11px}
-.tenant-contact-staff__empty{font-size:12px;opacity:.78}
+.tenant-contact-staff__empty{padding:10px 12px;border:1px dashed rgba(37,99,235,.20);border-radius:10px;background:rgba(255,255,255,.76);font-size:12px;opacity:.84}
 </style>';
 
         $html = $style . '

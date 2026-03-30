@@ -1576,6 +1576,19 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-
   overflow: visible;
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .tenant-cabinet-access{
+  border-color: #bfd2ef;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .tenant-cabinet-access .fi-section-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .tenant-cabinet-access .fi-section-content{
+  background: #f8fbff;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-ta .fi-ta-content{
   overflow: visible;
 }
