@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\TenantResource\RelationManagers;
 
+use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantContractResource;
 use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class ContractsRelationManager extends RelationManager
 {
@@ -28,57 +31,82 @@ class ContractsRelationManager extends RelationManager
 
     public function table(Table $table): Table
     {
-        $user = Filament::auth()->user();
-
         return $table
+            ->defaultSort('starts_at', 'desc')
             ->columns([
-                TextColumn::make('market.name')
-                    ->label('Рынок')
-                    ->visible(fn () => (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
-
                 TextColumn::make('number')
-                    ->label('Номер договора')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('marketSpace.number')
-                    ->label('Торговое место')
+                    ->label('Договор')
                     ->sortable()
                     ->searchable()
                     ->placeholder('—'),
 
+                TextColumn::make('marketSpace.number')
+                    ->label('Место')
+                    ->sortable()
+                    ->searchable()
+                    ->placeholder('—')
+                    ->url(fn ($record): ?string => $record?->marketSpace && MarketSpaceResource::canEdit($record->marketSpace)
+                        ? MarketSpaceResource::getUrl('edit', ['record' => $record->marketSpace])
+                        : null),
+
                 TextColumn::make('status')
                     ->label('Статус')
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                    ->formatStateUsing(fn (?string $state): string => $this->statusLabel($state))
+                    ->badge()
+                    ->color(fn (?string $state): string => $this->statusColor($state))
+                    ->sortable(),
+
+                TextColumn::make('starts_at')
+                    ->label('Период')
+                    ->state(fn ($record): string => $this->periodLabel($record?->starts_at, $record?->ends_at))
+                    ->tooltip(fn ($record): ?string => $this->periodTooltip($record?->signed_at))
+                    ->sortable(),
+
+                TextColumn::make('monthly_rent')
+                    ->label('Аренда')
+                    ->state(fn ($record): string => $this->formatMoney($record?->monthly_rent))
+                    ->alignEnd()
+                    ->sortable()
+                    ->placeholder('—'),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->label('Статус')
+                    ->options([
                         'draft' => 'Черновик',
                         'active' => 'Активен',
                         'paused' => 'Приостановлен',
                         'terminated' => 'Расторгнут',
                         'archived' => 'Архив',
-                        default => $state,
-                    }),
+                    ]),
 
-                TextColumn::make('starts_at')
-                    ->label('Начало')
-                    ->date(),
+                TernaryFilter::make('has_space')
+                    ->label('Привязка к месту')
+                    ->trueLabel('Только с местом')
+                    ->falseLabel('Только без места')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereNotNull('market_space_id'),
+                        false: fn (Builder $query): Builder => $query->whereNull('market_space_id'),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
 
-                TextColumn::make('ends_at')
-                    ->label('Окончание')
-                    ->date()
-                    ->placeholder('—'),
-
-                TextColumn::make('monthly_rent')
-                    ->label('Аренда в месяц')
-                    ->numeric(decimalPlaces: 2)
-                    ->placeholder('—'),
-
-                IconColumn::make('is_active')
-                    ->label('Активен')
-                    ->boolean(),
+                TernaryFilter::make('is_active')
+                    ->label('Активность')
+                    ->trueLabel('Только активные')
+                    ->falseLabel('Только неактивные')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->where('is_active', true),
+                        false: fn (Builder $query): Builder => $query->where('is_active', false),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
             ])
+            ->striped()
             ->headerActions([])
-            ->actions([])
+            ->recordActions([
+                static::openAction(),
+            ])
             ->bulkActions([])
+            ->paginated([10, 25, 50])
             ->recordUrl(function ($record): ?string {
                 return $record && TenantContractResource::canEdit($record)
                     ? TenantContractResource::getUrl('edit', ['record' => $record])
@@ -91,7 +119,7 @@ class ContractsRelationManager extends RelationManager
         $user = Filament::auth()->user();
 
         /** @var Builder $query */
-        $query = $this->getRelationship()->getQuery();
+        $query = $this->getRelationship()->getQuery()->with(['marketSpace']);
 
         if (! $user) {
             return $query->whereRaw('1 = 0');
@@ -106,5 +134,74 @@ class ContractsRelationManager extends RelationManager
         }
 
         return $query->whereRaw('1 = 0');
+    }
+
+    private function statusLabel(?string $state): string
+    {
+        return match ($state) {
+            'draft' => 'Черновик',
+            'active' => 'Активен',
+            'paused' => 'Приостановлен',
+            'terminated' => 'Расторгнут',
+            'archived' => 'Архив',
+            null, '' => '—',
+            default => (string) $state,
+        };
+    }
+
+    private function statusColor(?string $state): string
+    {
+        return match ($state) {
+            'active' => 'success',
+            'paused' => 'warning',
+            'terminated' => 'danger',
+            'draft', 'archived', null, '' => 'gray',
+            default => 'gray',
+        };
+    }
+
+    private function periodLabel(mixed $startsAt, mixed $endsAt): string
+    {
+        $start = $this->formatDate($startsAt);
+        $end = $this->formatDate($endsAt);
+
+        if ($start === '—' && $end === '—') {
+            return '—';
+        }
+
+        return $start.' - '.$end;
+    }
+
+    private function periodTooltip(mixed $signedAt): ?string
+    {
+        $signed = $this->formatDate($signedAt);
+
+        return $signed === '—' ? null : 'Подписан: '.$signed;
+    }
+
+    private function formatDate(mixed $value): string
+    {
+        if ($value instanceof Carbon) {
+            return $value->format('d.m.Y');
+        }
+
+        if (! filled($value)) {
+            return '—';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('d.m.Y');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private function formatMoney(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return '—';
+        }
+
+        return number_format((float) $value, 2, ',', ' ');
     }
 }
