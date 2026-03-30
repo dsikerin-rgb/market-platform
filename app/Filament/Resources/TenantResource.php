@@ -1858,6 +1858,14 @@ class TenantResource extends BaseResource
 
         $usersQuery = DB::table('users')
             ->where('tenant_id', (int) $record->id)
+            ->whereExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('model_has_roles')
+                    ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+                    ->whereColumn('model_has_roles.model_id', 'users.id')
+                    ->where('model_has_roles.model_type', \App\Models\User::class)
+                    ->where('roles.name', 'merchant-user');
+            })
             ->select(['id', 'name', 'email']);
 
         if (static::hasColumn('users', 'market_id')) {
