@@ -16,16 +16,33 @@ use Illuminate\Support\Facades\DB;
 
 class TenantAccrualsTable
 {
-    public static function configure(Table $table): Table
+    /**
+     * @param array{
+     *     marketId?: int|null,
+     *     tenantId?: int|null,
+     *     hideMarketColumn?: bool,
+     *     hideTenantColumn?: bool,
+     *     readOnly?: bool
+     * } $options
+     */
+    public static function configure(Table $table, array $options = []): Table
     {
-        return $table
+        $marketId = isset($options['marketId']) ? (int) $options['marketId'] : null;
+        $tenantId = isset($options['tenantId']) ? (int) $options['tenantId'] : null;
+        $hideMarketColumn = (bool) ($options['hideMarketColumn'] ?? false);
+        $hideTenantColumn = (bool) ($options['hideTenantColumn'] ?? false);
+        $readOnly = (bool) ($options['readOnly'] ?? false);
+
+        $table = $table
             ->defaultSort('period', 'desc')
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->visible(fn (): bool => (bool) Filament::auth()->user()?->isSuperAdmin() && blank(static::selectedMarketIdFromSession())),
+                    ->visible(fn (): bool => ! $hideMarketColumn
+                        && (bool) Filament::auth()->user()?->isSuperAdmin()
+                        && blank($marketId ?? static::selectedMarketIdFromSession())),
 
                 TextColumn::make('period')
                     ->label('Период начисления')
@@ -77,7 +94,8 @@ class TenantAccrualsTable
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->visible(fn (): bool => ! $hideTenantColumn),
 
                 TextColumn::make('tenantContract.number')
                     ->label('Договор')
@@ -185,15 +203,11 @@ class TenantAccrualsTable
             ->filters([
                 SelectFilter::make('period')
                     ->label('Период начисления')
-                    ->options(function (): array {
-                        $marketId = static::resolveMarketIdForCurrentUser();
-                        $query = DB::table('tenant_accruals')->select('period')->distinct();
-
-                        if ($marketId) {
-                            $query->where('market_id', $marketId);
-                        }
-
-                        $periods = $query
+                    ->options(function () use ($marketId, $tenantId): array {
+                        $periods = static::baseScopeQuery($marketId, $tenantId)
+                            ->select('period')
+                            ->whereNotNull('period')
+                            ->distinct()
                             ->orderByDesc('period')
                             ->limit(48)
                             ->pluck('period')
@@ -218,15 +232,15 @@ class TenantAccrualsTable
 
                 SelectFilter::make('location_id')
                     ->label('Локация')
-                    ->options(function (): array {
-                        $marketId = static::resolveMarketIdForCurrentUser();
+                    ->options(function () use ($marketId): array {
+                        $resolvedMarketId = $marketId ?: static::resolveMarketIdForCurrentUser();
 
-                        if (! $marketId) {
+                        if (! $resolvedMarketId) {
                             return [];
                         }
 
                         return MarketLocation::query()
-                            ->where('market_id', $marketId)
+                            ->where('market_id', $resolvedMarketId)
                             ->where('is_active', true)
                             ->orderBy('name')
                             ->pluck('name', 'id')
@@ -256,7 +270,11 @@ class TenantAccrualsTable
                 SelectFilter::make('contract_link_status')
                     ->visible(fn (): bool =>
                         \App\Filament\Resources\TenantAccruals\TenantAccrualResource::hasTenantAccrualColumn('contract_link_status')
-                        && static::hasContractLinkStatusInCurrentScope(TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS)
+                        && static::hasContractLinkStatusInScope(
+                            TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS,
+                            $marketId,
+                            $tenantId,
+                        )
                     )
                     ->label('Связь с договором')
                     ->options([
@@ -286,10 +304,15 @@ class TenantAccrualsTable
                         blank: fn (Builder $query): Builder => $query,
                     ),
             ])
-            ->recordActions([
-                static::editAction(),
-            ])
             ->toolbarActions([]);
+
+        if (! $readOnly) {
+            $table->recordActions([
+                static::editAction(),
+            ]);
+        }
+
+        return $table;
     }
 
     private static function editAction()
@@ -335,21 +358,30 @@ class TenantAccrualsTable
 
     private static function hasContractLinkStatusInCurrentScope(string $status): bool
     {
-        $user = Filament::auth()->user();
+        return static::hasContractLinkStatusInScope($status);
+    }
 
-        if (! $user) {
-            return false;
+    private static function hasContractLinkStatusInScope(string $status, ?int $marketId = null, ?int $tenantId = null): bool
+    {
+        return static::baseScopeQuery($marketId, $tenantId)
+            ->where('contract_link_status', $status)
+            ->exists();
+    }
+
+    private static function baseScopeQuery(?int $marketId = null, ?int $tenantId = null)
+    {
+        $query = DB::table('tenant_accruals');
+
+        $resolvedMarketId = $marketId ?: static::resolveMarketIdForCurrentUser();
+        if ($resolvedMarketId) {
+            $query->where('market_id', $resolvedMarketId);
         }
 
-        $query = DB::table('tenant_accruals')
-            ->where('contract_link_status', $status);
-
-        $marketId = static::resolveMarketIdForCurrentUser();
-        if ($marketId) {
-            $query->where('market_id', $marketId);
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
         }
 
-        return $query->exists();
+        return $query;
     }
 
     private static function formatMoney($state, string $suffix = ' ₽'): string

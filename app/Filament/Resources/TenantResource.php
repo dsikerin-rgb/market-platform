@@ -4,6 +4,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
+use App\Filament\Resources\TenantResource\RelationManagers\AccrualsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Models\ContractDebt;
 use App\Models\Market;
@@ -235,11 +236,20 @@ class TenantResource extends BaseResource
                         Section::make('Начисления 1С')
                             ->description('Реестр начислений арендатора из tenant_accruals. Здесь начисления видны в админке, а не только в кабинете арендатора.')
                             ->schema([
-                                Forms\Components\Placeholder::make('accruals_registry')
+                                Forms\Components\Placeholder::make('accruals_summary')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsRegistry($record))
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualSummaryCards($record))
                                     ->columnSpanFull(),
+                                Livewire::make(
+                                    AccrualsRelationManager::class,
+                                    fn (?Tenant $record): array => [
+                                        'ownerRecord' => $record,
+                                        'pageClass' => Pages\EditTenant::class,
+                                    ],
+                                )
+                                    ->visible(fn (?Tenant $record): bool => $record !== null)
+                                    ->key('tenant-accruals'),
                             ]),
                     ]),
 
@@ -2370,6 +2380,85 @@ class TenantResource extends BaseResource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    private static function renderAccrualSummaryCards(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Начисления появятся после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('tenant_accruals')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица tenant_accruals ещё не создана.</div>');
+        }
+
+        $summary = static::accrualSummaryData($record);
+
+        if ((int) ($summary['count'] ?? 0) === 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет начислений.</div>');
+        }
+
+        $hasTenantContractId = static::hasColumn('tenant_accruals', 'tenant_contract_id');
+        $hasMarketSpaceId = static::hasColumn('tenant_accruals', 'market_space_id');
+
+        $base = DB::table('tenant_accruals')
+            ->where('market_id', (int) $record->market_id)
+            ->where('tenant_id', (int) $record->id);
+
+        $withoutContractTotal = $hasTenantContractId
+            ? (int) ((clone $base)->whereNull('tenant_contract_id')->count())
+            : 0;
+
+        $withoutSpaceTotal = $hasMarketSpaceId
+            ? (int) ((clone $base)->whereNull('market_space_id')->count())
+            : 0;
+
+        $summaryCards = [
+            ['label' => 'Всего начислений', 'value' => (string) ($summary['count'] ?? 0)],
+            ['label' => 'Последний период', 'value' => (string) ($summary['last_period_label'] ?? '—')],
+            ['label' => 'Сумма за всё время', 'value' => static::formatRub((float) ($summary['sum_all'] ?? 0))],
+            ['label' => 'Сумма за последний период', 'value' => static::formatRub((float) ($summary['sum_last'] ?? 0))],
+            ['label' => 'Строк в последнем периоде', 'value' => (string) ($summary['count_last_period'] ?? 0)],
+            ['label' => 'Без привязки к месту', 'value' => (string) $withoutSpaceTotal],
+        ];
+
+        $cardsHtml = '';
+        foreach ($summaryCards as $card) {
+            $cardsHtml .= '<div class="tenant-accruals-inline-summary__card">'
+                . '<div class="tenant-accruals-inline-summary__label">' . e((string) $card['label']) . '</div>'
+                . '<div class="tenant-accruals-inline-summary__value">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $alertsHtml = '';
+        if ($withoutContractTotal > 0) {
+            $alertsHtml .= '<div class="tenant-accruals-inline-summary__alert">Есть начисления без привязки к договору: <strong>'
+                . e((string) $withoutContractTotal)
+                . '</strong>.</div>';
+        }
+        if ($withoutSpaceTotal > 0) {
+            $alertsHtml .= '<div class="tenant-accruals-inline-summary__alert">Есть начисления без привязки к торговому месту: <strong>'
+                . e((string) $withoutSpaceTotal)
+                . '</strong>.</div>';
+        }
+
+        return new HtmlString(
+            '<style>
+                .tenant-accruals-inline-summary{display:flex;flex-direction:column;gap:12px}
+                .tenant-accruals-inline-summary__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+                .tenant-accruals-inline-summary__card{border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;background:rgba(0,0,0,.02)}
+                .dark .tenant-accruals-inline-summary__card{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.03)}
+                .tenant-accruals-inline-summary__label{font-size:12px;line-height:1.2;opacity:.72}
+                .tenant-accruals-inline-summary__value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2}
+                .tenant-accruals-inline-summary__alerts{display:flex;flex-direction:column;gap:8px}
+                .tenant-accruals-inline-summary__alert{padding:10px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.10);font-size:13px;line-height:1.4}
+                .dark .tenant-accruals-inline-summary__alert{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
+            </style>
+            <div class="tenant-accruals-inline-summary">
+                <div class="tenant-accruals-inline-summary__grid">' . $cardsHtml . '</div>'
+                . ($alertsHtml !== '' ? '<div class="tenant-accruals-inline-summary__alerts">' . $alertsHtml . '</div>' : '') .
+            '</div>'
+        );
     }
 
     private static function renderContractStatusBadge(?string $status): string
