@@ -159,6 +159,11 @@ class AdminPanelProvider extends PanelProvider
 
             // Кнопка слева от поля global search (в topbar). НЕ сдвигает контент дашборда вниз.
             ->renderHook(
+                PanelsRenderHook::HEAD_START,
+                fn () => view('filament.components.session-expiry-guard'),
+            )
+
+            ->renderHook(
                 PanelsRenderHook::GLOBAL_SEARCH_BEFORE,
                 function (): ?HtmlString {
                     $user = Filament::auth()->user();
