@@ -148,7 +148,8 @@ class TenantResource extends BaseResource
 
                                 Forms\Components\Toggle::make('is_active')
                                     ->label('Активен')
-                                    ->default(true),
+                                    ->default(true)
+                                    ->visible(fn (string $operation): bool => $operation === 'create'),
 
                                 Forms\Components\Textarea::make('notes')
                                     ->label('Примечания')

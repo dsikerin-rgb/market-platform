@@ -61,6 +61,26 @@ class EditTenant extends BaseEditRecord
         $this->syncCabinetPayload($this->record, $this->cabinetPayload);
     }
 
+    public function toggleTenantActiveState(): void
+    {
+        if (! $this->record) {
+            return;
+        }
+
+        $newState = ! (bool) $this->record->is_active;
+
+        $this->record->forceFill([
+            'is_active' => $newState,
+        ])->save();
+
+        $this->record->refresh();
+
+        Notification::make()
+            ->success()
+            ->title($newState ? 'Арендатор активен' : 'Арендатор отключен')
+            ->send();
+    }
+
     protected function getHeaderActions(): array
     {
         $chatAction = Actions\Action::make('write_to_tenant')
@@ -90,6 +110,13 @@ class EditTenant extends BaseEditRecord
         if (method_exists($chatAction, 'modalContent')) {
             $chatAction->modalContent(fn () => view('filament.tenants.request-chat', $this->buildHeaderChatViewData()));
         }
+
+        $activeStateAction = Actions\Action::make('active_state')
+            ->view('filament.tenants.active-state-toggle')
+            ->viewData([
+                'isActive' => (bool) ($this->record?->is_active ?? false),
+                'recordName' => trim((string) ($this->record?->name ?? '')),
+            ]);
 
         return [
             Actions\Action::make('cabinet_impersonate')
@@ -154,6 +181,7 @@ class EditTenant extends BaseEditRecord
                     'class' => 'tenant-card-action tenant-card-action--danger',
                     'data-subtitle' => 'Арендатора без возврата',
                 ]),
+            $activeStateAction,
         ];
     }
 
