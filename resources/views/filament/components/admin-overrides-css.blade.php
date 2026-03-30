@@ -1510,33 +1510,35 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
   margin-top: .1rem;
-  margin-bottom: .85rem;
+  margin-bottom: .65rem;
   justify-self: start;
   width: 100%;
   max-width: 100%;
-  padding: .3rem;
+  padding: .2rem;
   border-radius: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(255, 255, 255, 0.76);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs .fi-tabs{
   margin-inline: 0;
-  width: 100%;
-  max-width: 100%;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: .35rem;
+  width: max-content;
+  max-width: none;
+  flex-wrap: nowrap;
+  gap: .2rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs [role="tab"]{
   border-radius: .85rem;
-  padding: .5rem .9rem;
-  width: 100%;
-  min-width: 0;
-  justify-content: center;
+  padding: .42rem .72rem;
   color: #475569;
+  white-space: nowrap;
   font-weight: 600;
+  font-size: .92rem;
+  line-height: 1.2;
   transition: background-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 

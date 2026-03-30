@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Cabinet\TenantImpersonationService;
+use App\Support\AdminPanelImpersonation;
 use Filament\Facades\Filament;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ class TenantCabinetImpersonationController extends Controller
         Tenant $tenant,
         TenantImpersonationService $service,
     ): RedirectResponse {
-        $impersonator = Filament::auth()->user();
+        $impersonator = AdminPanelImpersonation::resolveAdminUser(Filament::auth()->user(), $request);
         abort_unless($impersonator instanceof User, 403);
 
         if (! $service->canIssue($impersonator, $tenant)) {
@@ -45,4 +46,3 @@ class TenantCabinetImpersonationController extends Controller
         return redirect()->to($url);
     }
 }
-

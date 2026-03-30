@@ -36,9 +36,37 @@
         $showcaseScopeHint = $selectedSpaceLabel !== ''
             ? 'Редактируете отдельную витрину торгового места. Покупатель увидит именно этот профиль при переходе в выбранный отдел.'
             : 'Редактируете главную витрину арендатора. Она используется как базовая карточка продавца на маркетплейсе.';
+        $marketRouteKey = data_get($tenant, 'market.slug');
+        if (! filled($marketRouteKey) && (int) ($tenant->market_id ?? 0) > 0) {
+            $marketRouteKey = \App\Models\Market::query()
+                ->whereKey((int) $tenant->market_id)
+                ->value('slug') ?: (string) $tenant->market_id;
+        }
+        $storeRouteTenantKey = filled($tenantSlug) ? (string) $tenantSlug : (string) ($tenant->id ?? '');
+        $marketplaceStoreUrl = filled($marketRouteKey) && $storeRouteTenantKey !== ''
+            ? route('marketplace.store.show', ['marketSlug' => $marketRouteKey, 'tenantSlug' => $storeRouteTenantKey])
+            : null;
+        $marketplaceStoreQr = $marketplaceStoreUrl
+            ? app(\App\Support\QrCodeDataUriGenerator::class)->generateSvgDataUri($marketplaceStoreUrl, 8)
+            : null;
     @endphp
 
     <style>
+        .cabinet-share-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.55);
+        }
+
+        .cabinet-share-modal:target {
+            display: flex;
+        }
+
         .showcase-page {
             display: grid;
             gap: 1rem;
@@ -417,6 +445,14 @@
 
                     @if ($publicUrl)
                         <div class="showcase-toolbar__actions">
+                            @if($marketplaceStoreUrl)
+                                <a
+                                    href="#showcase-share-modal"
+                                    class="showcase-public-link"
+                                >
+                                    Поделиться витриной
+                                </a>
+                            @endif
                             <a
                                 href="{{ $publicUrl }}"
                                 target="_blank"
@@ -596,6 +632,46 @@
         </div>
     </form>
     </div>
+
+    @if($marketplaceStoreUrl)
+        <div id="showcase-share-modal" class="cabinet-share-modal">
+            <a href="#" class="absolute inset-0"></a>
+            <div class="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)] md:p-6">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Поделиться</p>
+                        <h3 class="mt-2 text-xl font-semibold text-slate-900">QR-код витрины</h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500">Покупатель сможет открыть витрину продавца по ссылке или QR-коду.</p>
+                    </div>
+                    <a href="#" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" aria-label="Закрыть окно">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
+                        </svg>
+                    </a>
+                </div>
+
+                <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <div class="mx-auto flex h-[18rem] w-[18rem] max-w-full items-center justify-center rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                        <img src="{{ $marketplaceStoreQr }}" alt="QR-код витрины" class="h-full w-full object-contain">
+                    </div>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ссылка</p>
+                    <p class="mt-2 break-all text-sm text-slate-700">{{ $marketplaceStoreUrl }}</p>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <a href="{{ $marketplaceStoreUrl }}" target="_blank" rel="noreferrer" class="inline-flex flex-1 items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700">
+                        Открыть ссылку
+                    </a>
+                    <a href="#" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900">
+                        Закрыть
+                    </a>
+                </div>
+            </div>
+        </div>
+    @endif
 
     <style>
         details > summary::-webkit-details-marker { display: none; }

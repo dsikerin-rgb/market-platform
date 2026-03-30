@@ -33,6 +33,10 @@ class NotifySuperAdminsAboutUserLogin
             return;
         }
 
+        if ($this->isImpersonationLoginRequest()) {
+            return;
+        }
+
         if ($this->isDuplicateLoginNotification($actor)) {
             return;
         }
@@ -114,6 +118,19 @@ class NotifySuperAdminsAboutUserLogin
         $refererPath = trim((string) parse_url($referer, PHP_URL_PATH), '/');
 
         return $refererPath === $panelPath || str_starts_with($refererPath, $panelPath . '/');
+    }
+
+    private function isImpersonationLoginRequest(): bool
+    {
+        $routeName = (string) ($this->request->route()?->getName() ?? '');
+
+        if ($routeName === 'cabinet.impersonate.consume') {
+            return true;
+        }
+
+        $path = trim($this->request->path(), '/');
+
+        return $path === 'cabinet/impersonate' || str_starts_with($path, 'cabinet/impersonate/');
     }
 
     private function isDuplicateLoginNotification(User $actor): bool

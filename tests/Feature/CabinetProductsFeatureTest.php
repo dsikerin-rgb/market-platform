@@ -10,6 +10,8 @@ use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Http\Controllers\Cabinet\ProductsController;
+use Illuminate\Http\Request;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -152,6 +154,88 @@ class CabinetProductsFeatureTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_merchant_can_remove_existing_product_image_even_with_extra_remove_values(): void
+    {
+        [$market, $tenant, $spaceA] = $this->createTenantContext();
+        $category = MarketplaceCategory::query()->create([
+            'market_id' => null,
+            'name' => 'Фрукты',
+            'slug' => 'frukty',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+        $product = MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceA->id,
+            'category_id' => (int) $category->id,
+            'title' => 'Яблоки',
+            'slug' => 'yabloki',
+            'is_active' => true,
+            'images' => [
+                'marketplace-products/first.webp',
+                'marketplace-products/second.webp',
+            ],
+        ]);
+
+        $this->actingAs($merchant, 'web');
+
+        $this->post(route('cabinet.products.update', ['product' => (int) $product->id]), [
+            'title' => 'Яблоки',
+            'category_id' => (int) $category->id,
+            'market_space_id' => (int) $spaceA->id,
+            'is_active' => '1',
+            'remove_images' => [
+                'marketplace-products/first.webp',
+                'on',
+            ],
+        ])->assertRedirect();
+
+        $product->refresh();
+
+        $this->assertSame([
+            'marketplace-products/second.webp',
+        ], $product->images);
+    }
+
+    public function test_merchant_can_delete_existing_product_image_immediately(): void
+    {
+        [$market, $tenant, $spaceA] = $this->createTenantContext();
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+        $product = MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceA->id,
+            'title' => 'Груши',
+            'slug' => 'grushi',
+            'is_active' => true,
+            'images' => [
+                'marketplace-products/first.webp',
+                'marketplace-products/second.webp',
+            ],
+        ]);
+
+        $request = Request::create('/cabinet/products/' . (int) $product->id . '/images/delete', 'POST', [
+            'path' => 'marketplace-products/first.webp',
+        ]);
+        $request->setUserResolver(static fn (): User => $merchant);
+
+        $response = app(ProductsController::class)->destroyImage($request, (int) $product->id);
+
+        $product->refresh();
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame([
+            'ok' => true,
+            'images_count' => 1,
+        ], $response->getData(true));
+        $this->assertSame([
+            'marketplace-products/second.webp',
+        ], $product->images);
+    }
+
     private function createTenantContext(): array
     {
         $market = Market::query()->create([
@@ -201,4 +285,3 @@ class CabinetProductsFeatureTest extends TestCase
         return $user;
     }
 }
-

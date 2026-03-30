@@ -172,6 +172,29 @@ class CabinetImpersonationFeatureTest extends TestCase
         $this->assertNotNull($audit->ended_at);
     }
 
+    public function test_super_admin_still_sees_impersonation_button_on_admin_page_during_impersonation(): void
+    {
+        $context = $this->createTenantWithCabinetUser();
+        $admin = $this->createUser(
+            marketId: (int) $context['market']->id,
+            role: 'super-admin',
+        );
+
+        $this->actingAs($context['cabinetUser'], 'web');
+
+        $response = $this
+            ->withSession([
+                \App\Services\Cabinet\TenantImpersonationService::SESSION_KEY => [
+                    'impersonator_user_id' => (int) $admin->id,
+                    'tenant_id' => (int) $context['tenant']->id,
+                ],
+            ])
+            ->get('/admin/tenants/' . (int) $context['tenant']->id . '/edit');
+
+        $response->assertOk();
+        $response->assertSee('Войти в кабинет', false);
+    }
+
     /**
      * @return array{market: Market, tenant: Tenant, cabinetUser: User}
      */
