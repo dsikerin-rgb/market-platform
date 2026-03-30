@@ -618,24 +618,29 @@ class TenantResource extends BaseResource
             ->defaultItems(0)
             ->addActionLabel('Добавить сотрудника')
             ->reorderable(false)
+            ->collapsible()
+            ->collapsed()
             ->extraAttributes(['data-contact-staff-editor' => '1'])
             ->itemLabel(function (array $state): ?string {
                 $name = trim((string) ($state['name'] ?? ''));
                 $email = trim((string) ($state['email'] ?? ''));
+                $summary = trim((string) ($state['space_summary'] ?? ''));
 
                 if ($name !== '' && $email !== '') {
-                    return $name . ' (' . $email . ')';
+                    $label = $name . ' (' . $email . ')';
+                } elseif ($email !== '') {
+                    $label = $email;
+                } elseif ($name !== '') {
+                    $label = $name;
+                } else {
+                    $label = 'Новый сотрудник';
                 }
 
-                if ($email !== '') {
-                    return $email;
+                if ($summary !== '') {
+                    return $label . ' · ' . $summary;
                 }
 
-                if ($name !== '') {
-                    return $name;
-                }
-
-                return 'Новый сотрудник';
+                return $label;
             })
             ->schema([
                 Forms\Components\Hidden::make('id')
@@ -1915,6 +1920,7 @@ class TenantResource extends BaseResource
             }
         }
 
+        $globalUsers = [];
         $staffBySpace = [];
         foreach ($users as $user) {
             $userId = (int) ($user->id ?? 0);
@@ -1929,6 +1935,13 @@ class TenantResource extends BaseResource
             $scopedIds = isset($scopedSpaceIdsByUser[$userId]) ? array_keys($scopedSpaceIdsByUser[$userId]) : [];
             $allSpaces = $scopedIds === [];
             $effectiveIds = $allSpaces ? $spaceIds : $scopedIds;
+
+            if ($allSpaces) {
+                $globalUsers[] = [
+                    'id' => $userId,
+                    'label' => $label,
+                ];
+            }
 
             foreach ($effectiveIds as $spaceId) {
                 $spaceId = (int) $spaceId;
@@ -1946,6 +1959,20 @@ class TenantResource extends BaseResource
                     'all_spaces' => $allSpaces,
                 ];
             }
+        }
+
+        $globalHtml = '';
+        if ($globalUsers !== []) {
+            foreach ($globalUsers as $userRow) {
+                $globalHtml .= '<div class="tenant-contact-staff__global-user">'
+                    . '<span class="tenant-contact-staff__member-name">' . e((string) $userRow['label']) . '</span>'
+                    . ' <span class="tenant-contact-staff__note">(все места)</span>'
+                    . '</div>';
+            }
+            $globalHtml = '<div class="tenant-contact-staff__global">'
+                . '<div class="tenant-contact-staff__global-title">Сотрудники с доступом ко всем местам</div>'
+                . '<div class="tenant-contact-staff__global-list">' . $globalHtml . '</div>'
+                . '</div>';
         }
 
         $cards = '';
@@ -1971,7 +1998,6 @@ class TenantResource extends BaseResource
                 foreach ($members as $member) {
                     $membersHtml .= '<div class="tenant-contact-staff__member">'
                         . '<span class="tenant-contact-staff__member-name">' . e((string) $member['label']) . '</span>'
-                        . (! empty($member['all_spaces']) ? ' <span class="tenant-contact-staff__note">(все места)</span>' : '')
                         . '</div>';
                 }
             }
@@ -1987,6 +2013,10 @@ class TenantResource extends BaseResource
 .tenant-contact-staff{display:flex;flex-direction:column;gap:10px}
 .tenant-contact-staff__head{display:flex;align-items:flex-start;gap:10px}
 .tenant-contact-staff__hint{font-size:12px;line-height:1.45;opacity:.8;max-width:52rem}
+.tenant-contact-staff__global{padding:10px 12px;border:1px solid rgba(37,99,235,.16);border-radius:12px;background:linear-gradient(180deg,#f8fbff 0%,#eef5ff 100%)}
+.tenant-contact-staff__global-title{font-size:12px;font-weight:700;line-height:1.35;color:#1d4ed8;margin-bottom:6px}
+.tenant-contact-staff__global-list{display:flex;flex-wrap:wrap;gap:6px 12px}
+.tenant-contact-staff__global-user{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:1.35}
 .tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
 .tenant-contact-staff__card{border:1px solid rgba(14,165,233,.30);border-radius:10px;padding:8px 10px;background:rgba(14,165,233,.07)}
 .dark .tenant-contact-staff__card{border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.10)}
@@ -2003,6 +2033,7 @@ class TenantResource extends BaseResource
     <div class="tenant-contact-staff__head">
         <div class="tenant-contact-staff__hint">Каждая карточка показывает торговое место и дополнительных сотрудников, которым открыт доступ именно к нему. Метка “все места” означает глобальный доступ по всем точкам арендатора.</div>
     </div>
+    ' . $globalHtml . '
     <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Дополнительные сотрудники пока не назначены.</div>') . '</div>
 </div>';
 
