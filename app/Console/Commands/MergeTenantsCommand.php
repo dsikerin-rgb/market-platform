@@ -483,7 +483,9 @@ class MergeTenantsCommand extends Command
         $stamp = now()->toDateTimeString();
 
         if (Schema::hasColumn('tenants', 'is_active')) {
+            $shouldKeepCanonicalActive = (bool) ($from->is_active || $to->is_active);
             $from->is_active = false;
+            $to->is_active = $shouldKeepCanonicalActive;
         }
 
         if (Schema::hasColumn('tenants', 'notes')) {
