@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
 use App\Filament\Resources\TenantResource\RelationManagers\AccrualsRelationManager;
+use App\Filament\Resources\TenantResource\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\SpacesRelationManager;
 use App\Models\ContractDebt;
