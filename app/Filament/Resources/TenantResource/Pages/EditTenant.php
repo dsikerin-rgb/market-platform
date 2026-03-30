@@ -136,6 +136,14 @@ class EditTenant extends BaseEditRecord
         ];
     }
 
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-tenants-edit-page',
+        ];
+    }
+
     protected function canImpersonateCabinet(): bool
     {
         $user = \Filament\Facades\Filament::auth()->user();
@@ -433,4 +441,3 @@ class EditTenant extends BaseEditRecord
         }
     }
 }
-
