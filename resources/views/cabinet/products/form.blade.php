@@ -35,18 +35,13 @@
                 ->value('slug') ?: (string) $tenant->market_id;
         }
 
-        $tenantRouteKey = filled($tenant->slug ?? null) ? (string) $tenant->slug : (string) ($tenant->id ?? '');
         $productRouteKey = filled($product->slug ?? null) ? (string) $product->slug : '';
 
-        $storeShareUrl = $isEdit && filled($marketRouteKey) && $tenantRouteKey !== ''
-            ? route('marketplace.store.show', ['marketSlug' => $marketRouteKey, 'tenantSlug' => $tenantRouteKey])
-            : null;
         $productShareUrl = $isEdit && filled($marketRouteKey) && $productRouteKey !== ''
             ? route('marketplace.product.show', ['marketSlug' => $marketRouteKey, 'productSlug' => $productRouteKey])
             : null;
 
         $qrGenerator = app(\App\Support\QrCodeDataUriGenerator::class);
-        $storeShareQr = $storeShareUrl ? $qrGenerator->generateSvgDataUri($storeShareUrl, 8) : null;
         $productShareQr = $productShareUrl ? $qrGenerator->generateSvgDataUri($productShareUrl, 8) : null;
 
         $fieldClass = 'mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100';
@@ -77,10 +72,10 @@
                         {{ $isEdit ? 'Карточка товара' : 'Добавление товара' }}
                     </h2>
                     <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                        Основные поля товара, фото и настройки показа.
+                        Короткая карточка товара без лишних панелей: название, цена, фото и видимость.
                     </p>
 
-                    <div class="mt-4 flex flex-wrap gap-2 pb-4 sm:pb-5">
+                    <div class="mt-4 flex flex-wrap gap-2">
                         <span class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
                             Категория: {{ $categoryLabel }}
                         </span>
@@ -100,50 +95,26 @@
                         @endif
                     </div>
 
-                    @if($productShareUrl || $storeShareUrl)
-                        <div class="rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm backdrop-blur">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Поделиться</div>
-                                    <p class="mt-1 text-xs leading-5 text-slate-600">
-                                        Покажите покупателю QR-код товара или всей витрины.
-                                    </p>
-                                </div>
-                                <div class="flex flex-wrap gap-2">
-                            @if($productShareUrl)
+                    @if($productShareUrl)
+                        <div class="mt-4 flex flex-wrap gap-2">
                                 <button
                                     type="button"
-                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
-                                    data-share-open="product"
+                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
+                                    data-share-title="QR-код товара"
+                                    data-share-description="Покупатель сможет открыть карточку товара по ссылке или QR-коду."
+                                    data-share-url="{{ $productShareUrl }}"
+                                    data-share-qr="{{ $productShareQr }}"
+                                    data-share-target="#product-share-modal"
+                                    onclick="return window.__cabinetShareModal ? window.__cabinetShareModal.openFromButton(this) : false;"
                                 >
                                     Поделиться ссылкой на товар
                                 </button>
-                            @endif
-                            @if($storeShareUrl)
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-                                    data-share-open="store"
-                                >
-                                    Поделиться витриной
-                                </button>
-                            @endif
-                                </div>
-                            </div>
                         </div>
                     @endif
                 </div>
 
-                <div class="mt-2 max-w-sm">
-                    <div class="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Статус</div>
-                        <div class="mt-1.5 text-base font-semibold text-slate-900">
-                            {{ $currentIsActive ? 'Активен' : 'Скрыт' }}
-                        </div>
-                        <div class="mt-0.5 text-xs text-slate-600">
-                            {{ $currentIsActive ? 'Виден покупателям' : 'Виден только в кабинете' }}
-                        </div>
-                    </div>
+                <div class="mt-4 inline-flex items-center rounded-2xl border border-white/80 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur">
+                    {{ $currentIsActive ? 'Активен и виден покупателям' : 'Скрыт и виден только в кабинете' }}
                 </div>
             </div>
         </section>
@@ -475,8 +446,8 @@
         </div>
     </form>
 
-    @if($productShareUrl || $storeShareUrl)
-        <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 px-4 py-6" data-share-modal-root>
+    @if($productShareUrl)
+        <div id="product-share-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 px-4 py-6" data-share-modal-root>
             <div class="absolute inset-0" data-share-close></div>
             <div class="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)] md:p-6">
                 <div class="flex items-start justify-between gap-3">
@@ -513,27 +484,6 @@
                 </div>
             </div>
         </div>
-
-        <script type="application/json" data-share-config>
-            {
-                @if($productShareUrl)
-                "product": {
-                    "title": "QR-код товара",
-                    "description": "Покупатель сможет открыть карточку товара, добавить его в избранное и перейти к продавцу.",
-                    "url": @json($productShareUrl),
-                    "qr": @json($productShareQr)
-                }@if($storeShareUrl),@endif
-                @endif
-                @if($storeShareUrl)
-                "store": {
-                    "title": "QR-код витрины",
-                    "description": "Покупатель сможет открыть витрину продавца, посмотреть товары и сохранить интересующие позиции в избранное.",
-                    "url": @json($storeShareUrl),
-                    "qr": @json($storeShareQr)
-                }
-                @endif
-            }
-        </script>
     @endif
 
     <script>
@@ -803,106 +753,86 @@
         })();
     </script>
 
-    @if($productShareUrl || $storeShareUrl)
+    @if($productShareUrl)
         <script>
             (() => {
-                const initShareModal = () => {
-                    const configNode = document.querySelector('[data-share-config]');
-                    const modalRoot = document.querySelector('[data-share-modal-root]');
+                const modalRoot = document.querySelector('#product-share-modal');
 
-                    if (!configNode || !modalRoot || modalRoot.dataset.shareBound === '1') {
-                        return;
-                    }
+                if (!modalRoot || window.__cabinetShareModal?.bound === true) {
+                    return;
+                }
 
-                    let config = {};
+                const titleNode = modalRoot.querySelector('[data-share-title]');
+                const descriptionNode = modalRoot.querySelector('[data-share-description]');
+                const qrNode = modalRoot.querySelector('[data-share-qr]');
+                const urlNode = modalRoot.querySelector('[data-share-url]');
+                const copyButton = modalRoot.querySelector('[data-share-copy]');
 
-                    try {
-                        config = JSON.parse(configNode.textContent || '{}');
-                    } catch (error) {
-                        return;
-                    }
+                if (!titleNode || !descriptionNode || !qrNode || !urlNode) {
+                    return;
+                }
 
-                    const titleNode = modalRoot.querySelector('[data-share-title]');
-                    const descriptionNode = modalRoot.querySelector('[data-share-description]');
-                    const qrNode = modalRoot.querySelector('[data-share-qr]');
-                    const urlNode = modalRoot.querySelector('[data-share-url]');
-                    const copyButton = modalRoot.querySelector('[data-share-copy]');
+                const closeModal = () => {
+                    modalRoot.classList.add('hidden');
+                    modalRoot.classList.remove('flex');
+                    document.body.classList.remove('overflow-hidden');
+                };
 
-                    if (!titleNode || !descriptionNode || !qrNode || !urlNode) {
-                        return;
-                    }
-
-                    const closeModal = () => {
-                        modalRoot.classList.add('hidden');
-                        modalRoot.classList.remove('flex');
-                        document.body.classList.remove('overflow-hidden');
-                    };
-
-                    const openModal = (key) => {
-                        const payload = config[key];
-
-                        if (!payload) {
-                            return;
+                window.__cabinetShareModal = {
+                    bound: true,
+                    openFromButton(button) {
+                        if (!button) {
+                            return false;
                         }
 
-                        titleNode.textContent = payload.title || '';
-                        descriptionNode.textContent = payload.description || '';
-                        qrNode.src = payload.qr || '';
-                        qrNode.alt = payload.title || '';
-                        urlNode.textContent = payload.url || '';
+                        titleNode.textContent = button.dataset.shareTitle || '';
+                        descriptionNode.textContent = button.dataset.shareDescription || '';
+                        qrNode.src = button.dataset.shareQr || '';
+                        qrNode.alt = button.dataset.shareTitle || '';
+                        urlNode.textContent = button.dataset.shareUrl || '';
 
                         if (copyButton) {
-                            copyButton.dataset.shareUrl = payload.url || '';
+                            copyButton.dataset.shareUrl = button.dataset.shareUrl || '';
                             copyButton.textContent = 'Скопировать ссылку';
                         }
 
                         modalRoot.classList.remove('hidden');
                         modalRoot.classList.add('flex');
                         document.body.classList.add('overflow-hidden');
-                    };
 
-                    document.querySelectorAll('[data-share-open]').forEach((button) => {
-                        button.addEventListener('click', () => {
-                            openModal(button.getAttribute('data-share-open'));
-                        });
-                    });
-
-                    modalRoot.querySelectorAll('[data-share-close]').forEach((button) => {
-                        button.addEventListener('click', closeModal);
-                    });
-
-                    document.addEventListener('keydown', (event) => {
-                        if (event.key === 'Escape') {
-                            closeModal();
-                        }
-                    });
-
-                    if (copyButton) {
-                        copyButton.addEventListener('click', async () => {
-                            const url = copyButton.dataset.shareUrl || '';
-
-                            if (!url) {
-                                return;
-                            }
-
-                            try {
-                                await navigator.clipboard.writeText(url);
-                                copyButton.textContent = 'Ссылка скопирована';
-                                window.setTimeout(() => {
-                                    copyButton.textContent = 'Скопировать ссылку';
-                                }, 1400);
-                            } catch (error) {
-                                window.prompt('Скопируйте ссылку вручную:', url);
-                            }
-                        });
+                        return false;
                     }
-
-                    modalRoot.dataset.shareBound = '1';
                 };
 
-                initShareModal();
-                document.addEventListener('livewire:navigated', initShareModal);
-                document.addEventListener('turbo:load', initShareModal);
+                modalRoot.querySelectorAll('[data-share-close]').forEach((button) => {
+                    button.addEventListener('click', closeModal);
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeModal();
+                    }
+                });
+
+                if (copyButton) {
+                    copyButton.addEventListener('click', async () => {
+                        const url = copyButton.dataset.shareUrl || '';
+
+                        if (!url) {
+                            return;
+                        }
+
+                        try {
+                            await navigator.clipboard.writeText(url);
+                            copyButton.textContent = 'Ссылка скопирована';
+                            window.setTimeout(() => {
+                                copyButton.textContent = 'Скопировать ссылку';
+                            }, 1400);
+                        } catch (error) {
+                            window.prompt('Скопируйте ссылку вручную:', url);
+                        }
+                    });
+                }
             })();
         </script>
     @endif
