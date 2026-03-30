@@ -125,4 +125,40 @@ class ContractDocumentClassifierTest extends TestCase
         $this->assertSame('О-8/М 24-25', $result['place_token']);
         $this->assertSame('2022-07-01', $result['document_date']);
     }
+
+    /**
+     * @dataProvider safeEquivalentPlaceTokenProvider
+     * @throws JsonException
+     */
+    public function test_normalizes_confirmed_safe_equivalent_place_tokens(
+        string $contractNumber,
+        string $expectedToken,
+    ): void {
+        $classifier = new ContractDocumentClassifier();
+
+        $result = $classifier->classify(
+            json_decode($contractNumber, true, 512, JSON_THROW_ON_ERROR),
+        );
+
+        $this->assertSame('primary_contract', $result['category']);
+        $this->assertSame($expectedToken, $result['place_token']);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function safeEquivalentPlaceTokenProvider(): array
+    {
+        return [
+            'П32/1 -> П/32/1' => ['"\u041f32\/1 \u043e\u0442 01.02.2025"', 'П/32/1'],
+            'П/32-1 -> П/32/1' => ['"\u041f\/32-1 \u043e\u0442 01.02.2025"', 'П/32/1'],
+            'П/32/1 stable' => ['"\u041f\/32\/1 \u043e\u0442 01.02.2025"', 'П/32/1'],
+            'СТ 5-6 -> СТ-5-6' => ['"\u0421\u0422 5-6 \u043e\u0442 01.02.2025"', 'СТ-5-6'],
+            'П/60/У -> П/60У' => ['"\u041f\/60\/\u0423 \u043e\u0442 01.02.2025"', 'П/60У'],
+            'П-73 -> П/73' => ['"\u041f-73 \u043e\u0442 01.02.2025"', 'П/73'],
+            'СКЛАД12 -> СКЛАД 12' => ['"\u0421\u041a\u041b\u0410\u041412 \u043e\u0442 01.02.2025"', 'СКЛАД 12'],
+            'СК-13 -> СКЛАД 13' => ['"\u0421\u041a-13 \u043e\u0442 01.02.2025"', 'СКЛАД 13'],
+            'СК-11-12 -> СКЛАД 11-12' => ['"\u0421\u041a-11-12 \u043e\u0442 01.02.2025"', 'СКЛАД 11-12'],
+        ];
+    }
 }

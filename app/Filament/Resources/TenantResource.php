@@ -2063,6 +2063,19 @@ class TenantResource extends BaseResource
                 . '</div>';
         }
 
+        $allSpacesCount = 0;
+        foreach ($users as $user) {
+            $userId = (int) ($user->id ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
+
+            $scopedIds = isset($scopedSpaceIdsByUser[$userId]) ? array_keys($scopedSpaceIdsByUser[$userId]) : [];
+            if ($scopedIds === []) {
+                $allSpacesCount++;
+            }
+        }
+
         $style = '
 <style>
 .tenant-contact-staff{display:flex;flex-direction:column;gap:10px}
@@ -2092,6 +2105,20 @@ class TenantResource extends BaseResource
 
         $html = $style . '
 <div class="tenant-contact-staff">
+    <div class="tenant-contact-staff__summary">
+        <div class="tenant-contact-staff__metric">
+            <div class="tenant-contact-staff__metric-value">' . (int) $spaces->count() . '</div>
+            <div class="tenant-contact-staff__metric-label">Торговых мест у арендатора</div>
+        </div>
+        <div class="tenant-contact-staff__metric">
+            <div class="tenant-contact-staff__metric-value">' . (int) $users->count() . '</div>
+            <div class="tenant-contact-staff__metric-label">Сотрудников в кабинете</div>
+        </div>
+        <div class="tenant-contact-staff__metric">
+            <div class="tenant-contact-staff__metric-value">' . (int) $allSpacesCount . '</div>
+            <div class="tenant-contact-staff__metric-label">Сотрудников с доступом ко всем местам</div>
+        </div>
+    </div>
     <div class="tenant-contact-staff__head">
         <div class="tenant-contact-staff__hint">Каждая карточка показывает торговое место и сотрудников, которым открыт доступ именно к нему. Метка “все места” означает глобальный доступ по всем точкам арендатора, а основной кабинетный аккаунт здесь не показывается.</div>
     </div>
