@@ -382,12 +382,16 @@ class TenantContractResource extends BaseResource
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок')
+                    ->tooltip('Рынок, к которому относится договор.')
+                    ->headerTooltip('Рынок, к которому относится договор.')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => (bool) $user && $user->isSuperAdmin()),
 
                 TextColumn::make('tenant.name')
                     ->label('Арендатор')
+                    ->tooltip('Арендатор по договору.')
+                    ->headerTooltip('Арендатор по договору.')
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
@@ -396,6 +400,8 @@ class TenantContractResource extends BaseResource
 
                 TextColumn::make('number')
                     ->label('Номер документа')
+                    ->tooltip('Номер договора из 1С.')
+                    ->headerTooltip('Номер договора из 1С.')
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
@@ -404,29 +410,39 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('document_type')
                     ->label('Тип документа')
                     ->state(fn (TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
+                    ->tooltip('Тип документа, определяемый по признакам 1С.')
+                    ->headerTooltip('Тип документа, определяемый по признакам 1С.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::documentTypeColor((string) static::classificationForRecord($record)['category'])),
 
                 TextColumn::make('document_date')
                     ->label('Дата из номера')
                     ->state(fn (TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
+                    ->tooltip('Дата, извлеченная из номера договора.')
+                    ->headerTooltip('Дата, извлеченная из номера договора.')
                     ->toggleable(),
 
                 TextColumn::make('market_space_link')
                     ->label('Текущее место')
                     ->state(fn (TenantContract $record): string => static::spaceLabel($record))
+                    ->tooltip('Торговое место, привязанное к договору сейчас.')
+                    ->headerTooltip('Торговое место, привязанное к договору сейчас.')
                     ->placeholder('—')
                     ->toggleable(),
 
                 TextColumn::make('ordering_status')
                     ->label('Готовность к привязке')
                     ->state(fn (TenantContract $record): string => static::orderingMeta($record)['label'])
+                    ->tooltip('Показывает, насколько договор уже готов к привязке к месту.')
+                    ->headerTooltip('Показывает, насколько договор уже готов к привязке к месту.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::orderingMeta($record)['color']),
 
                 TextColumn::make('chain_position')
                     ->label('Цепочка')
                     ->state(fn (TenantContract $record): string => static::chainDisplay($record))
+                    ->tooltip('Позиция договора в истории одного места. Формат 2/5 означает: второй из пяти.')
+                    ->headerTooltip('Позиция договора в истории одного места. Формат 2/5 означает: второй из пяти.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::chainColor($record))
                     ->toggleable(),
@@ -434,6 +450,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('overlap_status')
                     ->label('Наложение')
                     ->state(fn (TenantContract $record): string => static::overlapDisplay($record))
+                    ->tooltip('Показывает, есть ли пересечение этого договора по срокам с другим договором в цепочке.')
+                    ->headerTooltip('Показывает, есть ли пересечение этого договора по срокам с другим договором в цепочке.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::overlapColor($record))
                     ->toggleable(),
@@ -441,18 +459,24 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('place_token')
                     ->label('Токен места')
                     ->state(fn (TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
+                    ->tooltip('Технический токен места, который помогает собрать цепочку договоров.')
+                    ->headerTooltip('Технический токен места, который помогает собрать цепочку договоров.')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => $isSuperAdmin),
 
                 TextColumn::make('effective_order_date')
                     ->label('Дата для цепочки')
                     ->state(fn (TenantContract $record): string => static::effectiveOrderDateLabel($record))
+                    ->tooltip('Дата, по которой строится цепочка по месту.')
+                    ->headerTooltip('Дата, по которой строится цепочка по месту.')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => $isSuperAdmin),
 
                 TextColumn::make('date_consistency')
                     ->label('Дата 1С / БД')
                     ->state(fn (TenantContract $record): string => static::dateConsistencyLabel($record))
+                    ->tooltip('Сравнение даты из номера договора с датой из 1С и технической датой начала.')
+                    ->headerTooltip('Сравнение даты из номера договора с датой из 1С и технической датой начала.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::dateConsistencyColor($record))
                     ->toggleable(isToggledHiddenByDefault: true)
@@ -461,6 +485,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('latest_debt_snapshot')
                     ->label('Есть в выгрузке долга')
                     ->state(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'Да' : 'Нет')
+                    ->tooltip('Показывает, попал ли договор в последнюю выгрузку задолженности.')
+                    ->headerTooltip('Показывает, попал ли договор в последнюю выгрузку задолженности.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'success' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -468,6 +494,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('space_mapping_mode')
                     ->label('Режим привязки')
                     ->state(fn (TenantContract $record): string => static::spaceMappingModeLabel($record->space_mapping_mode))
+                    ->tooltip('Авто: 1С может обновлять привязку. Ручная: привязка зафиксирована вручную. Не участвует: договор исключён из привязки.')
+                    ->headerTooltip('Авто: 1С может обновлять привязку. Ручная: привязка зафиксирована вручную. Не участвует: договор исключён из привязки.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::spaceMappingModeColor($record->space_mapping_mode))
                     ->toggleable()
@@ -476,6 +504,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('starts_at')
                     ->label('Техническая дата 1С')
                     ->date('d.m.Y')
+                    ->tooltip('Техническая дата начала договора из 1С.')
+                    ->headerTooltip('Техническая дата начала договора из 1С.')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => $isSuperAdmin)
@@ -484,6 +514,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('ends_at')
                     ->label('Окончание')
                     ->date('d.m.Y')
+                    ->tooltip('Дата окончания договора.')
+                    ->headerTooltip('Дата окончания договора.')
                     ->sortable()
                     ->placeholder('—')
                     ->toggleable(),
@@ -491,6 +523,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('status')
                     ->label('Статус договора')
                     ->formatStateUsing(fn (?string $state): string => static::contractStatusLabel($state))
+                    ->tooltip('Статус договора в 1С.')
+                    ->headerTooltip('Статус договора в 1С.')
                     ->badge()
                     ->color(fn (?string $state): string => static::contractStatusColor($state))
                     ->sortable()
@@ -499,6 +533,8 @@ class TenantContractResource extends BaseResource
 
                 IconColumn::make('is_active')
                     ->label('Активен')
+                    ->tooltip(fn (bool $state): string => $state ? 'Договор активен.' : 'Договор неактивен.')
+                    ->headerTooltip('Признак активности договора.')
                     ->boolean(),
             ])
             ->filters([
@@ -657,9 +693,10 @@ class TenantContractResource extends BaseResource
             ])
             ->actions([
                 tap(\Filament\Actions\EditAction::make()
-                    ->label('Быстрое редактирование')
                     ->tooltip('Быстрое редактирование')
                     ->icon('heroicon-o-pencil-square')
+                    ->hiddenLabel()
+                    ->iconButton()
                     ->color('gray'), function ($action): void {
                         if (method_exists($action, 'slideOver')) {
                             $action->slideOver();
@@ -670,9 +707,10 @@ class TenantContractResource extends BaseResource
                         }
                     }),
                 \Filament\Actions\Action::make('open_card')
-                    ->label('Карточка')
                     ->tooltip('Открыть карточку')
                     ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->hiddenLabel()
+                    ->iconButton()
                     ->color('primary')
                     ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
             ])

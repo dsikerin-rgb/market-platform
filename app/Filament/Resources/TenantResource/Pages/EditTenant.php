@@ -27,9 +27,11 @@ class EditTenant extends BaseEditRecord
         return $name !== '' ? $name : 'Арендатор';
     }
 
-    public function getBreadcrumb(): string
+    public function getBreadcrumbs(): array
     {
-        return 'Арендатор';
+        return [
+            TenantResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+        ];
     }
 
     /**
@@ -64,6 +66,12 @@ class EditTenant extends BaseEditRecord
             ->label('Написать арендатору')
             ->icon('heroicon-o-paper-airplane')
             ->color('primary')
+            ->size('lg')
+            ->outlined()
+            ->extraAttributes([
+                'class' => 'tenant-card-action tenant-card-action--secondary',
+                'data-subtitle' => 'Сообщение арендатору',
+            ])
             ->modalHeading('Чат с арендатором')
             ->modalSubmitActionLabel('Отправить')
             ->form([
@@ -87,6 +95,12 @@ class EditTenant extends BaseEditRecord
                 ->label('Войти в кабинет')
                 ->icon('heroicon-o-arrow-right-on-rectangle')
                 ->color('gray')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'tenant-card-action tenant-card-action--primary',
+                    'data-subtitle' => 'Откроется кабинет арендатора',
+                ])
                 ->requiresConfirmation()
                 ->modalHeading('Открыть кабинет арендатора в новой вкладке?')
                 ->modalDescription('Кабинет арендатора откроется в новой вкладке. Текущая страница админки останется открытой.')
@@ -95,7 +109,22 @@ class EditTenant extends BaseEditRecord
                 ->openUrlInNewTab(),
             $chatAction,
             Actions\DeleteAction::make()
-                ->label('Удалить арендатора'),
+                ->label('Удалить')
+                ->icon('heroicon-o-trash')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'tenant-card-action tenant-card-action--danger',
+                    'data-subtitle' => 'Арендатора без возврата',
+                ]),
+        ];
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-tenants-edit-page',
         ];
     }
 

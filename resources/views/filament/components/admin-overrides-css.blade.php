@@ -1429,6 +1429,310 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-acti
   border-color: rgba(15, 23, 42, 0.12);
 }
 
+/* ====================================================================== */
+/* === Tenant edit page: card-based layout aligned with project pages   === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page{
+  --tenant-edit-surface: #ffffff;
+  --tenant-edit-surface-muted: #f8fafc;
+  --tenant-edit-border: #dbe4f0;
+  --tenant-edit-border-strong: #c5d4e8;
+  --tenant-edit-heading: #0f172a;
+  --tenant-edit-text: #334155;
+  --tenant-edit-label: #64748b;
+  --tenant-edit-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-page{
+  row-gap: .85rem !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.2rem;
+  flex-wrap: wrap;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
+    linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
+  border: 1px solid var(--tenant-edit-border-strong);
+  border-radius: 1.25rem;
+  padding: 1rem 1.15rem 1.05rem 1.15rem;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
+  flex: 1 1 52rem;
+  width: auto;
+  min-width: min(100%, 52rem);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .6rem;
+  width: 100%;
+  align-items: stretch;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
+  color: var(--tenant-edit-heading);
+  letter-spacing: -0.01em;
+  font-size: clamp(1.35rem, 1.15rem + 1vw, 2rem);
+  line-height: 1.02;
+  max-width: 13ch;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-subheading{
+  color: var(--tenant-edit-text);
+  font-size: .92rem;
+  line-height: 1.45;
+  max-width: 36rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
+  margin-top: .1rem;
+  margin-bottom: .85rem;
+  justify-self: start;
+  width: max-content;
+  max-width: 100%;
+  padding: .3rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs .fi-tabs{
+  margin-inline: 0;
+  width: max-content;
+  max-width: 100%;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs [role="tab"]{
+  border-radius: .85rem;
+  padding: .5rem .9rem;
+  color: #475569;
+  font-weight: 600;
+  transition: background-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs [role="tab"]:hover{
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs [role="tab"][aria-selected="true"]{
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs + .fi-section{
+  margin-top: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-form > .grid{
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-form > .grid > *{
+  grid-column: 1 / -1 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section{
+  background: var(--tenant-edit-surface);
+  border: 1px solid var(--tenant-edit-border);
+  border-radius: 1rem;
+  box-shadow: var(--tenant-edit-shadow);
+  overflow: hidden;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border-bottom: 1px solid #e4ebf7;
+  padding: 1rem 1.1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-header-heading{
+  color: var(--tenant-edit-heading);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-header-description{
+  color: var(--tenant-edit-text);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section-content{
+  background: var(--tenant-edit-surface-muted);
+  padding: 1.1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-fo-field-wrp-label{
+  color: var(--tenant-edit-label);
+  font-weight: 600;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-fo-field-wrp-helper-text{
+  color: #64748b;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-in-entry{
+  gap: .35rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-in-entry-label{
+  color: var(--tenant-edit-label);
+  font-weight: 600;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-in-entry-content{
+  color: var(--tenant-edit-heading);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-input-wrp{
+  border-color: #cfd9e8;
+  background: #ffffff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-input-wrp:focus-within{
+  border-color: #5f8fdc;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-actions.fi-sticky{
+  margin-top: .5rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-actions.fi-sticky .fi-ac{
+  border-radius: .95rem;
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn{
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "icon title"
+    "icon subtitle";
+  align-items: start;
+  justify-items: start;
+  gap: .08rem .7rem;
+  width: 100%;
+  min-height: 4.35rem;
+  padding: .68rem .8rem .72rem .7rem !important;
+  border-radius: .92rem;
+  border: 1px solid #d8e3f1 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  color: #1f3251 !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  text-align: left;
+  white-space: normal;
+  overflow: hidden;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease, background-color .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn:hover,
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn:focus-visible{
+  border-color: #c6d6e7 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 11px 24px rgba(15, 23, 42, 0.08);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-icon{
+  grid-area: icon;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  align-self: start;
+  justify-self: start;
+  border-radius: .8rem;
+  background: rgba(215, 227, 255, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(170, 190, 231, 0.45);
+  color: #1d4ed8 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-btn-label{
+  grid-area: title;
+  margin-top: .02rem;
+  color: #0f172a;
+  font-size: .9rem;
+  font-weight: 700;
+  line-height: 1.08;
+  white-space: normal;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn::after{
+  content: attr(data-subtitle);
+  grid-area: subtitle;
+  align-self: start;
+  color: #475569;
+  font-size: .74rem;
+  line-height: 1.22;
+  white-space: normal;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--secondary.fi-btn > .fi-icon{
+  background: rgba(215, 227, 255, 0.95);
+  color: #1d4ed8 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--primary.fi-btn > .fi-icon{
+  background: rgba(214, 229, 255, 0.95);
+  color: #1d4ed8 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--danger.fi-btn{
+  border-color: #f0c2c7 !important;
+  background: linear-gradient(180deg, #fffdfd 0%, #fff2f4 100%) !important;
+  color: #b4323d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--danger.fi-btn > .fi-icon{
+  background: rgba(255, 223, 226, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(228, 152, 161, 0.42);
+  color: #b4323d !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action--danger.fi-btn::after{
+  color: #9f1239;
+}
+
+@media (max-width: 1180px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
+    align-items: flex-start;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
+    grid-template-columns: 1fr;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn{
+    min-height: 0;
+  }
+}
+
+@media (max-width: 1024px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
+    padding: .85rem 1rem;
+    border-radius: 1.1rem;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section{
+    border-radius: .85rem;
+  }
+}
+
 @media (max-width: 1024px){
   html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-header,
   html:not([data-admin-overrides="0"]) .fi-ta .fi-ta-content{
