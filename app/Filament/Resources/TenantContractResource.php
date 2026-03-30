@@ -40,7 +40,7 @@ class TenantContractResource extends BaseResource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?int $navigationSort = 35;
+    protected static ?int $navigationSort = 25;
 
     /** @var array<string, array<string, mixed>> */
     private static array $classificationCache = [];
@@ -657,9 +657,9 @@ class TenantContractResource extends BaseResource
             ])
             ->actions([
                 tap(\Filament\Actions\EditAction::make()
-                    ->label('Быстрое редактирование')
                     ->tooltip('Быстрое редактирование')
                     ->icon('heroicon-o-pencil-square')
+                    ->hiddenLabel()
                     ->color('gray'), function ($action): void {
                         if (method_exists($action, 'slideOver')) {
                             $action->slideOver();
@@ -670,9 +670,9 @@ class TenantContractResource extends BaseResource
                         }
                     }),
                 \Filament\Actions\Action::make('open_card')
-                    ->label('Карточка')
                     ->tooltip('Открыть карточку')
                     ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->hiddenLabel()
                     ->color('primary')
                     ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
             ])
