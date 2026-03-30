@@ -1620,6 +1620,53 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-input-wr
   box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
 }
 
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"]{
+  margin-top: .15rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] > .fi-fo-repeater{
+  gap: .85rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-repeater-header{
+  padding: .9rem 1rem;
+  border: 1px solid #d8e3f1;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-repeater-items{
+  gap: .85rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-repeater-item{
+  border: 1px solid #d8e3f1;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-repeater-item-header{
+  padding: .8rem .95rem;
+  background: linear-gradient(180deg, #fdfefe 0%, #f3f8ff 100%);
+  border-bottom: 1px solid #e4ebf7;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-repeater-item-content{
+  padding: .95rem;
+  background: #f8fbff;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-field-wrp{
+  border-radius: .95rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page [data-contact-staff-editor="1"] .fi-fo-field-wrp-helper-text{
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-actions.fi-sticky{
   margin-top: .5rem;
 }

@@ -285,15 +285,16 @@ class TenantResource extends BaseResource
                             ->columns(2),
 
                         Section::make('Сотрудники по торговым местам')
+                            ->description('Здесь настраиваются сотрудники арендатора и их доступ к конкретным торговым местам. Если места не выбраны, сотрудник видит все точки арендатора.')
                             ->schema([
                                 Forms\Components\Placeholder::make('contacts_staff_by_spaces')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record): HtmlString => static::renderContactsStaffBySpaces($record))
                                     ->columnSpanFull(),
+                                static::cabinetAdditionalUsersRepeater(),
                             ])
-                            ->collapsible()
-                            ->collapsed(),
+                            ->columns(1),
                     ]),
 
                 Tab::make('Реквизиты')
@@ -590,104 +591,116 @@ class TenantResource extends BaseResource
                     ->minLength(8)
                     ->maxLength(255)
                     ->helperText('Для существующего аккаунта оставьте пустым, если пароль менять не нужно.'),
-
-                Forms\Components\Repeater::make('cabinet_additional_users')
-                    ->label('Доп. пользователи кабинета')
-                    ->columnSpanFull()
-                    ->defaultItems(0)
-                    ->addActionLabel('Добавить сотрудника')
-                    ->reorderable(false)
-                    ->collapsible()
-                    ->collapsed()
-                    ->itemLabel(function (array $state): ?string {
-                        $name = trim((string) ($state['name'] ?? ''));
-                        $email = trim((string) ($state['email'] ?? ''));
-
-                        if ($name !== '' && $email !== '') {
-                            return $name . ' (' . $email . ')';
-                        }
-
-                        if ($email !== '') {
-                            return $email;
-                        }
-
-                        if ($name !== '') {
-                            return $name;
-                        }
-
-                        return 'Новый сотрудник';
-                    })
-                    ->schema([
-                        Forms\Components\Hidden::make('id')
-                            ->dehydrated(true),
-
-                        Forms\Components\TextInput::make('name')
-                            ->label('Имя сотрудника')
-                            ->maxLength(255)
-                            ->placeholder('Например: Менеджер точки'),
-
-                        Forms\Components\TextInput::make('email')
-                            ->label('Логин (email)')
-                            ->email()
-                            ->autocomplete(false)
-                            ->maxLength(255)
-                            ->placeholder('employee@example.com'),
-
-                        Forms\Components\Select::make('space_ids')
-                            ->label('Торговые места')
-                            ->multiple()
-                            ->searchable()
-                            ->preload()
-                            ->options(function (?Tenant $record): array {
-                                if (! $record) {
-                                    return [];
-                                }
-
-                                return \App\Models\MarketSpace::query()
-                                    ->where('tenant_id', (int) $record->id)
-                                    ->when((int) ($record->market_id ?? 0) > 0, fn ($query) => $query->where('market_id', (int) $record->market_id))
-                                    ->orderByRaw('COALESCE(code, number, display_name) asc')
-                                    ->get(['id', 'code', 'number', 'display_name'])
-                                    ->mapWithKeys(static function ($space): array {
-                                        $label = trim((string) ($space->code ?: $space->number ?: $space->display_name ?: ('#' . $space->id)));
-                                        $name = trim((string) ($space->display_name ?? ''));
-
-                                        return [(int) $space->id => $name !== '' ? ($label . ' · ' . $name) : $label];
-                                    })
-                                    ->all();
-                            })
-                            ->helperText('Если не выбрано ни одного места, сотрудник видит все места арендатора.'),
-
-                        Forms\Components\TextInput::make('password')
-                            ->label('Новый пароль')
-                            ->password()
-                            ->revealable()
-                            ->maxLength(255)
-                            ->minLength(8)
-                            ->suffixAction(
-                                Action::make('generateAdditionalCabinetUserPassword')
-                                    ->label('')
-                                    ->tooltip('Сгенерировать пароль')
-                                    ->icon('heroicon-m-sparkles')
-                                    ->color('gray')
-                                    ->iconButton()
-                                    ->action(function (\Filament\Schemas\Components\Utilities\Set $set): void {
-                                        $set(
-                                            'password',
-                                            \Illuminate\Support\Str::password(length: 12, letters: true, numbers: true, symbols: false, spaces: false),
-                                        );
-                                    }),
-                                isInline: true,
-                            )
-                            ->helperText('Можно ввести пароль вручную или сгенерировать кнопкой.')
-                            ->dehydrated(true),
-                    ])
-                    ->columns(3)
-                    ->helperText('Сотрудники арендатора смогут входить в кабинет по своим логинам и паролям.'),
+                Forms\Components\Placeholder::make('cabinet_staff_redirect')
+                    ->hiddenLabel()
+                    ->dehydrated(false)
+                    ->content(new HtmlString('<div style="font-size:13px;line-height:1.5;color:#475569;">Управление сотрудниками и привязкой к торговым местам перенесено на вкладку <strong>«Контакты»</strong>, чтобы все рабочие контакты были в одном месте.</div>'))
+                    ->columnSpanFull(),
             ])
             ->collapsible()
             ->collapsed()
             ->columns(2);
+    }
+
+    private static function cabinetAdditionalUsersRepeater(): Forms\Components\Repeater
+    {
+        return Forms\Components\Repeater::make('cabinet_additional_users')
+            ->label('Сотрудники и доступ к местам')
+            ->columnSpanFull()
+            ->defaultItems(0)
+            ->addActionLabel('Добавить сотрудника')
+            ->reorderable(false)
+            ->collapsible()
+            ->collapsed()
+            ->extraAttributes(['data-contact-staff-editor' => '1'])
+            ->itemLabel(function (array $state): ?string {
+                $name = trim((string) ($state['name'] ?? ''));
+                $email = trim((string) ($state['email'] ?? ''));
+
+                if ($name !== '' && $email !== '') {
+                    return $name . ' (' . $email . ')';
+                }
+
+                if ($email !== '') {
+                    return $email;
+                }
+
+                if ($name !== '') {
+                    return $name;
+                }
+
+                return 'Новый сотрудник';
+            })
+            ->schema([
+                Forms\Components\Hidden::make('id')
+                    ->dehydrated(true),
+
+                Forms\Components\TextInput::make('name')
+                    ->label('Имя сотрудника')
+                    ->maxLength(255)
+                    ->placeholder('Например: менеджер точки'),
+
+                Forms\Components\TextInput::make('email')
+                    ->label('Логин (email)')
+                    ->email()
+                    ->autocomplete(false)
+                    ->maxLength(255)
+                    ->placeholder('employee@example.com'),
+
+                Forms\Components\Select::make('space_ids')
+                    ->label('Торговые места')
+                    ->multiple()
+                    ->searchable()
+                    ->preload()
+                    ->options(fn (?Tenant $record): array => static::tenantSpaceOptions($record))
+                    ->helperText('Если не выбрано ни одного места, сотрудник видит все места арендатора.'),
+
+                Forms\Components\TextInput::make('password')
+                    ->label('Новый пароль')
+                    ->password()
+                    ->revealable()
+                    ->maxLength(255)
+                    ->minLength(8)
+                    ->suffixAction(
+                        Action::make('generateAdditionalCabinetUserPassword')
+                            ->label('')
+                            ->tooltip('Сгенерировать пароль')
+                            ->icon('heroicon-m-sparkles')
+                            ->color('gray')
+                            ->iconButton()
+                            ->action(function (\Filament\Schemas\Components\Utilities\Set $set): void {
+                                $set(
+                                    'password',
+                                    \Illuminate\Support\Str::password(length: 12, letters: true, numbers: true, symbols: false, spaces: false),
+                                );
+                            }),
+                        isInline: true,
+                    )
+                    ->helperText('Можно ввести пароль вручную или сгенерировать кнопкой.')
+                    ->dehydrated(true),
+            ])
+            ->columns(3)
+            ->helperText('Каждый сотрудник получает отдельный вход в кабинет и видит только свои точки или все места арендатора.');
+    }
+
+    private static function tenantSpaceOptions(?Tenant $record): array
+    {
+        if (! $record) {
+            return [];
+        }
+
+        return \App\Models\MarketSpace::query()
+            ->where('tenant_id', (int) $record->id)
+            ->when((int) ($record->market_id ?? 0) > 0, fn ($query) => $query->where('market_id', (int) $record->market_id))
+            ->orderByRaw('COALESCE(code, number, display_name) asc')
+            ->get(['id', 'code', 'number', 'display_name'])
+            ->mapWithKeys(static function ($space): array {
+                $label = trim((string) ($space->code ?: $space->number ?: $space->display_name ?: ('#' . $space->id)));
+                $name = trim((string) ($space->display_name ?? ''));
+
+                return [(int) $space->id => $name !== '' ? ($label . ' · ' . $name) : $label];
+            })
+            ->all();
     }
 
     /**
@@ -1841,7 +1854,7 @@ class TenantResource extends BaseResource
             return new HtmlString('<div style="font-size:13px;opacity:.85;">У арендатора нет торговых мест.</div>');
         }
 
-        $cabinetTabUrl = url('/admin/tenants/' . (int) $record->id . '/edit?tab=kabinet::data::tab');
+        $contactsTabUrl = url('/admin/tenants/' . (int) $record->id . '/edit?tab=kontakty::data::tab');
 
         $usersQuery = DB::table('users')
             ->where('tenant_id', (int) $record->id)
@@ -1858,7 +1871,7 @@ class TenantResource extends BaseResource
         if ($users->isEmpty()) {
             return new HtmlString(
                 '<div style="font-size:13px;opacity:.85;">Сотрудников арендатора пока нет. '
-                . '<a href="' . e($cabinetTabUrl) . '" style="text-decoration:underline;text-underline-offset:2px;">Добавить на вкладке «Кабинет»</a>.'
+                . '<a href="' . e($contactsTabUrl) . '" style="text-decoration:underline;text-underline-offset:2px;">Добавьте первого сотрудника ниже на этой вкладке</a>.'
                 . '</div>'
             );
         }
