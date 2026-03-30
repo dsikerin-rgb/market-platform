@@ -1482,6 +1482,9 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   font-size: clamp(1.7rem, 1.28rem + 1vw, 2.2rem);
   line-height: 1.04;
   max-width: 28rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   overflow-wrap: normal;
   word-break: normal;
 }
