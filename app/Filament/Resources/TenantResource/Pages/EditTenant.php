@@ -7,6 +7,8 @@ use App\Filament\Resources\TenantResource\Pages\Concerns\InteractsWithTenantCabi
 use App\Models\TenantRequest;
 use App\Models\Ticket;
 use App\Models\TicketComment;
+use App\Models\User;
+use App\Support\AdminPanelImpersonation;
 use Filament\Actions;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use Illuminate\Contracts\Support\Htmlable;
@@ -99,7 +101,7 @@ class EditTenant extends BaseEditRecord
 
     protected function canImpersonateCabinet(): bool
     {
-        $user = \Filament\Facades\Filament::auth()->user();
+        $user = AdminPanelImpersonation::resolveAdminUser(\Filament\Facades\Filament::auth()->user());
 
         if (! $user instanceof User) {
             return false;
