@@ -1512,7 +1512,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
   margin-top: .1rem;
   margin-bottom: .85rem;
   justify-self: start;
-  width: max-content;
+  width: 100%;
   max-width: 100%;
   padding: .3rem;
   border-radius: 1rem;
@@ -1522,13 +1522,19 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs .fi-tabs{
   margin-inline: 0;
-  width: max-content;
+  width: 100%;
   max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: .35rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs [role="tab"]{
   border-radius: .85rem;
   padding: .5rem .9rem;
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
   color: #475569;
   font-weight: 600;
   transition: background-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
@@ -1823,12 +1829,20 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .tenant-hero
 }
 
 @media (max-width: 1180px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs .fi-tabs{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 780px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs .fi-tabs{
+    grid-template-columns: 1fr;
+  }
+
   html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
     flex-wrap: wrap;
   }
