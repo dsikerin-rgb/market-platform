@@ -487,6 +487,58 @@ class OneCContractImportTest extends TestCase
         $this->assertSame((int) $tenant->id, (int) $contract->tenant_id);
     }
 
+    public function test_contract_import_warns_about_suspicious_current_duplicates(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'П/75',
+            'code' => 'p-75',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-dup-001',
+                    'tenant_external_id' => 'tenant-dup-001',
+                    'market_space_code' => 'П/75',
+                    'contract_number' => 'П/75 от 01.04.2025',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                    'tenant_name' => 'ООО Дубль',
+                ],
+                [
+                    'contract_external_id' => 'contract-dup-002',
+                    'tenant_external_id' => 'tenant-dup-001',
+                    'market_space_code' => 'П/75',
+                    'contract_number' => 'П/75 к от 01.04.2025',
+                    'status' => 'active',
+                    'starts_at' => now()->toDateString(),
+                    'is_active' => true,
+                    'tenant_name' => 'ООО Дубль',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contract_groups', 1);
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contract_rows', 2);
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.count', 1);
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.rows', 2);
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.market_space_id', $space->id);
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.place_token', 'П/75');
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.document_date', '2025-04-01');
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.contract_ids', [1, 2]);
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.external_ids', [
+            'contract-dup-001',
+            'contract-dup-002',
+        ]);
+    }
+
     public function test_key_normalization_uppercase_trim(): void
     {
         // Создаём место с кодом "П3/2"
