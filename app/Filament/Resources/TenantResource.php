@@ -233,11 +233,15 @@ class TenantResource extends BaseResource
                         Section::make('Договоры')
                             ->description('Реестр договоров арендатора с привязкой к торговым местам.')
                             ->schema([
-                                Forms\Components\Placeholder::make('contracts_by_spaces')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderContractsBySpaces($record))
-                                    ->columnSpanFull(),
+                                Livewire::make(
+                                    ContractsRelationManager::class,
+                                    fn (?Tenant $record): array => [
+                                        'ownerRecord' => $record,
+                                        'pageClass' => Pages\EditTenant::class,
+                                    ],
+                                )
+                                    ->visible(fn (?Tenant $record): bool => $record !== null)
+                                    ->key('tenant-contracts'),
                             ]),
                     ]),
 
