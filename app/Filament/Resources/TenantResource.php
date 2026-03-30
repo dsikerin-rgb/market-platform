@@ -284,17 +284,24 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(2),
 
+                        static::cabinetAccessSection(),
+
                         Section::make('Сотрудники по торговым местам')
-                            ->description('Здесь настраиваются сотрудники арендатора и их доступ к конкретным торговым местам. Если места не выбраны, сотрудник видит все точки арендатора.')
+                            ->description('Здесь видно, какие дополнительные сотрудники уже назначены на конкретные торговые места. Основной аккаунт арендатора в этом обзоре не показывается.')
                             ->schema([
                                 Forms\Components\Placeholder::make('contacts_staff_by_spaces')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record): HtmlString => static::renderContactsStaffBySpaces($record))
                                     ->columnSpanFull(),
-                                static::cabinetAdditionalUsersRepeater(),
                             ])
                             ->columns(1),
+
+                        Section::make('Сотрудники')
+                            ->description('Добавляйте сотрудников, редактируйте логины и ограничивайте доступ конкретными торговыми местами.')
+                            ->schema([
+                                static::cabinetAdditionalUsersRepeater(),
+                            ]),
                     ]),
 
                 Tab::make('Реквизиты')
@@ -340,7 +347,15 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(2),
 
-                        static::cabinetAccessSection(),
+                        Section::make('Доступ в кабинет')
+                            ->description('Основной доступ арендатора и сотрудники теперь на вкладке «Контакты», чтобы вся рабочая коммуникация была в одном месте.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('cabinet_contacts_redirect')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(new HtmlString('<div style="font-size:13px;line-height:1.5;color:#475569;">Перейдите на вкладку <strong>«Контакты»</strong>, чтобы управлять основным доступом арендатора и сотрудниками по торговым местам.</div>'))
+                                    ->columnSpanFull(),
+                            ]),
                     ]),
 
                 Tab::make('Обращения')
@@ -570,7 +585,7 @@ class TenantResource extends BaseResource
 
     private static function cabinetAccessSection(): Section
     {
-        return Section::make('Доступ в кабинет арендатора')
+        return Section::make('Основной доступ арендатора')
             ->schema([
                 Forms\Components\TextInput::make('cabinet_user_name')
                     ->label('Имя пользователя кабинета')
@@ -591,21 +606,14 @@ class TenantResource extends BaseResource
                     ->minLength(8)
                     ->maxLength(255)
                     ->helperText('Для существующего аккаунта оставьте пустым, если пароль менять не нужно.'),
-                Forms\Components\Placeholder::make('cabinet_staff_redirect')
-                    ->hiddenLabel()
-                    ->dehydrated(false)
-                    ->content(new HtmlString('<div style="font-size:13px;line-height:1.5;color:#475569;">Управление сотрудниками и привязкой к торговым местам перенесено на вкладку <strong>«Контакты»</strong>, чтобы все рабочие контакты были в одном месте.</div>'))
-                    ->columnSpanFull(),
             ])
-            ->collapsible()
-            ->collapsed()
             ->columns(2);
     }
 
     private static function cabinetAdditionalUsersRepeater(): Forms\Components\Repeater
     {
         return Forms\Components\Repeater::make('cabinet_additional_users')
-            ->label('Сотрудники и доступ к местам')
+            ->label('Сотрудники арендатора')
             ->columnSpanFull()
             ->defaultItems(0)
             ->addActionLabel('Добавить сотрудника')
@@ -678,7 +686,7 @@ class TenantResource extends BaseResource
                     ->dehydrated(true),
             ])
             ->columns(3)
-            ->helperText('Каждый сотрудник получает отдельный вход в кабинет и видит только свои точки или все места арендатора.');
+            ->helperText('У каждого сотрудника свой вход в кабинет. Если торговые места не выбраны, сотрудник видит все места арендатора.');
     }
 
     private static function tenantSpaceOptions(?Tenant $record): array
@@ -1876,9 +1884,7 @@ class TenantResource extends BaseResource
         $users = $usersQuery->orderBy('name')->orderBy('id')->get();
         if ($users->isEmpty()) {
             return new HtmlString(
-                '<div style="font-size:13px;opacity:.85;">Сотрудников арендатора пока нет. '
-                . '<a href="' . e($contactsTabUrl) . '" style="text-decoration:underline;text-underline-offset:2px;">Добавьте первого сотрудника ниже на этой вкладке</a>.'
-                . '</div>'
+                '<div style="font-size:13px;line-height:1.5;color:#64748b;">Дополнительные сотрудники еще не добавлены. Ниже можно создать первого сотрудника и сразу назначить ему торговые места.</div>'
             );
         }
 
@@ -1964,9 +1970,7 @@ class TenantResource extends BaseResource
             } else {
                 foreach ($members as $member) {
                     $membersHtml .= '<div class="tenant-contact-staff__member">'
-                        . '<a href="' . e($contactsTabUrl) . '#cabinet-user-' . (int) ($member['id'] ?? 0) . '" class="tenant-contact-staff__member-link">'
-                        . e((string) $member['label'])
-                        . '</a>'
+                        . '<span class="tenant-contact-staff__member-name">' . e((string) $member['label']) . '</span>'
                         . (! empty($member['all_spaces']) ? ' <span class="tenant-contact-staff__note">(все места)</span>' : '')
                         . '</div>';
                 }
@@ -2029,10 +2033,9 @@ class TenantResource extends BaseResource
         </div>
     </div>
     <div class="tenant-contact-staff__head">
-        <div class="tenant-contact-staff__hint">Сверху показано, какие сотрудники уже назначены на торговые места. Ниже можно сразу добавить нового сотрудника, поменять логин, пароль и ограничить доступ конкретными точками.</div>
-        <a href="' . e($contactsTabUrl) . '" class="tenant-contact-staff__action">Управлять сотрудниками</a>
+        <div class="tenant-contact-staff__hint">Каждая карточка показывает торговое место и дополнительных сотрудников, которым открыт доступ именно к нему. Метка “все места” означает глобальный доступ по всем точкам арендатора.</div>
     </div>
-    <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Нет данных.</div>') . '</div>
+    <div class="tenant-contact-staff__grid">' . ($cards !== '' ? $cards : '<div class="tenant-contact-staff__empty">Дополнительные сотрудники пока не назначены.</div>') . '</div>
 </div>';
 
         return new HtmlString($html);
