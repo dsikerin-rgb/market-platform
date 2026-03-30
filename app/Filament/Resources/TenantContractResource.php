@@ -40,7 +40,7 @@ class TenantContractResource extends BaseResource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?int $navigationSort = 25;
+    protected static ?int $navigationSort = 35;
 
     /** @var array<string, array<string, mixed>> */
     private static array $classificationCache = [];
