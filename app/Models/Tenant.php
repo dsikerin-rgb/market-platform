@@ -180,6 +180,11 @@ class Tenant extends Model
         return $this->hasMany(TenantContract::class);
     }
 
+    public function accruals(): HasMany
+    {
+        return $this->hasMany(TenantAccrual::class);
+    }
+
     public function requests(): HasMany
     {
         return $this->hasMany(TenantRequest::class);
