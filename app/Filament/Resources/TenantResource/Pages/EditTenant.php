@@ -28,9 +28,11 @@ class EditTenant extends BaseEditRecord
         return $name !== '' ? $name : 'Арендатор';
     }
 
-    public function getBreadcrumb(): string
+    public function getBreadcrumbs(): array
     {
-        return 'Арендатор';
+        return [
+            TenantResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+        ];
     }
 
     /**
@@ -144,12 +146,13 @@ class EditTenant extends BaseEditRecord
                 }),
             $chatAction,
             Actions\DeleteAction::make()
-                ->label('Удалить арендатора')
+                ->label('Удалить')
+                ->icon('heroicon-o-trash')
                 ->size('lg')
                 ->outlined()
                 ->extraAttributes([
                     'class' => 'tenant-card-action tenant-card-action--danger',
-                    'data-subtitle' => 'Удалит арендатора без возврата',
+                    'data-subtitle' => 'Арендатора без возврата',
                 ]),
         ];
     }
