@@ -145,8 +145,23 @@ class ContractDocumentClassifier
         $token = trim($token);
         $token = preg_replace('/\s*([\/-])\s*/u', '$1', $token) ?? $token;
         $token = preg_replace('/\s+/u', ' ', $token) ?? $token;
+        $token = $this->normalizeSafeEquivalentPlaceToken($token);
 
         return trim($token);
+    }
+
+    private function normalizeSafeEquivalentPlaceToken(string $token): string
+    {
+        return match ($token) {
+            'П32/1', 'П/32-1', 'П/32/1' => 'П/32/1',
+            'СТ-5-6', 'СТ 5-6' => 'СТ-5-6',
+            'П/60У', 'П/60/У' => 'П/60У',
+            'П/73', 'П-73' => 'П/73',
+            'СКЛАД 12', 'СКЛАД12' => 'СКЛАД 12',
+            'СКЛАД 13', 'СК-13' => 'СКЛАД 13',
+            'СКЛАД 11-12', 'СК-11-12' => 'СКЛАД 11-12',
+            default => $token,
+        };
     }
 
     private function looksLikePlaceToken(string $token): bool
