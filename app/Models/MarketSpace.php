@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -100,6 +101,14 @@ class MarketSpace extends Model
                 $space->rent_rate_updated_at = $now;
             }
         });
+
+        static::saved(function (self $space): void {
+            if (! Schema::hasTable('market_space_tenant_bindings')) {
+                return;
+            }
+
+            app(MarketSpaceTenantBindingRecorder::class)->syncFromSpaceSnapshot($space);
+        });
     }
 
     private function ensureCode(): void
@@ -184,6 +193,11 @@ class MarketSpace extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function tenantBindings(): HasMany
+    {
+        return $this->hasMany(MarketSpaceTenantBinding::class);
     }
 
     public function reviews(): HasMany
