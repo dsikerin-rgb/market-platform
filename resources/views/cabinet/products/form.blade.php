@@ -28,6 +28,27 @@
         $photoCount = $existingImages->count();
         $backParams = $currentSpaceId > 0 ? ['space_id' => $currentSpaceId] : [];
 
+        $marketRouteKey = data_get($tenant, 'market.slug');
+        if (! filled($marketRouteKey) && (int) ($tenant->market_id ?? 0) > 0) {
+            $marketRouteKey = \App\Models\Market::query()
+                ->whereKey((int) $tenant->market_id)
+                ->value('slug') ?: (string) $tenant->market_id;
+        }
+
+        $tenantRouteKey = filled($tenant->slug ?? null) ? (string) $tenant->slug : (string) ($tenant->id ?? '');
+        $productRouteKey = filled($product->slug ?? null) ? (string) $product->slug : '';
+
+        $storeShareUrl = $isEdit && filled($marketRouteKey) && $tenantRouteKey !== ''
+            ? route('marketplace.store.show', ['marketSlug' => $marketRouteKey, 'tenantSlug' => $tenantRouteKey])
+            : null;
+        $productShareUrl = $isEdit && filled($marketRouteKey) && $productRouteKey !== ''
+            ? route('marketplace.product.show', ['marketSlug' => $marketRouteKey, 'productSlug' => $productRouteKey])
+            : null;
+
+        $qrGenerator = app(\App\Support\QrCodeDataUriGenerator::class);
+        $storeShareQr = $storeShareUrl ? $qrGenerator->generateSvgDataUri($storeShareUrl, 8) : null;
+        $productShareQr = $productShareUrl ? $qrGenerator->generateSvgDataUri($productShareUrl, 8) : null;
+
         $fieldClass = 'mt-1.5 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100';
         $selectClass = $fieldClass . ' pr-10';
         $textareaClass = $fieldClass . ' min-h-[11rem] resize-y';
@@ -56,8 +77,7 @@
                         {{ $isEdit ? 'Карточка товара' : 'Добавление товара' }}
                     </h2>
                     <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
-                        Заполните основные параметры товара, обновите фотографии и настройте показ в витрине.
-                        Витрина и карточка товара управляются отдельно, поэтому здесь собраны только рабочие поля.
+                        Основные поля товара, фото и настройки показа.
                     </p>
 
                     <div class="mt-4 flex flex-wrap gap-2 pb-4 sm:pb-5">
@@ -79,25 +99,39 @@
                             </span>
                         @endif
                     </div>
+
+                    @if($productShareUrl || $storeShareUrl)
+                        <div class="flex flex-wrap gap-2 pb-2">
+                            @if($productShareUrl)
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white/90 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
+                                    data-share-open="product"
+                                >
+                                    Поделиться ссылкой на товар
+                                </button>
+                            @endif
+                            @if($storeShareUrl)
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                                    data-share-open="store"
+                                >
+                                    Поделиться витриной
+                                </button>
+                            @endif
+                        </div>
+                    @endif
                 </div>
 
-                <div class="mt-2 grid gap-3 md:grid-cols-2 lg:max-w-4xl">
-                    <div class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Статус товара</div>
-                        <div class="mt-2 text-lg font-semibold text-slate-900">
+                <div class="mt-2 max-w-sm">
+                    <div class="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm backdrop-blur">
+                        <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Статус</div>
+                        <div class="mt-1.5 text-base font-semibold text-slate-900">
                             {{ $currentIsActive ? 'Активен' : 'Скрыт' }}
                         </div>
-                        <div class="mt-1 text-sm text-slate-600">
-                            {{ $currentIsActive ? 'Товар виден покупателям' : 'Товар сохранен только в кабинете' }}
-                        </div>
-                    </div>
-                    <div class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
-                        <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Фото в карточке</div>
-                        <div class="mt-2 text-lg font-semibold text-slate-900">
-                            {{ $photoCount > 0 ? $photoCount . ' шт.' : 'Нет фото' }}
-                        </div>
-                        <div class="mt-1 text-sm text-slate-600">
-                            Первое изображение показывается как основное
+                        <div class="mt-0.5 text-xs text-slate-600">
+                            {{ $currentIsActive ? 'Виден покупателям' : 'Виден только в кабинете' }}
                         </div>
                     </div>
                 </div>
@@ -110,12 +144,12 @@
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                             <h3 class="text-base font-semibold text-slate-900">Карточка товара</h3>
-                            <p class="mt-1 text-sm leading-6 text-slate-500">
-                                Название, цена, остаток, артикул и описание. Эти поля формируют основную карточку товара.
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                Название, категория, цена, остаток и описание.
                             </p>
                         </div>
                         <span class="inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                            Обязательное: название
+                            Обязательно: название
                         </span>
                     </div>
 
@@ -278,24 +312,28 @@
                                 @endphp
 
                                 <article
-                                    class="group relative overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm transition"
+                                    class="group overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm transition"
                                     data-existing-photo-card
                                     data-image-path="{{ $imagePath }}"
                                 >
-                                    <div class="absolute left-3 top-3 z-10 inline-flex items-center rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200" data-existing-photo-badge>
-                                        {{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}
+                                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-2.5 py-2">
+                                        <div class="min-w-0" data-existing-photo-badge>
+                                            <span class="inline-flex max-w-full items-center truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200">
+                                                {{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600"
+                                            data-remove-existing-photo
+                                            aria-label="Удалить фото {{ $index + 1 }}"
+                                            title="Удалить фото"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
+                                            </svg>
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        class="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600"
-                                        data-remove-existing-photo
-                                        aria-label="Удалить фото {{ $index + 1 }}"
-                                        title="Удалить фото"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
-                                        </svg>
-                                    </button>
                                     <div class="aspect-[4/3] w-full overflow-hidden bg-slate-100">
                                         <img
                                             src="{{ $imagePreview }}"
@@ -303,12 +341,6 @@
                                             class="block h-full w-full object-cover"
                                             loading="lazy"
                                         >
-                                    </div>
-                                    <div class="border-t border-slate-200 px-3 py-2.5">
-                                        <p class="text-xs font-semibold text-slate-900" data-existing-photo-title>{{ $isCoverImage ? 'Основное фото' : 'Фото ' . ($index + 1) }}</p>
-                                        <p class="mt-1 text-xs leading-5 text-slate-500" data-existing-photo-description>
-                                            {{ $isCoverImage ? 'Используется как главное изображение товара.' : 'Дополнительное фото товара.' }}
-                                        </p>
                                     </div>
                                 </article>
                             @endforeach
@@ -359,14 +391,18 @@
                 </section>
 
                 <section class="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.06)] md:p-6">
-                    <h3 class="text-base font-semibold text-slate-900">Публикация</h3>
-                    <p class="mt-1 text-sm leading-6 text-slate-500">
-                        Управляйте видимостью товара на витрине и попаданием в подборки.
-                    </p>
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-900">Публикация</h3>
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                Видимость товара и участие в подборках.
+                            </p>
+                        </div>
+                    </div>
 
-                    <div class="mt-5 space-y-3">
-                        <label class="flex items-start gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4 transition hover:border-sky-200 hover:bg-sky-50/60">
-                            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white">
+                    <div class="mt-4 grid gap-3">
+                        <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:border-sky-200 hover:bg-sky-50/60">
+                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white">
                                 <input
                                     type="checkbox"
                                     name="is_active"
@@ -377,8 +413,8 @@
                             </span>
                             <span class="min-w-0 flex-1">
                                 <span class="block text-sm font-semibold text-slate-900">Показывать в маркетплейсе</span>
-                                <span class="mt-1 block text-xs leading-5 text-slate-500">
-                                    Если отключить, товар останется в кабинете, но покупатели его не увидят.
+                                <span class="mt-0.5 block text-xs text-slate-500">
+                                    Товар виден покупателям
                                 </span>
                             </span>
                             <span class="inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold {{ $currentIsActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
@@ -386,8 +422,8 @@
                             </span>
                         </label>
 
-                        <label class="flex items-start gap-3 rounded-3xl border border-slate-200 bg-slate-50/80 px-4 py-4 transition hover:border-amber-200 hover:bg-amber-50/60">
-                            <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white">
+                        <label class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 transition hover:border-amber-200 hover:bg-amber-50/60">
+                            <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white">
                                 <input
                                     type="checkbox"
                                     name="is_featured"
@@ -398,8 +434,8 @@
                             </span>
                             <span class="min-w-0 flex-1">
                                 <span class="block text-sm font-semibold text-slate-900">Показывать в подборках</span>
-                                <span class="mt-1 block text-xs leading-5 text-slate-500">
-                                    Товар может попасть в выделенные блоки на главной странице маркетплейса.
+                                <span class="mt-0.5 block text-xs text-slate-500">
+                                    Дополнительное продвижение на витрине
                                 </span>
                             </span>
                             <span class="inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold {{ $currentIsFeatured ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600' }}">
@@ -429,8 +465,70 @@
         </div>
     </form>
 
+    @if($productShareUrl || $storeShareUrl)
+        <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/55 px-4 py-6" data-share-modal-root>
+            <div class="absolute inset-0" data-share-close></div>
+            <div class="relative z-10 w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.24)] md:p-6">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Поделиться</p>
+                        <h3 class="mt-2 text-xl font-semibold text-slate-900" data-share-title></h3>
+                        <p class="mt-2 text-sm leading-6 text-slate-500" data-share-description></p>
+                    </div>
+                    <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700" data-share-close aria-label="Закрыть окно">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.22 4.22a.75.75 0 011.06 0L10 8.94l4.72-4.72a.75.75 0 111.06 1.06L11.06 10l4.72 4.72a.75.75 0 11-1.06 1.06L10 11.06l-4.72 4.72a.75.75 0 11-1.06-1.06L8.94 10 4.22 5.28a.75.75 0 010-1.06z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                    <div class="mx-auto flex h-[18rem] w-[18rem] max-w-full items-center justify-center rounded-[1.5rem] bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                        <img src="" alt="" class="h-full w-full object-contain" data-share-qr>
+                    </div>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Ссылка</p>
+                    <p class="mt-2 break-all text-sm text-slate-700" data-share-url></p>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button type="button" class="inline-flex flex-1 items-center justify-center rounded-2xl border border-sky-600 bg-sky-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-700" data-share-copy>
+                        Скопировать ссылку
+                    </button>
+                    <button type="button" class="inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900" data-share-close>
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script type="application/json" data-share-config>
+            {
+                @if($productShareUrl)
+                "product": {
+                    "title": "QR-код товара",
+                    "description": "Покупатель сможет открыть карточку товара, добавить его в избранное и перейти к продавцу.",
+                    "url": @json($productShareUrl),
+                    "qr": @json($productShareQr)
+                }@if($storeShareUrl),@endif
+                @endif
+                @if($storeShareUrl)
+                "store": {
+                    "title": "QR-код витрины",
+                    "description": "Покупатель сможет открыть витрину продавца, посмотреть товары и сохранить интересующие позиции в избранное.",
+                    "url": @json($storeShareUrl),
+                    "qr": @json($storeShareQr)
+                }
+                @endif
+            }
+        </script>
+    @endif
+
     <script>
         (() => {
+            const form = document.querySelector('form[action="{{ $formAction }}"]');
             const input = document.querySelector('[data-product-image-input]');
             const preview = document.querySelector('[data-product-upload-preview]');
             const grid = document.querySelector('[data-product-upload-grid]');
@@ -439,10 +537,53 @@
             const scrollContainer = document.querySelector('.cabinet-main');
             const existingPhotosGrid = document.querySelector('[data-existing-photos-grid]');
             const existingPhotosEmpty = document.querySelector('[data-existing-photos-empty]');
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
 
             if (!input || !preview || !grid || !count || !caption) {
                 return;
             }
+
+            const readCookie = (name) => {
+                const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
+
+                if (!match) {
+                    return null;
+                }
+
+                try {
+                    return decodeURIComponent(match[1]);
+                } catch (error) {
+                    return match[1];
+                }
+            };
+
+            const syncCsrfToken = () => {
+                const cookieToken = readCookie('XSRF-TOKEN');
+                const token = cookieToken || csrfMeta?.getAttribute('content') || '';
+
+                if (!token) {
+                    return '';
+                }
+
+                if (csrfMeta) {
+                    csrfMeta.setAttribute('content', token);
+                }
+
+                if (form) {
+                    const tokenInput = form.querySelector('input[name="_token"]');
+
+                    if (tokenInput) {
+                        tokenInput.value = token;
+                    }
+                }
+
+                if (existingPhotosGrid) {
+                    existingPhotosGrid.dataset.csrfToken = token;
+                }
+
+                return token;
+            };
 
             const captureScrollState = () => ({
                 windowY: window.scrollY || window.pageYOffset || 0,
@@ -480,6 +621,7 @@
 
                     if (badge) {
                         badge.textContent = isCover ? 'Основное фото' : `Фото ${index + 1}`;
+                        badge.title = badge.textContent;
                     }
 
                     if (title) {
@@ -604,10 +746,15 @@
                                 method: 'POST',
                                 headers: {
                                     'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': csrfToken,
+                                    'X-CSRF-TOKEN': syncCsrfToken() || csrfToken,
                                 },
                                 body: formData,
                             });
+
+                            if (response.status === 419) {
+                                window.location.replace(window.location.pathname + window.location.search);
+                                return;
+                            }
 
                             if (!response.ok) {
                                 throw new Error('Delete failed');
@@ -630,7 +777,101 @@
                 syncExistingPhotoState();
             }
 
+            syncCsrfToken();
+
+            if (form) {
+                form.addEventListener('submit', () => {
+                    syncCsrfToken();
+                });
+            }
+
+            window.addEventListener('pageshow', () => {
+                syncCsrfToken();
+            });
+
             input.addEventListener('change', render);
         })();
     </script>
+
+    @if($productShareUrl || $storeShareUrl)
+        <script>
+            (() => {
+                const configNode = document.querySelector('[data-share-config]');
+                const modalRoot = document.querySelector('[data-share-modal-root]');
+
+                if (!configNode || !modalRoot) {
+                    return;
+                }
+
+                const config = JSON.parse(configNode.textContent || '{}');
+                const titleNode = modalRoot.querySelector('[data-share-title]');
+                const descriptionNode = modalRoot.querySelector('[data-share-description]');
+                const qrNode = modalRoot.querySelector('[data-share-qr]');
+                const urlNode = modalRoot.querySelector('[data-share-url]');
+                const copyButton = modalRoot.querySelector('[data-share-copy]');
+
+                const closeModal = () => {
+                    modalRoot.classList.add('hidden');
+                    modalRoot.classList.remove('flex');
+                    document.body.classList.remove('overflow-hidden');
+                };
+
+                const openModal = (key) => {
+                    const payload = config[key];
+
+                    if (!payload || !titleNode || !descriptionNode || !qrNode || !urlNode) {
+                        return;
+                    }
+
+                    titleNode.textContent = payload.title || '';
+                    descriptionNode.textContent = payload.description || '';
+                    qrNode.src = payload.qr || '';
+                    qrNode.alt = payload.title || '';
+                    urlNode.textContent = payload.url || '';
+
+                    if (copyButton) {
+                        copyButton.dataset.shareUrl = payload.url || '';
+                    }
+
+                    modalRoot.classList.remove('hidden');
+                    modalRoot.classList.add('flex');
+                    document.body.classList.add('overflow-hidden');
+                };
+
+                document.querySelectorAll('[data-share-open]').forEach((button) => {
+                    button.addEventListener('click', () => openModal(button.getAttribute('data-share-open')));
+                });
+
+                modalRoot.querySelectorAll('[data-share-close]').forEach((button) => {
+                    button.addEventListener('click', closeModal);
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeModal();
+                    }
+                });
+
+                if (copyButton) {
+                    copyButton.addEventListener('click', async () => {
+                        const url = copyButton.dataset.shareUrl || '';
+
+                        if (!url) {
+                            return;
+                        }
+
+                        try {
+                            await navigator.clipboard.writeText(url);
+                            copyButton.textContent = 'Ссылка скопирована';
+                            window.setTimeout(() => {
+                                copyButton.textContent = 'Скопировать ссылку';
+                            }, 1400);
+                        } catch (error) {
+                            window.prompt('Скопируйте ссылку вручную:', url);
+                        }
+                    });
+                }
+            })();
+        </script>
+    @endif
 </x-cabinet-layout>
