@@ -11,7 +11,6 @@ use App\Models\MarketSpace;
 use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
@@ -83,10 +82,10 @@ class SpacesRelationManager extends RelationManager
                     ->toggleable(),
 
                 TextColumn::make('last_period_accrual')
-                    ->label('Начислено за последний период')
+                    ->label('Начислено')
                     ->state(fn (MarketSpace $record): string => $this->formatMoney($this->lastPeriodAmountForSpace((int) $record->id)))
-                    ->description(fn (): ?string => $this->lastPeriodAccrualMeta()['period_label'] !== '—'
-                        ? ('Период: ' . $this->lastPeriodAccrualMeta()['period_label'])
+                    ->tooltip(fn (): ?string => $this->lastPeriodAccrualMeta()['period_label'] !== '—'
+                        ? ('Последний период: ' . $this->lastPeriodAccrualMeta()['period_label'])
                         : null)
                     ->alignEnd()
                     ->toggleable(),
@@ -110,9 +109,6 @@ class SpacesRelationManager extends RelationManager
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                IconColumn::make('is_active')
-                    ->label('Активно')
-                    ->boolean(),
             ])
             ->filters([
                 SelectFilter::make('location_id')
@@ -156,12 +152,14 @@ class SpacesRelationManager extends RelationManager
                         blank: fn (Builder $query): Builder => $query,
                     ),
             ])
+            ->striped()
             ->recordUrl(fn ($record): ?string => $record && MarketSpaceResource::canEdit($record)
                 ? MarketSpaceResource::getUrl('edit', ['record' => $record])
                 : null)
             ->recordActions([
                 static::openAction(),
             ])
+            ->paginated([10, 25, 50])
             ->headerActions([])
             ->bulkActions([])
             ->emptyStateHeading('Торговых мест пока нет')
