@@ -2018,10 +2018,13 @@ class TenantResource extends BaseResource
         $globalHtml = '';
         if ($globalUsers !== []) {
             foreach ($globalUsers as $userRow) {
-                $globalHtml .= static::tenantContactStaffMemberRow($userRow, 'Все места');
+                $globalHtml .= static::tenantContactStaffGlobalChip($userRow);
             }
             $globalHtml = '<div class="tenant-contact-staff__global">'
-                . '<div class="tenant-contact-staff__global-title">Сотрудники с доступом ко всем местам</div>'
+                . '<div class="tenant-contact-staff__global-title">'
+                . '<span>Сотрудники с доступом ко всем местам</span>'
+                . '<span class="tenant-contact-staff__global-count">' . e((string) count($globalUsers)) . '</span>'
+                . '</div>'
                 . '<div class="tenant-contact-staff__global-list">' . $globalHtml . '</div>'
                 . '</div>';
         }
@@ -2066,9 +2069,10 @@ class TenantResource extends BaseResource
 .tenant-contact-staff__head{display:flex;align-items:flex-start;gap:10px}
 .tenant-contact-staff__hint{font-size:12px;line-height:1.45;opacity:.8;max-width:52rem}
 .tenant-contact-staff__global{padding:10px 12px;border:1px solid rgba(37,99,235,.16);border-radius:12px;background:linear-gradient(180deg,#f8fbff 0%,#eef5ff 100%)}
-.tenant-contact-staff__global-title{font-size:12px;font-weight:700;line-height:1.35;color:#1d4ed8;margin-bottom:6px}
-.tenant-contact-staff__global-list{display:flex;flex-direction:column;gap:8px}
-.tenant-contact-staff__global-user{display:flex;align-items:center;gap:10px}
+.tenant-contact-staff__global-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;line-height:1.35;color:#1d4ed8;margin-bottom:6px}
+.tenant-contact-staff__global-count{padding:3px 8px;border-radius:999px;border:1px solid rgba(37,99,235,.14);background:rgba(255,255,255,.76);font-size:11px;font-weight:700;color:#1d4ed8;white-space:nowrap}
+.tenant-contact-staff__global-list{display:flex;flex-wrap:wrap;gap:8px}
+.tenant-contact-staff__global-user{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(37,99,235,.10);border-radius:12px;background:rgba(255,255,255,.76)}
 .tenant-contact-staff__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
 .tenant-contact-staff__card{border:1px solid rgba(14,165,233,.28);border-radius:14px;padding:10px 12px;background:rgba(14,165,233,.06)}
 .dark .tenant-contact-staff__card{border-color:rgba(56,189,248,.34);background:rgba(56,189,248,.10)}
@@ -2096,6 +2100,23 @@ class TenantResource extends BaseResource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    /**
+     * @param  array{id:int,label:string,email:string,all_spaces:bool}  $userRow
+     */
+    private static function tenantContactStaffGlobalChip(array $userRow): string
+    {
+        $label = (string) ($userRow['label'] ?? '');
+        $email = trim((string) ($userRow['email'] ?? ''));
+
+        return '<div class="tenant-contact-staff__global-user">'
+            . '<div class="tenant-contact-staff__member-copy">'
+            . '<div class="tenant-contact-staff__member-name">' . e($label) . '</div>'
+            . '<div class="tenant-contact-staff__member-email">' . e($email !== '' ? $email : '—') . '</div>'
+            . '</div>'
+            . '<div class="tenant-contact-staff__member-note">Все места</div>'
+            . '</div>';
     }
 
     /**
