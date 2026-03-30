@@ -101,11 +101,19 @@
                     </div>
 
                     @if($productShareUrl || $storeShareUrl)
-                        <div class="flex flex-wrap gap-2 pb-2">
+                        <div class="rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm backdrop-blur">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Поделиться</div>
+                                    <p class="mt-1 text-xs leading-5 text-slate-600">
+                                        Покажите покупателю QR-код товара или всей витрины.
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
                             @if($productShareUrl)
                                 <button
                                     type="button"
-                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white/90 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
+                                    class="inline-flex items-center rounded-full border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm transition hover:border-sky-300 hover:bg-sky-50"
                                     data-share-open="product"
                                 >
                                     Поделиться ссылкой на товар
@@ -114,12 +122,14 @@
                             @if($storeShareUrl)
                                 <button
                                     type="button"
-                                    class="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+                                    class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
                                     data-share-open="store"
                                 >
                                     Поделиться витриной
                                 </button>
                             @endif
+                                </div>
+                            </div>
                         </div>
                     @endif
                 </div>
@@ -796,81 +806,103 @@
     @if($productShareUrl || $storeShareUrl)
         <script>
             (() => {
-                const configNode = document.querySelector('[data-share-config]');
-                const modalRoot = document.querySelector('[data-share-modal-root]');
+                const initShareModal = () => {
+                    const configNode = document.querySelector('[data-share-config]');
+                    const modalRoot = document.querySelector('[data-share-modal-root]');
 
-                if (!configNode || !modalRoot) {
-                    return;
-                }
-
-                const config = JSON.parse(configNode.textContent || '{}');
-                const titleNode = modalRoot.querySelector('[data-share-title]');
-                const descriptionNode = modalRoot.querySelector('[data-share-description]');
-                const qrNode = modalRoot.querySelector('[data-share-qr]');
-                const urlNode = modalRoot.querySelector('[data-share-url]');
-                const copyButton = modalRoot.querySelector('[data-share-copy]');
-
-                const closeModal = () => {
-                    modalRoot.classList.add('hidden');
-                    modalRoot.classList.remove('flex');
-                    document.body.classList.remove('overflow-hidden');
-                };
-
-                const openModal = (key) => {
-                    const payload = config[key];
-
-                    if (!payload || !titleNode || !descriptionNode || !qrNode || !urlNode) {
+                    if (!configNode || !modalRoot || modalRoot.dataset.shareBound === '1') {
                         return;
                     }
 
-                    titleNode.textContent = payload.title || '';
-                    descriptionNode.textContent = payload.description || '';
-                    qrNode.src = payload.qr || '';
-                    qrNode.alt = payload.title || '';
-                    urlNode.textContent = payload.url || '';
+                    let config = {};
 
-                    if (copyButton) {
-                        copyButton.dataset.shareUrl = payload.url || '';
+                    try {
+                        config = JSON.parse(configNode.textContent || '{}');
+                    } catch (error) {
+                        return;
                     }
 
-                    modalRoot.classList.remove('hidden');
-                    modalRoot.classList.add('flex');
-                    document.body.classList.add('overflow-hidden');
-                };
+                    const titleNode = modalRoot.querySelector('[data-share-title]');
+                    const descriptionNode = modalRoot.querySelector('[data-share-description]');
+                    const qrNode = modalRoot.querySelector('[data-share-qr]');
+                    const urlNode = modalRoot.querySelector('[data-share-url]');
+                    const copyButton = modalRoot.querySelector('[data-share-copy]');
 
-                document.querySelectorAll('[data-share-open]').forEach((button) => {
-                    button.addEventListener('click', () => openModal(button.getAttribute('data-share-open')));
-                });
-
-                modalRoot.querySelectorAll('[data-share-close]').forEach((button) => {
-                    button.addEventListener('click', closeModal);
-                });
-
-                document.addEventListener('keydown', (event) => {
-                    if (event.key === 'Escape') {
-                        closeModal();
+                    if (!titleNode || !descriptionNode || !qrNode || !urlNode) {
+                        return;
                     }
-                });
 
-                if (copyButton) {
-                    copyButton.addEventListener('click', async () => {
-                        const url = copyButton.dataset.shareUrl || '';
+                    const closeModal = () => {
+                        modalRoot.classList.add('hidden');
+                        modalRoot.classList.remove('flex');
+                        document.body.classList.remove('overflow-hidden');
+                    };
 
-                        if (!url) {
+                    const openModal = (key) => {
+                        const payload = config[key];
+
+                        if (!payload) {
                             return;
                         }
 
-                        try {
-                            await navigator.clipboard.writeText(url);
-                            copyButton.textContent = 'Ссылка скопирована';
-                            window.setTimeout(() => {
-                                copyButton.textContent = 'Скопировать ссылку';
-                            }, 1400);
-                        } catch (error) {
-                            window.prompt('Скопируйте ссылку вручную:', url);
+                        titleNode.textContent = payload.title || '';
+                        descriptionNode.textContent = payload.description || '';
+                        qrNode.src = payload.qr || '';
+                        qrNode.alt = payload.title || '';
+                        urlNode.textContent = payload.url || '';
+
+                        if (copyButton) {
+                            copyButton.dataset.shareUrl = payload.url || '';
+                            copyButton.textContent = 'Скопировать ссылку';
+                        }
+
+                        modalRoot.classList.remove('hidden');
+                        modalRoot.classList.add('flex');
+                        document.body.classList.add('overflow-hidden');
+                    };
+
+                    document.querySelectorAll('[data-share-open]').forEach((button) => {
+                        button.addEventListener('click', () => {
+                            openModal(button.getAttribute('data-share-open'));
+                        });
+                    });
+
+                    modalRoot.querySelectorAll('[data-share-close]').forEach((button) => {
+                        button.addEventListener('click', closeModal);
+                    });
+
+                    document.addEventListener('keydown', (event) => {
+                        if (event.key === 'Escape') {
+                            closeModal();
                         }
                     });
-                }
+
+                    if (copyButton) {
+                        copyButton.addEventListener('click', async () => {
+                            const url = copyButton.dataset.shareUrl || '';
+
+                            if (!url) {
+                                return;
+                            }
+
+                            try {
+                                await navigator.clipboard.writeText(url);
+                                copyButton.textContent = 'Ссылка скопирована';
+                                window.setTimeout(() => {
+                                    copyButton.textContent = 'Скопировать ссылку';
+                                }, 1400);
+                            } catch (error) {
+                                window.prompt('Скопируйте ссылку вручную:', url);
+                            }
+                        });
+                    }
+
+                    modalRoot.dataset.shareBound = '1';
+                };
+
+                initShareModal();
+                document.addEventListener('livewire:navigated', initShareModal);
+                document.addEventListener('turbo:load', initShareModal);
             })();
         </script>
     @endif
