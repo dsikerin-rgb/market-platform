@@ -11,6 +11,7 @@ use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
+use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Services\TenantContracts\SafeContractSpaceLinker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,7 +34,11 @@ class ContractController extends Controller
      *
      * ВАЖНО: если ключ места неоднозначный (коллизия) — НЕ привязываем договор к месту.
      */
-    public function store(Request $request, SafeContractSpaceLinker $safeLinker): JsonResponse
+    public function store(
+        Request $request,
+        SafeContractSpaceLinker $safeLinker,
+        ContractDocumentClassifier $classifier
+    ): JsonResponse
     {
         $startedAt = now();
 
@@ -205,6 +210,11 @@ class ContractController extends Controller
             $safeLinkedByNumber = 0;        // привязано через number rule
 
             // Примеры проблемных ключей для диагностики
+            $suspectedCurrentDuplicateGroups = 0;
+            $suspectedCurrentDuplicateRows = 0;
+            $suspectedCurrentDuplicateSamples = [];
+            $seenDuplicateSignatures = [];
+
             $missingKeysSample = [];
             $notFoundKeysSample = [];
             $ambiguousKeysSample = [];
@@ -446,6 +456,22 @@ class ContractController extends Controller
 
                 $contract->save();
 
+                $duplicateWarning = $this->detectSuspiciousCurrentDuplicate($contract, $classifier);
+                if ($duplicateWarning !== null) {
+                    $signature = $duplicateWarning['signature'];
+
+                    if (! isset($seenDuplicateSignatures[$signature])) {
+                        $seenDuplicateSignatures[$signature] = true;
+                        $suspectedCurrentDuplicateGroups++;
+                        $suspectedCurrentDuplicateRows += $duplicateWarning['duplicate_rows'];
+
+                        if (count($suspectedCurrentDuplicateSamples) < $samplesLimit) {
+                            unset($duplicateWarning['signature']);
+                            $suspectedCurrentDuplicateSamples[] = $duplicateWarning;
+                        }
+                    }
+                }
+
                 // Safe auto-link for contracts without market_space_id
                 if ($contract->market_space_id === null) {
                     $linkResult = $safeLinker->link($contract);
@@ -508,6 +534,8 @@ class ContractController extends Controller
                 'contracts_without_space' => $missingSpaceKey,
                 'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
                 'space_key_collisions' => $keysWithCollisions,
+                'suspected_current_duplicate_contract_groups' => $suspectedCurrentDuplicateGroups,
+                'suspected_current_duplicate_contract_rows' => $suspectedCurrentDuplicateRows,
                 'linkage_stats' => $linkageStats,
                 'safe_auto_link' => [
                     'linked_total' => $safeLinkedContracts,
@@ -518,6 +546,14 @@ class ContractController extends Controller
 
             if ($diagnostics !== []) {
                 $warnings['diagnostics'] = $diagnostics;
+            }
+
+            if ($suspectedCurrentDuplicateSamples !== []) {
+                $warnings['suspected_current_duplicate_contracts'] = [
+                    'count' => $suspectedCurrentDuplicateGroups,
+                    'rows' => $suspectedCurrentDuplicateRows,
+                    'samples' => $suspectedCurrentDuplicateSamples,
+                ];
             }
 
             $response = [
@@ -549,6 +585,8 @@ class ContractController extends Controller
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
                     'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
+                    'suspected_current_duplicate_contract_groups' => $suspectedCurrentDuplicateGroups,
+                    'suspected_current_duplicate_contract_rows' => $suspectedCurrentDuplicateRows,
                     'ip' => $request->ip(),
                 ]),
             ]);
@@ -805,5 +843,117 @@ class ContractController extends Controller
         $variants = array_filter($variants, static fn ($v) => is_string($v) && trim($v) !== '');
 
         return array_values(array_unique($variants));
+    }
+
+    /**
+     * @return array{
+     *   signature: string,
+     *   tenant_id: int,
+     *   market_space_id: int,
+     *   place_token: string,
+     *   document_date: string,
+     *   contract_ids: list<int>,
+     *   external_ids: list<string>,
+     *   numbers: list<string>,
+     *   duplicate_rows: int
+     * }|null
+     */
+    private function detectSuspiciousCurrentDuplicate(
+        TenantContract $contract,
+        ContractDocumentClassifier $classifier
+    ): ?array {
+        if (! $contract->is_active || $contract->market_space_id === null || $contract->tenant_id === null) {
+            return null;
+        }
+
+        if ($contract->effectiveSpaceMappingMode() === TenantContract::SPACE_MAPPING_MODE_EXCLUDED) {
+            return null;
+        }
+
+        $classification = $classifier->classify((string) ($contract->number ?? ''));
+        if (($classification['category'] ?? null) !== 'primary_contract') {
+            return null;
+        }
+
+        $placeToken = trim((string) ($classification['place_token'] ?? ''));
+        $documentDate = trim((string) ($classification['document_date'] ?? ''));
+        $externalId = trim((string) ($contract->external_id ?? ''));
+
+        if ($placeToken === '' || $documentDate === '' || $externalId === '') {
+            return null;
+        }
+
+        $matched = [];
+
+        $duplicates = TenantContract::query()
+            ->where('market_id', (int) $contract->market_id)
+            ->where('tenant_id', (int) $contract->tenant_id)
+            ->where('market_space_id', (int) $contract->market_space_id)
+            ->where('is_active', true)
+            ->where('id', '!=', (int) $contract->id)
+            ->where('external_id', '!=', $externalId)
+            ->get(['id', 'external_id', 'number', 'space_mapping_mode']);
+
+        foreach ($duplicates as $candidate) {
+            if ($candidate->effectiveSpaceMappingMode() === TenantContract::SPACE_MAPPING_MODE_EXCLUDED) {
+                continue;
+            }
+
+            $candidateClassification = $classifier->classify((string) ($candidate->number ?? ''));
+            if (($candidateClassification['category'] ?? null) !== 'primary_contract') {
+                continue;
+            }
+
+            if (($candidateClassification['place_token'] ?? null) !== $placeToken) {
+                continue;
+            }
+
+            if (($candidateClassification['document_date'] ?? null) !== $documentDate) {
+                continue;
+            }
+
+            $matched[] = $candidate;
+        }
+
+        if ($matched === []) {
+            return null;
+        }
+
+        $groupContracts = collect($matched)
+            ->push($contract)
+            ->sortBy('id')
+            ->values();
+
+        $contractIds = $groupContracts
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        $externalIds = $groupContracts
+            ->pluck('external_id')
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->all();
+
+        $numbers = $groupContracts
+            ->pluck('number')
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->all();
+
+        return [
+            'signature' => implode('|', [
+                (int) $contract->tenant_id,
+                (int) $contract->market_space_id,
+                $placeToken,
+                $documentDate,
+            ]),
+            'tenant_id' => (int) $contract->tenant_id,
+            'market_space_id' => (int) $contract->market_space_id,
+            'place_token' => $placeToken,
+            'document_date' => $documentDate,
+            'contract_ids' => $contractIds,
+            'external_ids' => $externalIds,
+            'numbers' => $numbers,
+            'duplicate_rows' => count($contractIds),
+        ];
     }
 }
