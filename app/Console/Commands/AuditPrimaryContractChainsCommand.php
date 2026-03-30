@@ -129,7 +129,7 @@ class AuditPrimaryContractChainsCommand extends Command
                 ];
             })
             ->filter()
-            ->sort([$this, 'compareGroups'])
+            ->sort(fn (array $left, array $right): int => $this->compareGroups($left, $right))
             ->values();
 
         $stats['group_count'] = $preparedGroups->count();
