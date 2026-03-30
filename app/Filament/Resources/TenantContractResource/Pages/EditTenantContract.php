@@ -7,8 +7,10 @@ namespace App\Filament\Resources\TenantContractResource\Pages;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\TenantContractResource;
 use App\Models\TenantContract;
+use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
 use Filament\Actions;
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Schema;
 
 class EditTenantContract extends BaseEditRecord
 {
@@ -94,6 +96,18 @@ class EditTenantContract extends BaseEditRecord
         }
 
         return parent::getFormActions();
+    }
+
+    protected function afterSave(): void
+    {
+        if (! Schema::hasTable('market_space_tenant_bindings')) {
+            return;
+        }
+
+        /** @var TenantContract $contract */
+        $contract = $this->record->fresh();
+
+        app(MarketSpaceTenantBindingRecorder::class)->syncFromContract($contract);
     }
 
     private function normalizeNullableInt(mixed $value): ?int
