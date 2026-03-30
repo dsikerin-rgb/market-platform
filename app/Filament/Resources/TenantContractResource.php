@@ -421,12 +421,16 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('ordering_status')
                     ->label('Готовность к привязке')
                     ->state(fn (TenantContract $record): string => static::orderingMeta($record)['label'])
+                    ->tooltip('Показывает, насколько договор уже готов к привязке к месту.')
+                    ->headerTooltip('Показывает, насколько договор уже готов к привязке к месту.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::orderingMeta($record)['color']),
 
                 TextColumn::make('chain_position')
                     ->label('Цепочка')
                     ->state(fn (TenantContract $record): string => static::chainDisplay($record))
+                    ->tooltip('Позиция договора в истории одного места. Формат 2/5 означает: второй из пяти.')
+                    ->headerTooltip('Позиция договора в истории одного места. Формат 2/5 означает: второй из пяти.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::chainColor($record))
                     ->toggleable(),
@@ -434,6 +438,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('overlap_status')
                     ->label('Наложение')
                     ->state(fn (TenantContract $record): string => static::overlapDisplay($record))
+                    ->tooltip('Показывает, есть ли пересечение этого договора по срокам с другим договором в цепочке.')
+                    ->headerTooltip('Показывает, есть ли пересечение этого договора по срокам с другим договором в цепочке.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::overlapColor($record))
                     ->toggleable(),
@@ -468,6 +474,8 @@ class TenantContractResource extends BaseResource
                 TextColumn::make('space_mapping_mode')
                     ->label('Режим привязки')
                     ->state(fn (TenantContract $record): string => static::spaceMappingModeLabel($record->space_mapping_mode))
+                    ->tooltip('Авто: 1С может обновлять привязку. Ручная: привязка зафиксирована вручную. Не участвует: договор исключён из привязки.')
+                    ->headerTooltip('Авто: 1С может обновлять привязку. Ручная: привязка зафиксирована вручную. Не участвует: договор исключён из привязки.')
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::spaceMappingModeColor($record->space_mapping_mode))
                     ->toggleable()
