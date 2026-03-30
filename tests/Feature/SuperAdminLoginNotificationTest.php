@@ -230,6 +230,58 @@ class SuperAdminLoginNotificationTest extends TestCase
 
         Notification::assertSentToTimes($superAdmin, UserLoggedInNotification::class, 1);
     }
+
+    public function test_impersonation_consume_does_not_send_admin_login_notification(): void
+    {
+        Notification::fake();
+        config([
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = Market::query()->create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('merchant', 'web');
+
+        $superAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'super-admin-impersonation@example.test',
+            'telegram_chat_id' => '123456',
+            'notification_preferences' => [
+                'self_manage' => true,
+                'channels' => ['database', 'telegram'],
+                'topics' => UserNotificationPreferences::TOPICS,
+            ],
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        $merchant = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => 123,
+            'email' => 'merchant@example.test',
+        ]);
+        $merchant->assignRole('merchant');
+
+        $request = Request::create('/cabinet/impersonate/test-token', 'GET', server: [
+            'REMOTE_ADDR' => '203.0.113.19',
+            'HTTP_USER_AGENT' => 'PHPUnit Impersonation Consume Test',
+            'HTTP_REFERER' => 'https://market.example.test/admin/tenants/123/edit',
+        ]);
+        $request->server->set('REQUEST_URI', '/cabinet/impersonate/test-token');
+        $request->attributes->set('_route', 'cabinet.impersonate.consume');
+        $this->app->instance('request', $request);
+
+        Event::dispatch(new Login('web', $merchant, false));
+
+        Notification::assertNotSentTo($superAdmin, UserLoggedInNotification::class);
+        Notification::assertNotSentTo($merchant, UserLoggedInNotification::class);
+    }
+
     public function test_regular_user_can_receive_notification_about_login_to_own_account_when_security_enabled(): void
     {
         Notification::fake();
