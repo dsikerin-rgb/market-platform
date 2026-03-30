@@ -1449,9 +1449,9 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-page{
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem 1.2rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: .65rem 1.2rem;
   flex-wrap: wrap;
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
@@ -1463,9 +1463,9 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
-  flex: 1 1 52rem;
-  width: auto;
-  min-width: min(100%, 52rem);
+  flex: 1 0 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
@@ -1479,16 +1479,18 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
-  font-size: clamp(1.35rem, 1.15rem + 1vw, 2rem);
-  line-height: 1.02;
-  max-width: 13ch;
+  font-size: clamp(1.7rem, 1.28rem + 1vw, 2.2rem);
+  line-height: 1.04;
+  max-width: 28rem;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-subheading{
   color: var(--tenant-edit-text);
   font-size: .92rem;
   line-height: 1.45;
-  max-width: 36rem;
+  max-width: 42rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
@@ -1703,10 +1705,6 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 }
 
 @media (max-width: 1180px){
-  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
-    align-items: flex-start;
-  }
-
   html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
