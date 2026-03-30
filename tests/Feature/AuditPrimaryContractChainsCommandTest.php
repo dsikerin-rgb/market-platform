@@ -123,4 +123,97 @@ class AuditPrimaryContractChainsCommandTest extends TestCase
             ->expectsOutputToContain('"group_count": 1')
             ->expectsOutputToContain('"has_test_noise": true');
     }
+
+    public function test_audit_primary_chains_marks_auto_and_ambiguous_groups(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Test Tenant LLC',
+        ]);
+
+        $spaceA = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'P/10',
+            'status' => 'occupied',
+        ]);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $spaceA->id,
+            'number' => "P/10 \u{043E}\u{0442} 01.05.2024",
+            'status' => 'active',
+            'starts_at' => '2026-03-01',
+            'is_active' => true,
+        ]);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $spaceA->id,
+            'number' => "P/10 \u{043E}\u{0442} 01.03.2023",
+            'status' => 'active',
+            'starts_at' => '2026-03-01',
+            'is_active' => true,
+        ]);
+
+        $spaceB = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'P/20',
+            'status' => 'occupied',
+        ]);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $spaceB->id,
+            'number' => "P/20 \u{043E}\u{0442} 01.05.2024",
+            'status' => 'active',
+            'starts_at' => '2026-03-01',
+            'is_active' => true,
+        ]);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $spaceB->id,
+            'number' => "Q/20 \u{043E}\u{0442} 01.04.2023",
+            'status' => 'active',
+            'starts_at' => '2026-03-01',
+            'is_active' => true,
+        ]);
+
+        $this->artisan('contracts:audit-primary-chains', [
+            '--market' => $market->id,
+            '--limit' => 10,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"auto_resolvable_groups": 1')
+            ->expectsOutputToContain('"ambiguous_groups": 1')
+            ->expectsOutputToContain('"resolution_status": "auto_single_latest_document"')
+            ->expectsOutputToContain('"resolution_status": "review_mixed_place_tokens"');
+
+        $this->artisan('contracts:audit-primary-chains', [
+            '--market' => $market->id,
+            '--limit' => 10,
+            '--only-auto' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"group_count": 1')
+            ->expectsOutputToContain('"auto_resolvable": true');
+
+        $this->artisan('contracts:audit-primary-chains', [
+            '--market' => $market->id,
+            '--limit' => 10,
+            '--only-ambiguous' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"group_count": 1')
+            ->expectsOutputToContain('"auto_resolvable": false')
+            ->expectsOutputToContain('"latest_date_tie_contract_ids": []');
+    }
 }
