@@ -5,9 +5,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class TenantContract extends Model
 {
@@ -48,6 +51,29 @@ class TenantContract extends Model
         'space_mapping_updated_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(function (self $contract): void {
+            if (! Schema::hasTable('market_space_tenant_bindings')) {
+                return;
+            }
+
+            if (! $contract->wasRecentlyCreated && ! $contract->wasChanged([
+                'tenant_id',
+                'market_space_id',
+                'space_mapping_mode',
+                'status',
+                'is_active',
+                'starts_at',
+                'ends_at',
+            ])) {
+                return;
+            }
+
+            app(MarketSpaceTenantBindingRecorder::class)->syncFromContract($contract);
+        });
+    }
+
     /**
      * @return list<string>
      */
@@ -78,6 +104,11 @@ class TenantContract extends Model
     public function spaceMappingUpdatedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'space_mapping_updated_by_user_id');
+    }
+
+    public function tenantBindings(): HasMany
+    {
+        return $this->hasMany(MarketSpaceTenantBinding::class);
     }
 
     public function effectiveSpaceMappingMode(): string
