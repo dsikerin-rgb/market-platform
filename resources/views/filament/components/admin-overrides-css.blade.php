@@ -1479,7 +1479,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
-  font-size: clamp(1.35rem, 1.15rem + 1vw, 2rem);
+  font-size: clamp(1.08rem, 0.92rem + 0.8vw, 1.6rem);
   line-height: 1.02;
   max-width: 13ch;
 }
