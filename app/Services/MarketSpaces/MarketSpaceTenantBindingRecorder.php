@@ -93,7 +93,7 @@ class MarketSpaceTenantBindingRecorder
                     ->orWhere('tenant_id', '!=', $activeBinding['tenant_id']);
             })
             ->update([
-                'ended_at' => $activeBinding['started_at'],
+                'ended_at' => $now,
                 'updated_at' => $now,
                 'resolution_reason' => 'contract_rebound',
             ]);
@@ -108,7 +108,7 @@ class MarketSpaceTenantBindingRecorder
                     ->orWhere('tenant_id', '!=', $activeBinding['tenant_id']);
             })
             ->update([
-                'ended_at' => $activeBinding['started_at'],
+                'ended_at' => $now,
                 'updated_at' => $now,
                 'resolution_reason' => 'superseded_by_contract_binding',
             ]);
