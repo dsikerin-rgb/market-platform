@@ -1462,7 +1462,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .75rem;
+  gap: .6rem;
   width: 100%;
   align-items: stretch;
 }
@@ -1599,22 +1599,22 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-actio
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn{
   position: relative;
   display: grid;
-  grid-template-columns: 2.65rem minmax(0, 1fr);
+  grid-template-columns: 2.35rem minmax(0, 1fr);
   grid-template-rows: auto auto;
   grid-template-areas:
     "icon title"
     "icon subtitle";
   align-items: start;
   justify-items: start;
-  gap: .1rem .85rem;
+  gap: .08rem .7rem;
   width: 100%;
-  min-height: 5.25rem;
-  padding: .9rem .95rem .95rem .85rem !important;
-  border-radius: 1rem;
+  min-height: 4.6rem;
+  padding: .72rem .82rem .76rem .72rem !important;
+  border-radius: .95rem;
   border: 1px solid #d8e3f1 !important;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   color: #1f3251 !important;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
   text-align: left;
   white-space: normal;
   overflow: hidden;
@@ -1625,17 +1625,17 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn:focus-visible{
   border-color: #c6d6e7 !important;
   transform: translateY(-1px);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 11px 24px rgba(15, 23, 42, 0.08);
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-icon{
   grid-area: icon;
-  width: 2.65rem;
-  height: 2.65rem;
+  width: 2.35rem;
+  height: 2.35rem;
   margin: 0;
   align-self: start;
   justify-self: start;
-  border-radius: .9rem;
+  border-radius: .82rem;
   background: rgba(215, 227, 255, 0.95);
   box-shadow: inset 0 0 0 1px rgba(170, 190, 231, 0.45);
   color: #1d4ed8 !important;
@@ -1643,11 +1643,11 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-btn-label{
   grid-area: title;
-  margin-top: .05rem;
+  margin-top: .02rem;
   color: #0f172a;
-  font-size: 1rem;
+  font-size: .92rem;
   font-weight: 700;
-  line-height: 1.12;
+  line-height: 1.1;
   white-space: normal;
 }
 
@@ -1656,8 +1656,8 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   grid-area: subtitle;
   align-self: start;
   color: #475569;
-  font-size: .84rem;
-  line-height: 1.35;
+  font-size: .76rem;
+  line-height: 1.25;
   white-space: normal;
 }
 
