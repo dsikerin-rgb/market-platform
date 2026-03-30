@@ -1479,12 +1479,14 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
-  font-size: clamp(1.7rem, 1.28rem + 1vw, 2.2rem);
-  line-height: 1.04;
-  max-width: 28rem;
+  display: block;
+  width: 100%;
+  max-width: none;
+  font-size: clamp(1.35rem, 1.05rem + .85vw, 2rem);
+  line-height: 1.06;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
   overflow-wrap: normal;
   word-break: normal;
 }
