@@ -660,6 +660,7 @@ class TenantContractResource extends BaseResource
                     ->tooltip('Быстрое редактирование')
                     ->icon('heroicon-o-pencil-square')
                     ->hiddenLabel()
+                    ->iconButton()
                     ->color('gray'), function ($action): void {
                         if (method_exists($action, 'slideOver')) {
                             $action->slideOver();
@@ -673,6 +674,7 @@ class TenantContractResource extends BaseResource
                     ->tooltip('Открыть карточку')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->hiddenLabel()
+                    ->iconButton()
                     ->color('primary')
                     ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
             ])
