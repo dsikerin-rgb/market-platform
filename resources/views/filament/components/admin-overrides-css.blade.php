@@ -1448,15 +1448,24 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-page{
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
-  background: linear-gradient(125deg, #f3f7ff 0%, #e5eefc 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.2rem;
+  flex-wrap: wrap;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
+    linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
   border: 1px solid var(--tenant-edit-border-strong);
-  border-radius: 1rem;
-  padding: 1rem 1.25rem;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+  border-radius: 1.25rem;
+  padding: 1rem 1.15rem 1.05rem 1.15rem;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-actions{
-  width: 100%;
+  flex: 1 1 52rem;
+  width: auto;
+  min-width: min(100%, 52rem);
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
@@ -1470,10 +1479,16 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-heading{
   color: var(--tenant-edit-heading);
   letter-spacing: -0.01em;
+  font-size: clamp(1.35rem, 1.15rem + 1vw, 2rem);
+  line-height: 1.02;
+  max-width: 13ch;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-subheading{
   color: var(--tenant-edit-text);
+  font-size: .92rem;
+  line-height: 1.45;
+  max-width: 36rem;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-sc-tabs{
@@ -1608,9 +1623,9 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   justify-items: start;
   gap: .08rem .7rem;
   width: 100%;
-  min-height: 4.6rem;
-  padding: .72rem .82rem .76rem .72rem !important;
-  border-radius: .95rem;
+  min-height: 4.35rem;
+  padding: .68rem .8rem .72rem .7rem !important;
+  border-radius: .92rem;
   border: 1px solid #d8e3f1 !important;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   color: #1f3251 !important;
@@ -1630,12 +1645,12 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac .tenant-card-action.fi-btn > .fi-icon{
   grid-area: icon;
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 2.25rem;
+  height: 2.25rem;
   margin: 0;
   align-self: start;
   justify-self: start;
-  border-radius: .82rem;
+  border-radius: .8rem;
   background: rgba(215, 227, 255, 0.95);
   box-shadow: inset 0 0 0 1px rgba(170, 190, 231, 0.45);
   color: #1d4ed8 !important;
@@ -1645,9 +1660,9 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   grid-area: title;
   margin-top: .02rem;
   color: #0f172a;
-  font-size: .92rem;
+  font-size: .9rem;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.08;
   white-space: normal;
 }
 
@@ -1656,8 +1671,8 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   grid-area: subtitle;
   align-self: start;
   color: #475569;
-  font-size: .76rem;
-  line-height: 1.25;
+  font-size: .74rem;
+  line-height: 1.22;
   white-space: normal;
 }
 
@@ -1688,6 +1703,10 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 }
 
 @media (max-width: 1180px){
+  html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
+    align-items: flex-start;
+  }
+
   html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-ac{
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1706,6 +1725,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
 @media (max-width: 1024px){
   html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header{
     padding: .85rem 1rem;
+    border-radius: 1.1rem;
   }
 
   html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-section{
