@@ -180,7 +180,8 @@ class TenantContractResource extends BaseResource
 
                     Forms\Components\TextInput::make('starts_at')
                         ->label('Техническая дата 1С')
-                        ->helperText('Не используется как основная дата договора. Для истории приоритет у даты из номера договора.')
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Не используется как основная дата договора. Для истории приоритет у даты из номера договора.')
                         ->formatStateUsing(fn (?TenantContract $record): string => $record?->starts_at?->format('d.m.Y') ?: '—')
                         ->visible(fn (): bool => static::canViewTechnicalFields())
                         ->disabled()
@@ -236,14 +237,16 @@ class TenantContractResource extends BaseResource
                         ->default(TenantContract::SPACE_MAPPING_MODE_AUTO)
                         ->native(false)
                         ->visible(fn (): bool => static::hasTenantContractColumn('space_mapping_mode'))
-                        ->helperText('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
 
                     Forms\Components\Checkbox::make('limit_spaces_to_contract_tenant')
                         ->label('Только места этого арендатора')
                         ->default(true)
                         ->live()
                         ->dehydrated(false)
-                        ->helperText('По умолчанию список мест ограничен арендатором договора. Снимите галочку, если раньше у этого места был другой арендатор и нужен поиск по всему рынку.'),
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('По умолчанию список мест ограничен арендатором договора. Снимите галочку, если раньше у этого места был другой арендатор и нужен поиск по всему рынку.'),
 
                     Forms\Components\Checkbox::make('limit_spaces_to_place_group')
                         ->label('Только места этой группы')
@@ -251,7 +254,8 @@ class TenantContractResource extends BaseResource
                         ->live()
                         ->dehydrated(false)
                         ->visible(fn (?TenantContract $record): bool => filled(static::spaceGroupMetaForRecord($record)['group_token'] ?? null))
-                        ->helperText('Если система распознала группу мест из номера договора, список мест будет ограничен этой группой. Снимите галочку, если нужно искать место по всему рынку.'),
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Если система распознала группу мест из номера договора, список мест будет ограничен этой группой. Снимите галочку, если нужно искать место по всему рынку.'),
 
                     Forms\Components\Select::make('market_space_id')
                         ->label('Торговое место')
@@ -343,7 +347,8 @@ class TenantContractResource extends BaseResource
                         ->searchable()
                         ->preload()
                         ->nullable()
-                        ->helperText('Здесь задаётся только локальная привязка договора к торговому месту. Список можно ограничить арендатором договора и, если договор составной, его группой мест.'),
+                        ->hintIcon('heroicon-m-question-mark-circle')
+                        ->hintIconTooltip('Здесь задаётся только локальная привязка договора к торговому месту. Список можно ограничить арендатором договора и, если договор составной, его группой мест.'),
 
                     Forms\Components\TextInput::make('space_mapping_updated_display')
                         ->label('Последняя локальная фиксация')
