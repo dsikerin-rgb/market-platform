@@ -101,13 +101,9 @@ class AuditPrimaryContractChainsCommand extends Command
                     return null;
                 }
 
-                $sorted = $contracts
-                    ->sortByDesc([
-                        static fn (array $item): int => $item['document_date'] !== null ? 1 : 0,
-                        static fn (array $item): string => $item['document_date'] ?? '',
-                        static fn (array $item): int => $item['id'],
-                    ])
-                    ->values();
+                $sortedContracts = $contracts->all();
+                usort($sortedContracts, [$this, 'compareContracts']);
+                $sorted = collect($sortedContracts)->values();
 
                 $candidate = $sorted->first(static fn (array $item): bool => $item['document_date'] !== null);
                 $hasTestNoise = $contracts->contains(static fn (array $item): bool => $item['synthetic'] === true);
@@ -133,12 +129,7 @@ class AuditPrimaryContractChainsCommand extends Command
                 ];
             })
             ->filter()
-            ->sortByDesc([
-                static fn (array $group): int => $group['count'],
-                static fn (array $group): string => $group['candidate_document_date'] ?? '',
-                static fn (array $group): int => $group['tenant_id'],
-                static fn (array $group): int => $group['market_space_id'],
-            ])
+            ->sort([$this, 'compareGroups'])
             ->values();
 
         $stats['group_count'] = $preparedGroups->count();
@@ -173,5 +164,50 @@ class AuditPrimaryContractChainsCommand extends Command
         return str_starts_with($value, 'TEST')
             || str_contains($value, 'CONTRACT-')
             || str_contains($value, 'STAGING-CHECK');
+    }
+
+    /**
+     * @param  array{id:int,document_date:?string}  $left
+     * @param  array{id:int,document_date:?string}  $right
+     */
+    private function compareContracts(array $left, array $right): int
+    {
+        $leftHasDate = $left['document_date'] !== null;
+        $rightHasDate = $right['document_date'] !== null;
+
+        if ($leftHasDate !== $rightHasDate) {
+            return $leftHasDate ? -1 : 1;
+        }
+
+        $dateComparison = strcmp($right['document_date'] ?? '', $left['document_date'] ?? '');
+        if ($dateComparison !== 0) {
+            return $dateComparison;
+        }
+
+        return $right['id'] <=> $left['id'];
+    }
+
+    /**
+     * @param  array{count:int,candidate_document_date:?string,tenant_id:int,market_space_id:int}  $left
+     * @param  array{count:int,candidate_document_date:?string,tenant_id:int,market_space_id:int}  $right
+     */
+    private function compareGroups(array $left, array $right): int
+    {
+        $countComparison = $right['count'] <=> $left['count'];
+        if ($countComparison !== 0) {
+            return $countComparison;
+        }
+
+        $dateComparison = strcmp($right['candidate_document_date'] ?? '', $left['candidate_document_date'] ?? '');
+        if ($dateComparison !== 0) {
+            return $dateComparison;
+        }
+
+        $tenantComparison = $left['tenant_id'] <=> $right['tenant_id'];
+        if ($tenantComparison !== 0) {
+            return $tenantComparison;
+        }
+
+        return $left['market_space_id'] <=> $right['market_space_id'];
     }
 }
