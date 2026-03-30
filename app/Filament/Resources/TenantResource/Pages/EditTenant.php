@@ -7,10 +7,7 @@ use App\Filament\Resources\TenantResource\Pages\Concerns\InteractsWithTenantCabi
 use App\Models\TenantRequest;
 use App\Models\Ticket;
 use App\Models\TicketComment;
-use App\Models\User;
-use App\Services\Cabinet\TenantImpersonationService;
 use Filament\Actions;
-use Filament\Notifications\Notification;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Schema as DbSchema;
@@ -89,47 +86,11 @@ class EditTenant extends BaseEditRecord
                 ->icon('heroicon-o-arrow-right-on-rectangle')
                 ->color('gray')
                 ->requiresConfirmation()
-                ->modalHeading('Войти в кабинет арендатора?')
-                ->modalDescription('Откроется кабинет арендатора в текущей сессии. Возврат в админку доступен из шапки кабинета.')
+                ->modalHeading('Открыть кабинет арендатора в новой вкладке?')
+                ->modalDescription('Кабинет арендатора откроется в новой вкладке. Текущая страница админки останется открытой.')
                 ->visible(fn (): bool => $this->canImpersonateCabinet())
-                ->action(function () {
-                    $service = app(TenantImpersonationService::class);
-                    $impersonator = \Filament\Facades\Filament::auth()->user();
-
-                    if (! $impersonator instanceof User) {
-                        abort(403);
-                    }
-
-                    if (! $service->canIssue($impersonator, $this->record)) {
-                        $reason = $service->isCrossMarketDenied($impersonator, $this->record)
-                            ? 'cross_market_denied'
-                            : 'forbidden_role';
-                        $service->recordDenied($impersonator, $this->record, request(), $reason);
-
-                        Notification::make()
-                            ->danger()
-                            ->title('Недостаточно прав для входа в кабинет арендатора')
-                            ->send();
-                        abort(403);
-                    }
-
-                    $cabinetUser = $service->resolveCabinetUser($this->record);
-                    if (! $cabinetUser) {
-                        $service->recordDenied($impersonator, $this->record, request(), 'cabinet_user_missing');
-
-                        Notification::make()
-                            ->warning()
-                            ->title('Не найден пользователь кабинета арендатора')
-                            ->body('Создайте логин на вкладке «Кабинет», затем повторите вход.')
-                            ->send();
-
-                        return redirect()->to(url('/admin/tenants/' . (int) $this->record->id . '/edit?tab=kabinet::data::tab'));
-                    }
-
-                    $url = $service->issue($impersonator, $this->record, $cabinetUser, request());
-
-                    return redirect()->to($url);
-                }),
+                ->url(fn (): string => route('filament.admin.tenants.cabinet-impersonate', ['tenant' => (int) $this->record->id]))
+                ->openUrlInNewTab(),
             $chatAction,
             Actions\DeleteAction::make()
                 ->label('Удалить арендатора'),
@@ -433,4 +394,3 @@ class EditTenant extends BaseEditRecord
         }
     }
 }
-

@@ -122,7 +122,7 @@ Route::prefix('cabinet')->group(function () {
 Route::get('/v/{tenantSlug}', PublicShowcaseController::class)->name('cabinet.showcase.public');
 
 Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(function () {
-    Route::post('/admin/tenants/{tenant}/cabinet-impersonate', [TenantCabinetImpersonationController::class, 'issue'])
+    Route::match(['GET', 'POST'], '/admin/tenants/{tenant}/cabinet-impersonate', [TenantCabinetImpersonationController::class, 'issue'])
         ->name('filament.admin.tenants.cabinet-impersonate');
 
     Route::match(['POST', 'PUT', 'PATCH', 'DELETE'], '/admin/tenants/{tenant}/contracts/{contract}/delete', function (Request $request, int $tenant, int $contract) {
