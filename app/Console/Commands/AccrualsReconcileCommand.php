@@ -342,64 +342,11 @@ class AccrualsReconcileCommand extends Command
                 'ta.total_no_vat',
             ]);
 
-        $buckets = [];
-
-        foreach ($rows as $row) {
-            $bucket = $this->makeOverlapBucket((array) $row);
-            $bucketKey = $bucket['bucket_key'];
-            $sourceGroup = $this->sourceGroup((string) $row->source);
-
-            if (! isset($buckets[$bucketKey])) {
-                $buckets[$bucketKey] = [
-                    'tenant_id' => (int) $row->tenant_id,
-                    'tenant_name' => (string) $row->tenant_name,
-                    'comparison_basis' => $bucket['comparison_basis'],
-                    'comparison_value' => $bucket['comparison_value'],
-                    'bucket_label' => $bucket['bucket_label'],
-                    'activity_type' => $bucket['activity_type'],
-                    'currency' => $bucket['currency'],
-                    'rows_1c' => 0,
-                    'rows_csv' => 0,
-                    'sum_1c' => 0.0,
-                    'sum_csv' => 0.0,
-                    'sum_no_vat_1c' => 0.0,
-                    'sum_no_vat_csv' => 0.0,
-                    'source_place_codes' => [],
-                    'source_place_names' => [],
-                    'sources' => [],
-                ];
-            }
-
-            $sumWithVat = (float) ($row->total_with_vat ?? 0);
-            $sumNoVat = (float) ($row->total_no_vat ?? 0);
-
-            if ($sourceGroup === '1c') {
-                $buckets[$bucketKey]['rows_1c']++;
-                $buckets[$bucketKey]['sum_1c'] += $sumWithVat;
-                $buckets[$bucketKey]['sum_no_vat_1c'] += $sumNoVat;
-            } else {
-                $buckets[$bucketKey]['rows_csv']++;
-                $buckets[$bucketKey]['sum_csv'] += $sumWithVat;
-                $buckets[$bucketKey]['sum_no_vat_csv'] += $sumNoVat;
-            }
-
-            $code = trim((string) ($row->source_place_code ?? ''));
-            if ($code !== '' && ! in_array($code, $buckets[$bucketKey]['source_place_codes'], true)) {
-                $buckets[$bucketKey]['source_place_codes'][] = $code;
-            }
-
-            $name = trim((string) ($row->source_place_name ?? ''));
-            if ($name !== '' && ! in_array($name, $buckets[$bucketKey]['source_place_names'], true)) {
-                $buckets[$bucketKey]['source_place_names'][] = $name;
-            }
-
-            $source = (string) $row->source;
-            if (! in_array($source, $buckets[$bucketKey]['sources'], true)) {
-                $buckets[$bucketKey]['sources'][] = $source;
-            }
-        }
-
-        $prepared = collect(array_values($buckets))
+        $prepared = $rows
+            ->groupBy('tenant_id')
+            ->flatMap(function (Collection $tenantRows): array {
+                return $this->selectBestOverlapBucketsForTenant($tenantRows->values());
+            })
             ->map(function (array $bucket): array {
                 $bucket['diff_sum'] = (float) $bucket['sum_1c'] - (float) $bucket['sum_csv'];
                 $bucket['diff_sum_no_vat'] = (float) $bucket['sum_no_vat_1c'] - (float) $bucket['sum_no_vat_csv'];
@@ -489,12 +436,180 @@ class AccrualsReconcileCommand extends Command
     }
 
     /**
-     * @param  array<string, mixed>  $row
-     * @return array{bucket_key: string, comparison_basis: string, comparison_value: string, bucket_label: string, activity_type: ?string, currency: string}
+     * @return array<int, array<string, mixed>>
      */
-    private function makeOverlapBucket(array $row): array
+    private function selectBestOverlapBucketsForTenant(Collection $tenantRows): array
+    {
+        $candidates = collect([
+            'contract' => $this->buildOverlapBucketsByBasis($tenantRows, 'contract'),
+            'market_space' => $this->buildOverlapBucketsByBasis($tenantRows, 'market_space'),
+            'place_code' => $this->buildOverlapBucketsByBasis($tenantRows, 'place_code'),
+            'place_name' => $this->buildOverlapBucketsByBasis($tenantRows, 'place_name'),
+            'tenant' => $this->buildOverlapBucketsByBasis($tenantRows, 'tenant'),
+        ]);
+
+        $best = $candidates
+            ->map(fn (array $candidate, string $basis): array => [
+                'basis' => $basis,
+                'buckets' => $candidate,
+                'score' => $this->scoreOverlapCandidate($candidate, $basis),
+            ])
+            ->sort(function (array $left, array $right): int {
+                $coverageCompare = $right['score']['coverage_ratio'] <=> $left['score']['coverage_ratio'];
+                if ($coverageCompare !== 0) {
+                    return $coverageCompare;
+                }
+
+                $sharedCompare = $right['score']['shared_bucket_count'] <=> $left['score']['shared_bucket_count'];
+                if ($sharedCompare !== 0) {
+                    return $sharedCompare;
+                }
+
+                $mappedCompare = $right['score']['mapped_row_ratio'] <=> $left['score']['mapped_row_ratio'];
+                if ($mappedCompare !== 0) {
+                    return $mappedCompare;
+                }
+
+                $penaltyCompare = $left['score']['penalty'] <=> $right['score']['penalty'];
+                if ($penaltyCompare !== 0) {
+                    return $penaltyCompare;
+                }
+
+                return $right['score']['basis_weight'] <=> $left['score']['basis_weight'];
+            })
+            ->first();
+
+        return $best['buckets'] ?? [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildOverlapBucketsByBasis(Collection $tenantRows, string $basis): array
+    {
+        $buckets = [];
+
+        foreach ($tenantRows as $row) {
+            $bucket = $this->makeOverlapBucketForBasis((array) $row, $basis);
+            $bucketKey = $bucket['bucket_key'];
+            $sourceGroup = $this->sourceGroup((string) $row->source);
+
+            if (! isset($buckets[$bucketKey])) {
+                $buckets[$bucketKey] = [
+                    'tenant_id' => (int) $row->tenant_id,
+                    'tenant_name' => (string) $row->tenant_name,
+                    'comparison_basis' => $bucket['comparison_basis'],
+                    'comparison_value' => $bucket['comparison_value'],
+                    'bucket_label' => $bucket['bucket_label'],
+                    'activity_type' => $bucket['activity_type'],
+                    'currency' => $bucket['currency'],
+                    'rows_1c' => 0,
+                    'rows_csv' => 0,
+                    'sum_1c' => 0.0,
+                    'sum_csv' => 0.0,
+                    'sum_no_vat_1c' => 0.0,
+                    'sum_no_vat_csv' => 0.0,
+                    'source_place_codes' => [],
+                    'source_place_names' => [],
+                    'sources' => [],
+                    'mapped_row_count' => 0,
+                ];
+            }
+
+            $sumWithVat = (float) ($row->total_with_vat ?? 0);
+            $sumNoVat = (float) ($row->total_no_vat ?? 0);
+
+            if ($sourceGroup === '1c') {
+                $buckets[$bucketKey]['rows_1c']++;
+                $buckets[$bucketKey]['sum_1c'] += $sumWithVat;
+                $buckets[$bucketKey]['sum_no_vat_1c'] += $sumNoVat;
+            } else {
+                $buckets[$bucketKey]['rows_csv']++;
+                $buckets[$bucketKey]['sum_csv'] += $sumWithVat;
+                $buckets[$bucketKey]['sum_no_vat_csv'] += $sumNoVat;
+            }
+
+            $code = trim((string) ($row->source_place_code ?? ''));
+            if ($code !== '' && ! in_array($code, $buckets[$bucketKey]['source_place_codes'], true)) {
+                $buckets[$bucketKey]['source_place_codes'][] = $code;
+            }
+
+            $name = trim((string) ($row->source_place_name ?? ''));
+            if ($name !== '' && ! in_array($name, $buckets[$bucketKey]['source_place_names'], true)) {
+                $buckets[$bucketKey]['source_place_names'][] = $name;
+            }
+
+            $source = (string) $row->source;
+            if (! in_array($source, $buckets[$bucketKey]['sources'], true)) {
+                $buckets[$bucketKey]['sources'][] = $source;
+            }
+
+            if ($bucket['mapped']) {
+                $buckets[$bucketKey]['mapped_row_count']++;
+            }
+        }
+
+        return array_values($buckets);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $buckets
+     * @return array{coverage_ratio: float, shared_bucket_count: int, penalty: float, basis_weight: int, mapped_row_ratio: float}
+     */
+    private function scoreOverlapCandidate(array $buckets, string $basis): array
+    {
+        $sharedBucketCount = 0;
+        $sourceBuckets1c = 0;
+        $sourceBucketsCsv = 0;
+        $penalty = 0.0;
+        $mappedRows = 0;
+        $totalRows = 0;
+
+        foreach ($buckets as $bucket) {
+            $has1c = (int) ($bucket['rows_1c'] ?? 0) > 0;
+            $hasCsv = (int) ($bucket['rows_csv'] ?? 0) > 0;
+            $mappedRows += (int) ($bucket['mapped_row_count'] ?? 0);
+            $totalRows += (int) ($bucket['rows_1c'] ?? 0) + (int) ($bucket['rows_csv'] ?? 0);
+
+            if ($has1c) {
+                $sourceBuckets1c++;
+            }
+
+            if ($hasCsv) {
+                $sourceBucketsCsv++;
+            }
+
+            if ($has1c && $hasCsv) {
+                $sharedBucketCount++;
+                $penalty += abs((float) $bucket['sum_1c'] - (float) $bucket['sum_csv']);
+            } else {
+                $penalty += abs((float) $bucket['sum_1c']) + abs((float) $bucket['sum_csv']);
+            }
+        }
+
+        $coverageRatio = 0.0;
+        $denominator = max($sourceBuckets1c, $sourceBucketsCsv);
+        if ($denominator > 0) {
+            $coverageRatio = $sharedBucketCount / $denominator;
+        }
+
+        return [
+            'coverage_ratio' => $coverageRatio,
+            'shared_bucket_count' => $sharedBucketCount,
+            'penalty' => round($penalty, 2),
+            'basis_weight' => $this->overlapBasisWeight($basis),
+            'mapped_row_ratio' => $totalRows > 0 ? $mappedRows / $totalRows : 0.0,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array{bucket_key: string, comparison_basis: string, comparison_value: string, bucket_label: string, activity_type: ?string, currency: string, mapped: bool}
+     */
+    private function makeOverlapBucketForBasis(array $row, string $basis): array
     {
         $tenantId = (int) ($row['tenant_id'] ?? 0);
+        $rowId = (int) ($row['id'] ?? 0);
         $contractId = (int) ($row['tenant_contract_id'] ?? 0);
         $spaceId = (int) ($row['market_space_id'] ?? 0);
         $normalizedCode = $this->normalizePlaceKey((string) ($row['source_place_code'] ?? ''));
@@ -503,39 +618,31 @@ class AccrualsReconcileCommand extends Command
         $currency = strtoupper(trim((string) ($row['currency'] ?? 'RUB')));
         $currency = $currency !== '' ? $currency : 'RUB';
 
-        if ($contractId > 0) {
-            $basis = 'contract';
-            $value = (string) $contractId;
-            $label = 'contract:' . $contractId;
-        } elseif ($spaceId > 0) {
-            $basis = 'market_space';
-            $value = (string) $spaceId;
-            $label = 'market_space:' . $spaceId;
-        } elseif ($normalizedCode !== '') {
-            $basis = 'place_code';
-            $value = $normalizedCode;
-            $label = 'place_code:' . $normalizedCode;
-        } elseif ($normalizedName !== '') {
-            $basis = 'place_name';
-            $value = $normalizedName;
-            $label = 'place_name:' . $normalizedName;
-        } else {
-            $basis = 'tenant';
-            $value = (string) $tenantId;
-            $label = 'tenant:' . $tenantId;
-        }
-
-        if ($normalizedActivity !== '') {
-            $label .= ' | activity:' . $normalizedActivity;
-        }
+        [$comparisonValue, $bucketLabel, $mapped] = match ($basis) {
+            'contract' => $contractId > 0
+                ? [(string) $contractId, 'contract:' . $contractId, true]
+                : ['row:' . $rowId, 'contract:unmapped-row:' . $rowId, false],
+            'market_space' => $spaceId > 0
+                ? [(string) $spaceId, 'market_space:' . $spaceId, true]
+                : ['row:' . $rowId, 'market_space:unmapped-row:' . $rowId, false],
+            'place_code' => $normalizedCode !== ''
+                ? [$normalizedCode, 'place_code:' . $normalizedCode, true]
+                : ['row:' . $rowId, 'place_code:unmapped-row:' . $rowId, false],
+            'place_name' => $normalizedName !== ''
+                ? [$normalizedName, 'place_name:' . $normalizedName, true]
+                : ['row:' . $rowId, 'place_name:unmapped-row:' . $rowId, false],
+            'tenant' => [(string) $tenantId, 'tenant:' . $tenantId, true],
+            default => [(string) $tenantId, 'tenant:' . $tenantId, true],
+        };
 
         return [
-            'bucket_key' => implode('|', [$tenantId, $basis, $value, $normalizedActivity, $currency]),
+            'bucket_key' => implode('|', [$tenantId, $basis, $comparisonValue, $currency]),
             'comparison_basis' => $basis,
-            'comparison_value' => $value,
-            'bucket_label' => $label,
+            'comparison_value' => $comparisonValue,
+            'bucket_label' => $bucketLabel,
             'activity_type' => $normalizedActivity !== '' ? $normalizedActivity : null,
             'currency' => $currency,
+            'mapped' => $mapped,
         ];
     }
 
@@ -572,6 +679,18 @@ class AccrualsReconcileCommand extends Command
             'only_csv' => 2,
             'matched' => 3,
             default => 4,
+        };
+    }
+
+    private function overlapBasisWeight(string $basis): int
+    {
+        return match ($basis) {
+            'contract' => 5,
+            'market_space' => 4,
+            'place_code' => 3,
+            'place_name' => 2,
+            'tenant' => 1,
+            default => 0,
         };
     }
 
@@ -618,7 +737,8 @@ class AccrualsReconcileCommand extends Command
             '- This is a READ-ONLY report. No data was modified.',
             '- Source field: tenant_accruals.source = "1c" or "excel"/"csv".',
             '- Sum field: tenant_accruals.total_with_vat.',
-            '- Overlap bucket precedence: tenant_contract_id -> market_space_id -> source_place_code -> source_place_name -> tenant_id.',
+            '- Overlap basis is selected per tenant from: contract, market_space, source_place_code, source_place_name, tenant.',
+            '- Candidate basis selection prefers higher cross-source coverage, then lower unmatched penalty, then finer granularity.',
             '- Buckets are compared inside one period only; matched means same bucket, same row count, and diff < 0.01.',
         ];
     }
