@@ -56,6 +56,12 @@ class AccrualsReconcileCommandTest extends TestCase
             'code' => 'P/2',
         ]);
 
+        $onlyCsvSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/4',
+            'code' => 'P/4',
+        ]);
+
         $this->createAccrual([
             'market_id' => $market->id,
             'tenant_id' => $tenantMatched->id,
@@ -118,6 +124,7 @@ class AccrualsReconcileCommandTest extends TestCase
         $this->createAccrual([
             'market_id' => $market->id,
             'tenant_id' => $tenantOnlyCsv->id,
+            'market_space_id' => $onlyCsvSpace->id,
             'period' => '2026-01-01',
             'source' => 'excel',
             'total_with_vat' => 75,
@@ -147,10 +154,12 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"status": "mismatch"')
             ->expectsOutputToContain('"status": "only_1c"')
             ->expectsOutputToContain('"status": "only_csv"')
+            ->expectsOutputToContain('"primary_diagnostic": "contract_amount_mismatch"')
+            ->expectsOutputToContain('"primary_diagnostic": "only_csv_market_space_bucket"')
             ->expectsOutputToContain('"bucket_label": "contract:' . $contract->id . '"')
             ->expectsOutputToContain('"bucket_label": "market_space:' . $space->id . '"')
             ->expectsOutputToContain('"bucket_label": "place_code:P/3"')
-            ->expectsOutputToContain('"bucket_label": "place_code:P/4"');
+            ->expectsOutputToContain('"bucket_label": "market_space:' . $onlyCsvSpace->id . '"');
     }
 
     public function test_reconcile_json_respects_tenant_filter_for_overlap_report(): void
@@ -344,6 +353,7 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"bucket_count_in_both": 1')
             ->expectsOutputToContain('"bucket_count_mismatch": 1')
             ->expectsOutputToContain('"comparison_basis": "tenant"')
+            ->expectsOutputToContain('"primary_diagnostic": "same_total_different_row_count"')
             ->expectsOutputToContain('"bucket_label": "tenant:' . $tenant->id . '"')
             ->doesntExpectOutputToContain('"status": "only_1c"')
             ->doesntExpectOutputToContain('"status": "only_csv"');
