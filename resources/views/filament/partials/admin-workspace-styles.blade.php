@@ -507,6 +507,209 @@
         margin-top: 0;
     }
 
+    .fi-resource-staff-edit-page {
+        --staff-edit-border: #d8e3f1;
+        --staff-edit-surface: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+
+    .fi-resource-staff-edit-page .fi-section {
+        border-color: var(--staff-edit-border);
+        border-radius: 1rem;
+        background: var(--staff-edit-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        overflow: visible;
+    }
+
+    .fi-resource-staff-edit-page .fi-section-content {
+        padding: 1rem 1.1rem 1.15rem;
+        overflow: visible;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary {
+        border-color: rgba(37, 99, 235, 0.18);
+        background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary .fi-section-content {
+        padding-top: 1rem;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary .fi-section-description {
+        max-width: 48rem;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary .fi-grid {
+        gap: 0.85rem;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary__metric {
+        min-height: 100%;
+        padding: 0.95rem 1rem;
+        border: 1px solid rgba(37, 99, 235, 0.12);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.03);
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary__label {
+        font-size: 0.74rem;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        color: #1d4ed8;
+        opacity: 0.78;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary__value {
+        margin-top: 0.3rem;
+        font-size: 1rem;
+        font-weight: 800;
+        line-height: 1.35;
+        color: #0f172a;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-summary__note {
+        margin-top: 0.25rem;
+        font-size: 0.8rem;
+        line-height: 1.35;
+        color: #64748b;
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-summary {
+        border-color: rgba(59, 130, 246, 0.2);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.82));
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-summary__metric {
+        border-color: rgba(59, 130, 246, 0.18);
+        background: rgba(15, 23, 42, 0.94);
+        box-shadow: 0 6px 16px rgba(2, 6, 23, 0.22);
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-summary__label {
+        color: #93c5fd;
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-summary__value {
+        color: #e2e8f0;
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-summary__note {
+        color: #94a3b8;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-main,
+    .fi-resource-staff-edit-page .staff-edit-telegram,
+    .fi-resource-staff-edit-page .staff-edit-security,
+    .fi-resource-staff-edit-page .staff-edit-notifications {
+        border-color: rgba(148, 163, 184, 0.18);
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-main .fi-section-description,
+    .fi-resource-staff-edit-page .staff-edit-telegram .fi-section-description,
+    .fi-resource-staff-edit-page .staff-edit-security .fi-section-description,
+    .fi-resource-staff-edit-page .staff-edit-notifications .fi-section-description {
+        max-width: 52rem;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-access {
+        background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+        border-color: rgba(59, 130, 246, 0.16);
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-access .fi-fo-field-wrp-helper-text {
+        max-width: 44rem;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-role-hint {
+        display: grid;
+        gap: 0.75rem;
+        margin-top: 0.15rem;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-role-hint__item {
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 0.95rem;
+        background: rgba(248, 250, 252, 0.92);
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-role-hint__title {
+        display: block;
+        color: #0f172a;
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.35;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-role-hint__copy {
+        margin-top: 0.3rem;
+        color: #64748b;
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+
+    .fi-resource-staff-edit-page .staff-edit-security {
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+        border-color: rgba(96, 165, 250, 0.18);
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-security {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.82));
+        border-color: rgba(96, 165, 250, 0.18);
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-access {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.84));
+        border-color: rgba(59, 130, 246, 0.18);
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-role-hint__item {
+        border-color: rgba(148, 163, 184, 0.16);
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-role-hint__title {
+        color: #e2e8f0;
+    }
+
+    html.dark .fi-resource-staff-edit-page .staff-edit-role-hint__copy {
+        color: #94a3b8;
+    }
+
+    .fi-resource-staff-edit-page .fi-input-wrp {
+        border-color: #cfd9e8;
+        background: #ffffff;
+        transition: border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .fi-resource-staff-edit-page .fi-input-wrp:focus-within {
+        border-color: #5f8fdc;
+        box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+    }
+
+    .fi-resource-staff-edit-page .fi-fo-checkbox-list-option-label,
+    .fi-resource-staff-edit-page .fi-fo-toggle label {
+        font-size: 0.92rem;
+    }
+
+    @media (max-width: 1279px) {
+        .fi-resource-staff-edit-page .staff-edit-summary .fi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 767px) {
+        .fi-resource-staff-edit-page .staff-edit-summary .fi-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .fi-resource-staff-edit-page .fi-section-content {
+            padding-inline: 0.9rem;
+        }
+    }
+
     .aw-shell--tenants {
         gap: 1.25rem;
     }

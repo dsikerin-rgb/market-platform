@@ -18,6 +18,7 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Enums\Width;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
@@ -25,6 +26,19 @@ use Spatie\Permission\Models\Role;
 class EditStaff extends BaseEditRecord
 {
     protected static string $resource = StaffResource::class;
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-staff-edit-page',
+        ];
+    }
 
     /**
      * @var array{token:string,expires_at:string,command:string,deep_link:?string,share_link:?string,qr_svg_data_uri:?string}|null
@@ -78,6 +92,8 @@ class EditStaff extends BaseEditRecord
                 ->label('Написать сотруднику')
                 ->icon('heroicon-o-paper-airplane')
                 ->color('primary')
+                ->size('lg')
+                ->outlined()
                 ->visible(fn (): bool => (bool) $user
                     && (method_exists($this->record, 'getKey'))
                     && (int) $this->record->getKey() !== (int) ($user->id ?? 0)
@@ -123,6 +139,8 @@ class EditStaff extends BaseEditRecord
                 ->label('Пароль')
                 ->icon('heroicon-o-key')
                 ->color('gray')
+                ->size('lg')
+                ->outlined()
                 ->modalHeading('Смена пароля')
                 ->modalSubmitActionLabel('Сохранить')
                 ->visible(fn (): bool => $this->canManagePasswordFields())
