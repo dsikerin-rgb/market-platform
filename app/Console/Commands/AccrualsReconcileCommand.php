@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AccrualsReconcileCommand extends Command
 {
@@ -14,6 +15,7 @@ class AccrualsReconcileCommand extends Command
         {--tenant= : Filter by tenant ID (optional)}
         {--status= : Filter overlap detail rows by status (comma-separated)}
         {--diagnostic= : Filter overlap detail rows by primary diagnostic (comma-separated)}
+        {--subdiagnostic= : Filter overlap detail rows by secondary diagnostic (comma-separated)}
         {--limit=0 : Limit breakdown rows (0 = no limit)}
         {--overlap-limit=20 : Limit overlap detail rows (0 = no limit)}
         {--with-matched-overlap : Include matched overlap buckets in detailed overlap output}
@@ -29,6 +31,7 @@ class AccrualsReconcileCommand extends Command
         $tenantId = $this->option('tenant') ? (int) $this->option('tenant') : null;
         $statusFilters = $this->parseCsvOption((string) ($this->option('status') ?? ''));
         $diagnosticFilters = $this->parseCsvOption((string) ($this->option('diagnostic') ?? ''));
+        $subdiagnosticFilters = $this->parseCsvOption((string) ($this->option('subdiagnostic') ?? ''));
         $limit = (int) ($this->option('limit') ?? 0);
         $overlapLimit = (int) ($this->option('overlap-limit') ?? 20);
         $withMatchedOverlap = (bool) $this->option('with-matched-overlap');
@@ -65,6 +68,7 @@ class AccrualsReconcileCommand extends Command
             $withMatchedOverlap,
             $statusFilters,
             $diagnosticFilters,
+            $subdiagnosticFilters,
         );
 
         if ($json) {
@@ -75,6 +79,7 @@ class AccrualsReconcileCommand extends Command
                     'tenant_id' => $tenantId,
                     'status_filters' => $statusFilters,
                     'diagnostic_filters' => $diagnosticFilters,
+                    'subdiagnostic_filters' => $subdiagnosticFilters,
                     'breakdown_limit' => $limit,
                     'overlap_limit' => $overlapLimit,
                     'with_matched_overlap' => $withMatchedOverlap,
@@ -111,6 +116,9 @@ class AccrualsReconcileCommand extends Command
         }
         if ($diagnosticFilters !== []) {
             $this->line('  diagnostic_filters: ' . implode(', ', $diagnosticFilters));
+        }
+        if ($subdiagnosticFilters !== []) {
+            $this->line('  subdiagnostic_filters: ' . implode(', ', $subdiagnosticFilters));
         }
         $this->line("  breakdown_limit: {$limit}");
         $this->line("  overlap_limit: {$overlapLimit}");
@@ -200,7 +208,7 @@ class AccrualsReconcileCommand extends Command
             $this->newLine();
             $this->info('## Overlap Details');
             $this->table(
-                ['Tenant', 'Basis', 'Bucket', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status', 'Diagnostic'],
+                ['Tenant', 'Basis', 'Bucket', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status', 'Diagnostic', 'Subdiagnostic'],
                 collect($overlap['rows'])->map(fn (array $row) => [
                     $row['tenant_name'],
                     $row['comparison_basis'],
@@ -212,6 +220,7 @@ class AccrualsReconcileCommand extends Command
                     $this->formatMoney((float) $row['diff_sum']),
                     $row['status'],
                     $row['primary_diagnostic'],
+                    $row['secondary_diagnostic'] ?? '-',
                 ])->all()
             );
         }
@@ -225,6 +234,21 @@ class AccrualsReconcileCommand extends Command
                     ? ($overlap['diagnostics']['filtered_reason_counts'] ?? [])
                     : ($overlap['diagnostics']['reason_counts'] ?? []))
                     ->map(fn (array $row): array => [$row['diagnostic'], $row['count']])
+                    ->all()
+            );
+        }
+
+        $secondarySummary = $overlap['has_active_filters']
+            ? ($overlap['diagnostics']['filtered_secondary_counts'] ?? [])
+            : ($overlap['diagnostics']['secondary_counts'] ?? []);
+
+        if ($secondarySummary !== []) {
+            $this->newLine();
+            $this->info('## Subdiagnostic Summary');
+            $this->table(
+                ['Subdiagnostic', 'Count'],
+                collect($secondarySummary)
+                    ->map(fn (array $row): array => [$row['secondary_diagnostic'], $row['count']])
                     ->all()
             );
         }
@@ -385,29 +409,69 @@ class AccrualsReconcileCommand extends Command
         bool $withMatchedOverlap,
         array $statusFilters,
         array $diagnosticFilters,
+        array $subdiagnosticFilters,
     ): array {
-        $rows = DB::table('tenant_accruals as ta')
+        $rowsQuery = DB::table('tenant_accruals as ta')
             ->join('tenants as t', 't.id', '=', 'ta.tenant_id')
             ->where('ta.market_id', $marketId)
             ->where('ta.period', $periodDate)
             ->whereIn('ta.source', ['1c', 'excel', 'csv'])
             ->when($tenantId, fn ($query) => $query->where('ta.tenant_id', $tenantId))
             ->orderBy('ta.tenant_id')
-            ->orderBy('ta.id')
-            ->get([
-                'ta.id',
-                'ta.tenant_id',
-                't.name as tenant_name',
-                'ta.source',
-                'ta.tenant_contract_id',
-                'ta.market_space_id',
-                'ta.source_place_code',
-                'ta.source_place_name',
-                'ta.activity_type',
-                'ta.currency',
-                'ta.total_with_vat',
-                'ta.total_no_vat',
+            ->orderBy('ta.id');
+
+        $selects = [
+            'ta.id',
+            'ta.tenant_id',
+            't.name as tenant_name',
+            'ta.source',
+            'ta.tenant_contract_id',
+            'ta.market_space_id',
+            'ta.source_place_code',
+            'ta.source_place_name',
+            'ta.activity_type',
+            'ta.currency',
+            'ta.total_with_vat',
+            'ta.total_no_vat',
+        ];
+
+        if (Schema::hasTable('market_space_tenant_bindings')) {
+            $activeBindings = DB::table('market_space_tenant_bindings as mstb')
+                ->selectRaw('MAX(mstb.id) as id, mstb.market_space_id')
+                ->where('mstb.market_id', $marketId)
+                ->where(function ($query): void {
+                    $query->whereNull('mstb.started_at')
+                        ->orWhere('mstb.started_at', '<=', now());
+                })
+                ->where(function ($query): void {
+                    $query->whereNull('mstb.ended_at')
+                        ->orWhere('mstb.ended_at', '>', now());
+                })
+                ->groupBy('mstb.market_space_id');
+
+            $rowsQuery
+                ->leftJoinSub($activeBindings, 'active_mstb', function ($join): void {
+                    $join->on('active_mstb.market_space_id', '=', 'ta.market_space_id');
+                })
+                ->leftJoin('market_space_tenant_bindings as mstb', 'mstb.id', '=', 'active_mstb.id')
+                ->leftJoin('tenants as binding_t', 'binding_t.id', '=', 'mstb.tenant_id')
+                ->leftJoin('tenant_contracts as binding_tc', 'binding_tc.id', '=', 'mstb.tenant_contract_id');
+            $selects = array_merge($selects, [
+                'mstb.tenant_id as binding_tenant_id',
+                'binding_t.name as binding_tenant_name',
+                'mstb.tenant_contract_id as binding_contract_id',
+                'binding_tc.number as binding_contract_number',
             ]);
+        } else {
+            $selects = array_merge($selects, [
+                DB::raw('NULL as binding_tenant_id'),
+                DB::raw('NULL as binding_tenant_name'),
+                DB::raw('NULL as binding_contract_id'),
+                DB::raw('NULL as binding_contract_number'),
+            ]);
+        }
+
+        $rows = $rowsQuery->get($selects);
 
         $prepared = $rows
             ->groupBy('tenant_id')
@@ -420,6 +484,7 @@ class AccrualsReconcileCommand extends Command
                 $bucket['status'] = $this->overlapStatus($bucket);
                 $bucket['diagnostic_flags'] = $this->diagnosticFlags($bucket);
                 $bucket['primary_diagnostic'] = $this->primaryDiagnostic($bucket);
+                $bucket['secondary_diagnostic'] = $this->secondaryDiagnostic($bucket);
 
                 return $bucket;
             })
@@ -429,7 +494,7 @@ class AccrualsReconcileCommand extends Command
 
         $detailed = $prepared
             ->filter(fn (array $row): bool => $withMatchedOverlap || $row['status'] !== 'matched')
-            ->filter(fn (array $row): bool => $this->matchesOverlapFilters($row, $statusFilters, $diagnosticFilters))
+            ->filter(fn (array $row): bool => $this->matchesOverlapFilters($row, $statusFilters, $diagnosticFilters, $subdiagnosticFilters))
             ->sort(function (array $left, array $right): int {
                 $statusCompare = $this->overlapStatusWeight($left['status']) <=> $this->overlapStatusWeight($right['status']);
                 if ($statusCompare !== 0) {
@@ -459,7 +524,7 @@ class AccrualsReconcileCommand extends Command
         $stats['reported_detail_count'] = $reported->count();
         $filteredStats['filtered_detail_count'] = $detailed->count();
         $filteredStats['reported_detail_count'] = $reported->count();
-        $hasActiveFilters = $statusFilters !== [] || $diagnosticFilters !== [];
+        $hasActiveFilters = $statusFilters !== [] || $diagnosticFilters !== [] || $subdiagnosticFilters !== [];
 
         return [
             'stats' => $stats,
@@ -578,6 +643,10 @@ class AccrualsReconcileCommand extends Command
                     'source_place_codes' => [],
                     'source_place_names' => [],
                     'sources' => [],
+                    'binding_tenant_ids' => [],
+                    'binding_tenant_names' => [],
+                    'binding_contract_ids' => [],
+                    'binding_contract_numbers' => [],
                     'mapped_row_count' => 0,
                 ];
             }
@@ -608,6 +677,26 @@ class AccrualsReconcileCommand extends Command
             $source = (string) $row->source;
             if (! in_array($source, $buckets[$bucketKey]['sources'], true)) {
                 $buckets[$bucketKey]['sources'][] = $source;
+            }
+
+            $bindingTenantId = (int) ($row->binding_tenant_id ?? 0);
+            if ($bindingTenantId > 0 && ! in_array($bindingTenantId, $buckets[$bucketKey]['binding_tenant_ids'], true)) {
+                $buckets[$bucketKey]['binding_tenant_ids'][] = $bindingTenantId;
+            }
+
+            $bindingTenantName = trim((string) ($row->binding_tenant_name ?? ''));
+            if ($bindingTenantName !== '' && ! in_array($bindingTenantName, $buckets[$bucketKey]['binding_tenant_names'], true)) {
+                $buckets[$bucketKey]['binding_tenant_names'][] = $bindingTenantName;
+            }
+
+            $bindingContractId = (int) ($row->binding_contract_id ?? 0);
+            if ($bindingContractId > 0 && ! in_array($bindingContractId, $buckets[$bucketKey]['binding_contract_ids'], true)) {
+                $buckets[$bucketKey]['binding_contract_ids'][] = $bindingContractId;
+            }
+
+            $bindingContractNumber = trim((string) ($row->binding_contract_number ?? ''));
+            if ($bindingContractNumber !== '' && ! in_array($bindingContractNumber, $buckets[$bucketKey]['binding_contract_numbers'], true)) {
+                $buckets[$bucketKey]['binding_contract_numbers'][] = $bindingContractNumber;
             }
 
             if ($bucket['mapped']) {
@@ -785,17 +874,23 @@ class AccrualsReconcileCommand extends Command
      * @param  array<string, mixed>  $row
      * @param  array<int, string>  $statusFilters
      * @param  array<int, string>  $diagnosticFilters
+     * @param  array<int, string>  $subdiagnosticFilters
      */
-    private function matchesOverlapFilters(array $row, array $statusFilters, array $diagnosticFilters): bool
+    private function matchesOverlapFilters(array $row, array $statusFilters, array $diagnosticFilters, array $subdiagnosticFilters): bool
     {
         $status = (string) ($row['status'] ?? '');
         $diagnostic = (string) ($row['primary_diagnostic'] ?? '');
+        $subdiagnostic = (string) ($row['secondary_diagnostic'] ?? '');
 
         if ($statusFilters !== [] && ! in_array($status, $statusFilters, true)) {
             return false;
         }
 
         if ($diagnosticFilters !== [] && ! in_array($diagnostic, $diagnosticFilters, true)) {
+            return false;
+        }
+
+        if ($subdiagnosticFilters !== [] && ! in_array($subdiagnostic, $subdiagnosticFilters, true)) {
             return false;
         }
 
@@ -896,6 +991,45 @@ class AccrualsReconcileCommand extends Command
         };
     }
 
+    private function secondaryDiagnostic(array $bucket): ?string
+    {
+        if (($bucket['primary_diagnostic'] ?? null) !== 'only_csv_market_space_bucket') {
+            return null;
+        }
+
+        $bucketTenantId = (int) ($bucket['tenant_id'] ?? 0);
+        $bindingTenantIds = collect($bucket['binding_tenant_ids'] ?? [])
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->values()
+            ->all();
+        $bindingContractIds = collect($bucket['binding_contract_ids'] ?? [])
+            ->map(fn ($value): int => (int) $value)
+            ->filter(fn (int $value): bool => $value > 0)
+            ->values()
+            ->all();
+
+        if ($bindingTenantIds === [] && $bindingContractIds === []) {
+            return 'space_without_active_binding';
+        }
+
+        if ($bindingTenantIds !== [] && in_array($bucketTenantId, $bindingTenantIds, true)) {
+            return $bindingContractIds !== []
+                ? 'space_bound_to_same_tenant'
+                : 'space_bound_to_same_tenant_without_contract';
+        }
+
+        if ($bindingTenantIds !== []) {
+            return 'space_bound_to_other_tenant';
+        }
+
+        if ($bindingContractIds !== []) {
+            return 'space_with_contract_without_tenant';
+        }
+
+        return 'space_binding_context_unknown';
+    }
+
     private function isApproxMultipleOf(float $value, float $step, float $tolerance): bool
     {
         if ($value < ($step - $tolerance) || $step <= 0.0) {
@@ -949,6 +1083,42 @@ class AccrualsReconcileCommand extends Command
             ->values()
             ->all();
 
+        $secondaryCounts = $prepared
+            ->filter(fn (array $row): bool => ($row['secondary_diagnostic'] ?? null) !== null)
+            ->groupBy('secondary_diagnostic')
+            ->map(fn (Collection $group, string $secondaryDiagnostic): array => [
+                'secondary_diagnostic' => $secondaryDiagnostic,
+                'count' => $group->count(),
+            ])
+            ->sort(function (array $left, array $right): int {
+                $countCompare = $right['count'] <=> $left['count'];
+                if ($countCompare !== 0) {
+                    return $countCompare;
+                }
+
+                return $left['secondary_diagnostic'] <=> $right['secondary_diagnostic'];
+            })
+            ->values()
+            ->all();
+
+        $filteredSecondaryCounts = $filtered
+            ->filter(fn (array $row): bool => ($row['secondary_diagnostic'] ?? null) !== null)
+            ->groupBy('secondary_diagnostic')
+            ->map(fn (Collection $group, string $secondaryDiagnostic): array => [
+                'secondary_diagnostic' => $secondaryDiagnostic,
+                'count' => $group->count(),
+            ])
+            ->sort(function (array $left, array $right): int {
+                $countCompare = $right['count'] <=> $left['count'];
+                if ($countCompare !== 0) {
+                    return $countCompare;
+                }
+
+                return $left['secondary_diagnostic'] <=> $right['secondary_diagnostic'];
+            })
+            ->values()
+            ->all();
+
         $reportedExamples = $reported
             ->map(fn (array $row): array => [
                 'tenant_id' => (int) $row['tenant_id'],
@@ -956,6 +1126,7 @@ class AccrualsReconcileCommand extends Command
                 'bucket_label' => (string) $row['bucket_label'],
                 'status' => (string) $row['status'],
                 'primary_diagnostic' => (string) $row['primary_diagnostic'],
+                'secondary_diagnostic' => $row['secondary_diagnostic'],
             ])
             ->values()
             ->all();
@@ -963,6 +1134,8 @@ class AccrualsReconcileCommand extends Command
         return [
             'reason_counts' => $reasonCounts,
             'filtered_reason_counts' => $filteredReasonCounts,
+            'secondary_counts' => $secondaryCounts,
+            'filtered_secondary_counts' => $filteredSecondaryCounts,
             'reported_examples' => $reportedExamples,
         ];
     }
@@ -1030,7 +1203,8 @@ class AccrualsReconcileCommand extends Command
             '- Candidate basis selection prefers higher cross-source coverage, then lower unmatched penalty, then finer granularity.',
             '- Buckets are compared inside one period only; matched means same bucket, same row count, and diff < 0.01.',
             '- Diagnostic labels are read-only heuristics to separate aggregation gaps, small deltas, fixed-step deltas, and source-only buckets.',
-            '- Use --status=... or --diagnostic=... to focus the detailed overlap output on one class without changing the underlying data.',
+            '- Secondary diagnostics add active binding context for selected source-only classes without changing reconciliation results.',
+            '- Use --status=..., --diagnostic=..., or --subdiagnostic=... to focus the detailed overlap output on one class without changing the underlying data.',
         ];
     }
 }
