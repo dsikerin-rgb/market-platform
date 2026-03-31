@@ -359,6 +359,88 @@ class AccrualsReconcileCommandTest extends TestCase
             ->doesntExpectOutputToContain('"status": "only_csv"');
     }
 
+    public function test_reconcile_json_can_filter_overlap_rows_by_diagnostic_and_status(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenantOnlyCsv = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Only CSV',
+        ]);
+
+        $tenantMismatch = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Mismatch',
+        ]);
+
+        $csvSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/4',
+            'code' => 'P/4',
+        ]);
+
+        $mismatchSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/2',
+            'code' => 'P/2',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantOnlyCsv->id,
+            'market_space_id' => $csvSpace->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'total_with_vat' => 75,
+            'total_no_vat' => 75,
+            'source_place_code' => 'P/4',
+            'source_row_hash' => 'filtered-only-csv',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMismatch->id,
+            'market_space_id' => $mismatchSpace->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 200,
+            'total_no_vat' => 200,
+            'source_place_code' => 'P/2',
+            'source_row_hash' => 'filtered-mismatch-1c',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMismatch->id,
+            'market_space_id' => $mismatchSpace->id,
+            'period' => '2026-01-01',
+            'source' => 'csv',
+            'total_with_vat' => 240,
+            'total_no_vat' => 240,
+            'source_place_code' => 'P/2',
+            'source_row_hash' => 'filtered-mismatch-csv',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+            '--status' => 'only_csv',
+            '--diagnostic' => 'only_csv_market_space_bucket',
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"status_filters": [')
+            ->expectsOutputToContain('"only_csv"')
+            ->expectsOutputToContain('"diagnostic_filters": [')
+            ->expectsOutputToContain('"only_csv_market_space_bucket"')
+            ->expectsOutputToContain('"filtered_reason_counts": [')
+            ->expectsOutputToContain('"diagnostic": "only_csv_market_space_bucket"')
+            ->expectsOutputToContain('"filtered_detail_count": 1')
+            ->expectsOutputToContain('"bucket_label": "market_space:' . $csvSpace->id . '"')
+            ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $mismatchSpace->id . '"')
+            ->doesntExpectOutputToContain('"primary_diagnostic": "contract_amount_mismatch"');
+    }
+
     /**
      * @param  array<string, mixed>  $attributes
      */
