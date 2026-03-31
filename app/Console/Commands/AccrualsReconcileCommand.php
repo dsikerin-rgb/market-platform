@@ -12,6 +12,8 @@ class AccrualsReconcileCommand extends Command
         {--market= : Market ID (required)}
         {--period= : Period in YYYY-MM (e.g. 2026-01)}
         {--tenant= : Filter by tenant ID (optional)}
+        {--status= : Filter overlap detail rows by status (comma-separated)}
+        {--diagnostic= : Filter overlap detail rows by primary diagnostic (comma-separated)}
         {--limit=0 : Limit breakdown rows (0 = no limit)}
         {--overlap-limit=20 : Limit overlap detail rows (0 = no limit)}
         {--with-matched-overlap : Include matched overlap buckets in detailed overlap output}
@@ -25,6 +27,8 @@ class AccrualsReconcileCommand extends Command
         $marketId = (int) $this->option('market');
         $period = trim((string) $this->option('period'));
         $tenantId = $this->option('tenant') ? (int) $this->option('tenant') : null;
+        $statusFilters = $this->parseCsvOption((string) ($this->option('status') ?? ''));
+        $diagnosticFilters = $this->parseCsvOption((string) ($this->option('diagnostic') ?? ''));
         $limit = (int) ($this->option('limit') ?? 0);
         $overlapLimit = (int) ($this->option('overlap-limit') ?? 20);
         $withMatchedOverlap = (bool) $this->option('with-matched-overlap');
@@ -53,7 +57,15 @@ class AccrualsReconcileCommand extends Command
 
         // Breakdown by tenant
         $breakdown = $this->getBreakdown($marketId, $periodDate, $tenantId, $limit);
-        $overlap = $this->buildOverlapReport($marketId, $periodDate, $tenantId, $overlapLimit, $withMatchedOverlap);
+        $overlap = $this->buildOverlapReport(
+            $marketId,
+            $periodDate,
+            $tenantId,
+            $overlapLimit,
+            $withMatchedOverlap,
+            $statusFilters,
+            $diagnosticFilters,
+        );
 
         if ($json) {
             $this->line(json_encode([
@@ -61,6 +73,8 @@ class AccrualsReconcileCommand extends Command
                     'market_id' => $marketId,
                     'period' => $period,
                     'tenant_id' => $tenantId,
+                    'status_filters' => $statusFilters,
+                    'diagnostic_filters' => $diagnosticFilters,
                     'breakdown_limit' => $limit,
                     'overlap_limit' => $overlapLimit,
                     'with_matched_overlap' => $withMatchedOverlap,
@@ -91,6 +105,12 @@ class AccrualsReconcileCommand extends Command
         $this->line("  period: {$period}");
         if ($tenantId) {
             $this->line("  tenant_id: {$tenantId}");
+        }
+        if ($statusFilters !== []) {
+            $this->line('  status_filters: ' . implode(', ', $statusFilters));
+        }
+        if ($diagnosticFilters !== []) {
+            $this->line('  diagnostic_filters: ' . implode(', ', $diagnosticFilters));
         }
         $this->line("  breakdown_limit: {$limit}");
         $this->line("  overlap_limit: {$overlapLimit}");
@@ -154,6 +174,28 @@ class AccrualsReconcileCommand extends Command
             ]
         );
 
+        if ($overlap['has_active_filters']) {
+            $this->newLine();
+            $this->info('## Filtered Overlap Summary');
+            $this->table(
+                ['Metric', 'Value'],
+                [
+                    ['Filtered Buckets Total', $overlap['filtered_stats']['bucket_count_total']],
+                    ['Filtered Buckets in Both Sources', $overlap['filtered_stats']['bucket_count_in_both']],
+                    ['Filtered Buckets Matched', $overlap['filtered_stats']['bucket_count_matched']],
+                    ['Filtered Buckets Mismatched', $overlap['filtered_stats']['bucket_count_mismatch']],
+                    ['Filtered Buckets Only in 1C', $overlap['filtered_stats']['bucket_count_only_in_1c']],
+                    ['Filtered Buckets Only in CSV', $overlap['filtered_stats']['bucket_count_only_in_csv']],
+                    ['Filtered Rows 1C in Buckets', $overlap['filtered_stats']['row_count_1c']],
+                    ['Filtered Rows CSV in Buckets', $overlap['filtered_stats']['row_count_csv']],
+                    ['Filtered Sum 1C in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['sum_1c'])],
+                    ['Filtered Sum CSV in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['sum_csv'])],
+                    ['Filtered Diff in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['diff_sum'])],
+                    ['Filtered Detailed Rows', $overlap['filtered_stats']['filtered_detail_count']],
+                ]
+            );
+        }
+
         if ($overlap['rows'] !== []) {
             $this->newLine();
             $this->info('## Overlap Details');
@@ -179,7 +221,9 @@ class AccrualsReconcileCommand extends Command
             $this->info('## Diagnostic Summary');
             $this->table(
                 ['Diagnostic', 'Count'],
-                collect($overlap['diagnostics']['reason_counts'])
+                collect($overlap['has_active_filters']
+                    ? ($overlap['diagnostics']['filtered_reason_counts'] ?? [])
+                    : ($overlap['diagnostics']['reason_counts'] ?? []))
                     ->map(fn (array $row): array => [$row['diagnostic'], $row['count']])
                     ->all()
             );
@@ -323,7 +367,15 @@ class AccrualsReconcileCommand extends Command
     }
 
     /**
-     * @return array{stats: array<string, int|float>, rows: array<int, array<string, mixed>>, diagnostics: array<string, mixed>}
+     * @param  array<int, string>  $statusFilters
+     * @param  array<int, string>  $diagnosticFilters
+     * @return array{
+     *   stats: array<string, int|float>,
+     *   filtered_stats: array<string, int|float>,
+     *   rows: array<int, array<string, mixed>>,
+     *   diagnostics: array<string, mixed>,
+     *   has_active_filters: bool
+     * }
      */
     private function buildOverlapReport(
         int $marketId,
@@ -331,6 +383,8 @@ class AccrualsReconcileCommand extends Command
         ?int $tenantId,
         int $limit,
         bool $withMatchedOverlap,
+        array $statusFilters,
+        array $diagnosticFilters,
     ): array {
         $rows = DB::table('tenant_accruals as ta')
             ->join('tenants as t', 't.id', '=', 'ta.tenant_id')
@@ -371,22 +425,11 @@ class AccrualsReconcileCommand extends Command
             })
             ->values();
 
-        $stats = [
-            'bucket_count_total' => $prepared->count(),
-            'bucket_count_in_both' => $prepared->filter(fn (array $row): bool => $row['rows_1c'] > 0 && $row['rows_csv'] > 0)->count(),
-            'bucket_count_matched' => $prepared->where('status', 'matched')->count(),
-            'bucket_count_mismatch' => $prepared->where('status', 'mismatch')->count(),
-            'bucket_count_only_in_1c' => $prepared->where('status', 'only_1c')->count(),
-            'bucket_count_only_in_csv' => $prepared->where('status', 'only_csv')->count(),
-            'row_count_1c' => (int) $prepared->sum('rows_1c'),
-            'row_count_csv' => (int) $prepared->sum('rows_csv'),
-            'sum_1c' => round((float) $prepared->sum('sum_1c'), 2),
-            'sum_csv' => round((float) $prepared->sum('sum_csv'), 2),
-            'diff_sum' => round((float) $prepared->sum('diff_sum'), 2),
-        ];
+        $stats = $this->buildOverlapStats($prepared);
 
         $detailed = $prepared
             ->filter(fn (array $row): bool => $withMatchedOverlap || $row['status'] !== 'matched')
+            ->filter(fn (array $row): bool => $this->matchesOverlapFilters($row, $statusFilters, $diagnosticFilters))
             ->sort(function (array $left, array $right): int {
                 $statusCompare = $this->overlapStatusWeight($left['status']) <=> $this->overlapStatusWeight($right['status']);
                 if ($statusCompare !== 0) {
@@ -407,16 +450,23 @@ class AccrualsReconcileCommand extends Command
             })
             ->values();
 
+        $filteredStats = $this->buildOverlapStats($detailed);
+
         $reported = $limit > 0
             ? $detailed->take($limit)->values()
             : $detailed;
 
         $stats['reported_detail_count'] = $reported->count();
+        $filteredStats['filtered_detail_count'] = $detailed->count();
+        $filteredStats['reported_detail_count'] = $reported->count();
+        $hasActiveFilters = $statusFilters !== [] || $diagnosticFilters !== [];
 
         return [
             'stats' => $stats,
+            'filtered_stats' => $filteredStats,
             'rows' => $reported->all(),
-            'diagnostics' => $this->buildOverlapDiagnostics($prepared, $reported),
+            'diagnostics' => $this->buildOverlapDiagnostics($prepared, $detailed, $reported),
+            'has_active_filters' => $hasActiveFilters,
         ];
     }
 
@@ -711,6 +761,48 @@ class AccrualsReconcileCommand extends Command
     }
 
     /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array<string, int|float>
+     */
+    private function buildOverlapStats(Collection $rows): array
+    {
+        return [
+            'bucket_count_total' => $rows->count(),
+            'bucket_count_in_both' => $rows->filter(fn (array $row): bool => $row['rows_1c'] > 0 && $row['rows_csv'] > 0)->count(),
+            'bucket_count_matched' => $rows->where('status', 'matched')->count(),
+            'bucket_count_mismatch' => $rows->where('status', 'mismatch')->count(),
+            'bucket_count_only_in_1c' => $rows->where('status', 'only_1c')->count(),
+            'bucket_count_only_in_csv' => $rows->where('status', 'only_csv')->count(),
+            'row_count_1c' => (int) $rows->sum('rows_1c'),
+            'row_count_csv' => (int) $rows->sum('rows_csv'),
+            'sum_1c' => round((float) $rows->sum('sum_1c'), 2),
+            'sum_csv' => round((float) $rows->sum('sum_csv'), 2),
+            'diff_sum' => round((float) $rows->sum('diff_sum'), 2),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $statusFilters
+     * @param  array<int, string>  $diagnosticFilters
+     */
+    private function matchesOverlapFilters(array $row, array $statusFilters, array $diagnosticFilters): bool
+    {
+        $status = (string) ($row['status'] ?? '');
+        $diagnostic = (string) ($row['primary_diagnostic'] ?? '');
+
+        if ($statusFilters !== [] && ! in_array($status, $statusFilters, true)) {
+            return false;
+        }
+
+        if ($diagnosticFilters !== [] && ! in_array($diagnostic, $diagnosticFilters, true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * @param  array<string, mixed>  $bucket
      * @return array<int, string>
      */
@@ -817,12 +909,30 @@ class AccrualsReconcileCommand extends Command
 
     /**
      * @param  Collection<int, array<string, mixed>>  $prepared
+     * @param  Collection<int, array<string, mixed>>  $filtered
      * @param  Collection<int, array<string, mixed>>  $reported
      * @return array<string, mixed>
      */
-    private function buildOverlapDiagnostics(Collection $prepared, Collection $reported): array
+    private function buildOverlapDiagnostics(Collection $prepared, Collection $filtered, Collection $reported): array
     {
         $reasonCounts = $prepared
+            ->groupBy('primary_diagnostic')
+            ->map(fn (Collection $group, string $diagnostic): array => [
+                'diagnostic' => $diagnostic,
+                'count' => $group->count(),
+            ])
+            ->sort(function (array $left, array $right): int {
+                $countCompare = $right['count'] <=> $left['count'];
+                if ($countCompare !== 0) {
+                    return $countCompare;
+                }
+
+                return $left['diagnostic'] <=> $right['diagnostic'];
+            })
+            ->values()
+            ->all();
+
+        $filteredReasonCounts = $filtered
             ->groupBy('primary_diagnostic')
             ->map(fn (Collection $group, string $diagnostic): array => [
                 'diagnostic' => $diagnostic,
@@ -852,8 +962,25 @@ class AccrualsReconcileCommand extends Command
 
         return [
             'reason_counts' => $reasonCounts,
+            'filtered_reason_counts' => $filteredReasonCounts,
             'reported_examples' => $reportedExamples,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function parseCsvOption(string $value): array
+    {
+        if (trim($value) === '') {
+            return [];
+        }
+
+        return collect(explode(',', $value))
+            ->map(fn (string $item): string => trim($item))
+            ->filter(fn (string $item): bool => $item !== '')
+            ->values()
+            ->all();
     }
 
     private function sourceGroup(string $source): string
@@ -903,6 +1030,7 @@ class AccrualsReconcileCommand extends Command
             '- Candidate basis selection prefers higher cross-source coverage, then lower unmatched penalty, then finer granularity.',
             '- Buckets are compared inside one period only; matched means same bucket, same row count, and diff < 0.01.',
             '- Diagnostic labels are read-only heuristics to separate aggregation gaps, small deltas, fixed-step deltas, and source-only buckets.',
+            '- Use --status=... or --diagnostic=... to focus the detailed overlap output on one class without changing the underlying data.',
         ];
     }
 }
