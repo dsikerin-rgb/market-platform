@@ -52,21 +52,25 @@ class ReportSuspiciousCurrentDuplicateWarningsCommand extends Command
             })
             ->values();
 
+        $reported = $limit > 0
+            ? $prepared->take($limit)->values()
+            : $prepared;
+
         $stats = [
             'market_id' => $marketId,
             'scanned_exchange_count' => $exchanges->count(),
-            'reported_exchange_count' => $prepared->count(),
-            'warning_exchange_count' => $prepared->filter(
+            'reported_exchange_count' => $reported->count(),
+            'warning_exchange_count' => $reported->filter(
                 static fn (array $row): bool => $row['warning_group_count'] > 0 || $row['warning_row_count'] > 0
             )->count(),
-            'warning_group_count' => $prepared->sum('warning_group_count'),
-            'warning_row_count' => $prepared->sum('warning_row_count'),
-            'warning_sample_count' => $prepared->sum('warning_sample_count'),
+            'warning_group_count' => $reported->sum('warning_group_count'),
+            'warning_row_count' => $reported->sum('warning_row_count'),
+            'warning_sample_count' => $reported->sum('warning_sample_count'),
         ];
 
         $this->line(json_encode([
             'stats' => $stats,
-            'exchanges' => $limit > 0 ? $prepared->take($limit)->all() : $prepared->all(),
+            'exchanges' => $reported->all(),
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
         return self::SUCCESS;

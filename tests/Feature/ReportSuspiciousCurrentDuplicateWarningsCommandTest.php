@@ -145,4 +145,63 @@ class ReportSuspiciousCurrentDuplicateWarningsCommandTest extends TestCase
             ->expectsOutputToContain('"place_token": "P/24"')
             ->doesntExpectOutputToContain('"warning_row_count": 3');
     }
+
+    public function test_report_duplicate_warnings_limit_applies_to_stats_and_exchange_list(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        IntegrationExchange::query()->create([
+            'market_id' => $market->id,
+            'direction' => IntegrationExchange::DIRECTION_IN,
+            'entity_type' => 'contracts',
+            'status' => IntegrationExchange::STATUS_OK,
+            'started_at' => now()->subMinutes(2),
+            'finished_at' => now()->subMinutes(2)->addSeconds(5),
+            'payload' => [
+                'warnings' => [
+                    'suspected_current_duplicate_contract_groups' => 5,
+                    'suspected_current_duplicate_contract_rows' => 9,
+                    'suspected_current_duplicate_contracts' => [
+                        'samples' => [
+                            ['place_token' => 'P/old'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        IntegrationExchange::query()->create([
+            'market_id' => $market->id,
+            'direction' => IntegrationExchange::DIRECTION_IN,
+            'entity_type' => 'contracts',
+            'status' => IntegrationExchange::STATUS_OK,
+            'started_at' => now()->subMinute(),
+            'finished_at' => now()->subMinute()->addSeconds(5),
+            'payload' => [
+                'warnings' => [
+                    'suspected_current_duplicate_contract_groups' => 2,
+                    'suspected_current_duplicate_contract_rows' => 4,
+                    'suspected_current_duplicate_contracts' => [
+                        'samples' => [
+                            ['place_token' => 'P/new'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->artisan('contracts:report-duplicate-warnings', [
+            '--market' => $market->id,
+            '--with-samples-only' => true,
+            '--limit' => 1,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"reported_exchange_count": 1')
+            ->expectsOutputToContain('"warning_group_count": 2')
+            ->expectsOutputToContain('"warning_row_count": 4')
+            ->expectsOutputToContain('"place_token": "P/new"')
+            ->doesntExpectOutputToContain('"place_token": "P/old"')
+            ->doesntExpectOutputToContain('"warning_group_count": 7')
+            ->doesntExpectOutputToContain('"warning_row_count": 13');
+    }
 }
