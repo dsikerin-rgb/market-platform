@@ -214,6 +214,141 @@ class AccrualsReconcileCommandTest extends TestCase
             ->doesntExpectOutputToContain('"bucket_count_total": 2');
     }
 
+    public function test_reconcile_json_matches_same_contract_despite_different_activity_types(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Activity Drift',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'CONTRACT-ACTIVITY',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'activity_type' => 'rent',
+            'total_with_vat' => 100,
+            'total_no_vat' => 100,
+            'source_row_hash' => 'activity-1c',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'activity_type' => 'furniture',
+            'total_with_vat' => 100,
+            'total_no_vat' => 100,
+            'source_row_hash' => 'activity-csv',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+            '--with-matched-overlap' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"bucket_count_total": 1')
+            ->expectsOutputToContain('"bucket_count_in_both": 1')
+            ->expectsOutputToContain('"bucket_count_matched": 1')
+            ->expectsOutputToContain('"comparison_basis": "contract"')
+            ->expectsOutputToContain('"bucket_label": "contract:' . $contract->id . '"')
+            ->doesntExpectOutputToContain('activity:rent')
+            ->doesntExpectOutputToContain('activity:furniture');
+    }
+
+    public function test_reconcile_json_can_fall_back_to_tenant_basis_for_aggregated_cross_source_rows(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Aggregated',
+        ]);
+
+        $leftContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'CONTRACT-LEFT',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $rightContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'CONTRACT-RIGHT',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $leftContract->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 100,
+            'total_no_vat' => 100,
+            'source_row_hash' => 'aggregated-1c-left',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $rightContract->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 150,
+            'total_no_vat' => 150,
+            'source_row_hash' => 'aggregated-1c-right',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'total_with_vat' => 250,
+            'total_no_vat' => 250,
+            'source_row_hash' => 'aggregated-csv',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"bucket_count_total": 1')
+            ->expectsOutputToContain('"bucket_count_in_both": 1')
+            ->expectsOutputToContain('"bucket_count_mismatch": 1')
+            ->expectsOutputToContain('"comparison_basis": "tenant"')
+            ->expectsOutputToContain('"bucket_label": "tenant:' . $tenant->id . '"')
+            ->doesntExpectOutputToContain('"status": "only_1c"')
+            ->doesntExpectOutputToContain('"status": "only_csv"');
+    }
+
     /**
      * @param  array<string, mixed>  $attributes
      */
