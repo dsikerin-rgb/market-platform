@@ -77,6 +77,7 @@ class AccrualsReconcileCommand extends Command
                     'status' => $this->tenantStatus($row),
                 ])->values()->all(),
                 'overlap' => $overlap,
+                'diagnostics' => $overlap['diagnostics'],
                 'notes' => $this->notes(),
             ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
@@ -157,7 +158,7 @@ class AccrualsReconcileCommand extends Command
             $this->newLine();
             $this->info('## Overlap Details');
             $this->table(
-                ['Tenant', 'Basis', 'Bucket', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status'],
+                ['Tenant', 'Basis', 'Bucket', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status', 'Diagnostic'],
                 collect($overlap['rows'])->map(fn (array $row) => [
                     $row['tenant_name'],
                     $row['comparison_basis'],
@@ -168,7 +169,19 @@ class AccrualsReconcileCommand extends Command
                     $this->formatMoney((float) $row['sum_csv']),
                     $this->formatMoney((float) $row['diff_sum']),
                     $row['status'],
+                    $row['primary_diagnostic'],
                 ])->all()
+            );
+        }
+
+        if (($overlap['diagnostics']['reason_counts'] ?? []) !== []) {
+            $this->newLine();
+            $this->info('## Diagnostic Summary');
+            $this->table(
+                ['Diagnostic', 'Count'],
+                collect($overlap['diagnostics']['reason_counts'])
+                    ->map(fn (array $row): array => [$row['diagnostic'], $row['count']])
+                    ->all()
             );
         }
 
@@ -310,7 +323,7 @@ class AccrualsReconcileCommand extends Command
     }
 
     /**
-     * @return array{stats: array<string, int|float>, rows: array<int, array<string, mixed>>}
+     * @return array{stats: array<string, int|float>, rows: array<int, array<string, mixed>>, diagnostics: array<string, mixed>}
      */
     private function buildOverlapReport(
         int $marketId,
@@ -351,6 +364,8 @@ class AccrualsReconcileCommand extends Command
                 $bucket['diff_sum'] = (float) $bucket['sum_1c'] - (float) $bucket['sum_csv'];
                 $bucket['diff_sum_no_vat'] = (float) $bucket['sum_no_vat_1c'] - (float) $bucket['sum_no_vat_csv'];
                 $bucket['status'] = $this->overlapStatus($bucket);
+                $bucket['diagnostic_flags'] = $this->diagnosticFlags($bucket);
+                $bucket['primary_diagnostic'] = $this->primaryDiagnostic($bucket);
 
                 return $bucket;
             })
@@ -401,6 +416,7 @@ class AccrualsReconcileCommand extends Command
         return [
             'stats' => $stats,
             'rows' => $reported->all(),
+            'diagnostics' => $this->buildOverlapDiagnostics($prepared, $reported),
         ];
     }
 
@@ -694,6 +710,152 @@ class AccrualsReconcileCommand extends Command
         };
     }
 
+    /**
+     * @param  array<string, mixed>  $bucket
+     * @return array<int, string>
+     */
+    private function diagnosticFlags(array $bucket): array
+    {
+        $status = (string) ($bucket['status'] ?? '');
+        $basis = (string) ($bucket['comparison_basis'] ?? '');
+        $rows1c = (int) ($bucket['rows_1c'] ?? 0);
+        $rowsCsv = (int) ($bucket['rows_csv'] ?? 0);
+        $diff = abs((float) ($bucket['diff_sum'] ?? 0.0));
+        $flags = [];
+
+        if ($status === 'mismatch') {
+            if ($diff < 0.01 && $rows1c !== $rowsCsv) {
+                $flags[] = 'same_total_different_row_count';
+            }
+
+            if ($diff > 0.0 && $diff <= 1.10) {
+                $flags[] = 'near_zero_amount_delta';
+            }
+
+            if ($this->isApproxMultipleOf($diff, 525.0, 0.15)) {
+                $flags[] = 'fixed_step_delta_525';
+            }
+
+            if ($basis === 'tenant' && $rows1c !== $rowsCsv) {
+                $flags[] = 'tenant_level_aggregation_gap';
+            }
+
+            if ($basis === 'tenant' && $rows1c === $rowsCsv && $diff >= 0.01) {
+                $flags[] = 'tenant_level_amount_mismatch';
+            }
+
+            if ($basis === 'contract' && $rows1c === $rowsCsv && $diff >= 0.01) {
+                $flags[] = 'contract_amount_mismatch';
+            }
+        }
+
+        if ($status === 'only_1c') {
+            if ($basis === 'contract') {
+                $flags[] = 'only_1c_contract_bucket';
+            }
+
+            if (($bucket['source_place_codes'] ?? []) === []) {
+                $flags[] = 'missing_place_code_on_1c_side';
+            }
+        }
+
+        if ($status === 'only_csv') {
+            if ($basis === 'market_space') {
+                $flags[] = 'only_csv_market_space_bucket';
+            } elseif ($basis === 'contract') {
+                $flags[] = 'only_csv_contract_bucket';
+            }
+        }
+
+        return array_values(array_unique($flags));
+    }
+
+    /**
+     * @param  array<string, mixed>  $bucket
+     */
+    private function primaryDiagnostic(array $bucket): string
+    {
+        $status = (string) ($bucket['status'] ?? '');
+        $flags = $bucket['diagnostic_flags'] ?? [];
+
+        foreach ([
+            'same_total_different_row_count',
+            'near_zero_amount_delta',
+            'fixed_step_delta_525',
+            'tenant_level_aggregation_gap',
+            'tenant_level_amount_mismatch',
+            'contract_amount_mismatch',
+            'only_1c_contract_bucket',
+            'missing_place_code_on_1c_side',
+            'only_csv_market_space_bucket',
+            'only_csv_contract_bucket',
+        ] as $preferredFlag) {
+            if (in_array($preferredFlag, $flags, true)) {
+                return $preferredFlag;
+            }
+        }
+
+        return match ($status) {
+            'matched' => 'matched',
+            'mismatch' => 'mismatch_other',
+            'only_1c' => 'only_1c_other',
+            'only_csv' => 'only_csv_other',
+            default => 'unknown',
+        };
+    }
+
+    private function isApproxMultipleOf(float $value, float $step, float $tolerance): bool
+    {
+        if ($value < ($step - $tolerance) || $step <= 0.0) {
+            return false;
+        }
+
+        $quotient = $value / $step;
+
+        return abs($quotient - round($quotient)) <= ($tolerance / $step);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $prepared
+     * @param  Collection<int, array<string, mixed>>  $reported
+     * @return array<string, mixed>
+     */
+    private function buildOverlapDiagnostics(Collection $prepared, Collection $reported): array
+    {
+        $reasonCounts = $prepared
+            ->groupBy('primary_diagnostic')
+            ->map(fn (Collection $group, string $diagnostic): array => [
+                'diagnostic' => $diagnostic,
+                'count' => $group->count(),
+            ])
+            ->sort(function (array $left, array $right): int {
+                $countCompare = $right['count'] <=> $left['count'];
+                if ($countCompare !== 0) {
+                    return $countCompare;
+                }
+
+                return $left['diagnostic'] <=> $right['diagnostic'];
+            })
+            ->values()
+            ->all();
+
+        $reportedExamples = $reported
+            ->map(fn (array $row): array => [
+                'tenant_id' => (int) $row['tenant_id'],
+                'tenant_name' => (string) $row['tenant_name'],
+                'bucket_label' => (string) $row['bucket_label'],
+                'status' => (string) $row['status'],
+                'primary_diagnostic' => (string) $row['primary_diagnostic'],
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'reason_counts' => $reasonCounts,
+            'reported_examples' => $reportedExamples,
+        ];
+    }
+
     private function sourceGroup(string $source): string
     {
         return $source === '1c' ? '1c' : 'csv';
@@ -740,6 +902,7 @@ class AccrualsReconcileCommand extends Command
             '- Overlap basis is selected per tenant from: contract, market_space, source_place_code, source_place_name, tenant.',
             '- Candidate basis selection prefers higher cross-source coverage, then lower unmatched penalty, then finer granularity.',
             '- Buckets are compared inside one period only; matched means same bucket, same row count, and diff < 0.01.',
+            '- Diagnostic labels are read-only heuristics to separate aggregation gaps, small deltas, fixed-step deltas, and source-only buckets.',
         ];
     }
 }
