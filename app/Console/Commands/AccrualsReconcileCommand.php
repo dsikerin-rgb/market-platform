@@ -16,6 +16,7 @@ class AccrualsReconcileCommand extends Command
         {--status= : Filter overlap detail rows by status (comma-separated)}
         {--diagnostic= : Filter overlap detail rows by primary diagnostic (comma-separated)}
         {--subdiagnostic= : Filter overlap detail rows by secondary diagnostic (comma-separated)}
+        {--cutover-class= : Filter overlap detail rows by 1C cutover class (comma-separated)}
         {--limit=0 : Limit breakdown rows (0 = no limit)}
         {--overlap-limit=20 : Limit overlap detail rows (0 = no limit)}
         {--with-matched-overlap : Include matched overlap buckets in detailed overlap output}
@@ -32,6 +33,7 @@ class AccrualsReconcileCommand extends Command
         $statusFilters = $this->parseCsvOption((string) ($this->option('status') ?? ''));
         $diagnosticFilters = $this->parseCsvOption((string) ($this->option('diagnostic') ?? ''));
         $subdiagnosticFilters = $this->parseCsvOption((string) ($this->option('subdiagnostic') ?? ''));
+        $cutoverClassFilters = $this->parseCsvOption((string) ($this->option('cutover-class') ?? ''));
         $limit = (int) ($this->option('limit') ?? 0);
         $overlapLimit = (int) ($this->option('overlap-limit') ?? 20);
         $withMatchedOverlap = (bool) $this->option('with-matched-overlap');
@@ -69,6 +71,7 @@ class AccrualsReconcileCommand extends Command
             $statusFilters,
             $diagnosticFilters,
             $subdiagnosticFilters,
+            $cutoverClassFilters,
         );
 
         if ($json) {
@@ -80,6 +83,7 @@ class AccrualsReconcileCommand extends Command
                     'status_filters' => $statusFilters,
                     'diagnostic_filters' => $diagnosticFilters,
                     'subdiagnostic_filters' => $subdiagnosticFilters,
+                    'cutover_class_filters' => $cutoverClassFilters,
                     'breakdown_limit' => $limit,
                     'overlap_limit' => $overlapLimit,
                     'with_matched_overlap' => $withMatchedOverlap,
@@ -97,6 +101,7 @@ class AccrualsReconcileCommand extends Command
                 ])->values()->all(),
                 'overlap' => $overlap,
                 'diagnostics' => $overlap['diagnostics'],
+                'cutover' => $overlap['cutover'],
                 'notes' => $this->notes(),
             ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
@@ -119,6 +124,9 @@ class AccrualsReconcileCommand extends Command
         }
         if ($subdiagnosticFilters !== []) {
             $this->line('  subdiagnostic_filters: ' . implode(', ', $subdiagnosticFilters));
+        }
+        if ($cutoverClassFilters !== []) {
+            $this->line('  cutover_class_filters: ' . implode(', ', $cutoverClassFilters));
         }
         $this->line("  breakdown_limit: {$limit}");
         $this->line("  overlap_limit: {$overlapLimit}");
@@ -251,6 +259,46 @@ class AccrualsReconcileCommand extends Command
                     ->map(fn (array $row): array => [$row['secondary_diagnostic'], $row['count']])
                     ->all()
             );
+        }
+
+        if (($overlap['cutover']['class_counts'] ?? []) !== []) {
+            $this->newLine();
+            $this->info('## 1C Cutover Summary');
+            $this->table(
+                ['Metric', 'Value'],
+                [
+                    ['Policy', (string) ($overlap['cutover']['policy'] ?? '1c_primary_csv_reference')],
+                    ['Ready for 1C-primary workflow', (($overlap['cutover']['ready_for_1c_primary'] ?? false) ? 'yes' : 'no')],
+                    ['Accepted Buckets', (int) ($overlap['cutover']['accepted_bucket_count'] ?? 0)],
+                    ['Reference-only Buckets', (int) ($overlap['cutover']['reference_only_bucket_count'] ?? 0)],
+                    ['Manual-review Buckets', (int) ($overlap['cutover']['manual_review_bucket_count'] ?? 0)],
+                    ['Blocker Buckets', (int) ($overlap['cutover']['blocker_bucket_count'] ?? 0)],
+                ]
+            );
+
+            $this->newLine();
+            $this->table(
+                ['Cutover Class', 'Count'],
+                collect($overlap['has_active_filters']
+                    ? ($overlap['cutover']['filtered_class_counts'] ?? [])
+                    : ($overlap['cutover']['class_counts'] ?? []))
+                    ->map(fn (array $row): array => [$row['cutover_class'], $row['count']])
+                    ->all()
+            );
+
+            $cutoverReasons = $overlap['has_active_filters']
+                ? ($overlap['cutover']['filtered_reason_counts'] ?? [])
+                : ($overlap['cutover']['reason_counts'] ?? []);
+
+            if ($cutoverReasons !== []) {
+                $this->newLine();
+                $this->table(
+                    ['Cutover Reason', 'Count'],
+                    collect($cutoverReasons)
+                        ->map(fn (array $row): array => [$row['cutover_reason'], $row['count']])
+                        ->all()
+                );
+            }
         }
 
         $this->newLine();
@@ -393,11 +441,13 @@ class AccrualsReconcileCommand extends Command
     /**
      * @param  array<int, string>  $statusFilters
      * @param  array<int, string>  $diagnosticFilters
+     * @param  array<int, string>  $cutoverClassFilters
      * @return array{
      *   stats: array<string, int|float>,
      *   filtered_stats: array<string, int|float>,
      *   rows: array<int, array<string, mixed>>,
      *   diagnostics: array<string, mixed>,
+     *   cutover: array<string, mixed>,
      *   has_active_filters: bool
      * }
      */
@@ -410,6 +460,7 @@ class AccrualsReconcileCommand extends Command
         array $statusFilters,
         array $diagnosticFilters,
         array $subdiagnosticFilters,
+        array $cutoverClassFilters,
     ): array {
         $rowsQuery = DB::table('tenant_accruals as ta')
             ->join('tenants as t', 't.id', '=', 'ta.tenant_id')
@@ -485,6 +536,9 @@ class AccrualsReconcileCommand extends Command
                 $bucket['diagnostic_flags'] = $this->diagnosticFlags($bucket);
                 $bucket['primary_diagnostic'] = $this->primaryDiagnostic($bucket);
                 $bucket['secondary_diagnostic'] = $this->secondaryDiagnostic($bucket);
+                ['cutover_class' => $cutoverClass, 'cutover_reason' => $cutoverReason] = $this->cutoverClassification($bucket);
+                $bucket['cutover_class'] = $cutoverClass;
+                $bucket['cutover_reason'] = $cutoverReason;
 
                 return $bucket;
             })
@@ -494,7 +548,7 @@ class AccrualsReconcileCommand extends Command
 
         $detailed = $prepared
             ->filter(fn (array $row): bool => $withMatchedOverlap || $row['status'] !== 'matched')
-            ->filter(fn (array $row): bool => $this->matchesOverlapFilters($row, $statusFilters, $diagnosticFilters, $subdiagnosticFilters))
+            ->filter(fn (array $row): bool => $this->matchesOverlapFilters($row, $statusFilters, $diagnosticFilters, $subdiagnosticFilters, $cutoverClassFilters))
             ->sort(function (array $left, array $right): int {
                 $statusCompare = $this->overlapStatusWeight($left['status']) <=> $this->overlapStatusWeight($right['status']);
                 if ($statusCompare !== 0) {
@@ -524,13 +578,14 @@ class AccrualsReconcileCommand extends Command
         $stats['reported_detail_count'] = $reported->count();
         $filteredStats['filtered_detail_count'] = $detailed->count();
         $filteredStats['reported_detail_count'] = $reported->count();
-        $hasActiveFilters = $statusFilters !== [] || $diagnosticFilters !== [] || $subdiagnosticFilters !== [];
+        $hasActiveFilters = $statusFilters !== [] || $diagnosticFilters !== [] || $subdiagnosticFilters !== [] || $cutoverClassFilters !== [];
 
         return [
             'stats' => $stats,
             'filtered_stats' => $filteredStats,
             'rows' => $reported->all(),
             'diagnostics' => $this->buildOverlapDiagnostics($prepared, $detailed, $reported),
+            'cutover' => $this->buildCutoverSummary($prepared, $detailed),
             'has_active_filters' => $hasActiveFilters,
         ];
     }
@@ -875,12 +930,14 @@ class AccrualsReconcileCommand extends Command
      * @param  array<int, string>  $statusFilters
      * @param  array<int, string>  $diagnosticFilters
      * @param  array<int, string>  $subdiagnosticFilters
+     * @param  array<int, string>  $cutoverClassFilters
      */
-    private function matchesOverlapFilters(array $row, array $statusFilters, array $diagnosticFilters, array $subdiagnosticFilters): bool
+    private function matchesOverlapFilters(array $row, array $statusFilters, array $diagnosticFilters, array $subdiagnosticFilters, array $cutoverClassFilters): bool
     {
         $status = (string) ($row['status'] ?? '');
         $diagnostic = (string) ($row['primary_diagnostic'] ?? '');
         $subdiagnostic = (string) ($row['secondary_diagnostic'] ?? '');
+        $cutoverClass = (string) ($row['cutover_class'] ?? '');
 
         if ($statusFilters !== [] && ! in_array($status, $statusFilters, true)) {
             return false;
@@ -891,6 +948,10 @@ class AccrualsReconcileCommand extends Command
         }
 
         if ($subdiagnosticFilters !== [] && ! in_array($subdiagnostic, $subdiagnosticFilters, true)) {
+            return false;
+        }
+
+        if ($cutoverClassFilters !== [] && ! in_array($cutoverClass, $cutoverClassFilters, true)) {
             return false;
         }
 
@@ -1030,6 +1091,81 @@ class AccrualsReconcileCommand extends Command
         return 'space_binding_context_unknown';
     }
 
+    /**
+     * @param  array<string, mixed>  $bucket
+     * @return array{cutover_class: string, cutover_reason: string}
+     */
+    private function cutoverClassification(array $bucket): array
+    {
+        $primaryDiagnostic = (string) ($bucket['primary_diagnostic'] ?? 'unknown');
+        $secondaryDiagnostic = (string) ($bucket['secondary_diagnostic'] ?? '');
+        $flags = collect($bucket['diagnostic_flags'] ?? [])
+            ->map(fn ($value): string => (string) $value)
+            ->values()
+            ->all();
+
+        if ($primaryDiagnostic === 'matched') {
+            return [
+                'cutover_class' => 'accepted',
+                'cutover_reason' => 'matched_in_both_sources',
+            ];
+        }
+
+        if (in_array($primaryDiagnostic, ['near_zero_amount_delta', 'same_total_different_row_count'], true)) {
+            return [
+                'cutover_class' => 'accepted',
+                'cutover_reason' => $primaryDiagnostic,
+            ];
+        }
+
+        if (
+            in_array('missing_place_code_on_1c_side', $flags, true)
+            && in_array($primaryDiagnostic, ['only_1c_contract_bucket', 'missing_place_code_on_1c_side'], true)
+        ) {
+            return [
+                'cutover_class' => 'accepted',
+                'cutover_reason' => 'missing_place_code_on_1c_side',
+            ];
+        }
+
+        if ($primaryDiagnostic === 'only_csv_market_space_bucket' && $secondaryDiagnostic === 'space_without_active_binding') {
+            return [
+                'cutover_class' => 'reference_only',
+                'cutover_reason' => 'legacy_csv_space_without_active_binding',
+            ];
+        }
+
+        if ($primaryDiagnostic === 'only_csv_market_space_bucket' && $secondaryDiagnostic !== '') {
+            return [
+                'cutover_class' => in_array($secondaryDiagnostic, [
+                    'space_bound_to_same_tenant',
+                    'space_bound_to_same_tenant_without_contract',
+                    'space_bound_to_other_tenant',
+                ], true) ? 'manual_review' : 'blocker',
+                'cutover_reason' => $secondaryDiagnostic,
+            ];
+        }
+
+        if (in_array($primaryDiagnostic, [
+            'contract_amount_mismatch',
+            'fixed_step_delta_525',
+            'tenant_level_aggregation_gap',
+            'tenant_level_amount_mismatch',
+            'only_csv_contract_bucket',
+            'only_1c_contract_bucket',
+        ], true)) {
+            return [
+                'cutover_class' => 'manual_review',
+                'cutover_reason' => $primaryDiagnostic,
+            ];
+        }
+
+        return [
+            'cutover_class' => 'blocker',
+            'cutover_reason' => $primaryDiagnostic,
+        ];
+    }
+
     private function isApproxMultipleOf(float $value, float $step, float $tolerance): bool
     {
         if ($value < ($step - $tolerance) || $step <= 0.0) {
@@ -1141,6 +1277,81 @@ class AccrualsReconcileCommand extends Command
     }
 
     /**
+     * @param  Collection<int, array<string, mixed>>  $prepared
+     * @param  Collection<int, array<string, mixed>>  $filtered
+     * @return array<string, mixed>
+     */
+    private function buildCutoverSummary(Collection $prepared, Collection $filtered): array
+    {
+        $classCounts = $this->buildCutoverCountRows($prepared, 'cutover_class', 'cutover_class');
+        $filteredClassCounts = $this->buildCutoverCountRows($filtered, 'cutover_class', 'cutover_class');
+        $reasonCounts = $this->buildCutoverCountRows($prepared, 'cutover_reason', 'cutover_reason');
+        $filteredReasonCounts = $this->buildCutoverCountRows($filtered, 'cutover_reason', 'cutover_reason');
+        $blockerCount = $prepared->where('cutover_class', 'blocker')->count();
+
+        return [
+            'policy' => '1c_primary_csv_reference',
+            'ready_for_1c_primary' => $blockerCount === 0,
+            'accepted_bucket_count' => $prepared->where('cutover_class', 'accepted')->count(),
+            'reference_only_bucket_count' => $prepared->where('cutover_class', 'reference_only')->count(),
+            'manual_review_bucket_count' => $prepared->where('cutover_class', 'manual_review')->count(),
+            'blocker_bucket_count' => $blockerCount,
+            'class_counts' => $classCounts,
+            'filtered_class_counts' => $filteredClassCounts,
+            'reason_counts' => $reasonCounts,
+            'filtered_reason_counts' => $filteredReasonCounts,
+            'manual_review_examples' => $this->buildCutoverExamples($prepared, 'manual_review'),
+            'blocker_examples' => $this->buildCutoverExamples($prepared, 'blocker'),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, string|int>>
+     */
+    private function buildCutoverCountRows(Collection $rows, string $groupKey, string $labelKey): array
+    {
+        return $rows
+            ->groupBy($groupKey)
+            ->map(fn (Collection $group, string $value): array => [
+                $labelKey => $value,
+                'count' => $group->count(),
+            ])
+            ->sort(function (array $left, array $right) use ($labelKey): int {
+                $countCompare = $right['count'] <=> $left['count'];
+                if ($countCompare !== 0) {
+                    return $countCompare;
+                }
+
+                return $left[$labelKey] <=> $right[$labelKey];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildCutoverExamples(Collection $rows, string $cutoverClass): array
+    {
+        return $rows
+            ->where('cutover_class', $cutoverClass)
+            ->take(10)
+            ->map(fn (array $row): array => [
+                'tenant_id' => (int) $row['tenant_id'],
+                'tenant_name' => (string) $row['tenant_name'],
+                'bucket_label' => (string) $row['bucket_label'],
+                'status' => (string) $row['status'],
+                'primary_diagnostic' => (string) $row['primary_diagnostic'],
+                'secondary_diagnostic' => $row['secondary_diagnostic'],
+                'cutover_reason' => (string) $row['cutover_reason'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<int, string>
      */
     private function parseCsvOption(string $value): array
@@ -1204,7 +1415,8 @@ class AccrualsReconcileCommand extends Command
             '- Buckets are compared inside one period only; matched means same bucket, same row count, and diff < 0.01.',
             '- Diagnostic labels are read-only heuristics to separate aggregation gaps, small deltas, fixed-step deltas, and source-only buckets.',
             '- Secondary diagnostics add active binding context for selected source-only classes without changing reconciliation results.',
-            '- Use --status=..., --diagnostic=..., or --subdiagnostic=... to focus the detailed overlap output on one class without changing the underlying data.',
+            '- Cutover classes separate acceptable 1C-primary cases, legacy CSV reference tails, manual-review buckets, and unexpected blockers.',
+            '- Use --status=..., --diagnostic=..., --subdiagnostic=..., or --cutover-class=... to focus the detailed overlap output without changing the underlying data.',
         ];
     }
 }

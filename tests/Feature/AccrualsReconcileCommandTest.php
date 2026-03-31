@@ -557,6 +557,193 @@ class AccrualsReconcileCommandTest extends TestCase
             ->doesntExpectOutputToContain('"secondary_diagnostic": "space_bound_to_other_tenant"');
     }
 
+    public function test_reconcile_json_reports_cutover_summary_and_can_filter_by_cutover_class(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenantMatched = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Matched',
+        ]);
+
+        $tenantMissingPlaceCode = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Missing Place Code',
+        ]);
+
+        $tenantLegacyCsv = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Legacy CSV',
+        ]);
+
+        $tenantManualReview = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Manual Review',
+        ]);
+
+        $matchedContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMatched->id,
+            'number' => 'CONTRACT-MATCHED',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $missingPlaceContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMissingPlaceCode->id,
+            'number' => 'CONTRACT-NO-PLACE',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $legacySpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/20',
+            'code' => 'P/20',
+        ]);
+
+        $manualReviewContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantManualReview->id,
+            'number' => 'CONTRACT-MANUAL',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMatched->id,
+            'tenant_contract_id' => $matchedContract->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 100,
+            'total_no_vat' => 100,
+            'source_place_code' => 'P/1',
+            'source_row_hash' => 'cutover-matched-1c',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMatched->id,
+            'tenant_contract_id' => $matchedContract->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'total_with_vat' => 100,
+            'total_no_vat' => 100,
+            'source_place_code' => 'P/1',
+            'source_row_hash' => 'cutover-matched-csv',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantMissingPlaceCode->id,
+            'tenant_contract_id' => $missingPlaceContract->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 150,
+            'total_no_vat' => 150,
+            'source_row_hash' => 'cutover-no-place-1c',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantLegacyCsv->id,
+            'market_space_id' => $legacySpace->id,
+            'period' => '2026-01-01',
+            'source' => 'csv',
+            'total_with_vat' => 75,
+            'total_no_vat' => 75,
+            'source_place_code' => 'P/20',
+            'source_row_hash' => 'cutover-legacy-csv',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantManualReview->id,
+            'tenant_contract_id' => $manualReviewContract->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 220,
+            'total_no_vat' => 220,
+            'source_row_hash' => 'cutover-manual-1c',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantManualReview->id,
+            'tenant_contract_id' => $manualReviewContract->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'total_with_vat' => 200,
+            'total_no_vat' => 200,
+            'source_row_hash' => 'cutover-manual-csv',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+            '--with-matched-overlap' => true,
+            '--cutover-class' => 'manual_review',
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"cutover_class_filters": [')
+            ->expectsOutputToContain('"manual_review"')
+            ->expectsOutputToContain('"policy": "1c_primary_csv_reference"')
+            ->expectsOutputToContain('"ready_for_1c_primary": true')
+            ->expectsOutputToContain('"accepted_bucket_count": 2')
+            ->expectsOutputToContain('"reference_only_bucket_count": 1')
+            ->expectsOutputToContain('"manual_review_bucket_count": 1')
+            ->expectsOutputToContain('"blocker_bucket_count": 0')
+            ->expectsOutputToContain('"filtered_class_counts": [')
+            ->expectsOutputToContain('"cutover_class": "manual_review"')
+            ->expectsOutputToContain('"cutover_reason": "contract_amount_mismatch"')
+            ->expectsOutputToContain('"bucket_label": "contract:' . $manualReviewContract->id . '"')
+            ->doesntExpectOutputToContain('"bucket_label": "contract:' . $matchedContract->id . '"')
+            ->doesntExpectOutputToContain('"bucket_label": "contract:' . $missingPlaceContract->id . '"')
+            ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $legacySpace->id . '"');
+    }
+
+    public function test_reconcile_json_marks_unclassified_source_only_bucket_as_cutover_blocker(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Blocker',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 55,
+            'total_no_vat' => 55,
+            'source_place_code' => 'P/99',
+            'source_row_hash' => 'cutover-blocker-1c',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+            '--with-matched-overlap' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"ready_for_1c_primary": false')
+            ->expectsOutputToContain('"blocker_bucket_count": 1')
+            ->expectsOutputToContain('"cutover_class": "blocker"')
+            ->expectsOutputToContain('"cutover_reason": "only_1c_other"');
+    }
+
     /**
      * @param  array<string, mixed>  $attributes
      */
