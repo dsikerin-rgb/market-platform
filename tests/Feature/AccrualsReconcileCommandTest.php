@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceTenantBinding;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
@@ -439,6 +440,121 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"bucket_label": "market_space:' . $csvSpace->id . '"')
             ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $mismatchSpace->id . '"')
             ->doesntExpectOutputToContain('"primary_diagnostic": "contract_amount_mismatch"');
+    }
+
+    public function test_reconcile_json_can_filter_overlap_rows_by_subdiagnostic(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenantSame = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Same Binding',
+        ]);
+
+        $tenantCsvOther = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant CSV Other',
+        ]);
+
+        $tenantBindingOther = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Binding Other',
+        ]);
+
+        $sameSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/10',
+            'code' => 'P/10',
+        ]);
+
+        $otherSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/11',
+            'code' => 'P/11',
+        ]);
+
+        $sameContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantSame->id,
+            'number' => 'CONTRACT-SAME',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $otherContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantBindingOther->id,
+            'number' => 'CONTRACT-OTHER',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $sameSpace->id,
+            'tenant_id' => $tenantSame->id,
+            'tenant_contract_id' => $sameContract->id,
+            'started_at' => now()->subDay(),
+            'binding_type' => 'contract',
+            'confidence' => 'high',
+            'source' => 'test',
+        ]);
+
+        MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $otherSpace->id,
+            'tenant_id' => $tenantBindingOther->id,
+            'tenant_contract_id' => $otherContract->id,
+            'started_at' => now()->subDay(),
+            'binding_type' => 'contract',
+            'confidence' => 'high',
+            'source' => 'test',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantSame->id,
+            'market_space_id' => $sameSpace->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'total_with_vat' => 75,
+            'total_no_vat' => 75,
+            'source_place_code' => 'P/10',
+            'source_row_hash' => 'subdiagnostic-same',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantCsvOther->id,
+            'market_space_id' => $otherSpace->id,
+            'period' => '2026-01-01',
+            'source' => 'csv',
+            'total_with_vat' => 80,
+            'total_no_vat' => 80,
+            'source_place_code' => 'P/11',
+            'source_row_hash' => 'subdiagnostic-other',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+            '--status' => 'only_csv',
+            '--diagnostic' => 'only_csv_market_space_bucket',
+            '--subdiagnostic' => 'space_bound_to_same_tenant',
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"subdiagnostic_filters": [')
+            ->expectsOutputToContain('"space_bound_to_same_tenant"')
+            ->expectsOutputToContain('"filtered_secondary_counts": [')
+            ->expectsOutputToContain('"secondary_diagnostic": "space_bound_to_same_tenant"')
+            ->expectsOutputToContain('"bucket_label": "market_space:' . $sameSpace->id . '"')
+            ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $otherSpace->id . '"')
+            ->doesntExpectOutputToContain('"secondary_diagnostic": "space_bound_to_other_tenant"');
     }
 
     /**
