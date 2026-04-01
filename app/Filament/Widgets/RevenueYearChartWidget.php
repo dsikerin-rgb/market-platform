@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Widgets/RevenueYearChartWidget.php
 
 declare(strict_types=1);
 
@@ -108,12 +109,19 @@ class RevenueYearChartWidget extends ChartWidget
             return $this->emptyTwoSeriesChart($labels, count($months));
         }
 
-        [$labels, $payableData, $coveragePctData] = $this->filterAvailablePoints(
-            $labels,
-            ...$this->buildDebtSeries($marketId, $months, $totalSpaces),
-        );
+        // Строим данные для всех 13 месяцев (пустые месяцы будут с null)
+        [$payableData, $coveragePctData] = $this->buildDebtSeries($marketId, $months, $totalSpaces);
 
-        if ($labels === []) {
+        // Проверяем, есть ли хоть какие-то данные
+        $hasAnyData = false;
+        foreach ($payableData as $value) {
+            if ($value !== null) {
+                $hasAnyData = true;
+                break;
+            }
+        }
+
+        if (! $hasAnyData) {
             return $this->emptyChart('Нет данных 1С за выбранный период');
         }
 
@@ -180,8 +188,7 @@ class RevenueYearChartWidget extends ChartWidget
                 'x' => [
                     'ticks' => [
                         'font' => ['size' => 10],
-                        'autoSkip' => true,
-                        'maxTicksLimit' => 13,
+                        'autoSkip' => false,
                         'maxRotation' => 0,
                         'minRotation' => 0,
                     ],
@@ -432,35 +439,5 @@ class RevenueYearChartWidget extends ChartWidget
         }
 
         return [$payableData, $coveragePctData];
-    }
-
-    /**
-     * @param  list<string>  $labels
-     * @param  list<int|null>  $payableData
-     * @param  list<float|null>  $coveragePctData
-     * @return array{0:list<string>,1:list<int|null>,2:list<float|null>}
-     */
-    private function filterAvailablePoints(array $labels, array $payableData, array $coveragePctData): array
-    {
-        $filteredLabels = [];
-        $filteredPayable = [];
-        $filteredCoverage = [];
-
-        $count = min(count($labels), count($payableData), count($coveragePctData));
-
-        for ($i = 0; $i < $count; $i++) {
-            $hasPayable = $payableData[$i] !== null;
-            $hasCoverage = $coveragePctData[$i] !== null;
-
-            if (! $hasPayable && ! $hasCoverage) {
-                continue;
-            }
-
-            $filteredLabels[] = $labels[$i];
-            $filteredPayable[] = $payableData[$i];
-            $filteredCoverage[] = $coveragePctData[$i];
-        }
-
-        return [$filteredLabels, $filteredPayable, $filteredCoverage];
     }
 }
