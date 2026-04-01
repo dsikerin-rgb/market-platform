@@ -18,6 +18,8 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Support\Enums\Width;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
@@ -25,6 +27,64 @@ use Spatie\Permission\Models\Role;
 class EditStaff extends BaseEditRecord
 {
     protected static string $resource = StaffResource::class;
+
+    public function getMaxContentWidth(): Width|string|null
+    {
+        return Width::Full;
+    }
+
+    public function getSubheading(): string|HtmlString|null
+    {
+        $marketName = trim((string) ($this->record?->market?->name ?? ''));
+        $email = trim((string) ($this->record?->email ?? ''));
+
+        $parts = [];
+
+        if ($marketName !== '') {
+            $parts[] = 'Рынок: ' . $marketName;
+        }
+
+        if ($email !== '') {
+            $parts[] = 'Email: ' . $email;
+        }
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return new HtmlString(
+            '<span class="staff-edit-subheading">' . e(implode(' · ', $parts)) . '</span>'
+        );
+    }
+
+    public function getHeader(): ?View
+    {
+        $record = $this->record;
+        $roleNames = $record?->roles?->pluck('name')->values()->all() ?? [];
+
+        return view('filament.resources.staff.partials.edit-hero', [
+            'actions' => $this->getCachedHeaderActions(),
+            'actionsAlignment' => $this->getHeaderActionsAlignment(),
+            'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
+            'heading' => $this->getHeading(),
+            'subheading' => $this->getSubheading(),
+            'hero' => [
+                'market' => trim((string) ($record?->market?->name ?? '—')),
+                'email' => trim((string) ($record?->email ?? '—')),
+                'name' => trim((string) ($record?->name ?? '—')),
+                'roles' => $roleNames !== [] ? implode(', ', $roleNames) : 'Роли не назначены',
+                'telegram' => filled($record?->telegram_chat_id) ? 'Подключен' : 'Не подключен',
+            ],
+        ]);
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-staff-edit-page',
+        ];
+    }
 
     /**
      * @var array{token:string,expires_at:string,command:string,deep_link:?string,share_link:?string,qr_svg_data_uri:?string}|null
@@ -78,6 +138,12 @@ class EditStaff extends BaseEditRecord
                 ->label('Написать сотруднику')
                 ->icon('heroicon-o-paper-airplane')
                 ->color('primary')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'staff-card-action staff-card-action--secondary',
+                    'data-subtitle' => 'Сообщение сотруднику',
+                ])
                 ->visible(fn (): bool => (bool) $user
                     && (method_exists($this->record, 'getKey'))
                     && (int) $this->record->getKey() !== (int) ($user->id ?? 0)
@@ -123,6 +189,12 @@ class EditStaff extends BaseEditRecord
                 ->label('Пароль')
                 ->icon('heroicon-o-key')
                 ->color('gray')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'staff-card-action staff-card-action--primary',
+                    'data-subtitle' => 'Изменение пароля',
+                ])
                 ->modalHeading('Смена пароля')
                 ->modalSubmitActionLabel('Сохранить')
                 ->visible(fn (): bool => $this->canManagePasswordFields())
@@ -215,6 +287,12 @@ class EditStaff extends BaseEditRecord
                 ->label('Уведомления')
                 ->icon('heroicon-o-bell')
                 ->color('gray')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'staff-card-action staff-card-action--secondary',
+                    'data-subtitle' => 'Правила оповещений',
+                ])
                 ->modalHeading('Настройки уведомлений')
                 ->modalSubmitActionLabel('Сохранить')
                 ->modalWidth('3xl')
@@ -500,6 +578,12 @@ class EditStaff extends BaseEditRecord
 
             DeleteAction::make()
                 ->label('Удалить сотрудника')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'staff-card-action staff-card-action--danger',
+                    'data-subtitle' => 'Удаление без восстановления',
+                ])
                 ->visible(fn (): bool => StaffResource::canDelete($this->record)),
         ];
     }
