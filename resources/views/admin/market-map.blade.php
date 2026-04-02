@@ -486,7 +486,8 @@
       position: fixed;
       z-index: 10000;
       min-width: 220px;
-      max-width: min(420px, calc(100vw - 24px));
+      max-width: min(360px, calc(100vw - 24px));
+      max-height: calc(100vh - 24px);
       padding: 10px 12px;
       border-radius: 12px;
       border: 1px solid rgba(120,120,120,.25);
@@ -496,11 +497,29 @@
       line-height: 1.35;
       box-shadow: 0 12px 34px rgba(0,0,0,.28);
       display: none;
+      overflow: hidden;
     }
     .popover.show { display: block; }
+    .popover__content {
+      max-height: calc(100vh - 72px);
+      overflow-y: auto;
+      padding-right: 2px;
+    }
     .popover .t { font-weight: 700; font-size: 12px; padding-right: 28px; }
     .popover .row { margin-top: 6px; opacity: .92; }
+    .popover .row-label {
+      color: rgba(255,255,255,.70);
+    }
+    .popover .row-value {
+      color: #fff;
+      font-weight: 600;
+    }
     .popover .muted { opacity: .72; }
+    .popover .row-meta {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.10);
+    }
 
     .popover .xbtn {
       position: absolute;
@@ -512,6 +531,7 @@
       border: 1px solid rgba(255,255,255,.20);
       background: rgba(255,255,255,.06);
       color: #fff;
+      -webkit-text-fill-color: #fff;
       cursor: pointer;
       display:flex;
       align-items:center;
@@ -521,7 +541,9 @@
     .popover .xbtn:hover { background: rgba(255,255,255,.12); }
 
     .popover .act{
-      margin-top: 10px;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.10);
       display:flex;
       gap:8px;
       flex-wrap:wrap;
@@ -530,6 +552,7 @@
       border: 1px solid rgba(255,255,255,.20);
       background: rgba(255,255,255,.08);
       color:#fff;
+      -webkit-text-fill-color: #fff;
       padding: 7px 10px;
       border-radius: 10px;
       cursor:pointer;
@@ -1176,6 +1199,26 @@
             minimumFractionDigits: 0,
             maximumFractionDigits: 2,
           }).format(num) + ' ₽';
+        }
+
+        function buildPopoverRow(text, extraClass = '') {
+          if (!text) return '';
+
+          const rowClass = extraClass ? ('row ' + extraClass) : 'row';
+          const separatorIndex = text.indexOf(':');
+
+          if (separatorIndex === -1) {
+            return '<div class="' + rowClass + '"><span class="row-value">' + text + '</span></div>';
+          }
+
+          const label = text.slice(0, separatorIndex + 1).trim();
+          const value = text.slice(separatorIndex + 1).trim();
+
+          if (!value) {
+            return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span></div>';
+          }
+
+          return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span> <span class="row-value">' + value + '</span></div>';
         }
 
         function rentRateUnitLabel(unit) {
@@ -3222,15 +3265,17 @@
 
               showPopoverAt(
                 e.clientX, e.clientY,
-                '<div class="t">' + title + '</div>' +
-                (line2 ? '<div class="row">' + line2 + '</div>' : '') +
-                (line3 ? '<div class="row">' + line3 + '</div>' : '') +
-                (line4 ? '<div class="row">' + line4 + '</div>' : '') +
-                (line5 ? '<div class="row">' + line5 + '</div>' : '') +
-                (line6 ? '<div class="row">' + line6 + '</div>' : '') +
-                (line7 ? '<div class="row">' + line7 + '</div>' : '') +
-                (line1 ? '<div class="row muted">' + escapeHtml(line1) + '</div>' : '') +
-                actions
+                '<div class="popover__content">' +
+                  '<div class="t">' + title + '</div>' +
+                  buildPopoverRow(line2) +
+                  buildPopoverRow(line3) +
+                  buildPopoverRow(line4) +
+                  buildPopoverRow(line5) +
+                  buildPopoverRow(line6) +
+                  buildPopoverRow(line7) +
+                  (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
+                  actions +
+                '</div>'
               );
             } catch (err) {
               console.error(err);
