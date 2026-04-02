@@ -94,14 +94,27 @@
     }
     .map-load-progress {
       display: none;
-      align-items: center;
+      flex-direction: column;
       gap: 8px;
-      min-width: 220px;
+      width: calc(100% - 36px);
+      box-sizing: border-box;
+      margin: 12px 18px 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+    }
+    .map-load-progress__meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
     .map-load-progress__track {
       position: relative;
-      width: 120px;
-      height: 8px;
+      width: 100%;
+      height: 10px;
       border-radius: 999px;
       overflow: hidden;
       background: rgba(15, 23, 42, 0.12);
@@ -120,9 +133,15 @@
       background: linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%);
     }
     .map-load-progress__text {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
+    }
+    .map-load-progress__percent {
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(15, 23, 42, 0.72);
       white-space: nowrap;
+      font-variant-numeric: tabular-nums;
     }
 
     .pill {
@@ -545,12 +564,6 @@
 
             <div class="toolbar-group">
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-              <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
-                <div class="map-load-progress__track">
-                  <div class="map-load-progress__fill" id="mapLoadProgressFill"></div>
-                </div>
-                <span class="map-load-progress__text" id="mapLoadProgressText">Загрузка карты…</span>
-              </div>
               <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
               <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
@@ -628,6 +641,16 @@
               </div>
             </div>
           @endif
+        </div>
+
+        <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
+          <div class="map-load-progress__meta">
+            <span class="map-load-progress__text" id="mapLoadProgressText">Загрузка карты…</span>
+            <span class="map-load-progress__percent" id="mapLoadProgressPercent">0%</span>
+          </div>
+          <div class="map-load-progress__track">
+            <div class="map-load-progress__fill" id="mapLoadProgressFill"></div>
+          </div>
         </div>
 
         <!-- Легенда карты -->
@@ -780,6 +803,7 @@
         const mapLoadProgress = document.getElementById('mapLoadProgress');
         const mapLoadProgressFill = document.getElementById('mapLoadProgressFill');
         const mapLoadProgressText = document.getElementById('mapLoadProgressText');
+        const mapLoadProgressPercent = document.getElementById('mapLoadProgressPercent');
         const reviewProgress = document.getElementById('reviewProgress');
         const reviewProgressFill = document.getElementById('reviewProgressFill');
         const reviewProgressText = document.getElementById('reviewProgressText');
@@ -836,9 +860,12 @@
 
           const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
           mapLoadProgress.dataset.state = state;
-          mapLoadProgress.style.display = 'inline-flex';
+          mapLoadProgress.style.display = 'flex';
           mapLoadProgressFill.style.width = safePercent + '%';
           mapLoadProgressText.textContent = text;
+          if (mapLoadProgressPercent) {
+            mapLoadProgressPercent.textContent = safePercent + '%';
+          }
         }
 
         function hideMapLoadProgress() {
@@ -853,6 +880,9 @@
 
           mapLoadProgress.style.display = 'none';
           mapLoadProgressFill && (mapLoadProgressFill.style.width = '0%');
+          if (mapLoadProgressPercent) {
+            mapLoadProgressPercent.textContent = '0%';
+          }
           delete mapLoadProgress.dataset.state;
         }
 
