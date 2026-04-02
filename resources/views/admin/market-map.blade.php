@@ -1009,7 +1009,7 @@
           }
         }
 
-        function hideMapLoadProgress() {
+        function hideMapLoadProgress(resetState = false) {
           if (!mapLoadProgress) {
             return;
           }
@@ -1024,7 +1024,9 @@
           if (mapLoadProgressPercent) {
             mapLoadProgressPercent.textContent = '0%';
           }
-          mapLoadProgressState = 'idle';
+          if (resetState) {
+            mapLoadProgressState = 'idle';
+          }
           delete mapLoadProgress.dataset.state;
           delete mapLoadProgress.dataset.phase;
         }
