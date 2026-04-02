@@ -1960,7 +1960,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Viewer карты рынка (рендер через Blade).
      */
-    Route::get('/admin/market-map', function (Request $request) use ($resolveMarketForMap, $canEditShapes) {
+    Route::get('/admin/market-map', function (Request $request) use (
+        $resolveMarketForMap,
+        $canEditShapes,
+        $buildMapReviewProgress
+    ) {
         $market = $resolveMarketForMap();
 
         $mapPath = data_get($market->settings ?? [], 'map_pdf_path');
