@@ -29,8 +29,13 @@
   <title>Карта рынка — {{ $marketName }}</title>
 
   <style>
-    :root { color-scheme: light dark; }
-    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color: #0f172a;
+      background: #f8fafc;
+    }
     .wrap { padding: 16px; max-width: 1400px; margin: 0 auto; }
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
@@ -41,13 +46,21 @@
       border-radius: 9px;
       cursor: pointer;
       font-size: 12px;
+      color: #0f172a;
+      -webkit-text-fill-color: #0f172a;
     }
     button:hover { background: rgba(120,120,120,.18); }
-    button:disabled { opacity:.5; cursor:not-allowed; }
+    button:disabled {
+      opacity:.5;
+      cursor:not-allowed;
+      color: #64748b;
+      -webkit-text-fill-color: #64748b;
+    }
     .button-accent {
       background: #f59e0b;
       border-color: #d97706;
       color: #fff;
+      -webkit-text-fill-color: #fff;
     }
     .button-accent:hover {
       background: #ea580c;
@@ -56,6 +69,7 @@
       background: #0f172a;
       border-color: #0f172a;
       color: #fff;
+      -webkit-text-fill-color: #fff;
     }
     .button-toggle.is-active:hover {
       background: #1e293b;
@@ -179,7 +193,8 @@
       border-radius: 9px;
       border: 1px solid rgba(120,120,120,.25);
       background: rgba(120,120,120,.06);
-      color: inherit;
+      color: #334155;
+      -webkit-text-fill-color: #334155;
     }
 
     .spaceDropdown {
