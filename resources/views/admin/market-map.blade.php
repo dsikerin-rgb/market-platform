@@ -238,18 +238,22 @@
       background: rgba(120,120,120,.06);
     }
     .toolbar {
-      padding: 8px 10px 9px;
+      padding: 14px 16px 12px;
       display: grid;
-      gap: 8px;
+      gap: 10px;
       border-bottom: 1px solid rgba(120,120,120,.18);
       background: rgba(120,120,120,.06);
     }
     .toolbar-row {
       display: flex;
-      gap: 8px;
+      gap: 10px;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
+    }
+    .toolbar-row.toolbar-row--hero {
+      align-items: flex-start;
+      gap: 14px;
     }
     .toolbar-group {
       display: flex;
@@ -273,6 +277,61 @@
       font-size: 11px;
       font-weight: 600;
       white-space: nowrap;
+    }
+    .hero-heading {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(15, 23, 42, 0.58);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .hero-title-line {
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .hero-title {
+      margin: 0;
+      color: #0f172a;
+      font-size: 24px;
+      line-height: 1.1;
+      font-weight: 700;
+    }
+    .hero-subtitle {
+      color: rgba(15, 23, 42, 0.68);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .toolbar-group.toolbar-group--hero-actions {
+      margin-left: auto;
+      justify-content: flex-end;
+      align-self: flex-start;
+    }
+    .map-service-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px 16px 8px;
+      border-bottom: 1px solid rgba(120,120,120,.14);
+      background: rgba(255,255,255,.82);
+    }
+    .map-service-strip__group {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
     }
     .legend[hidden] {
       display: none;
@@ -330,6 +389,17 @@
     }
     .legend-label {
       white-space: nowrap;
+    }
+    @media (max-width: 900px) {
+      .toolbar {
+        padding: 12px 12px 10px;
+      }
+      .hero-title {
+        font-size: 20px;
+      }
+      .map-service-strip {
+        padding: 10px 12px 8px;
+      }
     }
     .stage {
       height: calc(100vh - 190px);
@@ -544,6 +614,28 @@
     @else
       <div class="viewer">
         <div class="toolbar">
+          <div class="toolbar-row toolbar-row--hero">
+            <div class="hero-heading">
+              <span class="hero-kicker">Карта рынка</span>
+              <div class="hero-title-line">
+                <h1 class="hero-title">{{ $marketName }}</h1>
+                <span class="hero-subtitle">Просмотр PDF-карты, слоёв и ревизии мест без перехода в сырой журнал операций.</span>
+              </div>
+            </div>
+
+            <div class="toolbar-group toolbar-group--hero-actions">
+              @if ($canEdit)
+                <div class="toolbar-group toolbar-group--accent">
+                  <span class="toolbar-label">Режим</span>
+                  <button id="scenarioMap" type="button" class="button-toggle is-active">Карта</button>
+                  <button id="scenarioReview" type="button" class="button-toggle">Ревизия</button>
+                </div>
+              @endif
+              <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
+              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
+            </div>
+          </div>
+
           <div class="toolbar-row">
             <div class="toolbar-group toolbar-group--accent">
               <button id="zoomOut" type="button">−</button>
@@ -571,13 +663,6 @@
                 title="Слой показывает относительную ставку по занятым местам."
                 aria-label="Слой показывает относительную ставку по занятым местам."
               >Арендная ставка</button>
-            </div>
-
-            <div class="toolbar-group">
-              <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-              <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
-              <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
-              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
             </div>
           </div>
 
@@ -634,12 +719,6 @@
               </div>
             </div>
             <div class="toolbar-row" id="reviewToolbarRow">
-              <div class="toolbar-group toolbar-group--accent">
-                <span class="toolbar-label">Сценарий</span>
-                <button id="scenarioMap" type="button" class="button-toggle is-active">Карта</button>
-                <button id="scenarioReview" type="button" class="button-toggle">Ревизия</button>
-              </div>
-
               <div class="toolbar-group">
                 <button id="reviewNotFound" type="button" style="display:none;">Не найдено на карте</button>
                 <div class="review-progress" id="reviewProgress" aria-live="polite">
@@ -652,6 +731,13 @@
               </div>
             </div>
           @endif
+        </div>
+
+        <div class="map-service-strip">
+          <div class="map-service-strip__group">
+            <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+            <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
+          </div>
         </div>
 
         <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
