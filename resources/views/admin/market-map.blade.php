@@ -253,22 +253,25 @@
       background: #fff;
     }
     .toolbar {
-      padding: 14px 16px 12px;
+      padding: 12px 16px 10px;
       display: grid;
-      gap: 10px;
+      gap: 8px;
       border-bottom: 1px solid rgba(120,120,120,.18);
       background: linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(248,250,252,.98) 100%);
     }
     .toolbar-row {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
     }
     .toolbar-row.toolbar-row--hero {
       align-items: flex-start;
-      gap: 14px;
+      gap: 12px;
+    }
+    .toolbar-row.toolbar-row--controls {
+      align-items: flex-start;
     }
     .toolbar-group {
       display: flex;
@@ -295,7 +298,7 @@
     }
     .hero-heading {
       display: grid;
-      gap: 4px;
+      gap: 2px;
       min-width: 0;
     }
     .hero-kicker {
@@ -317,7 +320,7 @@
     .hero-title {
       margin: 0;
       color: #0f172a;
-      font-size: 24px;
+      font-size: 22px;
       line-height: 1.1;
       font-weight: 700;
     }
@@ -325,6 +328,13 @@
       margin-left: auto;
       justify-content: flex-end;
       align-self: flex-start;
+    }
+    .toolbar-group.toolbar-group--stretch {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .toolbar-group.toolbar-group--utility {
+      margin-left: auto;
     }
     .legend[hidden] {
       display: none;
@@ -385,6 +395,9 @@
       }
       .hero-title {
         font-size: 20px;
+      }
+      .toolbar-group.toolbar-group--utility {
+        margin-left: 0;
       }
     }
     .stage {
@@ -621,7 +634,7 @@
             </div>
           </div>
 
-          <div class="toolbar-row">
+          <div class="toolbar-row toolbar-row--controls">
             <div class="toolbar-group toolbar-group--accent">
               <button id="zoomOut" type="button">−</button>
               <button id="zoomIn" type="button">+</button>
@@ -649,10 +662,8 @@
                 aria-label="Слой показывает относительную ставку по занятым местам."
               >Арендная ставка</button>
             </div>
-          </div>
 
-          @if ($canEdit)
-            <div class="toolbar-row">
+            @if ($canEdit)
               <div class="toolbar-group toolbar-group--accent">
                 <button id="toggleEdit" type="button">Разметка: выкл</button>
                 <button id="toolSelect" type="button" style="display:none;">Редактировать</button>
@@ -660,7 +671,7 @@
                 <button id="toolPoly" type="button" style="display:none;">Полигон</button>
               </div>
 
-              <div class="toolbar-group">
+              <div class="toolbar-group toolbar-group--stretch">
                 <span class="pill" id="scaleLabel">Масштаб: 100%</span>
                 <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
                 <div class="spacePicker" style="display:none;" id="spacePicker">
@@ -704,7 +715,15 @@
                 <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
                 <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Режим разметки</span>
               </div>
-            </div>
+            @else
+              <div class="toolbar-group toolbar-group--utility">
+                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
+              </div>
+            @endif
+          </div>
+
+          @if ($canEdit)
             <div class="toolbar-row" id="reviewToolbarRow">
               <div class="toolbar-group">
                 <button id="reviewNotFound" type="button" style="display:none;">Не найдено на карте</button>
@@ -715,14 +734,6 @@
                   <span class="review-progress__text" id="reviewProgressText">0 / 0</span>
                 </div>
                 <div class="review-summary" id="reviewSummary"></div>
-              </div>
-            </div>
-          @endif
-          @if (! $canEdit)
-            <div class="toolbar-row">
-              <div class="toolbar-group">
-                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               </div>
             </div>
           @endif
