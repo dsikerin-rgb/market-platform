@@ -127,11 +127,21 @@
       background: linear-gradient(90deg, #2563eb 0%, #38bdf8 100%);
       border-radius: 999px;
     }
+    @keyframes mapLoadShimmer {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 200% 50%; }
+    }
     .map-load-progress[data-state="done"] .map-load-progress__fill {
       background: linear-gradient(90deg, #15803d 0%, #22c55e 100%);
     }
     .map-load-progress[data-state="fallback"] .map-load-progress__fill {
       background: linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%);
+    }
+    .map-load-progress[data-phase="finalizing"] .map-load-progress__fill {
+      width: 100%;
+      background: linear-gradient(90deg, #2563eb 0%, #60a5fa 25%, #38bdf8 50%, #60a5fa 75%, #2563eb 100%);
+      background-size: 200% 100%;
+      animation: mapLoadShimmer 1.1s linear infinite;
     }
     .map-load-progress__text {
       font-size: 12px;
@@ -866,12 +876,23 @@
           }
 
           const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+          const isFinalizing = state !== 'done' && state !== 'fallback' && safePercent >= 78;
+          if (isFinalizing && state === 'loading') {
+            text = 'PDF загружен, подготавливаем карту…';
+          }
           mapLoadProgress.dataset.state = state;
+          if (isFinalizing) {
+            mapLoadProgress.dataset.phase = 'finalizing';
+          } else {
+            delete mapLoadProgress.dataset.phase;
+          }
           mapLoadProgress.style.display = 'flex';
           mapLoadProgressFill.style.width = safePercent + '%';
           mapLoadProgressText.textContent = text;
           if (mapLoadProgressPercent) {
-            mapLoadProgressPercent.textContent = safePercent + '%';
+            mapLoadProgressPercent.textContent = (state === 'loading' && safePercent >= 78)
+              ? 'Подготовка…'
+              : safePercent + '%';
           }
         }
 
@@ -891,6 +912,7 @@
             mapLoadProgressPercent.textContent = '0%';
           }
           delete mapLoadProgress.dataset.state;
+          delete mapLoadProgress.dataset.phase;
         }
 
         function completeMapLoadProgress(text = 'Карта загружена') {
