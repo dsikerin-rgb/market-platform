@@ -98,12 +98,13 @@
       gap: 8px;
       width: calc(100% - 36px);
       box-sizing: border-box;
-      margin: 12px 18px 0;
+      margin: 12px 18px 16px;
       padding: 12px 14px;
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.9);
       border: 1px solid rgba(15, 23, 42, 0.08);
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      transition: opacity .2s ease, transform .2s ease;
     }
     .map-load-progress__meta {
       display: flex;
@@ -846,6 +847,12 @@
           if (zoomResetBtn) zoomResetBtn.disabled = true;
           if (fitWidthBtn) fitWidthBtn.disabled = true;
           if (scaleLabel) scaleLabel.textContent = 'Масштаб: (встроенный просмотр)';
+        }
+
+        function nextUiFrame() {
+          return new Promise((resolve) => {
+            requestAnimationFrame(() => resolve());
+          });
         }
 
         function setMapLoadProgress(percent, text, state = 'loading') {
@@ -2024,6 +2031,7 @@
 
             if (bootstrappingMap) {
               setMapLoadProgress(92, 'Отрисовка карты…', 'rendering');
+              await nextUiFrame();
             }
 
             const centerX = stage.scrollLeft + stage.clientWidth / 2;
@@ -2066,6 +2074,7 @@
 
             if (bootstrappingMap) {
               setMapLoadProgress(96, 'Подготовка слоя мест…', 'rendering');
+              await nextUiFrame();
             }
           }
 
@@ -2428,7 +2437,7 @@
               if (Number.isFinite(total) && total > 0) {
                 const ratio = Math.max(0, Math.min(1, loaded / total));
                 const percent = Math.round(8 + ratio * 72);
-                setMapLoadProgress(percent, 'Загрузка карты: ' + percent + '%', 'loading');
+                setMapLoadProgress(percent, 'Загрузка PDF: ' + percent + '%', 'loading');
               } else {
                 setMapLoadProgress(24, 'Загрузка карты…', 'loading');
               }
@@ -2441,7 +2450,8 @@
                 console.error(err);
               });
             const pdfDoc = await loadingTask.promise;
-            setMapLoadProgress(84, 'Подготовка страницы…', 'rendering');
+            setMapLoadProgress(84, 'PDF загружен, подготовка страницы…', 'rendering');
+            await nextUiFrame();
             const requestedPage = MAP_PAGE || 1;
             try {
               page = await pdfDoc.getPage(requestedPage);
