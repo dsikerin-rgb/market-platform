@@ -235,14 +235,14 @@
       border: 1px solid rgba(120,120,120,.25);
       border-radius: 14px;
       overflow: hidden;
-      background: rgba(120,120,120,.06);
+      background: #fff;
     }
     .toolbar {
       padding: 14px 16px 12px;
       display: grid;
       gap: 10px;
       border-bottom: 1px solid rgba(120,120,120,.18);
-      background: rgba(120,120,120,.06);
+      background: linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(248,250,252,.98) 100%);
     }
     .toolbar-row {
       display: flex;
@@ -266,7 +266,7 @@
     .toolbar-group.toolbar-group--accent {
       padding: 4px 6px;
       border-radius: 10px;
-      background: rgba(255,255,255,.55);
+      background: rgba(255,255,255,.92);
       border: 1px solid rgba(120,120,120,.16);
     }
     .toolbar-label {
@@ -306,32 +306,10 @@
       line-height: 1.1;
       font-weight: 700;
     }
-    .hero-subtitle {
-      color: rgba(15, 23, 42, 0.68);
-      font-size: 12px;
-      line-height: 1.4;
-    }
     .toolbar-group.toolbar-group--hero-actions {
       margin-left: auto;
       justify-content: flex-end;
       align-self: flex-start;
-    }
-    .map-service-strip {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      padding: 10px 16px 8px;
-      border-bottom: 1px solid rgba(120,120,120,.14);
-      background: rgba(255,255,255,.82);
-    }
-    .map-service-strip__group {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      min-width: 0;
     }
     .legend[hidden] {
       display: none;
@@ -358,11 +336,7 @@
       align-items: center;
       gap: 5px;
     }
-    .legend-item.legend-item--note {
-      flex-basis: 100%;
-      gap: 0;
-      margin-top: 2px;
-    }
+    .legend-item.legend-item--note { display: none; }
     .legend-color {
       width: 16px;
       height: 16px;
@@ -396,9 +370,6 @@
       }
       .hero-title {
         font-size: 20px;
-      }
-      .map-service-strip {
-        padding: 10px 12px 8px;
       }
     }
     .stage {
@@ -616,10 +587,9 @@
         <div class="toolbar">
           <div class="toolbar-row toolbar-row--hero">
             <div class="hero-heading">
-              <span class="hero-kicker">Карта рынка</span>
+              <span class="hero-kicker">Карта</span>
               <div class="hero-title-line">
                 <h1 class="hero-title">{{ $marketName }}</h1>
-                <span class="hero-subtitle">Просмотр PDF-карты, слоёв и ревизии мест без перехода в сырой журнал операций.</span>
               </div>
             </div>
 
@@ -676,6 +646,8 @@
               </div>
 
               <div class="toolbar-group">
+                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
                 <div class="spacePicker" style="display:none;" id="spacePicker">
                   <input
                     id="spaceSearch"
@@ -731,13 +703,14 @@
               </div>
             </div>
           @endif
-        </div>
-
-        <div class="map-service-strip">
-          <div class="map-service-strip__group">
-            <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-            <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
-          </div>
+          @if (! $canEdit)
+            <div class="toolbar-row">
+              <div class="toolbar-group">
+                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
+              </div>
+            </div>
+          @endif
         </div>
 
         <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
@@ -951,6 +924,19 @@
           });
         }
 
+        function syncLayerButtonHelp() {
+          const debtHelp = (debtLegendNote?.textContent || 'Слой показывает статус задолженности по занятым местам.').trim();
+          const rentHelp = (rentLegendNote?.textContent || 'Слой показывает относительную ставку по занятым местам.').trim();
+          if (layerDebtBtn && debtHelp) {
+            layerDebtBtn.title = debtHelp;
+            layerDebtBtn.setAttribute('aria-label', debtHelp);
+          }
+          if (layerRentBtn && rentHelp) {
+            layerRentBtn.title = rentHelp;
+            layerRentBtn.setAttribute('aria-label', rentHelp);
+          }
+        }
+
         function setMapLoadProgress(percent, text, state = 'loading') {
           if (!mapLoadProgress || !mapLoadProgressFill || !mapLoadProgressText) {
             return;
@@ -962,9 +948,9 @@
           }
 
           const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
-          const isFinalizing = state !== 'done' && state !== 'fallback' && safePercent >= 78;
+          const isFinalizing = state === 'rendering' || (state === 'loading' && safePercent >= 68);
           if (isFinalizing && state === 'loading') {
-            text = 'PDF загружен, подготавливаем карту…';
+            text = 'PDF почти загружен, подготавливаем карту…';
           }
           mapLoadProgress.dataset.state = state;
           if (isFinalizing) {
@@ -976,7 +962,7 @@
           mapLoadProgressFill.style.width = safePercent + '%';
           mapLoadProgressText.textContent = text;
           if (mapLoadProgressPercent) {
-            mapLoadProgressPercent.textContent = (state === 'loading' && safePercent >= 78)
+            mapLoadProgressPercent.textContent = isFinalizing
               ? 'Подготовка…'
               : safePercent + '%';
           }
@@ -1222,6 +1208,7 @@
           if (legendRent) legendRent.hidden = currentLayer !== 'rent';
           layerDebtBtn?.classList.toggle('is-active', currentLayer === 'debt');
           layerRentBtn?.classList.toggle('is-active', currentLayer === 'rent');
+          syncLayerButtonHelp();
         }
 
         function updateRentLegend(items) {
@@ -1263,6 +1250,7 @@
               rentLegendNote.textContent = 'Слой показывает относительную ставку по занятым местам.';
             }
           }
+          syncLayerButtonHelp();
         }
 
         function setLayerMode(mode) {
@@ -2544,7 +2532,7 @@
               const total = Number(progressData?.total || 0);
               if (Number.isFinite(total) && total > 0) {
                 const ratio = Math.max(0, Math.min(1, loaded / total));
-                const percent = Math.round(8 + ratio * 64);
+                const percent = Math.round(8 + ratio * 60);
                 setMapLoadProgress(percent, 'Загрузка PDF: ' + percent + '%', 'loading');
               } else {
                 setMapLoadProgress(24, 'Загрузка карты…', 'loading');
