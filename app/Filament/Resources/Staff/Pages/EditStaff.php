@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/Staff/Pages/EditStaff.php
 
 namespace App\Filament\Resources\Staff\Pages;
 
@@ -28,54 +29,21 @@ class EditStaff extends BaseEditRecord
 {
     protected static string $resource = StaffResource::class;
 
-    public function getMaxContentWidth(): Width|string|null
+    public function getBreadcrumbs(): array
     {
-        return Width::Full;
+        return [
+            StaffResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+        ];
     }
 
     public function getSubheading(): string|HtmlString|null
     {
-        $marketName = trim((string) ($this->record?->market?->name ?? ''));
-        $email = trim((string) ($this->record?->email ?? ''));
-
-        $parts = [];
-
-        if ($marketName !== '') {
-            $parts[] = 'Рынок: ' . $marketName;
-        }
-
-        if ($email !== '') {
-            $parts[] = 'Email: ' . $email;
-        }
-
-        if ($parts === []) {
-            return null;
-        }
-
-        return new HtmlString(
-            '<span class="staff-edit-subheading">' . e(implode(' · ', $parts)) . '</span>'
-        );
+        return null;
     }
 
-    public function getHeader(): ?View
+    public function getMaxContentWidth(): Width|string|null
     {
-        $record = $this->record;
-        $roleNames = $record?->roles?->pluck('name')->values()->all() ?? [];
-
-        return view('filament.resources.staff.partials.edit-hero', [
-            'actions' => $this->getCachedHeaderActions(),
-            'actionsAlignment' => $this->getHeaderActionsAlignment(),
-            'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
-            'heading' => $this->getHeading(),
-            'subheading' => $this->getSubheading(),
-            'hero' => [
-                'market' => trim((string) ($record?->market?->name ?? '—')),
-                'email' => trim((string) ($record?->email ?? '—')),
-                'name' => trim((string) ($record?->name ?? '—')),
-                'roles' => $roleNames !== [] ? implode(', ', $roleNames) : 'Роли не назначены',
-                'telegram' => filled($record?->telegram_chat_id) ? 'Подключен' : 'Не подключен',
-            ],
-        ]);
+        return Width::Full;
     }
 
     public function getPageClasses(): array
@@ -135,25 +103,17 @@ class EditStaff extends BaseEditRecord
 
         return [
             Action::make('write_to_staff')
-                ->label('Написать сотруднику')
-                ->icon('heroicon-o-paper-airplane')
+                ->label('Написать')
+                ->icon('heroicon-o-chat-bubble-left-right')
                 ->color('primary')
                 ->size('lg')
                 ->outlined()
                 ->extraAttributes([
-                    'class' => 'staff-card-action staff-card-action--secondary',
-                    'data-subtitle' => 'Сообщение сотруднику',
+                    'class' => 'staff-card-action staff-card-action--primary',
                 ])
                 ->visible(fn (): bool => (bool) $user
                     && (method_exists($this->record, 'getKey'))
-                    && (int) $this->record->getKey() !== (int) ($user->id ?? 0)
-                    && (
-                        $user->isSuperAdmin()
-                        || (
-                            $user->isMarketAdmin()
-                            && (int) ($user->market_id ?? 0) === (int) ($this->record->market_id ?? 0)
-                        )
-                    ))
+                    && (int) $this->record->getKey() !== (int) ($user->id ?? 0))
                 ->modalHeading('Написать сотруднику')
                 ->modalSubmitActionLabel('Отправить')
                 ->form([
@@ -193,7 +153,6 @@ class EditStaff extends BaseEditRecord
                 ->outlined()
                 ->extraAttributes([
                     'class' => 'staff-card-action staff-card-action--primary',
-                    'data-subtitle' => 'Изменение пароля',
                 ])
                 ->modalHeading('Смена пароля')
                 ->modalSubmitActionLabel('Сохранить')
@@ -242,47 +201,6 @@ class EditStaff extends BaseEditRecord
                         ->send();
                 }),
 
-            Action::make('telegram_settings')
-                ->label('Настройки Telegram')
-                ->icon('heroicon-o-chat-bubble-left-right')
-                ->color('gray')
-                ->modalHeading('Telegram')
-                ->modalSubmitActionLabel('Сохранить')
-                ->visible(false)
-                ->fillForm(fn (): array => [
-                    'telegram_chat_id' => $this->record->telegram_chat_id,
-                ])
-                ->form([
-                    Forms\Components\TextInput::make('telegram_chat_id')
-                        ->label('Telegram (chat_id)')
-                        ->placeholder('например: 123456789')
-                        ->helperText('Нужен для доставки уведомлений в Telegram.')
-                        ->maxLength(32)
-                        ->regex('/^-?\d+$/')
-                        ->validationMessages([
-                            'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
-                        ]),
-                ])
-                ->action(function (array $data): void {
-                    $chatId = trim((string) ($data['telegram_chat_id'] ?? ''));
-                    $chatId = $chatId !== '' ? $chatId : null;
-
-                    $payload = ['telegram_chat_id' => $chatId];
-                    if ($chatId === null) {
-                        $payload['telegram_profile'] = null;
-                        $payload['telegram_linked_at'] = null;
-                    }
-
-                    $this->record->forceFill($payload)->save();
-
-                    Notification::make()
-                        ->title($chatId === null
-                            ? 'Telegram (chat_id) очищен'
-                            : 'Telegram (chat_id) сохранен')
-                        ->success()
-                        ->send();
-                }),
-
             Action::make('notification_settings')
                 ->label('Уведомления')
                 ->icon('heroicon-o-bell')
@@ -291,7 +209,6 @@ class EditStaff extends BaseEditRecord
                 ->outlined()
                 ->extraAttributes([
                     'class' => 'staff-card-action staff-card-action--secondary',
-                    'data-subtitle' => 'Правила оповещений',
                 ])
                 ->modalHeading('Настройки уведомлений')
                 ->modalSubmitActionLabel('Сохранить')
@@ -341,248 +258,287 @@ class EditStaff extends BaseEditRecord
                         ->send();
                 }),
 
-            ActionGroup::make([
-                Action::make('telegram_block_settings')
-                    ->label('Настройки')
-                    ->icon('heroicon-o-cog-6-tooth')
-                    ->action(fn (): mixed => $this->mountAction('telegram_settings')),
-                Action::make('telegram_block_connect')
-                    ->label('Telegram ссылка')
-                    ->icon('heroicon-o-link')
-                    ->action(fn (): mixed => $this->mountAction('telegram_connect_link')),
-                Action::make('telegram_block_binding')
-                    ->label('Проверить привязку')
-                    ->icon('heroicon-o-identification')
-                    ->action(fn (): mixed => $this->mountAction('telegram_binding_info')),
-                Action::make('telegram_block_test')
-                    ->label('Telegram тест')
-                    ->icon('heroicon-o-paper-airplane')
-                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
-                    ->action(fn (): mixed => $this->mountAction('telegram_test')),
-                Action::make('telegram_block_reset')
-                    ->label('Сбросить Telegram')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
-                    ->action(fn (): mixed => $this->mountAction('telegram_unlink')),
-            ])
+            Action::make('telegram_settings')
                 ->label('Telegram')
-                ->icon('heroicon-o-chat-bubble-left-right')
-                ->color('gray')
-                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin())),
-
-            Action::make('telegram_connect_link')
-                ->label('Telegram ссылка')
-                ->icon('heroicon-o-link')
-                ->color('gray')
-                ->tooltip('Сгенерировать одноразовую ссылку /start для сотрудника')
-                ->modalHeading('Ссылка подключения Telegram')
-                ->modalSubmitActionLabel('Сгенерировать')
-                ->visible(false)
-                ->fillForm(function (): array {
-                    $this->telegramConnectModalPayload = $this->issueTelegramConnectPayload();
-
-                    return [
-                        'delivery_channels' => $this->defaultTelegramConnectDeliveryChannels(),
-                    ];
-                })
-                ->form([
-                    \Filament\Forms\Components\CheckboxList::make('delivery_channels')
-                        ->label('Отправить сотруднику')
-                        ->options(fn (): array => $this->telegramConnectDeliveryOptions())
-                        ->default(fn (): array => $this->defaultTelegramConnectDeliveryChannels())
-                        ->columns(1)
-                        ->helperText('Ссылка и QR показаны в блоке ниже.'),
-
-                    \Filament\Forms\Components\Placeholder::make('telegram_connect_qr_preview')
-                        ->label('Быстрое подключение (QR)')
-                        ->content(fn () => $this->telegramConnectQrPreviewHtml()),
-                ])
-                ->action(function (array $data): void {
-                    $payload = is_array($this->telegramConnectModalPayload)
-                        ? $this->telegramConnectModalPayload
-                        : $this->issueTelegramConnectPayload();
-
-                    $deepLink = trim((string) ($payload['deep_link'] ?? ''));
-                    $command = trim((string) ($payload['command'] ?? ''));
-                    $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
-                    $recipientLabel = $this->telegramConnectRecipientLabel();
-                    $shareLink = trim((string) ($payload['share_link'] ?? ''));
-
-                    $requestedChannelsRaw = is_array($data['delivery_channels'] ?? null)
-                        ? $data['delivery_channels']
-                        : [];
-                    $deliveryChannels = $this->normalizeTelegramConnectDeliveryChannels($requestedChannelsRaw);
-                    $mailRequested = in_array('mail', $requestedChannelsRaw, true);
-                    $mailMissing = $mailRequested && blank($this->record->email);
-                    $deliveryFailed = false;
-
-                    if ($deliveryChannels !== []) {
-                        try {
-                            $actorName = trim((string) (Filament::auth()->user()?->name ?? 'Система'));
-                            $this->record->notify(new TelegramConnectLinkNotification(
-                                recipientLabel: $recipientLabel,
-                                issuedBy: $actorName,
-                                deepLink: $deepLink,
-                                command: $command,
-                                expiresAt: $expiresAt !== '' ? $expiresAt : null,
-                                shareLink: $shareLink !== '' ? $shareLink : null,
-                                channels: $deliveryChannels,
-                            ));
-                        } catch (\Throwable $e) {
-                            report($e);
-                            $deliveryFailed = true;
-                        }
-                    }
-
-                    $bodyParts = ['Получатель: ' . $recipientLabel];
-                    if ($expiresAt !== '') {
-                        $bodyParts[] = 'Действует до: ' . $expiresAt;
-                    }
-                    if ($deliveryChannels !== []) {
-                        $bodyParts[] = 'Доставлено по каналам: ' . implode(', ', array_map(
-                            fn (string $channel): string => $this->telegramConnectChannelLabel($channel),
-                            $deliveryChannels,
-                        ));
-                    } else {
-                        $bodyParts[] = 'Автоотправка не выбрана, передайте ссылку вручную.';
-                    }
-                    if ($mailMissing) {
-                        $bodyParts[] = 'Канал Email пропущен: у сотрудника не заполнен email.';
-                    }
-                    if ($deepLink === '') {
-                        $bodyParts[] = 'QR недоступен: проверьте TELEGRAM_BOT_USERNAME и очистите кэш конфигурации.';
-                    }
-
-                    $feedback = Notification::make()
-                        ->title($deliveryFailed
-                            ? 'Ссылка сгенерирована, но автоотправка завершилась с ошибкой'
-                            : 'Ссылка подключения Telegram сгенерирована')
-                        ->body(implode("\n", $bodyParts));
-
-                    if ($deliveryFailed) {
-                        $feedback->warning();
-                    } else {
-                        $feedback->success();
-                    }
-
-                    $feedback->send();
-                    $this->telegramConnectModalPayload = null;
-                }),
-
-            Action::make('telegram_binding_info')
-                ->label('Проверить привязку')
-                ->icon('heroicon-o-identification')
-                ->color('gray')
-                ->tooltip('Показать, какой Telegram-аккаунт привязан к сотруднику')
-                ->visible(false)
-                ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
-                ->action(function (): void {
-                    $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
-                    $profile = is_array($this->record->telegram_profile ?? null)
-                        ? $this->record->telegram_profile
-                        : [];
-                    $username = trim((string) ($profile['username'] ?? ''));
-                    $firstName = trim((string) ($profile['first_name'] ?? ''));
-                    $lastName = trim((string) ($profile['last_name'] ?? ''));
-                    $displayName = trim($firstName . ' ' . $lastName);
-                    $telegramUserId = trim((string) ($profile['id'] ?? ''));
-                    $linkedAt = $this->record->telegram_linked_at?->format('Y-m-d H:i:s');
-
-                    $lines = ['chat_id: ' . $chatId];
-                    if ($username !== '') {
-                        $lines[] = 'Аккаунт: @' . $username;
-                    }
-                    if ($displayName !== '') {
-                        $lines[] = 'Имя в Telegram: ' . $displayName;
-                    }
-                    if ($telegramUserId !== '') {
-                        $lines[] = 'Telegram user id: ' . $telegramUserId;
-                    }
-                    if ($linkedAt !== null) {
-                        $lines[] = 'Привязано: ' . $linkedAt;
-                    }
-
-                    Notification::make()
-                        ->title('Текущая Telegram-привязка')
-                        ->body(implode("\n", $lines))
-                        ->success()
-                        ->send();
-                }),
-
-            Action::make('telegram_unlink')
-                ->label('Сбросить Telegram')
-                ->icon('heroicon-o-x-circle')
-                ->color('danger')
-                ->tooltip('Очистить Telegram-привязку сотрудника')
-                ->requiresConfirmation()
-                ->modalHeading('Сбросить привязку Telegram?')
-                ->modalDescription('Будут очищены chat_id и информация о связанном Telegram-аккаунте.')
-                ->visible(false)
-                ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
-                ->action(function (): void {
-                    $this->record->forceFill([
-                        'telegram_chat_id' => null,
-                        'telegram_profile' => null,
-                        'telegram_linked_at' => null,
-                    ])->save();
-
-                    Notification::make()
-                        ->title('Telegram-привязка сброшена')
-                        ->success()
-                        ->send();
-                }),
-
-            Action::make('telegram_test')
-                ->label('Telegram тест')
                 ->icon('heroicon-o-paper-airplane')
                 ->color('gray')
-                ->tooltip(fn (): string => blank($this->record->telegram_chat_id)
-                    ? 'Сначала заполните Telegram (chat_id)'
-                    : 'Отправить тестовое сообщение в Telegram')
-                ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
-                ->requiresConfirmation()
-                ->modalHeading('Отправить Telegram тест')
-                ->modalDescription('Тестовое сообщение будет отправлено по chat_id сотрудника.')
-                ->visible(false)
-                ->action(function (): void {
-                    $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
-                    if ($chatId === '') {
-                        Notification::make()
-                            ->title('У сотрудника не заполнен Telegram (chat_id)')
-                            ->warning()
-                            ->send();
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'staff-card-action staff-card-action--secondary',
+                ])
+                ->modalHeading('Telegram')
+                ->modalSubmitActionLabel('Сохранить')
+                ->modalWidth('3xl')
+                ->fillForm(fn (): array => [
+                    'telegram_chat_id' => $this->record->telegram_chat_id,
+                ])
+                ->form([
+                    Section::make('')
+                        ->schema([
+                            Grid::make(2)
+                                ->schema([
+                                    Forms\Components\TextInput::make('telegram_chat_id')
+                                        ->label('Telegram chat_id')
+                                        ->placeholder('123456789')
+                                        ->helperText('Для уведомлений в Telegram')
+                                        ->maxLength(32)
+                                        ->regex('/^-?\d+$/')
+                                        ->validationMessages([
+                                            'regex' => 'Только цифры и знак "-" в начале.',
+                                        ]),
+                                    Section::make('Статус подключения')
+                                        ->schema([
+                                            Forms\Components\Placeholder::make('telegram_status')
+                                                ->label('Статус')
+                                                ->content(function (): string {
+                                                    if (blank($this->record->telegram_chat_id)) {
+                                                        return '<span class="text-danger font-semibold">● Не подключен</span>';
+                                                    }
+                                                    $profile = is_array($this->record->telegram_profile ?? null)
+                                                        ? $this->record->telegram_profile
+                                                        : [];
+                                                    $username = trim((string) ($profile['username'] ?? ''));
+                                                    $linkedAt = $this->record->telegram_linked_at?->format('d.m.Y H:i');
+                                                    $status = '<span class="text-success font-semibold">● Подключен</span>';
+                                                    if ($username !== '') {
+                                                        $status .= '<br><span class="text-gray-600">@' . e($username) . '</span>';
+                                                    }
+                                                    if ($linkedAt !== null) {
+                                                        $status .= '<br><span class="text-gray-500 text-sm">' . e($linkedAt) . '</span>';
+                                                    }
+                                                    return $status;
+                                                }),
+                                        ])
+                                        ->compact()
+                                        ->collapsed(),
+                                    Section::make('QR-подключение')
+                                        ->schema([
+                                            Forms\Components\Placeholder::make('telegram_connect_qr_preview')
+                                                ->label('')
+                                                ->content(fn () => $this->telegramConnectQrPreviewHtml()),
+                                        ])
+                                        ->compact()
+                                        ->collapsed(),
+                                ]),
+                        ])
+                        ->compact(),
+                    Section::make('Действия')
+                        ->schema([
+                            \Filament\Schemas\Components\Actions::make([
+                                \Filament\Actions\Action::make('telegram_connect_link')
+                                    ->label('Сгенерировать ссылку')
+                                    ->icon('heroicon-o-link')
+                                    ->color('gray')
+                                    ->modalHeading('Ссылка подключения')
+                                    ->modalSubmitActionLabel('Сгенерировать')
+                                    ->modalWidth('lg')
+                                    ->fillForm(function (): array {
+                                        $this->telegramConnectModalPayload = $this->issueTelegramConnectPayload();
+                                        return ['delivery_channels' => $this->defaultTelegramConnectDeliveryChannels()];
+                                    })
+                                    ->form([
+                                        \Filament\Forms\Components\CheckboxList::make('delivery_channels')
+                                            ->label('Куда отправить')
+                                            ->options(fn (): array => $this->telegramConnectDeliveryOptions())
+                                            ->default(fn (): array => $this->defaultTelegramConnectDeliveryChannels())
+                                            ->columns(1)
+                                            ->helperText('QR и ссылка показаны выше.'),
+                                    ])
+                                    ->action(function (array $data): void {
+                                        $payload = is_array($this->telegramConnectModalPayload)
+                                            ? $this->telegramConnectModalPayload
+                                            : $this->issueTelegramConnectPayload();
 
-                        return;
+                                        $deepLink = trim((string) ($payload['deep_link'] ?? ''));
+                                        $command = trim((string) ($payload['command'] ?? ''));
+                                        $expiresAt = trim((string) ($payload['expires_at'] ?? ''));
+                                        $recipientLabel = $this->telegramConnectRecipientLabel();
+                                        $shareLink = trim((string) ($payload['share_link'] ?? ''));
+
+                                        $requestedChannelsRaw = is_array($data['delivery_channels'] ?? null)
+                                            ? $data['delivery_channels']
+                                            : [];
+                                        $deliveryChannels = $this->normalizeTelegramConnectDeliveryChannels($requestedChannelsRaw);
+                                        $mailRequested = in_array('mail', $requestedChannelsRaw, true);
+                                        $mailMissing = $mailRequested && blank($this->record->email);
+                                        $deliveryFailed = false;
+
+                                        if ($deliveryChannels !== []) {
+                                            try {
+                                                $actorName = trim((string) (\Filament\Facades\Filament::auth()->user()?->name ?? 'Система'));
+                                                $this->record->notify(new TelegramConnectLinkNotification(
+                                                    recipientLabel: $recipientLabel,
+                                                    issuedBy: $actorName,
+                                                    deepLink: $deepLink,
+                                                    command: $command,
+                                                    expiresAt: $expiresAt !== '' ? $expiresAt : null,
+                                                    shareLink: $shareLink !== '' ? $shareLink : null,
+                                                    channels: $deliveryChannels,
+                                                ));
+                                            } catch (\Throwable $e) {
+                                                report($e);
+                                                $deliveryFailed = true;
+                                            }
+                                        }
+
+                                        $bodyParts = ['Получатель: ' . $recipientLabel];
+                                        if ($expiresAt !== '') {
+                                            $bodyParts[] = 'Действует до: ' . $expiresAt;
+                                        }
+                                        if ($deliveryChannels !== []) {
+                                            $bodyParts[] = 'Каналы: ' . implode(', ', array_map(
+                                                fn (string $channel): string => $this->telegramConnectChannelLabel($channel),
+                                                $deliveryChannels,
+                                            ));
+                                        } else {
+                                            $bodyParts[] = 'Автоотправка не выбрана.';
+                                        }
+                                        if ($mailMissing) {
+                                            $bodyParts[] = 'Email не заполнен.';
+                                        }
+                                        if ($deepLink === '') {
+                                            $bodyParts[] = 'QR недоступен.';
+                                        }
+
+                                        $feedback = \Filament\Notifications\Notification::make()
+                                            ->title($deliveryFailed
+                                                ? 'Ошибка автоотправки'
+                                                : 'Ссылка сгенерирована')
+                                            ->body(implode("\n", $bodyParts));
+
+                                        if ($deliveryFailed) {
+                                            $feedback->warning();
+                                        } else {
+                                            $feedback->success();
+                                        }
+
+                                        $feedback->send();
+                                        $this->telegramConnectModalPayload = null;
+                                    }),
+                                \Filament\Actions\Action::make('telegram_binding_info')
+                                    ->label('Проверить привязку')
+                                    ->icon('heroicon-o-identification')
+                                    ->color('gray')
+                                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                                    ->action(function (): void {
+                                        $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
+                                        $profile = is_array($this->record->telegram_profile ?? null)
+                                            ? $this->record->telegram_profile
+                                            : [];
+                                        $username = trim((string) ($profile['username'] ?? ''));
+                                        $firstName = trim((string) ($profile['first_name'] ?? ''));
+                                        $lastName = trim((string) ($profile['last_name'] ?? ''));
+                                        $displayName = trim($firstName . ' ' . $lastName);
+                                        $telegramUserId = trim((string) ($profile['id'] ?? ''));
+                                        $linkedAt = $this->record->telegram_linked_at?->format('d.m.Y H:i');
+
+                                        $lines = [];
+                                        if ($username !== '') {
+                                            $lines[] = '@' . $username;
+                                        }
+                                        if ($displayName !== '') {
+                                            $lines[] = $displayName;
+                                        }
+                                        if ($telegramUserId !== '') {
+                                            $lines[] = 'ID: ' . $telegramUserId;
+                                        }
+                                        if ($linkedAt !== null) {
+                                            $lines[] = 'Привязано: ' . $linkedAt;
+                                        }
+
+                                        \Filament\Notifications\Notification::make()
+                                            ->title('Telegram привязан')
+                                            ->body(implode("\n", $lines))
+                                            ->success()
+                                            ->send();
+                                    }),
+                                \Filament\Actions\Action::make('telegram_test')
+                                    ->label('Тест')
+                                    ->icon('heroicon-o-paper-airplane')
+                                    ->color('gray')
+                                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                                    ->requiresConfirmation()
+                                    ->modalHeading('Тест Telegram')
+                                    ->modalDescription('Отправить тестовое сообщение?')
+                                    ->modalSubmitActionLabel('Отправить')
+                                    ->action(function (): void {
+                                        $chatId = trim((string) ($this->record->telegram_chat_id ?? ''));
+                                        if ($chatId === '') {
+                                            \Filament\Notifications\Notification::make()
+                                                ->title('chat_id не заполнен')
+                                                ->warning()
+                                                ->send();
+                                            return;
+                                        }
+                                        try {
+                                            $actorName = trim((string) (\Filament\Facades\Filament::auth()->user()?->name ?? 'System'));
+                                            $this->record->notify(new TelegramTestNotification($actorName));
+                                            \Filament\Notifications\Notification::make()
+                                                ->title('Сообщение отправлено')
+                                                ->success()
+                                                ->send();
+                                        } catch (\Throwable $e) {
+                                            report($e);
+                                            \Filament\Notifications\Notification::make()
+                                                ->title('Ошибка отправки')
+                                                ->body('Проверьте токен бота и chat_id.')
+                                                ->danger()
+                                                ->send();
+                                        }
+                                    }),
+                                \Filament\Actions\Action::make('telegram_block_reset')
+                                    ->label('Сбросить Telegram')
+                                    ->icon('heroicon-o-x-circle')
+                                    ->color('danger')
+                                    ->requiresConfirmation()
+                                    ->modalHeading('Сбросить привязку?')
+                                    ->modalDescription('chat_id и данные аккаунта будут удалены.')
+                                    ->modalSubmitActionLabel('Сбросить')
+                                    ->disabled(fn (): bool => blank($this->record->telegram_chat_id))
+                                    ->action(function (): void {
+                                        $this->record->forceFill([
+                                            'telegram_chat_id' => null,
+                                            'telegram_profile' => null,
+                                            'telegram_linked_at' => null,
+                                        ])->save();
+                                        \Filament\Notifications\Notification::make()
+                                            ->title('Telegram сброшен')
+                                            ->success()
+                                            ->send();
+                                    }),
+                            ])->alignCenter(),
+                        ])
+                        ->compact(),
+                ])
+                ->action(function (array $data): void {
+                    $chatId = trim((string) ($data['telegram_chat_id'] ?? ''));
+                    $chatId = $chatId !== '' ? $chatId : null;
+
+                    $payload = ['telegram_chat_id' => $chatId];
+                    if ($chatId === null) {
+                        $payload['telegram_profile'] = null;
+                        $payload['telegram_linked_at'] = null;
                     }
 
-                    try {
-                        $actorName = trim((string) (Filament::auth()->user()?->name ?? 'System'));
-                        $this->record->notify(new TelegramTestNotification($actorName));
+                    $this->record->forceFill($payload)->save();
 
-                        Notification::make()
-                            ->title('Тестовое сообщение отправлено')
-                            ->body('Проверьте Telegram у выбранного сотрудника.')
-                            ->success()
-                            ->send();
-                    } catch (\Throwable $e) {
-                        report($e);
-
-                        Notification::make()
-                            ->title('Не удалось отправить в Telegram')
-                            ->body('Проверьте токен бота и chat_id сотрудника.')
-                            ->danger()
-                            ->send();
-                    }
+                    Notification::make()
+                        ->title($chatId === null
+                            ? 'Telegram очищен'
+                            : 'Telegram сохранён')
+                        ->success()
+                        ->send();
                 }),
 
             DeleteAction::make()
                 ->label('Удалить сотрудника')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
                 ->size('lg')
                 ->outlined()
                 ->extraAttributes([
                     'class' => 'staff-card-action staff-card-action--danger',
-                    'data-subtitle' => 'Удаление без восстановления',
                 ])
                 ->visible(fn (): bool => StaffResource::canDelete($this->record)),
         ];
