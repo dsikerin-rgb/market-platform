@@ -628,23 +628,23 @@
               @if ($canEdit)
                 <div class="toolbar-group toolbar-group--accent">
                   <span class="toolbar-label">Режим</span>
-                  <button id="scenarioMap" type="button" class="button-toggle is-active">Карта</button>
-                  <button id="scenarioReview" type="button" class="button-toggle">Ревизия</button>
+                  <button id="scenarioMap" type="button" class="button-toggle is-active" title="Обычный режим просмотра карты" aria-label="Обычный режим просмотра карты">Карта</button>
+                  <button id="scenarioReview" type="button" class="button-toggle" title="Режим ревизии мест и разметки" aria-label="Режим ревизии мест и разметки">Ревизия</button>
                 </div>
               @endif
-              <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
-              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
+              <button id="closeBtn" type="button" class="button-accent" title="Закрыть карту и вернуться назад" aria-label="Закрыть карту и вернуться назад">Закрыть</button>
+              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;" title="Открыть настройки карты и рынка" aria-label="Открыть настройки карты и рынка">К настройкам</a>
             </div>
           </div>
 
           <div class="toolbar-row toolbar-row--controls">
             <div class="toolbar-group toolbar-group--accent">
-              <button id="zoomOut" type="button">−</button>
-              <button id="zoomIn" type="button">+</button>
-              <button id="zoomReset" type="button">100%</button>
-              <button id="fitWidth" type="button">По ширине</button>
+              <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
+              <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
+              <button id="zoomReset" type="button" title="Сбросить масштаб до 100%" aria-label="Сбросить масштаб до 100%">100%</button>
+              <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
               @if ($canOpenPdf)
-                <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer">Открыть PDF</a>
+                <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
               @endif
             </div>
 
@@ -668,10 +668,10 @@
 
             @if ($canEdit)
               <div class="toolbar-group toolbar-group--accent">
-                <button id="toggleEdit" type="button">Разметка: выкл</button>
-                <button id="toolSelect" type="button" style="display:none;">Редактировать</button>
-                <button id="toolRect" type="button" style="display:none;">Прямоугольник</button>
-                <button id="toolPoly" type="button" style="display:none;">Полигон</button>
+                <button id="toggleEdit" type="button" title="Включить или выключить режим разметки карты" aria-label="Включить или выключить режим разметки карты">Разметка: выкл</button>
+                <button id="toolSelect" type="button" style="display:none;" title="Редактировать существующую разметку" aria-label="Редактировать существующую разметку">Редактировать</button>
+                <button id="toolRect" type="button" style="display:none;" title="Нарисовать прямоугольную область" aria-label="Нарисовать прямоугольную область">Прямоугольник</button>
+                <button id="toolPoly" type="button" style="display:none;" title="Нарисовать полигон по точкам" aria-label="Нарисовать полигон по точкам">Полигон</button>
               </div>
 
               <div class="toolbar-group toolbar-group--stretch">
@@ -682,24 +682,28 @@
                     class="spaceSearchInput"
                     placeholder="Номер / код / арендатор / ID"
                     autocomplete="off"
+                    title="Поиск места по номеру, коду, арендатору или ID"
+                    aria-label="Поиск места по номеру, коду, арендатору или ID"
                   >
                   <div id="spaceDropdown" class="spaceDropdown" role="listbox" aria-label="Результаты поиска"></div>
                 </div>
 
-                <label class="pill" id="spaceNumberPill" style="display:none;">
+                <label class="pill" id="spaceNumberPill" style="display:none;" title="Введите номер места для поиска ID">
                   Номер:
                   <input
                     id="marketSpaceNumber"
                     type="text"
                     inputmode="text"
                     placeholder="например 45-4"
+                    title="Номер места для поиска по карте"
+                    aria-label="Номер места для поиска по карте"
                     style="width:120px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
                   >
                 </label>
 
-                <button id="findByNumber" type="button" style="display:none;">Найти ID</button>
+                <button id="findByNumber" type="button" style="display:none;" title="Найти место по введённому номеру" aria-label="Найти место по введённому номеру">Найти ID</button>
 
-                <label class="pill" style="display:none;">
+                <label class="pill" style="display:none;" title="Технический идентификатор места">
                   Место ID:
                   <input
                     id="marketSpaceId"
@@ -708,21 +712,23 @@
                     step="1"
                     inputmode="numeric"
                     placeholder="ID"
+                    title="Технический идентификатор места"
+                    aria-label="Технический идентификатор места"
                     style="width:92px; padding:6px 8px; border-radius:10px; border:1px solid rgba(120,120,120,.25); background:rgba(120,120,120,.06); color:inherit;"
                   >
                 </label>
 
-                <span class="pill" id="spaceChosenPill" style="display:none;"></span>
-                <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
+                <span class="pill" id="spaceChosenPill" style="display:none;" title="Выбранное место для привязки или ревизии"></span>
+                <span class="pill" id="spaceIdState" style="display:none;" title="Текущий ID выбранного места">ID: —</span>
                 <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Режим разметки</span>
               </div>
 
               <div class="toolbar-group toolbar-group--utility">
-                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+                <span class="pill" id="scaleLabel" title="Текущий масштаб карты">Масштаб: 100%</span>
               </div>
             @else
               <div class="toolbar-group toolbar-group--utility">
-                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+                <span class="pill" id="scaleLabel" title="Текущий масштаб карты">Масштаб: 100%</span>
               </div>
             @endif
           </div>
@@ -730,8 +736,8 @@
           @if ($canEdit)
             <div class="toolbar-row" id="reviewToolbarRow">
               <div class="toolbar-group">
-                <button id="reviewNotFound" type="button" style="display:none;">Не найдено на карте</button>
-                <div class="review-progress" id="reviewProgress" aria-live="polite">
+                <button id="reviewNotFound" type="button" style="display:none;" title="Отметить, что выбранное место не найдено на карте" aria-label="Отметить, что выбранное место не найдено на карте">Не найдено на карте</button>
+                <div class="review-progress" id="reviewProgress" aria-live="polite" title="Прогресс ревизии по местам">
                   <div class="review-progress__track">
                     <div class="review-progress__fill" id="reviewProgressFill"></div>
                   </div>
