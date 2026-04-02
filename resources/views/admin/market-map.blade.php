@@ -42,7 +42,7 @@
     button {
       border: 1px solid rgba(120,120,120,.35);
       background: rgba(120,120,120,.10);
-      padding: 6px 9px;
+      padding: 5px 8px;
       border-radius: 9px;
       cursor: pointer;
       font-size: 12px;
@@ -170,9 +170,9 @@
     }
 
     .pill {
-      font-size: 11px;
+      font-size: 10.5px;
       opacity: .85;
-      padding: 5px 9px;
+      padding: 4px 8px;
       border-radius: 999px;
       border: 1px solid rgba(120,120,120,.25);
       display: inline-flex;
@@ -253,25 +253,26 @@
       background: #fff;
     }
     .toolbar {
-      padding: 12px 16px 10px;
+      padding: 10px 14px 8px;
       display: grid;
-      gap: 8px;
+      gap: 7px;
       border-bottom: 1px solid rgba(120,120,120,.18);
       background: linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(248,250,252,.98) 100%);
     }
     .toolbar-row {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
     }
     .toolbar-row.toolbar-row--hero {
-      align-items: flex-start;
-      gap: 12px;
+      align-items: center;
+      gap: 10px;
     }
     .toolbar-row.toolbar-row--controls {
-      align-items: flex-start;
+      align-items: center;
+      justify-content: flex-start;
     }
     .toolbar-group {
       display: flex;
@@ -282,7 +283,7 @@
       min-width: 0;
     }
     .toolbar-group.toolbar-group--accent {
-      padding: 4px 6px;
+      padding: 3px 5px;
       border-radius: 10px;
       background: rgba(255,255,255,.92);
       border: 1px solid rgba(120,120,120,.16);
@@ -306,7 +307,7 @@
       align-items: center;
       gap: 8px;
       color: rgba(15, 23, 42, 0.58);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       letter-spacing: .08em;
       text-transform: uppercase;
@@ -320,7 +321,7 @@
     .hero-title {
       margin: 0;
       color: #0f172a;
-      font-size: 22px;
+      font-size: 20px;
       line-height: 1.1;
       font-weight: 700;
     }
@@ -335,6 +336,8 @@
     }
     .toolbar-group.toolbar-group--utility {
       margin-left: auto;
+      opacity: .92;
+      gap: 5px;
     }
     .legend[hidden] {
       display: none;
@@ -672,8 +675,6 @@
               </div>
 
               <div class="toolbar-group toolbar-group--stretch">
-                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
                 <div class="spacePicker" style="display:none;" id="spacePicker">
                   <input
                     id="spaceSearch"
@@ -714,6 +715,11 @@
                 <span class="pill" id="spaceChosenPill" style="display:none;"></span>
                 <span class="pill" id="spaceIdState" style="display:none;">ID: —</span>
                 <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Режим разметки</span>
+              </div>
+
+              <div class="toolbar-group toolbar-group--utility">
+                <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               </div>
             @else
               <div class="toolbar-group toolbar-group--utility">
