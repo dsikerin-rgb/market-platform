@@ -900,6 +900,7 @@
         let searchTimer = null;
         let searchController = null;
         let mapLoadProgressHideTimer = null;
+        let mapLoadProgressState = 'idle';
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -937,8 +938,32 @@
           }
         }
 
+        function mapLoadStatePriority(state) {
+          switch (state) {
+            case 'loading':
+              return 1;
+            case 'rendering':
+              return 2;
+            case 'done':
+              return 3;
+            case 'fallback':
+              return 4;
+            default:
+              return 0;
+          }
+        }
+
         function setMapLoadProgress(percent, text, state = 'loading') {
           if (!mapLoadProgress || !mapLoadProgressFill || !mapLoadProgressText) {
+            return;
+          }
+
+          const nextPriority = mapLoadStatePriority(state);
+          const currentPriority = mapLoadStatePriority(mapLoadProgressState);
+          if (currentPriority >= 3 && nextPriority < currentPriority) {
+            return;
+          }
+          if (nextPriority < currentPriority && currentPriority > 0) {
             return;
           }
 
@@ -952,6 +977,7 @@
           if (isFinalizing && state === 'loading') {
             text = 'PDF почти загружен, подготавливаем карту…';
           }
+          mapLoadProgressState = state;
           mapLoadProgress.dataset.state = state;
           if (isFinalizing) {
             mapLoadProgress.dataset.phase = 'finalizing';
@@ -983,6 +1009,7 @@
           if (mapLoadProgressPercent) {
             mapLoadProgressPercent.textContent = '0%';
           }
+          mapLoadProgressState = 'idle';
           delete mapLoadProgress.dataset.state;
           delete mapLoadProgress.dataset.phase;
         }
