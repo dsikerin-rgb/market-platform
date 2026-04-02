@@ -197,7 +197,6 @@ class DebtStatusResolver
         if ($hasCalculatedAt) {
             $latest = $query->clone()->max('calculated_at');
             if ($latest) {
-                $query->where('calculated_at', $latest);
                 try {
                     $snapshotLabel = Carbon::parse($latest)->format('d.m.Y H:i');
                 } catch (\Throwable) {
@@ -207,7 +206,6 @@ class DebtStatusResolver
         } elseif ($hasCreatedAt) {
             $latest = $query->clone()->max('created_at');
             if ($latest) {
-                $query->where('created_at', $latest);
                 try {
                     $snapshotLabel = Carbon::parse($latest)->format('d.m.Y H:i');
                 } catch (\Throwable) {
@@ -217,7 +215,6 @@ class DebtStatusResolver
         } elseif ($hasPeriod) {
             $latest = $query->clone()->max('period');
             if ($latest) {
-                $query->where('period', $latest);
                 $snapshotLabel = (string) $latest;
             }
         }
@@ -366,38 +363,45 @@ class DebtStatusResolver
         bool $hasCalculatedAt,
         bool $hasCreatedAt
     ): ?Carbon {
-        // 1. Если есть calculated_at в rows - используем его + grace_days
+        $positiveRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+
+        $agingRows = $positiveRows->isNotEmpty() ? $positiveRows : $rows;
+
+        // 1. Для aging берём самую раннюю положительную debt row, а не последний snapshot.
+        // Иначе новый snapshot "омолаживает" старую просрочку и скрывает overdue-статусы.
         if ($hasCalculatedAt) {
-            $latestCalculatedAt = $rows->max('calculated_at');
-            if ($latestCalculatedAt) {
+            $oldestCalculatedAt = $agingRows->min('calculated_at');
+            if ($oldestCalculatedAt) {
                 try {
-                    return Carbon::parse($latestCalculatedAt)->addDays($graceDays);
+                    return Carbon::parse($oldestCalculatedAt)->addDays($graceDays);
                 } catch (\Throwable) {
                     // continue
                 }
             }
         }
 
-        // 2. Если есть created_at в rows - используем его + grace_days
+        // 2. Если calculated_at нет, используем самую раннюю положительную created_at.
         if ($hasCreatedAt) {
-            $latestCreatedAt = $rows->max('created_at');
-            if ($latestCreatedAt) {
+            $oldestCreatedAt = $agingRows->min('created_at');
+            if ($oldestCreatedAt) {
                 try {
-                    return Carbon::parse($latestCreatedAt)->addDays($graceDays);
+                    return Carbon::parse($oldestCreatedAt)->addDays($graceDays);
                 } catch (\Throwable) {
                     // continue
                 }
             }
         }
 
-        // 3. Если есть period - используем его + grace_days
+        // 3. Fallback: самый ранний положительный period.
         if ($hasPeriod) {
-            $latestPeriod = $rows->max('period');
-            if ($latestPeriod) {
+            $oldestPeriod = $agingRows->min('period');
+            if ($oldestPeriod) {
                 try {
                     // period в формате YYYY-MM
-                    if (preg_match('/^\d{4}-\d{2}/', $latestPeriod) === 1) {
-                        return Carbon::createFromFormat('Y-m-d', substr($latestPeriod, 0, 7) . '-01')
+                    if (preg_match('/^\d{4}-\d{2}/', $oldestPeriod) === 1) {
+                        return Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01')
                             ->startOfMonth()
                             ->addDays($graceDays);
                     }

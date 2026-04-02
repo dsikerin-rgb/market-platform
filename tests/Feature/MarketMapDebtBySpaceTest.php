@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
+use App\Services\Debt\DebtStatusResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
@@ -23,6 +24,7 @@ class MarketMapDebtBySpaceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        DebtStatusResolver::clearCache();
 
         $this->market = Market::create([
             'name' => 'Тестовый рынок',
@@ -457,5 +459,123 @@ class MarketMapDebtBySpaceTest extends TestCase
         
         // Проверяем, что статус orange
         $this->assertEquals('orange', $shape['debt_status']);
+    }
+
+    public function test_space_status_keeps_overdue_when_newer_snapshot_exists(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '60',
+            'code' => 'space-60',
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $this->market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [[0, 0], [10, 0], [10, 10], [0, 10]],
+        ]);
+
+        $contractA = 'contract-space-60-a';
+        $contractB = 'contract-space-60-b';
+
+        DB::table('tenant_contracts')->insert([
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'market_space_id' => $space->id,
+                'external_id' => $contractA,
+                'number' => '60-A',
+                'status' => 'active',
+                'is_active' => true,
+                'starts_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'market_space_id' => $space->id,
+                'external_id' => $contractB,
+                'number' => '60-B',
+                'status' => 'active',
+                'is_active' => true,
+                'starts_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        DB::table('contract_debts')->insert([
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'tenant_external_id' => $this->tenant->external_id,
+                'contract_external_id' => $contractA,
+                'period' => '2026-03',
+                'accrued_amount' => 25991.23,
+                'paid_amount' => 0,
+                'debt_amount' => 25991.23,
+                'calculated_at' => now()->subDays(24),
+                'created_at' => now()->subDays(24),
+                'hash' => sha1($this->tenant->external_id . '|' . $contractA . '|2026-03|25991.23|0|25991.23'),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'tenant_external_id' => $this->tenant->external_id,
+                'contract_external_id' => $contractB,
+                'period' => '2026-03',
+                'accrued_amount' => 11761.57,
+                'paid_amount' => 0,
+                'debt_amount' => 11761.57,
+                'calculated_at' => now()->subDays(25),
+                'created_at' => now()->subDays(25),
+                'hash' => sha1($this->tenant->external_id . '|' . $contractB . '|2026-03|11761.57|0|11761.57'),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'tenant_external_id' => $this->tenant->external_id,
+                'contract_external_id' => $contractA,
+                'period' => '2026-04',
+                'accrued_amount' => 24364.18,
+                'paid_amount' => 0,
+                'debt_amount' => 24364.18,
+                'calculated_at' => now()->subDay(),
+                'created_at' => now()->subDay(),
+                'hash' => sha1($this->tenant->external_id . '|' . $contractA . '|2026-04|24364.18|0|24364.18'),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'tenant_external_id' => $this->tenant->external_id,
+                'contract_external_id' => $contractB,
+                'period' => '2026-04',
+                'accrued_amount' => 11761.57,
+                'paid_amount' => 0,
+                'debt_amount' => 11761.57,
+                'calculated_at' => now()->subDay(),
+                'created_at' => now()->subDay(),
+                'hash' => sha1($this->tenant->external_id . '|' . $contractB . '|2026-04|11761.57|0|11761.57'),
+            ],
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.shapes', [
+            'market' => $this->market->id,
+            'page' => 1,
+        ]));
+
+        $response->assertOk();
+
+        $shape = $response->json('items.0');
+
+        $this->assertSame('orange', $shape['debt_status']);
+        $this->assertSame('space', $shape['debt_status_scope']);
+        $this->assertGreaterThanOrEqual(1, (int) $shape['debt_overdue_days']);
     }
 }
