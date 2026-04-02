@@ -2436,7 +2436,7 @@
               const total = Number(progressData?.total || 0);
               if (Number.isFinite(total) && total > 0) {
                 const ratio = Math.max(0, Math.min(1, loaded / total));
-                const percent = Math.round(8 + ratio * 72);
+                const percent = Math.round(8 + ratio * 64);
                 setMapLoadProgress(percent, 'Загрузка PDF: ' + percent + '%', 'loading');
               } else {
                 setMapLoadProgress(24, 'Загрузка карты…', 'loading');
