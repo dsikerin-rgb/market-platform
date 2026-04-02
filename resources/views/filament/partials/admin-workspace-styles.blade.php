@@ -638,7 +638,7 @@
 
     .fi-resource-staff-edit-page .staff-edit-hero__grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: 1fr 2.5fr 1fr 1fr;
         gap: .75rem;
     }
 
