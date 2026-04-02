@@ -719,12 +719,10 @@
 
               <div class="toolbar-group toolbar-group--utility">
                 <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               </div>
             @else
               <div class="toolbar-group toolbar-group--utility">
                 <span class="pill" id="scaleLabel">Масштаб: 100%</span>
-                <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               </div>
             @endif
           </div>
