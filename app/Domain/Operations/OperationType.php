@@ -9,6 +9,7 @@ final class OperationType
     public const TENANT_SWITCH = 'tenant_switch';
     public const RENT_RATE_CHANGE = 'rent_rate_change';
     public const SPACE_ATTRS_CHANGE = 'space_attrs_change';
+    public const SPACE_REVIEW = 'space_review';
     public const ELECTRICITY_INPUT = 'electricity_input';
     public const ACCRUAL_ADJUSTMENT = 'accrual_adjustment';
     public const PERIOD_CLOSE = 'period_close';
@@ -22,6 +23,7 @@ final class OperationType
             self::TENANT_SWITCH => 'Смена арендатора',
             self::RENT_RATE_CHANGE => 'Изменение ставки аренды',
             self::SPACE_ATTRS_CHANGE => 'Изменение характеристик места',
+            self::SPACE_REVIEW => 'Ревизия места',
             self::ELECTRICITY_INPUT => 'Ввод электроэнергии',
             self::ACCRUAL_ADJUSTMENT => 'Корректировка начислений',
             self::PERIOD_CLOSE => 'Закрытие месяца',

@@ -60,6 +60,38 @@
     .button-toggle.is-active:hover {
       background: #1e293b;
     }
+    .review-progress {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      min-width: 220px;
+    }
+    .review-progress__track {
+      position: relative;
+      width: 160px;
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.12);
+    }
+    .review-progress__fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 0;
+      background: linear-gradient(90deg, #0f766e 0%, #14b8a6 100%);
+      border-radius: 999px;
+    }
+    .review-progress__text {
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .review-summary {
+      display: none;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
 
     .pill {
       font-size: 11px;
@@ -539,6 +571,24 @@
                 <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Режим разметки</span>
               </div>
             </div>
+            <div class="toolbar-row" id="reviewToolbarRow">
+              <div class="toolbar-group toolbar-group--accent">
+                <span class="toolbar-label">Сценарий</span>
+                <button id="scenarioMap" type="button" class="button-toggle is-active">Карта</button>
+                <button id="scenarioReview" type="button" class="button-toggle">Ревизия</button>
+              </div>
+
+              <div class="toolbar-group">
+                <button id="reviewNotFound" type="button" style="display:none;">Не найдено на карте</button>
+                <div class="review-progress" id="reviewProgress" aria-live="polite">
+                  <div class="review-progress__track">
+                    <div class="review-progress__fill" id="reviewProgressFill"></div>
+                  </div>
+                  <span class="review-progress__text" id="reviewProgressText">0 / 0</span>
+                </div>
+                <div class="review-summary" id="reviewSummary"></div>
+              </div>
+            </div>
           @endif
         </div>
 
@@ -644,13 +694,16 @@
         const SHAPES_URL = @json($shapesUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const SPACE_URL  = @json($spaceUrl,  JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const SPACES_URL = @json($spacesUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        const REVIEW_DECISION_URL = @json($reviewDecisionUrl ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const CAN_EDIT  = @json((bool) $canEdit);
+        const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
         const MARKET_ID = @json((int) $marketId);
         const MAP_PAGE = @json((int) ($mapPage ?? 1));
         const MAP_VERSION = @json((int) ($mapVersion ?? 1));
         const FOCUS_SPACE_ID = @json(isset($marketSpaceId) ? (int) $marketSpaceId : null);
         const FOCUS_SHAPE = @json($focusShape ?? null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        const INITIAL_REVIEW_PROGRESS = @json($reviewProgress ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
@@ -677,9 +730,19 @@
         const popoverClose = document.getElementById('popoverClose');
 
         const toggleEditBtn = document.getElementById('toggleEdit');
+        const editToolbarRow = toggleEditBtn?.closest('.toolbar-row') || null;
+        const mapEditGroup = toggleEditBtn?.closest('.toolbar-group') || null;
         const toolSelectBtn = document.getElementById('toolSelect');
         const toolRectBtn = document.getElementById('toolRect');
         const toolPolyBtn = document.getElementById('toolPoly');
+        const scenarioMapBtn = document.getElementById('scenarioMap');
+        const scenarioReviewBtn = document.getElementById('scenarioReview');
+        const reviewToolbarRow = document.getElementById('reviewToolbarRow');
+        const reviewNotFoundBtn = document.getElementById('reviewNotFound');
+        const reviewProgress = document.getElementById('reviewProgress');
+        const reviewProgressFill = document.getElementById('reviewProgressFill');
+        const reviewProgressText = document.getElementById('reviewProgressText');
+        const reviewSummary = document.getElementById('reviewSummary');
 
         const spacePicker = document.getElementById('spacePicker');
         const spaceSearchInput = document.getElementById('spaceSearch');
@@ -693,6 +756,8 @@
 
         let chosenSpace = null;
         let isEditMode = false;
+        let currentScenario = INITIAL_MAP_MODE === 'review' ? 'review' : 'map';
+        let reviewProgressState = INITIAL_REVIEW_PROGRESS || {};
         let currentLayer = 'debt';
         let redrawShapesRef = null;
         let searchResults = [];
@@ -805,6 +870,8 @@
             number: item?.number ? String(item.number) : '',
             code: item?.code ? String(item.code) : '',
             tenantName: item?.tenant?.name ? String(item.tenant.name) : (item?.tenantName ? String(item.tenantName) : null),
+            reviewStatus: item?.review_status ? String(item.review_status) : '',
+            reviewStatusLabel: item?.review_status_label ? String(item.review_status_label) : '',
           };
         }
 
@@ -980,19 +1047,117 @@
           }
         }
 
+
+        function isReviewMode() {
+          return currentScenario === 'review';
+        }
+
+        function isSelectionToolbarVisible() {
+          return isReviewMode() || isEditMode;
+        }
+
+        function updateReviewProgress(nextProgress = null) {
+          if (nextProgress && typeof nextProgress === 'object') {
+            reviewProgressState = nextProgress;
+          }
+
+          if (!reviewProgress || !reviewProgressFill || !reviewProgressText || !reviewSummary) {
+            return;
+          }
+
+          const total = Number(reviewProgressState?.total || 0);
+          const reviewed = Number(reviewProgressState?.reviewed || 0);
+          const percent = Number(reviewProgressState?.percent || 0);
+          const counts = reviewProgressState?.counts || {};
+          const labels = reviewProgressState?.labels || {};
+
+          reviewProgress.style.display = isReviewMode() ? 'inline-flex' : 'none';
+          reviewProgressFill.style.width = Math.max(0, Math.min(100, percent)) + '%';
+          reviewProgressText.textContent = reviewed + ' / ' + total + ' / ' + percent + '%';
+
+          if (!isReviewMode()) {
+            reviewSummary.style.display = 'none';
+            reviewSummary.innerHTML = '';
+            return;
+          }
+
+          const statuses = Object.entries(counts);
+          if (!statuses.length) {
+            reviewSummary.style.display = 'none';
+            reviewSummary.innerHTML = '';
+            return;
+          }
+
+          reviewSummary.style.display = 'flex';
+          reviewSummary.innerHTML = statuses
+            .map(([status, count]) => '<span class="pill">' + escapeHtml(labels[status] || status) + ': ' + escapeHtml(String(count)) + '</span>')
+            .join('');
+        }
+
+        function updateScenarioUi() {
+          const reviewMode = isReviewMode();
+
+          scenarioMapBtn?.classList.toggle('is-active', !reviewMode);
+          scenarioReviewBtn?.classList.toggle('is-active', reviewMode);
+
+          if (editToolbarRow) {
+            editToolbarRow.style.display = 'flex';
+          }
+
+          if (mapEditGroup) {
+            mapEditGroup.style.display = reviewMode ? 'none' : 'inline-flex';
+          }
+
+          if (reviewToolbarRow) {
+            reviewToolbarRow.style.display = 'flex';
+          }
+
+          if (spacePicker) {
+            spacePicker.style.display = isSelectionToolbarVisible() ? 'inline-flex' : 'none';
+          }
+
+          if (reviewNotFoundBtn) {
+            reviewNotFoundBtn.style.display = reviewMode ? 'inline-flex' : 'none';
+            reviewNotFoundBtn.disabled = !chosenSpace;
+          }
+
+          if (editHint) {
+            editHint.style.display = isEditMode && !reviewMode ? 'inline-flex' : 'none';
+          }
+
+          if (reviewMode && isEditMode) {
+            isEditMode = false;
+          }
+
+          updateChosenPill();
+          updateReviewProgress();
+        }
+
+        function setScenario(mode) {
+          currentScenario = mode === 'review' ? 'review' : 'map';
+          hidePopover();
+          updateScenarioUi();
+
+          const url = new URL(window.location.href);
+          url.searchParams.set('mode', currentScenario);
+          window.history.replaceState({}, '', url.toString());
+        }
+
         function updateChosenPill() {
           if (!spaceChosenPill) return;
-          if (!chosenSpace || !isEditMode) {
+          if (!chosenSpace || !isSelectionToolbarVisible()) {
             spaceChosenPill.style.display = 'none';
             spaceChosenPill.innerHTML = '';
             return;
           }
           const label = formatSpaceLabel(chosenSpace);
           const tenant = chosenSpace.tenantName ? (' • арендатор ' + chosenSpace.tenantName) : ' • арендатор —';
+          const review = chosenSpace.reviewStatusLabel ? (' / ' + chosenSpace.reviewStatusLabel) : '';
           spaceChosenPill.style.display = 'inline-flex';
           spaceChosenPill.innerHTML =
             'Выбрано: ' + escapeHtml(label) + ' (ID ' + escapeHtml(String(chosenSpace.id)) + ')' +
             escapeHtml(tenant) +
+            escapeHtml(review) +
             ' <button type="button" class="spacePillButton" data-action="clear-chosen" aria-label="Сбросить">×</button>';
         }
 
@@ -1007,6 +1172,8 @@
               number: chosenSpace.number,
               code: chosenSpace.code,
               tenantName: chosenSpace.tenantName,
+              reviewStatus: chosenSpace.reviewStatus,
+              reviewStatusLabel: chosenSpace.reviewStatusLabel,
             };
             localStorage.setItem(LS_KEY_CHOSEN, JSON.stringify(payload));
           } catch {}
@@ -1018,12 +1185,17 @@
             number: space.number || '',
             code: space.code || '',
             tenantName: space.tenantName ?? null,
+            reviewStatus: space.reviewStatus ?? '',
+            reviewStatusLabel: space.reviewStatusLabel ?? '',
           } : null;
           chosenSpace = next;
           updateChosenPill();
           saveChosenSpaceToLS();
           if (spaceSearchInput && next) {
             spaceSearchInput.value = '';
+          }
+          if (reviewNotFoundBtn) {
+            reviewNotFoundBtn.disabled = !next;
           }
           if (opts.announce && next) {
             toast('Выбрано место ' + formatSpaceLabel(next) + ' (ID ' + String(next.id) + ')');
@@ -1971,7 +2143,162 @@
             toast('Полигон отменён');
           }
 
+
+          function syncChosenSpaceReview(item) {
+            if (!item || !chosenSpace) {
+              return;
+            }
+
+            const reviewedSpaceId = Number(item.market_space_id || 0);
+            if (!Number.isFinite(reviewedSpaceId) || reviewedSpaceId <= 0 || reviewedSpaceId !== Number(chosenSpace.id)) {
+              return;
+            }
+
+            setChosenSpace({
+              ...chosenSpace,
+              reviewStatus: item.review_status || '',
+              reviewStatusLabel: item.review_status_label || '',
+            }, { announce: false });
+          }
+
+
+          function reviewDecisionSuccessMessage(decision) {
+            switch (decision) {
+              case 'matched':
+                return 'Ревизия: совпадение отмечено';
+              case 'mark_space_free':
+                return 'Ревизия: место отмечено как свободное';
+              case 'mark_space_service':
+                return 'Ревизия: место отмечено как служебное';
+              case 'fix_space_identity':
+                return 'Ревизия: данные места уточнены';
+              case 'occupancy_conflict':
+                return 'Ревизия: конфликт отправлен в observed';
+              case 'tenant_changed_on_site':
+                return 'Ревизия: смена арендатора зафиксирована';
+              case 'shape_not_found':
+                return 'Ревизия: место отмечено как не найденное';
+              case 'bind_shape_to_space':
+                return 'Ревизия: фигура привязана к месту';
+              case 'unbind_shape_from_space':
+                return 'Ревизия: фигура отвязана от места';
+              default:
+                return 'Ревизия обновлена';
+            }
+          }
+
+          async function submitReviewDecision(decision, options = {}) {
+            if (!REVIEW_DECISION_URL) {
+              toast('Нет endpoint для ревизии');
+              return;
+            }
+
+            const sourceHit = options.hit || lastHit || null;
+            const sourceSpace = options.space || sourceHit?.space || chosenSpace || null;
+            const marketSpaceId = Number(
+              options.marketSpaceId
+              || sourceSpace?.id
+              || sourceHit?.market_space_id
+              || chosenSpace?.id
+              || 0
+            );
+
+            if (!Number.isFinite(marketSpaceId) || marketSpaceId <= 0) {
+              toast('Сначала выбери место для ревизии');
+              return;
+            }
+
+            const payload = {
+              decision,
+              market_space_id: Math.trunc(marketSpaceId),
+            };
+
+            const shapeId = Number(options.shapeId || sourceHit?.shape_id || 0);
+            if (Number.isFinite(shapeId) && shapeId > 0 && ['bind_shape_to_space', 'unbind_shape_from_space'].includes(decision)) {
+              payload.shape_id = Math.trunc(shapeId);
+            }
+
+            if (decision === 'occupancy_conflict' || decision === 'shape_not_found') {
+              const reason = window.prompt('Комментарий для ревизии', '');
+              if (!reason || !String(reason).trim()) {
+                return;
+              }
+              payload.reason = String(reason).trim();
+            }
+
+            if (decision === 'tenant_changed_on_site') {
+              const observedTenant = window.prompt('Фактический арендатор', options.observedTenantName || '');
+              if (!observedTenant || !String(observedTenant).trim()) {
+                return;
+              }
+
+              const reason = window.prompt('Комментарий для ревизии', '');
+              if (!reason || !String(reason).trim()) {
+                return;
+              }
+
+              payload.observed_tenant_name = String(observedTenant).trim();
+              payload.reason = String(reason).trim();
+            }
+
+            if (decision === 'fix_space_identity') {
+              const currentNumber = sourceSpace?.number ? String(sourceSpace.number) : '';
+              const currentDisplayName = sourceSpace?.display_name ? String(sourceSpace.display_name) : '';
+              const nextNumber = window.prompt('Номер места', currentNumber);
+              const nextDisplayName = window.prompt('Название места', currentDisplayName);
+
+              if ((!nextNumber || !String(nextNumber).trim()) && (!nextDisplayName || !String(nextDisplayName).trim())) {
+                toast('Нужен номер или название места');
+                return;
+              }
+
+              if (nextNumber && String(nextNumber).trim()) {
+                payload.number = String(nextNumber).trim();
+              }
+
+              if (nextDisplayName && String(nextDisplayName).trim()) {
+                payload.display_name = String(nextDisplayName).trim();
+              }
+            }
+
+            const res = await apiFetch(REVIEW_DECISION_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+
+            let json = null;
+            try {
+              json = await res.json();
+            } catch (error) {
+              json = null;
+            }
+
+            if (!res.ok || !json || json.ok !== true) {
+              toast(String(json?.message || 'Не удалось сохранить ревизию'));
+              return;
+            }
+
+            if (json.progress) {
+              updateReviewProgress(json.progress);
+            }
+
+            if (json.item) {
+              syncChosenSpaceReview(json.item);
+            }
+
+            if (decision === 'bind_shape_to_space' || decision === 'unbind_shape_from_space') {
+              await loadShapes();
+              redrawShapes();
+              renderHandles();
+            }
+
+            hidePopover();
+            toast(reviewDecisionSuccessMessage(decision));
+          }
+
           async function init() {
+
             const loadingTask = pdfjsLib.getDocument(PDF_URL);
             const shapesPromise = loadShapes()
               .then(() => {
@@ -2012,9 +2339,15 @@
           fitWidthBtn?.addEventListener('click', async () => { await fitWidth(); });
           layerDebtBtn?.addEventListener('click', () => setLayerMode('debt'));
           layerRentBtn?.addEventListener('click', () => setLayerMode('rent'));
+          scenarioMapBtn?.addEventListener('click', () => setScenario('map'));
+          scenarioReviewBtn?.addEventListener('click', () => setScenario('review'));
 
           if (CAN_EDIT && toggleEditBtn) {
             toggleEditBtn.addEventListener('click', async () => {
+              if (isReviewMode()) {
+                return;
+              }
+
               editMode = !editMode;
               isEditMode = editMode;
 
@@ -2024,9 +2357,7 @@
               if (toolRectBtn) toolRectBtn.style.display = editMode ? 'inline-flex' : 'none';
               if (toolPolyBtn) toolPolyBtn.style.display = editMode ? 'inline-flex' : 'none';
 
-              if (spacePicker) spacePicker.style.display = editMode ? 'inline-flex' : 'none';
-              updateChosenPill();
-              if (editHint) editHint.style.display = editMode ? 'inline-flex' : 'none';
+              updateScenarioUi();
 
               if (editMode) {
                 setTool('select');
@@ -2096,6 +2427,21 @@
             if (!spacePicker || !spaceDropdown) return;
             if (spacePicker.contains(e.target)) return;
             closeSpaceDropdown();
+          });
+
+          reviewNotFoundBtn?.addEventListener('click', () => {
+            if (!chosenSpace) {
+              toast('??????? ?????? ????? ??? ???????');
+              return;
+            }
+
+            submitReviewDecision('shape_not_found', {
+              marketSpaceId: chosenSpace.id,
+              space: chosenSpace,
+            }).catch((err) => {
+              console.error(err);
+              toast(String(err?.message || err));
+            });
           });
 
           let isDown = false;
@@ -2531,21 +2877,28 @@
                 btns.push('<button type="button" data-action="open-tenant" data-tenant-id="' + String(hitTenantId) + '">Открыть арендатора</button>');
               }
 
+              if (isReviewMode()) {
+                if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
+                  btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(hitSpaceId) + '">\u041a\u043e\u043d\u0444\u043b\u0438\u043a\u0442</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '">\u0423\u0442\u043e\u0447\u043d\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435</button>');
+                }
+
+                if ((!hitSpaceId || hitSpaceId <= 0) && chosenId && Number.isFinite(chosenId) && chosenId > 0 && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
+                  btns.push('<button type="button" data-action="review-decision" data-decision="bind_shape_to_space" data-space-id="' + String(chosenId) + '" data-shape-id="' + String(shapeId) + '">\u041f\u0440\u0438\u0432\u044f\u0437\u0430\u0442\u044c \u043a \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u043c\u0443 \u043c\u0435\u0441\u0442\u0443</button>');
+                }
+              }
+
               if (CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
                 if (hit.market_space_id) {
                   btns.push('<button type="button" data-action="set-chosen-space" data-space-id="' + String(hit.market_space_id) + '">Выбрать это место</button>');
                 }
 
-                if (chosenId && Number.isFinite(chosenId) && chosenId > 0) {
-                  btns.push('<button type="button" data-action="bind-shape" data-shape-id="' + String(shapeId) + '">Привязать к выбранному месту</button>');
-                } else {
-                  btns.push('<button type="button" disabled>Привязать к выбранному месту</button>');
-                }
-
-                btns.push('<button type="button" data-action="unbind-shape" data-shape-id="' + String(shapeId) + '">Отвязать</button>');
                 btns.push('<button type="button" data-action="delete-shape" data-shape-id="' + String(shapeId) + '">Удалить разметку</button>');
               }
-
               if (btns.length) {
                 actions = '<div class="act">' + btns.join('') + '</div>';
               }
@@ -2573,6 +2926,23 @@
             if (!(t instanceof HTMLElement)) return;
 
             const action = t.getAttribute('data-action');
+
+            if (action === 'review-decision') {
+              const decision = String(t.getAttribute('data-decision') || '');
+              const marketSpaceId = Number(t.getAttribute('data-space-id') || 0);
+              const shapeId = Number(t.getAttribute('data-shape-id') || 0);
+              submitReviewDecision(decision, {
+                marketSpaceId: Number.isFinite(marketSpaceId) && marketSpaceId > 0 ? marketSpaceId : null,
+                shapeId: Number.isFinite(shapeId) && shapeId > 0 ? shapeId : null,
+                hit: lastHit,
+                space: lastHit?.space || chosenSpace || null,
+                observedTenantName: lastHit?.tenant?.name || '',
+              }).catch((err) => {
+                console.error(err);
+                toast(String(err?.message || err));
+              });
+              return;
+            }
 
             if (action === 'open-space') {
               const id = Number(t.getAttribute('data-space-id') || 0);
@@ -2614,42 +2984,6 @@
                 setChosenSpace(next, { announce: true });
                 hidePopover();
               }
-              return;
-            }
-
-            if (action === 'bind-shape') {
-              const shapeId = Number(t.getAttribute('data-shape-id') || 0);
-              const msId = getChosenSpaceId();
-              if (!Number.isFinite(shapeId) || shapeId <= 0) return;
-              if (!msId) { toast('Сначала выбери место из списка'); return; }
-
-              patchShape(shapeId, { market_space_id: msId }).then(async () => {
-                await loadShapes();
-                redrawShapes();
-                renderHandles();
-                toast('Привязано к ID ' + String(msId));
-                hidePopover();
-              }).catch((err) => {
-                console.error(err);
-                toast('Ошибка привязки: ' + String(err?.message || err));
-              });
-              return;
-            }
-
-            if (action === 'unbind-shape') {
-              const shapeId = Number(t.getAttribute('data-shape-id') || 0);
-              if (!Number.isFinite(shapeId) || shapeId <= 0) return;
-
-              patchShape(shapeId, { market_space_id: null }).then(async () => {
-                await loadShapes();
-                redrawShapes();
-                renderHandles();
-                toast('Отвязано');
-                hidePopover();
-              }).catch((err) => {
-                console.error(err);
-                toast('Ошибка отвязки: ' + String(err?.message || err));
-              });
               return;
             }
           });

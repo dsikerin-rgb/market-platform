@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Operations;
 
 use App\Domain\Operations\OperationType;
+use App\Domain\Operations\SpaceReviewDecision;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 
@@ -20,6 +21,7 @@ final class OperationPayloadValidator
             OperationType::TENANT_SWITCH => self::normalizeTenantSwitch($payload),
             OperationType::RENT_RATE_CHANGE => self::normalizeRentRateChange($payload),
             OperationType::SPACE_ATTRS_CHANGE => self::normalizeSpaceAttrsChange($payload),
+            OperationType::SPACE_REVIEW => self::normalizeSpaceReview($payload),
             OperationType::ELECTRICITY_INPUT => self::normalizeElectricityInput($payload),
             OperationType::ACCRUAL_ADJUSTMENT => self::normalizeAccrualAdjustment($payload),
             OperationType::PERIOD_CLOSE => self::normalizePeriodClose($payload),
@@ -95,6 +97,68 @@ final class OperationPayloadValidator
 
         if (array_key_exists('is_active', $payload)) {
             $normalized['is_active'] = self::boolOrNull($payload['is_active']);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function normalizeSpaceReview(array $payload): array
+    {
+        $decision = self::stringOrNull($payload['decision'] ?? null, true);
+
+        if (! in_array($decision, SpaceReviewDecision::values(), true)) {
+            throw ValidationException::withMessages([
+                'payload.decision' => 'Недопустимое решение ревизии.',
+            ]);
+        }
+
+        $normalized = [
+            'market_space_id' => self::intOrNull($payload['market_space_id'] ?? null, true),
+            'decision' => $decision,
+        ];
+
+        if (SpaceReviewDecision::requiresShapeId($decision)) {
+            $normalized['shape_id'] = self::intOrNull($payload['shape_id'] ?? null, true);
+        } elseif (array_key_exists('shape_id', $payload)) {
+            $normalized['shape_id'] = self::intOrNull($payload['shape_id'] ?? null);
+        }
+
+        if (SpaceReviewDecision::requiresReason($decision)) {
+            $normalized['reason'] = self::stringOrNull($payload['reason'] ?? null, true);
+        } elseif (array_key_exists('reason', $payload)) {
+            $normalized['reason'] = self::stringOrNull($payload['reason'] ?? null);
+        }
+
+        if (SpaceReviewDecision::requiresObservedTenantName($decision)) {
+            $normalized['observed_tenant_name'] = self::stringOrNull($payload['observed_tenant_name'] ?? null, true);
+        } elseif (array_key_exists('observed_tenant_name', $payload)) {
+            $normalized['observed_tenant_name'] = self::stringOrNull($payload['observed_tenant_name'] ?? null);
+        }
+
+        if (SpaceReviewDecision::isIdentityFix($decision)) {
+            $number = self::stringOrNull($payload['number'] ?? null);
+            $displayName = self::stringOrNull($payload['display_name'] ?? null);
+
+            if ($number === null && $displayName === null) {
+                throw ValidationException::withMessages([
+                    'payload' => 'Для уточнения места нужен номер или отображаемое имя.',
+                ]);
+            }
+
+            $normalized['number'] = $number;
+            $normalized['display_name'] = $displayName;
+        } else {
+            if (array_key_exists('number', $payload)) {
+                $normalized['number'] = self::stringOrNull($payload['number'] ?? null);
+            }
+
+            if (array_key_exists('display_name', $payload)) {
+                $normalized['display_name'] = self::stringOrNull($payload['display_name'] ?? null);
+            }
         }
 
         return $normalized;

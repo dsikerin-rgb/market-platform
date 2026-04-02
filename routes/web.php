@@ -30,9 +30,12 @@ use App\Http\Controllers\Marketplace\HomeController as MarketplaceHomeController
 use App\Http\Controllers\Marketplace\MapController as MarketplaceMapController;
 use App\Http\Controllers\Marketplace\ProductController as MarketplaceProductController;
 use App\Http\Controllers\Marketplace\StoreController as MarketplaceStoreController;
+use App\Domain\Operations\OperationType;
+use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\StaffConversation;
@@ -558,6 +561,79 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $canByPermission = method_exists($user, 'can') && $user->can('markets.update');
 
         return $isSuperAdmin || $isMarketAdmin || $canByPermission;
+    };
+
+    $hasMapReviewColumns = static function (): bool {
+        return Schema::hasTable('market_spaces')
+            && Schema::hasColumn('market_spaces', 'map_review_status')
+            && Schema::hasColumn('market_spaces', 'map_reviewed_at')
+            && Schema::hasColumn('market_spaces', 'map_reviewed_by');
+    };
+
+    $mapReviewStatusLabel = static function (?string $status): ?string {
+        return match ($status) {
+            'matched' => 'Совпало',
+            'changed' => 'Есть безопасное изменение',
+            'changed_tenant' => 'Сменился арендатор',
+            'conflict' => 'Конфликт',
+            'not_found' => 'Не найдено на карте',
+            default => null,
+        };
+    };
+
+    $markMarketSpaceReviewed = static function (MarketSpace $space, string $status, ?int $userId = null, $reviewedAt = null) use ($hasMapReviewColumns): void {
+        if (! $hasMapReviewColumns()) {
+            return;
+        }
+
+        $space->forceFill([
+            'map_review_status' => $status,
+            'map_reviewed_at' => $reviewedAt ?? now(),
+            'map_reviewed_by' => $userId,
+        ])->save();
+    };
+
+    $buildMapReviewProgress = static function (Market $market) use ($hasMapReviewColumns, $mapReviewStatusLabel): array {
+        $baseQuery = MarketSpace::query()->where('market_id', (int) $market->id);
+
+        if (Schema::hasColumn('market_spaces', 'is_active')) {
+            $baseQuery->where('is_active', true);
+        }
+
+        $total = (int) (clone $baseQuery)->count();
+
+        if (! $hasMapReviewColumns()) {
+            return [
+                'total' => $total,
+                'reviewed' => 0,
+                'remaining' => $total,
+                'percent' => 0,
+                'counts' => [],
+                'labels' => [],
+            ];
+        }
+
+        $counts = (clone $baseQuery)
+            ->whereNotNull('map_review_status')
+            ->select('map_review_status', DB::raw('count(*) as aggregate'))
+            ->groupBy('map_review_status')
+            ->pluck('aggregate', 'map_review_status')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+
+        $reviewed = array_sum($counts);
+        $remaining = max($total - $reviewed, 0);
+
+        return [
+            'total' => $total,
+            'reviewed' => $reviewed,
+            'remaining' => $remaining,
+            'percent' => $total > 0 ? (int) round(($reviewed / $total) * 100) : 0,
+            'counts' => $counts,
+            'labels' => collect(array_keys($counts))
+                ->mapWithKeys(fn (string $status): array => [$status => $mapReviewStatusLabel($status) ?? $status])
+                ->all(),
+        ];
     };
 
     /**
@@ -1143,7 +1219,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * - ?id=123
      * - ?number=П3/2  (по точному совпадению number либо code)
      */
-    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap) {
+    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1207,6 +1283,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'code' => (string) ($space->code ?? ''),
                 'area_sqm' => (string) ($space->area_sqm ?? ''),
                 'status' => (string) ($space->status ?? ''),
+                'review_status' => (string) ($space->map_review_status ?? ''),
+                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
                 'tenant' => $tenant ? [
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
@@ -1219,7 +1298,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * Поиск мест для автокомплита (номер/код/арендатор/ID).
      * Поддерживает ?number= и ?q=.
      */
-    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap) {
+    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1283,6 +1362,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'code' => (string) ($space->code ?? ''),
                 'area_sqm' => (string) ($space->area_sqm ?? ''),
                 'status' => (string) ($space->status ?? ''),
+                'review_status' => (string) ($space->map_review_status ?? ''),
+                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
                 'tenant' => $tenant ? [
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
@@ -1296,7 +1378,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * HIT-test: клик по карте -> поиск места по bbox + polygon.
      */
-    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap) {
+    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1557,6 +1639,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'activity_type' => (string) ($space->activity_type ?? ''),
                     'area_sqm' => (string) ($space->area_sqm ?? ''),
                     'status' => (string) ($space->status ?? ''),
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
                     'location_name' => $locationName,
                     'rent_rate_value' => $rentRateValue,
                     'rent_rate_unit' => $rentRateUnit,
@@ -1747,6 +1832,131 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         return response()->stream($callback, 200, $headers);
     })->name('filament.admin.operations.export');
 
+    Route::post('/admin/market-map/review-decision', function (Request $request) use (
+        $resolveMarketForMap,
+        $ensureCanEditShapes,
+        $hasMapReviewColumns,
+        $markMarketSpaceReviewed,
+        $buildMapReviewProgress,
+        $mapReviewStatusLabel
+    ) {
+        $ensureCanEditShapes();
+        $market = $resolveMarketForMap();
+
+        if (! $hasMapReviewColumns()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review columns are missing on market_spaces.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'decision' => ['required', 'string', 'max:64'],
+            'market_space_id' => ['required', 'integer', 'min:1'],
+            'shape_id' => ['nullable', 'integer', 'min:1'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'observed_tenant_name' => ['nullable', 'string', 'max:255'],
+            'number' => ['nullable', 'string', 'max:255'],
+            'display_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $space = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['market_space_id'])
+            ->first();
+
+        if (! $space) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review space was not found in the current market.',
+            ], 404);
+        }
+
+        $decision = (string) $validated['decision'];
+        $userId = Filament::auth()->id();
+        $now = now();
+
+        if ($decision === 'matched') {
+            $markMarketSpaceReviewed($space, 'matched', $userId, $now);
+            $space->refresh();
+
+            return response()->json([
+                'ok' => true,
+                'mode' => 'lightweight',
+                'item' => [
+                    'market_space_id' => (int) $space->id,
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                ],
+                'progress' => $buildMapReviewProgress($market),
+            ]);
+        }
+
+        if (! in_array($decision, SpaceReviewDecision::values(), true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Unknown review decision.',
+            ], 422);
+        }
+
+        $payload = [
+            'market_space_id' => (int) $space->id,
+            'decision' => $decision,
+        ];
+
+        foreach (['shape_id', 'reason', 'observed_tenant_name', 'number', 'display_name'] as $field) {
+            if (array_key_exists($field, $validated) && $validated[$field] !== null && $validated[$field] !== '') {
+                $payload[$field] = $validated[$field];
+            }
+        }
+
+        if (isset($payload['shape_id'])) {
+            $shape = MarketSpaceMapShape::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey((int) $payload['shape_id'])
+                ->first();
+
+            if (! $shape) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Map review shape was not found in the current market.',
+                ], 404);
+            }
+        }
+
+        $operation = Operation::query()->create([
+            'market_id' => (int) $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => (int) $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $now,
+            'status' => SpaceReviewDecision::defaultOperationStatus($decision),
+            'payload' => $payload,
+            'comment' => isset($payload['reason']) ? (string) $payload['reason'] : null,
+            'created_by' => $userId,
+        ]);
+
+        $space->refresh();
+
+        return response()->json([
+            'ok' => true,
+            'mode' => 'operation',
+            'operation' => [
+                'id' => (int) $operation->id,
+                'status' => (string) $operation->status,
+                'decision' => $decision,
+            ],
+            'item' => [
+                'market_space_id' => (int) $space->id,
+                'review_status' => (string) ($space->map_review_status ?? ''),
+                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+            ],
+            'progress' => $buildMapReviewProgress($market),
+        ]);
+    })->name('filament.admin.market-map.review-decision');
+
     /**
      * Viewer карты рынка (рендер через Blade).
      */
@@ -1761,6 +1971,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             && Storage::disk('local')->exists($mapPath);
 
         $validated = $request->validate([
+            'mode' => ['nullable', 'string', 'in:map,review'],
             'market_space_id' => ['nullable', 'integer', 'min:1'],
             'page' => ['nullable', 'integer', 'min:1'],
             'version' => ['nullable', 'integer', 'min:1'],
@@ -1771,6 +1982,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ]);
 
         $marketSpaceId = isset($validated['market_space_id']) ? (int) $validated['market_space_id'] : null;
+        $mode = (string) ($validated['mode'] ?? 'map');
         $page = (int) ($validated['page'] ?? 1);
         $version = (int) ($validated['version'] ?? 1);
 
@@ -1879,12 +2091,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'marketName' => (string) ($market->name ?? 'Рынок'),
             'hasMap' => $hasMap,
             'canEdit' => (bool) $canEditShapes(),
+            'mapMode' => $mode === 'review' ? 'review' : 'map',
             'canOpenPdf' => $canOpenPdf,
             'mapPage' => $page,
             'mapVersion' => $version,
             'marketSpaceId' => $marketSpaceId,
             'focusShape' => $focusShape,
             'marketSpaceNotLinked' => $marketSpaceNotLinked,
+            'reviewProgress' => $buildMapReviewProgress($market),
             'debtYellowAfterDays' => (int) ($market->settings['debt_monitoring']['yellow_after_days']
                 ?? $market->settings['debt_monitoring']['orange_after_days']
                 ?? 1),
@@ -1897,6 +2111,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'shapesUrl' => route('filament.admin.market-map.shapes'),
             'spaceUrl' => route('filament.admin.market-map.space'),
             'spacesUrl' => route('filament.admin.market-map.spaces'),
+            'reviewDecisionUrl' => route('filament.admin.market-map.review-decision'),
         ];
 
         if (! $hasMap) {
