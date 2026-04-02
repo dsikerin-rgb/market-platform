@@ -3,38 +3,32 @@
 @props([
     'items' => [],
     'spaceId' => null,
+    'reviewUrl' => null,
 ])
 
 @php
     $rows = is_array($items) ? $items : [];
-    $period = request()->query('period');
-    $query = is_string($period) ? ['period' => $period] : [];
 @endphp
 
 @once
     <style>
-        .space-ops__actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+        .space-ops__note {
             margin-bottom: 12px;
-        }
-
-        .space-ops__btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 0, 0, 0.12);
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
             background: rgba(0, 0, 0, 0.03);
             font-size: 13px;
-            text-decoration: none;
+            line-height: 1.45;
         }
 
-        .dark .space-ops__btn {
+        .dark .space-ops__note {
             border-color: rgba(255, 255, 255, 0.12);
             background: rgba(255, 255, 255, 0.04);
+        }
+
+        .space-ops__note a {
+            text-decoration: underline;
         }
 
         .space-ops__table {
@@ -73,20 +67,16 @@
 @endonce
 
 <div class="space-ops">
-    <div class="space-ops__actions">
-        <a class="space-ops__btn" href="{{ route('filament.admin.resources.operations.create', array_merge(['type' => 'tenant_switch', 'entity_type' => 'market_space', 'entity_id' => $spaceId], $query)) }}">
-            Сменить арендатора
-        </a>
-        <a class="space-ops__btn" href="{{ route('filament.admin.resources.operations.create', array_merge(['type' => 'rent_rate_change', 'entity_type' => 'market_space', 'entity_id' => $spaceId], $query)) }}">
-            Изменить ставку
-        </a>
-        <a class="space-ops__btn" href="{{ route('filament.admin.resources.operations.create', array_merge(['type' => 'electricity_input', 'entity_type' => 'market_space', 'entity_id' => $spaceId], $query)) }}">
-            Ввести электроэнергию
-        </a>
+    <div class="space-ops__note">
+        Основной сценарий изменений перенесён в режим <strong>Карта -> Ревизия</strong>.
+        @if (filled($reviewUrl))
+            <a href="{{ $reviewUrl }}">Открыть ревизию карты</a>.
+        @endif
+        Здесь остаётся только внутренний журнал по месту.
     </div>
 
     @if (empty($rows))
-        <div class="space-ops__empty">Операции по месту пока не зафиксированы.</div>
+        <div class="space-ops__empty">По этому месту ещё нет записей внутреннего журнала.</div>
     @else
         <table class="space-ops__table">
             <thead>

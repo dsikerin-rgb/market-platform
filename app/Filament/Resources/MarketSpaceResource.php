@@ -9,11 +9,8 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
-use App\Domain\Operations\OperationType;
-use App\Filament\Resources\OperationResource;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
-use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -202,24 +199,6 @@ class MarketSpaceResource extends BaseResource
         $tabs = Tabs::make('market_space_tabs')
             ->columnSpanFull();
 
-        $makeSpaceAttrsOperationAction = function (?MarketSpace $record, string $actionName, string $focus, string $tooltip): ?Action {
-            if (! $record || ! OperationResource::canCreate()) {
-                return null;
-            }
-
-            $url = static::operationCreateUrl($record, OperationType::SPACE_ATTRS_CHANGE, [
-                'focus' => $focus,
-            ]);
-
-            return Action::make($actionName)
-                ->label('')
-                ->tooltip($tooltip)
-                ->icon('heroicon-m-plus')
-                ->color('gray')
-                ->iconButton()
-                ->url($url);
-        };
-
         // Безопасно: если в вашей версии Filament нет этого метода — просто пропускаем.
         if (method_exists($tabs, 'persistTabInQueryString')) {
             $tabs->persistTabInQueryString();
@@ -253,15 +232,6 @@ class MarketSpaceResource extends BaseResource
                                     })
                                     ->searchable()
                                     ->preload()
-                                    ->suffixAction(
-                                        fn (?MarketSpace $record): ?Action => $makeSpaceAttrsOperationAction(
-                                            $record,
-                                            'location_change_operation',
-                                            'location_id',
-                                            'Изменить локацию через операцию'
-                                        ),
-                                        isInline: true,
-                                    )
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Физическая зона рынка: павильоны, острова, уличная торговля и т.д.')
                                     ->disabled(function ($get, ?MarketSpace $record) use ($user) {
@@ -297,27 +267,6 @@ class MarketSpaceResource extends BaseResource
                         })
                         ->searchable()
                         ->preload()
-                        ->suffixAction(
-                            function (?MarketSpace $record): ?Action {
-                                if (! $record || ! OperationResource::canCreate()) {
-                                    return null;
-                                }
-
-                                $url = static::operationCreateUrl($record, OperationType::TENANT_SWITCH, [
-                                    'from_tenant_id' => $record->tenant_id,
-                                    'focus' => 'to_tenant_id',
-                                ]);
-
-                                return Action::make('tenant_switch_operation')
-                                    ->label('')
-                                    ->tooltip('Сменить арендатора через операцию')
-                                    ->icon('heroicon-m-plus')
-                                    ->color('gray')
-                                    ->iconButton()
-                                    ->url($url);
-                            },
-                            isInline: true,
-                        )
                         ->hintIcon('heroicon-m-question-mark-circle')
                         ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
                         ->disabled(function ($get, ?MarketSpace $record) use ($user) {
@@ -379,15 +328,6 @@ class MarketSpaceResource extends BaseResource
                                     ->label('Вид деятельности')
                                     ->maxLength(255)
                                     ->placeholder('Например: аптека / электро / мясо')
-                                    ->suffixAction(
-                                        fn (?MarketSpace $record): ?Action => $makeSpaceAttrsOperationAction(
-                                            $record,
-                                            'activity_type_change_operation',
-                                            'activity_type',
-                                            'Изменить вид деятельности через операцию'
-                                        ),
-                                        isInline: true,
-                                    )
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Заполняется импортом начислений и может уточняться вручную.')
                                     ->nullable(),
@@ -453,15 +393,6 @@ class MarketSpaceResource extends BaseResource
                                     ->inputMode('decimal')
                                     ->placeholder('Например: 48')
                                     ->suffix('м²')
-                                    ->suffixAction(
-                                        fn (?MarketSpace $record): ?Action => $makeSpaceAttrsOperationAction(
-                                            $record,
-                                            'area_change_operation',
-                                            'area_sqm',
-                                            'Изменить площадь через операцию'
-                                        ),
-                                        isInline: true,
-                                    )
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
 
@@ -480,6 +411,8 @@ class MarketSpaceResource extends BaseResource
                                         }
                                     })
                                     ->dehydrateStateUsing(fn ($state) => $state === 'free' ? 'vacant' : $state)
+                                    ->disabled(fn (?MarketSpace $record): bool => (bool) $record)
+                                    ->helperText(fn (?MarketSpace $record): ?string => $record ? 'Для существующих мест статус меняется через режим «Карта -> Ревизия».' : null)
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Используется для быстрой визуальной оценки занятости. В таблице помечается цветом.'),
 
@@ -505,30 +438,6 @@ class MarketSpaceResource extends BaseResource
                                 ->numeric()
                                 ->inputMode('decimal')
                                 ->placeholder('Например: 1500')
-                                ->suffixAction(
-                                    function (?MarketSpace $record): ?Action {
-                                        if (! $record || ! OperationResource::canCreate()) {
-                                            return null;
-                                        }
-
-                                        $period = static::resolveOperationPeriod($record);
-                                        $rentRate = static::resolveRentRateFact($record, $period);
-
-                                        $url = static::operationCreateUrl($record, OperationType::RENT_RATE_CHANGE, [
-                                            'from_rent_rate' => $rentRate,
-                                            'focus' => 'to_rent_rate',
-                                        ]);
-
-                                        return Action::make('rent_rate_change_operation')
-                                            ->label('')
-                                            ->tooltip('Изменить ставку через операцию')
-                                            ->icon('heroicon-m-plus')
-                                            ->color('gray')
-                                            ->iconButton()
-                                            ->url($url);
-                                    },
-                                    isInline: true,
-                                )
                                 ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
 
                             Forms\Components\Select::make('rent_rate_unit')
@@ -590,9 +499,9 @@ class MarketSpaceResource extends BaseResource
                             ])
                             ->columns(1),
                     ]),
-                Tab::make('Операции')
+                Tab::make('Журнал')
                     ->schema([
-                        Section::make('Операции по месту')
+                        Section::make('Внутренний журнал')
                             ->schema([
                                 Forms\Components\Placeholder::make('operations')
                                     ->hiddenLabel()
@@ -715,26 +624,6 @@ class MarketSpaceResource extends BaseResource
         }
 
         return $rentRate !== null ? (float) $rentRate : null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $extra
-     */
-    private static function operationCreateUrl(MarketSpace $record, string $type, array $extra = []): string
-    {
-        $period = static::resolveOperationPeriod($record);
-
-        $params = array_merge([
-            'type' => $type,
-            'entity_type' => 'market_space',
-            'entity_id' => $record->id,
-            'market_space_id' => $record->id,
-            'market_id' => $record->market_id,
-            'period' => $period->toDateString(),
-            'return_url' => static::getUrl('edit', ['record' => $record]),
-        ], $extra);
-
-        return OperationResource::getUrl('create', $params);
     }
 
     private static function renderTenantHistory(?MarketSpace $record): HtmlString
@@ -880,6 +769,7 @@ class MarketSpaceResource extends BaseResource
         return new HtmlString(view('filament.market-spaces.operations', [
             'items' => $items,
             'spaceId' => (int) $record->id,
+            'reviewUrl' => route('filament.admin.market-map', ['mode' => 'review']),
         ])->render());
     }
 

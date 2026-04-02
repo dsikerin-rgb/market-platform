@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Domain\Operations\OperationType;
+use App\Domain\Operations\SpaceReviewDecision;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationPayloadValidator;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Models\Market;
 
 class Operation extends Model
@@ -55,6 +57,13 @@ class Operation extends Model
                 $operation->entity_id = (int) $operation->payload['market_space_id'];
             }
 
+            if ($operation->type === OperationType::SPACE_REVIEW && blank($operation->status)) {
+                $decision = (string) ($operation->payload['decision'] ?? '');
+                if ($decision !== '') {
+                    $operation->status = SpaceReviewDecision::defaultOperationStatus($decision);
+                }
+            }
+
             if (! $operation->created_by) {
                 $operation->created_by = Auth::id();
             }
@@ -86,6 +95,11 @@ class Operation extends Model
             }
 
             if ($operation->entity_type !== 'market_space') {
+                return;
+            }
+
+            if ($operation->type === OperationType::SPACE_REVIEW) {
+                static::applySpaceReviewOperation($operation, $spaceId);
                 return;
             }
 
@@ -191,6 +205,86 @@ class Operation extends Model
                 if ($payload['is_active'] !== null) {
                     $space->is_active = (bool) $payload['is_active'];
                 }
+            }
+        }
+
+        if ($space->isDirty()) {
+            $space->save();
+        }
+    }
+
+    private static function applySpaceReviewOperation(self $operation, int $spaceId): void
+    {
+        $space = MarketSpace::query()
+            ->where('market_id', (int) $operation->market_id)
+            ->whereKey($spaceId)
+            ->first();
+
+        if (! $space) {
+            return;
+        }
+
+        $payload = is_array($operation->payload) ? $operation->payload : [];
+        $decision = (string) ($payload['decision'] ?? '');
+
+        if ($decision === '') {
+            return;
+        }
+
+        $reviewAttributes = [
+            'map_review_status' => SpaceReviewDecision::reviewStatusForDecision($decision),
+            'map_reviewed_at' => $operation->effective_at,
+            'map_reviewed_by' => $operation->created_by,
+        ];
+
+        $reviewUpdateCount = DB::table('market_spaces')
+            ->where('market_id', (int) $operation->market_id)
+            ->where('id', $space->id)
+            ->update($reviewAttributes);
+        $space->forceFill($reviewAttributes);
+
+        if ($operation->status !== 'applied') {
+            return;
+        }
+
+        if ($decision === SpaceReviewDecision::BIND_SHAPE_TO_SPACE || $decision === SpaceReviewDecision::UNBIND_SHAPE_FROM_SPACE) {
+            $shapeId = (int) ($payload['shape_id'] ?? 0);
+            if ($shapeId > 0) {
+                $shape = MarketSpaceMapShape::query()
+                    ->where('market_id', (int) $operation->market_id)
+                    ->whereKey($shapeId)
+                    ->first();
+
+                if ($shape) {
+                    $shape->market_space_id = $decision === SpaceReviewDecision::BIND_SHAPE_TO_SPACE
+                        ? $space->id
+                        : null;
+                    $shape->save();
+                }
+            }
+
+            if ($reviewUpdateCount === 0) {
+                $space->save();
+            }
+
+            return;
+        }
+
+        if ($decision === SpaceReviewDecision::MARK_SPACE_FREE) {
+            $space->status = 'vacant';
+        }
+
+        if ($decision === SpaceReviewDecision::MARK_SPACE_SERVICE) {
+            $space->status = 'maintenance';
+        }
+
+        if ($decision === SpaceReviewDecision::FIX_SPACE_IDENTITY) {
+            if (array_key_exists('number', $payload)) {
+                $space->number = $payload['number'];
+            }
+
+            if (array_key_exists('display_name', $payload)) {
+                $space->display_name = $payload['display_name'];
             }
         }
 

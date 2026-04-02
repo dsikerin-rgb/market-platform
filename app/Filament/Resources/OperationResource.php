@@ -31,8 +31,6 @@ use Illuminate\Support\HtmlString;
 
 class OperationResource extends BaseResource
 {
-    
-
     protected static ?string $model = Operation::class;
 
     protected static ?string $recordTitleAttribute = 'type';
@@ -46,6 +44,11 @@ class OperationResource extends BaseResource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-check';
     protected static ?int $navigationSort = 100;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function getGloballySearchableAttributes(): array
     {
@@ -595,9 +598,7 @@ class OperationResource extends BaseResource
 
     public static function canCreate(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && $user->isSuperAdmin();
+        return false;
     }
 
     public static function canEdit($record): bool
@@ -622,11 +623,6 @@ class OperationResource extends BaseResource
         $user = Filament::auth()->user();
 
         return (bool) $user && $user->isSuperAdmin();
-    }
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return false;
     }
 
     public static function resolveMarketId(): int

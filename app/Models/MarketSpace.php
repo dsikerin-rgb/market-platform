@@ -36,6 +36,9 @@ class MarketSpace extends Model
         'rent_rate_updated_at',
         'type',
         'status',
+        'map_review_status',
+        'map_reviewed_at',
+        'map_reviewed_by',
         'is_active',
         'notes',
     ];
@@ -44,6 +47,7 @@ class MarketSpace extends Model
         'area_sqm' => 'decimal:2',
         'rent_rate_value' => 'decimal:2',
         'rent_rate_updated_at' => 'datetime',
+        'map_reviewed_at' => 'datetime',
         'is_active' => 'boolean',
     ];
 
