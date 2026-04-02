@@ -92,6 +92,38 @@
       align-items: center;
       flex-wrap: wrap;
     }
+    .map-load-progress {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      min-width: 220px;
+    }
+    .map-load-progress__track {
+      position: relative;
+      width: 120px;
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.12);
+    }
+    .map-load-progress__fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 0;
+      background: linear-gradient(90deg, #2563eb 0%, #38bdf8 100%);
+      border-radius: 999px;
+    }
+    .map-load-progress[data-state="done"] .map-load-progress__fill {
+      background: linear-gradient(90deg, #15803d 0%, #22c55e 100%);
+    }
+    .map-load-progress[data-state="fallback"] .map-load-progress__fill {
+      background: linear-gradient(90deg, #9ca3af 0%, #cbd5e1 100%);
+    }
+    .map-load-progress__text {
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
 
     .pill {
       font-size: 11px;
@@ -513,6 +545,12 @@
 
             <div class="toolbar-group">
               <span class="pill" id="scaleLabel">Масштаб: 100%</span>
+              <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
+                <div class="map-load-progress__track">
+                  <div class="map-load-progress__fill" id="mapLoadProgressFill"></div>
+                </div>
+                <span class="map-load-progress__text" id="mapLoadProgressText">Загрузка карты…</span>
+              </div>
               <span class="pill" title="Перетаскивание: зажми мышь и тяни • Клик: карточка • Масштаб: +/−">Навигация</span>
               <button id="closeBtn" type="button" class="button-accent">Закрыть</button>
               <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;">К настройкам</a>
@@ -739,6 +777,9 @@
         const scenarioReviewBtn = document.getElementById('scenarioReview');
         const reviewToolbarRow = document.getElementById('reviewToolbarRow');
         const reviewNotFoundBtn = document.getElementById('reviewNotFound');
+        const mapLoadProgress = document.getElementById('mapLoadProgress');
+        const mapLoadProgressFill = document.getElementById('mapLoadProgressFill');
+        const mapLoadProgressText = document.getElementById('mapLoadProgressText');
         const reviewProgress = document.getElementById('reviewProgress');
         const reviewProgressFill = document.getElementById('reviewProgressFill');
         const reviewProgressText = document.getElementById('reviewProgressText');
@@ -764,6 +805,7 @@
         let searchIndex = -1;
         let searchTimer = null;
         let searchController = null;
+        let mapLoadProgressHideTimer = null;
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -782,8 +824,48 @@
           if (scaleLabel) scaleLabel.textContent = 'Масштаб: (встроенный просмотр)';
         }
 
+        function setMapLoadProgress(percent, text, state = 'loading') {
+          if (!mapLoadProgress || !mapLoadProgressFill || !mapLoadProgressText) {
+            return;
+          }
+
+          if (mapLoadProgressHideTimer) {
+            clearTimeout(mapLoadProgressHideTimer);
+            mapLoadProgressHideTimer = null;
+          }
+
+          const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+          mapLoadProgress.dataset.state = state;
+          mapLoadProgress.style.display = 'inline-flex';
+          mapLoadProgressFill.style.width = safePercent + '%';
+          mapLoadProgressText.textContent = text;
+        }
+
+        function hideMapLoadProgress() {
+          if (!mapLoadProgress) {
+            return;
+          }
+
+          if (mapLoadProgressHideTimer) {
+            clearTimeout(mapLoadProgressHideTimer);
+            mapLoadProgressHideTimer = null;
+          }
+
+          mapLoadProgress.style.display = 'none';
+          mapLoadProgressFill && (mapLoadProgressFill.style.width = '0%');
+          delete mapLoadProgress.dataset.state;
+        }
+
+        function completeMapLoadProgress(text = 'Карта загружена') {
+          setMapLoadProgress(100, text, 'done');
+          mapLoadProgressHideTimer = setTimeout(() => {
+            hideMapLoadProgress();
+          }, 1200);
+        }
+
         function fallbackToIframe(reason) {
           console.warn('PDF.js fallback:', reason);
+          setMapLoadProgress(100, 'Встроенный просмотр PDF', 'fallback');
           disablePdfJsControls();
           if (viewerRoot) {
             viewerRoot.innerHTML = '<iframe class="iframe" src="' + PDF_URL + '" loading="lazy"></iframe>';
@@ -1378,6 +1460,7 @@
 
           let polyDrawing = false;
           let polyDraft = [];
+          let bootstrappingMap = true;
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
 
@@ -1909,6 +1992,10 @@
           async function render() {
             if (!page) return;
 
+            if (bootstrappingMap) {
+              setMapLoadProgress(92, 'Отрисовка карты…', 'rendering');
+            }
+
             const centerX = stage.scrollLeft + stage.clientWidth / 2;
             const centerY = stage.scrollTop + stage.clientHeight / 2;
 
@@ -1946,6 +2033,10 @@
             setScaleLabel();
             redrawShapes();
             renderHandles();
+
+            if (bootstrappingMap) {
+              setMapLoadProgress(96, 'Подготовка слоя мест…', 'rendering');
+            }
           }
 
           async function fitWidth() {
@@ -2300,6 +2391,18 @@
           async function init() {
 
             const loadingTask = pdfjsLib.getDocument(PDF_URL);
+            setMapLoadProgress(8, 'Загрузка карты…', 'loading');
+            loadingTask.onProgress = (progressData) => {
+              const loaded = Number(progressData?.loaded || 0);
+              const total = Number(progressData?.total || 0);
+              if (Number.isFinite(total) && total > 0) {
+                const ratio = Math.max(0, Math.min(1, loaded / total));
+                const percent = Math.round(8 + ratio * 72);
+                setMapLoadProgress(percent, 'Загрузка карты: ' + percent + '%', 'loading');
+              } else {
+                setMapLoadProgress(24, 'Загрузка карты…', 'loading');
+              }
+            };
             const shapesPromise = loadShapes()
               .then(() => {
                 redrawShapes();
@@ -2308,6 +2411,7 @@
                 console.error(err);
               });
             const pdfDoc = await loadingTask.promise;
+            setMapLoadProgress(84, 'Подготовка страницы…', 'rendering');
             const requestedPage = MAP_PAGE || 1;
             try {
               page = await pdfDoc.getPage(requestedPage);
@@ -2330,6 +2434,8 @@
               await refreshChosenSpaceFromServer();
             }
 
+            bootstrappingMap = false;
+            completeMapLoadProgress();
             toast('Клик по месту откроет карточку.');
           }
 
@@ -3065,6 +3171,7 @@
           return null;
         }
 
+        setMapLoadProgress(4, 'Загрузка карты…', 'loading');
         const loaded = await loadPdfJs();
         if (!loaded) {
           fallbackToIframe('cannot import pdfjs from local and CDN');
