@@ -1,3 +1,5 @@
+@include('filament.components.admin-overrides-css')
+
 <header class="staff-edit-hero">
     @if ($breadcrumbs)
         <div class="staff-edit-hero__breadcrumbs">

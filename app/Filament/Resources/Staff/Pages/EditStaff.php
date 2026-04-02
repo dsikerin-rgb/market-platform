@@ -19,8 +19,6 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Support\Enums\Width;
-use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
@@ -41,38 +39,12 @@ class EditStaff extends BaseEditRecord
         return null;
     }
 
-    public function getMaxContentWidth(): Width|string|null
-    {
-        return Width::Full;
-    }
-
     public function getPageClasses(): array
     {
         return [
             ...parent::getPageClasses(),
             'fi-resource-staff-edit-page',
         ];
-    }
-
-    public function getHeader(): ?View
-    {
-        $record = $this->record;
-        $roleNames = $record?->roles?->pluck('name')->values()->all() ?? [];
-
-        return view('filament.resources.staff.partials.edit-hero', [
-            'actions' => $this->getCachedHeaderActions(),
-            'actionsAlignment' => $this->getHeaderActionsAlignment(),
-            'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
-            'heading' => $this->getHeading(),
-            'subheading' => $this->getSubheading(),
-            'hero' => [
-                'market' => trim((string) ($record?->market?->name ?? '—')),
-                'email' => trim((string) ($record?->email ?? '—')),
-                'name' => trim((string) ($record?->name ?? '—')),
-                'roles' => $roleNames !== [] ? implode(', ', $roleNames) : 'Роли не назначены',
-                'telegram' => filled($record?->telegram_chat_id) ? 'Подключен' : 'Не подключен',
-            ],
-        ]);
     }
 
     /**
