@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login as AdminLogin;
 use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\MapReviewResults;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\MarketplaceSettings;
 use App\Filament\Pages\OpsDiagnostics;
@@ -138,6 +139,7 @@ class AdminPanelProvider extends PanelProvider
                 SettingsHub::class,
                 MarketSettings::class,
                 MarketplaceSettings::class,
+                MapReviewResults::class,
                 ReportsHub::class,
                 Requests::class,
                 OpsDiagnostics::class,
