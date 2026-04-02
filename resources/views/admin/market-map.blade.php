@@ -2560,18 +2560,28 @@
             }
 
             await fitWidth();
+            bootstrappingMap = false;
+            completeMapLoadProgress();
+
+            const postBootstrapTasks = [];
 
             if (FOCUS_SPACE_ID || FOCUS_SHAPE) {
-              await shapesPromise;
-              await applyInitialFocus();
+              postBootstrapTasks.push((async () => {
+                await shapesPromise;
+                await applyInitialFocus();
+              })());
             }
 
             if (CAN_EDIT) {
-              await refreshChosenSpaceFromServer();
+              postBootstrapTasks.push(refreshChosenSpaceFromServer());
             }
 
-            bootstrappingMap = false;
-            completeMapLoadProgress();
+            if (postBootstrapTasks.length) {
+              Promise.allSettled(postBootstrapTasks).catch((err) => {
+                console.error(err);
+              });
+            }
+
             toast('Клик по месту откроет карточку.');
           }
 
