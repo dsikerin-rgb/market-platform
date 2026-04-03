@@ -78,13 +78,13 @@
     .review-progress {
       display: none;
       align-items: center;
-      gap: 5px;
-      min-width: 188px;
+      gap: 4px;
+      min-width: 164px;
     }
     .review-progress__track {
       position: relative;
-      width: 138px;
-      height: 6px;
+      width: 114px;
+      height: 4px;
       border-radius: 999px;
       overflow: hidden;
       background: rgba(15, 23, 42, 0.12);
@@ -97,13 +97,13 @@
       border-radius: 999px;
     }
     .review-progress__text {
-      font-size: 9px;
+      font-size: 8px;
       font-weight: 600;
       white-space: nowrap;
     }
     .review-summary {
       display: none;
-      gap: 4px;
+      gap: 3px;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -185,7 +185,7 @@
 
     .spacePicker {
       position: relative;
-      width: min(420px, 100%);
+      width: 100%;
       min-width: 240px;
     }
 
@@ -262,9 +262,9 @@
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
     }
     .toolbar {
-      padding: 10px 14px 8px;
+      padding: 9px 14px 7px;
       display: grid;
-      gap: 7px;
+      gap: 5px;
       position: relative;
       border-bottom: 1px solid rgba(147, 197, 253, 0.32);
       background:
@@ -282,12 +282,12 @@
       display: grid;
       grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
       align-items: start;
-      gap: 14px;
+      gap: 12px;
     }
     .toolbar-row.toolbar-row--controls {
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
+      gap: 12px;
     }
     .toolbar-row.toolbar-row--edit-hint {
       display: none;
@@ -301,8 +301,8 @@
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 6px 10px;
-      border-radius: 12px;
+      padding: 4px 8px;
+      border-radius: 10px;
       border: 1px solid rgba(147, 197, 253, 0.44);
       background: linear-gradient(180deg, rgba(219, 234, 254, 0.86) 0%, rgba(239, 246, 255, 0.92) 100%);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.78);
@@ -373,6 +373,22 @@
     }
     .toolbar-group.toolbar-group--segmented .button-toggle.is-active:hover {
       background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);
+    }
+    .toolbar-group.toolbar-group--segmented .button-toggle.button-toggle--close {
+      min-width: 30px;
+      padding: 0 10px;
+      background: linear-gradient(180deg, #f59e0b 0%, #f59e0b 100%);
+      border-color: #d97706;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+      box-shadow: 0 6px 14px rgba(245, 158, 11, 0.24);
+      font-size: 24px;
+      line-height: 1;
+      justify-content: center;
+    }
+    .toolbar-group.toolbar-group--segmented .button-toggle.button-toggle--close:hover {
+      background: linear-gradient(180deg, #f59e0b 0%, #ea580c 100%);
+      border-color: #c2410c;
     }
     .toolbar-group.toolbar-group--control-segmented {
       gap: 4px;
@@ -456,9 +472,10 @@
     }
     .hero-heading {
       display: grid;
-      gap: 2px;
+      gap: 1px;
       min-width: 0;
       justify-self: start;
+      padding: 4px 0 0 8px;
     }
     .hero-kicker {
       display: none;
@@ -480,7 +497,7 @@
       margin: 0;
       color: #0f172a;
       font-size: 20px;
-      line-height: 1.1;
+      line-height: 1.02;
       font-weight: 700;
     }
     .toolbar-group.toolbar-group--hero-actions {
@@ -492,13 +509,14 @@
     .toolbar-group.toolbar-group--hero-actions-main {
       display: flex;
       align-items: flex-start;
-      gap: 14px;
+      gap: 12px;
     }
     .toolbar-group.toolbar-group--hero-stack {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 10px;
+      gap: 8px;
+      width: auto;
     }
     .toolbar-group.toolbar-group--hero-center {
       justify-self: center;
@@ -508,7 +526,7 @@
     .toolbar-group.toolbar-group--hero-review {
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       width: 100%;
       min-width: 0;
     }
@@ -559,12 +577,14 @@
       opacity: .72;
     }
     .toolbar-group.toolbar-group--search-slot {
-      flex: 1 1 320px;
+      flex: 0 1 auto;
+      width: 340px;
+      margin-left: auto;
       justify-content: flex-end;
     }
     .toolbar-group.toolbar-group--review-status-group {
       width: 100%;
-      gap: 6px;
+      gap: 4px;
       justify-content: flex-start;
       flex-wrap: nowrap;
     }
@@ -599,12 +619,12 @@
     #reviewNavStatus {
       display: inline-flex;
       align-items: center;
-      padding: 5px 9px;
-      border-radius: 9px;
+      padding: 4px 8px;
+      border-radius: 8px;
       border: 1px solid rgba(147, 197, 253, 0.34);
       background: rgba(255,255,255,.76);
       color: #3b82f6;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
       white-space: nowrap;
     }
@@ -626,7 +646,7 @@
       width: fit-content;
       min-width: 0;
       max-width: min(500px, 100%);
-      padding: 10px 16px;
+      padding: 9px 14px;
       border-radius: 16px;
       border: 1px solid rgba(147, 197, 253, 0.40);
       background: linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(239, 246, 255, 0.98) 100%);
@@ -642,7 +662,7 @@
     }
     #spaceChosenPill .hero-chosen__body {
       display: grid;
-      gap: 2px;
+      gap: 1px;
       min-width: 0;
       align-items: start;
     }
@@ -652,7 +672,7 @@
       grid-template-columns: max-content minmax(0, 1fr);
       column-gap: 6px;
       align-items: baseline;
-      line-height: 1.15;
+      line-height: 1.08;
       min-width: 0;
     }
     #spaceChosenPill .hero-chosen__value,
@@ -686,10 +706,10 @@
       -webkit-text-fill-color: #1e3a8a;
     }
     #reviewSummary .pill {
-      min-height: 24px;
-      padding: 3px 8px;
-      border-radius: 8px;
-      font-size: 10px;
+      min-height: 18px;
+      padding: 2px 7px;
+      border-radius: 7px;
+      font-size: 9px;
       background: rgba(255,255,255,.58);
       border-color: rgba(147, 197, 253, 0.28);
       color: #475569;
@@ -942,6 +962,19 @@
     }
     .popover .act button:hover{ background: rgba(255,255,255,.14); }
     .popover .act button:disabled{ opacity:.5; cursor:not-allowed; }
+    .popover .act button[data-action="open-space"],
+    .popover .act button[data-action="open-tenant"]{
+      border-color: rgba(147, 197, 253, .42);
+      background: linear-gradient(180deg, rgba(219, 234, 254, .24) 0%, rgba(191, 219, 254, .18) 100%);
+      color:#dbeafe;
+      -webkit-text-fill-color: #dbeafe;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .popover .act button[data-action="open-space"]:hover,
+    .popover .act button[data-action="open-tenant"]:hover{
+      background: linear-gradient(180deg, rgba(219, 234, 254, .34) 0%, rgba(191, 219, 254, .26) 100%);
+      border-color: rgba(191, 219, 254, .56);
+    }
 
     .toast {
       position: fixed;
@@ -1050,6 +1083,7 @@
                       <span class="toolbar-label">Режим</span>
                       <button id="scenarioMap" type="button" class="button-toggle is-active" title="Обычный режим просмотра карты" aria-label="Обычный режим просмотра карты">Карта</button>
                       <button id="scenarioReview" type="button" class="button-toggle" title="Режим ревизии мест и разметки" aria-label="Режим ревизии мест и разметки">Ревизия</button>
+                      <button id="closeBtn" type="button" class="button-toggle button-toggle--close" title="Закрыть карту и вернуться назад" aria-label="Закрыть карту и вернуться назад">×</button>
                     </div>
                   @endif
 
@@ -1072,7 +1106,6 @@
                   </div>
                 </div>
 
-                <button id="closeBtn" type="button" class="button-accent button-accent--icon" title="Закрыть карту и вернуться назад" aria-label="Закрыть карту и вернуться назад">×</button>
               </div>
               <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;" title="Открыть настройки карты и рынка" aria-label="Открыть настройки карты и рынка">К настройкам</a>
             </div>
@@ -1953,7 +1986,7 @@
                 '<span class="hero-chosen__tenant">' + escapeHtml(tenantLabel) + '</span>' +
               '</div>' +
             '</div>' +
-            '<button type="button" class="spacePillButton" data-action="clear-chosen" aria-label="Сбросить">×</button>';
+            '<button type="button" class="spacePillButton" data-action="clear-chosen" title="Сбросить выбранное место" aria-label="Сбросить выбранное место">×</button>';
         }
 
         function saveChosenSpaceToLS() {
@@ -3900,21 +3933,21 @@
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
 
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
-                btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '">Открыть место</button>');
+                btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '" title="Открыть карточку торгового места в новой вкладке" aria-label="Открыть карточку торгового места в новой вкладке">Открыть место</button>');
               }
 
               if (hitTenantId && Number.isFinite(hitTenantId) && hitTenantId > 0) {
-                btns.push('<button type="button" data-action="open-tenant" data-tenant-id="' + String(hitTenantId) + '">Открыть арендатора</button>');
+                btns.push('<button type="button" data-action="open-tenant" data-tenant-id="' + String(hitTenantId) + '" title="Открыть карточку арендатора в новой вкладке" aria-label="Открыть карточку арендатора в новой вкладке">Открыть арендатора</button>');
               }
 
               if (isReviewMode()) {
                 if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
-                  btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(hitSpaceId) + '">\u041a\u043e\u043d\u0444\u043b\u0438\u043a\u0442</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '">\u0423\u0442\u043e\u0447\u043d\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что факт на месте совпадает с системой" aria-label="Отметить, что факт на месте совпадает с системой">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как свободное" aria-label="Отметить место как свободное">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать конфликт по месту" aria-label="Зафиксировать конфликт по месту">\u041a\u043e\u043d\u0444\u043b\u0438\u043a\u0442</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '" title="Уточнить номер или название места" aria-label="Уточнить номер или название места">\u0423\u0442\u043e\u0447\u043d\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435</button>');
                 }
 
                 if ((!hitSpaceId || hitSpaceId <= 0) && chosenId && Number.isFinite(chosenId) && chosenId > 0 && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
