@@ -24,8 +24,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <link rel="modulepreload" href="/vendor/pdfjs/pdf.min.mjs">
-  <link rel="modulepreload" href="/vendor/pdfjs/pdf.worker.min.mjs">
   <title>Карта рынка — {{ $marketName }}</title>
 
   <style>
@@ -4103,7 +4101,25 @@
           });
         }
 
-        async function tryImport(pdfUrl, workerUrl) {
+        async function importWithTimeout(url, timeoutMs = 3500) {
+          return await Promise.race([
+            import(url),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('import timeout')), timeoutMs)),
+          ]);
+        }
+
+        async function tryImportDirect(pdfUrl, workerUrl) {
+          try {
+            const mod = await importWithTimeout(pdfUrl);
+            const pdfjsLib = mod?.default ?? mod;
+            if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') return null;
+            return { pdfjsLib, workerSrc: workerUrl };
+          } catch {
+            return null;
+          }
+        }
+
+        async function tryImportBlob(pdfUrl, workerUrl) {
           let blobUrl = null;
 
           try {
@@ -4136,18 +4152,58 @@
           }
         }
 
+        async function tryLoadScript(pdfUrl, workerUrl) {
+          try {
+            await new Promise((resolve, reject) => {
+              const existing = document.querySelector('script[data-pdfjs-loader="' + pdfUrl + '"]');
+              if (existing) {
+                if (window.pdfjsLib && typeof window.pdfjsLib.getDocument === 'function') {
+                  resolve();
+                  return;
+                }
+                existing.addEventListener('load', () => resolve(), { once: true });
+                existing.addEventListener('error', () => reject(new Error('script load failed')), { once: true });
+                return;
+              }
+
+              const script = document.createElement('script');
+              script.src = pdfUrl;
+              script.async = true;
+              script.dataset.pdfjsLoader = pdfUrl;
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error('script load failed'));
+              document.head.appendChild(script);
+            });
+
+            const pdfjsLib = window.pdfjsLib;
+            if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') return null;
+            return { pdfjsLib, workerSrc: workerUrl };
+          } catch {
+            return null;
+          }
+        }
+
         async function loadPdfJs() {
-          const localMjs = await tryImport('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
+          const localMjs = await tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.js');
           if (localMjs) return localMjs;
 
-          const localJs = await tryImport('/vendor/pdfjs/pdf.min.js', '/vendor/pdfjs/pdf.worker.min.js');
+          const localMjsBlob = await tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.js');
+          if (localMjsBlob) return localMjsBlob;
+
+          const localJs = await tryLoadScript('/vendor/pdfjs/pdf.min.js', '/vendor/pdfjs/pdf.worker.min.js');
           if (localJs) return localJs;
 
-          const cdn = await tryImport(
+          const cdn = await tryImportDirect(
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
           );
           if (cdn) return cdn;
+
+          const cdnBlob = await tryImportBlob(
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+          );
+          if (cdnBlob) return cdnBlob;
 
           return null;
         }
