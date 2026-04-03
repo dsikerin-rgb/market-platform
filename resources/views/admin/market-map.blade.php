@@ -2187,7 +2187,14 @@
             return;
           }
 
-          pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+          const resolvedWorkerSrc = (() => {
+            try {
+              return new URL(workerSrc, window.location.origin).href;
+            } catch {
+              return workerSrc;
+            }
+          })();
+          pdfjsLib.GlobalWorkerOptions.workerSrc = resolvedWorkerSrc;
 
           let page = null;
           let scale = 1.0;
@@ -4184,20 +4191,23 @@
         }
 
         async function loadPdfJs() {
-          const localJs = await tryLoadScript('/vendor/pdfjs/pdf.min.js', '/vendor/pdfjs/pdf.worker.min.js');
-          if (localJs) return localJs;
+          const cdnScript = await tryLoadScript(
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.js',
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+          );
+          if (cdnScript) return cdnScript;
 
-          const localMjs = await tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.js');
-          if (localMjs) return localMjs;
-
-          const localMjsBlob = await tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.js');
+          const localMjsBlob = await tryImportBlob(
+            '/vendor/pdfjs/pdf.min.mjs',
+            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+          );
           if (localMjsBlob) return localMjsBlob;
 
-          const cdn = await tryImportDirect(
+          const cdnDirect = await tryImportDirect(
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
           );
-          if (cdn) return cdn;
+          if (cdnDirect) return cdnDirect;
 
           const cdnBlob = await tryImportBlob(
             'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
