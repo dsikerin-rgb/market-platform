@@ -20,18 +20,18 @@ class OperationSnapshotSyncTest extends TestCase
     public function test_applied_operations_update_space_snapshot_and_canceled_do_not_override_it(): void
     {
         $market = Market::create([
-            'name' => 'Тестовый рынок',
+            'name' => 'Test market',
             'timezone' => 'Europe/Moscow',
         ]);
 
         $tenantA = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'ООО Первый',
+            'name' => 'Tenant One',
         ]);
 
         $tenantB = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'ООО Второй',
+            'name' => 'Tenant Two',
         ]);
 
         $space = MarketSpace::create([
@@ -86,15 +86,16 @@ class OperationSnapshotSyncTest extends TestCase
             'payload' => [
                 'market_space_id' => $space->id,
                 'area_sqm' => 42.5,
-                'activity_type' => 'Овощи',
+                'activity_type' => 'Vegetables',
+                'status' => 'maintenance',
                 'is_active' => true,
             ],
         ]);
 
         $space->refresh();
         $this->assertSame('42.50', (string) $space->area_sqm);
-        $this->assertSame('Овощи', $space->activity_type);
+        $this->assertSame('Vegetables', $space->activity_type);
+        $this->assertSame('maintenance', $space->status);
         $this->assertTrue((bool) $space->is_active);
     }
 }
-

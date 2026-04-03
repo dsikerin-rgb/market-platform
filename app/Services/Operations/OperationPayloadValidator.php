@@ -72,6 +72,7 @@ final class OperationPayloadValidator
             'activity_type',
             'location_id',
             'type',
+            'status',
             'is_active',
         ]);
 
@@ -93,6 +94,10 @@ final class OperationPayloadValidator
 
         if (array_key_exists('type', $payload)) {
             $normalized['type'] = self::stringOrNull($payload['type']);
+        }
+
+        if (array_key_exists('status', $payload)) {
+            $normalized['status'] = self::spaceStatusOrNull($payload['status']);
         }
 
         if (array_key_exists('is_active', $payload)) {
@@ -265,5 +270,24 @@ final class OperationPayloadValidator
         }
 
         return (bool) $value;
+    }
+
+    private static function spaceStatusOrNull(mixed $value): ?string
+    {
+        $value = self::stringOrNull($value);
+
+        if ($value === null) {
+            return null;
+        }
+
+        $allowed = ['occupied', 'vacant', 'maintenance', 'reserved'];
+
+        if (in_array($value, $allowed, true)) {
+            return $value;
+        }
+
+        throw ValidationException::withMessages([
+            'payload.status' => 'Invalid market space status.',
+        ]);
     }
 }

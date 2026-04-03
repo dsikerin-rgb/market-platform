@@ -3,20 +3,60 @@
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Models\MarketSpaceMapShape;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Schema;
-use App\Filament\Resources\Pages\BaseEditRecord;
 
 class EditMarketSpace extends BaseEditRecord
 {
     protected static string $resource = MarketSpaceResource::class;
 
-    protected static ?string $title = 'Торговое место';
+    protected static ?string $title = null;
 
-    public function getBreadcrumb(): string
+    public function getTitle(): string|Htmlable
     {
-        return 'Торговое место';
+        return $this->resolveSpaceHeading();
+    }
+
+    public function getHeading(): string|Htmlable
+    {
+        return $this->resolveSpaceHeading();
+    }
+
+    public function getSubheading(): string|Htmlable|null
+    {
+        return null;
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-market-spaces-edit-page',
+        ];
+    }
+
+    public function getBreadcrumbs(): array
+    {
+        return [
+            MarketSpaceResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+        ];
+    }
+
+    public function getHeader(): ?View
+    {
+        return view('filament.resources.market-spaces.partials.edit-hero', [
+            'actions' => $this->getCachedHeaderActions(),
+            'actionsAlignment' => $this->getHeaderActionsAlignment(),
+            'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
+            'heading' => $this->getHeading(),
+            'statusLabel' => $this->resolveStatusLabel(),
+            'statusColor' => $this->resolveStatusColor(),
+        ]);
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
@@ -27,24 +67,45 @@ class EditMarketSpace extends BaseEditRecord
             return $data;
         }
 
-        // Рыночные роли никогда не меняют market_id
+        // Рыночные роли никогда не меняют market_id.
         if (! $user->isSuperAdmin()) {
             $data['market_id'] = $this->record->market_id;
+
             return $data;
         }
 
-        // Super-admin: если выбран рынок через переключатель — фиксируем market_id
+        // Super-admin: если выбран рынок через переключатель — фиксируем market_id.
         $selectedMarketId = session('filament.admin.selected_market_id');
         if (filled($selectedMarketId)) {
             $data['market_id'] = (int) $selectedMarketId;
         } else {
-            // иначе не даём случайно "обнулить"
+            // Иначе не даём случайно "обнулить" поле.
             if (empty($data['market_id'])) {
                 $data['market_id'] = $this->record->market_id;
             }
         }
 
         return $data;
+    }
+
+    public function toggleMarketSpaceActiveState(): void
+    {
+        if (! $this->record) {
+            return;
+        }
+
+        $newState = ! (bool) $this->record->is_active;
+
+        $this->record->forceFill([
+            'is_active' => $newState,
+        ])->save();
+
+        $this->record->refresh();
+
+        Notification::make()
+            ->success()
+            ->title($newState ? 'Торговое место активно' : 'Торговое место отключено')
+            ->send();
     }
 
     protected function getHeaderActions(): array
@@ -105,9 +166,23 @@ class EditMarketSpace extends BaseEditRecord
         }
 
         if (class_exists(\Filament\Actions\Action::class)) {
+            $actions[] = \Filament\Actions\Action::make('active_state')
+                ->view('filament.resources.market-spaces.partials.active-state-toggle')
+                ->viewData([
+                    'isActive' => (bool) ($this->record?->is_active ?? false),
+                ]);
+
             $openMapAction = \Filament\Actions\Action::make('openMap')
-                ->label('Открыть карту')
-                ->disabled(! $isMapLinked);
+                ->label('Показать на карте')
+                ->icon('heroicon-o-map')
+                ->tooltip($isMapLinked ? 'Откроет связанную карту объекта' : 'Привязка к карте ещё не настроена')
+                ->disabled(! $isMapLinked)
+                ->size('lg')
+                ->outlined()
+                ->color('primary')
+                ->extraAttributes([
+                    'class' => 'market-space-card-action market-space-card-action--primary',
+                ]);
 
             if ($mapUrl) {
                 $openMapAction->url($mapUrl, shouldOpenInNewTab: true);
@@ -117,13 +192,35 @@ class EditMarketSpace extends BaseEditRecord
 
             if (! $isMapLinked) {
                 $actions[] = \Filament\Actions\Action::make('mapStatus')
-                    ->label($mapStatus)
-                    ->disabled();
+                    ->label('Нет карты')
+                    ->icon('heroicon-o-link-slash')
+                    ->tooltip($mapStatus)
+                    ->disabled()
+                    ->size('lg')
+                    ->outlined()
+                    ->color('gray')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--secondary',
+                    ]);
             }
         } elseif (class_exists(\Filament\Pages\Actions\Action::class)) {
+            $actions[] = \Filament\Pages\Actions\Action::make('active_state')
+                ->view('filament.resources.market-spaces.partials.active-state-toggle')
+                ->viewData([
+                    'isActive' => (bool) ($this->record?->is_active ?? false),
+                ]);
+
             $openMapAction = \Filament\Pages\Actions\Action::make('openMap')
-                ->label('Открыть карту')
-                ->disabled(! $isMapLinked);
+                ->label('Показать на карте')
+                ->icon('heroicon-o-map')
+                ->tooltip($isMapLinked ? 'Откроет связанную карту объекта' : 'Привязка к карте ещё не настроена')
+                ->disabled(! $isMapLinked)
+                ->size('lg')
+                ->outlined()
+                ->color('primary')
+                ->extraAttributes([
+                    'class' => 'market-space-card-action market-space-card-action--primary',
+                ]);
 
             if ($mapUrl) {
                 $openMapAction->url($mapUrl, shouldOpenInNewTab: true);
@@ -133,8 +230,16 @@ class EditMarketSpace extends BaseEditRecord
 
             if (! $isMapLinked) {
                 $actions[] = \Filament\Pages\Actions\Action::make('mapStatus')
-                    ->label($mapStatus)
-                    ->disabled();
+                    ->label('Нет карты')
+                    ->icon('heroicon-o-link-slash')
+                    ->tooltip($mapStatus)
+                    ->disabled()
+                    ->size('lg')
+                    ->outlined()
+                    ->color('gray')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--secondary',
+                    ]);
             }
         }
 
@@ -142,13 +247,80 @@ class EditMarketSpace extends BaseEditRecord
 
         if ($canDelete) {
             if (class_exists(\Filament\Actions\DeleteAction::class)) {
-                $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить торговое место');
+                $actions[] = \Filament\Actions\DeleteAction::make()
+                    ->label('Удалить')
+                    ->icon('heroicon-o-trash')
+                    ->tooltip('Безвозвратно удалить карточку места')
+                    ->size('lg')
+                    ->outlined()
+                    ->color('danger')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--danger',
+                    ]);
             } elseif (class_exists(\Filament\Pages\Actions\DeleteAction::class)) {
-                $actions[] = \Filament\Pages\Actions\DeleteAction::make()->label('Удалить торговое место');
+                $actions[] = \Filament\Pages\Actions\DeleteAction::make()
+                    ->label('Удалить')
+                    ->icon('heroicon-o-trash')
+                    ->tooltip('Безвозвратно удалить карточку места')
+                    ->size('lg')
+                    ->outlined()
+                    ->color('danger')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--danger',
+                    ]);
             }
         }
 
         return $actions;
     }
-}
 
+    private function resolveSpaceHeading(): string
+    {
+        $displayName = trim((string) ($this->record?->display_name ?? ''));
+        if ($displayName !== '') {
+            return $displayName;
+        }
+
+        $number = trim((string) ($this->record?->number ?? ''));
+        if ($number !== '') {
+            return 'Место ' . $number;
+        }
+
+        return 'Торговое место';
+    }
+
+    private function resolveStatusLabel(): ?string
+    {
+        $state = $this->record?->status;
+
+        if ($state === 'free') {
+            $state = 'vacant';
+        }
+
+        return match ($state) {
+            'vacant' => 'Свободно',
+            'occupied' => 'Занято',
+            'reserved' => 'Зарезервировано',
+            'maintenance' => 'На обслуживании',
+            default => $state,
+        };
+    }
+
+    private function resolveStatusColor(): string
+    {
+        $state = $this->record?->status;
+
+        if ($state === 'free') {
+            $state = 'vacant';
+        }
+
+        return match ($state) {
+            'occupied' => 'success',
+            'vacant' => 'danger',
+            'reserved' => 'warning',
+            'maintenance' => 'gray',
+            default => 'gray',
+        };
+    }
+
+}

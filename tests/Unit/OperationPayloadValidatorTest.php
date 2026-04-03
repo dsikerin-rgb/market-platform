@@ -39,6 +39,17 @@ class OperationPayloadValidatorTest extends TestCase
         $this->assertSame(-1200.5, $payload['amount_delta']);
         $this->assertSame('Корректировка', $payload['reason']);
     }
+    public function test_validates_space_attrs_change_status_payload(): void
+    {
+        $payload = OperationPayloadValidator::normalize(OperationType::SPACE_ATTRS_CHANGE, [
+            'market_space_id' => 7,
+            'status' => 'maintenance',
+        ]);
+
+        $this->assertSame(7, $payload['market_space_id']);
+        $this->assertSame('maintenance', $payload['status']);
+    }
+
     public function test_validates_space_review_identity_fix_payload(): void
     {
         $payload = OperationPayloadValidator::normalize(OperationType::SPACE_REVIEW, [

@@ -140,6 +140,7 @@ class EditTenant extends BaseEditRecord
                 ->icon('heroicon-o-trash')
                 ->size('lg')
                 ->outlined()
+                ->visible(fn (): bool => TenantResource::canDelete($this->record))
                 ->extraAttributes([
                     'class' => 'tenant-card-action tenant-card-action--danger',
                     'data-subtitle' => 'Арендатора без возврата',

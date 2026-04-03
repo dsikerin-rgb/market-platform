@@ -289,6 +289,21 @@ class MarketSpaceResource extends BaseResource
                                     ->maxLength(255)
                                     ->reactive()
                                     ->placeholder('Например: П/1 или A-101')
+                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id))
+                                    ->helperText(function (?MarketSpace $record): HtmlString|string|null {
+                                        if (! filled($record?->id)) {
+                                            return null;
+                                        }
+
+                                        $url = route('filament.admin.market-map', [
+                                            'mode' => 'review',
+                                            'market_space_id' => (int) $record->id,
+                                        ]);
+
+                                        return new HtmlString(
+                                            '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:#2563eb;text-decoration:none;">Изменить через Карта → Ревизия</a>'
+                                        );
+                                    })
                                     ->afterStateUpdated(function ($state, callable $set, callable $get) {
                                         // Для создания: если display_name пуст — подставляем "Место {number}"
                                         if (blank($get('display_name')) && filled($state)) {
@@ -296,33 +311,71 @@ class MarketSpaceResource extends BaseResource
                                         }
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Короткий идентификатор места. Используется в поиске и в импорте начислений.'),
+                                    ->hintIconTooltip('Короткий идентификатор места. Используется в поиске, импорте начислений и привязке договоров. После создания номер меняется только через режим "Карта -> Ревизия".'),
 
                                 Forms\Components\TextInput::make('display_name')
                                     ->label('Название (для отображения)')
                                     ->maxLength(255)
                                     ->placeholder('Например: Аптека 22')
+                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id))
+                                    ->helperText(function (?MarketSpace $record): HtmlString|string|null {
+                                        if (! filled($record?->id)) {
+                                            return null;
+                                        }
+
+                                        $url = route('filament.admin.market-map', [
+                                            'mode' => 'review',
+                                            'market_space_id' => (int) $record->id,
+                                        ]);
+
+                                        return new HtmlString(
+                                            '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:#2563eb;text-decoration:none;">Изменить через Карта → Ревизия</a>'
+                                        );
+                                    })
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Понятное название для пользователей. Обычно заполняется импортом, но можно редактировать вручную.')
+                                    ->hintIconTooltip('Отображаемое имя места. После создания меняется только через режим "Карта -> Ревизия", чтобы не расходиться с ревизией идентичности места.')
                                     ->nullable(),
 
-                                Forms\Components\TextInput::make('space_group_token')
-                                    ->label('Группа мест')
-                                    ->maxLength(255)
-                                    ->placeholder('Например: ОС8, ХК1, ПАВИЛЬОН3')
+                                Forms\Components\Toggle::make('has_space_grouping')
+                                    ->label('Входит в группу')
+                                    ->default(fn (?MarketSpace $record): bool => filled($record?->space_group_token) || filled($record?->space_group_slot))
+                                    ->dehydrated(false)
+                                    ->live()
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Используйте для группировки мест внутри острова, холодильной линии или другой общей зоны. Для ОС8/14 и ОС8/15 указывайте одну и ту же группу ОС8.')
-                                    ->helperText('Заполняется для мест, которые входят в состав одной группы. Это упрощает привязку договоров вроде ОС8 14-15.')
-                                    ->nullable(),
+                                    ->hintIconTooltip('Включайте только для мест, которые входят в состав общей группы: острова, холодильной линии или другой общей зоны.')
+                                    ->afterStateUpdated(function (bool $state, callable $set): void {
+                                        if ($state) {
+                                            return;
+                                        }
 
-                                Forms\Components\TextInput::make('space_group_slot')
-                                    ->label('Номер внутри группы')
-                                    ->maxLength(255)
-                                    ->placeholder('Например: 14, 15, 14-15')
-                                    ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции.')
-                                    ->helperText('Для одиночного места указывайте один номер, например 14. Для комбинированного служебного обозначения можно хранить 14-15.')
-                                    ->nullable(),
+                                        $set('space_group_token', null);
+                                        $set('space_group_slot', null);
+                                    }),
+
+                                Section::make('Групповое место')
+                                    ->visible(fn (callable $get): bool => (bool) $get('has_space_grouping'))
+                                    ->schema([
+                                        Forms\Components\TextInput::make('space_group_token')
+                                            ->label('Группа мест')
+                                            ->maxLength(255)
+                                            ->placeholder('Например: ОС8, ХК1, ПАВИЛЬОН3')
+                                            ->hintIcon('heroicon-m-question-mark-circle')
+                                            ->hintIconTooltip('Используйте для группировки мест внутри острова, холодильной линии или другой общей зоны. Заполняется для мест, которые входят в состав одной группы. Это упрощает привязку договоров вроде ОС8 14-15. Для ОС8/14 и ОС8/15 указывайте одну и ту же группу ОС8.')
+                                            ->nullable(),
+
+                                        Forms\Components\TextInput::make('space_group_slot')
+                                            ->label('Номер внутри группы')
+                                            ->maxLength(255)
+                                            ->placeholder('Например: 14, 15, 14-15')
+                                            ->hintIcon('heroicon-m-question-mark-circle')
+                                            ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции. Для одиночного места указывайте один номер, например 14. Для комбинированного служебного обозначения можно хранить 14-15.')
+                                            ->nullable(),
+                                    ])
+                                    ->columns([
+                                        'default' => 1,
+                                        'md' => 2,
+                                    ])
+                                    ->compact(),
 
                                 Forms\Components\TextInput::make('activity_type')
                                     ->label('Вид деятельности')
@@ -350,42 +403,38 @@ class MarketSpaceResource extends BaseResource
                                     ->preload()
                                     ->reactive()
                                     ->nullable()
-                        ->placeholder('—')
-                        ->helperText(function ($get, ?MarketSpace $record) use ($user) {
-                            $marketId = $get('market_id') ?? $record?->market_id;
+                                    ->placeholder('—')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip(function ($get, ?MarketSpace $record) use ($user): string {
+                                        $parts = ['Категория места для отчётности. Берётся из справочника “Типы мест”.'];
+                                        $marketId = $get('market_id') ?? $record?->market_id;
 
-                            if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
-                                $marketId = $user->market_id;
-                            }
+                                        if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                            $marketId = $user->market_id;
+                                        }
 
-                            if (blank($marketId)) {
-                                return null;
-                            }
+                                        if (filled($marketId)) {
+                                            $currentType = (string) ($get('type') ?? $record?->type ?? '');
+                                            $activeTypeCount = MarketSpaceType::query()
+                                                ->where('market_id', (int) $marketId)
+                                                ->where('is_active', true)
+                                                ->count();
+                                            $hasCurrentActiveType = $currentType !== ''
+                                                && MarketSpaceType::query()
+                                                    ->where('market_id', (int) $marketId)
+                                                    ->where('is_active', true)
+                                                    ->where('code', $currentType)
+                                                    ->exists();
 
-                            $currentType = (string) ($get('type') ?? $record?->type ?? '');
-                            $activeTypeCount = MarketSpaceType::query()
-                                ->where('market_id', (int) $marketId)
-                                ->where('is_active', true)
-                                ->count();
-                            $hasCurrentActiveType = $currentType !== ''
-                                && MarketSpaceType::query()
-                                    ->where('market_id', (int) $marketId)
-                                    ->where('is_active', true)
-                                    ->where('code', $currentType)
-                                    ->exists();
+                                            if ($activeTypeCount === 0) {
+                                                $parts[] = 'Для этого рынка справочник типов мест пока пуст. Сначала заполните "Типы мест".';
+                                            } elseif ($currentType !== '' && ! $hasCurrentActiveType) {
+                                                $parts[] = 'Текущий тип больше не найден среди активных типов мест.';
+                                            }
+                                        }
 
-                            if ($activeTypeCount === 0) {
-                                return 'Для этого рынка справочник типов мест пока пуст. Сначала заполните "Типы мест".';
-                            }
-
-                            if ($currentType !== '' && ! $hasCurrentActiveType) {
-                                return 'Текущий тип больше не найден среди активных типов мест.';
-                            }
-
-                            return null;
-                        })
-                        ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('Категория места для отчётности. Берётся из справочника “Типы мест”.'),
+                                        return implode(' ', $parts);
+                                    }),
 
                                 Forms\Components\TextInput::make('area_sqm')
                                     ->label('Площадь, м²')
@@ -393,6 +442,8 @@ class MarketSpaceResource extends BaseResource
                                     ->inputMode('decimal')
                                     ->placeholder('Например: 48')
                                     ->suffix('м²')
+                                    ->extraFieldWrapperAttributes(['style' => 'width:min(100%, 14rem);'])
+                                    ->extraInputAttributes(['style' => 'width:100%;'])
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
 
@@ -411,16 +462,13 @@ class MarketSpaceResource extends BaseResource
                                         }
                                     })
                                     ->dehydrateStateUsing(fn ($state) => $state === 'free' ? 'vacant' : $state)
+                                    ->visible(fn (?MarketSpace $record): bool => ! $record)
                                     ->disabled(fn (?MarketSpace $record): bool => (bool) $record)
-                                    ->helperText(fn (?MarketSpace $record): ?string => $record ? 'Для существующих мест статус меняется через режим «Карта -> Ревизия».' : null)
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Используется для быстрой визуальной оценки занятости. В таблице помечается цветом.'),
+                                    ->hintIconTooltip(fn (?MarketSpace $record): string => $record
+                                        ? 'Используется для быстрой визуальной оценки занятости. В таблице помечается цветом. Для существующих мест статус меняется через режим «Карта -> Ревизия».'
+                                        : 'Используется для быстрой визуальной оценки занятости. В таблице помечается цветом.'),
 
-                                Forms\Components\Toggle::make('is_active')
-                                    ->label('Активно')
-                                    ->default(true)
-                                    ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Если выключить — место скрывается из большинства сценариев, но данные остаются в системе.'),
                             ])
                             ->columns([
                                 'default' => 1,
@@ -430,32 +478,28 @@ class MarketSpaceResource extends BaseResource
                     Section::make('Ставка аренды')
                         ->schema([
                             Forms\Components\Placeholder::make('rent_rate_fact')
-                                ->label('Ставка (rent_rate)')
+                                ->label('Фактическая ставка за период')
+                                ->hintIcon('heroicon-m-question-mark-circle')
+                                ->hintIconTooltip('Ставка, которую система фактически видит для выбранного периода. Берётся из операций и начислений, поэтому может отличаться от текущей ставки в карточке.')
                                 ->content(fn (?MarketSpace $record): HtmlString => static::rentRateFactHtml($record)),
 
                             Forms\Components\TextInput::make('rent_rate_value')
-                                ->label('Ставка аренды')
+                                ->label('Текущая ставка')
                                 ->numeric()
                                 ->inputMode('decimal')
                                 ->placeholder('Например: 1500')
+                                ->hintIcon('heroicon-m-question-mark-circle')
+                                ->hintIconTooltip('Текущее значение ставки в карточке места. Используется в интерфейсах и операциях как актуальный снапшот ставки.')
                                 ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
 
                             Forms\Components\Select::make('rent_rate_unit')
                                 ->label('Единица ставки')
                                 ->options(static::rentRateUnitOptions())
                                 ->placeholder('Не указано')
+                                ->hintIcon('heroicon-m-question-mark-circle')
+                                ->hintIconTooltip('Показывает, как интерпретировать текущую ставку: за м² в месяц или за всё место в месяц.')
                                 ->nullable()
                                 ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
-
-                                Forms\Components\Placeholder::make('rent_rate_updated_at')
-                                    ->label('Обновлено')
-                                    ->content(function (?MarketSpace $record): string {
-                                        if (! $record?->rent_rate_updated_at) {
-                                            return '—';
-                                        }
-
-                                        return $record->rent_rate_updated_at->format('d.m.Y H:i');
-                                    }),
 
                             ])
                             ->columns([
@@ -479,7 +523,7 @@ class MarketSpaceResource extends BaseResource
                     ]),
                 Tab::make('История')
                     ->schema([
-                        Section::make('История арендаторов')
+                        Section::make('Арендаторы')
                             ->schema([
                                 Forms\Components\Placeholder::make('tenant_history')
                                     ->hiddenLabel()
@@ -489,7 +533,7 @@ class MarketSpaceResource extends BaseResource
                             ])
                             ->columns(1),
 
-                        Section::make('История ставки')
+                        Section::make('Ставка')
                             ->schema([
                                 Forms\Components\Placeholder::make('rent_rate_history')
                                     ->hiddenLabel()
@@ -498,10 +542,8 @@ class MarketSpaceResource extends BaseResource
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
-                    ]),
-                Tab::make('Журнал')
-                    ->schema([
-                        Section::make('Внутренний журнал')
+
+                        Section::make('Операции')
                             ->schema([
                                 Forms\Components\Placeholder::make('operations')
                                     ->hiddenLabel()
@@ -994,12 +1036,14 @@ class MarketSpaceResource extends BaseResource
                 ->label('')
                 ->tooltip('Удалить')
                 ->icon('heroicon-o-trash')
+                ->visible(fn (MarketSpace $record): bool => static::canDelete($record))
                 ->iconButton();
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
             $actions[] = \Filament\Tables\Actions\DeleteAction::make()
                 ->label('')
                 ->tooltip('Удалить')
                 ->icon('heroicon-o-trash')
+                ->visible(fn (MarketSpace $record): bool => static::canDelete($record))
                 ->iconButton();
         }
 
@@ -1089,16 +1133,73 @@ class MarketSpaceResource extends BaseResource
 
     public static function canDelete($record): bool
     {
+        if (! $record instanceof MarketSpace) {
+            return false;
+        }
+
         $user = Filament::auth()->user();
 
         if (! $user) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
+            return false;
+        }
+
+        return ! static::hasDeleteDependencies($record);
+    }
+
+    private static function hasDeleteDependencies(MarketSpace $record): bool
+    {
+        if (filled($record->tenant_id)) {
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        $recordId = (int) $record->getKey();
+
+        if ($recordId <= 0) {
+            return true;
+        }
+
+        $tableChecks = [
+            ['tenant_contracts', 'market_space_id'],
+            ['tenant_requests', 'market_space_id'],
+            ['tenant_accruals', 'market_space_id'],
+            ['market_space_map_shapes', 'market_space_id'],
+            ['market_space_tenant_histories', 'market_space_id'],
+            ['market_space_rent_rate_histories', 'market_space_id'],
+            ['market_space_tenant_bindings', 'market_space_id'],
+            ['tenant_user_market_spaces', 'market_space_id'],
+            ['tenant_space_showcases', 'market_space_id'],
+            ['marketplace_products', 'market_space_id'],
+            ['marketplace_chats', 'market_space_id'],
+            ['tickets', 'market_space_id'],
+            ['tenant_reviews', 'market_space_id'],
+        ];
+
+        foreach ($tableChecks as [$table, $column]) {
+            if (! SchemaFacade::hasTable($table) || ! SchemaFacade::hasColumn($table, $column)) {
+                continue;
+            }
+
+            if (DB::table($table)->where($column, $recordId)->exists()) {
+                return true;
+            }
+        }
+
+        if (
+            SchemaFacade::hasTable('operations')
+            && SchemaFacade::hasColumn('operations', 'entity_type')
+            && SchemaFacade::hasColumn('operations', 'entity_id')
+            && DB::table('operations')
+                ->where('entity_type', 'market_space')
+                ->where('entity_id', $recordId)
+                ->exists()
+        ) {
+            return true;
+        }
+
+        return false;
     }
 }

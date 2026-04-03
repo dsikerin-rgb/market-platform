@@ -12,25 +12,6 @@
 
 @once
     <style>
-        .space-ops__note {
-            margin-bottom: 12px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            background: rgba(0, 0, 0, 0.03);
-            font-size: 13px;
-            line-height: 1.45;
-        }
-
-        .dark .space-ops__note {
-            border-color: rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.04);
-        }
-
-        .space-ops__note a {
-            text-decoration: underline;
-        }
-
         .space-ops__table {
             width: 100%;
             border-collapse: collapse;
@@ -67,14 +48,6 @@
 @endonce
 
 <div class="space-ops">
-    <div class="space-ops__note">
-        Основной сценарий изменений перенесён в режим <strong>Карта -> Ревизия</strong>.
-        @if (filled($reviewUrl))
-            <a href="{{ $reviewUrl }}">Открыть ревизию карты</a>.
-        @endif
-        Здесь остаётся только внутренний журнал по месту.
-    </div>
-
     @if (empty($rows))
         <div class="space-ops__empty">По этому месту ещё нет записей внутреннего журнала.</div>
     @else
