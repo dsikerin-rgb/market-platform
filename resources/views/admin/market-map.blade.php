@@ -4121,6 +4121,7 @@
 
         async function tryImportBlob(pdfUrl, workerUrl) {
           let blobUrl = null;
+          let workerBlobUrl = null;
 
           try {
             const response = await fetch(pdfUrl, {
@@ -4142,14 +4143,27 @@
             const mod = await import(blobUrl);
             const pdfjsLib = mod?.default ?? mod;
             if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') return null;
+
+            // Загружаем worker тоже через blob, чтобы избежать MIME-проблем
+            const workerResponse = await fetch(workerUrl, {
+              method: 'GET',
+              credentials: 'same-origin',
+            });
+
+            if (workerResponse.ok) {
+              const workerSource = await workerResponse.text();
+              if (workerSource) {
+                workerBlobUrl = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
+                return { pdfjsLib, workerSrc: workerBlobUrl };
+              }
+            }
+
+            // Fallback к прямому URL worker (на случай если worker загружается нормально)
             return { pdfjsLib, workerSrc: workerUrl };
           } catch {
             return null;
-          } finally {
-            if (blobUrl) {
-              URL.revokeObjectURL(blobUrl);
-            }
           }
+          // Не отзываем blobUrl — worker нужен позже для загрузки
         }
 
         async function tryLoadScript(pdfUrl, workerUrl) {
@@ -4184,12 +4198,6 @@
         }
 
         async function loadPdfJs() {
-          const localJs = await tryLoadScript('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
-          if (localJs) return localJs;
-
-          const localMjs = await tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
-          if (localMjs) return localMjs;
-
           const localMjsBlob = await tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
           if (localMjsBlob) return localMjsBlob;
 
