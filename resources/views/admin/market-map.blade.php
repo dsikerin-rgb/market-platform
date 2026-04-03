@@ -66,24 +66,25 @@
       background: #ea580c;
     }
     .button-toggle.is-active {
-      background: #0f172a;
-      border-color: #0f172a;
+      background: #1d4ed8;
+      border-color: #1d4ed8;
       color: #fff;
       -webkit-text-fill-color: #fff;
+      box-shadow: 0 6px 14px rgba(37, 99, 235, 0.22);
     }
     .button-toggle.is-active:hover {
-      background: #1e293b;
+      background: #1e40af;
     }
     .review-progress {
       display: none;
       align-items: center;
-      gap: 8px;
-      min-width: 220px;
+      gap: 5px;
+      min-width: 188px;
     }
     .review-progress__track {
       position: relative;
-      width: 160px;
-      height: 8px;
+      width: 138px;
+      height: 6px;
       border-radius: 999px;
       overflow: hidden;
       background: rgba(15, 23, 42, 0.12);
@@ -96,13 +97,13 @@
       border-radius: 999px;
     }
     .review-progress__text {
-      font-size: 11px;
+      font-size: 9px;
       font-weight: 600;
       white-space: nowrap;
     }
     .review-summary {
       display: none;
-      gap: 6px;
+      gap: 4px;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -184,15 +185,22 @@
 
     .spacePicker {
       position: relative;
-      min-width: 180px;
+      width: min(420px, 100%);
+      min-width: 240px;
     }
 
     .spaceSearchInput {
-      width: 200px;
-      padding: 5px 8px;
-      border-radius: 9px;
-      border: 1px solid rgba(120,120,120,.25);
-      background: rgba(120,120,120,.06);
+      width: 100%;
+      height: 40px;
+      min-height: 40px;
+      padding: 0 16px 0 42px;
+      border-radius: 14px;
+      border: 1px solid var(--map-control-border);
+      background:
+        #ffffff
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E")
+        no-repeat 14px center / 16px 16px;
+      box-shadow: var(--map-control-shadow);
       color: #334155;
       -webkit-text-fill-color: #334155;
     }
@@ -247,17 +255,21 @@
 
     .viewer {
       margin-top: 14px;
-      border: 1px solid rgba(120,120,120,.25);
+      border: 1px solid rgba(148, 163, 184, 0.28);
       border-radius: 14px;
       overflow: hidden;
       background: #fff;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
     }
     .toolbar {
       padding: 10px 14px 8px;
       display: grid;
       gap: 7px;
-      border-bottom: 1px solid rgba(120,120,120,.18);
-      background: linear-gradient(180deg, rgba(255,255,255,.98) 0%, rgba(248,250,252,.98) 100%);
+      position: relative;
+      border-bottom: 1px solid rgba(147, 197, 253, 0.32);
+      background:
+        radial-gradient(circle at top right, rgba(186, 230, 253, 0.55) 0%, rgba(186, 230, 253, 0) 34%),
+        linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(248, 250, 252, 0.98) 100%);
     }
     .toolbar-row {
       display: flex;
@@ -267,12 +279,33 @@
       flex-wrap: wrap;
     }
     .toolbar-row.toolbar-row--hero {
-      align-items: center;
-      gap: 10px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+      align-items: start;
+      gap: 14px;
     }
     .toolbar-row.toolbar-row--controls {
       align-items: center;
-      justify-content: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .toolbar-row.toolbar-row--edit-hint {
+      display: none;
+      position: absolute;
+      left: 14px;
+      top: 86px;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .toolbar-row.toolbar-row--review-status {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(147, 197, 253, 0.44);
+      background: linear-gradient(180deg, rgba(219, 234, 254, 0.86) 0%, rgba(239, 246, 255, 0.92) 100%);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.78);
     }
     .toolbar-group {
       display: flex;
@@ -282,11 +315,135 @@
       padding: 0;
       min-width: 0;
     }
+    :root {
+      --map-control-height: 46px;
+      --map-control-inner-height: 34px;
+      --map-control-radius: 16px;
+      --map-control-inner-radius: 11px;
+      --map-control-border: rgba(147, 197, 253, 0.38);
+      --map-control-bg: linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(239,246,255,.98) 100%);
+      --map-control-shadow: inset 0 1px 0 rgba(255,255,255,.72), 0 8px 18px rgba(147, 197, 253, 0.12);
+    }
     .toolbar-group.toolbar-group--accent {
-      padding: 3px 5px;
+      min-height: 36px;
+      padding: 3px;
+      border-radius: 12px;
+      background: var(--map-control-bg);
+      border: 1px solid var(--map-control-border);
+      box-shadow: var(--map-control-shadow);
+    }
+    .toolbar-group.toolbar-group--segmented {
+      gap: 4px;
+      min-height: 40px;
+      padding: 4px;
+      border-radius: 13px;
+      background: var(--map-control-bg);
+      border: 1px solid var(--map-control-border);
+      box-shadow: var(--map-control-shadow);
+    }
+    .toolbar-group.toolbar-group--segmented .toolbar-label {
+      min-height: 30px;
+      padding: 0 9px 0 6px;
+      color: #475569;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+    }
+    .toolbar-group.toolbar-group--segmented .button-toggle {
+      min-height: 30px;
+      padding: 4px 14px;
       border-radius: 10px;
-      background: rgba(255,255,255,.92);
-      border: 1px solid rgba(120,120,120,.16);
+      border-color: transparent;
+      background: rgba(255,255,255,.5);
+      color: #1e3a8a;
+      -webkit-text-fill-color: #1e3a8a;
+      font-weight: 600;
+      transition: background .18s ease, color .18s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+    .toolbar-group.toolbar-group--segmented .button-toggle:hover {
+      background: rgba(255,255,255,.82);
+      border-color: rgba(147, 197, 253, 0.34);
+    }
+    .toolbar-group.toolbar-group--segmented .button-toggle.is-active {
+      background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+      border-color: #1d4ed8;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.26);
+    }
+    .toolbar-group.toolbar-group--segmented .button-toggle.is-active:hover {
+      background: linear-gradient(180deg, #1d4ed8 0%, #1e40af 100%);
+    }
+    .toolbar-group.toolbar-group--control-segmented {
+      gap: 4px;
+      min-height: 36px;
+      padding: 3px;
+      border-radius: 12px;
+      background: var(--map-control-bg);
+      border: 1px solid var(--map-control-border);
+      box-shadow: var(--map-control-shadow);
+    }
+    .toolbar-group.toolbar-group--control-segmented button,
+    .toolbar-group.toolbar-group--control-segmented .pill {
+      min-height: 26px;
+      padding: 2px 11px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.58);
+      color: #1e3a8a;
+      -webkit-text-fill-color: #1e3a8a;
+      font-size: 11px;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: none;
+      transition: background .18s ease, border-color .18s ease, color .18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .toolbar-group.toolbar-group--control-segmented button:hover,
+    .toolbar-group.toolbar-group--control-segmented .pill:hover {
+      background: rgba(255,255,255,.88);
+      border-color: rgba(147, 197, 253, 0.34);
+    }
+    .toolbar-group.toolbar-group--control-segmented button:disabled {
+      background: rgba(255,255,255,.38);
+      color: #94a3b8;
+      -webkit-text-fill-color: #94a3b8;
+      border-color: transparent;
+      opacity: .72;
+    }
+    .toolbar-group.toolbar-group--control-segmented button.is-active {
+      background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+      border-color: rgba(96, 165, 250, 0.55);
+      color: #1d4ed8;
+      -webkit-text-fill-color: #1d4ed8;
+      box-shadow: 0 2px 6px rgba(147, 197, 253, 0.18);
+    }
+    .toolbar-group.toolbar-group--control-segmented button.is-active:hover {
+      background: linear-gradient(180deg, #bfdbfe 0%, #93c5fd 100%);
+    }
+    .toolbar-group.toolbar-group--accent > button,
+    .toolbar-group.toolbar-group--accent > .pill {
+      min-height: 26px;
+      padding: 2px 11px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.58);
+      color: #1e3a8a;
+      -webkit-text-fill-color: #1e3a8a;
+      font-size: 11px;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: none;
+      transition: background .18s ease, border-color .18s ease, color .18s ease;
+    }
+    .toolbar-group.toolbar-group--accent > button:hover,
+    .toolbar-group.toolbar-group--accent > .pill:hover {
+      background: rgba(255,255,255,.88);
+      border-color: rgba(147, 197, 253, 0.34);
     }
     .toolbar-label {
       display: inline-flex;
@@ -301,9 +458,10 @@
       display: grid;
       gap: 2px;
       min-width: 0;
+      justify-self: start;
     }
     .hero-kicker {
-      display: inline-flex;
+      display: none;
       align-items: center;
       gap: 8px;
       color: rgba(15, 23, 42, 0.58);
@@ -326,18 +484,242 @@
       font-weight: 700;
     }
     .toolbar-group.toolbar-group--hero-actions {
-      margin-left: auto;
+      margin-left: 0;
+      justify-self: end;
       justify-content: flex-end;
       align-self: flex-start;
+    }
+    .toolbar-group.toolbar-group--hero-actions-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    .toolbar-group.toolbar-group--hero-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .toolbar-group.toolbar-group--hero-center {
+      justify-self: center;
+      justify-content: center;
+      min-width: 0;
+    }
+    .toolbar-group.toolbar-group--hero-review {
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      min-width: 0;
+    }
+    .toolbar-group.toolbar-group--controls-left {
+      flex: 0 1 auto;
+      justify-content: flex-start;
+      gap: 10px;
+      flex-wrap: nowrap;
     }
     .toolbar-group.toolbar-group--stretch {
       flex: 1 1 auto;
       min-width: 0;
     }
+    .toolbar-group.toolbar-group--review-nav {
+      flex: 0 1 auto;
+      justify-content: center;
+      width: fit-content;
+      max-width: 100%;
+      padding: 5px;
+      border-radius: var(--map-control-radius);
+      border: 1px solid var(--map-control-border);
+      background: var(--map-control-bg);
+      box-shadow: var(--map-control-shadow);
+      gap: 6px;
+    }
+    .toolbar-group.toolbar-group--review-nav button {
+      min-height: var(--map-control-inner-height);
+      padding: 5px 14px;
+      border-radius: var(--map-control-inner-radius);
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.58);
+      color: #1e3a8a;
+      -webkit-text-fill-color: #1e3a8a;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: none;
+      transition: background .18s ease, border-color .18s ease, color .18s ease;
+    }
+    .toolbar-group.toolbar-group--review-nav button:hover {
+      background: rgba(255,255,255,.88);
+      border-color: rgba(147, 197, 253, 0.34);
+    }
+    .toolbar-group.toolbar-group--review-nav button:disabled {
+      background: rgba(255,255,255,.38);
+      color: #94a3b8;
+      -webkit-text-fill-color: #94a3b8;
+      border-color: transparent;
+      opacity: .72;
+    }
+    .toolbar-group.toolbar-group--search-slot {
+      flex: 1 1 320px;
+      justify-content: flex-end;
+    }
+    .toolbar-group.toolbar-group--review-status-group {
+      width: 100%;
+      gap: 6px;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+    }
     .toolbar-group.toolbar-group--utility {
       margin-left: auto;
       opacity: .92;
       gap: 5px;
+    }
+    .toolbar-group.toolbar-group--utility .pill {
+      min-height: 36px;
+      padding: 0 11px;
+      border-radius: 12px;
+      border: 1px solid var(--map-control-border);
+      background: var(--map-control-bg);
+      box-shadow: var(--map-control-shadow);
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+    }
+    #editHint {
+      min-height: 30px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(147, 197, 253, 0.34);
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+      color: #475569;
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+    #reviewNavStatus {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      border-radius: 9px;
+      border: 1px solid rgba(147, 197, 253, 0.34);
+      background: rgba(255,255,255,.76);
+      color: #3b82f6;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .button-accent.button-accent--icon {
+      min-width: var(--map-control-height);
+      min-height: var(--map-control-height);
+      padding: 0;
+      border-radius: var(--map-control-radius);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      line-height: 1;
+    }
+    #spaceChosenPill.hero-chosen {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      width: fit-content;
+      min-width: 0;
+      max-width: min(500px, 100%);
+      padding: 10px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(147, 197, 253, 0.40);
+      background: linear-gradient(180deg, rgba(255,255,255,.96) 0%, rgba(239, 246, 255, 0.98) 100%);
+      box-shadow: 0 10px 22px rgba(147, 197, 253, 0.12);
+      color: #0f172a;
+      -webkit-text-fill-color: #0f172a;
+    }
+    #spaceChosenPill .hero-chosen__label {
+      color: #64748b;
+      font-weight: 500;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    #spaceChosenPill .hero-chosen__body {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      align-items: start;
+    }
+    #spaceChosenPill .hero-chosen__line,
+    #spaceChosenPill .hero-chosen__meta {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      column-gap: 6px;
+      align-items: baseline;
+      line-height: 1.15;
+      min-width: 0;
+    }
+    #spaceChosenPill .hero-chosen__value,
+    #spaceChosenPill .hero-chosen__tenant {
+      font-weight: 800;
+      font-size: 14px;
+      color: #0f172a;
+      -webkit-text-fill-color: #0f172a;
+      justify-self: start;
+      text-align: left;
+    }
+    #spaceChosenPill .hero-chosen__prefix,
+    #spaceChosenPill .hero-chosen__meta-label {
+      min-width: 78px;
+      font-weight: 500;
+      font-size: 13px;
+      color: #475569;
+      -webkit-text-fill-color: #475569;
+      justify-self: start;
+      text-align: left;
+    }
+    #spaceChosenPill .hero-chosen__empty {
+      color: #64748b;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    #spaceChosenPill .spacePillButton {
+      margin-left: auto;
+      color: #1e3a8a;
+      font-size: 16px;
+      -webkit-text-fill-color: #1e3a8a;
+    }
+    #reviewSummary .pill {
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 8px;
+      font-size: 10px;
+      background: rgba(255,255,255,.58);
+      border-color: rgba(147, 197, 253, 0.28);
+      color: #475569;
+      -webkit-text-fill-color: #475569;
+    }
+    @media (max-width: 1120px) {
+      .toolbar-row.toolbar-row--hero {
+        grid-template-columns: 1fr;
+      }
+      .hero-heading,
+      .toolbar-group.toolbar-group--hero-center,
+      .toolbar-group.toolbar-group--hero-actions {
+        justify-self: stretch;
+      }
+      .toolbar-group.toolbar-group--hero-actions {
+        justify-content: space-between;
+      }
+      .toolbar-group.toolbar-group--controls-left {
+        flex-wrap: wrap;
+      }
+      .toolbar-group.toolbar-group--hero-actions-main {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .toolbar-group.toolbar-group--hero-stack {
+        align-items: stretch;
+      }
+      .toolbar-group.toolbar-group--review-status-group {
+        flex-wrap: wrap;
+      }
     }
     .legend[hidden] {
       display: none;
@@ -647,57 +1029,78 @@
               </div>
             </div>
 
-            <div class="toolbar-group toolbar-group--hero-actions">
-              @if ($canEdit)
-                <div class="toolbar-group toolbar-group--accent">
-                  <span class="toolbar-label">Режим</span>
-                  <button id="scenarioMap" type="button" class="button-toggle is-active" title="Обычный режим просмотра карты" aria-label="Обычный режим просмотра карты">Карта</button>
-                  <button id="scenarioReview" type="button" class="button-toggle" title="Режим ревизии мест и разметки" aria-label="Режим ревизии мест и разметки">Ревизия</button>
+            @if ($canEdit)
+              <div class="toolbar-group toolbar-group--hero-center toolbar-group--hero-review">
+                <span class="pill hero-chosen" id="spaceChosenPill" title="Выбранное место для ревизии"></span>
+                <div class="toolbar-group toolbar-group--review-nav" id="reviewNavRow" style="display:none;">
+                  <button id="reviewNavPrev" type="button" title="Перейти к предыдущему месту в очереди ревизии" aria-label="Перейти к предыдущему месту в очереди ревизии">← Предыдущее</button>
+                  <button id="reviewNavNextPending" type="button" title="Перейти к следующему непройденному месту" aria-label="Перейти к следующему непройденному месту">Следующее непройденное →</button>
+                  <button id="reviewNavNext" type="button" title="Перейти к следующему месту в очереди ревизии" aria-label="Перейти к следующему месту в очереди ревизии">Следующее →</button>
                 </div>
-              @endif
-              <button id="closeBtn" type="button" class="button-accent" title="Закрыть карту и вернуться назад" aria-label="Закрыть карту и вернуться назад">Закрыть</button>
+              </div>
+            @else
+              <div class="toolbar-group toolbar-group--hero-center"></div>
+            @endif
+
+            <div class="toolbar-group toolbar-group--hero-actions">
+              <div class="toolbar-group toolbar-group--hero-actions-main">
+                <div class="toolbar-group toolbar-group--hero-stack">
+                  @if ($canEdit)
+                    <div class="toolbar-group toolbar-group--accent toolbar-group--segmented">
+                      <span class="toolbar-label">Режим</span>
+                      <button id="scenarioMap" type="button" class="button-toggle is-active" title="Обычный режим просмотра карты" aria-label="Обычный режим просмотра карты">Карта</button>
+                      <button id="scenarioReview" type="button" class="button-toggle" title="Режим ревизии мест и разметки" aria-label="Режим ревизии мест и разметки">Ревизия</button>
+                    </div>
+                  @endif
+
+                  <div class="toolbar-group toolbar-group--accent toolbar-group--segmented">
+                    <span class="toolbar-label">Слои</span>
+                    <button
+                      id="layerDebt"
+                      type="button"
+                      class="button-toggle is-active"
+                      title="Слой показывает статус задолженности по занятым местам."
+                      aria-label="Слой показывает статус задолженности по занятым местам."
+                    >Задолженность</button>
+                    <button
+                      id="layerRent"
+                      type="button"
+                      class="button-toggle"
+                      title="Слой показывает относительную ставку по занятым местам."
+                      aria-label="Слой показывает относительную ставку по занятым местам."
+                    >Арендная ставка</button>
+                  </div>
+                </div>
+
+                <button id="closeBtn" type="button" class="button-accent button-accent--icon" title="Закрыть карту и вернуться назад" aria-label="Закрыть карту и вернуться назад">×</button>
+              </div>
               <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;" title="Открыть настройки карты и рынка" aria-label="Открыть настройки карты и рынка">К настройкам</a>
             </div>
           </div>
 
           <div class="toolbar-row toolbar-row--controls">
-            <div class="toolbar-group toolbar-group--accent">
-              <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
-              <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
-              <button id="zoomReset" type="button" title="Сбросить масштаб до 100%" aria-label="Сбросить масштаб до 100%">100%</button>
-              <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
-              @if ($canOpenPdf)
-                <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
+            <div class="toolbar-group toolbar-group--controls-left">
+              <div class="toolbar-group toolbar-group--accent">
+                <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
+                <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
+                <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
+                @if ($canOpenPdf)
+                  <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
+                @endif
+              </div>
+
+              @if ($canEdit)
+                <div class="toolbar-group toolbar-group--accent toolbar-group--control-segmented">
+                  <button id="toggleEdit" type="button" title="Включить редактирование разметки карты" aria-label="Включить редактирование разметки карты">Включить редактирование</button>
+                  <button id="toolSelect" type="button" style="display:none;" title="Редактировать существующую разметку" aria-label="Редактировать существующую разметку">Редактировать</button>
+                  <button id="toolRect" type="button" style="display:none;" title="Нарисовать прямоугольную область" aria-label="Нарисовать прямоугольную область">Прямоугольник</button>
+                  <button id="toolPoly" type="button" style="display:none;" title="Нарисовать полигон по точкам" aria-label="Нарисовать полигон по точкам">Полигон</button>
+                </div>
               @endif
             </div>
 
-            <div class="toolbar-group toolbar-group--accent">
-              <span class="toolbar-label">Слои</span>
-              <button
-                id="layerDebt"
-                type="button"
-                class="button-toggle is-active"
-                title="Слой показывает статус задолженности по занятым местам."
-                aria-label="Слой показывает статус задолженности по занятым местам."
-              >Задолженность</button>
-              <button
-                id="layerRent"
-                type="button"
-                class="button-toggle"
-                title="Слой показывает относительную ставку по занятым местам."
-                aria-label="Слой показывает относительную ставку по занятым местам."
-              >Арендная ставка</button>
-            </div>
-
             @if ($canEdit)
-              <div class="toolbar-group toolbar-group--accent">
-                <button id="toggleEdit" type="button" title="Включить или выключить режим разметки карты" aria-label="Включить или выключить режим разметки карты">Разметка: выкл</button>
-                <button id="toolSelect" type="button" style="display:none;" title="Редактировать существующую разметку" aria-label="Редактировать существующую разметку">Редактировать</button>
-                <button id="toolRect" type="button" style="display:none;" title="Нарисовать прямоугольную область" aria-label="Нарисовать прямоугольную область">Прямоугольник</button>
-                <button id="toolPoly" type="button" style="display:none;" title="Нарисовать полигон по точкам" aria-label="Нарисовать полигон по точкам">Полигон</button>
-              </div>
-
-              <div class="toolbar-group toolbar-group--stretch">
+              <div class="toolbar-group toolbar-group--search-slot">
                 <div class="spacePicker" style="display:none;" id="spacePicker">
                   <input
                     id="spaceSearch"
@@ -741,25 +1144,28 @@
                   >
                 </label>
 
-                <span class="pill" id="spaceChosenPill" style="display:none;" title="Выбранное место для привязки или ревизии"></span>
                 <span class="pill" id="spaceIdState" style="display:none;" title="Текущий ID выбранного места">ID: —</span>
-                <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Режим разметки</span>
               </div>
 
               <div class="toolbar-group toolbar-group--utility">
-                <span class="pill" id="scaleLabel" title="Текущий масштаб карты">Масштаб: 100%</span>
+                <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
               </div>
             @else
               <div class="toolbar-group toolbar-group--utility">
-                <span class="pill" id="scaleLabel" title="Текущий масштаб карты">Масштаб: 100%</span>
+                <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
               </div>
             @endif
           </div>
 
+          <div class="toolbar-row toolbar-row--edit-hint" id="editHintRow" aria-hidden="true">
+            <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить</span>
+          </div>
+
           @if ($canEdit)
-            <div class="toolbar-row" id="reviewToolbarRow">
-              <div class="toolbar-group">
-                <button id="reviewNotFound" type="button" style="display:none;" title="Отметить, что выбранное место не найдено на карте" aria-label="Отметить, что выбранное место не найдено на карте">Не найдено на карте</button>
+            <div class="toolbar-row toolbar-row--review-status" id="reviewToolbarRow">
+              <div class="toolbar-group toolbar-group--review-status-group">
+                <span class="pill" id="reviewNavStatus">Места не загружены</span>
+                <button id="reviewNotFound" type="button" style="display:none;" hidden title="Отметить, что выбранное место не найдено на карте" aria-label="Отметить, что выбранное место не найдено на карте">Не найдено на карте</button>
                 <div class="review-progress" id="reviewProgress" aria-live="polite" title="Прогресс ревизии по местам">
                   <div class="review-progress__track">
                     <div class="review-progress__fill" id="reviewProgressFill"></div>
@@ -927,7 +1333,13 @@
         const toolPolyBtn = document.getElementById('toolPoly');
         const scenarioMapBtn = document.getElementById('scenarioMap');
         const scenarioReviewBtn = document.getElementById('scenarioReview');
+        const layerGroup = layerDebtBtn?.closest('.toolbar-group') || null;
         const reviewToolbarRow = document.getElementById('reviewToolbarRow');
+        const reviewNavRow = document.getElementById('reviewNavRow');
+        const reviewNavPrevBtn = document.getElementById('reviewNavPrev');
+        const reviewNavNextPendingBtn = document.getElementById('reviewNavNextPending');
+        const reviewNavNextBtn = document.getElementById('reviewNavNext');
+        const reviewNavStatus = document.getElementById('reviewNavStatus');
         const reviewNotFoundBtn = document.getElementById('reviewNotFound');
         const mapLoadProgress = document.getElementById('mapLoadProgress');
         const mapLoadProgressFill = document.getElementById('mapLoadProgressFill');
@@ -939,11 +1351,15 @@
         const reviewSummary = document.getElementById('reviewSummary');
 
         const spacePicker = document.getElementById('spacePicker');
+        const searchSlotGroup = spacePicker?.closest('.toolbar-group') || null;
         const spaceSearchInput = document.getElementById('spaceSearch');
         const spaceDropdown = document.getElementById('spaceDropdown');
         const spaceChosenPill = document.getElementById('spaceChosenPill');
+        const spaceIdState = document.getElementById('spaceIdState');
+        const utilityGroup = scaleLabel?.closest('.toolbar-group') || null;
 
         const editHint = document.getElementById('editHint');
+        const editHintRow = document.getElementById('editHintRow');
 
         const LS_KEY_CHOSEN = 'mp.marketMap.market_' + String(MARKET_ID) + '.chosenSpace';
         const LS_KEY_LAYER = 'mp.marketMap.market_' + String(MARKET_ID) + '.layer';
@@ -954,6 +1370,10 @@
         let reviewProgressState = INITIAL_REVIEW_PROGRESS || {};
         let currentLayer = 'debt';
         let redrawShapesRef = null;
+        let reviewNavItems = [];
+        let updateReviewNavUi = () => {};
+        let syncReviewNavFromShapes = () => {};
+        let navigateReview = async () => {};
         let searchResults = [];
         let searchIndex = -1;
         let searchTimer = null;
@@ -982,6 +1402,20 @@
           return new Promise((resolve) => {
             requestAnimationFrame(() => resolve());
           });
+        }
+
+        function syncEditToggleUi() {
+          if (!toggleEditBtn) {
+            return;
+          }
+
+          const nextActionText = 'Редактирование';
+          const nextActionHint = isEditMode ? 'Выключить редактирование разметки карты' : 'Включить редактирование разметки карты';
+
+          toggleEditBtn.textContent = nextActionText;
+          toggleEditBtn.title = nextActionHint;
+          toggleEditBtn.setAttribute('aria-label', nextActionHint);
+          toggleEditBtn.classList.toggle('is-active', !!isEditMode);
         }
 
         function syncLayerButtonHelp() {
@@ -1376,7 +1810,7 @@
         }
 
         function isSelectionToolbarVisible() {
-          return isReviewMode() || isEditMode;
+          return true;
         }
 
         function updateReviewProgress(nextProgress = null) {
@@ -1431,8 +1865,16 @@
             mapEditGroup.style.display = reviewMode ? 'none' : 'inline-flex';
           }
 
+          if (reviewNavRow) {
+            reviewNavRow.style.display = reviewMode ? 'inline-flex' : 'none';
+          }
+
           if (reviewToolbarRow) {
-            reviewToolbarRow.style.display = 'flex';
+            reviewToolbarRow.style.display = reviewMode ? 'flex' : 'none';
+          }
+
+          if (searchSlotGroup) {
+            searchSlotGroup.style.display = isSelectionToolbarVisible() ? 'inline-flex' : 'none';
           }
 
           if (spacePicker) {
@@ -1440,10 +1882,25 @@
           }
 
           if (reviewNotFoundBtn) {
-            reviewNotFoundBtn.style.display = reviewMode ? 'inline-flex' : 'none';
+            reviewNotFoundBtn.style.display = 'none';
             reviewNotFoundBtn.disabled = !chosenSpace;
           }
 
+          if (utilityGroup) {
+            utilityGroup.style.display = 'none';
+          }
+
+          if (scaleLabel) {
+            scaleLabel.style.display = 'none';
+          }
+
+          if (spaceIdState) {
+            spaceIdState.style.display = 'none';
+          }
+
+          if (editHintRow) {
+            editHintRow.style.display = isEditMode && !reviewMode ? 'flex' : 'none';
+          }
           if (editHint) {
             editHint.style.display = isEditMode && !reviewMode ? 'inline-flex' : 'none';
           }
@@ -1453,6 +1910,7 @@
           }
 
           updateChosenPill();
+          updateReviewNavUi();
           updateReviewProgress();
         }
 
@@ -1468,20 +1926,34 @@
 
         function updateChosenPill() {
           if (!spaceChosenPill) return;
-          if (!chosenSpace || !isSelectionToolbarVisible()) {
-            spaceChosenPill.style.display = 'none';
-            spaceChosenPill.innerHTML = '';
+
+          if (!chosenSpace) {
+            spaceChosenPill.style.display = 'inline-flex';
+            spaceChosenPill.innerHTML =
+              '<span class="hero-chosen__label">Выбрано:</span>' +
+              '<div class="hero-chosen__body">' +
+                '<div class="hero-chosen__empty">Выберите место на карте</div>' +
+              '</div>';
             return;
           }
-          const label = formatSpaceLabel(chosenSpace);
-          const tenant = chosenSpace.tenantName ? (' • арендатор ' + chosenSpace.tenantName) : ' • арендатор —';
-          const review = chosenSpace.reviewStatusLabel ? (' / ' + chosenSpace.reviewStatusLabel) : '';
+
+          const numberLabel = String(chosenSpace.number || chosenSpace.code || '—').trim() || '—';
+          const tenantLabel = String(chosenSpace.tenantName || '—').trim() || '—';
+
           spaceChosenPill.style.display = 'inline-flex';
           spaceChosenPill.innerHTML =
-            'Выбрано: ' + escapeHtml(label) + ' (ID ' + escapeHtml(String(chosenSpace.id)) + ')' +
-            escapeHtml(tenant) +
-            escapeHtml(review) +
-            ' <button type="button" class="spacePillButton" data-action="clear-chosen" aria-label="Сбросить">×</button>';
+            '<span class="hero-chosen__label">Выбрано:</span>' +
+            '<div class="hero-chosen__body">' +
+              '<div class="hero-chosen__line">' +
+                '<span class="hero-chosen__prefix">Место №</span>' +
+                '<span class="hero-chosen__value">' + escapeHtml(numberLabel) + '</span>' +
+              '</div>' +
+              '<div class="hero-chosen__meta">' +
+                '<span class="hero-chosen__meta-label">Арендатор:</span>' +
+                '<span class="hero-chosen__tenant">' + escapeHtml(tenantLabel) + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<button type="button" class="spacePillButton" data-action="clear-chosen" aria-label="Сбросить">×</button>';
         }
 
         function saveChosenSpaceToLS() {
@@ -1513,6 +1985,7 @@
           } : null;
           chosenSpace = next;
           updateChosenPill();
+          updateReviewNavUi();
           saveChosenSpaceToLS();
           if (spaceSearchInput && next) {
             spaceSearchInput.value = '';
@@ -1705,6 +2178,152 @@
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
 
+          function buildReviewNavItemsFromShapes() {
+            const seen = new Set();
+            const items = [];
+
+            for (const shape of Array.isArray(shapes) ? shapes : []) {
+              const marketSpaceId = Number(shape?.market_space_id || shape?.space_id || 0);
+              if (!Number.isFinite(marketSpaceId) || marketSpaceId <= 0) continue;
+
+              const bbox = resolveShapeBbox(shape);
+              if (!bbox) continue;
+
+              if (seen.has(marketSpaceId)) continue;
+              seen.add(marketSpaceId);
+
+              const normalized = normalizeChosenSpace({
+                id: marketSpaceId,
+                number: shape?.space_number || '',
+                code: shape?.space_code || '',
+                tenantName: shape?.space_tenant_name || shape?.tenant_name || null,
+                review_status: shape?.space_review_status || '',
+                review_status_label: shape?.space_review_status_label || '',
+              });
+
+              if (!normalized) continue;
+
+              items.push({
+                ...normalized,
+                shapeId: Number(shape?.id || 0) || null,
+                bbox,
+              });
+            }
+
+            return items;
+          }
+
+          function getReviewCurrentIndex() {
+            if (!chosenSpace || !reviewNavItems.length) return -1;
+            return reviewNavItems.findIndex((item) => Number(item.id) === Number(chosenSpace.id));
+          }
+
+          function findNextPendingIndex(currentIndex) {
+            if (!reviewNavItems.length) return -1;
+
+            const total = reviewNavItems.length;
+            const start = currentIndex >= 0 ? currentIndex + 1 : 0;
+
+            for (let step = 0; step < total; step++) {
+              const index = (start + step) % total;
+              const item = reviewNavItems[index];
+              if (!String(item?.reviewStatus || '').trim()) {
+                return index;
+              }
+            }
+
+            return -1;
+          }
+
+          updateReviewNavUi = function () {
+            const total = reviewNavItems.length;
+            const currentIndex = getReviewCurrentIndex();
+
+            if (reviewNavStatus) {
+              if (!total) {
+                reviewNavStatus.textContent = 'Места не загружены';
+              } else if (currentIndex >= 0) {
+                reviewNavStatus.textContent = 'Место ' + String(currentIndex + 1) + ' из ' + String(total);
+              } else {
+                reviewNavStatus.textContent = 'Место — из ' + String(total);
+              }
+            }
+
+            if (reviewNavPrevBtn) {
+              reviewNavPrevBtn.disabled = !total || currentIndex <= 0;
+            }
+
+            if (reviewNavNextBtn) {
+              reviewNavNextBtn.disabled = !total || (currentIndex >= total - 1 && currentIndex !== -1);
+            }
+
+            if (reviewNavNextPendingBtn) {
+              reviewNavNextPendingBtn.disabled = findNextPendingIndex(currentIndex) === -1;
+            }
+          };
+
+          syncReviewNavFromShapes = function () {
+            reviewNavItems = buildReviewNavItemsFromShapes();
+            updateReviewNavUi();
+          };
+
+          navigateReview = async function (kind) {
+            if (!reviewNavItems.length) {
+              updateReviewNavUi();
+              return;
+            }
+
+            const currentIndex = getReviewCurrentIndex();
+            let targetIndex = -1;
+
+            if (kind === 'prev') {
+              if (currentIndex > 0) targetIndex = currentIndex - 1;
+            } else if (kind === 'next') {
+              if (currentIndex === -1) {
+                targetIndex = 0;
+              } else if (currentIndex < reviewNavItems.length - 1) {
+                targetIndex = currentIndex + 1;
+              }
+            } else if (kind === 'next-pending') {
+              targetIndex = findNextPendingIndex(currentIndex);
+            }
+
+            if (targetIndex < 0 || targetIndex >= reviewNavItems.length) {
+              updateReviewNavUi();
+              return;
+            }
+
+            const target = reviewNavItems[targetIndex];
+            setChosenSpace(target, { announce: false });
+            await refreshChosenSpaceFromServer();
+            updateReviewNavUi();
+
+            if (!target?.bbox) return;
+
+            await centerOnBbox(target.bbox, { zoomFactor: 1.2 });
+            await nextUiFrame();
+            await nextUiFrame();
+
+            if (!currentViewport || !canvas || !overlay) return;
+
+            const centerX = (target.bbox.x1 + target.bbox.x2) / 2;
+            const centerY = (target.bbox.y1 + target.bbox.y2) / 2;
+            const viewportPoint = currentViewport.convertToViewportPoint(centerX, centerY);
+            if (!Array.isArray(viewportPoint)) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const clientX = rect.left + Number(viewportPoint[0]);
+            const clientY = rect.top + Number(viewportPoint[1]);
+
+            overlay.dispatchEvent(new MouseEvent('click', {
+              bubbles: true,
+              cancelable: true,
+              view: window,
+              clientX,
+              clientY,
+            }));
+          };
+
           function normalizeBbox(raw) {
             if (!raw) return null;
             const x1 = Number(raw.x1 ?? raw.bbox_x1 ?? raw.bboxX1);
@@ -1845,9 +2464,9 @@
           function setTool(next) {
             tool = next;
 
-            if (toolSelectBtn) toolSelectBtn.style.background = (tool === 'select') ? 'rgba(120,120,120,.18)' : 'rgba(120,120,120,.10)';
-            if (toolRectBtn) toolRectBtn.style.background = (tool === 'rect') ? 'rgba(120,120,120,.18)' : 'rgba(120,120,120,.10)';
-            if (toolPolyBtn) toolPolyBtn.style.background = (tool === 'poly') ? 'rgba(120,120,120,.18)' : 'rgba(120,120,120,.10)';
+            if (toolSelectBtn) toolSelectBtn.classList.toggle('is-active', tool === 'select');
+            if (toolRectBtn) toolRectBtn.classList.toggle('is-active', tool === 'rect');
+            if (toolPolyBtn) toolPolyBtn.classList.toggle('is-active', tool === 'poly');
 
             if (tool !== 'select') {
               setSelectedShape(null);
@@ -1886,10 +2505,12 @@
               const json = await res.json();
 
               shapes = (json && json.ok === true && Array.isArray(json.items)) ? json.items : [];
+              syncReviewNavFromShapes();
               updateRentLegend(shapes);
             } catch (e) {
               console.error(e);
               shapes = [];
+              syncReviewNavFromShapes();
               updateRentLegend([]);
             }
           }
@@ -2493,6 +3114,16 @@
               reviewStatus: item.review_status || '',
               reviewStatusLabel: item.review_status_label || '',
             }, { announce: false });
+
+            const reviewIndex = reviewNavItems.findIndex((entry) => Number(entry.id) === reviewedSpaceId);
+            if (reviewIndex >= 0) {
+              reviewNavItems[reviewIndex] = {
+                ...reviewNavItems[reviewIndex],
+                reviewStatus: item.review_status || '',
+                reviewStatusLabel: item.review_status_label || '',
+              };
+              updateReviewNavUi();
+            }
           }
 
 
@@ -2711,7 +3342,7 @@
               editMode = !editMode;
               isEditMode = editMode;
 
-              toggleEditBtn.textContent = editMode ? 'Разметка: вкл' : 'Разметка: выкл';
+              syncEditToggleUi();
 
               if (toolSelectBtn) toolSelectBtn.style.display = editMode ? 'inline-flex' : 'none';
               if (toolRectBtn) toolRectBtn.style.display = editMode ? 'inline-flex' : 'none';
@@ -2732,6 +3363,9 @@
               }
             });
           }
+
+          syncEditToggleUi();
+          updateScenarioUi();
 
           if (CAN_EDIT && toolSelectBtn) toolSelectBtn.addEventListener('click', () => { if (editMode) setTool('select'); });
           if (CAN_EDIT && toolRectBtn) toolRectBtn.addEventListener('click', () => { if (editMode) setTool('rect'); });
@@ -2781,6 +3415,27 @@
               closeSpaceDropdown();
               toast('Выбор сброшен');
             }
+          });
+
+          reviewNavPrevBtn?.addEventListener('click', () => {
+            navigateReview('prev').catch((err) => {
+              console.error(err);
+              toast('Не удалось перейти к предыдущему месту');
+            });
+          });
+
+          reviewNavNextPendingBtn?.addEventListener('click', () => {
+            navigateReview('next-pending').catch((err) => {
+              console.error(err);
+              toast('Не удалось перейти к следующему непройденному месту');
+            });
+          });
+
+          reviewNavNextBtn?.addEventListener('click', () => {
+            navigateReview('next').catch((err) => {
+              console.error(err);
+              toast('Не удалось перейти к следующему месту');
+            });
           });
 
           document.addEventListener('click', (e) => {
@@ -3080,6 +3735,21 @@
               lastHit = hit;
               const space = hit.space || null;
               const tenant = hit.tenant || null;
+
+              const nextChosen = (space && Number(hit.market_space_id || space.id || 0) > 0)
+                ? normalizeChosenSpace({
+                    id: Number(hit.market_space_id || space.id || 0),
+                    number: space.number || hit.space_number || '',
+                    code: space.code || hit.space_code || '',
+                    tenantName: tenant?.name || hit.space_tenant_name || null,
+                    review_status: space.review_status || hit.space_review_status || '',
+                    review_status_label: space.review_status_label || hit.space_review_status_label || '',
+                  })
+                : null;
+
+              if (nextChosen) {
+                setChosenSpace(nextChosen, { announce: false });
+              }
 
               if (CAN_EDIT && editMode && tool === 'select' && hit.shape_id) {
                 setSelectedShape(hit.shape_id);
@@ -3401,13 +4071,35 @@
         }
 
         async function tryImport(pdfUrl, workerUrl) {
+          let blobUrl = null;
+
           try {
-            const mod = await import(pdfUrl);
+            const response = await fetch(pdfUrl, {
+              method: 'GET',
+              credentials: 'same-origin',
+            });
+
+            if (!response.ok) {
+              return null;
+            }
+
+            const source = await response.text();
+            if (!source) {
+              return null;
+            }
+
+            blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+
+            const mod = await import(blobUrl);
             const pdfjsLib = mod?.default ?? mod;
             if (!pdfjsLib || typeof pdfjsLib.getDocument !== 'function') return null;
             return { pdfjsLib, workerSrc: workerUrl };
           } catch {
             return null;
+          } finally {
+            if (blobUrl) {
+              URL.revokeObjectURL(blobUrl);
+            }
           }
         }
 

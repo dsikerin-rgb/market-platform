@@ -21,7 +21,6 @@ use Filament\Forms;
 use App\Filament\Resources\BaseResource;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Schemas\Components\Livewire;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -116,6 +115,7 @@ class TenantResource extends BaseResource
                                     ->required(fn () => (bool) $user && $user->isSuperAdmin())
                                     ->searchable()
                                     ->preload()
+                                    ->disabled(fn (?Tenant $record): bool => filled($record?->id))
                                     ->default(function () use ($user) {
                                         if (! $user) {
                                             return null;
@@ -128,7 +128,11 @@ class TenantResource extends BaseResource
                                         return $user->market_id;
                                     })
                                     ->visible(fn () => (bool) $user && $user->isSuperAdmin())
-                                    ->dehydrated(fn () => (bool) $user && $user->isSuperAdmin()),
+                                    ->dehydrated(fn () => (bool) $user && $user->isSuperAdmin())
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip(fn (?Tenant $record): string => filled($record?->id)
+                                        ? 'Для существующего арендатора рынок не меняется из карточки, чтобы не разорвать связи с местами, договорами, начислениями и кабинетом.'
+                                        : 'Рынок задаётся при создании арендатора и определяет его рабочий контур в системе.'),
 
                                 Forms\Components\Hidden::make('market_id')
                                     ->default(function () use ($user) {
@@ -177,7 +181,8 @@ class TenantResource extends BaseResource
                                     ->native(false)
                                     ->placeholder('Автоматически (из 1С)')
                                     ->nullable()
-                                    ->helperText('По умолчанию — автоматически из 1С (последний снимок в contract_debts). Выберите вручную только как временный override.')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('По умолчанию статус берётся автоматически из 1С по последнему снимку в contract_debts. Ручной выбор используйте только как временный override.')
                                     ->columnSpan(1),
 
                             ])
@@ -312,7 +317,12 @@ class TenantResource extends BaseResource
                             ->schema([
                                 Forms\Components\TextInput::make('inn')
                                     ->label('ИНН')
-                                    ->maxLength(20),
+                                    ->maxLength(20)
+                                    ->disabled(fn (?Tenant $record): bool => filled($record?->id))
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip(fn (?Tenant $record): string => filled($record?->id)
+                                        ? 'Для существующего арендатора ИНН не меняется из карточки. Он участвует в матчинге с 1С и импортах.'
+                                        : 'ИНН используется для идентификации арендатора и fallback-сопоставления с 1С.'),
 
                                 Forms\Components\TextInput::make('ogrn')
                                     ->label('ОГРН / ОГРНИП')
@@ -348,15 +358,6 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(2),
 
-                        Section::make('Доступ в кабинет')
-                            ->description('Основной доступ арендатора и сотрудники теперь на вкладке «Контакты», чтобы вся рабочая коммуникация была в одном месте.')
-                            ->schema([
-                                Forms\Components\Placeholder::make('cabinet_contacts_redirect')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(new HtmlString('<div style="font-size:13px;line-height:1.5;color:#475569;">Перейдите на вкладку <strong>«Контакты»</strong>, чтобы управлять основным доступом арендатора и сотрудниками по торговым местам.</div>'))
-                                    ->columnSpanFull(),
-                            ]),
                     ]),
 
                 Tab::make('Обращения')
@@ -860,18 +861,7 @@ class TenantResource extends BaseResource
                     }
                 });
             });
-
-        $bulkDelete = null;
-        if (class_exists(DeleteBulkAction::class)) {
-            $bulkDelete = DeleteBulkAction::make()
-                ->label('Массовое удаление')
-                ->requiresConfirmation();
-        }
-
         $actions = [$bulkEdit];
-        if ($bulkDelete) {
-            $actions[] = $bulkDelete;
-        }
 
         if (class_exists(BulkActionGroup::class)) {
             return [BulkActionGroup::make($actions)];
@@ -3092,16 +3082,61 @@ class TenantResource extends BaseResource
 
     public static function canDelete($record): bool
     {
+        if (! $record instanceof Tenant) {
+            return false;
+        }
+
         $user = Filament::auth()->user();
 
         if (! $user) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
+        if (! $user->isSuperAdmin()) {
+            return false;
+        }
+
+        return ! static::hasDeleteDependencies($record);
+    }
+
+    private static function hasDeleteDependencies(Tenant $record): bool
+    {
+        $recordId = (int) $record->getKey();
+
+        if ($recordId <= 0) {
             return true;
         }
 
-        return $user->market_id && $record->market_id === $user->market_id;
+        $tableChecks = [
+            ['market_spaces', 'tenant_id'],
+            ['tenant_contracts', 'tenant_id'],
+            ['tenant_requests', 'tenant_id'],
+            ['tenant_accruals', 'tenant_id'],
+            ['tenant_documents', 'tenant_id'],
+            ['tenant_showcases', 'tenant_id'],
+            ['tenant_space_showcases', 'tenant_id'],
+            ['tickets', 'tenant_id'],
+            ['tenant_reviews', 'tenant_id'],
+            ['marketplace_products', 'tenant_id'],
+            ['marketplace_chats', 'tenant_id'],
+            ['users', 'tenant_id'],
+            ['cabinet_impersonation_audits', 'tenant_id'],
+            ['contract_debts', 'tenant_id'],
+            ['market_space_tenant_bindings', 'tenant_id'],
+            ['market_space_tenant_histories', 'old_tenant_id'],
+            ['market_space_tenant_histories', 'new_tenant_id'],
+        ];
+
+        foreach ($tableChecks as [$table, $column]) {
+            if (! DbSchema::hasTable($table) || ! static::hasColumn($table, $column)) {
+                continue;
+            }
+
+            if (DB::table($table)->where($column, $recordId)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

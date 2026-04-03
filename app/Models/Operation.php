@@ -201,6 +201,12 @@ class Operation extends Model
                     : null;
             }
 
+            if (array_key_exists('status', $payload)) {
+                $space->status = is_string($payload['status']) && trim($payload['status']) !== ''
+                    ? trim($payload['status'])
+                    : $space->status;
+            }
+
             if (array_key_exists('is_active', $payload)) {
                 if ($payload['is_active'] !== null) {
                     $space->is_active = (bool) $payload['is_active'];
