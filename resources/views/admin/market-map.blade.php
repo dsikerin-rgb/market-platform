@@ -4184,13 +4184,13 @@
         }
 
         async function loadPdfJs() {
-          const localJs = await tryLoadScript('/vendor/pdfjs/pdf.min.js', '/vendor/pdfjs/pdf.worker.min.js');
+          const localJs = await tryLoadScript('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
           if (localJs) return localJs;
 
-          const localMjs = await tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.js');
+          const localMjs = await tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
           if (localMjs) return localMjs;
 
-          const localMjsBlob = await tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.js');
+          const localMjsBlob = await tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
           if (localMjsBlob) return localMjsBlob;
 
           const cdn = await tryImportDirect(
