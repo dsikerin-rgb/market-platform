@@ -276,11 +276,108 @@
       justify-content: space-between;
       flex-wrap: wrap;
     }
+    .toolbar-row.toolbar-row--top {
+      display: flex;
+      justify-content: flex-end;
+      padding: 4px 0 8px 0;
+    }
     .toolbar-row.toolbar-row--hero {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
-      align-items: start;
+      display: flex !important;
+      align-items: center;
+      justify-content: space-between;
       gap: 12px;
+      flex-wrap: nowrap !important;
+      white-space: nowrap !important;
+      overflow-x: auto !important;
+    }
+    .toolbar-group--hero-left {
+      display: flex !important;
+      flex-direction: column;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
+      gap: 8px;
+      flex-wrap: nowrap !important;
+      white-space: nowrap !important;
+      flex: 0 0 auto;
+      min-width: 0;
+      margin-left: 0 !important;
+      padding-left: 0 !important;
+    }
+    .toolbar-group--hero-top {
+      display: flex !important;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: nowrap !important;
+      white-space: nowrap !important;
+      margin-left: 0 !important;
+    }
+    .toolbar-group--hero-top > .toolbar-group {
+      flex-shrink: 0 !important;
+      flex-wrap: nowrap !important;
+      display: flex !important;
+      align-items: center;
+    }
+    .toolbar-group--hero-bottom {
+      display: flex !important;
+      align-items: center;
+      justify-content: flex-start !important;
+      flex-wrap: nowrap !important;
+      white-space: nowrap !important;
+      margin-left: 0 !important;
+      padding-left: 0 !important;
+    }
+    .toolbar-group--hero-bottom .spacePicker {
+      display: flex !important;
+      align-items: center;
+      position: relative;
+      background: rgba(255,255,255,0.8);
+      border: 1px solid rgba(147, 197, 253, 0.38);
+      border-radius: 11px;
+      padding: 0 10px;
+      height: 34px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.72), 0 4px 10px rgba(147, 197, 253, 0.12);
+      margin-left: 0 !important;
+    }
+    .toolbar-group--hero-bottom .spacePickerIcon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(15, 23, 42, 0.5);
+      pointer-events: none;
+    }
+    .toolbar-group--hero-bottom .spaceSearchInput {
+      width: 240px !important;
+      padding: 6px 12px 6px 30px !important;
+      border: none !important;
+      background: transparent !important;
+      color: inherit !important;
+      font-size: 13px !important;
+      white-space: nowrap !important;
+      outline: none;
+    }
+    .toolbar-group--hero-left .toolbar-group--accent {
+      flex-wrap: nowrap !important;
+    }
+    .toolbar-group--hero-left .toolbar-group--accent button,
+    .toolbar-group--hero-left .toolbar-group--accent .pill {
+      white-space: nowrap !important;
+    }
+    .toolbar-group--hero-center {
+      display: flex;
+      align-items: center;
+      flex: 1 1 auto;
+      justify-content: center;
+      min-width: 0;
+    }
+    .toolbar-group.toolbar-group--hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: nowrap !important;
+      white-space: nowrap !important;
+      flex: 0 0 auto;
+      justify-content: flex-end;
     }
     .toolbar-row.toolbar-row--controls {
       align-items: center;
@@ -467,42 +564,6 @@
       font-size: 11px;
       font-weight: 600;
       white-space: nowrap;
-    }
-    .hero-heading {
-      display: grid;
-      gap: 1px;
-      min-width: 0;
-      justify-self: start;
-      padding: 4px 0 0 8px;
-    }
-    .hero-kicker {
-      display: none;
-      align-items: center;
-      gap: 8px;
-      color: rgba(15, 23, 42, 0.58);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-    }
-    .hero-title-line {
-      display: flex;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-    .hero-title {
-      margin: 0;
-      color: #0f172a;
-      font-size: 20px;
-      line-height: 1.02;
-      font-weight: 700;
-    }
-    .toolbar-group.toolbar-group--hero-actions {
-      margin-left: 0;
-      justify-self: end;
-      justify-content: flex-end;
-      align-self: flex-start;
     }
     .toolbar-group.toolbar-group--hero-actions-main {
       display: flex;
@@ -715,12 +776,12 @@
     }
     @media (max-width: 1120px) {
       .toolbar-row.toolbar-row--hero {
-        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
       }
-      .hero-heading,
-      .toolbar-group.toolbar-group--hero-center,
-      .toolbar-group.toolbar-group--hero-actions {
-        justify-self: stretch;
+      .toolbar-group--hero-left {
+        flex-wrap: wrap;
+        justify-content: center;
       }
       .toolbar-group.toolbar-group--hero-actions {
         justify-content: space-between;
@@ -795,9 +856,6 @@
     @media (max-width: 900px) {
       .toolbar {
         padding: 12px 12px 10px;
-      }
-      .hero-title {
-        font-size: 20px;
       }
       .toolbar-group.toolbar-group--utility {
         margin-left: 0;
@@ -1053,13 +1111,48 @@
       <div class="viewer">
         <div class="toolbar">
           <div class="toolbar-row toolbar-row--hero">
-            <div class="hero-heading">
-              <span class="hero-kicker">Карта</span>
-              <div class="hero-title-line">
-                <h1 class="hero-title">{{ $marketName }}</h1>
+            <!-- Left: Zoom, Controls & Search -->
+            <div class="toolbar-group toolbar-group--hero-left">
+              <div class="toolbar-group--hero-top">
+                <div class="toolbar-group toolbar-group--accent">
+                  <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
+                  <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
+                  <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
+                  @if ($canOpenPdf)
+                    <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
+                  @endif
+                </div>
+
+                @if ($canEdit)
+                  <div class="toolbar-group toolbar-group--accent toolbar-group--control-segmented">
+                    <button id="toggleEdit" type="button" title="Включить редактирование разметки карты" aria-label="Включить редактирование разметки карты">Редактирование</button>
+                    <button id="toolSelect" type="button" style="display:none;" title="Редактировать существующую разметку" aria-label="Редактировать существующую разметку">Редактировать</button>
+                    <button id="toolRect" type="button" style="display:none;" title="Нарисовать прямоугольную область" aria-label="Нарисовать прямоугольную область">Прямоугольник</button>
+                    <button id="toolPoly" type="button" style="display:none;" title="Нарисовать полигон по точкам" aria-label="Нарисовать полигон по точкам">Полигон</button>
+                  </div>
+                @endif
               </div>
+
+              @if ($canEdit)
+                <div class="toolbar-group--hero-bottom">
+                  <div class="spacePicker" id="spacePicker">
+                    <svg class="spacePickerIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input
+                      id="spaceSearch"
+                      type="text"
+                      class="spaceSearchInput"
+                      placeholder="Номер / код / арендатор / ID"
+                      autocomplete="off"
+                      title="Поиск места по номеру, коду, арендатору или ID"
+                      aria-label="Поиск места по номеру, коду, арендатору или ID"
+                    >
+                    <div id="spaceDropdown" class="spaceDropdown" role="listbox" aria-label="Результаты поиска"></div>
+                  </div>
+                </div>
+              @endif
             </div>
 
+            <!-- Center: Selection Info -->
             @if ($canEdit)
               <div class="toolbar-group toolbar-group--hero-center toolbar-group--hero-review">
                 <span class="pill hero-chosen" id="spaceChosenPill" title="Выбранное место для ревизии"></span>
@@ -1073,6 +1166,7 @@
               <div class="toolbar-group toolbar-group--hero-center"></div>
             @endif
 
+            <!-- Right: Mode & Layers -->
             <div class="toolbar-group toolbar-group--hero-actions">
               <div class="toolbar-group toolbar-group--hero-actions-main">
                 <div class="toolbar-group toolbar-group--hero-stack">
@@ -1110,41 +1204,8 @@
           </div>
 
           <div class="toolbar-row toolbar-row--controls">
-            <div class="toolbar-group toolbar-group--controls-left">
-              <div class="toolbar-group toolbar-group--accent">
-                <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
-                <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
-                <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
-                @if ($canOpenPdf)
-                  <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
-                @endif
-              </div>
-
-              @if ($canEdit)
-                <div class="toolbar-group toolbar-group--accent toolbar-group--control-segmented">
-                  <button id="toggleEdit" type="button" title="Включить редактирование разметки карты" aria-label="Включить редактирование разметки карты">Включить редактирование</button>
-                  <button id="toolSelect" type="button" style="display:none;" title="Редактировать существующую разметку" aria-label="Редактировать существующую разметку">Редактировать</button>
-                  <button id="toolRect" type="button" style="display:none;" title="Нарисовать прямоугольную область" aria-label="Нарисовать прямоугольную область">Прямоугольник</button>
-                  <button id="toolPoly" type="button" style="display:none;" title="Нарисовать полигон по точкам" aria-label="Нарисовать полигон по точкам">Полигон</button>
-                </div>
-              @endif
-            </div>
-
             @if ($canEdit)
               <div class="toolbar-group toolbar-group--search-slot">
-                <div class="spacePicker" style="display:none;" id="spacePicker">
-                  <input
-                    id="spaceSearch"
-                    type="text"
-                    class="spaceSearchInput"
-                    placeholder="Номер / код / арендатор / ID"
-                    autocomplete="off"
-                    title="Поиск места по номеру, коду, арендатору или ID"
-                    aria-label="Поиск места по номеру, коду, арендатору или ID"
-                  >
-                  <div id="spaceDropdown" class="spaceDropdown" role="listbox" aria-label="Результаты поиска"></div>
-                </div>
-
                 <label class="pill" id="spaceNumberPill" style="display:none;" title="Введите номер места для поиска ID">
                   Номер:
                   <input
