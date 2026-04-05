@@ -31,6 +31,7 @@ class MergeTenantsCommand extends Command
     private array $referenceTargets = [
         ['table' => 'market_spaces', 'column' => 'tenant_id'],
         ['table' => 'tenant_contracts', 'column' => 'tenant_id'],
+        ['table' => 'tenant_contract_mappings', 'column' => 'tenant_id'],
         ['table' => 'tenant_requests', 'column' => 'tenant_id'],
         ['table' => 'tenant_accruals', 'column' => 'tenant_id'],
         ['table' => 'tenant_documents', 'column' => 'tenant_id'],
@@ -47,6 +48,7 @@ class MergeTenantsCommand extends Command
     private array $postMergeReferenceTargets = [
         ['table' => 'market_spaces', 'column' => 'tenant_id'],
         ['table' => 'tenant_contracts', 'column' => 'tenant_id'],
+        ['table' => 'tenant_contract_mappings', 'column' => 'tenant_id'],
         ['table' => 'tenant_requests', 'column' => 'tenant_id'],
         ['table' => 'tenant_accruals', 'column' => 'tenant_id'],
         ['table' => 'tenant_documents', 'column' => 'tenant_id'],
