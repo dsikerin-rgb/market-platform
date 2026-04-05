@@ -1062,47 +1062,24 @@ class TenantResource extends BaseResource
 
     public static function applyCriticalDebtFilter(Builder $query, ?int $marketId = null): Builder
     {
-        $tenantTable = $query->getModel()->getTable();
-        $hasManualDebtStatus = static::hasColumn($tenantTable, 'debt_status');
-        $autoExistsQuery = static::buildAutoCriticalDebtExistsQuery($tenantTable, $marketId);
+        $ids = static::getRedTenantIds();
 
-        if (! $hasManualDebtStatus && $autoExistsQuery === null) {
-            return $query->whereRaw('1 = 0');
+        if (empty($ids)) {
+            return $query->whereRaw('0=1');
         }
 
-        return $query->where(function (Builder $scope) use ($tenantTable, $hasManualDebtStatus, $autoExistsQuery): void {
-            if ($hasManualDebtStatus) {
-                $scope->where("{$tenantTable}.debt_status", 'red');
-            }
-
-            if ($autoExistsQuery !== null) {
-                $scope->orWhere(function (Builder $autoScope) use ($tenantTable, $hasManualDebtStatus, $autoExistsQuery): void {
-                    if ($hasManualDebtStatus) {
-                        $autoScope->whereNull("{$tenantTable}.debt_status");
-                    }
-
-                    $autoScope->whereExists($autoExistsQuery);
-                });
-            }
-        });
+        return $query->whereKey($ids);
     }
 
     public static function excludeCriticalDebtFilter(Builder $query, ?int $marketId = null): Builder
     {
-        $tenantTable = $query->getModel()->getTable();
-        $hasManualDebtStatus = static::hasColumn($tenantTable, 'debt_status');
-        $autoExistsQuery = static::buildAutoCriticalDebtExistsQuery($tenantTable, $marketId);
+        $ids = static::getRedTenantIds();
 
-        return $query->where(function (Builder $scope) use ($tenantTable, $hasManualDebtStatus, $autoExistsQuery): void {
-            if ($hasManualDebtStatus) {
-                $scope->where("{$tenantTable}.debt_status", '!=', 'red')
-                    ->orWhereNull("{$tenantTable}.debt_status");
-            }
+        if (empty($ids)) {
+            return $query;
+        }
 
-            if ($autoExistsQuery !== null) {
-                $scope->whereNotExists($autoExistsQuery);
-            }
-        });
+        return $query->whereKeyNot($ids);
     }
 
     public static function countActiveTenantsWithCriticalDebt(int $marketId): int
@@ -1111,11 +1088,17 @@ class TenantResource extends BaseResource
             return 0;
         }
 
-        $query = Tenant::query()
-            ->where('market_id', $marketId)
-            ->where('is_active', true);
+        $ids = static::getRedTenantIds();
 
-        return (int) static::applyCriticalDebtFilter($query, $marketId)->count();
+        if (empty($ids)) {
+            return 0;
+        }
+
+        return Tenant::query()
+            ->where('market_id', $marketId)
+            ->where('is_active', true)
+            ->whereKey($ids)
+            ->count();
     }
 
     private static function buildAutoCriticalDebtExistsQuery(string $tenantTable, ?int $marketId = null): ?\Illuminate\Database\Query\Builder
@@ -3138,5 +3121,33 @@ class TenantResource extends BaseResource
         }
 
         return false;
+    }
+
+    /**
+     * Получить ID арендаторов со статусом 'red'.
+     * Использует DebtStatusResolver для вычисления статуса, идентичного тому, что отображается в интерфейсе арендатора.
+     * Результат кешируется в рамках одного HTTP-запроса для избежания повторных вычислений.
+     */
+    private static function getRedTenantIds(): array
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $resolver = app(DebtStatusResolver::class);
+        $ids = [];
+        $model = static::getModel();
+
+        $model::query()->chunk(200, function ($tenants) use ($resolver, &$ids) {
+            foreach ($tenants as $tenant) {
+                $resolved = $resolver->resolve($tenant);
+                if (($resolved['status'] ?? null) === 'red') {
+                    $ids[] = $tenant->id;
+                }
+            }
+        });
+
+        return $cached = $ids;
     }
 }
