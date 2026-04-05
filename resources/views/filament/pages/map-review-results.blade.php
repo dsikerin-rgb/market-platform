@@ -192,6 +192,116 @@
                     padding-inline: 0.7rem;
                 }
             }
+
+            /* AI-разбор колонка */
+            .mrr-ai {
+                max-width: 320px;
+            }
+
+            .mrr-ai__summary {
+                font-size: 0.8125rem;
+                color: #475569;
+                line-height: 1.45;
+                margin-bottom: 0.4rem;
+            }
+
+            .dark .mrr-ai__summary {
+                color: #cbd5e1;
+            }
+
+            .mrr-ai__reason {
+                font-size: 0.75rem;
+                color: #64748b;
+                line-height: 1.4;
+                margin-bottom: 0.35rem;
+            }
+
+            .dark .mrr-ai__reason {
+                color: #94a3b8;
+            }
+
+            .mrr-ai__reason strong {
+                color: #334155;
+            }
+
+            .dark .mrr-ai__reason strong {
+                color: #e2e8f0;
+            }
+
+            .mrr-ai__step {
+                font-size: 0.75rem;
+                color: #64748b;
+                line-height: 1.4;
+                margin-bottom: 0.4rem;
+            }
+
+            .dark .mrr-ai__step {
+                color: #94a3b8;
+            }
+
+            .mrr-ai__step strong {
+                color: #334155;
+            }
+
+            .dark .mrr-ai__step strong {
+                color: #e2e8f0;
+            }
+
+            .mrr-ai__badges {
+                display: flex;
+                gap: 0.35rem;
+                flex-wrap: wrap;
+            }
+
+            .mrr-ai__badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.2rem;
+                border-radius: 999px;
+                padding: 0.2rem 0.5rem;
+                font-size: 0.6875rem;
+                font-weight: 600;
+                line-height: 1;
+            }
+
+            .mrr-ai__badge--risk {
+                background: rgba(234, 88, 12, 0.1);
+                color: #ea580c;
+            }
+
+            .dark .mrr-ai__badge--risk {
+                background: rgba(234, 88, 12, 0.15);
+                color: #fb923c;
+            }
+
+            .mrr-ai__badge--conf {
+                background: rgba(37, 99, 235, 0.1);
+                color: #2563eb;
+            }
+
+            .dark .mrr-ai__badge--conf {
+                background: rgba(37, 99, 235, 0.15);
+                color: #93c5fd;
+            }
+
+            .mrr-ai--empty {
+                font-size: 0.75rem;
+                color: #94a3b8;
+                font-style: italic;
+            }
+
+            .mrr-ai--skipped {
+                font-size: 0.6875rem;
+                color: #94a3b8;
+            }
+
+            .mrr-ai__placeholder {
+                color: #94a3b8;
+            }
+
+            .dark .mrr-ai__placeholder {
+                color: #64748b;
+            }
         </style>
     @endonce
 
@@ -323,10 +433,14 @@
                                                 <th>Последнее решение</th>
                                                 <th>Кем и когда</th>
                                                 <th>Переходы</th>
+                                                <th>AI-разбор</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach ($needsAttention as $row)
+                                                @php
+                                                    $ai = $aiSummaries[$row['space_id']] ?? null;
+                                                @endphp
                                                 <tr>
                                                     <td>
                                                         <div class="mrr-place">
@@ -365,6 +479,39 @@
                                                             <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                         </div>
+                                                    </td>
+                                                    <td>
+                                                        @php
+                                                            $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
+                                                            $ai = $hasAiKey ? $aiSummaries[$row['space_id']] : null;
+                                                        @endphp
+                                                        @if ($ai && filled($ai['summary']))
+                                                            <div class="mrr-ai">
+                                                                <div class="mrr-ai__summary">{{ $ai['summary'] }}</div>
+                                                                <div class="mrr-ai__reason">
+                                                                    <strong>Почему:</strong> {{ $ai['why_flagged'] }}
+                                                                </div>
+                                                                <div class="mrr-ai__step">
+                                                                    <strong>Действие:</strong> {{ $ai['recommended_next_step'] }}
+                                                                </div>
+                                                                <div class="mrr-ai__badges">
+                                                                    <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">
+                                                                        ⚠ {{ $ai['risk_score'] }}/10
+                                                                    </span>
+                                                                    <span class="mrr-ai__badge mrr-ai__badge--conf" title="Уверенность {{ round($ai['confidence'] * 100) }}%">
+                                                                        🎯 {{ round($ai['confidence'] * 100) }}%
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        @elseif ($hasAiKey)
+                                                            <div class="mrr-ai mrr-ai--empty">
+                                                                <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
+                                                            </div>
+                                                        @else
+                                                            <div class="mrr-ai mrr-ai--skipped">
+                                                                <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
+                                                            </div>
+                                                        @endif
                                                     </td>
                                                 </tr>
                                             @endforeach

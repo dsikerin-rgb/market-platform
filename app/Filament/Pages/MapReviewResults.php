@@ -6,9 +6,11 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Models\Market;
+use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\MapReviewResultsService;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Cache;
 
 class MapReviewResults extends Page
 {
@@ -49,6 +51,9 @@ class MapReviewResults extends Page
         $needsAttention = $marketId ? $service->needsAttention($marketId, 50) : [];
         $appliedChanges = $marketId ? $service->appliedChanges($marketId, 50) : [];
 
+        // AI summaries для спорных мест (read-only, кешировано через shared service)
+        $aiSummaries = $marketId ? $this->buildAiSummaries($marketId, $needsAttention) : [];
+
         return [
             'market' => $market,
             'marketName' => $market?->name ?? 'Выберите рынок',
@@ -75,7 +80,62 @@ class MapReviewResults extends Page
                 ],
                 $appliedChanges
             ),
+            'aiSummaries' => $aiSummaries,
         ];
+    }
+
+    /**
+     * Собрать AI reviews для первых 5 спорных мест.
+     * Делегирует shared AiReviewService (policy, validation, caching).
+     *
+     * Quick cooldown: только на connectivity_fail (5 мин).
+     * Policy/semantic fail НЕ включает cooldown — это единичный случай.
+     *
+     * @param  list<array{space_id:int}>  $needsAttention
+     * @return array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>
+     */
+    protected function buildAiSummaries(int $marketId, array $needsAttention): array
+    {
+        if (empty($needsAttention)) {
+            return [];
+        }
+
+        $reviewService = app(AiReviewService::class);
+
+        if (! $reviewService->isAvailable()) {
+            return [];
+        }
+
+        // Quick cooldown: только если GigaChat недоступен на уровне сети/auth
+        $downKey = 'gigachat_connectivity_down';
+        if (Cache::get($downKey)) {
+            return [];
+        }
+
+        // Лимит: максимум 5 первых кейсов за один рендер страницы
+        $limited = array_slice($needsAttention, 0, AiReviewService::MAX_REVIEWS_PER_BATCH);
+
+        $results = [];
+        $connectivityFails = 0;
+
+        foreach ($limited as $row) {
+            $spaceId = (int) $row['space_id'];
+            $fetchResult = $reviewService->getReviewForSpace($spaceId, $marketId);
+            $results[$spaceId] = $fetchResult['review'];
+
+            // connectivity_fail → candidate для cooldown
+            if ($fetchResult['error_type'] === 'connectivity') {
+                $connectivityFails++;
+            }
+            // policy_fail → НЕ включаем в cooldown (единичный случай)
+        }
+
+        // Если все запросы — connectivity_fail — блокируем на 5 мин
+        if ($connectivityFails === count($limited)) {
+            Cache::put($downKey, true, now()->addMinutes(5));
+        }
+
+        return $results;
     }
 
     protected static function selectedMarketIdFromSession(): ?int

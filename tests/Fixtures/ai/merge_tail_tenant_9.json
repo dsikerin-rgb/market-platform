@@ -1,0 +1,96 @@
+{
+  "case_type": "tenant_merge_tail",
+  "case_id": "merge_tail_tenant_9_into_106",
+  "description": "Старый tenant деактивирован и слит в canonical, но активные spaces и contracts остались на старом tenant.",
+
+  "old_tenant": {
+    "id": 9,
+    "name": "Солиев М. ИП",
+    "short_name": null,
+    "display_name": "Солиев М. ИП",
+    "inn": "222222222222",
+    "type": "sole_trader",
+    "is_active": false,
+    "external_id": "TEST_9",
+    "notes": "merged_into_tenant_id=106 at 2026-03-03 15:50:19\nmerged_from_tenant_id=297 at 2026-03-03 16:28:44"
+  },
+
+  "canonical_tenant": {
+    "id": 106,
+    "name": "Солиев ИП",
+    "short_name": "Солиев ИП",
+    "display_name": "Солиев ИП",
+    "inn": "111111111111",
+    "type": "sole_trader",
+    "is_active": true,
+    "external_id": "TEST_106",
+    "notes": "merged_from_tenant_id=9 at 2026-03-03 15:50:19\nmerged_from_tenant_id=116 at 2026-03-03 15:50:19"
+  },
+
+  "merge_metadata": {
+    "merged_at": "2026-03-03 15:50:19",
+    "merge_command": "tenants:merge 9 106",
+    "merged_into_tenant_id": 106
+  },
+
+  "orphan_spaces": [
+    {
+      "id": 42,
+      "number": "П/5",
+      "display_name": "Продукты",
+      "status": "occupied",
+      "is_active": true,
+      "area_sqm": "15.00",
+      "tenant_id": 9
+    },
+    {
+      "id": 87,
+      "number": "ОС12/3",
+      "display_name": "Овощи",
+      "status": "occupied",
+      "is_active": true,
+      "area_sqm": "22.50",
+      "tenant_id": 9
+    }
+  ],
+
+  "orphan_contracts": [
+    {
+      "id": 88,
+      "external_id": "CT-099",
+      "contract_number": "АР-2025/099",
+      "market_space_id": 42,
+      "is_active": true,
+      "starts_at": "2025-01-01",
+      "ends_at": "2026-12-31",
+      "monthly_rent": "15000.00",
+      "tenant_id": 9
+    },
+    {
+      "id": 91,
+      "external_id": "CT-101",
+      "contract_number": "АР-2025/101",
+      "market_space_id": 87,
+      "is_active": true,
+      "starts_at": "2025-06-01",
+      "ends_at": "2027-05-31",
+      "monthly_rent": "22000.00",
+      "tenant_id": 9
+    }
+  ],
+
+  "canonical_state": {
+    "spaces_count": 4,
+    "contracts_count": 2,
+    "spaces": [
+      {"id": 138, "number": "Ф13-18", "status": "occupied", "is_active": true},
+      {"id": 150, "number": "ОС15/2", "status": "occupied", "is_active": true}
+    ]
+  },
+
+  "financial_summary": {
+    "orphan_contracts_total_monthly_rent": "37000.00",
+    "orphan_contracts_with_1c_external_ids": true,
+    "potential_debt_reassignment_risk": "high"
+  }
+}
