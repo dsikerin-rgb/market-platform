@@ -1,4 +1,5 @@
 <?php
+# tests/Unit/Services/Debt/DebtStatusResolverTest.php
 
 namespace Tests\Unit\Services\Debt;
 
@@ -419,5 +420,61 @@ class DebtStatusResolverTest extends TestCase
         // После очистки кеша результат должен быть тем же (данные не менялись)
         $this->assertEquals($result1['status'], $result3['status']);
         $this->assertEquals($result1['label'], $result3['label']);
+    }
+
+    /**
+     * Old positive-debt snapshot should not be "rejuvenated" by a newer
+     * snapshot of a different contract. Both contracts have debt, but the
+     * older one dictates the due date — matching space-level behavior.
+     * The result must stay overdue (orange/red), not fall back to pending.
+     */
+    public function test_auto_status_oldest_positive_debt_not_rejuvenated_by_newer_contract(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Multi-contract tenant',
+            'external_id' => 'test-multi-001',
+            'debt_status' => null,
+        ]);
+
+        // Old contract: debt from 50 days ago
+        $hashOld = sha1($tenant->external_id . '|contract-old|2026-02|10000|0|10000');
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-old',
+            'period' => '2026-02',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => Carbon::now()->subDays(50),
+            'created_at' => Carbon::now()->subDays(50),
+            'hash' => $hashOld,
+        ]);
+
+        // New contract: debt from 2 days ago (would "rejuvenate" with max())
+        $hashNew = sha1($tenant->external_id . '|contract-new|2026-04|5000|0|5000');
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-new',
+            'period' => '2026-04',
+            'accrued_amount' => 5000,
+            'paid_amount' => 0,
+            'debt_amount' => 5000,
+            'calculated_at' => Carbon::now()->subDays(2),
+            'created_at' => Carbon::now()->subDays(2),
+            'hash' => $hashNew,
+        ]);
+
+        $result = $this->resolver->resolve($tenant);
+
+        // 50 days + 5 grace = 45 days overdue → orange (< 90 red_after_days)
+        // With max() it would be: 2 days + 5 grace = pending (WRONG)
+        // With min() it correctly uses the oldest date → overdue
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('orange', $result['status']);
     }
 }
