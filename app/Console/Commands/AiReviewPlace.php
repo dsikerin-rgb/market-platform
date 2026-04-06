@@ -172,8 +172,8 @@ class AiReviewPlace extends Command
     {
         $status = $pack['map_review_status'];
         $statusLabels = [
-            'changed_tenant' => 'сменился арендатор',
-            'conflict'       => 'конфликт occupacy',
+            'changed_tenant' => 'на месте другой арендатор',
+            'conflict'       => 'конфликт по занятости',
             'not_found'      => 'место не найдено на карте',
         ];
 
