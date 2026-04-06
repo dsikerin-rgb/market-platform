@@ -484,15 +484,32 @@
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
                                                             $ai = $hasAiKey ? $aiSummaries[$row['space_id']] : null;
+
+                                                            // Функция для замены технических кодов на русский текст
+                                                            $humanize = function(?string $text): string {
+                                                                if (blank($text)) return '';
+                                                                $map = [
+                                                                    'occupancy_conflict'     => 'конфликт по занятости',
+                                                                    'tenant_changed_on_site' => 'на месте другой арендатор',
+                                                                    'shape_not_found'        => 'место не найдено на карте',
+                                                                    'mark_space_free'        => 'отметить место как свободное',
+                                                                    'mark_space_service'     => 'отметить место как служебное',
+                                                                    'fix_space_identity'     => 'уточнить номер и название',
+                                                                    'bind_shape_to_space'    => 'привязать фигуру к месту',
+                                                                    'unbind_shape_from_space'=> 'отвязать фигуру',
+                                                                ];
+                                                                $text = str_replace(array_keys($map), array_values($map), $text);
+                                                                return $text;
+                                                            };
                                                         @endphp
                                                         @if ($ai && filled($ai['summary']))
                                                             <div class="mrr-ai">
-                                                                <div class="mrr-ai__summary">{{ $ai['summary'] }}</div>
+                                                                <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
                                                                 <div class="mrr-ai__reason">
-                                                                    <strong>Почему:</strong> {{ $ai['why_flagged'] }}
+                                                                    <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
                                                                 </div>
                                                                 <div class="mrr-ai__step">
-                                                                    <strong>Действие:</strong> {{ $ai['recommended_next_step'] }}
+                                                                    <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
                                                                 </div>
                                                                 <div class="mrr-ai__badges">
                                                                     <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">

@@ -179,8 +179,8 @@ class AiReviewService
     {
         $status = $pack['map_review_status'];
         $statusLabels = [
-            'changed_tenant' => 'сменился арендатор',
-            'conflict'       => 'конфликт occupacy',
+            'changed_tenant' => 'на месте другой арендатор',
+            'conflict'       => 'конфликт по занятости',
             'not_found'      => 'место не найдено на карте',
         ];
         $label = $statusLabels[$status] ?? $status;
@@ -196,32 +196,39 @@ class AiReviewService
             fn ($d) => $d['is_observed']
         );
 
+        // Русские лейблы для решений
         $observedList = count($observedDecisions) > 0
-            ? implode(', ', array_map(fn ($d) => "{$d['decision']}", $observedDecisions))
+            ? implode(', ', array_map(fn ($d) => $d['label'], $observedDecisions))
             : 'нет observed-решений';
 
         $appliedList = count($appliedDecisions) > 0
-            ? implode(', ', array_map(fn ($d) => "{$d['decision']}", $appliedDecisions))
+            ? implode(', ', array_map(fn ($d) => $d['label'], $appliedDecisions))
             : 'нет applied-решений';
 
         $expected = self::STATUS_TO_RECOMMENDATION[$status] ?? null;
+        $expectedLabels = [
+            'occupancy_conflict'     => 'конфликт по занятости',
+            'tenant_changed_on_site' => 'на месте другой арендатор',
+            'shape_not_found'        => 'место не найдено на карте',
+        ];
+        $expectedLabel = $expectedLabels[$expected] ?? $expected;
 
         $safetyRules = $isDisputed
             ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (статус «{$label}» — СПОРНЫЙ):\n"
-              . "1. ЗАПРЕЩЕНО рекомендовать applied-действия: {$appliedList}\n"
-              . "2. РАЗРЕШЕНО рекомендовать только observed-решения: {$observedList}\n"
-              . "3. Для статуса '{$status}' ТРЕБУЕТСЯ рекомендовать: '{$expected}'\n"
+              . "1. ЗАПРЕЩЕНО рекомендовать действия, изменяющие данные: {$appliedList}\n"
+              . "2. РАЗРЕШЕНО рекомендовать только наблюдательные решения: {$observedList}\n"
+              . "3. Для этого статуса ТРЕБУЕТСЯ рекомендовать: '{$expectedLabel}'\n"
               . "4. risk_score должен быть >= 7 для спорных статусов.\n"
               . "5. Если данных недостаточно — добавь «требуется ручной review управляющим рынком»."
             : "\n\nПРАВИЛА БЕЗОПАСНОСТИ:\n"
-              . "- Не предлагай applied-действия без достаточных данных.\n"
+              . "- Не предлагай действия, изменяющие данные, без достаточных данных.\n"
               . "- risk_score >= 7, если есть риски потери данных.";
 
         return <<<PROMPT
 Ты — ассистент-аналитик для системы управления торговым рынком.
 Анализируй данные спорного торгового места и дай краткую структурированную рекомендацию.
 
-Статус: {$status} ({$label}).
+Статус: {$label}.
 Ты НЕ принимаешь решения — только рекомендуешь действие.{$safetyRules}
 
 Ответ — СТРОГО JSON:
@@ -232,6 +239,21 @@ class AiReviewService
   "risk_score": 5,
   "confidence": 0.75
 }
+
+ВАЖНО:
+- Используй только русский язык.
+- НЕ используй технические кодов (occupancy_conflict, changed_tenant и т.д.).
+- Вместо кодов решений пиши понятные фразы:
+  * occupancy_conflict → «отметить конфликт по занятости»
+  * tenant_changed_on_site → «зафиксировать, что на месте другой арендатор»
+  * shape_not_found → «отметить, что место не найдено на карте»
+  * mark_space_free → «отметить место как свободное»
+  * mark_space_service → «отметить место как служебное»
+  * fix_space_identity → «уточнить номер и название места»
+  * bind_shape_to_space → «привязать фигуру на карте к месту»
+  * unbind_shape_from_space → «отвязать фигуру от места»
+- Формулируй recommended_next_step как человеческую инструкцию, например:
+  «Отметить конфликт по занятости и передать на ручную проверку управляющему рынком.»
 
 risk_score: 1-10, где 10 = только ручной review.
 confidence: 0.0-1.0.
