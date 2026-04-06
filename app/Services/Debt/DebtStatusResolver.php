@@ -1,4 +1,5 @@
 <?php
+# app/Services/Debt/DebtStatusResolver.php
 
 namespace App\Services\Debt;
 
@@ -651,6 +652,7 @@ class DebtStatusResolver
         }
 
         $hasTenantExternalId = Schema::hasColumn('contract_debts', 'tenant_external_id');
+        $hasContractExternalId = Schema::hasColumn('contract_debts', 'contract_external_id');
         $hasMarketId = Schema::hasColumn('contract_debts', 'market_id');
         $hasCalculatedAt = Schema::hasColumn('contract_debts', 'calculated_at');
         $hasCreatedAt = Schema::hasColumn('contract_debts', 'created_at');
@@ -664,8 +666,21 @@ class DebtStatusResolver
 
         $query = ContractDebt::currentStateQuery((int) $tenant->market_id);
 
-        // Поиск по external_id или one_c_uid
-        if ($hasTenantExternalId) {
+        // Prioritise the same contour as space-level:
+        // 1) Get contract external_ids from tenant_contracts for this tenant
+        // 2) If found, query contract_debts by contract_external_id
+        // 3) Fallback to tenant_external_id / one_c_uid only if no contracts found
+        $contractExternalIds = DB::table('tenant_contracts')
+            ->where('tenant_id', $tenant->id)
+            ->whereNotNull('external_id')
+            ->pluck('external_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($hasContractExternalId && $contractExternalIds !== []) {
+            $query->whereIn('cd.contract_external_id', $contractExternalIds);
+        } elseif ($hasTenantExternalId) {
             $externalId = trim($tenant->external_id ?? '');
             $oneCUid = trim($tenant->one_c_uid ?? '');
 
