@@ -42,6 +42,16 @@ class AiReviewService
     ];
 
     /**
+     * Пользовательские русские формулировки тех же решений.
+     * validateSafety() принимает и технический код, и русский лейбл.
+     */
+    private const EXPECTED_RECOMMENDATION_LABELS = [
+        'occupancy_conflict'     => 'конфликт по занятости',
+        'tenant_changed_on_site' => 'другой арендатор',
+        'shape_not_found'        => 'не найдено на карте',
+    ];
+
+    /**
      * Максимум AI-запросов за один вызов (UI protection).
      */
     public const MAX_REVIEWS_PER_BATCH = 5;
@@ -374,10 +384,18 @@ PROMPT;
         }
 
         $expected = self::STATUS_TO_RECOMMENDATION[$mapReviewStatus] ?? null;
-        if ($expected && ! str_contains($recommendation, $expected)) {
+        $expectedLabel = self::EXPECTED_RECOMMENDATION_LABELS[$expected] ?? null;
+
+        // Принимается либо технический код, либо русская пользовательская формулировка
+        $matchesExpected = $expected !== null && (
+            str_contains($recommendation, $expected)
+            || ($expectedLabel !== null && str_contains($recommendation, $expectedLabel))
+        );
+
+        if ($expected && ! $matchesExpected) {
             return [
                 'ok'    => false,
-                'error' => "Semantic mismatch: expected '{$expected}' for status '{$mapReviewStatus}', got '{$parsed['recommended_next_step']}'",
+                'error' => "Semantic mismatch: expected '{$expected}' or '{$expectedLabel}' for status '{$mapReviewStatus}', got '{$parsed['recommended_next_step']}'",
             ];
         }
 

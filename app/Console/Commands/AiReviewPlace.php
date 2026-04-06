@@ -356,6 +356,16 @@ PROMPT;
     ];
 
     /**
+     * Пользовательские русские формулировки тех же решений.
+     * validateSafety() принимает и технический код, и русский лейбл.
+     */
+    private const EXPECTED_RECOMMENDATION_LABELS = [
+        'occupancy_conflict'     => 'конфликт по занятости',
+        'tenant_changed_on_site' => 'другой арендатор',
+        'shape_not_found'        => 'не найдено на карте',
+    ];
+
+    /**
      * Парсит JSON из ответа GigaChat и валидирует схему.
      *
      * @return array{ok: bool, data: array|null, error: string|null}
@@ -455,10 +465,18 @@ PROMPT;
         }
 
         // 2. Семантическое соответствие: каждый статус должен рекомендовать своё решение
+        // Принимается либо технический код, либо русская пользовательская формулировка
         $expected = self::STATUS_TO_RECOMMENDATION[$mapReviewStatus] ?? null;
-        $expectedLabel = self::RECOMMENDATION_LABELS[$expected] ?? $expected;
+        $expectedHumanLabel = self::EXPECTED_RECOMMENDATION_LABELS[$expected] ?? null;
+        $expectedVerboseLabel = self::RECOMMENDATION_LABELS[$expected] ?? null;
 
-        if ($expected && ! str_contains($recommendation, $expected)) {
+        $matchesExpected = $expected !== null && (
+            str_contains($recommendation, $expected)
+            || ($expectedHumanLabel !== null && str_contains($recommendation, $expectedHumanLabel))
+            || ($expectedVerboseLabel !== null && str_contains($recommendation, strtolower($expectedVerboseLabel)))
+        );
+
+        if ($expected && ! $matchesExpected) {
             // Определяем, что модель вернула вместо ожидаемого
             $got = 'unknown';
             foreach (self::STATUS_TO_RECOMMENDATION as $status => $rec) {
@@ -474,7 +492,7 @@ PROMPT;
             return [
                 'ok'    => false,
                 'data'  => null,
-                'error' => "Semantic mismatch: для статуса '{$mapReviewStatus}' ожидается '{$expected}' ({$expectedLabel}), но модель вернула {$got}.",
+                'error' => "Semantic mismatch: для статуса '{$mapReviewStatus}' ожидается '{$expected}' или '{$expectedHumanLabel}', но модель вернула {$got}.",
             ];
         }
 
