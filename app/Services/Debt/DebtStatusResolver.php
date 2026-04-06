@@ -814,6 +814,9 @@ class DebtStatusResolver
     /**
      * Рассчитать дату оплаты (due date).
      *
+     * For positive debt rows, use the OLDEST date to avoid "rejuvenating"
+     * old debt with newer snapshots — same principle as calculateDueDateFromRows().
+     *
      * @param array $data
      * @param int $graceDays
      * @return Carbon|null
@@ -822,58 +825,65 @@ class DebtStatusResolver
     {
         $rows = $data['rows'];
 
-        // 1. Если есть due_date - используем его
+        // Filter to positive debt rows (same as calculateDueDateFromRows)
+        $positiveRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+
+        $agingRows = $positiveRows->isNotEmpty() ? $positiveRows : $rows;
+
+        // 1. Если есть due_date - используем самый ранний
         if ($data['has_due_date']) {
-            $latestDueDate = null;
-            foreach ($rows as $row) {
+            $earliestDueDate = null;
+            foreach ($agingRows as $row) {
                 if (!empty($row->due_date)) {
                     try {
                         $due = Carbon::parse($row->due_date);
-                        if ($latestDueDate === null || $due->gt($latestDueDate)) {
-                            $latestDueDate = $due;
+                        if ($earliestDueDate === null || $due->lt($earliestDueDate)) {
+                            $earliestDueDate = $due;
                         }
                     } catch (\Throwable) {
                         continue;
                     }
                 }
             }
-            if ($latestDueDate !== null) {
-                return $latestDueDate;
+            if ($earliestDueDate !== null) {
+                return $earliestDueDate;
             }
         }
 
-        // 2. Если есть calculated_at - используем его + grace_days
+        // 2. Если есть calculated_at - используем самый ранний + grace_days
         if ($data['has_calculated_at']) {
-            $latestCalculatedAt = $rows->max('calculated_at');
-            if ($latestCalculatedAt) {
+            $oldestCalculatedAt = $agingRows->min('calculated_at');
+            if ($oldestCalculatedAt) {
                 try {
-                    return Carbon::parse($latestCalculatedAt)->addDays($graceDays);
+                    return Carbon::parse($oldestCalculatedAt)->addDays($graceDays);
                 } catch (\Throwable) {
                     // continue
                 }
             }
         }
 
-        // 3. Если есть created_at - используем его + grace_days
+        // 3. Если есть created_at - используем самый ранний + grace_days
         if ($data['has_created_at']) {
-            $latestCreatedAt = $rows->max('created_at');
-            if ($latestCreatedAt) {
+            $oldestCreatedAt = $agingRows->min('created_at');
+            if ($oldestCreatedAt) {
                 try {
-                    return Carbon::parse($latestCreatedAt)->addDays($graceDays);
+                    return Carbon::parse($oldestCreatedAt)->addDays($graceDays);
                 } catch (\Throwable) {
                     // continue
                 }
             }
         }
 
-        // 4. Если есть period - используем его + grace_days
+        // 4. Если есть period - используем самый ранний + grace_days
         if ($data['has_period']) {
-            $latestPeriod = $rows->max('period');
-            if ($latestPeriod) {
+            $oldestPeriod = $agingRows->min('period');
+            if ($oldestPeriod) {
                 try {
                     // period в формате YYYY-MM
-                    if (preg_match('/^\d{4}-\d{2}/', $latestPeriod) === 1) {
-                        return Carbon::createFromFormat('Y-m-d', substr($latestPeriod, 0, 7) . '-01')
+                    if (preg_match('/^\d{4}-\d{2}/', $oldestPeriod) === 1) {
+                        return Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01')
                             ->startOfMonth()
                             ->addDays($graceDays);
                     }
