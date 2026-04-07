@@ -2292,6 +2292,15 @@ html:not([data-admin-overrides="0"]) .fi-resource-staff-edit-page .fi-header .fi
     grid-column: 1 / -1 !important;
   }
 }
+
+/* ====================================================================== */
+/* === Tablet/Mobile: narrower sidebar                                    === */
+/* ====================================================================== */
+@media (max-width: 1279px){
+  html:not([data-admin-overrides="0"]){
+    --sidebar-width: 17rem;
+  }
+}
 </style>
 
 {{-- Tabs stay in the relation-manager container and are positioned via CSS only. --}}
