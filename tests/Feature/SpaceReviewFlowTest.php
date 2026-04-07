@@ -86,6 +86,15 @@ class SpaceReviewFlowTest extends TestCase
         return $user;
     }
 
+    private function withCsrfToken(): self
+    {
+        $token = csrf_token();
+
+        return $this->withHeaders([
+            'X-CSRF-TOKEN' => $token,
+        ]);
+    }
+
     public function test_applied_space_review_binds_shape_and_preserves_tenant_id(): void
     {
         $market = $this->createMarket();
@@ -173,7 +182,7 @@ class SpaceReviewFlowTest extends TestCase
 
         $space = $this->createSpace($market);
 
-        $response = $this->postJson('/admin/market-map/review-decision', [
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
             'decision' => 'matched',
             'market_space_id' => $space->id,
         ]);
@@ -201,7 +210,7 @@ class SpaceReviewFlowTest extends TestCase
 
         $space = $this->createSpace($market);
 
-        $response = $this->postJson('/admin/market-map/review-decision', [
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
             'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
             'market_space_id' => $space->id,
             'observed_tenant_name' => 'Observed tenant',
