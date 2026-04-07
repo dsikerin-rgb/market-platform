@@ -1,0 +1,29 @@
+{
+  "name": "Управление рынком",
+  "short_name": "Админка",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "display": "standalone",
+  "theme_color": "#d97706",
+  "background_color": "#f8fafc",
+  "icons": [
+    {
+      "src": "/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

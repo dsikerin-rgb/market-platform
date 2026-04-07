@@ -132,6 +132,10 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Amber,
             ])
 
+            // Favicon (нативный способ Filament).
+            // PNG поддерживается всеми современными браузерами.
+            ->favicon(url('favicon.png'))
+
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
 
             ->pages([
@@ -204,7 +208,10 @@ class AdminPanelProvider extends PanelProvider
             // ВНИМАНИЕ: view должен существовать, иначе будет 500.
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn () => view('filament.components.admin-overrides-css'),
+                fn (): HtmlString => new HtmlString(
+                    view('filament.components.pwa-meta')->render()
+                    . view('filament.components.admin-overrides-css')->render(),
+                ),
             )
 
             ->middleware([
