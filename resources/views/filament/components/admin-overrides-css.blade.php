@@ -2294,11 +2294,17 @@ html:not([data-admin-overrides="0"]) .fi-resource-staff-edit-page .fi-header .fi
 }
 
 /* ====================================================================== */
-/* === Tablet/Mobile: narrower sidebar                                    === */
+/* === Sidebar width: narrower on desktop, even narrower on tablet/mobile === */
 /* ====================================================================== */
+/* Desktop: 20rem → 16rem (−20%) */
+html:not([data-admin-overrides="0"]){
+  --sidebar-width: 16rem;
+}
+
+/* Tablet/Mobile: 16rem → 14.4rem (−10% от desktop) */
 @media (max-width: 1279px){
   html:not([data-admin-overrides="0"]){
-    --sidebar-width: 17rem;
+    --sidebar-width: 14.4rem;
   }
 }
 </style>
