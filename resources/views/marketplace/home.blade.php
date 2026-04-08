@@ -291,6 +291,151 @@
             background: #fff;
         }
 
+        .mp-store-card {
+            position: relative;
+            min-height: 190px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid #d6e6f8;
+            background:
+                radial-gradient(circle at top right, rgba(42, 172, 229, .12), transparent 34%),
+                linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 10px 24px rgba(18, 64, 112, .06);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            overflow: hidden;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .mp-store-card::after {
+            content: "";
+            position: absolute;
+            inset: 0 auto auto 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, #0a84d6, #32c2ef);
+            opacity: .88;
+        }
+
+        .mp-store-card:hover {
+            transform: translateY(-2px);
+            border-color: #b9d8f6;
+            box-shadow: 0 16px 30px rgba(18, 64, 112, .12);
+        }
+
+        .mp-store-card:nth-child(3n + 2)::after {
+            background: linear-gradient(90deg, #19a863, #5fd39d);
+        }
+
+        .mp-store-card:nth-child(3n + 3)::after {
+            background: linear-gradient(90deg, #f59e0b, #ffd36a);
+        }
+
+        .mp-store-card__head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .mp-store-card__brand {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .mp-store-card__mark {
+            width: 42px;
+            height: 42px;
+            flex-shrink: 0;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #0f93dd, #0b79ce);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: -.03em;
+            box-shadow: 0 10px 18px rgba(11, 121, 206, .2);
+        }
+
+        .mp-store-card:nth-child(3n + 2) .mp-store-card__mark {
+            background: linear-gradient(180deg, #18ad66, #0f9354);
+            box-shadow: 0 10px 18px rgba(15, 147, 84, .18);
+        }
+
+        .mp-store-card:nth-child(3n + 3) .mp-store-card__mark {
+            background: linear-gradient(180deg, #f4a81d, #ec8b0d);
+            box-shadow: 0 10px 18px rgba(236, 139, 13, .18);
+        }
+
+        .mp-store-card__tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eef7ff;
+            border: 1px solid #d3e7fb;
+            color: #2d6295;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .mp-store-card__name {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.18;
+            letter-spacing: -.02em;
+            color: #102f59;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .mp-store-card__meta {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .mp-store-card__count {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: #f3f8ff;
+            border: 1px solid #d9e8f9;
+            color: #2f5b8a;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .mp-store-card__count strong {
+            color: #102f59;
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: -.02em;
+        }
+
+        .mp-store-card .mp-btn {
+            min-height: 40px;
+            padding-inline: 14px;
+            border-radius: 12px;
+            background: #fff;
+            border-color: #cfe1f5;
+        }
+
         @media (max-width: 980px) {
             .mp-hero-grid {
                 padding: 16px 16px 14px;
@@ -548,10 +693,21 @@
             <div class="mp-grid">
                 @foreach($topStores as $store)
                     @php($storeRouteKey = filled($store->slug ?? null) ? (string) $store->slug : (string) $store->id)
-                    <article style="background:var(--surface-soft);border:1px solid #d5e5f8;border-radius:14px;padding:14px;">
-                        <h3 style="margin:0 0 8px;font-size:20px;">{{ $store->short_name ?: $store->name }}</h3>
-                        <p class="mp-muted" style="margin:0 0 12px;">Товаров: {{ (int) ($store->active_products_count ?? 0) }}</p>
-                        <a class="mp-btn" href="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $storeRouteKey]) }}">Перейти в витрину</a>
+                    @php($storeName = $store->short_name ?: $store->name)
+                    @php($storeWords = preg_split('/\s+/u', trim((string) $storeName)) ?: [])
+                    @php($storeInitials = collect($storeWords)->filter()->take(2)->map(fn ($word) => mb_strtoupper(mb_substr($word, 0, 1)))->implode(''))
+                    <article class="mp-store-card">
+                        <div class="mp-store-card__head">
+                            <div class="mp-store-card__brand">
+                                <div class="mp-store-card__mark">{{ $storeInitials !== '' ? $storeInitials : 'МП' }}</div>
+                                <h3 class="mp-store-card__name">{{ $storeName }}</h3>
+                            </div>
+                            <div class="mp-store-card__tag">Витрина</div>
+                        </div>
+                        <div class="mp-store-card__meta">
+                            <div class="mp-store-card__count"><strong>{{ (int) ($store->active_products_count ?? 0) }}</strong> товаров</div>
+                            <a class="mp-btn" href="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $storeRouteKey]) }}">Перейти в витрину</a>
+                        </div>
                     </article>
                 @endforeach
             </div>
