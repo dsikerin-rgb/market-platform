@@ -801,14 +801,17 @@
       }
       /* Right: mode / layers, compact */
       .toolbar-group.toolbar-group--hero-actions {
+        width: 100% !important;
         justify-content: flex-end !important;
+        justify-self: end !important;
         grid-column: 3 !important;
       }
       .toolbar-group.toolbar-group--hero-actions-main {
-        width: auto !important;
+        width: 100% !important;
         justify-content: flex-end !important;
       }
       .toolbar-group.toolbar-group--hero-stack {
+        width: 100% !important;
         align-items: flex-end !important;
       }
       /* Center block: compact vertical layout */
