@@ -184,6 +184,14 @@ final class MarketplaceMediaStorage
             return self::serveFromDisk($fallbackDisk, $value);
         }
 
+        if (self::exists('s3', $value)) {
+            return self::serveFromDisk('s3', $value);
+        }
+
+        if ($response = self::serveFromLocalPublicStorage($value)) {
+            return $response;
+        }
+
         if (str_contains($value, '/previews/')) {
             foreach (self::originalPathCandidatesFromPreviewPath($value) as $originalPath) {
                 if (self::ensurePreview($originalPath) && self::exists($disk, $value)) {
@@ -199,6 +207,14 @@ final class MarketplaceMediaStorage
 
             if ($fallbackDisk !== null && $fallbackDisk !== $disk && self::exists($fallbackDisk, $originalPath)) {
                 return self::serveFromDisk($fallbackDisk, $originalPath);
+            }
+
+            if (self::exists('s3', $originalPath)) {
+                return self::serveFromDisk('s3', $originalPath);
+            }
+
+            if ($response = self::serveFromLocalPublicStorage($originalPath)) {
+                return $response;
             }
         }
 
@@ -420,6 +436,32 @@ final class MarketplaceMediaStorage
         }
 
         return Storage::disk($disk)->response($path, null, self::responseHeaders());
+    }
+
+    private static function serveFromLocalPublicStorage(string $path)
+    {
+        $absolutePath = self::localPublicStoragePath($path);
+
+        if ($absolutePath !== null) {
+            return response()->file($absolutePath, self::responseHeaders());
+        }
+
+        return null;
+    }
+
+    private static function localPublicStoragePath(string $path): ?string
+    {
+        $value = trim($path, "/ \t\n\r\0\x0B");
+        if ($value === '') {
+            return null;
+        }
+
+        $absolutePath = storage_path('app/public/' . ltrim($value, '/'));
+        if (! is_string($absolutePath) || $absolutePath === '' || ! is_file($absolutePath)) {
+            return null;
+        }
+
+        return $absolutePath;
     }
 
     private static function canTransform(UploadedFile $file): bool
