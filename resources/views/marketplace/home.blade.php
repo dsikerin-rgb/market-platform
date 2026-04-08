@@ -100,8 +100,10 @@
             color: #fff;
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
+            align-items: center;
+            justify-content: center;
             gap: 4px;
+            text-align: center;
             box-shadow: 0 6px 14px rgba(12, 62, 109, .10);
             transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
