@@ -259,6 +259,85 @@
             align-items: start;
         }
 
+        .mp-product-card {
+            background: #fff;
+            border: 1px solid #d9e6f7;
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mp-product-card__media {
+            display: block;
+            height: clamp(190px, 18vw, 248px);
+            background: #eef4fb;
+            border-bottom: 1px solid #d9e6f7;
+            overflow: hidden;
+        }
+
+        .mp-product-card__image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .mp-product-card__placeholder {
+            width: 100%;
+            height: 100%;
+            display: grid;
+            place-items: center;
+            color: #7f93b3;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: .01em;
+        }
+
+        .mp-product-card__body {
+            padding: 14px 14px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mp-product-card__title {
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: calc(1.35em * 2);
+        }
+
+        .mp-product-card__price {
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 1.1;
+            color: #10294c;
+            letter-spacing: -0.01em;
+        }
+
+        .mp-product-card__meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            color: #5f7392;
+            font-size: 12px;
+            line-height: 1.35;
+            min-width: 0;
+        }
+
+        .mp-product-card__meta span:first-child {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .mp-flash {
             padding: 12px 14px;
             border-radius: 12px;
@@ -383,10 +462,6 @@
             color: #8ca0bc;
             background: #f4f8fd;
             cursor: default;
-        }
-
-        @media (max-width: 1100px) {
-            .mp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
 
         @media (max-width: 820px) {
