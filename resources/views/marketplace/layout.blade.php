@@ -106,6 +106,73 @@
             color: #fff;
         }
 
+        .mp-public-actions > .mp-btn,
+        .mp-actions > .mp-btn.mp-btn-brand {
+            min-height: 46px;
+            padding: 0 16px;
+            border-radius: 15px;
+            gap: 10px;
+            font-size: 0;
+            font-weight: 700;
+            letter-spacing: -.01em;
+            justify-content: center;
+            box-shadow: 0 4px 14px rgba(17, 48, 91, .06);
+        }
+
+        .mp-public-actions > .mp-btn:hover,
+        .mp-actions > .mp-btn.mp-btn-brand:hover {
+            box-shadow: 0 10px 24px rgba(17, 48, 91, .12);
+        }
+
+        .mp-public-actions > .mp-btn {
+            border-color: #d2e1f2;
+            background: rgba(255, 255, 255, .92);
+            color: #183659;
+        }
+
+        .mp-actions > .mp-btn.mp-btn-brand {
+            background: linear-gradient(180deg, #1096df, #0b80cf);
+            border-color: rgba(11, 128, 207, .14);
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(14, 128, 203, .22);
+        }
+
+        .mp-actions > .mp-btn.mp-btn-brand:hover {
+            box-shadow: 0 12px 26px rgba(14, 128, 203, .28);
+        }
+
+        .mp-public-actions > .mp-btn::before,
+        .mp-actions > .mp-btn.mp-btn-brand::before {
+            content: "";
+            width: 18px;
+            height: 18px;
+            display: block;
+            flex-shrink: 0;
+            background: currentColor;
+            mask-repeat: no-repeat;
+            mask-position: center;
+            mask-size: contain;
+            -webkit-mask-repeat: no-repeat;
+            -webkit-mask-position: center;
+            -webkit-mask-size: contain;
+        }
+
+        .mp-public-actions > .mp-btn::before {
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M8 6.5 4.5 8v10L8 16.5m0-10L16 4l3.5 1.5v10L16 18l-8-1.5m8-12v12m-8-10v10' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M8 6.5 4.5 8v10L8 16.5m0-10L16 4l3.5 1.5v10L16 18l-8-1.5m8-12v12m-8-10v10' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        }
+
+        .mp-actions > .mp-btn.mp-btn-brand::before {
+            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 7a7 7 0 0 1 14 0' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 7a7 7 0 0 1 14 0' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        }
+
+        .mp-public-actions > .mp-btn span,
+        .mp-actions > .mp-btn.mp-btn-brand span {
+            font-size: 15px;
+            line-height: 1;
+        }
+
         .mp-icon-btn {
             width: 46px;
             height: 46px;
