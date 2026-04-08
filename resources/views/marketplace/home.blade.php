@@ -70,9 +70,11 @@
         }
 
         .mp-hero-meta {
-            display: grid;
-            gap: 10px;
-            width: min(100%, 430px);
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            width: min(100%, 680px);
             margin-top: 2px;
         }
 
@@ -92,15 +94,16 @@
         }
 
         .mp-hero-kpis {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 6px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
             margin-top: 0;
         }
 
         .mp-hero-stat {
-            min-width: 0;
-            padding: 6px 9px;
+            width: 74px;
+            aspect-ratio: 1 / 1;
+            padding: 6px;
             background: rgba(255,255,255,.14);
             border: 1px solid rgba(255,255,255,.28);
             border-radius: 12px;
@@ -125,11 +128,11 @@
             font-size: 10px;
             line-height: 1.2;
             opacity: .92;
-            white-space: nowrap;
+            white-space: normal;
         }
 
         .mp-hero-stat__value {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 900;
             line-height: 1;
             letter-spacing: -.03em;
@@ -323,11 +326,12 @@
             }
 
             .mp-hero-kpis {
-                gap: 6px;
+                gap: 8px;
             }
 
             .mp-hero-stat {
-                padding: 8px 9px;
+                width: 68px;
+                padding: 6px;
                 border-radius: 12px;
             }
 
