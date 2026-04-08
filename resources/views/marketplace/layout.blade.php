@@ -72,7 +72,6 @@
             flex-shrink: 0;
         }
 
-        .mp-public-actions,
         .mp-account-actions {
             display: flex;
             align-items: center;
@@ -106,7 +105,6 @@
             color: #fff;
         }
 
-        .mp-public-actions > .mp-btn,
         .mp-actions > .mp-btn.mp-btn-brand {
             min-height: 46px;
             padding: 0 16px;
@@ -119,15 +117,8 @@
             box-shadow: 0 4px 14px rgba(17, 48, 91, .06);
         }
 
-        .mp-public-actions > .mp-btn:hover,
         .mp-actions > .mp-btn.mp-btn-brand:hover {
             box-shadow: 0 10px 24px rgba(17, 48, 91, .12);
-        }
-
-        .mp-public-actions > .mp-btn {
-            border-color: #d2e1f2;
-            background: rgba(255, 255, 255, .92);
-            color: #183659;
         }
 
         .mp-actions > .mp-btn.mp-btn-brand {
@@ -141,7 +132,6 @@
             box-shadow: 0 12px 26px rgba(14, 128, 203, .28);
         }
 
-        .mp-public-actions > .mp-btn::before,
         .mp-actions > .mp-btn.mp-btn-brand::before {
             content: "";
             width: 18px;
@@ -157,17 +147,11 @@
             -webkit-mask-size: contain;
         }
 
-        .mp-public-actions > .mp-btn::before {
-            mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M8 6.5 4.5 8v10L8 16.5m0-10L16 4l3.5 1.5v10L16 18l-8-1.5m8-12v12m-8-10v10' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-            -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M8 6.5 4.5 8v10L8 16.5m0-10L16 4l3.5 1.5v10L16 18l-8-1.5m8-12v12m-8-10v10' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-        }
-
         .mp-actions > .mp-btn.mp-btn-brand::before {
             mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 7a7 7 0 0 1 14 0' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
             -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 7a7 7 0 0 1 14 0' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
         }
 
-        .mp-public-actions > .mp-btn span,
         .mp-actions > .mp-btn.mp-btn-brand span {
             font-size: 15px;
             line-height: 1;
@@ -542,7 +526,6 @@
             .mp-top-search-inline { order: 3; flex-basis: 100%; min-width: 0; margin: 0; }
             .mp-logo { order: 1; }
             .mp-actions { order: 2; margin-left: auto; }
-            .mp-public-actions,
             .mp-account-actions { gap: 6px; }
             .mp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .mp-actions .mp-btn span { display: none; }
@@ -576,10 +559,6 @@
             </form>
 
             <div class="mp-actions">
-                <div class="mp-public-actions">
-                    <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $marketRouteKey]) }}">&#128506; <span>Карта</span></a>
-                </div>
-
                 @if($marketplaceCurrentUser)
                     <div class="mp-account-actions">
                         @if($marketplaceCurrentUserCanUseBuyer)
