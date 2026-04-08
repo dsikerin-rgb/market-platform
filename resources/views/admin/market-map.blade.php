@@ -774,27 +774,121 @@
       color: #475569;
       -webkit-text-fill-color: #475569;
     }
+    /* === Tablet hero: 3-column grid (no wrap, no column stacking) === */
     @media (max-width: 1120px) {
       .toolbar-row.toolbar-row--hero {
-        flex-direction: column;
-        align-items: stretch;
+        display: grid !important;
+        grid-template-columns: auto 1fr auto !important;
+        align-items: center !important;
+        gap: 10px !important;
       }
+      /* Left: zoom over search, compact */
       .toolbar-group--hero-left {
-        flex-wrap: wrap;
-        justify-content: center;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        flex-wrap: nowrap !important;
+        justify-content: flex-start !important;
+        grid-column: 1 !important;
       }
+      /* Center: chosen place, takes remaining space */
+      .toolbar-group--hero-center {
+        grid-column: 2 !important;
+        min-width: 0 !important;
+        justify-content: center !important;
+      }
+      /* Right: mode / layers, compact */
       .toolbar-group.toolbar-group--hero-actions {
-        justify-content: space-between;
-      }
-      .toolbar-group.toolbar-group--controls-left {
-        flex-wrap: wrap;
+        justify-content: flex-end !important;
+        grid-column: 3 !important;
       }
       .toolbar-group.toolbar-group--hero-actions-main {
-        width: 100%;
-        justify-content: space-between;
+        width: auto !important;
+        justify-content: flex-end !important;
       }
       .toolbar-group.toolbar-group--hero-stack {
-        align-items: stretch;
+        align-items: center !important;
+      }
+      /* Center block: compact vertical layout */
+      .toolbar-group.toolbar-group--hero-center {
+        justify-content: center !important;
+      }
+      .toolbar-group.toolbar-group--hero-review {
+        align-items: center !important;
+        gap: 6px !important;
+      }
+      /* Override any inline display set by JS */
+      #spaceChosenPill.hero-chosen {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 3px !important;
+        padding: 5px 8px !important;
+        max-width: min(280px, 100%) !important;
+        min-width: 0 !important;
+        width: auto !important;
+      }
+      #spaceChosenPill .hero-chosen__label {
+        font-size: 10px !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+        order: -1 !important;
+        margin-bottom: 1px !important;
+      }
+      #spaceChosenPill .hero-chosen__body {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 1px !important;
+        width: 100% !important;
+      }
+      #spaceChosenPill .hero-chosen__line,
+      #spaceChosenPill .hero-chosen__meta {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 4px !important;
+        align-items: baseline !important;
+        justify-content: center !important;
+        line-height: 1.15 !important;
+        text-align: center !important;
+        width: 100% !important;
+      }
+      #spaceChosenPill .hero-chosen__prefix,
+      #spaceChosenPill .hero-chosen__meta-label {
+        display: none !important;
+      }
+      #spaceChosenPill .hero-chosen__value,
+      #spaceChosenPill .hero-chosen__tenant {
+        font-size: 12px !important;
+        text-align: center !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+        max-width: 200px !important;
+      }
+      /* Move close button to top-right corner */
+      #spaceChosenPill .spacePillButton {
+        position: absolute !important;
+        top: 2px !important;
+        right: 4px !important;
+        margin: 0 !important;
+        font-size: 14px !important;
+        line-height: 1 !important;
+      }
+      #spaceChosenPill {
+        position: relative !important;
+      }
+      .toolbar-group.toolbar-group--review-nav {
+        justify-content: center !important;
+        gap: 4px !important;
+        padding: 4px !important;
+      }
+      .toolbar-group.toolbar-group--review-nav button {
+        padding: 4px 10px !important;
+        font-size: 11px !important;
+      }
+      /* Controls row below hero — keep wrapping */
+      .toolbar-group.toolbar-group--controls-left {
+        flex-wrap: wrap;
       }
       .toolbar-group.toolbar-group--review-status-group {
         flex-wrap: wrap;
