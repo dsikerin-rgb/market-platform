@@ -35,15 +35,15 @@
 
     <style>
         .mp-hero-grid {
-            padding: 22px 28px;
+            padding: 18px 24px 16px;
             display: grid;
-            gap: 16px;
+            gap: 12px;
             align-items: start;
         }
 
         .mp-hero-main {
             display: grid;
-            gap: 12px;
+            gap: 10px;
         }
 
         .mp-hero-eyebrow {
@@ -55,19 +55,19 @@
 
         .mp-hero-title {
             margin: 0;
-            max-width: 880px;
+            max-width: none;
             color: #fff;
-            font-size: clamp(34px, 4vw, 52px);
-            line-height: 1.05;
+            font-size: clamp(30px, 3.2vw, 44px);
+            line-height: 1.08;
             letter-spacing: -0.03em;
         }
 
         .mp-hero-copy {
             margin: 0;
-            max-width: 760px;
+            max-width: 720px;
             color: #e8f7ff;
-            font-size: 17px;
-            line-height: 1.45;
+            font-size: 15px;
+            line-height: 1.4;
         }
 
         .mp-hero-actions {
@@ -77,8 +77,8 @@
         }
 
         .mp-hero-actions .mp-btn {
-            min-height: 46px;
-            padding-inline: 16px;
+            min-height: 42px;
+            padding-inline: 14px;
             border-color: rgba(255,255,255,.42);
             background: rgba(255,255,255,.14);
             color: #fff;
@@ -87,20 +87,21 @@
         .mp-hero-kpis {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 2px;
+            gap: 8px;
+            margin-top: 0;
         }
 
         .mp-hero-stat {
-            min-width: 136px;
-            padding: 12px 14px;
+            min-width: 104px;
+            padding: 8px 10px;
             background: rgba(255,255,255,.14);
             border: 1px solid rgba(255,255,255,.28);
-            border-radius: 16px;
+            border-radius: 14px;
             color: #fff;
-            display: grid;
-            gap: 6px;
-            box-shadow: 0 10px 24px rgba(12, 62, 109, .14);
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            box-shadow: 0 8px 18px rgba(12, 62, 109, .12);
             transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
 
@@ -111,13 +112,14 @@
         }
 
         .mp-hero-stat__label {
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.2;
             opacity: .92;
+            white-space: nowrap;
         }
 
         .mp-hero-stat__value {
-            font-size: 30px;
+            font-size: 20px;
             font-weight: 900;
             line-height: 1;
             letter-spacing: -.03em;
@@ -125,22 +127,22 @@
 
         @media (max-width: 980px) {
             .mp-hero-grid {
-                padding: 20px 20px 18px;
+                padding: 18px 18px 16px;
             }
         }
 
         @media (max-width: 560px) {
             .mp-hero-grid {
-                padding: 18px 16px 16px;
-                gap: 14px;
+                padding: 16px 14px 14px;
+                gap: 12px;
             }
 
             .mp-hero-title {
-                font-size: 30px;
+                font-size: 28px;
             }
 
             .mp-hero-copy {
-                font-size: 15px;
+                font-size: 14px;
             }
 
             .mp-hero-kpis {
@@ -149,8 +151,8 @@
 
             .mp-hero-stat {
                 min-width: calc(50% - 4px);
-                padding: 10px 12px;
-                border-radius: 14px;
+                padding: 8px 10px;
+                border-radius: 12px;
             }
 
             .mp-hero-stat__label {
@@ -158,7 +160,7 @@
             }
 
             .mp-hero-stat__value {
-                font-size: 24px;
+                font-size: 18px;
             }
         }
     </style>
@@ -201,7 +203,7 @@
                 .mp-slider__track {
                     display: grid;
                     grid-auto-flow: column;
-                    grid-auto-columns: calc(33.333% - 8px);
+                    grid-auto-columns: calc(25% - 9px);
                     gap: 12px;
                     overflow-x: auto;
                     scroll-snap-type: x mandatory;
@@ -214,8 +216,8 @@
                 }
                 .mp-slider__card {
                     scroll-snap-align: start;
-                    min-height: 180px;
-                    border-radius: 18px;
+                    min-height: 152px;
+                    border-radius: 16px;
                     border: 1px solid #d9e6f7;
                     background: linear-gradient(180deg, #ffffff, #f7fbff);
                     box-shadow: 0 8px 24px rgba(17, 32, 59, .06);
@@ -233,7 +235,7 @@
                     background: linear-gradient(180deg, #fef7ec, #ffffff);
                 }
                 .mp-slider__media {
-                    height: 92px;
+                    height: 68px;
                     background: #dfefff;
                 }
                 .mp-slider__media img {
@@ -243,26 +245,30 @@
                     display: block;
                 }
                 .mp-slider__body {
-                    padding: 14px;
+                    padding: 12px;
                     display: flex;
                     flex: 1;
                     flex-direction: column;
-                    gap: 8px;
+                    gap: 6px;
                 }
                 .mp-slider__title {
                     margin: 0;
-                    font-size: 18px;
+                    font-size: 16px;
                     line-height: 1.25;
                 }
                 .mp-slider__text {
                     margin: 0;
                     color: var(--muted);
-                    font-size: 15px;
+                    font-size: 14px;
                     line-height: 1.4;
                     display: -webkit-box;
-                    -webkit-line-clamp: 3;
+                    -webkit-line-clamp: 2;
                     -webkit-box-orient: vertical;
                     overflow: hidden;
+                }
+                .mp-slider__footer .mp-btn {
+                    min-height: 38px;
+                    padding: 8px 12px;
                 }
                 .mp-slider__footer {
                     margin-top: auto;
@@ -312,16 +318,21 @@
                 }
                 @media (max-width: 1100px) {
                     .mp-slider__track {
-                        grid-auto-columns: calc(50% - 6px);
+                        grid-auto-columns: calc(33.333% - 8px);
                     }
                 }
                 @media (max-width: 760px) {
                     .mp-slider__track {
-                        grid-auto-columns: 100%;
+                        grid-auto-columns: calc(50% - 6px);
                     }
                     .mp-slider__controls {
                         flex-direction: column;
                         align-items: stretch;
+                    }
+                }
+                @media (max-width: 560px) {
+                    .mp-slider__track {
+                        grid-auto-columns: 100%;
                     }
                 }
             </style>
