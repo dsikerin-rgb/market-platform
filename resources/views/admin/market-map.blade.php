@@ -809,7 +809,7 @@
         justify-content: flex-end !important;
       }
       .toolbar-group.toolbar-group--hero-stack {
-        align-items: center !important;
+        align-items: flex-end !important;
       }
       /* Center block: compact vertical layout */
       .toolbar-group.toolbar-group--hero-center {
