@@ -18,18 +18,6 @@
                 'value' => $latestProducts->count(),
                 'url' => route('marketplace.catalog', ['marketSlug' => $marketSlug]),
             ],
-            [
-                'label' => 'Анонсов',
-                'value' => $announcements->count(),
-                'url' => route('marketplace.announcements', ['marketSlug' => $marketSlug]),
-            ],
-            [
-                'label' => 'Избранное',
-                'value' => $marketplaceFavoriteCount ?? 0,
-                'url' => $marketplaceCurrentUserCanUseBuyer
-                    ? route('marketplace.buyer.favorites', ['marketSlug' => $marketSlug])
-                    : route('marketplace.login', ['marketSlug' => $marketSlug]),
-            ],
         ];
     @endphp
 
