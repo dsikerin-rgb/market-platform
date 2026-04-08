@@ -39,19 +39,42 @@
       </div>
       <div class="btnrow">
         <button id="closeBtn" type="button" class="pill" style="background:transparent;">✕ Закрыть</button>
-        <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="text-decoration:none; display:none;">К настройкам</a>
       </div>
     </div>
 
     <script>
       (function () {
         const btn = document.getElementById('closeBtn');
-        const toSettings = document.getElementById('toSettingsLink');
+        const returnUrl = @json($returnUrl ?? '');
+        const settingsUrl = @json($settingsUrl ?? '');
+        const fallbackUrl = returnUrl || settingsUrl || '';
+
+        function isStandaloneApp() {
+          try {
+            if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+            if (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) return true;
+          } catch (e) {
+            // ignore
+          }
+
+          return Boolean(window.navigator && 'standalone' in window.navigator && window.navigator.standalone);
+        }
 
         btn.addEventListener('click', function () {
+          if (isStandaloneApp()) {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else if (fallbackUrl) {
+              window.location.replace(fallbackUrl);
+            }
+            return;
+          }
+
           try { window.close(); } catch (e) { /* ignore */ }
           setTimeout(function () {
-            if (toSettings) toSettings.style.display = 'inline-flex';
+            if (document.visibilityState !== 'hidden' && fallbackUrl) {
+              window.location.replace(fallbackUrl);
+            }
           }, 150);
         });
       })();

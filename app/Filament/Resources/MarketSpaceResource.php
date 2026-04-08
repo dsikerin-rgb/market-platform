@@ -298,6 +298,7 @@ class MarketSpaceResource extends BaseResource
                                         $url = route('filament.admin.market-map', [
                                             'mode' => 'review',
                                             'market_space_id' => (int) $record->id,
+                                            'return_url' => request()->fullUrl(),
                                         ]);
 
                                         return new HtmlString(
@@ -326,6 +327,7 @@ class MarketSpaceResource extends BaseResource
                                         $url = route('filament.admin.market-map', [
                                             'mode' => 'review',
                                             'market_space_id' => (int) $record->id,
+                                            'return_url' => request()->fullUrl(),
                                         ]);
 
                                         return new HtmlString(
@@ -811,7 +813,10 @@ class MarketSpaceResource extends BaseResource
         return new HtmlString(view('filament.market-spaces.operations', [
             'items' => $items,
             'spaceId' => (int) $record->id,
-            'reviewUrl' => route('filament.admin.market-map', ['mode' => 'review']),
+            'reviewUrl' => route('filament.admin.market-map', [
+                'mode' => 'review',
+                'return_url' => request()->fullUrl(),
+            ]),
         ])->render());
     }
 

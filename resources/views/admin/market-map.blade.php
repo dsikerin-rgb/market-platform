@@ -877,14 +877,49 @@
       #spaceChosenPill {
         position: relative !important;
       }
+      /* Tablet review nav: single row ← [Pending] → */
       .toolbar-group.toolbar-group--review-nav {
-        justify-content: center !important;
+        /* JS toggles display:none/inline-flex. We style inline-flex. */
+        justify-content: space-between !important;
+        align-items: center !important;
         gap: 4px !important;
-        padding: 4px !important;
+        padding: 3px !important;
+        width: 100% !important;
       }
       .toolbar-group.toolbar-group--review-nav button {
-        padding: 4px 10px !important;
+        padding: 4px 8px !important;
         font-size: 11px !important;
+        white-space: nowrap !important;
+      }
+      /* Side buttons: arrows only */
+      #reviewNavPrev, #reviewNavNext {
+        width: 36px !important;
+        min-width: 36px !important;
+        max-width: 36px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        color: transparent !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      #reviewNavPrev::before,
+      #reviewNavNext::before {
+        font-size: 16px;
+        line-height: 1;
+        color: #0f172a;
+        -webkit-text-fill-color: #0f172a;
+      }
+      #reviewNavPrev::before { content: "←"; }
+      #reviewNavNext::before { content: "→"; }
+      /* Center button: main action */
+      #reviewNavNextPending {
+        flex: 1 !important;
+        padding: 4px 10px !important;
+        font-weight: 700 !important;
       }
       /* Controls row below hero — keep wrapping */
       .toolbar-group.toolbar-group--controls-left {
@@ -1174,14 +1209,38 @@
     <script>
       document.addEventListener('DOMContentLoaded', function () {
         const btn = document.getElementById('closeBtn');
-        const toSettings = document.getElementById('toSettingsLink');
+        const returnUrl = @json($returnUrl ?? '');
+        const settingsUrl = @json($settingsUrl ?? '');
+        const fallbackUrl = returnUrl || settingsUrl || '';
+
+        function isStandaloneApp() {
+          try {
+            if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+            if (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) return true;
+          } catch (e) {
+            // ignore
+          }
+
+          return Boolean(window.navigator && 'standalone' in window.navigator && window.navigator.standalone);
+        }
 
         btn?.addEventListener('click', function () {
+          if (isStandaloneApp()) {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else if (fallbackUrl) {
+              window.location.replace(fallbackUrl);
+            }
+            return;
+          }
+
           try { window.close(); } catch (e) { /* ignore */ }
 
-          // Если вкладку закрыть нельзя (не window.open), покажем ссылку на настройки.
+          // Если вкладку закрыть нельзя, возвращаем пользователя на исходную страницу.
           setTimeout(function () {
-            if (toSettings) toSettings.style.display = 'inline-flex';
+            if (document.visibilityState !== 'hidden' && fallbackUrl) {
+              window.location.replace(fallbackUrl);
+            }
           }, 150);
         });
       });
@@ -1293,7 +1352,6 @@
                 </div>
 
               </div>
-              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;" title="Открыть настройки карты и рынка" aria-label="Открыть настройки карты и рынка">К настройкам</a>
             </div>
           </div>
 
