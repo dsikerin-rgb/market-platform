@@ -45,20 +45,38 @@
     <script>
       (function () {
         const btn = document.getElementById('closeBtn');
-        const returnUrl = @js($returnUrl ?? url('/admin'));
+        const returnUrl = @json($returnUrl ?? '');
+        const settingsUrl = @json($settingsUrl ?? '');
+        const fallbackUrl = returnUrl || settingsUrl || '';
 
-        btn.addEventListener('click', function () {
-          if (returnUrl) {
-            window.location.assign(returnUrl);
-            return;
+        function isStandaloneApp() {
+          try {
+            if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+            if (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) return true;
+          } catch (e) {
+            // ignore
           }
 
-          if (window.history.length > 1) {
-            window.history.back();
+          return Boolean(window.navigator && 'standalone' in window.navigator && window.navigator.standalone);
+        }
+
+        btn.addEventListener('click', function () {
+          if (isStandaloneApp()) {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else if (fallbackUrl) {
+              window.location.replace(fallbackUrl);
+            }
             return;
           }
 
           try { window.close(); } catch (e) { /* ignore */ }
+
+          setTimeout(function () {
+            if (document.visibilityState !== 'hidden' && fallbackUrl) {
+              window.location.replace(fallbackUrl);
+            }
+          }, 150);
         });
       })();
     </script>

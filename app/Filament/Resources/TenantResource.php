@@ -1639,6 +1639,7 @@ class TenantResource extends BaseResource
                     }
 
                     try {
+                        $params['return_url'] = request()->fullUrl();
                         $mapLinksBySpace[$spaceId] = route('filament.admin.market-map', $params);
                     } catch (\Throwable) {
                         // ignore: route might be unavailable in tests/CLI contexts

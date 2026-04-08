@@ -813,7 +813,10 @@ class MarketSpaceResource extends BaseResource
         return new HtmlString(view('filament.market-spaces.operations', [
             'items' => $items,
             'spaceId' => (int) $record->id,
-            'reviewUrl' => route('filament.admin.market-map', ['mode' => 'review']),
+            'reviewUrl' => route('filament.admin.market-map', [
+                'mode' => 'review',
+                'return_url' => request()->fullUrl(),
+            ]),
         ])->render());
     }
 

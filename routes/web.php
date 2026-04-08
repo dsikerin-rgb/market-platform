@@ -1996,6 +1996,19 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             && $request->has('bbox_y1')
             && $request->has('bbox_x2')
             && $request->has('bbox_y2');
+        $rawReturnUrl = (string) $request->query('return_url', '');
+        $returnUrl = null;
+
+        if ($rawReturnUrl !== '') {
+            $appBaseUrl = rtrim(url('/'), '/');
+
+            if (
+                (str_starts_with($rawReturnUrl, '/') && ! str_starts_with($rawReturnUrl, '//'))
+                || str_starts_with($rawReturnUrl, $appBaseUrl)
+            ) {
+                $returnUrl = $rawReturnUrl;
+            }
+        }
 
         $bboxFromRequest = null;
 
@@ -2132,6 +2145,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'spaceUrl' => route('filament.admin.market-map.space'),
             'spacesUrl' => route('filament.admin.market-map.spaces'),
             'reviewDecisionUrl' => route('filament.admin.market-map.review-decision'),
+            'returnUrl' => $returnUrl,
         ];
 
         if (! $hasMap) {
