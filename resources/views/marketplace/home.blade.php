@@ -85,8 +85,8 @@
         }
 
         .mp-hero-actions .mp-btn {
-            min-height: 42px;
-            padding-inline: 14px;
+            min-height: 50px;
+            padding-inline: 18px;
             border-color: rgba(255,255,255,.38);
             background: rgba(255,255,255,.14);
             color: #fff;
@@ -101,9 +101,9 @@
         }
 
         .mp-hero-stat {
-            width: 74px;
-            aspect-ratio: 1 / 1;
-            padding: 6px;
+            width: 64px;
+            min-height: 50px;
+            padding: 4px 6px;
             background: rgba(255,255,255,.14);
             border: 1px solid rgba(255,255,255,.28);
             border-radius: 12px;
@@ -125,14 +125,14 @@
         }
 
         .mp-hero-stat__label {
-            font-size: 10px;
-            line-height: 1.2;
+            font-size: 9px;
+            line-height: 1.1;
             opacity: .92;
             white-space: normal;
         }
 
         .mp-hero-stat__value {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 900;
             line-height: 1;
             letter-spacing: -.03em;
@@ -330,17 +330,18 @@
             }
 
             .mp-hero-stat {
-                width: 68px;
-                padding: 6px;
+                width: 62px;
+                min-height: 50px;
+                padding: 4px 5px;
                 border-radius: 12px;
             }
 
             .mp-hero-stat__label {
-                font-size: 10px;
+                font-size: 9px;
             }
 
             .mp-hero-stat__value {
-                font-size: 18px;
+                font-size: 14px;
             }
 
             .mp-slider__body {
