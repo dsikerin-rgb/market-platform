@@ -35,31 +35,71 @@
 
     <style>
         .mp-hero-grid {
-            padding: 24px;
+            padding: 22px 28px;
             display: grid;
-            grid-template-columns: 1.2fr .8fr;
-            gap: 14px;
-            align-items: center;
+            gap: 16px;
+            align-items: start;
         }
 
-        .mp-hero-stats {
+        .mp-hero-main {
             display: grid;
-            grid-template-columns: repeat(2, 96px);
-            justify-content: end;
-            gap: 8px;
+            gap: 12px;
+        }
+
+        .mp-hero-eyebrow {
+            font-size: 12px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            opacity: .84;
+        }
+
+        .mp-hero-title {
+            margin: 0;
+            max-width: 880px;
+            color: #fff;
+            font-size: clamp(34px, 4vw, 52px);
+            line-height: 1.05;
+            letter-spacing: -0.03em;
+        }
+
+        .mp-hero-copy {
+            margin: 0;
+            max-width: 760px;
+            color: #e8f7ff;
+            font-size: 17px;
+            line-height: 1.45;
+        }
+
+        .mp-hero-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .mp-hero-actions .mp-btn {
+            min-height: 46px;
+            padding-inline: 16px;
+            border-color: rgba(255,255,255,.42);
+            background: rgba(255,255,255,.14);
+            color: #fff;
+        }
+
+        .mp-hero-kpis {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 2px;
         }
 
         .mp-hero-stat {
-            min-height: 0;
-            aspect-ratio: 1 / 1;
-            background: rgba(255,255,255,.16);
-            border: 1px solid rgba(255,255,255,.35);
+            min-width: 136px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.28);
             border-radius: 16px;
-            padding: 14px;
             color: #fff;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            display: grid;
+            gap: 6px;
             box-shadow: 0 10px 24px rgba(12, 62, 109, .14);
             transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
@@ -72,38 +112,45 @@
 
         .mp-hero-stat__label {
             font-size: 11px;
+            line-height: 1.2;
             opacity: .92;
         }
 
         .mp-hero-stat__value {
-            font-size: 24px;
+            font-size: 30px;
             font-weight: 900;
             line-height: 1;
+            letter-spacing: -.03em;
         }
 
         @media (max-width: 980px) {
             .mp-hero-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .mp-hero-stats {
-                justify-content: start;
+                padding: 20px 20px 18px;
             }
         }
 
         @media (max-width: 560px) {
             .mp-hero-grid {
-                padding: 18px;
+                padding: 18px 16px 16px;
+                gap: 14px;
             }
 
-            .mp-hero-stats {
-                grid-template-columns: repeat(2, 82px);
-                gap: 6px;
+            .mp-hero-title {
+                font-size: 30px;
+            }
+
+            .mp-hero-copy {
+                font-size: 15px;
+            }
+
+            .mp-hero-kpis {
+                gap: 8px;
             }
 
             .mp-hero-stat {
-                padding: 10px;
-                border-radius: 12px;
+                min-width: calc(50% - 4px);
+                padding: 10px 12px;
+                border-radius: 14px;
             }
 
             .mp-hero-stat__label {
@@ -111,31 +158,31 @@
             }
 
             .mp-hero-stat__value {
-                font-size: 20px;
+                font-size: 24px;
             }
         }
     </style>
 
     <section class="mp-card" style="padding:0;overflow:hidden;background:linear-gradient(120deg,#0a84d6,#10b2d8 60%,#7bd5ff);color:#fff;">
         <div class="mp-hero-grid">
-            <div>
-                <div style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;">Городская Экоярмарка</div>
-                <h1 class="mp-page-title" style="color:#fff;margin-top:8px;">{{ $marketplaceSettings['hero_title'] }}</h1>
-                <p style="margin:10px 0 0;max-width:620px;color:#e8f7ff;">
+            <div class="mp-hero-main">
+                <div class="mp-hero-eyebrow">Городская Экоярмарка</div>
+                <h1 class="mp-hero-title">{{ $marketplaceSettings['hero_title'] }}</h1>
+                <p class="mp-hero-copy">
                     {{ $marketplaceSettings['hero_subtitle'] }}
                 </p>
-                <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-                    <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
-                    <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
+                <div class="mp-hero-actions">
+                    <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
+                    <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
                 </div>
-            </div>
-            <div class="mp-hero-stats">
-                @foreach($heroStats as $stat)
-                    <a class="mp-hero-stat" href="{{ $stat['url'] }}">
-                        <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
-                        <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
-                    </a>
-                @endforeach
+                <div class="mp-hero-kpis">
+                    @foreach($heroStats as $stat)
+                        <a class="mp-hero-stat" href="{{ $stat['url'] }}">
+                            <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
+                            <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
+                        </a>
+                    @endforeach
+                </div>
             </div>
         </div>
     </section>
@@ -167,7 +214,7 @@
                 }
                 .mp-slider__card {
                     scroll-snap-align: start;
-                    min-height: 218px;
+                    min-height: 180px;
                     border-radius: 18px;
                     border: 1px solid #d9e6f7;
                     background: linear-gradient(180deg, #ffffff, #f7fbff);
@@ -186,7 +233,7 @@
                     background: linear-gradient(180deg, #fef7ec, #ffffff);
                 }
                 .mp-slider__media {
-                    height: 140px;
+                    height: 92px;
                     background: #dfefff;
                 }
                 .mp-slider__media img {
@@ -196,21 +243,26 @@
                     display: block;
                 }
                 .mp-slider__body {
-                    padding: 16px;
+                    padding: 14px;
                     display: flex;
                     flex: 1;
                     flex-direction: column;
-                    gap: 10px;
+                    gap: 8px;
                 }
                 .mp-slider__title {
                     margin: 0;
-                    font-size: 21px;
-                    line-height: 1.2;
+                    font-size: 18px;
+                    line-height: 1.25;
                 }
                 .mp-slider__text {
                     margin: 0;
                     color: var(--muted);
-                    line-height: 1.45;
+                    font-size: 15px;
+                    line-height: 1.4;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 3;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
                 }
                 .mp-slider__footer {
                     margin-top: auto;
