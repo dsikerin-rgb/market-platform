@@ -223,8 +223,22 @@
         .mp-cats-wrap {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             margin: 10px 0 0;
+            padding: 6px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(255,255,255,.8), rgba(238,246,255,.92));
+            border: 1px solid rgba(201, 220, 243, .85);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.75);
+        }
+
+        .mp-cats-wrap > .mp-btn {
+            align-self: stretch;
+            padding: 10px 16px;
+            border-radius: 14px;
+            border-color: rgba(188, 210, 236, .92);
+            background: linear-gradient(180deg, #ffffff, #f3f8ff);
+            box-shadow: 0 6px 16px rgba(16, 88, 145, .06);
         }
 
         .mp-buyer-nav {
@@ -270,22 +284,64 @@
 
         .mp-cats {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             overflow: auto;
-            padding: 2px 2px 2px;
+            padding: 2px;
             margin: 0;
             flex: 1 1 auto;
             scrollbar-width: thin;
         }
 
         .mp-cat {
-            border: 1px solid #c9dcf3;
-            background: #fff;
+            --cat-accent: #20a4d8;
+            position: relative;
+            border: 1px solid rgba(193, 214, 238, .94);
+            background: linear-gradient(180deg, #ffffff, #f5f9ff);
             border-radius: 999px;
-            padding: 8px 12px;
+            padding: 9px 14px 9px 32px;
             font-size: 13px;
+            font-weight: 600;
             white-space: nowrap;
             color: #24446d;
+            box-shadow: 0 5px 14px rgba(13, 61, 109, .05);
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+        }
+
+        .mp-cat::before {
+            content: "";
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            transform: translateY(-50%);
+            background: var(--cat-accent);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--cat-accent) 18%, white);
+        }
+
+        .mp-cat:hover {
+            transform: translateY(-1px);
+            border-color: rgba(114, 180, 233, .95);
+            background: linear-gradient(180deg, #ffffff, #edf6ff);
+            color: #163b67;
+            box-shadow: 0 10px 22px rgba(13, 61, 109, .1);
+        }
+
+        .mp-cat.is-active {
+            border-color: rgba(52, 166, 229, .95);
+            background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(227,242,255,.95));
+            color: #0f4d87;
+            box-shadow: 0 10px 24px rgba(18, 112, 183, .16);
+        }
+
+        .mp-cat:nth-child(4n + 1) { --cat-accent: #1fb66a; }
+        .mp-cat:nth-child(4n + 2) { --cat-accent: #f59e0b; }
+        .mp-cat:nth-child(4n + 3) { --cat-accent: #0ea5e9; }
+        .mp-cat:nth-child(4n + 4) { --cat-accent: #8b5cf6; }
+
+        .mp-cat.is-active::before {
+            box-shadow: 0 0 0 5px color-mix(in srgb, var(--cat-accent) 24%, white);
         }
 
         .mp-main { margin-top: 16px; display: grid; gap: 16px; }
@@ -538,6 +594,8 @@
             .mp-logo img { width: 186px; }
             .mp-cats-wrap { gap: 8px; }
             .mp-cats-wrap > .mp-btn { padding: 8px 10px; }
+            .mp-cat { padding: 8px 12px 8px 28px; }
+            .mp-cat::before { left: 10px; width: 9px; height: 9px; }
         }
     </style>
     @stack('head')
@@ -546,6 +604,7 @@
 @php($marketRouteKey = filled($market->slug ?? null) ? (string) $market->slug : (string) $market->id)
 @php($isBuyerArea = request()->routeIs('marketplace.buyer.*'))
 @php($accountHomeUrl = $marketplaceCurrentUserCanUseSeller ? route('cabinet.dashboard') : route('marketplace.buyer.dashboard', ['marketSlug' => $marketRouteKey]))
+@php($activeCategorySlug = (string) request('category', ''))
 <div class="mp-shell">
     <header class="mp-top">
         <div class="mp-top-line">
@@ -619,7 +678,7 @@
                 <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey]) }}">Каталог</a>
                 <div class="mp-cats">
                     @foreach($topCategories as $cat)
-                        <a class="mp-cat" href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey, 'category' => $cat->slug]) }}">
+                        <a @class(['mp-cat', 'is-active' => $activeCategorySlug === (string) $cat->slug]) href="{{ route('marketplace.catalog', ['marketSlug' => $marketRouteKey, 'category' => $cat->slug]) }}">
                             {{ $cat->name }}
                         </a>
                     @endforeach
