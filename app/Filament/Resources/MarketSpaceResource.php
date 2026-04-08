@@ -298,6 +298,7 @@ class MarketSpaceResource extends BaseResource
                                         $url = route('filament.admin.market-map', [
                                             'mode' => 'review',
                                             'market_space_id' => (int) $record->id,
+                                            'return_url' => request()->fullUrl(),
                                         ]);
 
                                         return new HtmlString(
@@ -326,6 +327,7 @@ class MarketSpaceResource extends BaseResource
                                         $url = route('filament.admin.market-map', [
                                             'mode' => 'review',
                                             'market_space_id' => (int) $record->id,
+                                            'return_url' => request()->fullUrl(),
                                         ]);
 
                                         return new HtmlString(

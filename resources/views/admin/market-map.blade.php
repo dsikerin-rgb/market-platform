@@ -12,6 +12,9 @@
     $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
+    $returnUrl = is_string($returnUrl ?? null) && trim((string) $returnUrl) !== ''
+        ? (string) $returnUrl
+        : url('/admin');
 
     // URL’ы API/viewer’а (могут отсутствовать при $hasMap=false — это ок)
     $pdfUrl    = $pdfUrl ?? '';
@@ -1174,15 +1177,20 @@
     <script>
       document.addEventListener('DOMContentLoaded', function () {
         const btn = document.getElementById('closeBtn');
-        const toSettings = document.getElementById('toSettingsLink');
+        const returnUrl = @js($returnUrl);
 
         btn?.addEventListener('click', function () {
-          try { window.close(); } catch (e) { /* ignore */ }
+          if (returnUrl) {
+            window.location.assign(returnUrl);
+            return;
+          }
 
-          // Если вкладку закрыть нельзя (не window.open), покажем ссылку на настройки.
-          setTimeout(function () {
-            if (toSettings) toSettings.style.display = 'inline-flex';
-          }, 150);
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+
+          try { window.close(); } catch (e) { /* ignore */ }
         });
       });
     </script>
@@ -1293,7 +1301,6 @@
                 </div>
 
               </div>
-              <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="display:none;" title="Открыть настройки карты и рынка" aria-label="Открыть настройки карты и рынка">К настройкам</a>
             </div>
           </div>
 

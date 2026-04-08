@@ -39,20 +39,26 @@
       </div>
       <div class="btnrow">
         <button id="closeBtn" type="button" class="pill" style="background:transparent;">✕ Закрыть</button>
-        <a id="toSettingsLink" href="{{ $settingsUrl }}" class="pill" style="text-decoration:none; display:none;">К настройкам</a>
       </div>
     </div>
 
     <script>
       (function () {
         const btn = document.getElementById('closeBtn');
-        const toSettings = document.getElementById('toSettingsLink');
+        const returnUrl = @js($returnUrl ?? url('/admin'));
 
         btn.addEventListener('click', function () {
+          if (returnUrl) {
+            window.location.assign(returnUrl);
+            return;
+          }
+
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+
           try { window.close(); } catch (e) { /* ignore */ }
-          setTimeout(function () {
-            if (toSettings) toSettings.style.display = 'inline-flex';
-          }, 150);
         });
       })();
     </script>
@@ -63,7 +69,6 @@
         Загрузите PDF-карту в настройках рынка (поле “Карта (PDF)”), нажмите “Сохранить”, затем откройте просмотр снова.
       </div>
     </div>
-
   </div>
 </body>
 </html>

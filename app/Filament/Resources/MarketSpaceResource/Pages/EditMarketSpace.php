@@ -150,6 +150,7 @@ class EditMarketSpace extends BaseEditRecord
                     'market_space_id' => $marketSpaceId,
                     'page' => $page,
                     'version' => $version,
+                    'return_url' => request()->fullUrl(),
                 ];
 
                 if ($bbox

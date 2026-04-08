@@ -148,6 +148,23 @@ class MarketMapLinkingTest extends TestCase
         });
     }
 
+    public function test_market_map_exposes_return_url_from_request(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $returnUrl = url('/admin/market-settings');
+
+        $response = $this->get(route('filament.admin.market-map', [
+            'return_url' => $returnUrl,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewHas('returnUrl', $returnUrl);
+    }
+
     public function test_market_space_edit_status_view_shows_linked_state(): void
     {
         $linkedView = view('admin.market-space-edit', [

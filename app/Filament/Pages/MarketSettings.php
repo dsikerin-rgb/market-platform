@@ -1182,7 +1182,9 @@ class MarketSettings extends Page
         }
 
         try {
-            $this->marketMapViewerUrl = route('filament.admin.market-map');
+            $this->marketMapViewerUrl = route('filament.admin.market-map', [
+                'return_url' => request()->fullUrl(),
+            ]);
         } catch (\Throwable) {
             $this->marketMapViewerUrl = null;
         }

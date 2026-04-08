@@ -161,6 +161,7 @@ class MapReviewResults extends Page
         return route('filament.admin.market-map', [
             'mode' => 'review',
             'market_space_id' => $spaceId,
+            'return_url' => request()->fullUrl(),
         ]);
     }
 

@@ -178,7 +178,9 @@ class AdminPanelProvider extends PanelProvider
                         return null;
                     }
 
-                    $mapUrl = url('/admin/market-map');
+                    $mapUrl = route('filament.admin.market-map', [
+                        'return_url' => request()->fullUrl(),
+                    ]);
                     $marketplaceUrl = route('marketplace.entry');
 
                     return new HtmlString(
