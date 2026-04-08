@@ -7,6 +7,7 @@ namespace Tests\Unit;
 use App\Models\MarketplaceAnnouncement;
 use App\Models\MarketplaceSlide;
 use App\Support\MarketplaceMediaStorage;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -269,6 +270,27 @@ class MarketplaceMediaStorageTest extends TestCase
 
         $response->assertOk();
         Storage::disk('public')->assertExists($previewPath);
+    }
+
+    public function test_normalize_local_public_tree_permissions_walks_the_full_tree(): void
+    {
+        $filesystem = new Filesystem();
+        $directory = 'marketplace-demo-assets-permissions-' . Str::random(8);
+        $basePath = storage_path('app/public/' . $directory);
+
+        $filesystem->ensureDirectoryExists($basePath . '/nested');
+        file_put_contents($basePath . '/root.txt', 'root');
+        file_put_contents($basePath . '/nested/child.txt', 'child');
+
+        try {
+            $normalized = MarketplaceMediaStorage::normalizeLocalPublicTreePermissions($directory);
+
+            $this->assertGreaterThanOrEqual(3, $normalized);
+            $this->assertFileExists($basePath . '/root.txt');
+            $this->assertFileExists($basePath . '/nested/child.txt');
+        } finally {
+            $filesystem->deleteDirectory($basePath);
+        }
     }
 
     public function test_media_proxy_sets_public_cache_headers(): void

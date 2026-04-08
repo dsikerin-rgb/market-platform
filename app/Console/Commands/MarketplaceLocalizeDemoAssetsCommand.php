@@ -9,6 +9,7 @@ use App\Models\MarketplaceProduct;
 use App\Models\TenantShowcase;
 use App\Models\TenantSpaceShowcase;
 use App\Support\MarketplaceDemoAssetLocalizer;
+use App\Support\MarketplaceMediaStorage;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -44,6 +45,8 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
             $this->line("  tenant showcases updated: {$showcasesUpdated}");
             $this->line("  space showcases updated: {$spaceShowcasesUpdated}");
         }
+
+        MarketplaceMediaStorage::normalizeLocalPublicTreePermissions((string) config('marketplace.demo_assets.directory', 'marketplace-demo-assets'));
 
         $this->line('');
         $this->info('Demo asset localization completed.');
