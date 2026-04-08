@@ -161,6 +161,7 @@ class EditMarketSpace extends BaseEditRecord
                     $params = array_merge($params, $bbox);
                 }
 
+                $params['return_url'] = request()->fullUrl();
                 $mapUrl = route('filament.admin.market-map', $params);
             }
         }
