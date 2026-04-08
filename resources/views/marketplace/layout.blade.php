@@ -254,7 +254,7 @@
 
         .mp-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 12px;
             align-items: start;
         }
@@ -462,6 +462,10 @@
             color: #8ca0bc;
             background: #f4f8fd;
             cursor: default;
+        }
+
+        @media (max-width: 1200px) {
+            .mp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
 
         @media (max-width: 820px) {
