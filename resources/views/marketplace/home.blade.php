@@ -37,13 +37,19 @@
         .mp-hero-grid {
             padding: 14px 20px 12px;
             display: grid;
-            gap: 8px;
-            align-items: start;
+            grid-template-columns: minmax(0, 1.7fr) minmax(240px, .78fr);
+            gap: 18px;
+            align-items: center;
         }
 
         .mp-hero-main {
             display: grid;
             gap: 8px;
+        }
+
+        .mp-hero-side {
+            width: min(100%, 290px);
+            justify-self: end;
         }
 
         .mp-hero-eyebrow {
@@ -71,16 +77,13 @@
         }
 
         .mp-hero-meta {
-            display: flex;
+            display: grid;
             gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
         }
 
         .mp-hero-actions {
-            display: flex;
+            display: grid;
             gap: 8px;
-            flex-wrap: wrap;
         }
 
         .mp-hero-actions .mp-btn {
@@ -89,25 +92,28 @@
             border-color: rgba(255,255,255,.42);
             background: rgba(255,255,255,.14);
             color: #fff;
+            width: 100%;
+            justify-content: center;
         }
 
         .mp-hero-kpis {
-            display: flex;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 6px;
             margin-top: 0;
         }
 
         .mp-hero-stat {
-            min-width: 92px;
+            min-width: 0;
             padding: 6px 9px;
             background: rgba(255,255,255,.14);
             border: 1px solid rgba(255,255,255,.28);
             border-radius: 12px;
             color: #fff;
             display: flex;
-            align-items: baseline;
-            gap: 6px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
             box-shadow: 0 6px 14px rgba(12, 62, 109, .10);
             transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
@@ -135,6 +141,27 @@
         @media (max-width: 980px) {
             .mp-hero-grid {
                 padding: 16px 16px 14px;
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .mp-hero-side {
+                width: 100%;
+                justify-self: stretch;
+            }
+
+            .mp-hero-meta {
+                grid-template-columns: 1fr;
+            }
+
+            .mp-hero-actions {
+                display: flex;
+                flex-wrap: wrap;
+            }
+
+            .mp-hero-actions .mp-btn {
+                width: auto;
+                justify-content: flex-start;
             }
         }
 
@@ -153,7 +180,7 @@
             }
 
             .mp-hero-meta {
-                align-items: stretch;
+                gap: 8px;
             }
 
             .mp-hero-kpis {
@@ -161,7 +188,6 @@
             }
 
             .mp-hero-stat {
-                min-width: calc(50% - 4px);
                 padding: 8px 9px;
                 border-radius: 12px;
             }
@@ -184,6 +210,8 @@
                 <p class="mp-hero-copy">
                     {{ $marketplaceSettings['hero_subtitle'] }}
                 </p>
+            </div>
+            <div class="mp-hero-side">
                 <div class="mp-hero-meta">
                     <div class="mp-hero-actions">
                     <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
