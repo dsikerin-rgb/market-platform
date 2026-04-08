@@ -35,19 +35,19 @@
 
     <style>
         .mp-hero-grid {
-            padding: 18px 24px 16px;
+            padding: 14px 20px 12px;
             display: grid;
-            gap: 12px;
+            gap: 8px;
             align-items: start;
         }
 
         .mp-hero-main {
             display: grid;
-            gap: 10px;
+            gap: 8px;
         }
 
         .mp-hero-eyebrow {
-            font-size: 12px;
+            font-size: 11px;
             letter-spacing: .18em;
             text-transform: uppercase;
             opacity: .84;
@@ -55,30 +55,37 @@
 
         .mp-hero-title {
             margin: 0;
-            max-width: none;
+            max-width: 980px;
             color: #fff;
-            font-size: clamp(30px, 3.2vw, 44px);
-            line-height: 1.08;
-            letter-spacing: -0.03em;
+            font-size: clamp(26px, 2.7vw, 38px);
+            line-height: 1.05;
+            letter-spacing: -0.04em;
         }
 
         .mp-hero-copy {
             margin: 0;
-            max-width: 720px;
+            max-width: 860px;
             color: #e8f7ff;
-            font-size: 15px;
-            line-height: 1.4;
+            font-size: 14px;
+            line-height: 1.32;
+        }
+
+        .mp-hero-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
         }
 
         .mp-hero-actions {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
         }
 
         .mp-hero-actions .mp-btn {
-            min-height: 42px;
-            padding-inline: 14px;
+            min-height: 40px;
+            padding-inline: 12px;
             border-color: rgba(255,255,255,.42);
             background: rgba(255,255,255,.14);
             color: #fff;
@@ -87,21 +94,21 @@
         .mp-hero-kpis {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             margin-top: 0;
         }
 
         .mp-hero-stat {
-            min-width: 104px;
-            padding: 8px 10px;
+            min-width: 92px;
+            padding: 6px 9px;
             background: rgba(255,255,255,.14);
             border: 1px solid rgba(255,255,255,.28);
-            border-radius: 14px;
+            border-radius: 12px;
             color: #fff;
             display: flex;
             align-items: baseline;
-            gap: 8px;
-            box-shadow: 0 8px 18px rgba(12, 62, 109, .12);
+            gap: 6px;
+            box-shadow: 0 6px 14px rgba(12, 62, 109, .10);
             transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
 
@@ -119,7 +126,7 @@
         }
 
         .mp-hero-stat__value {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 900;
             line-height: 1;
             letter-spacing: -.03em;
@@ -127,31 +134,35 @@
 
         @media (max-width: 980px) {
             .mp-hero-grid {
-                padding: 18px 18px 16px;
+                padding: 16px 16px 14px;
             }
         }
 
         @media (max-width: 560px) {
             .mp-hero-grid {
-                padding: 16px 14px 14px;
-                gap: 12px;
+                padding: 14px 14px 12px;
+                gap: 10px;
             }
 
             .mp-hero-title {
-                font-size: 28px;
+                font-size: 25px;
             }
 
             .mp-hero-copy {
                 font-size: 14px;
             }
 
+            .mp-hero-meta {
+                align-items: stretch;
+            }
+
             .mp-hero-kpis {
-                gap: 8px;
+                gap: 6px;
             }
 
             .mp-hero-stat {
                 min-width: calc(50% - 4px);
-                padding: 8px 10px;
+                padding: 8px 9px;
                 border-radius: 12px;
             }
 
@@ -173,17 +184,19 @@
                 <p class="mp-hero-copy">
                     {{ $marketplaceSettings['hero_subtitle'] }}
                 </p>
-                <div class="mp-hero-actions">
+                <div class="mp-hero-meta">
+                    <div class="mp-hero-actions">
                     <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
                     <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
-                </div>
-                <div class="mp-hero-kpis">
+                    </div>
+                    <div class="mp-hero-kpis">
                     @foreach($heroStats as $stat)
                         <a class="mp-hero-stat" href="{{ $stat['url'] }}">
                             <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
                             <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
                         </a>
                     @endforeach
+                    </div>
                 </div>
             </div>
         </div>
@@ -203,24 +216,24 @@
                 .mp-slider__track {
                     display: grid;
                     grid-auto-flow: column;
-                    grid-auto-columns: calc(25% - 9px);
-                    gap: 12px;
+                    grid-auto-columns: calc(25% - 8px);
+                    gap: 10px;
                     overflow-x: auto;
                     scroll-snap-type: x mandatory;
                     scrollbar-width: none;
                     scroll-behavior: smooth;
-                    padding-bottom: 4px;
+                    padding-bottom: 2px;
                 }
                 .mp-slider__track::-webkit-scrollbar {
                     display: none;
                 }
                 .mp-slider__card {
                     scroll-snap-align: start;
-                    min-height: 152px;
-                    border-radius: 16px;
+                    min-height: 128px;
+                    border-radius: 14px;
                     border: 1px solid #d9e6f7;
                     background: linear-gradient(180deg, #ffffff, #f7fbff);
-                    box-shadow: 0 8px 24px rgba(17, 32, 59, .06);
+                    box-shadow: 0 6px 18px rgba(17, 32, 59, .05);
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
@@ -235,7 +248,7 @@
                     background: linear-gradient(180deg, #fef7ec, #ffffff);
                 }
                 .mp-slider__media {
-                    height: 68px;
+                    height: 56px;
                     background: #dfefff;
                 }
                 .mp-slider__media img {
@@ -245,30 +258,30 @@
                     display: block;
                 }
                 .mp-slider__body {
-                    padding: 12px;
+                    padding: 10px;
                     display: flex;
                     flex: 1;
                     flex-direction: column;
-                    gap: 6px;
+                    gap: 5px;
                 }
                 .mp-slider__title {
                     margin: 0;
-                    font-size: 16px;
-                    line-height: 1.25;
+                    font-size: 15px;
+                    line-height: 1.2;
                 }
                 .mp-slider__text {
                     margin: 0;
                     color: var(--muted);
-                    font-size: 14px;
-                    line-height: 1.4;
+                    font-size: 13px;
+                    line-height: 1.32;
                     display: -webkit-box;
-                    -webkit-line-clamp: 2;
+                    -webkit-line-clamp: 1;
                     -webkit-box-orient: vertical;
                     overflow: hidden;
                 }
                 .mp-slider__footer .mp-btn {
-                    min-height: 38px;
-                    padding: 8px 12px;
+                    min-height: 34px;
+                    padding: 7px 11px;
                 }
                 .mp-slider__footer {
                     margin-top: auto;
@@ -318,7 +331,7 @@
                 }
                 @media (max-width: 1100px) {
                     .mp-slider__track {
-                        grid-auto-columns: calc(33.333% - 8px);
+                        grid-auto-columns: calc(33.333% - 7px);
                     }
                 }
                 @media (max-width: 760px) {
