@@ -23,21 +23,26 @@
 
     <style>
         .mp-hero-grid {
-            padding: 14px 20px 12px;
+            padding: 16px 20px;
             display: grid;
-            grid-template-columns: minmax(0, 1.7fr) minmax(240px, .78fr);
+            grid-template-columns: minmax(0, 1.35fr) minmax(320px, .9fr);
             gap: 18px;
-            align-items: center;
+            align-items: stretch;
+        }
+
+        .mp-hero-grid--single {
+            grid-template-columns: 1fr;
         }
 
         .mp-hero-main {
             display: grid;
-            gap: 8px;
+            gap: 10px;
+            align-content: center;
         }
 
         .mp-hero-side {
-            width: min(100%, 290px);
-            justify-self: end;
+            min-width: 0;
+            display: grid;
         }
 
         .mp-hero-eyebrow {
@@ -49,38 +54,40 @@
 
         .mp-hero-title {
             margin: 0;
-            max-width: 980px;
+            max-width: 720px;
             color: #fff;
-            font-size: clamp(26px, 2.7vw, 38px);
-            line-height: 1.05;
+            font-size: clamp(28px, 2.8vw, 40px);
+            line-height: 1.04;
             letter-spacing: -0.04em;
         }
 
         .mp-hero-copy {
             margin: 0;
-            max-width: 860px;
+            max-width: 720px;
             color: #e8f7ff;
             font-size: 14px;
-            line-height: 1.32;
+            line-height: 1.34;
         }
 
         .mp-hero-meta {
             display: grid;
             gap: 10px;
+            width: min(100%, 430px);
+            margin-top: 2px;
         }
 
         .mp-hero-actions {
-            display: grid;
+            display: flex;
             gap: 8px;
+            flex-wrap: wrap;
         }
 
         .mp-hero-actions .mp-btn {
-            min-height: 40px;
-            padding-inline: 12px;
-            border-color: rgba(255,255,255,.42);
+            min-height: 42px;
+            padding-inline: 14px;
+            border-color: rgba(255,255,255,.38);
             background: rgba(255,255,255,.14);
             color: #fff;
-            width: 100%;
             justify-content: center;
         }
 
@@ -128,6 +135,159 @@
             letter-spacing: -.03em;
         }
 
+        .mp-slider {
+            position: relative;
+            display: grid;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .mp-slider__viewport {
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .mp-slider__track {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 100%;
+            gap: 0;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+            scroll-behavior: smooth;
+        }
+
+        .mp-slider__track::-webkit-scrollbar {
+            display: none;
+        }
+
+        .mp-slider__card {
+            scroll-snap-align: start;
+            min-height: 100%;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.24);
+            background: rgba(255,255,255,.14);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 28px rgba(12, 62, 109, .18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        .mp-slider__card[data-theme="buyer"] {
+            background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(235,248,255,.16));
+        }
+
+        .mp-slider__card[data-theme="seller"] {
+            background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(245,241,255,.16));
+        }
+
+        .mp-slider__card[data-theme="partner"] {
+            background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,245,228,.16));
+        }
+
+        .mp-slider__media {
+            height: 116px;
+            background: rgba(223,239,255,.26);
+        }
+
+        .mp-slider__media img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .mp-slider__body {
+            padding: 14px;
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mp-slider__title {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.15;
+            color: #fff;
+        }
+
+        .mp-slider__text {
+            margin: 0;
+            color: rgba(233,245,255,.92);
+            font-size: 14px;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .mp-slider__footer {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+
+        .mp-slider__footer .mp-btn {
+            min-height: 36px;
+            padding: 8px 12px;
+            border-color: rgba(255,255,255,.34);
+            background: rgba(255,255,255,.16);
+            color: #fff;
+        }
+
+        .mp-slider__controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .mp-slider__nav {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mp-slider__arrow {
+            width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.24);
+            background: rgba(255,255,255,.14);
+            color: #fff;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .mp-slider__dots {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .mp-slider__dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            border: none;
+            background: rgba(255,255,255,.34);
+            cursor: pointer;
+        }
+
+        .mp-slider__dot.is-active {
+            width: 24px;
+            background: #fff;
+        }
+
         @media (max-width: 980px) {
             .mp-hero-grid {
                 padding: 16px 16px 14px;
@@ -135,23 +295,12 @@
                 gap: 12px;
             }
 
-            .mp-hero-side {
-                width: 100%;
-                justify-self: stretch;
-            }
-
             .mp-hero-meta {
-                grid-template-columns: 1fr;
+                width: 100%;
             }
 
-            .mp-hero-actions {
-                display: flex;
-                flex-wrap: wrap;
-            }
-
-            .mp-hero-actions .mp-btn {
-                width: auto;
-                justify-content: flex-start;
+            .mp-slider__media {
+                height: 104px;
             }
         }
 
@@ -189,231 +338,99 @@
             .mp-hero-stat__value {
                 font-size: 18px;
             }
+
+            .mp-slider__body {
+                padding: 12px;
+            }
+
+            .mp-slider__title {
+                font-size: 16px;
+            }
+
+            .mp-slider__text {
+                -webkit-line-clamp: 2;
+            }
+
+            .mp-slider__controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
         }
     </style>
 
     <section class="mp-card" style="padding:0;overflow:hidden;background:linear-gradient(120deg,#0a84d6,#10b2d8 60%,#7bd5ff);color:#fff;">
-        <div class="mp-hero-grid">
+        <div class="mp-hero-grid{{ collect($infoSlides)->isNotEmpty() ? '' : ' mp-hero-grid--single' }}">
             <div class="mp-hero-main">
                 <div class="mp-hero-eyebrow">Городская Экоярмарка</div>
                 <h1 class="mp-hero-title">{{ $marketplaceSettings['hero_title'] }}</h1>
                 <p class="mp-hero-copy">
                     {{ $marketplaceSettings['hero_subtitle'] }}
                 </p>
-            </div>
-            <div class="mp-hero-side">
                 <div class="mp-hero-meta">
                     <div class="mp-hero-actions">
-                    <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
-                    <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
+                        <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
+                        <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
                     </div>
                     <div class="mp-hero-kpis">
-                    @foreach($heroStats as $stat)
-                        <a class="mp-hero-stat" href="{{ $stat['url'] }}">
-                            <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
-                            <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
-                        </a>
-                    @endforeach
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    @if(collect($infoSlides)->isNotEmpty())
-        <section class="mp-card">
-            <style>
-                .mp-slider {
-                    position: relative;
-                    display: grid;
-                    gap: 12px;
-                }
-                .mp-slider__viewport {
-                    overflow: hidden;
-                }
-                .mp-slider__track {
-                    display: grid;
-                    grid-auto-flow: column;
-                    grid-auto-columns: calc(25% - 8px);
-                    gap: 10px;
-                    overflow-x: auto;
-                    scroll-snap-type: x mandatory;
-                    scrollbar-width: none;
-                    scroll-behavior: smooth;
-                    padding-bottom: 2px;
-                }
-                .mp-slider__track::-webkit-scrollbar {
-                    display: none;
-                }
-                .mp-slider__card {
-                    scroll-snap-align: start;
-                    min-height: 128px;
-                    border-radius: 14px;
-                    border: 1px solid #d9e6f7;
-                    background: linear-gradient(180deg, #ffffff, #f7fbff);
-                    box-shadow: 0 6px 18px rgba(17, 32, 59, .05);
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                }
-                .mp-slider__card[data-theme="buyer"] {
-                    background: linear-gradient(180deg, #eff8ff, #ffffff);
-                }
-                .mp-slider__card[data-theme="seller"] {
-                    background: linear-gradient(180deg, #f7f5ff, #ffffff);
-                }
-                .mp-slider__card[data-theme="partner"] {
-                    background: linear-gradient(180deg, #fef7ec, #ffffff);
-                }
-                .mp-slider__media {
-                    height: 56px;
-                    background: #dfefff;
-                }
-                .mp-slider__media img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    display: block;
-                }
-                .mp-slider__body {
-                    padding: 10px;
-                    display: flex;
-                    flex: 1;
-                    flex-direction: column;
-                    gap: 5px;
-                }
-                .mp-slider__title {
-                    margin: 0;
-                    font-size: 15px;
-                    line-height: 1.2;
-                }
-                .mp-slider__text {
-                    margin: 0;
-                    color: var(--muted);
-                    font-size: 13px;
-                    line-height: 1.32;
-                    display: -webkit-box;
-                    -webkit-line-clamp: 1;
-                    -webkit-box-orient: vertical;
-                    overflow: hidden;
-                }
-                .mp-slider__footer .mp-btn {
-                    min-height: 34px;
-                    padding: 7px 11px;
-                }
-                .mp-slider__footer {
-                    margin-top: auto;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 10px;
-                }
-                .mp-slider__controls {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 12px;
-                }
-                .mp-slider__nav {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .mp-slider__arrow {
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 999px;
-                    border: 1px solid #cfe2f7;
-                    background: #fff;
-                    color: var(--text);
-                    font-weight: 800;
-                    cursor: pointer;
-                }
-                .mp-slider__dots {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
-                }
-                .mp-slider__dot {
-                    width: 9px;
-                    height: 9px;
-                    border-radius: 999px;
-                    border: none;
-                    background: #c6d9ee;
-                    cursor: pointer;
-                }
-                .mp-slider__dot.is-active {
-                    width: 28px;
-                    background: linear-gradient(140deg, var(--brand), var(--brand-2));
-                }
-                @media (max-width: 1100px) {
-                    .mp-slider__track {
-                        grid-auto-columns: calc(33.333% - 7px);
-                    }
-                }
-                @media (max-width: 760px) {
-                    .mp-slider__track {
-                        grid-auto-columns: calc(50% - 6px);
-                    }
-                    .mp-slider__controls {
-                        flex-direction: column;
-                        align-items: stretch;
-                    }
-                }
-                @media (max-width: 560px) {
-                    .mp-slider__track {
-                        grid-auto-columns: 100%;
-                    }
-                }
-            </style>
-
-            <div class="mp-slider"
-                 data-mp-slider
-                 data-autoplay="{{ !empty($marketplaceSettings['slider_autoplay_enabled']) ? '1' : '0' }}"
-                 data-interval="{{ (int) ($marketplaceSettings['slider_autoplay_interval_ms'] ?? 7000) }}">
-                <div class="mp-slider__viewport">
-                    <div class="mp-slider__track" data-mp-slider-track>
-                        @foreach($infoSlides as $slide)
-                            @php($imageUrl = is_object($slide) ? ($slide->image_preview_url ?? $slide->image_url) : ($slide['image_url'] ?? null))
-                            @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
-                            @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
-                            @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
-                            @php($ctaLabel = is_object($slide) ? ($slide->cta_label ?? null) : ($slide['cta_label'] ?? null))
-                            @php($ctaUrl = is_object($slide) ? ($slide->cta_url ?? null) : ($slide['cta_url'] ?? null))
-                            <article class="mp-slider__card" data-theme="{{ $theme }}">
-                                @if(filled($imageUrl))
-                                    <div class="mp-slider__media">
-                                        <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="lazy" decoding="async">
-                                    </div>
-                                @endif
-                                <div class="mp-slider__body">
-                                    <h3 class="mp-slider__title">{{ $title }}</h3>
-                                    @if(filled($description))
-                                        <p class="mp-slider__text">{{ $description }}</p>
-                                    @endif
-                                    <div class="mp-slider__footer">
-                                        @if(filled($ctaLabel) && filled($ctaUrl))
-                                            <a class="mp-btn" href="{{ $ctaUrl }}">{{ $ctaLabel }}</a>
-                                        @else
-                                            <span></span>
-                                        @endif
-                                    </div>
-                                </div>
-                            </article>
+                        @foreach($heroStats as $stat)
+                            <a class="mp-hero-stat" href="{{ $stat['url'] }}">
+                                <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
+                                <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
+                            </a>
                         @endforeach
                     </div>
                 </div>
-                <div class="mp-slider__controls">
-                    <div class="mp-slider__nav">
-                        <button class="mp-slider__arrow" type="button" data-mp-slider-prev>&lsaquo;</button>
-                        <button class="mp-slider__arrow" type="button" data-mp-slider-next>&rsaquo;</button>
-                    </div>
-                    <div class="mp-slider__dots" data-mp-slider-dots></div>
-                </div>
             </div>
-        </section>
-    @endif
+            @if(collect($infoSlides)->isNotEmpty())
+                <div class="mp-hero-side">
+                    <div class="mp-slider"
+                         data-mp-slider
+                         data-autoplay="{{ !empty($marketplaceSettings['slider_autoplay_enabled']) ? '1' : '0' }}"
+                         data-interval="{{ (int) ($marketplaceSettings['slider_autoplay_interval_ms'] ?? 7000) }}">
+                        <div class="mp-slider__viewport">
+                            <div class="mp-slider__track" data-mp-slider-track>
+                                @foreach($infoSlides as $slide)
+                                    @php($imageUrl = is_object($slide) ? ($slide->image_preview_url ?? $slide->image_url) : ($slide['image_url'] ?? null))
+                                    @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
+                                    @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
+                                    @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
+                                    @php($ctaLabel = is_object($slide) ? ($slide->cta_label ?? null) : ($slide['cta_label'] ?? null))
+                                    @php($ctaUrl = is_object($slide) ? ($slide->cta_url ?? null) : ($slide['cta_url'] ?? null))
+                                    <article class="mp-slider__card" data-theme="{{ $theme }}">
+                                        @if(filled($imageUrl))
+                                            <div class="mp-slider__media">
+                                                <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="lazy" decoding="async">
+                                            </div>
+                                        @endif
+                                        <div class="mp-slider__body">
+                                            <h3 class="mp-slider__title">{{ $title }}</h3>
+                                            @if(filled($description))
+                                                <p class="mp-slider__text">{{ $description }}</p>
+                                            @endif
+                                            <div class="mp-slider__footer">
+                                                @if(filled($ctaLabel) && filled($ctaUrl))
+                                                    <a class="mp-btn" href="{{ $ctaUrl }}">{{ $ctaLabel }}</a>
+                                                @else
+                                                    <span></span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="mp-slider__controls">
+                            <div class="mp-slider__nav">
+                                <button class="mp-slider__arrow" type="button" data-mp-slider-prev>&lsaquo;</button>
+                                <button class="mp-slider__arrow" type="button" data-mp-slider-next>&rsaquo;</button>
+                            </div>
+                            <div class="mp-slider__dots" data-mp-slider-dots></div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        </div>
+    </section>
 
     @if(!empty($nearestSanitaryAnnouncement))
         <section class="mp-card" style="border-color:#f9d48c;background:linear-gradient(180deg,#fff9e8,#fffdf4);">
