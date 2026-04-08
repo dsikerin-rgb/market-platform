@@ -2307,6 +2307,29 @@ html:not([data-admin-overrides="0"]){
     --sidebar-width: 14.4rem;
   }
 }
+
+/* ====================================================================== */
+/* === Map page hero: compact tablet layout                              === */
+/* ====================================================================== */
+/* Источник проблемы: при ≤1120px .toolbar-row--hero переключается на
+   flex-direction: column, из-за чего left/center/right выстраиваются
+   вертикально и занимают много высоты. Возвращаем горизонтальную
+   компоновку с переносом строк. */
+@media (max-width: 1279px){
+  html:not([data-admin-overrides="0"]) .toolbar-row.toolbar-row--hero{
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+  }
+  /* toolbar-group--hero-left остаётся column (zoom над поиском) */
+  html:not([data-admin-overrides="0"]) .toolbar-group.toolbar-group--hero-actions{
+    justify-content: flex-end !important;
+  }
+  html:not([data-admin-overrides="0"]) .toolbar-group.toolbar-group--hero-actions-main{
+    width: auto !important;
+  }
+}
 </style>
 
 {{-- Tabs stay in the relation-manager container and are positioned via CSS only. --}}
