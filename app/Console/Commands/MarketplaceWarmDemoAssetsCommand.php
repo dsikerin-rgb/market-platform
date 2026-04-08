@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Support\MarketplaceDemoAssetLocalizer;
 use App\Support\MarketplaceDemoAssets;
+use App\Support\MarketplaceMediaStorage;
 use Illuminate\Console\Command;
 
 class MarketplaceWarmDemoAssetsCommand extends Command
@@ -55,6 +56,8 @@ class MarketplaceWarmDemoAssetsCommand extends Command
                 $localized++;
             }
         }
+
+        MarketplaceMediaStorage::normalizeLocalPublicTreePermissions((string) config('marketplace.demo_assets.directory', 'marketplace-demo-assets'));
 
         $this->info(sprintf('Demo assets warmed: %d', $localized));
 

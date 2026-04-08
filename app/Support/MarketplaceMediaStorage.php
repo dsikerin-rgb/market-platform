@@ -7,6 +7,9 @@ namespace App\Support;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
 
 final class MarketplaceMediaStorage
@@ -303,6 +306,51 @@ final class MarketplaceMediaStorage
                 fclose($stream);
             }
         }
+    }
+
+    public static function normalizeLocalPublicTreePermissions(string $path): int
+    {
+        $value = trim($path, "/ \t\n\r\0\x0B");
+        if ($value === '') {
+            return 0;
+        }
+
+        $absolutePath = storage_path('app/public/' . ltrim($value, '/'));
+        if (! file_exists($absolutePath)) {
+            return 0;
+        }
+
+        if (is_file($absolutePath)) {
+            @chmod($absolutePath, 0644);
+
+            return 1;
+        }
+
+        $normalized = 0;
+        @chmod($absolutePath, 0755);
+        $normalized++;
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($absolutePath, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            $itemPath = $item->getPathname();
+            if (! is_string($itemPath) || $itemPath === '') {
+                continue;
+            }
+
+            if ($item->isDir()) {
+                @chmod($itemPath, 0755);
+            } else {
+                @chmod($itemPath, 0644);
+            }
+
+            $normalized++;
+        }
+
+        return $normalized;
     }
 
     public static function hasPreview(?string $path): bool

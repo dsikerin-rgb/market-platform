@@ -12,6 +12,9 @@
     $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
+    $returnUrl = is_string($returnUrl ?? null) && trim((string) $returnUrl) !== ''
+        ? (string) $returnUrl
+        : url('/admin');
 
     // URL’ы API/viewer’а (могут отсутствовать при $hasMap=false — это ок)
     $pdfUrl    = $pdfUrl ?? '';

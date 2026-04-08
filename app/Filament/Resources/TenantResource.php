@@ -1623,6 +1623,7 @@ class TenantResource extends BaseResource
                         'market_space_id' => $spaceId,
                         'page' => (int) ($shapeRow->page ?? 1),
                         'version' => (int) ($shapeRow->version ?? 1),
+                        'return_url' => request()->fullUrl(),
                     ];
 
                     if (

@@ -71,6 +71,7 @@
           }
 
           try { window.close(); } catch (e) { /* ignore */ }
+
           setTimeout(function () {
             if (document.visibilityState !== 'hidden' && fallbackUrl) {
               window.location.replace(fallbackUrl);
@@ -86,7 +87,6 @@
         Загрузите PDF-карту в настройках рынка (поле “Карта (PDF)”), нажмите “Сохранить”, затем откройте просмотр снова.
       </div>
     </div>
-
   </div>
 </body>
 </html>

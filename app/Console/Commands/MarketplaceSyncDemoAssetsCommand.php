@@ -61,6 +61,8 @@ class MarketplaceSyncDemoAssetsCommand extends Command
             $synced++;
         }
 
+        MarketplaceMediaStorage::normalizeLocalPublicTreePermissions($directory);
+
         $this->info("Synced {$synced} demo assets into {$targetDisk}.");
 
         return self::SUCCESS;

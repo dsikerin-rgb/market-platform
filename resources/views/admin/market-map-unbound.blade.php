@@ -71,6 +71,7 @@
           }
 
           try { window.close(); } catch (e) { /* ignore */ }
+
           setTimeout(function () {
             if (document.visibilityState !== 'hidden' && fallbackUrl) {
               window.location.replace(fallbackUrl);
@@ -86,7 +87,6 @@
         Создайте полигон или прямоугольник на карте и привяжите его к этому месту, чтобы открыть карту с фокусом.
       </div>
     </div>
-
   </div>
 </body>
 </html>

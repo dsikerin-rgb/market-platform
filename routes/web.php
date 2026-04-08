@@ -2021,6 +2021,21 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ];
         }
 
+        $returnUrl = url('/admin');
+        $rawReturnUrl = $request->query('return_url');
+        if (is_string($rawReturnUrl)) {
+            $rawReturnUrl = trim($rawReturnUrl);
+            $baseUrl = rtrim(url('/'), '/');
+
+            if ($rawReturnUrl !== '') {
+                if (str_starts_with($rawReturnUrl, '/')) {
+                    $returnUrl = $rawReturnUrl;
+                } elseif ($rawReturnUrl === $baseUrl || str_starts_with($rawReturnUrl, $baseUrl . '/')) {
+                    $returnUrl = $rawReturnUrl;
+                }
+            }
+        }
+
         $focusShape = null;
         $marketSpaceNotLinked = false;
 
@@ -2120,6 +2135,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ?? $market->settings['debt_monitoring']['orange_after_days']
                 ?? 1),
             'debtRedAfterDays' => (int) ($market->settings['debt_monitoring']['red_after_days'] ?? 30),
+            'returnUrl' => $returnUrl,
 
             'settingsUrl' => url('/admin/market-settings'),
 

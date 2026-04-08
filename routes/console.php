@@ -24,6 +24,7 @@ Schedule::call(function () {
 Schedule::command('market:calendar:generate-sanitary')->dailyAt('03:15')->withoutOverlapping();
 Schedule::command('market:calendar:generate-tasks')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('market:holidays:notify')->everyThirtyMinutes();
+Schedule::command('marketplace:repair-demo-asset-permissions')->dailyAt('03:25')->withoutOverlapping();
 
 Schedule::command('notifications:health-check --hours=1 --notify')
     ->everyThirtyMinutes()
