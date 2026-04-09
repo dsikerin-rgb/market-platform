@@ -37,6 +37,7 @@ final class MarketplaceMediaStorage
 
     public static function store(UploadedFile $file, string $directory): string
     {
+        $disk = self::resolveWritableDisk();
         $path = self::importFromPath(
             (string) $file->getRealPath(),
             $directory,
@@ -44,7 +45,7 @@ final class MarketplaceMediaStorage
             (string) $file->getMimeType()
         );
 
-        return $path ?? $file->store($directory, self::disk());
+        return $path ?? $file->store($directory, $disk);
     }
 
     public static function importFromPath(string $sourcePath, string $directory, ?string $baseName = null, ?string $mimeType = null): ?string
@@ -73,7 +74,7 @@ final class MarketplaceMediaStorage
                 return null;
             }
 
-            Storage::disk(self::disk())->put($path, $binary, array_filter([
+            Storage::disk(self::resolveWritableDisk())->put($path, $binary, array_filter([
                 'visibility' => 'public',
                 'ContentType' => $resolvedMimeType !== '' ? $resolvedMimeType : null,
             ], static fn ($value): bool => $value !== null));
@@ -93,8 +94,9 @@ final class MarketplaceMediaStorage
             $normalized = self::resizeToFit($image, self::ORIGINAL_MAX_WIDTH, self::ORIGINAL_MAX_HEIGHT);
             $preview = self::createCoverPreview($normalized, self::PREVIEW_WIDTH, self::PREVIEW_HEIGHT);
 
-            self::storeWebp(self::disk(), $path, $normalized, self::ORIGINAL_QUALITY);
-            self::storeWebp(self::disk(), $previewPath, $preview, self::PREVIEW_QUALITY);
+            $disk = self::resolveWritableDisk();
+            self::storeWebp($disk, $path, $normalized, self::ORIGINAL_QUALITY);
+            self::storeWebp($disk, $previewPath, $preview, self::PREVIEW_QUALITY);
         } finally {
             self::destroyImage($image);
             self::destroyImage($normalized ?? null);
@@ -112,12 +114,12 @@ final class MarketplaceMediaStorage
         }
 
         $paths = [$value, self::previewPath($value)];
-
-        Storage::disk(self::disk())->delete($paths);
-
-        $fallbackDisk = self::fallbackDisk();
-        if ($fallbackDisk !== null && $fallbackDisk !== self::disk()) {
-            Storage::disk($fallbackDisk)->delete($paths);
+        foreach (self::deleteCandidateDisks() as $disk) {
+            try {
+                Storage::disk($disk)->delete($paths);
+            } catch (\Throwable) {
+                // Ignore unavailable disks and continue with fallbacks.
+            }
         }
     }
 
@@ -232,7 +234,7 @@ final class MarketplaceMediaStorage
         }
 
         $previewPath = self::previewPath($value);
-        $disk = self::disk();
+        $disk = self::resolveWritableDisk();
         if (! $force && self::exists($disk, $previewPath)) {
             return true;
         }
@@ -289,7 +291,7 @@ final class MarketplaceMediaStorage
                 $preview = self::createCoverPreview($normalized, self::PREVIEW_WIDTH, self::PREVIEW_HEIGHT);
 
                 if ($force && self::exists($disk, $previewPath)) {
-                    Storage::disk($disk)->delete($previewPath);
+                    self::deleteFromDisk($disk, [$previewPath]);
                 }
 
                 self::storeWebp($disk, $previewPath, $preview, self::PREVIEW_QUALITY);
@@ -425,6 +427,66 @@ final class MarketplaceMediaStorage
     private static function isExternal(string $path): bool
     {
         return Str::startsWith($path, ['http://', 'https://', 'data:', '/']);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function deleteCandidateDisks(): array
+    {
+        $disks = [];
+
+        foreach ([self::disk(), self::fallbackDisk(), 'public'] as $disk) {
+            if (! is_string($disk) || $disk === '' || in_array($disk, $disks, true)) {
+                continue;
+            }
+
+            if (! self::canUseDisk($disk)) {
+                continue;
+            }
+
+            $disks[] = $disk;
+        }
+
+        return $disks;
+    }
+
+    private static function resolveWritableDisk(): string
+    {
+        foreach ([self::disk(), self::fallbackDisk(), 'public'] as $disk) {
+            if (! is_string($disk) || $disk === '') {
+                continue;
+            }
+
+            if (self::canUseDisk($disk)) {
+                return $disk;
+            }
+        }
+
+        return 'public';
+    }
+
+    private static function deleteFromDisk(string $disk, array $paths): void
+    {
+        try {
+            Storage::disk($disk)->delete($paths);
+        } catch (\Throwable) {
+            // Ignore unavailable disks and continue with fallbacks.
+        }
+    }
+
+    private static function canUseDisk(string $disk): bool
+    {
+        $driver = trim((string) config("filesystems.disks.$disk.driver", ''));
+        if ($driver === '') {
+            return false;
+        }
+
+        if ($driver === 's3' && ! class_exists(\League\Flysystem\AwsS3V3\PortableVisibilityConverter::class)) {
+            return false;
+        }
+
+        return true;
     }
 
     private static function exists(string $disk, string $path): bool

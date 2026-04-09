@@ -195,7 +195,7 @@ class MarketplaceMediaStorageTest extends TestCase
         Storage::fake('s3');
         Storage::fake('public');
 
-        config()->set('marketplace.media_disk', 's3');
+        config()->set('marketplace.media_disk', 'broken-primary');
         config()->set('marketplace.media_fallback_disk', 'public');
 
         $path = 'marketplace-demo-assets/products/home/example.webp';
@@ -205,6 +205,25 @@ class MarketplaceMediaStorageTest extends TestCase
             route('marketplace.media.proxy', ['path' => $path]),
             MarketplaceMediaStorage::url($path)
         );
+    }
+
+    public function test_delete_uses_fallback_disk_when_primary_disk_is_unavailable(): void
+    {
+        Storage::fake('public');
+
+        config()->set('marketplace.media_disk', 's3');
+        config()->set('marketplace.media_fallback_disk', 'public');
+
+        $path = 'marketplace-products/demo-delete.webp';
+        $previewPath = MarketplaceMediaStorage::previewPath($path);
+
+        Storage::disk('public')->put($path, 'original');
+        Storage::disk('public')->put($previewPath, 'preview');
+
+        MarketplaceMediaStorage::delete($path);
+
+        Storage::disk('public')->assertMissing($path);
+        Storage::disk('public')->assertMissing($previewPath);
     }
 
     public function test_models_expose_preview_urls_for_listing_images(): void
