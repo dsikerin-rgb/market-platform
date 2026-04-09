@@ -65,7 +65,7 @@ class RevenueYearChartWidget extends ChartWidget
         }
 
         $tz = $this->resolveTimezone($market->timezone);
-        [$selectedYm] = $this->resolveEndMonth($tz);
+        [$selectedYm] = $this->resolveEndMonth($tz, $marketId);
         $currentYm = CarbonImmutable::now($tz)->format('Y-m');
         $latestDebtYm = $this->resolveLatestDebtMonth($marketId);
 
@@ -111,7 +111,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        [, $endMonthStart] = $this->resolveEndMonth($tz);
+        [, $endMonthStart] = $this->resolveEndMonth($tz, $marketId);
 
         $months = [];
         $cursor = $endMonthStart->subMonths(12);
@@ -291,7 +291,7 @@ class RevenueYearChartWidget extends ChartWidget
     /**
      * @return array{0:string,1:CarbonImmutable}
      */
-    private function resolveEndMonth(string $tz): array
+    private function resolveEndMonth(string $tz, ?int $marketId = null): array
     {
         $raw = $this->resolveDashboardFilterMonthRaw();
 
@@ -307,6 +307,14 @@ class RevenueYearChartWidget extends ChartWidget
             ? $raw
             : CarbonImmutable::now($tz)->format('Y-m');
 
+        if (! session('dashboard_month_explicit') && $marketId) {
+            $latestDebtYm = $this->resolveLatestDebtMonth($marketId);
+
+            if ($latestDebtYm && $latestDebtYm > $ym) {
+                $ym = $latestDebtYm;
+            }
+        }
+
         $start = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
 
         return [$ym, $start];
@@ -321,7 +329,7 @@ class RevenueYearChartWidget extends ChartWidget
         }
     }
 
-    private function resolveLatestDebtMonth(int $marketId): ?string
+    protected function resolveLatestDebtMonth(int $marketId): ?string
     {
         if ($marketId <= 0 || ! Schema::hasTable('contract_debts')) {
             return null;
