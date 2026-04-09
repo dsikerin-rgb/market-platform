@@ -671,7 +671,7 @@
             <div class="mp-page-head">
                 <div>
                     <h2 class="mp-page-title" style="font-size:26px;">Рекомендуем</h2>
-                    <p class="mp-page-sub">Подборка актуальных предложений продавцов Экоярмарки.</p>
+                    <p class="mp-page-sub">Подборка актуальных предложений разных продавцов Экоярмарки.</p>
                 </div>
             </div>
             <div class="mp-grid">
