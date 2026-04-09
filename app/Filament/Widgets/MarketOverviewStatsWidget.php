@@ -71,7 +71,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         // Финансовая/отчётная часть зависит от выбранного месяца.
-        [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz);
+        [$monthYm, $monthStart, $monthEnd] = $this->resolveFinancialMonthRange($marketId, $tz);
         $monthLabel = $this->formatMonthLabel($monthYm, $tz);
 
         $financialSummary = $this->resolveFinancialSummaryForMonth($marketId, $monthYm, $monthStart, $monthEnd);
@@ -268,6 +268,32 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         return $url . (str_contains($url, '?') ? '&' : '?') . $queryString;
     }
 
+    /**
+     * @return array{0:string,1:CarbonImmutable,2:CarbonImmutable}
+     */
+    private function resolveFinancialMonthRange(int $marketId, string $tz): array
+    {
+        [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz);
+
+        if (session('dashboard_month_explicit')) {
+            return [$monthYm, $monthStart, $monthEnd];
+        }
+
+        $latestDebtMonth = $this->resolveLatestDebtMonth($marketId);
+
+        if ($latestDebtMonth && $latestDebtMonth !== $monthYm) {
+            $latestMonthStart = CarbonImmutable::createFromFormat('Y-m', $latestDebtMonth, $tz)->startOfMonth();
+
+            return [
+                $latestDebtMonth,
+                $latestMonthStart,
+                $latestMonthStart->addMonth(),
+            ];
+        }
+
+        return [$monthYm, $monthStart, $monthEnd];
+    }
+
     private function resolveMarketIdForWidget($user): int
     {
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
@@ -286,6 +312,26 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         return (int) ($value ?: 0);
+    }
+
+    protected function resolveLatestDebtMonth(int $marketId): ?string
+    {
+        if ($marketId <= 0 || ! Schema::hasTable('contract_debts')) {
+            return null;
+        }
+
+        try {
+            $value = ContractDebt::query()
+                ->where('market_id', $marketId)
+                ->orderByDesc('period')
+                ->value('period');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value)
+            ? $value
+            : null;
     }
 
     private function resolveTimezone(?string $marketTimezone): string
