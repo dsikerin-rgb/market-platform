@@ -130,8 +130,9 @@ class Dashboard extends BaseDashboard
             $current = $this->filters['month'] ?? $current;
         }
 
-        $fallback = $this->resolveLastMonthWithData($marketId, $tz);
-        $month = $this->resolveMonthOrFallback($current ?: session('dashboard_month'), $fallback);
+        $month = filled($current)
+            ? $this->resolveMonthOrFallback($current, $this->resolveLastMonthWithData($marketId, $tz))
+            : $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
 
         $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
         session(['dashboard_month' => $month]);
@@ -265,7 +266,9 @@ class Dashboard extends BaseDashboard
             $selectedMonth = $this->filters['month'] ?? null;
         }
 
-        $month = $this->resolveMonthOrFallback($selectedMonth ?: session('dashboard_month'), $fallbackMonth);
+        $month = filled($selectedMonth)
+            ? $this->resolveMonthOrFallback($selectedMonth, $fallbackMonth)
+            : $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
         $periodLabel = $this->formatWorkspaceMonthLabel($month, $tz);
         $marketName = trim((string) ($market?->name ?? ''));
         $marketSelected = $marketId > 0 && $marketName !== '';
@@ -741,7 +744,11 @@ class Dashboard extends BaseDashboard
         $raw = session('dashboard_month');
         $fallback = $this->resolveLastMonthWithData($marketId, $tz);
 
-        return $this->resolveMonthOrFallback($raw, $fallback);
+        if (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)) {
+            return strcmp($raw, $fallback) < 0 ? $fallback : $raw;
+        }
+
+        return $fallback;
     }
 
     private function resolveMonthOrFallback(mixed $candidate, string $fallbackYm): string
