@@ -308,6 +308,40 @@ class MarketplaceFeatureTest extends TestCase
             ->assertDontSee('00:00');
     }
 
+    public function test_announcement_show_falls_back_to_legacy_description_when_public_payload_is_empty(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Legacy event market',
+            'slug' => 'legacy-event-market',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+        ]);
+
+        $holiday = MarketHoliday::query()->create([
+            'market_id' => (int) $market->id,
+            'title' => 'Субботняя ярмарка',
+            'starts_at' => '2026-05-16',
+            'all_day' => true,
+            'description' => 'Расширенная распродажа сезонных товаров и праздничная программа для семей.',
+            'source' => 'market_event',
+            'public_payload' => null,
+        ]);
+
+        $announcement = MarketplaceAnnouncement::query()
+            ->where('market_holiday_id', (int) $holiday->id)
+            ->firstOrFail();
+
+        $this->get(route('marketplace.announcement.show', [
+            'marketSlug' => $market->slug,
+            'announcementSlug' => $announcement->slug,
+        ]))
+            ->assertOk()
+            ->assertSee('Расширенная распродажа сезонных товаров и праздничная программа для семей.')
+            ->assertSee('Что будет на событии')
+            ->assertSee('Практическая информация')
+            ->assertDontSee('Описание события появится позже.');
+    }
+
     public function test_marketplace_bootstrap_seeds_ten_demo_products_per_tenant(): void
     {
         $market = Market::query()->create([
