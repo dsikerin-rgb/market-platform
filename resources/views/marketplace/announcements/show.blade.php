@@ -28,12 +28,22 @@
     @php($dateLabel = $announcement->starts_at ? optional($announcement->starts_at)->format('d.m.Y') : '')
     @php($endDateLabel = $announcement->ends_at ? optional($announcement->ends_at)->format('d.m.Y') : '')
     @php($showDateRange = $dateLabel !== '' && $endDateLabel !== '' && $dateLabel !== $endDateLabel)
+    @php($hasSummary = $summary !== '')
+    @php($hasDetails = $details !== '')
+    @php($hasSchedule = $scheduleItems->isNotEmpty())
+    @php($hasPromo = $promoItems->isNotEmpty())
+    @php($hasSecondaryContent = $hasSchedule || $hasPromo)
+    @php($hasLocationInfo = $locationTitle !== '' || $locationNote !== '')
+    @php($hasPracticalInfo = $dateLabel !== '' || $timeNote !== '' || $hasLocationInfo || $specialHours !== '')
+    @php($introTitle = ($hasSummary || $hasDetails) ? 'Что будет на событии' : 'О событии')
+    @php($introBody = $hasDetails ? $details : ($hasSummary ? $summary : 'Подробности события уточняются. Следите за обновлениями на странице ярмарки.'))
 
     <style>
         .mp-announcement-hero {
             display: grid;
             grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
             gap: 18px;
+            align-items: start;
             margin-bottom: 18px;
         }
 
@@ -65,7 +75,8 @@
         }
 
         .mp-announcement-cover {
-            min-height: 220px;
+            min-height: 0;
+            aspect-ratio: 16 / 10;
             border-radius: 18px;
             overflow: hidden;
             border: 1px solid #d5e5f8;
@@ -176,13 +187,25 @@
             letter-spacing: .06em;
         }
 
+        .mp-announcement-inline-facts {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .mp-announcement-inline-facts .mp-announcement-fact {
+            padding: 12px 14px;
+        }
+
         @media (max-width: 980px) {
             .mp-announcement-hero,
             .mp-announcement-layout {
                 grid-template-columns: 1fr;
             }
 
-            .mp-announcement-promo-grid {
+            .mp-announcement-promo-grid,
+            .mp-announcement-inline-facts {
                 grid-template-columns: 1fr;
             }
         }
@@ -221,9 +244,9 @@
 
         <section class="mp-announcement-hero">
             <div class="mp-announcement-section" style="background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);">
-                <h2>Что будет на событии</h2>
+                <h2>{{ $introTitle }}</h2>
                 <div style="line-height:1.75;font-size:16px;color:#29476e;">
-                    {!! nl2br(e($details !== '' ? $details : ($summary !== '' ? $summary : 'Описание события появится позже.'))) !!}
+                    {!! nl2br(e($introBody)) !!}
                 </div>
 
                 <div class="mp-announcement-actions">
@@ -233,67 +256,9 @@
                         <a class="mp-btn" href="{{ $primaryCtaUrl }}">{{ $primaryCtaLabel }}</a>
                     @endif
                 </div>
-            </div>
 
-            @if($coverImageUrl)
-                <div class="mp-announcement-cover">
-                    <img src="{{ $coverImageUrl }}" alt="{{ $announcement->title }}" loading="lazy" decoding="async">
-                </div>
-            @endif
-        </section>
-
-        <section class="mp-announcement-layout">
-            <div class="mp-announcement-stack">
-                @if($scheduleItems->isNotEmpty())
-                    <div class="mp-announcement-section">
-                        <h2>Программа</h2>
-                        <div class="mp-announcement-program">
-                            @foreach($scheduleItems as $item)
-                                <div class="mp-announcement-program-item">
-                                    <div class="mp-announcement-program-time">{{ trim((string) ($item['time'] ?? '')) ?: 'В течение дня' }}</div>
-                                    <div>
-                                        @if(trim((string) ($item['title'] ?? '')) !== '')
-                                            <div style="font-weight:800;font-size:17px;margin-bottom:6px;">{{ $item['title'] }}</div>
-                                        @endif
-                                        @if(trim((string) ($item['description'] ?? '')) !== '')
-                                            <div class="mp-muted" style="line-height:1.65;">{{ $item['description'] }}</div>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-
-                @if($promoItems->isNotEmpty())
-                    <div class="mp-announcement-section">
-                        <h2>Акции и активности</h2>
-                        <div class="mp-announcement-promo-grid">
-                            @foreach($promoItems as $item)
-                                <div class="mp-announcement-promo-card">
-                                    @if(trim((string) ($item['badge'] ?? '')) !== '')
-                                        <span class="mp-announcement-promo-badge">{{ $item['badge'] }}</span>
-                                    @endif
-                                    @if(trim((string) ($item['title'] ?? '')) !== '')
-                                        <div style="font-size:18px;font-weight:800;margin-bottom:8px;">{{ $item['title'] }}</div>
-                                    @endif
-                                    @if(trim((string) ($item['description'] ?? '')) !== '')
-                                        <div class="mp-muted" style="line-height:1.65;margin-bottom:10px;">{{ $item['description'] }}</div>
-                                    @endif
-                                    @if(trim((string) ($item['link_label'] ?? '')) !== '' && trim((string) ($item['link_url'] ?? '')) !== '')
-                                        <a class="mp-btn" href="{{ $item['link_url'] }}">{{ $item['link_label'] }}</a>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-            </div>
-
-            <aside class="mp-announcement-stack">
-                <div class="mp-announcement-section">
-                    <h2>Практическая информация</h2>
-                    <div class="mp-announcement-facts">
+                @if(! $hasSecondaryContent && $hasPracticalInfo)
+                    <div class="mp-announcement-inline-facts">
                         <div class="mp-announcement-fact">
                             <p class="mp-announcement-fact-label">Дата</p>
                             <div>{{ $showDateRange ? ($dateLabel . ' - ' . $endDateLabel) : ($dateLabel !== '' ? $dateLabel : 'Будет объявлена позже') }}</div>
@@ -306,7 +271,7 @@
                             </div>
                         @endif
 
-                        @if($locationTitle !== '' || $locationNote !== '')
+                        @if($hasLocationInfo)
                             <div class="mp-announcement-fact">
                                 <p class="mp-announcement-fact-label">Место</p>
                                 @if($locationTitle !== '')
@@ -325,8 +290,103 @@
                             </div>
                         @endif
                     </div>
+                @endif
+            </div>
+
+            @if($coverImageUrl)
+                <div class="mp-announcement-cover">
+                    <img src="{{ $coverImageUrl }}" alt="{{ $announcement->title }}" loading="lazy" decoding="async">
                 </div>
-            </aside>
+            @endif
         </section>
+
+        @if($hasSecondaryContent)
+            <section class="mp-announcement-layout">
+                <div class="mp-announcement-stack">
+                    @if($hasSchedule)
+                        <div class="mp-announcement-section">
+                            <h2>Программа</h2>
+                            <div class="mp-announcement-program">
+                                @foreach($scheduleItems as $item)
+                                    <div class="mp-announcement-program-item">
+                                        <div class="mp-announcement-program-time">{{ trim((string) ($item['time'] ?? '')) ?: 'В течение дня' }}</div>
+                                        <div>
+                                            @if(trim((string) ($item['title'] ?? '')) !== '')
+                                                <div style="font-weight:800;font-size:17px;margin-bottom:6px;">{{ $item['title'] }}</div>
+                                            @endif
+                                            @if(trim((string) ($item['description'] ?? '')) !== '')
+                                                <div class="mp-muted" style="line-height:1.65;">{{ $item['description'] }}</div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($hasPromo)
+                        <div class="mp-announcement-section">
+                            <h2>Акции и активности</h2>
+                            <div class="mp-announcement-promo-grid">
+                                @foreach($promoItems as $item)
+                                    <div class="mp-announcement-promo-card">
+                                        @if(trim((string) ($item['badge'] ?? '')) !== '')
+                                            <span class="mp-announcement-promo-badge">{{ $item['badge'] }}</span>
+                                        @endif
+                                        @if(trim((string) ($item['title'] ?? '')) !== '')
+                                            <div style="font-size:18px;font-weight:800;margin-bottom:8px;">{{ $item['title'] }}</div>
+                                        @endif
+                                        @if(trim((string) ($item['description'] ?? '')) !== '')
+                                            <div class="mp-muted" style="line-height:1.65;margin-bottom:10px;">{{ $item['description'] }}</div>
+                                        @endif
+                                        @if(trim((string) ($item['link_label'] ?? '')) !== '' && trim((string) ($item['link_url'] ?? '')) !== '')
+                                            <a class="mp-btn" href="{{ $item['link_url'] }}">{{ $item['link_label'] }}</a>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                <aside class="mp-announcement-stack">
+                    <div class="mp-announcement-section">
+                        <h2>Практическая информация</h2>
+                        <div class="mp-announcement-facts">
+                            <div class="mp-announcement-fact">
+                                <p class="mp-announcement-fact-label">Дата</p>
+                                <div>{{ $showDateRange ? ($dateLabel . ' - ' . $endDateLabel) : ($dateLabel !== '' ? $dateLabel : 'Будет объявлена позже') }}</div>
+                            </div>
+
+                            @if($timeNote !== '')
+                                <div class="mp-announcement-fact">
+                                    <p class="mp-announcement-fact-label">Время</p>
+                                    <div>{{ $timeNote }}</div>
+                                </div>
+                            @endif
+
+                            @if($hasLocationInfo)
+                                <div class="mp-announcement-fact">
+                                    <p class="mp-announcement-fact-label">Место</p>
+                                    @if($locationTitle !== '')
+                                        <div style="font-weight:700;margin-bottom:6px;">{{ $locationTitle }}</div>
+                                    @endif
+                                    @if($locationNote !== '')
+                                        <div class="mp-muted" style="line-height:1.6;">{{ $locationNote }}</div>
+                                    @endif
+                                </div>
+                            @endif
+
+                            @if($specialHours !== '')
+                                <div class="mp-announcement-fact">
+                                    <p class="mp-announcement-fact-label">Важно знать</p>
+                                    <div class="mp-muted" style="line-height:1.6;">{{ $specialHours }}</div>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </aside>
+            </section>
+        @endif
     </article>
 @endsection
