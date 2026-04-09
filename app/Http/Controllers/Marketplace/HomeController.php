@@ -13,6 +13,7 @@ use App\Support\MarketplaceDefaultSlideCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class HomeController extends BaseMarketplaceController
@@ -23,21 +24,25 @@ class HomeController extends BaseMarketplaceController
         $allowWithoutActiveContracts = app(PortalAccessService::class)->allowsPublicSalesWithoutActiveContract($market);
         $showDemoContent = $this->marketplaceDemoContentEnabled($market);
 
-        $featuredProducts = MarketplaceProduct::query()
+        $featuredCandidates = MarketplaceProduct::query()
             ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
             ->where('is_featured', true)
             ->with(['tenant:id,name,short_name,slug', 'category:id,name,slug'])
             ->orderByDesc('published_at')
-            ->limit(12)
+            ->orderByDesc('id')
+            ->limit(48)
             ->get();
 
-        $latestProducts = MarketplaceProduct::query()
+        $latestProductsPool = MarketplaceProduct::query()
             ->publiclyVisibleInMarket((int) $market->id, $allowWithoutActiveContracts, $showDemoContent)
             ->with(['tenant:id,name,short_name,slug'])
             ->orderByDesc('published_at')
             ->orderByDesc('id')
-            ->limit(16)
+            ->limit(48)
             ->get();
+
+        $featuredProducts = $this->diversifyProductsByTenant($featuredCandidates, $latestProductsPool, 12);
+        $latestProducts = $latestProductsPool->take(16)->values();
 
         $today = CarbonImmutable::today();
         $upcomingWindowEnd = $today->addMonths(2);
@@ -154,5 +159,41 @@ class HomeController extends BaseMarketplaceController
                 'infoSlides' => $infoSlides,
             ],
         ));
+    }
+
+    private function diversifyProductsByTenant(Collection $primary, Collection $fallback, int $limit): Collection
+    {
+        $picked = collect();
+        $seenTenants = [];
+
+        $push = static function ($product) use (&$picked, &$seenTenants): bool {
+            $tenantId = (int) ($product->tenant_id ?? 0);
+            if ($tenantId <= 0 || isset($seenTenants[$tenantId])) {
+                return false;
+            }
+
+            $seenTenants[$tenantId] = true;
+            $picked->push($product);
+
+            return true;
+        };
+
+        foreach ($primary as $product) {
+            $push($product);
+
+            if ($picked->count() >= $limit) {
+                return $picked->values();
+            }
+        }
+
+        foreach ($fallback as $product) {
+            $push($product);
+
+            if ($picked->count() >= $limit) {
+                break;
+            }
+        }
+
+        return $picked->take($limit)->values();
     }
 }

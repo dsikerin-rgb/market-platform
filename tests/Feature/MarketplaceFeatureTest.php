@@ -85,6 +85,99 @@ class MarketplaceFeatureTest extends TestCase
             ->assertSee('Каталог товаров');
     }
 
+    public function test_home_recommendations_mix_products_from_different_sellers(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Рынок рекомендаций',
+            'slug' => 'recommendation-market',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+            'settings' => [
+                'marketplace' => [
+                    'allow_public_sales_without_active_contracts' => true,
+                ],
+            ],
+        ]);
+
+        $tenantA = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Продавец А',
+            'short_name' => 'А',
+            'slug' => 'seller-a',
+            'is_active' => true,
+        ]);
+
+        $tenantB = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Продавец Б',
+            'short_name' => 'Б',
+            'slug' => 'seller-b',
+            'is_active' => true,
+        ]);
+
+        $category = MarketplaceCategory::query()->create([
+            'market_id' => null,
+            'name' => 'Категория',
+            'slug' => 'cat',
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+
+        MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenantA->id,
+            'category_id' => (int) $category->id,
+            'title' => 'Товар A1',
+            'slug' => 'product-a-1',
+            'price' => 1000,
+            'currency' => 'RUB',
+            'stock_qty' => 10,
+            'is_active' => true,
+            'is_featured' => true,
+            'published_at' => now()->subHours(2),
+        ]);
+
+        MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenantA->id,
+            'category_id' => (int) $category->id,
+            'title' => 'Товар A2',
+            'slug' => 'product-a-2',
+            'price' => 900,
+            'currency' => 'RUB',
+            'stock_qty' => 5,
+            'is_active' => true,
+            'is_featured' => true,
+            'published_at' => now()->subHour(),
+        ]);
+
+        MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenantB->id,
+            'category_id' => (int) $category->id,
+            'title' => 'Товар B1',
+            'slug' => 'product-b-1',
+            'price' => 1100,
+            'currency' => 'RUB',
+            'stock_qty' => 7,
+            'is_active' => true,
+            'published_at' => now(),
+        ]);
+
+        $response = $this->get(route('marketplace.home', ['marketSlug' => $market->slug]))
+            ->assertOk();
+
+        $featuredProducts = $response->viewData('featuredProducts');
+
+        $this->assertNotNull($featuredProducts);
+        $this->assertCount(2, $featuredProducts);
+        $this->assertSame(2, $featuredProducts->pluck('tenant_id')->unique()->count());
+        $this->assertEqualsCanonicalizing(
+            [(int) $tenantA->id, (int) $tenantB->id],
+            $featuredProducts->pluck('tenant_id')->all()
+        );
+    }
+
     public function test_buyer_role_access_for_buyer_routes(): void
     {
         $market = Market::query()->create([
