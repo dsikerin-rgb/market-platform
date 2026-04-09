@@ -75,6 +75,22 @@ class RevenueYearChartWidgetIncompletePeriodsTest extends TestCase
         $this->assertArrayHasKey('2026-04', $filtered);
     }
 
+    #[Test]
+    public function it_turns_leading_zero_coverage_points_into_nulls(): void
+    {
+        $widget = new RevenueYearChartWidget();
+
+        $normalized = $this->invokeZeroCoverageNormalizer(
+            $widget,
+            [0.0, 0.0, 52.3, 50.1]
+        );
+
+        $this->assertNull($normalized[0]);
+        $this->assertNull($normalized[1]);
+        $this->assertSame(52.3, $normalized[2]);
+        $this->assertSame(50.1, $normalized[3]);
+    }
+
     /**
      * @param  array<string, array{rows:int,payable:float,spaces:array<int,true>}>  $periodStats
      * @return array<string, array{rows:int,payable:float,spaces:array<int,true>}>
@@ -86,6 +102,21 @@ class RevenueYearChartWidgetIncompletePeriodsTest extends TestCase
 
         /** @var array<string, array{rows:int,payable:float,spaces:array<int,true>}> $result */
         $result = $method->invoke($widget, $periodStats, $totalSpaces);
+
+        return $result;
+    }
+
+    /**
+     * @param  list<float|null>  $coveragePctData
+     * @return list<float|null>
+     */
+    private function invokeZeroCoverageNormalizer(RevenueYearChartWidget $widget, array $coveragePctData): array
+    {
+        $method = new ReflectionMethod($widget, 'nullLeadingZeroCoveragePoints');
+        $method->setAccessible(true);
+
+        /** @var list<float|null> $result */
+        $result = $method->invoke($widget, $coveragePctData);
 
         return $result;
     }

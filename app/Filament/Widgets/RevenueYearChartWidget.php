@@ -484,6 +484,8 @@ class RevenueYearChartWidget extends ChartWidget
             $coveragePctData[] = round(($occupied / $totalSpaces) * 100, 1);
         }
 
+        $coveragePctData = $this->nullLeadingZeroCoveragePoints($coveragePctData);
+
         return [$payableData, $coveragePctData];
     }
 
@@ -557,5 +559,36 @@ class RevenueYearChartWidget extends ChartWidget
             : 0;
 
         return round(($spaces / $totalSpaces) * 100, 1);
+    }
+
+    /**
+     * If the first visible coverage points are exact zeros, but later months do have
+     * positive coverage, treat those zeros as incomplete data rather than a real 0%.
+     *
+     * @param  list<float|null>  $coveragePctData
+     * @return list<float|null>
+     */
+    private function nullLeadingZeroCoveragePoints(array $coveragePctData): array
+    {
+        $firstPositiveIndex = null;
+
+        foreach ($coveragePctData as $index => $value) {
+            if (is_numeric($value) && (float) $value > 0.0) {
+                $firstPositiveIndex = $index;
+                break;
+            }
+        }
+
+        if ($firstPositiveIndex === null) {
+            return $coveragePctData;
+        }
+
+        for ($i = 0; $i < $firstPositiveIndex; $i++) {
+            if (isset($coveragePctData[$i]) && is_numeric($coveragePctData[$i]) && (float) $coveragePctData[$i] <= 0.0) {
+                $coveragePctData[$i] = null;
+            }
+        }
+
+        return $coveragePctData;
     }
 }
