@@ -33,6 +33,8 @@ class Dashboard extends BaseDashboard
 {
     use HasFiltersForm;
 
+    public ?string $activeDashboardMonth = null;
+
     protected string $view = 'filament.pages.dashboard';
 
     protected static ?string $navigationLabel = 'Панель управления';
@@ -426,7 +428,7 @@ class Dashboard extends BaseDashboard
                         ->afterStateHydrated(function (Select $component, $state) use ($resolveTz): void {
                             $marketId = $this->resolveMarketId();
                             $tz = $resolveTz();
-                            $value = $this->resolveActiveDashboardMonth($marketId, $tz, $state);
+                            $value = $this->resolveActiveDashboardMonth($marketId, $tz);
 
                             if ($state !== $value) {
                                 $component->state($value);
@@ -741,8 +743,8 @@ class Dashboard extends BaseDashboard
             return $this->resolveMonthOrFallback($preferred, $fallback);
         }
 
-        if (is_array($this->filters ?? null) && filled($this->filters['month'] ?? null)) {
-            return $this->resolveMonthOrFallback($this->filters['month'], $fallback);
+        if (filled($this->activeDashboardMonth)) {
+            return $this->resolveMonthOrFallback($this->activeDashboardMonth, $fallback);
         }
 
         return $fallback;
@@ -750,6 +752,7 @@ class Dashboard extends BaseDashboard
 
     private function syncDashboardMonthState(string $month, bool $syncFormState = false): void
     {
+        $this->activeDashboardMonth = $month;
         $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
 
         session([
