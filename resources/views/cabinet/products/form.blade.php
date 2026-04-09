@@ -514,24 +514,8 @@
                 return;
             }
 
-            const readCookie = (name) => {
-                const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
-
-                if (!match) {
-                    return null;
-                }
-
-                try {
-                    return decodeURIComponent(match[1]);
-                } catch (error) {
-                    return match[1];
-                }
-            };
-
             const syncCsrfToken = () => {
-                const cookieToken = readCookie('XSRF-TOKEN');
-                const token = cookieToken || csrfMeta?.getAttribute('content') || '';
+                const token = csrfMeta?.getAttribute('content') || '';
 
                 if (!token) {
                     return '';
