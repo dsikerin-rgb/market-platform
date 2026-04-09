@@ -63,8 +63,30 @@ class RevenueYearChartWidget extends ChartWidget
         }
 
         $tz = $this->resolveTimezone($market->timezone);
+        [$selectedYm] = $this->resolveEndMonth($tz);
+        $currentYm = CarbonImmutable::now($tz)->format('Y-m');
+        $latestDebtYm = $this->resolveLatestDebtMonth($marketId);
 
-        return 'Локация: ' . (string) $market->name . ' • TZ: ' . $tz . ' • Источник: 1С';
+        $parts = [
+            'Локация: ' . (string) $market->name,
+            'TZ: ' . $tz,
+            'Источник: 1С',
+            'Период графика: до ' . $this->formatMonthLabel($selectedYm, $tz),
+        ];
+
+        if ($selectedYm !== $currentYm) {
+            $parts[] = 'Текущий месяц: ' . $this->formatMonthLabel($currentYm, $tz);
+        }
+
+        if ($latestDebtYm && $latestDebtYm !== $selectedYm) {
+            $parts[] = 'Последние данные: ' . $this->formatMonthLabel($latestDebtYm, $tz);
+        }
+
+        if ($latestDebtYm && $latestDebtYm === $selectedYm && $selectedYm !== $currentYm) {
+            $parts[] = 'Новых данных за ' . $this->formatMonthLabel($currentYm, $tz) . ' пока нет';
+        }
+
+        return implode(' • ', $parts);
     }
 
     protected function getData(): array
@@ -305,6 +327,26 @@ class RevenueYearChartWidget extends ChartWidget
         } catch (\Throwable) {
             return $ym;
         }
+    }
+
+    private function resolveLatestDebtMonth(int $marketId): ?string
+    {
+        if ($marketId <= 0 || ! Schema::hasTable('contract_debts')) {
+            return null;
+        }
+
+        try {
+            $value = DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->orderByDesc('period')
+                ->value('period');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value)
+            ? $value
+            : null;
     }
 
     private function emptyChart(string $label = 'Нет данных'): array
