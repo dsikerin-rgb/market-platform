@@ -20,15 +20,14 @@ class DashboardMonthFilterHydrationTest extends TestCase
     public function test_booted_ignores_stale_persisted_dashboard_filter_session_and_uses_latest_month(): void
     {
         [$page, $filtersSessionKey] = $this->bootstrapDashboardPageWithLatestMonth(
-            dashboardMonth: '2026-03',
             filtersMonth: '2026-03',
-            activeFilters: null,
         );
 
         $page->mountHasFilters();
         $this->invokeDashboardHook($page, 'booted');
 
         $this->assertSame('2026-04', $page->filters['month'] ?? null);
+        $this->assertSame('2026-04', $page->activeDashboardMonth);
         $this->assertSame('2026-04', session('dashboard_month'));
         $this->assertSame('2026-04-01', session('dashboard_period'));
         $this->assertNull(session('dashboard_month_mode'));
@@ -40,15 +39,15 @@ class DashboardMonthFilterHydrationTest extends TestCase
     public function test_booted_preserves_explicit_historical_month_from_current_page_state(): void
     {
         [$page, $filtersSessionKey] = $this->bootstrapDashboardPageWithLatestMonth(
-            dashboardMonth: '2026-03',
             filtersMonth: '2026-03',
-            activeFilters: ['month' => '2026-03'],
         );
+        $page->activeDashboardMonth = '2026-03';
 
         $page->mountHasFilters();
         $this->invokeDashboardHook($page, 'booted');
 
         $this->assertSame('2026-03', $page->filters['month'] ?? null);
+        $this->assertSame('2026-03', $page->activeDashboardMonth);
         $this->assertSame('2026-03', session('dashboard_month'));
         $this->assertSame('2026-03-01', session('dashboard_period'));
         $this->assertNull(session('dashboard_month_mode'));
@@ -61,9 +60,7 @@ class DashboardMonthFilterHydrationTest extends TestCase
      * @return array{0: Dashboard, 1: string}
      */
     private function bootstrapDashboardPageWithLatestMonth(
-        string $dashboardMonth,
         string $filtersMonth,
-        ?array $activeFilters,
     ): array {
         Carbon::setTestNow('2026-04-09 12:00:00');
 
@@ -96,7 +93,7 @@ class DashboardMonthFilterHydrationTest extends TestCase
             'management_fee' => 0,
             'total_with_vat' => 1000.00,
             'source' => '1c',
-            'source_row_hash' => hash('sha256', 'dashboard-month-filter-' . $dashboardMonth . '-' . ($activeFilters['month'] ?? 'latest')),
+            'source_row_hash' => hash('sha256', 'dashboard-month-filter-' . $filtersMonth),
             'imported_at' => now(),
             'created_at' => now(),
             'updated_at' => now(),
@@ -109,12 +106,10 @@ class DashboardMonthFilterHydrationTest extends TestCase
 
         session([
             'dashboard_market_id' => (int) $market->id,
-            'dashboard_month' => $dashboardMonth,
-            'dashboard_period' => $dashboardMonth . '-01',
+            'dashboard_month' => '2026-03',
+            'dashboard_period' => '2026-03-01',
             $filtersSessionKey => ['month' => $filtersMonth],
         ]);
-
-        $page->filters = $activeFilters;
 
         return [$page, $filtersSessionKey];
     }
