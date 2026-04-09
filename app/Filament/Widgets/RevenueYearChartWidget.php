@@ -447,17 +447,21 @@ class RevenueYearChartWidget extends ChartWidget
 
             if (! isset($periodStats[$period])) {
                 $periodStats[$period] = [
+                    'rows' => 0,
                     'payable' => 0.0,
                     'spaces' => [],
                 ];
             }
 
+            $periodStats[$period]['rows']++;
             $periodStats[$period]['payable'] += (float) ($row->accrued_amount ?? 0);
 
             if ($row->market_space_id !== null) {
                 $periodStats[$period]['spaces'][(int) $row->market_space_id] = true;
             }
         }
+
+        $periodStats = $this->filterLeadingIncompleteDebtPeriods($periodStats, $totalSpaces);
 
         $payableData = [];
         $coveragePctData = [];
@@ -481,5 +485,77 @@ class RevenueYearChartWidget extends ChartWidget
         }
 
         return [$payableData, $coveragePctData];
+    }
+
+    /**
+     * The earliest debt snapshots can be partial and look like tiny but real values.
+     * Keep the leading outlier months out of the chart so we do not misrepresent them as final data.
+     *
+     * @param  array<string, array{rows:int,payable:float,spaces:array<int,true>}>  $periodStats
+     * @return array<string, array{rows:int,payable:float,spaces:array<int,true>}>
+     */
+    private function filterLeadingIncompleteDebtPeriods(array $periodStats, int $totalSpaces): array
+    {
+        if (count($periodStats) < 2 || $totalSpaces <= 0) {
+            return $periodStats;
+        }
+
+        $maxRows = 0;
+        $maxPayable = 0.0;
+        $maxCoverage = 0.0;
+
+        foreach ($periodStats as $stat) {
+            $rows = (int) ($stat['rows'] ?? 0);
+            $payable = (float) ($stat['payable'] ?? 0);
+            $coverage = $this->calculateDebtCoveragePct($stat, $totalSpaces);
+
+            $maxRows = max($maxRows, $rows);
+            $maxPayable = max($maxPayable, $payable);
+            $maxCoverage = max($maxCoverage, $coverage);
+        }
+
+        $rowsThreshold = $maxRows > 0 ? max(2, (int) ceil($maxRows * 0.2)) : 0;
+        $payableThreshold = $maxPayable > 0 ? max(1.0, $maxPayable * 0.2) : 0.0;
+        $coverageThreshold = $maxCoverage > 0 ? max(1.0, $maxCoverage * 0.2) : 0.0;
+
+        $filtered = [];
+        $stillLeading = true;
+
+        foreach ($periodStats as $period => $stat) {
+            $rows = (int) ($stat['rows'] ?? 0);
+            $payable = (float) ($stat['payable'] ?? 0);
+            $coverage = $this->calculateDebtCoveragePct($stat, $totalSpaces);
+
+            if (
+                $stillLeading
+                && $rows > 0
+                && $rows <= $rowsThreshold
+                && $payable <= $payableThreshold
+                && $coverage <= $coverageThreshold
+            ) {
+                continue;
+            }
+
+            $stillLeading = false;
+            $filtered[$period] = $stat;
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param  array{rows:int,payable:float,spaces:array<int,true>}  $stat
+     */
+    private function calculateDebtCoveragePct(array $stat, int $totalSpaces): float
+    {
+        if ($totalSpaces <= 0) {
+            return 0.0;
+        }
+
+        $spaces = isset($stat['spaces']) && is_array($stat['spaces'])
+            ? count($stat['spaces'])
+            : 0;
+
+        return round(($spaces / $totalSpaces) * 100, 1);
     }
 }
