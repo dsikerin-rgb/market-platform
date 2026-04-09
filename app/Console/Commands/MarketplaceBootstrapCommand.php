@@ -237,7 +237,7 @@ class MarketplaceBootstrapCommand extends Command
             ->where('market_id', (int) $market->id)
             ->orderByDesc('starts_at')
             ->limit(200)
-            ->get(['id', 'title', 'description', 'starts_at', 'ends_at', 'source', 'cover_image']);
+            ->get(['id', 'title', 'description', 'starts_at', 'ends_at', 'source', 'cover_image', 'public_payload']);
 
         $count = 0;
         foreach ($holidays as $holiday) {
@@ -297,11 +297,12 @@ class MarketplaceBootstrapCommand extends Command
             );
 
             $payload = [
+                'market_holiday_id' => (int) $holiday->id,
                 'author_user_id' => null,
                 'kind' => $this->mapHolidayKind($source),
                 'title' => trim((string) ($holiday->title ?? 'Market event')),
-                'excerpt' => Str::limit(trim((string) ($holiday->description ?? '')), 220),
-                'content' => trim((string) ($holiday->description ?? '')),
+                'excerpt' => $holiday->announcementExcerptText(),
+                'content' => $holiday->announcementContentText(),
                 'starts_at' => $holiday->starts_at,
                 'ends_at' => $holiday->ends_at,
                 'is_active' => true,
