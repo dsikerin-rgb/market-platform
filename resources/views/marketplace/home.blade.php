@@ -436,6 +436,13 @@
             border-color: #cfe1f5;
         }
 
+        .mp-announcements-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            align-items: start;
+        }
+
         @media (max-width: 980px) {
             .mp-hero-grid {
                 padding: 16px 16px 14px;
@@ -449,6 +456,10 @@
 
             .mp-slider__media {
                 height: 104px;
+            }
+
+            .mp-announcements-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -504,6 +515,10 @@
             .mp-slider__controls {
                 flex-direction: column;
                 align-items: stretch;
+            }
+
+            .mp-announcements-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -614,7 +629,7 @@
                 </div>
                 <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $market->slug]) }}">Все анонсы</a>
             </div>
-            <div class="mp-grid">
+            <div class="mp-announcements-grid">
                 @foreach($announcements->take(4) as $announcement)
                     @php($announcementImageUrl = $announcement->cover_image_preview_url ?? $announcement->cover_image_url)
                     @php($hasImage = filled($announcementImageUrl))
