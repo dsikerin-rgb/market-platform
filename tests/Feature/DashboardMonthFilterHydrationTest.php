@@ -17,8 +17,56 @@ class DashboardMonthFilterHydrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_bootstrap_advances_stale_hydrated_month_filter_to_latest_data(): void
+    public function test_bootstrap_advances_stale_auto_dashboard_month_filter_to_latest_data(): void
     {
+        [$page, $filtersSessionKey] = $this->bootstrapDashboardPageWithLatestMonth(
+            dashboardMonth: '2026-03',
+            filtersMonth: '2026-03',
+            monthMode: null,
+        );
+
+        $method = new \ReflectionMethod($page, 'bootstrapDashboardState');
+        $method->setAccessible(true);
+        $method->invoke($page);
+
+        $this->assertSame('2026-04', $page->filters['month'] ?? null);
+        $this->assertSame('2026-04', session('dashboard_month'));
+        $this->assertSame('2026-04-01', session('dashboard_period'));
+        $this->assertSame('auto', session('dashboard_month_mode'));
+        $this->assertSame('2026-04', data_get(session($filtersSessionKey), 'month'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_bootstrap_preserves_manual_historical_dashboard_month_filter(): void
+    {
+        [$page, $filtersSessionKey] = $this->bootstrapDashboardPageWithLatestMonth(
+            dashboardMonth: '2026-03',
+            filtersMonth: '2026-03',
+            monthMode: 'manual',
+        );
+
+        $method = new \ReflectionMethod($page, 'bootstrapDashboardState');
+        $method->setAccessible(true);
+        $method->invoke($page);
+
+        $this->assertSame('2026-03', $page->filters['month'] ?? null);
+        $this->assertSame('2026-03', session('dashboard_month'));
+        $this->assertSame('2026-03-01', session('dashboard_period'));
+        $this->assertSame('manual', session('dashboard_month_mode'));
+        $this->assertSame('2026-03', data_get(session($filtersSessionKey), 'month'));
+
+        Carbon::setTestNow();
+    }
+
+    /**
+     * @return array{0: Dashboard, 1: string}
+     */
+    private function bootstrapDashboardPageWithLatestMonth(
+        string $dashboardMonth,
+        string $filtersMonth,
+        ?string $monthMode,
+    ): array {
         Carbon::setTestNow('2026-04-09 12:00:00');
 
         $market = Market::query()->create([
@@ -50,48 +98,30 @@ class DashboardMonthFilterHydrationTest extends TestCase
             'management_fee' => 0,
             'total_with_vat' => 1000.00,
             'source' => '1c',
-            'source_row_hash' => hash('sha256', 'dashboard-month-filter'),
+            'source_row_hash' => hash('sha256', 'dashboard-month-filter-' . $dashboardMonth . '-' . ($monthMode ?? 'auto')),
             'imported_at' => now(),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
         $this->actingAs($user);
-        session([
-            'dashboard_market_id' => (int) $market->id,
-            'dashboard_month' => '2026-03',
-            'dashboard_period' => '2026-03-01',
-        ]);
 
         $page = app(Dashboard::class);
-        $page->filters = ['month' => '2026-03'];
+        $filtersSessionKey = $page->getFiltersSessionKey();
 
-        $resolveLastMonthWithData = new \ReflectionMethod($page, 'resolveLastMonthWithData');
-        $resolveLastMonthWithData->setAccessible(true);
+        session([
+            'dashboard_market_id' => (int) $market->id,
+            'dashboard_month' => $dashboardMonth,
+            'dashboard_period' => $dashboardMonth . '-01',
+            $filtersSessionKey => ['month' => $filtersMonth],
+        ]);
 
-        $this->assertSame(
-            '2026-04',
-            $resolveLastMonthWithData->invoke($page, (int) $market->id, 'Asia/Barnaul')
-        );
+        if ($monthMode !== null) {
+            session(['dashboard_month_mode' => $monthMode]);
+        }
 
-        $resolveMonthOrLatest = new \ReflectionMethod($page, 'resolveMonthOrLatest');
-        $resolveMonthOrLatest->setAccessible(true);
+        $page->filters = ['month' => $filtersMonth];
 
-        $this->assertSame('2026-04', $resolveMonthOrLatest->invoke($page, '2026-03', '2026-04'));
-
-        $resolveMonthFromRequestPeriod = new \ReflectionMethod($page, 'resolveMonthFromRequestPeriod');
-        $resolveMonthFromRequestPeriod->setAccessible(true);
-
-        $this->assertNull($resolveMonthFromRequestPeriod->invoke($page, 'Asia/Barnaul'));
-
-        $method = new \ReflectionMethod($page, 'bootstrapDashboardState');
-        $method->setAccessible(true);
-        $method->invoke($page);
-
-        $this->assertSame('2026-04', $page->filters['month'] ?? null);
-        $this->assertSame('2026-04', session('dashboard_month'));
-        $this->assertSame('2026-04-01', session('dashboard_period'));
-
-        Carbon::setTestNow();
+        return [$page, $filtersSessionKey];
     }
 }
