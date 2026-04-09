@@ -2584,6 +2584,10 @@
             return { x1, y1, x2, y2 };
           }
 
+          function isConflictReviewStatus(value) {
+            return String(value || '').trim() === 'conflict';
+          }
+
           function bboxFromPolygon(poly) {
             if (!Array.isArray(poly) || poly.length < 3) return null;
             let minX = Infinity;
@@ -2778,6 +2782,10 @@
               '<pattern id="unlinkedHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">' +
               '<line x1="0" y1="0" x2="0" y2="8" stroke="#94a3b8" stroke-width="2" stroke-opacity="0.85"></line>' +
               '</pattern>' +
+              '<pattern id="conflictHatch" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(45)">' +
+              '<line x1="0" y1="0" x2="0" y2="12" stroke="#1f2937" stroke-width="2" stroke-opacity="0.18"></line>' +
+              '<line x1="6" y1="0" x2="6" y2="12" stroke="#dc2626" stroke-width="2" stroke-opacity="0.38"></line>' +
+              '</pattern>' +
               '</defs>'
             );
             const BORDER_COLOR = '#064e3b';
@@ -2836,6 +2844,8 @@
               const hasSpace = isLinked;
               const hasTenant = hasSpace && (s.space_tenant_id !== null && s.space_tenant_id !== undefined);
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
+              const reviewStatus = typeof s.space_review_status === 'string' ? s.space_review_status : '';
+              const isConflictReview = hasSpace && isConflictReviewStatus(reviewStatus);
               const rentRateBand = getRentRateBand(s.space_rent_rate_value, rentLayerStats);
               
               // Цвета для debt status
@@ -2919,6 +2929,16 @@
                 ' stroke-width="' + (isSel ? (sw + 1.0) : sw) +
                 '"></polygon>'
               );
+
+              if (isConflictReview) {
+                parts.push(
+                  '<polygon points="' + pts +
+                  '" fill="url(#conflictHatch)" fill-opacity="' + (isSel ? '0.75' : '0.58') +
+                  '" stroke="#b45309" stroke-opacity="' + (isSel ? '0.95' : '0.8') +
+                  '" stroke-width="' + (isSel ? (sw + 0.8) : 1.6) +
+                  '" stroke-dasharray="5 4"></polygon>'
+                );
+              }
 
               if (viewportPoints.length >= 3) {
                 let minX = Infinity;
