@@ -62,4 +62,56 @@ class ResolvesDashboardFilterMonthTest extends TestCase
 
         self::assertSame('2026-04-01', $widget->resolve());
     }
+
+    public function test_prefers_session_month_over_stale_raw_page_filter_month(): void
+    {
+        session([
+            'dashboard_month' => '2026-04',
+            'dashboard_period' => '2026-04-01',
+        ]);
+
+        $widget = new class
+        {
+            use ResolvesDashboardFilterMonth;
+
+            public ?array $pageFilters = [
+                'month' => '2026-03',
+            ];
+
+            public ?array $filters = null;
+
+            public function resolve(): mixed
+            {
+                return $this->resolveDashboardFilterMonthRaw();
+            }
+        };
+
+        self::assertSame('2026-04', $widget->resolve());
+    }
+
+    public function test_prefers_session_month_over_stale_raw_filters_month(): void
+    {
+        session([
+            'dashboard_month' => '2026-04',
+            'dashboard_period' => '2026-04-01',
+        ]);
+
+        $widget = new class
+        {
+            use ResolvesDashboardFilterMonth;
+
+            public ?array $pageFilters = null;
+
+            public ?array $filters = [
+                'month' => '2026-03',
+            ];
+
+            public function resolve(): mixed
+            {
+                return $this->resolveDashboardFilterMonthRaw();
+            }
+        };
+
+        self::assertSame('2026-04', $widget->resolve());
+    }
 }
