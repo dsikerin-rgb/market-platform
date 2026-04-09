@@ -11,8 +11,11 @@ use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Http\Controllers\Cabinet\ProductsController;
+use App\Support\MarketplaceMediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -75,6 +78,18 @@ class CabinetProductsFeatureTest extends TestCase
         $this->assertSame(10, (int) $product->stock_qty);
         $this->assertFalse((bool) $product->is_active);
         $this->assertTrue((bool) $product->is_featured);
+    }
+
+    public function test_merchant_can_refresh_cabinet_csrf_token(): void
+    {
+        [$market, $tenant] = $this->createTenantContext();
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+
+        $this->actingAs($merchant, 'web');
+
+        $this->getJson(route('cabinet.csrf-token'))
+            ->assertOk()
+            ->assertJsonStructure(['token']);
     }
 
     public function test_merchant_user_cannot_create_product_without_allowed_space(): void
@@ -234,6 +249,119 @@ class CabinetProductsFeatureTest extends TestCase
         $this->assertSame([
             'marketplace-products/second.webp',
         ], $product->images);
+    }
+
+    public function test_demo_product_update_preserves_demo_flag_and_existing_images_when_demo_content_is_disabled(): void
+    {
+        Storage::fake('public');
+
+        config()->set('marketplace.media_disk', 'public');
+        config()->set('marketplace.media_fallback_disk', 'public');
+        config()->set('marketplace.demo_content_enabled', false);
+
+        [$market, $tenant, $spaceA] = $this->createTenantContext();
+        $category = MarketplaceCategory::query()->create([
+            'market_id' => null,
+            'name' => 'Демо категория',
+            'slug' => 'demo-category',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+        $existingImage = MarketplaceMediaStorage::store(
+            UploadedFile::fake()->image('demo-existing.jpg', 1200, 900),
+            'marketplace-products'
+        );
+
+        $product = MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceA->id,
+            'category_id' => (int) $category->id,
+            'title' => 'Демо товар',
+            'slug' => 'demo-product',
+            'is_active' => true,
+            'is_demo' => true,
+            'images' => [$existingImage],
+        ]);
+
+        $this->actingAs($merchant, 'web');
+
+        $this->post(route('cabinet.products.update', ['product' => (int) $product->id]), [
+            'title' => 'Демо товар обновлён',
+            'category_id' => (int) $category->id,
+            'market_space_id' => (int) $spaceA->id,
+            'is_active' => '1',
+        ])->assertRedirect();
+
+        $product->refresh();
+
+        $this->assertTrue((bool) $product->is_demo);
+        $this->assertSame([$existingImage], $product->images);
+        Storage::disk('public')->assertExists($existingImage);
+        Storage::disk('public')->assertExists(MarketplaceMediaStorage::previewPath($existingImage));
+    }
+
+    public function test_demo_product_photo_replacement_keeps_demo_flag_and_generates_preview(): void
+    {
+        Storage::fake('public');
+
+        config()->set('marketplace.media_disk', 'public');
+        config()->set('marketplace.media_fallback_disk', 'public');
+        config()->set('marketplace.demo_content_enabled', true);
+
+        [$market, $tenant, $spaceA] = $this->createTenantContext();
+        $category = MarketplaceCategory::query()->create([
+            'market_id' => null,
+            'name' => 'Демо фото',
+            'slug' => 'demo-photo',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+        $oldImage = MarketplaceMediaStorage::store(
+            UploadedFile::fake()->image('demo-old.jpg', 1200, 900),
+            'marketplace-products'
+        );
+
+        $product = MarketplaceProduct::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceA->id,
+            'category_id' => (int) $category->id,
+            'title' => 'Демо товар с фото',
+            'slug' => 'demo-product-photo',
+            'is_active' => true,
+            'is_demo' => true,
+            'images' => [$oldImage],
+        ]);
+
+        $this->actingAs($merchant, 'web');
+
+        $this->post(route('cabinet.products.update', ['product' => (int) $product->id]), [
+            'title' => 'Демо товар с новым фото',
+            'category_id' => (int) $category->id,
+            'market_space_id' => (int) $spaceA->id,
+            'is_active' => '1',
+            'remove_images' => [$oldImage],
+            'new_images' => [
+                UploadedFile::fake()->image('demo-new.jpg', 1400, 1050),
+            ],
+        ])->assertRedirect();
+
+        $product->refresh();
+
+        $this->assertTrue((bool) $product->is_demo);
+        $this->assertCount(1, (array) $product->images);
+        $this->assertNotSame($oldImage, $product->images[0]);
+        $this->assertStringEndsWith('.webp', (string) $product->images[0]);
+
+        Storage::disk('public')->assertMissing($oldImage);
+        Storage::disk('public')->assertMissing(MarketplaceMediaStorage::previewPath($oldImage));
+        Storage::disk('public')->assertExists($product->images[0]);
+        Storage::disk('public')->assertExists(MarketplaceMediaStorage::previewPath($product->images[0]));
     }
 
     private function createTenantContext(): array

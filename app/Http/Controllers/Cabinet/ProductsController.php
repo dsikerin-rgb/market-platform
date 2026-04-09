@@ -11,13 +11,12 @@ use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Marketplace\MarketplaceDemoContentService;
+use App\Support\MarketplaceMediaStorage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -136,6 +135,13 @@ class ProductsController extends Controller
         ]);
     }
 
+    public function csrfToken(Request $request): JsonResponse
+    {
+        return response()->json([
+            'token' => $request->session()->token(),
+        ]);
+    }
+
     public function update(Request $request, int $product): RedirectResponse
     {
         $authUser = $request->user();
@@ -144,14 +150,9 @@ class ProductsController extends Controller
         [$spaces, $canManageGlobalProducts] = $this->resolveAccessibleSpaces($authUser, $tenant);
         $productModel = $this->resolveProductOrFail($tenant, $spaces, $canManageGlobalProducts, $product);
         $validated = $this->validateProductPayload($request, $tenant, $spaces, $canManageGlobalProducts);
-        $showDemoContent = app(MarketplaceDemoContentService::class)->isEnabled($tenant->market);
-
         $existingImages = collect($productModel->images ?? [])
             ->filter(static fn ($path): bool => is_string($path) && $path !== '')
             ->values();
-        if ((bool) $productModel->is_demo && ! $showDemoContent) {
-            $existingImages = collect();
-        }
 
         $removeImages = $this->resolveRemovableImages($request, $existingImages);
         $remainingImagesCount = $existingImages->count() - $removeImages->count();
@@ -168,15 +169,17 @@ class ProductsController extends Controller
             ->values();
 
         foreach ($removeImages as $path) {
-            Storage::disk('public')->delete($path);
+            MarketplaceMediaStorage::delete($path);
         }
 
         $newImages = $this->storeUploadedImages($request);
         $images = $images->concat($newImages)->values();
 
         $wasInactive = ! (bool) $productModel->is_active;
+        $wasDemo = (bool) $productModel->is_demo;
 
         $productModel->fill($this->buildProductAttributes($validated, $tenant));
+        $productModel->is_demo = $wasDemo;
 
         if (! filled($productModel->slug)) {
             $productModel->slug = $this->makeUniqueSlug(
@@ -210,7 +213,7 @@ class ProductsController extends Controller
 
         foreach ((array) ($productModel->images ?? []) as $path) {
             if (is_string($path) && $path !== '') {
-                Storage::disk('public')->delete($path);
+                MarketplaceMediaStorage::delete($path);
             }
         }
 
@@ -240,7 +243,7 @@ class ProductsController extends Controller
 
         abort_unless($images->contains($path), 422, 'Передано неизвестное изображение.');
 
-        Storage::disk('public')->delete($path);
+        MarketplaceMediaStorage::delete($path);
 
         $productModel->images = $images
             ->reject(static fn (string $imagePath): bool => $imagePath === $path)
@@ -440,7 +443,7 @@ class ProductsController extends Controller
                 continue;
             }
 
-            $paths[] = $file->store('marketplace-products', 'public');
+            $paths[] = MarketplaceMediaStorage::store($file, 'marketplace-products');
         }
 
         return $paths;
