@@ -1020,7 +1020,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Слой разметки: список полигонов (PDF-координаты) для отрисовки поверх canvas.
      */
-    Route::get('/admin/market-map/shapes', function (Request $request) use ($resolveMarketForMap) {
+    Route::get('/admin/market-map/shapes', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1042,7 +1042,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         try {
             $rows = MarketSpaceMapShape::query()
-                ->with(['marketSpace.tenant'])
+                ->with(['marketSpace' => static function ($query) {
+                    $query->select('id', 'tenant_id', 'display_name', 'number', 'code', 'status', 'is_active', 'map_review_status', 'map_reviewed_at')
+                        ->with(['tenant:id,name,short_name,slug']);
+                }])
                 ->where('market_id', (int) $market->id)
                 ->where('page', $page)
                 ->where('version', $version)
@@ -1083,7 +1086,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->with(['tenant:id,market_id,name,short_name,external_id,one_c_uid,debt_status,debt_status_updated_at,updated_at'])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
-                ->get(['id', 'tenant_id', 'number', 'code', 'display_name', 'rent_rate_value', 'rent_rate_unit'])
+                ->get(['id', 'tenant_id', 'number', 'code', 'display_name', 'rent_rate_value', 'rent_rate_unit', 'map_review_status', 'map_reviewed_at'])
                 ->keyBy('id')
             : collect();
 
@@ -1125,7 +1128,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $items = $rows->map(static function (MarketSpaceMapShape $s) use (
             $spacesById,
             $currentRentRatesBySpaceId,
-            $latestRentRatesBySpaceId
+            $latestRentRatesBySpaceId,
+            $mapReviewStatusLabel
         ): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
@@ -1196,9 +1200,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
+                'space_tenant_name' => $tenant?->short_name ?: ($tenant?->name ?: null),
                 'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
                 'space_is_active' => $space?->is_active ?? false,
                 'space_is_occupied' => $space?->tenant_id !== null,
+                'space_review_status' => $space?->map_review_status ? (string) $space->map_review_status : null,
+                'space_review_status_label' => $mapReviewStatusLabel($space?->map_review_status),
+                'space_reviewed_at' => optional($space?->map_reviewed_at)?->toIso8601String(),
                 'space_rent_rate_value' => $rentRateValue,
                 'space_rent_rate_unit' => $rentRateUnit,
             ];

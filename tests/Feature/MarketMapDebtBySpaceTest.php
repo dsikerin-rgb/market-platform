@@ -1,5 +1,7 @@
 <?php
 
+# tests/Feature/MarketMapDebtBySpaceTest.php
+
 declare(strict_types=1);
 
 namespace Tests\Feature;
@@ -385,6 +387,74 @@ class MarketMapDebtBySpaceTest extends TestCase
 
         $shape = $items[0];
         $this->assertArrayHasKey('debt_status_source', $shape);
+    }
+
+    /**
+     * Тест: conflict-review отдаётся отдельно от debt_status для overlay.
+     */
+    public function test_conflict_review_status_is_exposed_separately_from_debt_status(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '77',
+            'code' => 'space-77',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $this->market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [[0, 0], [10, 0], [10, 10], [0, 10]],
+        ]);
+
+        $contractExternalId = 'contract-space-77';
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => $contractExternalId,
+            'number' => '77',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'tenant_external_id' => $this->tenant->external_id,
+            'contract_external_id' => $contractExternalId,
+            'period' => '2026-04',
+            'accrued_amount' => 0,
+            'paid_amount' => 0,
+            'debt_amount' => 0,
+            'calculated_at' => now(),
+            'created_at' => now(),
+            'hash' => sha1($this->tenant->external_id . '|' . $contractExternalId . '|2026-04|0|0|0'),
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.shapes', [
+            'market' => $this->market->id,
+            'page' => 1,
+        ]));
+
+        $response->assertOk();
+
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+
+        $shape = $items[0];
+        $this->assertSame('green', $shape['debt_status']);
+        $this->assertSame('conflict', $shape['space_review_status']);
+        $this->assertNotEmpty($shape['space_review_status_label']);
     }
 
     /**
