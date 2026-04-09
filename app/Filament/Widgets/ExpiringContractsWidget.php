@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Models\TenantContract;
 use Carbon\CarbonImmutable;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 class ExpiringContractsWidget extends BaseTableWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     /**
      * Важно: при смене pageFilters (отчётного месяца) Livewire пересобирает страницу.
@@ -205,13 +207,7 @@ class ExpiringContractsWidget extends BaseTableWidget
      */
     private function resolveMonthRange(string $tz): array
     {
-        $raw = null;
-
-        if (is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? $this->filters['period'] ?? $this->filters['dashboard_month'] ?? null;
-        }
-
-        $raw = $raw ?: session('dashboard_month') ?: session('dashboard_period');
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         $monthYm = is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)
             ? $raw
