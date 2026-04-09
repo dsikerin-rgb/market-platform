@@ -40,13 +40,11 @@
                     'maxlength' => 1000,
                     'name' => 'table-search-' . $this->getId() . '-' . $wireModel,
                     'placeholder' => $placeholder,
-                    'readonly' => true,
                     'spellcheck' => 'false',
                     'type' => 'search',
                     'wire:key' => $this->getId() . '.table.' . $wireModel . '.field.input',
                     $wireModelAttribute => $wireModel,
                     'x-bind:id' => '$id(\'input\')',
-                    'x-on:focus' => '$el.removeAttribute(\'readonly\')',
                     'x-on:keyup' => 'if ($event.key === \'Enter\') { $wire.$refresh() }',
                 ], escape: false)
             "
