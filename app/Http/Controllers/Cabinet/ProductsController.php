@@ -135,6 +135,13 @@ class ProductsController extends Controller
         ]);
     }
 
+    public function csrfToken(Request $request): JsonResponse
+    {
+        return response()->json([
+            'token' => $request->session()->token(),
+        ]);
+    }
+
     public function update(Request $request, int $product): RedirectResponse
     {
         $authUser = $request->user();

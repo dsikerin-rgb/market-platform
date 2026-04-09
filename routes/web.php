@@ -117,6 +117,7 @@ Route::prefix('cabinet')->middleware('cabinet.no_cache')->group(function () {
         Route::get('/products/create', [ProductsController::class, 'create'])->name('cabinet.products.create');
         Route::post('/products', [ProductsController::class, 'store'])->name('cabinet.products.store');
         Route::get('/products/{product}/edit', [ProductsController::class, 'edit'])->name('cabinet.products.edit');
+        Route::get('/csrf-token', [ProductsController::class, 'csrfToken'])->name('cabinet.csrf-token');
         Route::post('/products/{product}/images/delete', [ProductsController::class, 'destroyImage'])->name('cabinet.products.images.destroy');
         Route::post('/products/{product}', [ProductsController::class, 'update'])->name('cabinet.products.update');
         Route::post('/products/{product}/delete', [ProductsController::class, 'destroy'])->name('cabinet.products.destroy');

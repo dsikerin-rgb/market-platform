@@ -80,6 +80,18 @@ class CabinetProductsFeatureTest extends TestCase
         $this->assertTrue((bool) $product->is_featured);
     }
 
+    public function test_merchant_can_refresh_cabinet_csrf_token(): void
+    {
+        [$market, $tenant] = $this->createTenantContext();
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+
+        $this->actingAs($merchant, 'web');
+
+        $this->getJson(route('cabinet.csrf-token'))
+            ->assertOk()
+            ->assertJsonStructure(['token']);
+    }
+
     public function test_merchant_user_cannot_create_product_without_allowed_space(): void
     {
         [$market, $tenant, $spaceA, $spaceB] = $this->createTenantContext();

@@ -67,7 +67,13 @@
         }
     </style>
 
-    <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data" class="space-y-4">
+    <form
+        method="POST"
+        action="{{ $formAction }}"
+        enctype="multipart/form-data"
+        class="space-y-4"
+        data-csrf-refresh-url="{{ route('cabinet.csrf-token') }}"
+    >
         @csrf
 
         <section class="overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-slate-50 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] md:p-6">
@@ -509,35 +515,73 @@
             const existingPhotosGrid = document.querySelector('[data-existing-photos-grid]');
             const existingPhotosEmpty = document.querySelector('[data-existing-photos-empty]');
             const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfRefreshUrl = form?.dataset.csrfRefreshUrl || '';
+            let csrfRefreshInProgress = false;
+            let submitResubmitPending = false;
 
             if (!input || !preview || !grid || !count || !caption) {
                 return;
             }
 
-            const syncCsrfToken = () => {
-                const token = csrfMeta?.getAttribute('content') || '';
+            const applyCsrfToken = (token) => {
+                const normalizedToken = typeof token === 'string' ? token.trim() : '';
 
-                if (!token) {
+                if (!normalizedToken) {
                     return '';
                 }
 
                 if (csrfMeta) {
-                    csrfMeta.setAttribute('content', token);
+                    csrfMeta.setAttribute('content', normalizedToken);
                 }
 
                 if (form) {
                     const tokenInput = form.querySelector('input[name="_token"]');
 
                     if (tokenInput) {
-                        tokenInput.value = token;
+                        tokenInput.value = normalizedToken;
                     }
                 }
 
                 if (existingPhotosGrid) {
-                    existingPhotosGrid.dataset.csrfToken = token;
+                    existingPhotosGrid.dataset.csrfToken = normalizedToken;
                 }
 
-                return token;
+                return normalizedToken;
+            };
+
+            const syncCsrfToken = () => applyCsrfToken(csrfMeta?.getAttribute('content') || '');
+
+            const refreshCsrfToken = async () => {
+                if (!csrfRefreshUrl) {
+                    return syncCsrfToken();
+                }
+
+                if (csrfRefreshInProgress) {
+                    return syncCsrfToken();
+                }
+
+                csrfRefreshInProgress = true;
+
+                try {
+                    const response = await fetch(csrfRefreshUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        return syncCsrfToken();
+                    }
+
+                    const payload = await response.json();
+                    return applyCsrfToken(payload?.token || '');
+                } catch (error) {
+                    return syncCsrfToken();
+                } finally {
+                    csrfRefreshInProgress = false;
+                }
             };
 
             const captureScrollState = () => ({
@@ -707,7 +751,8 @@
                             });
 
                             if (response.status === 419) {
-                                window.location.replace(window.location.pathname + window.location.search);
+                                await refreshCsrfToken();
+                                window.location.reload();
                                 return;
                             }
 
@@ -719,6 +764,7 @@
                             card.remove();
                             syncExistingPhotoState();
                             restoreScrollState(scrollState);
+                            await refreshCsrfToken();
                         } catch (error) {
                             button.disabled = false;
                             button.dataset.loading = '0';
@@ -735,8 +781,30 @@
             syncCsrfToken();
 
             if (form) {
-                form.addEventListener('submit', () => {
-                    syncCsrfToken();
+                form.addEventListener('submit', async (event) => {
+                    if (submitResubmitPending) {
+                        submitResubmitPending = false;
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    const token = await refreshCsrfToken();
+
+                    if (!token) {
+                        window.alert('Не удалось обновить сессию формы. Обновите страницу и попробуйте ещё раз.');
+                        return;
+                    }
+
+                    submitResubmitPending = true;
+
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit(event.submitter || undefined);
+                        return;
+                    }
+
+                    form.submit();
+                    submitResubmitPending = false;
                 });
             }
 
