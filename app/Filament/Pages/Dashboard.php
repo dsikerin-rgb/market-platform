@@ -86,6 +86,11 @@ class Dashboard extends BaseDashboard
         $this->bootstrapDashboardState();
     }
 
+    public function booted(): void
+    {
+        $this->bootstrapDashboardState();
+    }
+
     /**
      * Страховка: если Livewire по какой-то причине не “видит” mount и вызывает его через __call — не падаем.
      */
