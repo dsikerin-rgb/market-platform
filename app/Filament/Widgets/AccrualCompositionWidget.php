@@ -36,19 +36,10 @@ class AccrualCompositionWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
 
-        $hasAccess = (bool) $user && (
+        return (bool) $user && (
             (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             || (bool) ($user->market_id ?? null)
         );
-
-        if (! $hasAccess) {
-            return false;
-        }
-
-        /** @var self $widget */
-        $widget = app(static::class);
-
-        return $widget->hasDetailBreakdownForCurrentContext($user);
     }
 
     public function getDescription(): ?string
@@ -213,35 +204,6 @@ class AccrualCompositionWidget extends ChartWidget
         return number_format($value, 1, '.', '');
     }
 
-    private function hasDetailBreakdownForCurrentContext($user): bool
-    {
-        if (! Schema::hasTable('tenant_accruals')) {
-            return false;
-        }
-
-        $marketId = $this->resolveMarketIdForWidget($user);
-
-        if (! $marketId) {
-            return false;
-        }
-
-        $market = Market::query()
-            ->select(['id', 'timezone'])
-            ->find($marketId);
-
-        $tz = $this->resolveTimezone($market?->timezone);
-        [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
-        [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
-
-        $totals = $this->loadAccrualTotals($marketId, $effectiveMonthStart);
-
-        if ($totals === null || ! $totals['has_rows']) {
-            return false;
-        }
-
-        return $this->hasDetailBreakdown($totals);
-    }
-
     /**
      * @return array{
      *   has_rows: bool,
@@ -286,24 +248,6 @@ class AccrualCompositionWidget extends ChartWidget
             'total_with_vat' => $totalWithVat,
             'other' => $this->calculateOtherAmount($rent, $utilities, $electricity, $management, $totalWithVat),
         ];
-    }
-
-    /**
-     * @param array{
-     *   rent: float,
-     *   utilities: float,
-     *   electricity: float,
-     *   management: float,
-     *   total_with_vat: float,
-     *   other: float
-     * } $totals
-     */
-    private function hasDetailBreakdown(array $totals): bool
-    {
-        return $totals['utilities'] > 0
-            || $totals['electricity'] > 0
-            || $totals['management'] > 0
-            || $totals['other'] > 0;
     }
 
     private function calculateOtherAmount(
