@@ -17,42 +17,42 @@ class DashboardMonthFilterHydrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_booted_reconciles_stale_auto_dashboard_month_filter_after_filament_restores_filters(): void
+    public function test_booted_ignores_stale_persisted_dashboard_filter_session_and_uses_latest_month(): void
     {
         [$page, $filtersSessionKey] = $this->bootstrapDashboardPageWithLatestMonth(
             dashboardMonth: '2026-03',
             filtersMonth: '2026-03',
-            monthMode: null,
+            activeFilters: null,
         );
 
         $page->mountHasFilters();
-        $page->booted();
+        $this->invokeDashboardHook($page, 'booted');
 
         $this->assertSame('2026-04', $page->filters['month'] ?? null);
         $this->assertSame('2026-04', session('dashboard_month'));
         $this->assertSame('2026-04-01', session('dashboard_period'));
-        $this->assertSame('auto', session('dashboard_month_mode'));
-        $this->assertSame('2026-04', data_get(session($filtersSessionKey), 'month'));
+        $this->assertNull(session('dashboard_month_mode'));
+        $this->assertFalse(session()->has($filtersSessionKey));
 
         Carbon::setTestNow();
     }
 
-    public function test_booted_preserves_manual_historical_dashboard_month_filter(): void
+    public function test_booted_preserves_explicit_historical_month_from_current_page_state(): void
     {
         [$page, $filtersSessionKey] = $this->bootstrapDashboardPageWithLatestMonth(
             dashboardMonth: '2026-03',
             filtersMonth: '2026-03',
-            monthMode: 'manual',
+            activeFilters: ['month' => '2026-03'],
         );
 
         $page->mountHasFilters();
-        $page->booted();
+        $this->invokeDashboardHook($page, 'booted');
 
         $this->assertSame('2026-03', $page->filters['month'] ?? null);
         $this->assertSame('2026-03', session('dashboard_month'));
         $this->assertSame('2026-03-01', session('dashboard_period'));
-        $this->assertSame('manual', session('dashboard_month_mode'));
-        $this->assertSame('2026-03', data_get(session($filtersSessionKey), 'month'));
+        $this->assertNull(session('dashboard_month_mode'));
+        $this->assertFalse(session()->has($filtersSessionKey));
 
         Carbon::setTestNow();
     }
@@ -63,7 +63,7 @@ class DashboardMonthFilterHydrationTest extends TestCase
     private function bootstrapDashboardPageWithLatestMonth(
         string $dashboardMonth,
         string $filtersMonth,
-        ?string $monthMode,
+        ?array $activeFilters,
     ): array {
         Carbon::setTestNow('2026-04-09 12:00:00');
 
@@ -96,7 +96,7 @@ class DashboardMonthFilterHydrationTest extends TestCase
             'management_fee' => 0,
             'total_with_vat' => 1000.00,
             'source' => '1c',
-            'source_row_hash' => hash('sha256', 'dashboard-month-filter-' . $dashboardMonth . '-' . ($monthMode ?? 'auto')),
+            'source_row_hash' => hash('sha256', 'dashboard-month-filter-' . $dashboardMonth . '-' . ($activeFilters['month'] ?? 'latest')),
             'imported_at' => now(),
             'created_at' => now(),
             'updated_at' => now(),
@@ -114,12 +114,14 @@ class DashboardMonthFilterHydrationTest extends TestCase
             $filtersSessionKey => ['month' => $filtersMonth],
         ]);
 
-        if ($monthMode !== null) {
-            session(['dashboard_month_mode' => $monthMode]);
-        }
-
-        $page->filters = ['month' => $filtersMonth];
+        $page->filters = $activeFilters;
 
         return [$page, $filtersSessionKey];
+    }
+
+    private function invokeDashboardHook(Dashboard $page, string $method): void
+    {
+        $reflection = new \ReflectionMethod($page, $method);
+        $reflection->invoke($page);
     }
 }
