@@ -49,6 +49,7 @@ class AnnouncementController extends BaseMarketplaceController
         $market = $this->resolveMarketOrFail($marketSlug);
 
         $announcement = MarketplaceAnnouncement::query()
+            ->with('marketHoliday')
             ->where('market_id', (int) $market->id)
             ->where('slug', $announcementSlug)
             ->where('is_active', true)

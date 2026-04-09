@@ -18,7 +18,7 @@ class AccrualCompositionWidgetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_widget_is_hidden_when_only_rent_component_is_present(): void
+    public function test_widget_is_visible_when_only_rent_component_is_present(): void
     {
         Carbon::setTestNow('2026-03-20 12:00:00');
 
@@ -61,7 +61,15 @@ class AccrualCompositionWidgetTest extends TestCase
             'dashboard_month' => '2026-03',
         ]);
 
-        $this->assertFalse(AccrualCompositionWidget::canView());
+        $this->assertTrue(AccrualCompositionWidget::canView());
+
+        $livewire = Livewire::test(AccrualCompositionWidget::class);
+
+        $method = new \ReflectionMethod($livewire->instance(), 'getData');
+        $method->setAccessible(true);
+        $data = $method->invoke($livewire->instance());
+
+        $this->assertSame(['Аренда (100%)'], $data['labels'] ?? []);
 
         Carbon::setTestNow();
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use Carbon\CarbonImmutable;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Schema;
 class RevenueYearChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $heading = 'Начислено по 1С и охват мест за 13 месяцев';
 
@@ -63,8 +65,30 @@ class RevenueYearChartWidget extends ChartWidget
         }
 
         $tz = $this->resolveTimezone($market->timezone);
+        [$selectedYm] = $this->resolveEndMonth($tz, $marketId);
+        $currentYm = CarbonImmutable::now($tz)->format('Y-m');
+        $latestDebtYm = $this->resolveLatestDebtMonth($marketId);
 
-        return 'Локация: ' . (string) $market->name . ' • TZ: ' . $tz . ' • Источник: 1С';
+        $parts = [
+            'Локация: ' . (string) $market->name,
+            'TZ: ' . $tz,
+            'Источник: 1С',
+            'Период графика: до ' . $this->formatMonthLabel($selectedYm, $tz),
+        ];
+
+        if ($selectedYm !== $currentYm) {
+            $parts[] = 'Текущий месяц: ' . $this->formatMonthLabel($currentYm, $tz);
+        }
+
+        if ($latestDebtYm && $latestDebtYm !== $selectedYm) {
+            $parts[] = 'Последние данные: ' . $this->formatMonthLabel($latestDebtYm, $tz);
+        }
+
+        if ($latestDebtYm && $latestDebtYm === $selectedYm && $selectedYm !== $currentYm) {
+            $parts[] = 'Новых данных за ' . $this->formatMonthLabel($currentYm, $tz) . ' пока нет';
+        }
+
+        return implode(' • ', $parts);
     }
 
     protected function getData(): array
@@ -87,7 +111,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
 
-        [, $endMonthStart] = $this->resolveEndMonth($tz);
+        [, $endMonthStart] = $this->resolveEndMonth($tz, $marketId);
 
         $months = [];
         $cursor = $endMonthStart->subMonths(12);
@@ -267,19 +291,9 @@ class RevenueYearChartWidget extends ChartWidget
     /**
      * @return array{0:string,1:CarbonImmutable}
      */
-    private function resolveEndMonth(string $tz): array
+    private function resolveEndMonth(string $tz, ?int $marketId = null): array
     {
-        $raw = null;
-
-        if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
-            $raw = $this->pageFilters['month'] ?? null;
-        }
-
-        if (! $raw && is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? null;
-        }
-
-        $raw = $raw ?: session('dashboard_month');
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
             try {
@@ -293,6 +307,14 @@ class RevenueYearChartWidget extends ChartWidget
             ? $raw
             : CarbonImmutable::now($tz)->format('Y-m');
 
+        if (! session('dashboard_month_explicit') && $marketId) {
+            $latestDebtYm = $this->resolveLatestDebtMonth($marketId);
+
+            if ($latestDebtYm && $latestDebtYm > $ym) {
+                $ym = $latestDebtYm;
+            }
+        }
+
         $start = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
 
         return [$ym, $start];
@@ -305,6 +327,26 @@ class RevenueYearChartWidget extends ChartWidget
         } catch (\Throwable) {
             return $ym;
         }
+    }
+
+    protected function resolveLatestDebtMonth(int $marketId): ?string
+    {
+        if ($marketId <= 0 || ! Schema::hasTable('contract_debts')) {
+            return null;
+        }
+
+        try {
+            $value = DB::table('contract_debts')
+                ->where('market_id', $marketId)
+                ->orderByDesc('period')
+                ->value('period');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value)
+            ? $value
+            : null;
     }
 
     private function emptyChart(string $label = 'Нет данных'): array
@@ -405,17 +447,21 @@ class RevenueYearChartWidget extends ChartWidget
 
             if (! isset($periodStats[$period])) {
                 $periodStats[$period] = [
+                    'rows' => 0,
                     'payable' => 0.0,
                     'spaces' => [],
                 ];
             }
 
+            $periodStats[$period]['rows']++;
             $periodStats[$period]['payable'] += (float) ($row->accrued_amount ?? 0);
 
             if ($row->market_space_id !== null) {
                 $periodStats[$period]['spaces'][(int) $row->market_space_id] = true;
             }
         }
+
+        $periodStats = $this->filterLeadingIncompleteDebtPeriods($periodStats, $totalSpaces);
 
         $payableData = [];
         $coveragePctData = [];
@@ -438,6 +484,111 @@ class RevenueYearChartWidget extends ChartWidget
             $coveragePctData[] = round(($occupied / $totalSpaces) * 100, 1);
         }
 
+        $coveragePctData = $this->nullLeadingZeroCoveragePoints($coveragePctData);
+
         return [$payableData, $coveragePctData];
+    }
+
+    /**
+     * The earliest debt snapshots can be partial and look like tiny but real values.
+     * Keep the leading outlier months out of the chart so we do not misrepresent them as final data.
+     *
+     * @param  array<string, array{rows:int,payable:float,spaces:array<int,true>}>  $periodStats
+     * @return array<string, array{rows:int,payable:float,spaces:array<int,true>}>
+     */
+    private function filterLeadingIncompleteDebtPeriods(array $periodStats, int $totalSpaces): array
+    {
+        if (count($periodStats) < 2 || $totalSpaces <= 0) {
+            return $periodStats;
+        }
+
+        $maxRows = 0;
+        $maxPayable = 0.0;
+        $maxCoverage = 0.0;
+
+        foreach ($periodStats as $stat) {
+            $rows = (int) ($stat['rows'] ?? 0);
+            $payable = (float) ($stat['payable'] ?? 0);
+            $coverage = $this->calculateDebtCoveragePct($stat, $totalSpaces);
+
+            $maxRows = max($maxRows, $rows);
+            $maxPayable = max($maxPayable, $payable);
+            $maxCoverage = max($maxCoverage, $coverage);
+        }
+
+        $rowsThreshold = $maxRows > 0 ? max(2, (int) ceil($maxRows * 0.2)) : 0;
+        $payableThreshold = $maxPayable > 0 ? max(1.0, $maxPayable * 0.2) : 0.0;
+        $coverageThreshold = $maxCoverage > 0 ? max(1.0, $maxCoverage * 0.2) : 0.0;
+
+        $filtered = [];
+        $stillLeading = true;
+
+        foreach ($periodStats as $period => $stat) {
+            $rows = (int) ($stat['rows'] ?? 0);
+            $payable = (float) ($stat['payable'] ?? 0);
+            $coverage = $this->calculateDebtCoveragePct($stat, $totalSpaces);
+
+            if (
+                $stillLeading
+                && $rows > 0
+                && $rows <= $rowsThreshold
+                && $payable <= $payableThreshold
+                && $coverage <= $coverageThreshold
+            ) {
+                continue;
+            }
+
+            $stillLeading = false;
+            $filtered[$period] = $stat;
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param  array{rows:int,payable:float,spaces:array<int,true>}  $stat
+     */
+    private function calculateDebtCoveragePct(array $stat, int $totalSpaces): float
+    {
+        if ($totalSpaces <= 0) {
+            return 0.0;
+        }
+
+        $spaces = isset($stat['spaces']) && is_array($stat['spaces'])
+            ? count($stat['spaces'])
+            : 0;
+
+        return round(($spaces / $totalSpaces) * 100, 1);
+    }
+
+    /**
+     * If the first visible coverage points are exact zeros, but later months do have
+     * positive coverage, treat those zeros as incomplete data rather than a real 0%.
+     *
+     * @param  list<float|null>  $coveragePctData
+     * @return list<float|null>
+     */
+    private function nullLeadingZeroCoveragePoints(array $coveragePctData): array
+    {
+        $firstPositiveIndex = null;
+
+        foreach ($coveragePctData as $index => $value) {
+            if (is_numeric($value) && (float) $value > 0.0) {
+                $firstPositiveIndex = $index;
+                break;
+            }
+        }
+
+        if ($firstPositiveIndex === null) {
+            return $coveragePctData;
+        }
+
+        for ($i = 0; $i < $firstPositiveIndex; $i++) {
+            if (isset($coveragePctData[$i]) && is_numeric($coveragePctData[$i]) && (float) $coveragePctData[$i] <= 0.0) {
+                $coveragePctData[$i] = null;
+            }
+        }
+
+        return $coveragePctData;
     }
 }

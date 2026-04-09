@@ -191,6 +191,104 @@ class MarketHolidayResource extends BaseResource
                 ->columns(3)
                 ->columnSpanFull(),
 
+            Section::make('Публичная карточка маркетплейса')
+                ->description('Эти поля формируют страницу анонса на маркетплейсе: краткое описание, подробный текст, программа, акции и практическая информация для посетителей.')
+                ->schema([
+                    Forms\Components\Textarea::make('public_payload.summary')
+                        ->label('Краткий анонс')
+                        ->rows(3)
+                        ->helperText('Короткий лид для первого экрана карточки и краткого описания анонса.')
+                        ->columnSpanFull(),
+
+                    Forms\Components\Textarea::make('public_payload.details')
+                        ->label('Подробное описание')
+                        ->rows(6)
+                        ->helperText('Основной текст карточки: что будет происходить, кому это интересно и почему стоит прийти.')
+                        ->columnSpanFull(),
+
+                    Forms\Components\TextInput::make('public_payload.time_note')
+                        ->label('Время для посетителей')
+                        ->placeholder('Например: 10:00 - 18:00 или 12:00 начало программы'),
+
+                    Forms\Components\TextInput::make('public_payload.location_title')
+                        ->label('Где проходит')
+                        ->placeholder('Например: Главная площадь Экоярмарки'),
+
+                    Forms\Components\Textarea::make('public_payload.location_note')
+                        ->label('Как пройти / ориентир')
+                        ->rows(2)
+                        ->helperText('Короткая подсказка по месту проведения, входу или зоне рынка.')
+                        ->columnSpan(1),
+
+                    Forms\Components\Textarea::make('public_payload.special_hours')
+                        ->label('Режим работы / важное примечание')
+                        ->rows(2)
+                        ->helperText('Например: в этот день рынок работает до 20:00 или часть павильонов закрыта.')
+                        ->columnSpan(1),
+
+                    Forms\Components\TextInput::make('public_payload.primary_cta_label')
+                        ->label('Текст дополнительной кнопки')
+                        ->placeholder('Например: Смотреть праздничные товары'),
+
+                    Forms\Components\TextInput::make('public_payload.primary_cta_url')
+                        ->label('Ссылка дополнительной кнопки')
+                        ->placeholder('Можно относительную ссылку или полный URL'),
+
+                    Forms\Components\Repeater::make('public_payload.schedule_items')
+                        ->label('Программа по времени')
+                        ->addActionLabel('Добавить пункт программы')
+                        ->reorderable(false)
+                        ->collapsible()
+                        ->schema([
+                            Forms\Components\TextInput::make('time')
+                                ->label('Время')
+                                ->placeholder('10:00'),
+
+                            Forms\Components\TextInput::make('title')
+                                ->label('Заголовок')
+                                ->placeholder('Открытие ярмарки'),
+
+                            Forms\Components\Textarea::make('description')
+                                ->label('Описание')
+                                ->rows(2)
+                                ->columnSpanFull(),
+                        ])
+                        ->columns(2)
+                        ->columnSpanFull(),
+
+                    Forms\Components\Repeater::make('public_payload.promo_items')
+                        ->label('Акции и активности')
+                        ->addActionLabel('Добавить акцию или активность')
+                        ->reorderable(false)
+                        ->collapsible()
+                        ->schema([
+                            Forms\Components\TextInput::make('badge')
+                                ->label('Бейдж')
+                                ->placeholder('Скидка 15%'),
+
+                            Forms\Components\TextInput::make('title')
+                                ->label('Заголовок')
+                                ->placeholder('Праздничная скидка на фермерские наборы'),
+
+                            Forms\Components\Textarea::make('description')
+                                ->label('Описание')
+                                ->rows(2)
+                                ->columnSpanFull(),
+
+                            Forms\Components\TextInput::make('link_label')
+                                ->label('Текст ссылки')
+                                ->placeholder('Смотреть товары'),
+
+                            Forms\Components\TextInput::make('link_url')
+                                ->label('Ссылка')
+                                ->placeholder('/m/market/catalog'),
+                        ])
+                        ->columns(2)
+                        ->columnSpanFull(),
+                ])
+                ->columns(2)
+                ->collapsible(),
+
             Section::make('Сценарии автоматизации')
                 ->description('Система может автоматически создавать и обновлять задачи подготовки по этому событию.')
                 ->schema([

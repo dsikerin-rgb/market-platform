@@ -18,49 +18,103 @@
                 'value' => $latestProducts->count(),
                 'url' => route('marketplace.catalog', ['marketSlug' => $marketSlug]),
             ],
-            [
-                'label' => 'Анонсов',
-                'value' => $announcements->count(),
-                'url' => route('marketplace.announcements', ['marketSlug' => $marketSlug]),
-            ],
-            [
-                'label' => 'Избранное',
-                'value' => $marketplaceFavoriteCount ?? 0,
-                'url' => $marketplaceCurrentUserCanUseBuyer
-                    ? route('marketplace.buyer.favorites', ['marketSlug' => $marketSlug])
-                    : route('marketplace.login', ['marketSlug' => $marketSlug]),
-            ],
         ];
     @endphp
 
     <style>
         .mp-hero-grid {
-            padding: 24px;
+            padding: 16px 20px;
             display: grid;
-            grid-template-columns: 1.2fr .8fr;
-            gap: 14px;
-            align-items: center;
+            grid-template-columns: minmax(0, 1.35fr) minmax(320px, .9fr);
+            gap: 18px;
+            align-items: stretch;
         }
 
-        .mp-hero-stats {
+        .mp-hero-grid--single {
+            grid-template-columns: 1fr;
+        }
+
+        .mp-hero-main {
             display: grid;
-            grid-template-columns: repeat(2, 96px);
-            justify-content: end;
+            gap: 10px;
+            align-content: center;
+        }
+
+        .mp-hero-side {
+            min-width: 0;
+            display: grid;
+        }
+
+        .mp-hero-eyebrow {
+            font-size: 11px;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            opacity: .84;
+        }
+
+        .mp-hero-title {
+            margin: 0;
+            max-width: 720px;
+            color: #fff;
+            font-size: clamp(28px, 2.8vw, 40px);
+            line-height: 1.04;
+            letter-spacing: -0.04em;
+        }
+
+        .mp-hero-copy {
+            margin: 0;
+            max-width: 720px;
+            color: #e8f7ff;
+            font-size: 14px;
+            line-height: 1.34;
+        }
+
+        .mp-hero-meta {
+            display: flex;
             gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            width: min(100%, 680px);
+            margin-top: 2px;
+        }
+
+        .mp-hero-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .mp-hero-actions .mp-btn {
+            min-height: 50px;
+            padding-inline: 18px;
+            border-color: rgba(255,255,255,.38);
+            background: rgba(255,255,255,.14);
+            color: #fff;
+            justify-content: center;
+        }
+
+        .mp-hero-kpis {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 0;
         }
 
         .mp-hero-stat {
-            min-height: 0;
-            aspect-ratio: 1 / 1;
-            background: rgba(255,255,255,.16);
-            border: 1px solid rgba(255,255,255,.35);
-            border-radius: 16px;
-            padding: 14px;
+            width: 64px;
+            min-height: 50px;
+            padding: 4px 6px;
+            background: rgba(255,255,255,.14);
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 12px;
             color: #fff;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            box-shadow: 0 10px 24px rgba(12, 62, 109, .14);
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            text-align: center;
+            box-shadow: 0 6px 14px rgba(12, 62, 109, .10);
             transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
         }
 
@@ -71,255 +125,477 @@
         }
 
         .mp-hero-stat__label {
-            font-size: 11px;
+            font-size: 9px;
+            line-height: 1.1;
             opacity: .92;
+            white-space: normal;
         }
 
         .mp-hero-stat__value {
-            font-size: 24px;
+            font-size: 14px;
             font-weight: 900;
             line-height: 1;
+            letter-spacing: -.03em;
+        }
+
+        .mp-slider {
+            position: relative;
+            display: grid;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .mp-slider__viewport {
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .mp-slider__track {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 100%;
+            gap: 0;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+            scroll-behavior: smooth;
+        }
+
+        .mp-slider__track::-webkit-scrollbar {
+            display: none;
+        }
+
+        .mp-slider__card {
+            scroll-snap-align: start;
+            min-height: 100%;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,.24);
+            background: rgba(255,255,255,.14);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 10px 28px rgba(12, 62, 109, .18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        .mp-slider__card[data-theme="buyer"] {
+            background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(235,248,255,.16));
+        }
+
+        .mp-slider__card[data-theme="seller"] {
+            background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(245,241,255,.16));
+        }
+
+        .mp-slider__card[data-theme="partner"] {
+            background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,245,228,.16));
+        }
+
+        .mp-slider__media {
+            height: 116px;
+            background: rgba(223,239,255,.26);
+        }
+
+        .mp-slider__media img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .mp-slider__body {
+            padding: 14px;
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .mp-slider__title {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.15;
+            color: #fff;
+        }
+
+        .mp-slider__text {
+            margin: 0;
+            color: rgba(233,245,255,.92);
+            font-size: 14px;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .mp-slider__footer {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+
+        .mp-slider__footer .mp-btn {
+            min-height: 36px;
+            padding: 8px 12px;
+            border-color: rgba(255,255,255,.34);
+            background: rgba(255,255,255,.16);
+            color: #fff;
+        }
+
+        .mp-slider__controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .mp-slider__nav {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mp-slider__arrow {
+            width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.24);
+            background: rgba(255,255,255,.14);
+            color: #fff;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .mp-slider__dots {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .mp-slider__dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            border: none;
+            background: rgba(255,255,255,.34);
+            cursor: pointer;
+        }
+
+        .mp-slider__dot.is-active {
+            width: 24px;
+            background: #fff;
+        }
+
+        .mp-store-card {
+            position: relative;
+            min-height: 190px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid #d6e6f8;
+            background:
+                radial-gradient(circle at top right, rgba(42, 172, 229, .12), transparent 34%),
+                linear-gradient(180deg, #ffffff, #f7fbff);
+            box-shadow: 0 10px 24px rgba(18, 64, 112, .06);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            overflow: hidden;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .mp-store-card::after {
+            content: "";
+            position: absolute;
+            inset: 0 auto auto 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, #0a84d6, #32c2ef);
+            opacity: .88;
+        }
+
+        .mp-store-card:hover {
+            transform: translateY(-2px);
+            border-color: #b9d8f6;
+            box-shadow: 0 16px 30px rgba(18, 64, 112, .12);
+        }
+
+        .mp-store-card:nth-child(3n + 2)::after {
+            background: linear-gradient(90deg, #19a863, #5fd39d);
+        }
+
+        .mp-store-card:nth-child(3n + 3)::after {
+            background: linear-gradient(90deg, #f59e0b, #ffd36a);
+        }
+
+        .mp-store-card__head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .mp-store-card__brand {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .mp-store-card__mark {
+            width: 42px;
+            height: 42px;
+            flex-shrink: 0;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #0f93dd, #0b79ce);
+            color: #fff;
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: -.03em;
+            box-shadow: 0 10px 18px rgba(11, 121, 206, .2);
+        }
+
+        .mp-store-card:nth-child(3n + 2) .mp-store-card__mark {
+            background: linear-gradient(180deg, #18ad66, #0f9354);
+            box-shadow: 0 10px 18px rgba(15, 147, 84, .18);
+        }
+
+        .mp-store-card:nth-child(3n + 3) .mp-store-card__mark {
+            background: linear-gradient(180deg, #f4a81d, #ec8b0d);
+            box-shadow: 0 10px 18px rgba(236, 139, 13, .18);
+        }
+
+        .mp-store-card__tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eef7ff;
+            border: 1px solid #d3e7fb;
+            color: #2d6295;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .mp-store-card__name {
+            margin: 0;
+            font-size: 18px;
+            line-height: 1.18;
+            letter-spacing: -.02em;
+            color: #102f59;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .mp-store-card__meta {
+            margin-top: auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .mp-store-card__count {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 12px;
+            background: #f3f8ff;
+            border: 1px solid #d9e8f9;
+            color: #2f5b8a;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .mp-store-card__count strong {
+            color: #102f59;
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: -.02em;
+        }
+
+        .mp-store-card .mp-btn {
+            min-height: 40px;
+            padding-inline: 14px;
+            border-radius: 12px;
+            background: #fff;
+            border-color: #cfe1f5;
+        }
+
+        .mp-announcements-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            align-items: start;
         }
 
         @media (max-width: 980px) {
             .mp-hero-grid {
+                padding: 16px 16px 14px;
                 grid-template-columns: 1fr;
+                gap: 12px;
             }
 
-            .mp-hero-stats {
-                justify-content: start;
+            .mp-hero-meta {
+                width: 100%;
+            }
+
+            .mp-slider__media {
+                height: 104px;
+            }
+
+            .mp-announcements-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
         @media (max-width: 560px) {
             .mp-hero-grid {
-                padding: 18px;
+                padding: 14px 14px 12px;
+                gap: 10px;
             }
 
-            .mp-hero-stats {
-                grid-template-columns: repeat(2, 82px);
-                gap: 6px;
+            .mp-hero-title {
+                font-size: 25px;
+            }
+
+            .mp-hero-copy {
+                font-size: 14px;
+            }
+
+            .mp-hero-meta {
+                gap: 8px;
+            }
+
+            .mp-hero-kpis {
+                gap: 8px;
             }
 
             .mp-hero-stat {
-                padding: 10px;
+                width: 62px;
+                min-height: 50px;
+                padding: 4px 5px;
                 border-radius: 12px;
             }
 
             .mp-hero-stat__label {
-                font-size: 10px;
+                font-size: 9px;
             }
 
             .mp-hero-stat__value {
-                font-size: 20px;
+                font-size: 14px;
+            }
+
+            .mp-slider__body {
+                padding: 12px;
+            }
+
+            .mp-slider__title {
+                font-size: 16px;
+            }
+
+            .mp-slider__text {
+                -webkit-line-clamp: 2;
+            }
+
+            .mp-slider__controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .mp-announcements-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 
     <section class="mp-card" style="padding:0;overflow:hidden;background:linear-gradient(120deg,#0a84d6,#10b2d8 60%,#7bd5ff);color:#fff;">
-        <div class="mp-hero-grid">
-            <div>
-                <div style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;">Городская Экоярмарка</div>
-                <h1 class="mp-page-title" style="color:#fff;margin-top:8px;">{{ $marketplaceSettings['hero_title'] }}</h1>
-                <p style="margin:10px 0 0;max-width:620px;color:#e8f7ff;">
+        <div class="mp-hero-grid{{ collect($infoSlides)->isNotEmpty() ? '' : ' mp-hero-grid--single' }}">
+            <div class="mp-hero-main">
+                <div class="mp-hero-eyebrow">Городская Экоярмарка</div>
+                <h1 class="mp-hero-title">{{ $marketplaceSettings['hero_title'] }}</h1>
+                <p class="mp-hero-copy">
                     {{ $marketplaceSettings['hero_subtitle'] }}
                 </p>
-                <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
-                    <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
-                    <a class="mp-btn" style="border-color:rgba(255,255,255,.45);background:rgba(255,255,255,.14);color:#fff;" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
-                </div>
-            </div>
-            <div class="mp-hero-stats">
-                @foreach($heroStats as $stat)
-                    <a class="mp-hero-stat" href="{{ $stat['url'] }}">
-                        <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
-                        <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
-                    </a>
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    @if(collect($infoSlides)->isNotEmpty())
-        <section class="mp-card">
-            <style>
-                .mp-slider {
-                    position: relative;
-                    display: grid;
-                    gap: 12px;
-                }
-                .mp-slider__viewport {
-                    overflow: hidden;
-                }
-                .mp-slider__track {
-                    display: grid;
-                    grid-auto-flow: column;
-                    grid-auto-columns: calc(33.333% - 8px);
-                    gap: 12px;
-                    overflow-x: auto;
-                    scroll-snap-type: x mandatory;
-                    scrollbar-width: none;
-                    scroll-behavior: smooth;
-                    padding-bottom: 4px;
-                }
-                .mp-slider__track::-webkit-scrollbar {
-                    display: none;
-                }
-                .mp-slider__card {
-                    scroll-snap-align: start;
-                    min-height: 218px;
-                    border-radius: 18px;
-                    border: 1px solid #d9e6f7;
-                    background: linear-gradient(180deg, #ffffff, #f7fbff);
-                    box-shadow: 0 8px 24px rgba(17, 32, 59, .06);
-                    display: flex;
-                    flex-direction: column;
-                    overflow: hidden;
-                }
-                .mp-slider__card[data-theme="buyer"] {
-                    background: linear-gradient(180deg, #eff8ff, #ffffff);
-                }
-                .mp-slider__card[data-theme="seller"] {
-                    background: linear-gradient(180deg, #f7f5ff, #ffffff);
-                }
-                .mp-slider__card[data-theme="partner"] {
-                    background: linear-gradient(180deg, #fef7ec, #ffffff);
-                }
-                .mp-slider__media {
-                    height: 140px;
-                    background: #dfefff;
-                }
-                .mp-slider__media img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    display: block;
-                }
-                .mp-slider__body {
-                    padding: 16px;
-                    display: flex;
-                    flex: 1;
-                    flex-direction: column;
-                    gap: 10px;
-                }
-                .mp-slider__title {
-                    margin: 0;
-                    font-size: 21px;
-                    line-height: 1.2;
-                }
-                .mp-slider__text {
-                    margin: 0;
-                    color: var(--muted);
-                    line-height: 1.45;
-                }
-                .mp-slider__footer {
-                    margin-top: auto;
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 10px;
-                }
-                .mp-slider__controls {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 12px;
-                }
-                .mp-slider__nav {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .mp-slider__arrow {
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 999px;
-                    border: 1px solid #cfe2f7;
-                    background: #fff;
-                    color: var(--text);
-                    font-weight: 800;
-                    cursor: pointer;
-                }
-                .mp-slider__dots {
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    flex-wrap: wrap;
-                }
-                .mp-slider__dot {
-                    width: 9px;
-                    height: 9px;
-                    border-radius: 999px;
-                    border: none;
-                    background: #c6d9ee;
-                    cursor: pointer;
-                }
-                .mp-slider__dot.is-active {
-                    width: 28px;
-                    background: linear-gradient(140deg, var(--brand), var(--brand-2));
-                }
-                @media (max-width: 1100px) {
-                    .mp-slider__track {
-                        grid-auto-columns: calc(50% - 6px);
-                    }
-                }
-                @media (max-width: 760px) {
-                    .mp-slider__track {
-                        grid-auto-columns: 100%;
-                    }
-                    .mp-slider__controls {
-                        flex-direction: column;
-                        align-items: stretch;
-                    }
-                }
-            </style>
-
-            <div class="mp-slider"
-                 data-mp-slider
-                 data-autoplay="{{ !empty($marketplaceSettings['slider_autoplay_enabled']) ? '1' : '0' }}"
-                 data-interval="{{ (int) ($marketplaceSettings['slider_autoplay_interval_ms'] ?? 7000) }}">
-                <div class="mp-slider__viewport">
-                    <div class="mp-slider__track" data-mp-slider-track>
-                        @foreach($infoSlides as $slide)
-                            @php($imageUrl = is_object($slide) ? ($slide->image_preview_url ?? $slide->image_url) : ($slide['image_url'] ?? null))
-                            @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
-                            @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
-                            @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
-                            @php($ctaLabel = is_object($slide) ? ($slide->cta_label ?? null) : ($slide['cta_label'] ?? null))
-                            @php($ctaUrl = is_object($slide) ? ($slide->cta_url ?? null) : ($slide['cta_url'] ?? null))
-                            <article class="mp-slider__card" data-theme="{{ $theme }}">
-                                @if(filled($imageUrl))
-                                    <div class="mp-slider__media">
-                                        <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="lazy" decoding="async">
-                                    </div>
-                                @endif
-                                <div class="mp-slider__body">
-                                    <h3 class="mp-slider__title">{{ $title }}</h3>
-                                    @if(filled($description))
-                                        <p class="mp-slider__text">{{ $description }}</p>
-                                    @endif
-                                    <div class="mp-slider__footer">
-                                        @if(filled($ctaLabel) && filled($ctaUrl))
-                                            <a class="mp-btn" href="{{ $ctaUrl }}">{{ $ctaLabel }}</a>
-                                        @else
-                                            <span></span>
-                                        @endif
-                                    </div>
-                                </div>
-                            </article>
+                <div class="mp-hero-meta">
+                    <div class="mp-hero-actions">
+                        <a class="mp-btn" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Перейти в каталог</a>
+                        <a class="mp-btn" href="{{ route('marketplace.map', ['marketSlug' => $market->slug]) }}">Посмотреть карту</a>
+                    </div>
+                    <div class="mp-hero-kpis">
+                        @foreach($heroStats as $stat)
+                            <a class="mp-hero-stat" href="{{ $stat['url'] }}">
+                                <div class="mp-hero-stat__label">{{ $stat['label'] }}</div>
+                                <div class="mp-hero-stat__value">{{ $stat['value'] }}</div>
+                            </a>
                         @endforeach
                     </div>
                 </div>
-                <div class="mp-slider__controls">
-                    <div class="mp-slider__nav">
-                        <button class="mp-slider__arrow" type="button" data-mp-slider-prev>&lsaquo;</button>
-                        <button class="mp-slider__arrow" type="button" data-mp-slider-next>&rsaquo;</button>
-                    </div>
-                    <div class="mp-slider__dots" data-mp-slider-dots></div>
-                </div>
             </div>
-        </section>
-    @endif
+            @if(collect($infoSlides)->isNotEmpty())
+                <div class="mp-hero-side">
+                    <div class="mp-slider"
+                         data-mp-slider
+                         data-autoplay="{{ !empty($marketplaceSettings['slider_autoplay_enabled']) ? '1' : '0' }}"
+                         data-interval="{{ (int) ($marketplaceSettings['slider_autoplay_interval_ms'] ?? 7000) }}">
+                        <div class="mp-slider__viewport">
+                            <div class="mp-slider__track" data-mp-slider-track>
+                                @foreach($infoSlides as $slide)
+                                    @php($imageUrl = is_object($slide) ? ($slide->image_preview_url ?? $slide->image_url) : ($slide['image_url'] ?? null))
+                                    @php($theme = is_object($slide) ? ($slide->theme ?? 'info') : ($slide['theme'] ?? 'info'))
+                                    @php($title = is_object($slide) ? ($slide->title ?? '') : ($slide['title'] ?? ''))
+                                    @php($description = is_object($slide) ? ($slide->description ?? '') : ($slide['description'] ?? ''))
+                                    @php($ctaLabel = is_object($slide) ? ($slide->cta_label ?? null) : ($slide['cta_label'] ?? null))
+                                    @php($ctaUrl = is_object($slide) ? ($slide->cta_url ?? null) : ($slide['cta_url'] ?? null))
+                                    <article class="mp-slider__card" data-theme="{{ $theme }}">
+                                        @if(filled($imageUrl))
+                                            <div class="mp-slider__media">
+                                                <img src="{{ $imageUrl }}" alt="{{ $title }}" loading="lazy" decoding="async">
+                                            </div>
+                                        @endif
+                                        <div class="mp-slider__body">
+                                            <h3 class="mp-slider__title">{{ $title }}</h3>
+                                            @if(filled($description))
+                                                <p class="mp-slider__text">{{ $description }}</p>
+                                            @endif
+                                            <div class="mp-slider__footer">
+                                                @if(filled($ctaLabel) && filled($ctaUrl))
+                                                    <a class="mp-btn" href="{{ $ctaUrl }}">{{ $ctaLabel }}</a>
+                                                @else
+                                                    <span></span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="mp-slider__controls">
+                            <div class="mp-slider__nav">
+                                <button class="mp-slider__arrow" type="button" data-mp-slider-prev>&lsaquo;</button>
+                                <button class="mp-slider__arrow" type="button" data-mp-slider-next>&rsaquo;</button>
+                            </div>
+                            <div class="mp-slider__dots" data-mp-slider-dots></div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        </div>
+    </section>
 
     @if(!empty($nearestSanitaryAnnouncement))
         <section class="mp-card" style="border-color:#f9d48c;background:linear-gradient(180deg,#fff9e8,#fffdf4);">
@@ -353,7 +629,7 @@
                 </div>
                 <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $market->slug]) }}">Все анонсы</a>
             </div>
-            <div class="mp-grid">
+            <div class="mp-announcements-grid">
                 @foreach($announcements->take(4) as $announcement)
                     @php($announcementImageUrl = $announcement->cover_image_preview_url ?? $announcement->cover_image_url)
                     @php($hasImage = filled($announcementImageUrl))
@@ -432,10 +708,21 @@
             <div class="mp-grid">
                 @foreach($topStores as $store)
                     @php($storeRouteKey = filled($store->slug ?? null) ? (string) $store->slug : (string) $store->id)
-                    <article style="background:var(--surface-soft);border:1px solid #d5e5f8;border-radius:14px;padding:14px;">
-                        <h3 style="margin:0 0 8px;font-size:20px;">{{ $store->short_name ?: $store->name }}</h3>
-                        <p class="mp-muted" style="margin:0 0 12px;">Товаров: {{ (int) ($store->active_products_count ?? 0) }}</p>
-                        <a class="mp-btn" href="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $storeRouteKey]) }}">Перейти в витрину</a>
+                    @php($storeName = $store->short_name ?: $store->name)
+                    @php($storeWords = preg_split('/\s+/u', trim((string) $storeName)) ?: [])
+                    @php($storeInitials = collect($storeWords)->filter()->take(2)->map(fn ($word) => mb_strtoupper(mb_substr($word, 0, 1)))->implode(''))
+                    <article class="mp-store-card">
+                        <div class="mp-store-card__head">
+                            <div class="mp-store-card__brand">
+                                <div class="mp-store-card__mark">{{ $storeInitials !== '' ? $storeInitials : 'МП' }}</div>
+                                <h3 class="mp-store-card__name">{{ $storeName }}</h3>
+                            </div>
+                            <div class="mp-store-card__tag">Витрина</div>
+                        </div>
+                        <div class="mp-store-card__meta">
+                            <div class="mp-store-card__count"><strong>{{ (int) ($store->active_products_count ?? 0) }}</strong> товаров</div>
+                            <a class="mp-btn" href="{{ route('marketplace.store.show', ['marketSlug' => $market->slug, 'tenantSlug' => $storeRouteKey]) }}">Перейти в витрину</a>
+                        </div>
                     </article>
                 @endforeach
             </div>

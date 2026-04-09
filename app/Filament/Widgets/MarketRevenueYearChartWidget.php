@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 class MarketRevenueYearChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $heading = 'Выручка за год (по месяцам)';
 
@@ -129,13 +131,7 @@ class MarketRevenueYearChartWidget extends ChartWidget
 
     private function resolveYear(string $tz): int
     {
-        $raw = null;
-
-        if (is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? $this->filters['period'] ?? $this->filters['dashboard_month'] ?? null;
-        }
-
-        $raw = $raw ?: session('dashboard_month') ?: session('dashboard_period');
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         if (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)) {
             return (int) substr($raw, 0, 4);

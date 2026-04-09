@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 class AccrualCompositionWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $heading = 'Структура начислений';
 
@@ -34,19 +36,10 @@ class AccrualCompositionWidget extends ChartWidget
     {
         $user = Filament::auth()->user();
 
-        $hasAccess = (bool) $user && (
+        return (bool) $user && (
             (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             || (bool) ($user->market_id ?? null)
         );
-
-        if (! $hasAccess) {
-            return false;
-        }
-
-        /** @var self $widget */
-        $widget = app(static::class);
-
-        return $widget->hasDetailBreakdownForCurrentContext($user);
     }
 
     public function getDescription(): ?string
@@ -211,35 +204,6 @@ class AccrualCompositionWidget extends ChartWidget
         return number_format($value, 1, '.', '');
     }
 
-    private function hasDetailBreakdownForCurrentContext($user): bool
-    {
-        if (! Schema::hasTable('tenant_accruals')) {
-            return false;
-        }
-
-        $marketId = $this->resolveMarketIdForWidget($user);
-
-        if (! $marketId) {
-            return false;
-        }
-
-        $market = Market::query()
-            ->select(['id', 'timezone'])
-            ->find($marketId);
-
-        $tz = $this->resolveTimezone($market?->timezone);
-        [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
-        [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
-
-        $totals = $this->loadAccrualTotals($marketId, $effectiveMonthStart);
-
-        if ($totals === null || ! $totals['has_rows']) {
-            return false;
-        }
-
-        return $this->hasDetailBreakdown($totals);
-    }
-
     /**
      * @return array{
      *   has_rows: bool,
@@ -284,24 +248,6 @@ class AccrualCompositionWidget extends ChartWidget
             'total_with_vat' => $totalWithVat,
             'other' => $this->calculateOtherAmount($rent, $utilities, $electricity, $management, $totalWithVat),
         ];
-    }
-
-    /**
-     * @param array{
-     *   rent: float,
-     *   utilities: float,
-     *   electricity: float,
-     *   management: float,
-     *   total_with_vat: float,
-     *   other: float
-     * } $totals
-     */
-    private function hasDetailBreakdown(array $totals): bool
-    {
-        return $totals['utilities'] > 0
-            || $totals['electricity'] > 0
-            || $totals['management'] > 0
-            || $totals['other'] > 0;
     }
 
     private function calculateOtherAmount(
@@ -391,17 +337,7 @@ class AccrualCompositionWidget extends ChartWidget
      */
     private function resolveMonthRange(string $tz): array
     {
-        $raw = null;
-
-        if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
-            $raw = $this->pageFilters['month'] ?? $this->pageFilters['period'] ?? null;
-        }
-
-        if (! $raw && is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? $this->filters['period'] ?? $this->filters['dashboard_month'] ?? null;
-        }
-
-        $raw = $raw ?: session('dashboard_month') ?: session('dashboard_period');
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
             try {

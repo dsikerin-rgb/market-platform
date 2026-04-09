@@ -63,4 +63,34 @@ class MarketplaceAnnouncement extends Model
     {
         return MarketplaceMediaStorage::previewUrl($this->cover_image);
     }
+
+    /**
+     * @return array{
+     *   summary:string,
+     *   details:string,
+     *   time_note:string,
+     *   location_title:string,
+     *   location_note:string,
+     *   special_hours:string,
+     *   primary_cta_label:string,
+     *   primary_cta_url:string,
+     *   schedule_items:list<array{time:string,title:string,description:string}>,
+     *   promo_items:list<array{badge:string,title:string,description:string,link_label:string,link_url:string}>
+     * }
+     */
+    public function publicCardPayload(): array
+    {
+        return $this->marketHoliday?->publicCardPayload() ?? [
+            'summary' => '',
+            'details' => '',
+            'time_note' => '',
+            'location_title' => '',
+            'location_note' => '',
+            'special_hours' => '',
+            'primary_cta_label' => '',
+            'primary_cta_url' => '',
+            'schedule_items' => [],
+            'promo_items' => [],
+        ];
+    }
 }

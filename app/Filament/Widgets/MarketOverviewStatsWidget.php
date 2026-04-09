@@ -7,8 +7,8 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MarketResource;
 use App\Filament\Resources\MarketSpaceResource;
-use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantResource;
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\MarketSpace;
@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Schema;
 class MarketOverviewStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $pollingInterval = null;
 
@@ -70,7 +71,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         // Финансовая/отчётная часть зависит от выбранного месяца.
-        [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz);
+        [$monthYm, $monthStart, $monthEnd] = $this->resolveFinancialMonthRange($marketId, $tz);
         $monthLabel = $this->formatMonthLabel($monthYm, $tz);
 
         $financialSummary = $this->resolveFinancialSummaryForMonth($marketId, $monthYm, $monthStart, $monthEnd);
@@ -93,12 +94,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
                 'status' => ['value' => 'vacant'],
             ],
         ]);
-        $accrualsUrl = $this->appendQueryString(TenantAccrualResource::getUrl('index'), [
-            'tableFilters' => [
-                'period' => ['value' => $monthStart->toDateString()],
-            ],
-        ]);
-
         $stats = [];
 
         if ($isSuperAdmin) {
@@ -114,7 +109,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         $reportDesc = $hasReportData
             ? ($monthLabel . ' · ' . $financialSummary['source'])
-            : ($monthLabel . ' · нет финансовых данных');
+            : ($monthLabel . ' · нет данных 1С за выбранный месяц');
         $accruedValue = $accrued ?? 0.0;
         $paidValue = $paid ?? 0.0;
         $debtValue = $debt ?? ($accruedValue - $paidValue);
@@ -170,7 +165,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             label: 'Начислено за месяц',
             value: $this->formatMoney($accruedValue) . ' ₽',
             description: $reportDesc,
-            url: $accrualsUrl,
+            url: null,
             color: 'primary',
             icon: 'heroicon-o-banknotes',
         );
@@ -178,7 +173,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             label: 'Оплачено за месяц',
             value: $this->formatMoney($paidValue) . ' ₽',
             description: $reportDesc,
-            url: $accrualsUrl,
+            url: null,
             color: 'success',
             icon: 'heroicon-o-arrow-down-circle',
         );
@@ -186,7 +181,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             label: 'Долг на конец месяца',
             value: $this->formatMoney($debtValue) . ' ₽',
             description: $reportDesc,
-            url: $accrualsUrl,
+            url: null,
             color: $debtValue > 0 ? 'danger' : 'success',
             icon: 'heroicon-o-scale',
         );
@@ -273,6 +268,32 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         return $url . (str_contains($url, '?') ? '&' : '?') . $queryString;
     }
 
+    /**
+     * @return array{0:string,1:CarbonImmutable,2:CarbonImmutable}
+     */
+    private function resolveFinancialMonthRange(int $marketId, string $tz): array
+    {
+        [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz);
+
+        if (session('dashboard_month_explicit')) {
+            return [$monthYm, $monthStart, $monthEnd];
+        }
+
+        $latestDebtMonth = $this->resolveLatestDebtMonth($marketId);
+
+        if ($latestDebtMonth && $latestDebtMonth !== $monthYm) {
+            $latestMonthStart = CarbonImmutable::createFromFormat('Y-m', $latestDebtMonth, $tz)->startOfMonth();
+
+            return [
+                $latestDebtMonth,
+                $latestMonthStart,
+                $latestMonthStart->addMonth(),
+            ];
+        }
+
+        return [$monthYm, $monthStart, $monthEnd];
+    }
+
     private function resolveMarketIdForWidget($user): int
     {
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
@@ -291,6 +312,26 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         return (int) ($value ?: 0);
+    }
+
+    protected function resolveLatestDebtMonth(int $marketId): ?string
+    {
+        if ($marketId <= 0 || ! Schema::hasTable('contract_debts')) {
+            return null;
+        }
+
+        try {
+            $value = ContractDebt::query()
+                ->where('market_id', $marketId)
+                ->orderByDesc('period')
+                ->value('period');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value)
+            ? $value
+            : null;
     }
 
     private function resolveTimezone(?string $marketTimezone): string
@@ -315,10 +356,10 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
      */
     private function resolveMonthRange(string $tz): array
     {
-        $raw = null;
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         // 1) Filament page filters (главное)
-        if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
+        if (! $raw && property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
             $raw = $this->pageFilters['month'] ?? $this->pageFilters['period'] ?? null;
         }
 
@@ -496,11 +537,11 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         return [
-            'rows' => $this->countAccrualRowsForMonth($marketId, $monthYm, $start, $end),
-            'accrued' => $this->sumAccruedForMonth($marketId, $monthYm, $start, $end),
-            'paid' => $this->sumPaidForMonth($marketId, $monthYm, $start, $end),
-            'debt' => null,
-            'source' => 'витрина начислений',
+            'rows' => 0,
+            'accrued' => 0.0,
+            'paid' => 0.0,
+            'debt' => 0.0,
+            'source' => '1С',
         ];
     }
 
