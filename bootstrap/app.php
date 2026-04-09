@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\RestoreAdminFromImpersonation;
 use App\Http\Middleware\RedirectAdminTokenMismatch;
+use App\Http\Middleware\PreventCabinetPageCache;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -36,6 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'cabinet.access' => \App\Http\Middleware\EnsureTenantCabinetAccess::class,
+            'cabinet.no_cache' => PreventCabinetPageCache::class,
             'marketplace.buyer' => \App\Http\Middleware\EnsureMarketplaceBuyerAccess::class,
             'marketplace.ready' => \App\Http\Middleware\EnsureMarketplaceSchemaReady::class,
         ]);

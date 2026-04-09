@@ -463,6 +463,14 @@
         applyDeviceFlag();
         window.addEventListener('resize', applyDeviceFlag, { passive: true });
         window.addEventListener('orientationchange', applyDeviceFlag, { passive: true });
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                window.location.reload();
+                return;
+            }
+
+            applyDeviceFlag();
+        });
     })();
 </script>
 </body>

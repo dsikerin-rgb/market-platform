@@ -80,7 +80,7 @@ Route::get('/login', function () {
     return redirect()->route('cabinet.login');
 })->name('login');
 
-Route::prefix('cabinet')->group(function () {
+Route::prefix('cabinet')->middleware('cabinet.no_cache')->group(function () {
     Route::get('/login', [CabinetAuthController::class, 'showLogin'])->name('cabinet.login');
     Route::post('/login', [CabinetAuthController::class, 'login'])->name('cabinet.login.submit');
     Route::middleware('auth')
