@@ -33,6 +33,9 @@ class Dashboard extends BaseDashboard
 {
     use HasFiltersForm;
 
+    private const DASHBOARD_MONTH_MODE_AUTO = 'auto';
+    private const DASHBOARD_MONTH_MODE_MANUAL = 'manual';
+
     protected string $view = 'filament.pages.dashboard';
 
     protected static ?string $navigationLabel = 'Панель управления';
@@ -104,13 +107,17 @@ class Dashboard extends BaseDashboard
         $marketId = $this->resolveMarketId();
         $tz = $this->resolveMarketTimezone($marketId);
 
-        $month = $this->resolveMonthFromRequestPeriod($tz);
+        $requestMonth = $this->resolveMonthFromRequestPeriod($tz);
+        $fallback = $this->resolveLastMonthWithData($marketId, $tz);
+        $mode = filled($requestMonth)
+            ? $this->resolveDashboardMonthModeForSelection($requestMonth, $fallback)
+            : $this->resolveDashboardMonthMode();
 
-        // Если нет period=... в URL — берём из сессии, иначе дефолт = "последний месяц с данными"
-        $month = $month ?: $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
+        $month = filled($requestMonth)
+            ? $this->resolveMonthOrFallback($requestMonth, $fallback)
+            : $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
 
-        session(['dashboard_month' => $month]);
-        session(['dashboard_period' => $month . '-01']);
+        $this->syncDashboardMonthState($month, $mode);
 
         return [
             'month' => $month,
@@ -129,18 +136,19 @@ class Dashboard extends BaseDashboard
         $filterMonth = is_array($this->filters ?? null)
             ? ($this->filters['month'] ?? null)
             : null;
+        $mode = filled($requestMonth)
+            ? $this->resolveDashboardMonthModeForSelection($requestMonth, $fallback)
+            : $this->resolveDashboardMonthMode();
 
         if (filled($requestMonth)) {
             $month = $this->resolveMonthOrFallback($requestMonth, $fallback);
         } elseif (filled($filterMonth)) {
-            $month = $this->resolveMonthOrLatest($filterMonth, $fallback);
+            $month = $this->resolveMonthForMode($filterMonth, $fallback, $mode);
         } else {
             $month = $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
         }
 
-        $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
-        session(['dashboard_month' => $month]);
-        session(['dashboard_period' => $month . '-01']);
+        $this->syncDashboardMonthState($month, $mode, true);
     }
 
     public function getHeading(): string
@@ -270,8 +278,9 @@ class Dashboard extends BaseDashboard
             $selectedMonth = $this->filters['month'] ?? null;
         }
 
+        $mode = $this->resolveDashboardMonthMode();
         $month = filled($selectedMonth)
-            ? $this->resolveMonthOrLatest($selectedMonth, $fallbackMonth)
+            ? $this->resolveMonthForMode($selectedMonth, $fallbackMonth, $mode)
             : $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
         $periodLabel = $this->formatWorkspaceMonthLabel($month, $tz);
         $marketName = trim((string) ($market?->name ?? ''));
@@ -431,8 +440,7 @@ class Dashboard extends BaseDashboard
 
                             $value = $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
 
-                            session(['dashboard_month' => $value]);
-                            session(['dashboard_period' => $value . '-01']);
+                            $this->syncDashboardMonthState($value, $this->resolveDashboardMonthMode());
 
                             return $value;
                         })
@@ -447,16 +455,16 @@ class Dashboard extends BaseDashboard
                         ->afterStateHydrated(function (Select $component, $state) use ($resolveTz): void {
                             $marketId = $this->resolveMarketId();
                             $tz = $resolveTz();
+                            $mode = $this->resolveDashboardMonthMode();
 
                             $fallback = $this->resolveLastMonthWithData($marketId, $tz);
-                            $value = $this->resolveMonthOrLatest($state, $fallback);
+                            $value = $this->resolveMonthForMode($state, $fallback, $mode);
 
                             if ($state !== $value) {
                                 $component->state($value);
                             }
 
-                            session(['dashboard_month' => $value]);
-                            session(['dashboard_period' => $value . '-01']);
+                            $this->syncDashboardMonthState($value, $mode);
                         })
                         ->afterStateUpdated(function ($state) use ($resolveTz): void {
                             $marketId = $this->resolveMarketId();
@@ -465,8 +473,10 @@ class Dashboard extends BaseDashboard
                             $fallback = $this->resolveLastMonthWithData($marketId, $tz);
                             $value = $this->resolveMonthOrFallback($state, $fallback);
 
-                            session(['dashboard_month' => $value]);
-                            session(['dashboard_period' => $value . '-01']);
+                            $this->syncDashboardMonthState(
+                                $value,
+                                $this->resolveDashboardMonthModeForSelection($value, $fallback)
+                            );
                         }),
                 ])
                 ->columns(1),
@@ -749,7 +759,7 @@ class Dashboard extends BaseDashboard
         $fallback = $this->resolveLastMonthWithData($marketId, $tz);
 
         if (is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)) {
-            return strcmp($raw, $fallback) < 0 ? $fallback : $raw;
+            return $this->resolveMonthForMode($raw, $fallback);
         }
 
         return $fallback;
@@ -769,6 +779,56 @@ class Dashboard extends BaseDashboard
         $value = $this->resolveMonthOrFallback($candidate, $fallbackYm);
 
         return strcmp($value, $fallbackYm) < 0 ? $fallbackYm : $value;
+    }
+
+    private function resolveMonthForMode(mixed $candidate, string $fallbackYm, ?string $mode = null): string
+    {
+        $mode = $mode ?? $this->resolveDashboardMonthMode();
+
+        return $mode === self::DASHBOARD_MONTH_MODE_MANUAL
+            ? $this->resolveMonthOrFallback($candidate, $fallbackYm)
+            : $this->resolveMonthOrLatest($candidate, $fallbackYm);
+    }
+
+    private function resolveDashboardMonthMode(): string
+    {
+        return session('dashboard_month_mode') === self::DASHBOARD_MONTH_MODE_MANUAL
+            ? self::DASHBOARD_MONTH_MODE_MANUAL
+            : self::DASHBOARD_MONTH_MODE_AUTO;
+    }
+
+    private function resolveDashboardMonthModeForSelection(mixed $candidate, string $fallbackYm): string
+    {
+        $value = $this->resolveMonthOrFallback($candidate, $fallbackYm);
+
+        return strcmp($value, $fallbackYm) < 0
+            ? self::DASHBOARD_MONTH_MODE_MANUAL
+            : self::DASHBOARD_MONTH_MODE_AUTO;
+    }
+
+    private function syncDashboardMonthState(string $month, string $mode, bool $syncFormState = false): void
+    {
+        $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
+
+        session([
+            'dashboard_month' => $month,
+            'dashboard_period' => $month . '-01',
+            'dashboard_month_mode' => $mode,
+        ]);
+
+        if ($this->persistsFiltersInSession()) {
+            session()->put($this->getFiltersSessionKey(), $this->filters);
+        }
+
+        if (! $syncFormState) {
+            return;
+        }
+
+        try {
+            $this->getFiltersForm()->fill($this->filters);
+        } catch (\Throwable) {
+            // ignore
+        }
     }
 
     /**
