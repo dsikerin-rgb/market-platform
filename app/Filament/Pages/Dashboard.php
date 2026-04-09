@@ -124,15 +124,19 @@ class Dashboard extends BaseDashboard
         $marketId = $this->resolveMarketId();
         $tz = $this->resolveMarketTimezone($marketId);
 
-        $current = $this->resolveMonthFromRequestPeriod($tz);
+        $fallback = $this->resolveLastMonthWithData($marketId, $tz);
+        $requestMonth = $this->resolveMonthFromRequestPeriod($tz);
+        $filterMonth = is_array($this->filters ?? null)
+            ? ($this->filters['month'] ?? null)
+            : null;
 
-        if (is_array($this->filters ?? null)) {
-            $current = $this->filters['month'] ?? $current;
+        if (filled($requestMonth)) {
+            $month = $this->resolveMonthOrFallback($requestMonth, $fallback);
+        } elseif (filled($filterMonth)) {
+            $month = $this->resolveMonthOrLatest($filterMonth, $fallback);
+        } else {
+            $month = $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
         }
-
-        $month = filled($current)
-            ? $this->resolveMonthOrFallback($current, $this->resolveLastMonthWithData($marketId, $tz))
-            : $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
 
         $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
         session(['dashboard_month' => $month]);
@@ -267,7 +271,7 @@ class Dashboard extends BaseDashboard
         }
 
         $month = filled($selectedMonth)
-            ? $this->resolveMonthOrFallback($selectedMonth, $fallbackMonth)
+            ? $this->resolveMonthOrLatest($selectedMonth, $fallbackMonth)
             : $this->resolveMonthFromSessionOrLastWithData($marketId, $tz);
         $periodLabel = $this->formatWorkspaceMonthLabel($month, $tz);
         $marketName = trim((string) ($market?->name ?? ''));
@@ -445,7 +449,7 @@ class Dashboard extends BaseDashboard
                             $tz = $resolveTz();
 
                             $fallback = $this->resolveLastMonthWithData($marketId, $tz);
-                            $value = $this->resolveMonthOrFallback($state, $fallback);
+                            $value = $this->resolveMonthOrLatest($state, $fallback);
 
                             if ($state !== $value) {
                                 $component->state($value);
@@ -758,6 +762,13 @@ class Dashboard extends BaseDashboard
         }
 
         return $fallbackYm;
+    }
+
+    private function resolveMonthOrLatest(mixed $candidate, string $fallbackYm): string
+    {
+        $value = $this->resolveMonthOrFallback($candidate, $fallbackYm);
+
+        return strcmp($value, $fallbackYm) < 0 ? $fallbackYm : $value;
     }
 
     /**
