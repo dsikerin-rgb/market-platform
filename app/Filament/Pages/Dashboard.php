@@ -753,7 +753,12 @@ class Dashboard extends BaseDashboard
     private function syncDashboardMonthState(string $month, bool $syncFormState = false): void
     {
         $this->activeDashboardMonth = $month;
-        $this->filters = array_merge((array) ($this->filters ?? []), ['month' => $month]);
+        $this->filters = array_merge((array) ($this->filters ?? []), [
+            'month' => $month,
+            'period' => $month . '-01',
+            'dashboard_month' => $month,
+            'dashboard_period' => $month . '-01',
+        ]);
 
         session([
             'dashboard_month' => $month,

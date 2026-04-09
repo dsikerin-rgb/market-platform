@@ -9,6 +9,7 @@ use App\Filament\Resources\MarketResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantResource;
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\MarketSpace;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\Schema;
 class MarketOverviewStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $pollingInterval = null;
 
@@ -315,10 +317,10 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
      */
     private function resolveMonthRange(string $tz): array
     {
-        $raw = null;
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         // 1) Filament page filters (главное)
-        if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
+        if (! $raw && property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
             $raw = $this->pageFilters['month'] ?? $this->pageFilters['period'] ?? null;
         }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use Carbon\CarbonImmutable;
@@ -17,6 +18,7 @@ use Illuminate\Support\Facades\Schema;
 class RevenueYearChartWidget extends ChartWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $heading = 'Начислено по 1С и охват мест за 13 месяцев';
 
@@ -291,17 +293,7 @@ class RevenueYearChartWidget extends ChartWidget
      */
     private function resolveEndMonth(string $tz): array
     {
-        $raw = null;
-
-        if (property_exists($this, 'pageFilters') && is_array($this->pageFilters ?? null)) {
-            $raw = $this->pageFilters['month'] ?? null;
-        }
-
-        if (! $raw && is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? null;
-        }
-
-        $raw = $raw ?: session('dashboard_month');
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         if (is_string($raw) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
             try {

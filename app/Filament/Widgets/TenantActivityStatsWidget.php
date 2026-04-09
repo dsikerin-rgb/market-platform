@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Widgets;
 
+use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Models\TenantContract;
 use App\Models\TenantRequest;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Schema;
 class TenantActivityStatsWidget extends StatsOverviewWidget
 {
     use InteractsWithPageFilters;
+    use ResolvesDashboardFilterMonth;
 
     protected ?string $pollingInterval = null;
 
@@ -174,13 +176,7 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
      */
     private function resolveMonthRange(string $tz): array
     {
-        $raw = null;
-
-        if (is_array($this->filters ?? null)) {
-            $raw = $this->filters['month'] ?? $this->filters['period'] ?? $this->filters['dashboard_month'] ?? null;
-        }
-
-        $raw = $raw ?: session('dashboard_month') ?: session('dashboard_period');
+        $raw = $this->resolveDashboardFilterMonthRaw();
 
         $monthYm = is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw)
             ? $raw
