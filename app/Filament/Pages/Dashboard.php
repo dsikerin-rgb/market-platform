@@ -115,9 +115,10 @@ class Dashboard extends BaseDashboard
 
         $marketId = $this->resolveMarketId();
         $tz = $this->resolveMarketTimezone($marketId);
+        $requestMonth = $this->resolveMonthFromRequestPeriod($tz);
         $month = $this->resolveActiveDashboardMonth($marketId, $tz);
 
-        $this->syncDashboardMonthState($month);
+        $this->syncDashboardMonthState($month, false, filled($requestMonth) ? true : null);
 
         return [
             'month' => $month,
@@ -130,9 +131,10 @@ class Dashboard extends BaseDashboard
 
         $marketId = $this->resolveMarketId();
         $tz = $this->resolveMarketTimezone($marketId);
+        $requestMonth = $this->resolveMonthFromRequestPeriod($tz);
         $month = $this->resolveActiveDashboardMonth($marketId, $tz);
 
-        $this->syncDashboardMonthState($month, true);
+        $this->syncDashboardMonthState($month, true, filled($requestMonth) ? true : null);
     }
 
     public function getHeading(): string
@@ -441,7 +443,7 @@ class Dashboard extends BaseDashboard
                             $tz = $resolveTz();
                             $value = $this->resolveActiveDashboardMonth($marketId, $tz, $state);
 
-                            $this->syncDashboardMonthState($value);
+                            $this->syncDashboardMonthState($value, false, true);
                         }),
                 ])
                 ->columns(1),
@@ -747,10 +749,14 @@ class Dashboard extends BaseDashboard
             return $this->resolveMonthOrFallback($this->activeDashboardMonth, $fallback);
         }
 
+        if (session('dashboard_month_explicit') && filled(session('dashboard_month'))) {
+            return $this->resolveMonthOrFallback(session('dashboard_month'), $fallback);
+        }
+
         return $fallback;
     }
 
-    private function syncDashboardMonthState(string $month, bool $syncFormState = false): void
+    private function syncDashboardMonthState(string $month, bool $syncFormState = false, ?bool $explicit = null): void
     {
         $this->activeDashboardMonth = $month;
         $this->filters = array_merge((array) ($this->filters ?? []), [
@@ -764,6 +770,10 @@ class Dashboard extends BaseDashboard
             'dashboard_month' => $month,
             'dashboard_period' => $month . '-01',
         ]);
+
+        if ($explicit !== null) {
+            session(['dashboard_month_explicit' => $explicit]);
+        }
 
         session()->forget([
             'dashboard_month_mode',
