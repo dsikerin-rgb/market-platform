@@ -342,6 +342,40 @@ class MarketplaceFeatureTest extends TestCase
             ->assertDontSee('Описание события появится позже.');
     }
 
+    public function test_announcement_show_uses_compact_empty_state_when_event_content_is_missing(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Empty event market',
+            'slug' => 'empty-event-market',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+        ]);
+
+        $holiday = MarketHoliday::query()->create([
+            'market_id' => (int) $market->id,
+            'title' => 'Праздничный день',
+            'starts_at' => '2026-06-01',
+            'all_day' => true,
+            'description' => null,
+            'source' => 'market_event',
+            'public_payload' => null,
+        ]);
+
+        $announcement = MarketplaceAnnouncement::query()
+            ->where('market_holiday_id', (int) $holiday->id)
+            ->firstOrFail();
+
+        $this->get(route('marketplace.announcement.show', [
+            'marketSlug' => $market->slug,
+            'announcementSlug' => $announcement->slug,
+        ]))
+            ->assertOk()
+            ->assertSee('О событии')
+            ->assertSee('Подробности события уточняются. Следите за обновлениями на странице ярмарки.')
+            ->assertSee('Дата')
+            ->assertDontSee('Описание события появится позже.');
+    }
+
     public function test_marketplace_bootstrap_seeds_ten_demo_products_per_tenant(): void
     {
         $market = Market::query()->create([
