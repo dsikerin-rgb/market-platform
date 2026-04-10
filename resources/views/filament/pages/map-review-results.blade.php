@@ -198,6 +198,100 @@
                 max-width: 320px;
             }
 
+            .mrr-sort-toggle {
+                display: inline-flex;
+                flex-wrap: wrap;
+                gap: 0.45rem;
+                margin-top: 0.85rem;
+                padding: 0.25rem;
+                border-radius: 999px;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                background: rgba(248, 250, 252, 0.85);
+                width: fit-content;
+            }
+
+            .dark .mrr-sort-toggle {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.42);
+            }
+
+            .mrr-sort-toggle__link {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 999px;
+                border: 1px solid transparent;
+                padding: 0.42rem 0.8rem;
+                font-size: 0.8125rem;
+                font-weight: 700;
+                line-height: 1.15;
+                color: #475569;
+                text-decoration: none;
+                transition:
+                    background-color 0.16s ease,
+                    border-color 0.16s ease,
+                    color 0.16s ease,
+                    box-shadow 0.16s ease;
+            }
+
+            .mrr-sort-toggle__link:hover {
+                color: #0f172a;
+                background: rgba(255, 255, 255, 0.92);
+                border-color: rgba(15, 23, 42, 0.08);
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            }
+
+            .dark .mrr-sort-toggle__link {
+                color: #cbd5e1;
+            }
+
+            .dark .mrr-sort-toggle__link:hover {
+                color: #f8fafc;
+                background: rgba(30, 41, 59, 0.88);
+                border-color: rgba(148, 163, 184, 0.16);
+            }
+
+            .mrr-sort-toggle__link.is-active {
+                background: #0f172a;
+                border-color: #0f172a;
+                color: #fff;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+            }
+
+            .mrr-sort-toggle__link.is-active:hover {
+                background: #0f172a;
+                border-color: #0f172a;
+                color: #fff;
+            }
+
+            .dark .mrr-sort-toggle__link.is-active {
+                background: #e2e8f0;
+                border-color: #e2e8f0;
+                color: #0f172a;
+            }
+
+            .dark .mrr-sort-toggle__link.is-active:hover {
+                background: #f8fafc;
+                border-color: #f8fafc;
+                color: #0f172a;
+            }
+
+            .mrr-row--priority td {
+                background: rgba(37, 99, 235, 0.045);
+            }
+
+            .mrr-row--priority td:first-child {
+                box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.22);
+            }
+
+            .dark .mrr-row--priority td {
+                background: rgba(37, 99, 235, 0.085);
+            }
+
+            .dark .mrr-row--priority td:first-child {
+                box-shadow: inset 3px 0 0 rgba(96, 165, 250, 0.28);
+            }
+
             .mrr-ai__summary {
                 font-size: 0.8125rem;
                 color: #475569;
@@ -301,6 +395,123 @@
 
             .dark .mrr-ai__placeholder {
                 color: #64748b;
+            }
+
+            .mrr-ai__priority {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.35rem 0.5rem;
+                margin-bottom: 0.45rem;
+                padding: 0.45rem 0.55rem;
+                border-radius: 0.9rem;
+                background: rgba(248, 250, 252, 0.92);
+                border: 1px solid rgba(15, 23, 42, 0.08);
+            }
+
+            .dark .mrr-ai__priority {
+                background: rgba(15, 23, 42, 0.38);
+                border-color: rgba(148, 163, 184, 0.16);
+            }
+
+            .mrr-ai__priority--high {
+                background: rgba(239, 68, 68, 0.08);
+                border-color: rgba(239, 68, 68, 0.18);
+            }
+
+            .dark .mrr-ai__priority--high {
+                background: rgba(239, 68, 68, 0.12);
+                border-color: rgba(248, 113, 113, 0.2);
+            }
+
+            .mrr-ai__priority--medium {
+                background: rgba(245, 158, 11, 0.08);
+                border-color: rgba(245, 158, 11, 0.18);
+            }
+
+            .dark .mrr-ai__priority--medium {
+                background: rgba(245, 158, 11, 0.12);
+                border-color: rgba(251, 191, 36, 0.2);
+            }
+
+            .mrr-ai__priority--normal {
+                background: rgba(148, 163, 184, 0.08);
+                border-color: rgba(148, 163, 184, 0.14);
+            }
+
+            .dark .mrr-ai__priority--normal {
+                background: rgba(148, 163, 184, 0.1);
+                border-color: rgba(148, 163, 184, 0.18);
+            }
+
+            .mrr-ai__priority-label {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 999px;
+                padding: 0.24rem 0.55rem;
+                font-size: 0.75rem;
+                font-weight: 800;
+                line-height: 1.2;
+                letter-spacing: 0.01em;
+                background: #fff;
+                color: #0f172a;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+            }
+
+            .dark .mrr-ai__priority-label {
+                background: rgba(15, 23, 42, 0.48);
+                color: #f8fafc;
+                border-color: rgba(148, 163, 184, 0.18);
+            }
+
+            .mrr-ai__priority--high .mrr-ai__priority-label {
+                color: #b91c1c;
+                border-color: rgba(239, 68, 68, 0.2);
+            }
+
+            .dark .mrr-ai__priority--high .mrr-ai__priority-label {
+                color: #fecaca;
+                border-color: rgba(248, 113, 113, 0.24);
+            }
+
+            .mrr-ai__priority--medium .mrr-ai__priority-label {
+                color: #b45309;
+                border-color: rgba(245, 158, 11, 0.22);
+            }
+
+            .dark .mrr-ai__priority--medium .mrr-ai__priority-label {
+                color: #fde68a;
+                border-color: rgba(251, 191, 36, 0.24);
+            }
+
+            .mrr-ai__priority--normal .mrr-ai__priority-label {
+                color: #334155;
+            }
+
+            .dark .mrr-ai__priority--normal .mrr-ai__priority-label {
+                color: #e2e8f0;
+            }
+
+            .mrr-ai__priority-score {
+                font-size: 0.75rem;
+                font-weight: 700;
+                color: #64748b;
+            }
+
+            .dark .mrr-ai__priority-score {
+                color: #94a3b8;
+            }
+
+            .mrr-ai__priority-reason {
+                margin-bottom: 0.4rem;
+                font-size: 0.75rem;
+                line-height: 1.45;
+                color: #64748b;
+            }
+
+            .dark .mrr-ai__priority-reason {
+                color: #94a3b8;
             }
         </style>
     @endonce
@@ -417,6 +628,20 @@
                             <div>
                                 <h2 class="aw-panel-title">Нужно уточнить</h2>
                                 <p class="aw-panel-copy">Места со спорным или незавершённым ревизионным результатом.</p>
+                                <div class="mrr-sort-toggle">
+                                    <a
+                                        class="mrr-sort-toggle__link {{ $needsAttentionSortMode === 'default' ? 'is-active' : '' }}"
+                                        href="{{ $needsAttentionSortDefaultUrl }}"
+                                    >
+                                        Обычный порядок
+                                    </a>
+                                    <a
+                                        class="mrr-sort-toggle__link {{ $needsAttentionSortMode === 'ai_priority' ? 'is-active' : '' }}"
+                                        href="{{ $needsAttentionSortAiUrl }}"
+                                    >
+                                        AI-приоритет
+                                    </a>
+                                </div>
                             </div>
                         </div>
 
@@ -440,8 +665,11 @@
                                             @foreach ($needsAttention as $row)
                                                 @php
                                                     $ai = $aiSummaries[$row['space_id']] ?? null;
+                                                    $priorityTone = $row['priority_score'] >= 85
+                                                        ? 'high'
+                                                        : ($row['priority_score'] >= 65 ? 'medium' : 'normal');
                                                 @endphp
-                                                <tr>
+                                                <tr class="{{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
                                                     <td>
                                                         <div class="mrr-place">
                                                             <div class="mrr-place__title">
@@ -483,7 +711,6 @@
                                                     <td>
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
-                                                            $ai = $hasAiKey ? $aiSummaries[$row['space_id']] : null;
 
                                                             // Функция для замены технических кодов на русский текст
                                                             $humanize = function(?string $text): string {
@@ -502,8 +729,13 @@
                                                                 return $text;
                                                             };
                                                         @endphp
-                                                        @if ($ai && filled($ai['summary']))
-                                                            <div class="mrr-ai">
+                                                        <div class="mrr-ai">
+                                                            <div class="mrr-ai__priority mrr-ai__priority--{{ $priorityTone }}">
+                                                                <span class="mrr-ai__priority-label">{{ $row['priority_label'] }}</span>
+                                                                <span class="mrr-ai__priority-score">Приоритет {{ $row['priority_score'] }}/100</span>
+                                                            </div>
+                                                            <div class="mrr-ai__priority-reason">{{ $humanize($row['priority_reason']) }}</div>
+                                                            @if ($ai && filled($ai['summary']))
                                                                 <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
                                                                 <div class="mrr-ai__reason">
                                                                     <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
@@ -519,16 +751,20 @@
                                                                         🎯 {{ round($ai['confidence'] * 100) }}%
                                                                     </span>
                                                                 </div>
-                                                            </div>
-                                                        @elseif ($hasAiKey)
-                                                            <div class="mrr-ai mrr-ai--empty">
-                                                                <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
-                                                            </div>
-                                                        @else
-                                                            <div class="mrr-ai mrr-ai--skipped">
-                                                                <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
-                                                            </div>
-                                                        @endif
+                                                            @elseif ($hasAiKey)
+                                                                <div class="mrr-ai mrr-ai--empty">
+                                                                    <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
+                                                                </div>
+                                                            @elseif (empty($aiSummaries))
+                                                                <div class="mrr-ai mrr-ai--empty">
+                                                                    <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
+                                                                </div>
+                                                            @else
+                                                                <div class="mrr-ai mrr-ai--skipped">
+                                                                    <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
+                                                                </div>
+                                                            @endif
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             @endforeach
