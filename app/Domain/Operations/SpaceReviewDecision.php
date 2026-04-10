@@ -1,5 +1,7 @@
 <?php
 
+# app/Domain/Operations/SpaceReviewDecision.php
+
 declare(strict_types=1);
 
 namespace App\Domain\Operations;
@@ -11,6 +13,7 @@ final class SpaceReviewDecision
     public const MARK_SPACE_FREE = 'mark_space_free';
     public const MARK_SPACE_SERVICE = 'mark_space_service';
     public const FIX_SPACE_IDENTITY = 'fix_space_identity';
+    public const SPACE_IDENTITY_NEEDS_CLARIFICATION = 'space_identity_needs_clarification';
     public const OCCUPANCY_CONFLICT = 'occupancy_conflict';
     public const TENANT_CHANGED_ON_SITE = 'tenant_changed_on_site';
     public const SHAPE_NOT_FOUND = 'shape_not_found';
@@ -25,7 +28,8 @@ final class SpaceReviewDecision
             self::UNBIND_SHAPE_FROM_SPACE => 'Отвязать фигуру',
             self::MARK_SPACE_FREE => 'Отметить место как свободное',
             self::MARK_SPACE_SERVICE => 'Отметить место как служебное',
-            self::FIX_SPACE_IDENTITY => 'Уточнить номер и название',
+            self::FIX_SPACE_IDENTITY => 'Применить уточнение',
+            self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'Требует уточнения',
             self::OCCUPANCY_CONFLICT => 'Конфликт по месту',
             self::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
             self::SHAPE_NOT_FOUND => 'Место не найдено на карте',
@@ -60,6 +64,7 @@ final class SpaceReviewDecision
     public static function observedValues(): array
     {
         return [
+            self::SPACE_IDENTITY_NEEDS_CLARIFICATION,
             self::OCCUPANCY_CONFLICT,
             self::TENANT_CHANGED_ON_SITE,
             self::SHAPE_NOT_FOUND,
@@ -101,6 +106,7 @@ final class SpaceReviewDecision
     public static function reviewStatusForDecision(string $decision): string
     {
         return match ($decision) {
+            self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'conflict',
             self::OCCUPANCY_CONFLICT => 'conflict',
             self::TENANT_CHANGED_ON_SITE => 'changed_tenant',
             self::SHAPE_NOT_FOUND => 'not_found',

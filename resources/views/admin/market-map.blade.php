@@ -1200,6 +1200,112 @@
       border-color: rgba(191, 219, 254, .56);
     }
 
+    .identity-fix-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10020;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .identity-fix-modal.show {
+      display: flex;
+    }
+    .identity-fix-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.46);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .identity-fix-modal__dialog {
+      position: relative;
+      width: min(540px, 100%);
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .identity-fix-modal__eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .identity-fix-modal__title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      color: #0f172a;
+    }
+    .identity-fix-modal__description {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #475569;
+    }
+    .identity-fix-modal__label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .identity-fix-modal__input {
+      width: 100%;
+      box-sizing: border-box;
+      height: 40px;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      border-radius: 12px;
+      padding: 0 12px;
+      background: #fff;
+      color: #0f172a;
+      font-size: 14px;
+      outline: none;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .identity-fix-modal__input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    }
+    .identity-fix-modal__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .identity-fix-modal__actions button {
+      min-width: 104px;
+    }
+    .identity-fix-modal__cancel {
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .identity-fix-modal__save {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+    }
+    .identity-fix-modal__save:hover {
+      background: #1e40af;
+    }
+    .identity-fix-modal__close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(148, 163, 184, 0.12);
+      color: #334155;
+    }
+
     .toast {
       position: fixed;
       right: 14px;
@@ -1575,6 +1681,37 @@
         <div id="popoverBody"></div>
       </div>
 
+      <div id="identityFixModal" class="identity-fix-modal" hidden aria-hidden="true">
+        <div class="identity-fix-modal__backdrop" data-action="close"></div>
+        <div
+          class="identity-fix-modal__dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="identityFixTitle"
+          aria-describedby="identityFixDescription"
+        >
+          <button id="identityFixClose" class="identity-fix-modal__close" type="button" data-action="close" aria-label="Закрыть">×</button>
+          <div class="identity-fix-modal__eyebrow">Уточнить данные</div>
+          <h2 id="identityFixTitle" class="identity-fix-modal__title">Уточнить номер / название места</h2>
+          <p id="identityFixDescription" class="identity-fix-modal__description">
+            Введите, как это место обозначено на схеме, вывеске или на месте.
+          </p>
+          <label class="identity-fix-modal__label" for="identityFixInput">Номер или название места</label>
+          <input
+            id="identityFixInput"
+            class="identity-fix-modal__input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            inputmode="text"
+          >
+          <div class="identity-fix-modal__actions">
+            <button type="button" class="identity-fix-modal__cancel" data-action="close">Отмена</button>
+            <button type="button" class="identity-fix-modal__save" data-action="save">Сохранить</button>
+          </div>
+        </div>
+      </div>
+
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <script type="module">
@@ -1649,6 +1786,9 @@
         const spaceDropdown = document.getElementById('spaceDropdown');
         const spaceChosenPill = document.getElementById('spaceChosenPill');
         const spaceIdState = document.getElementById('spaceIdState');
+        const identityFixModal = document.getElementById('identityFixModal');
+        const identityFixInput = document.getElementById('identityFixInput');
+        const identityFixClose = document.getElementById('identityFixClose');
         const utilityGroup = scaleLabel?.closest('.toolbar-group') || null;
 
         const editHint = document.getElementById('editHint');
@@ -1673,6 +1813,7 @@
         let searchController = null;
         let mapLoadProgressHideTimer = null;
         let mapLoadProgressState = 'idle';
+        let identityFixContext = null;
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -1834,6 +1975,63 @@
           popover.classList.remove('show');
         }
 
+        function getIdentityFixPrefill(context = {}) {
+          const sourceSpace = context.space || context.hit?.space || chosenSpace || null;
+          const fallback = context.prefillValue
+            ?? sourceSpace?.number
+            ?? sourceSpace?.display_name
+            ?? context.hit?.space?.number
+            ?? context.hit?.space?.display_name
+            ?? '';
+          return String(fallback || '').trim();
+        }
+
+        function closeIdentityFixModal() {
+          if (!identityFixModal) return;
+
+          identityFixModal.classList.remove('show');
+          identityFixModal.hidden = true;
+          identityFixModal.setAttribute('aria-hidden', 'true');
+          identityFixContext = null;
+        }
+
+        function openIdentityFixModal(context = {}) {
+          if (!identityFixModal || !identityFixInput) return;
+
+          identityFixContext = {
+            ...context,
+            prefillValue: getIdentityFixPrefill(context),
+          };
+
+          identityFixInput.value = identityFixContext.prefillValue || '';
+          identityFixModal.hidden = false;
+          identityFixModal.classList.add('show');
+          identityFixModal.setAttribute('aria-hidden', 'false');
+
+          requestAnimationFrame(() => {
+            identityFixInput.focus({ preventScroll: true });
+            identityFixInput.select();
+          });
+        }
+
+        async function submitIdentityFixModal() {
+          if (!identityFixInput) return;
+
+          const value = String(identityFixInput.value || '').trim();
+          if (!value) {
+            toast('Нужен номер или название места');
+            identityFixInput.focus({ preventScroll: true });
+            return;
+          }
+
+          const context = identityFixContext || {};
+          closeIdentityFixModal();
+          await submitReviewDecision('fix_space_identity', {
+            ...context,
+            identityValue: value,
+          });
+        }
+
         function showPopoverAt(clientX, clientY, html) {
           if (!popover || !popoverBody) return;
 
@@ -1861,7 +2059,45 @@
         }
 
         popoverClose?.addEventListener('click', hidePopover);
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') hidePopover(); });
+        identityFixModal?.addEventListener('click', (e) => {
+          const t = e.target;
+          if (!(t instanceof HTMLElement)) return;
+
+          const action = t.getAttribute('data-action');
+          if (action === 'close') {
+            e.preventDefault();
+            closeIdentityFixModal();
+            return;
+          }
+
+          if (action === 'save') {
+            e.preventDefault();
+            submitIdentityFixModal().catch((err) => {
+              console.error(err);
+              toast(String(err?.message || err));
+            });
+          }
+        });
+        identityFixInput?.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          submitIdentityFixModal().catch((err) => {
+            console.error(err);
+            toast(String(err?.message || err));
+          });
+        });
+        identityFixClose?.addEventListener('click', closeIdentityFixModal);
+        window.addEventListener('keydown', (e) => {
+          if (identityFixModal?.classList.contains('show')) {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeIdentityFixModal();
+            }
+            return;
+          }
+
+          if (e.key === 'Escape') hidePopover();
+        });
         window.addEventListener('click', (e) => {
           if (!popover?.classList.contains('show')) return;
           if (popover.contains(e.target)) return;
@@ -3521,22 +3757,31 @@
             }
 
             if (decision === 'fix_space_identity') {
-              const currentNumber = sourceSpace?.number ? String(sourceSpace.number) : '';
-              const currentDisplayName = sourceSpace?.display_name ? String(sourceSpace.display_name) : '';
-              const nextNumber = window.prompt('Номер места', currentNumber);
-              const nextDisplayName = window.prompt('Название места', currentDisplayName);
+              const identityValue = typeof options.identityValue === 'string'
+                ? String(options.identityValue).trim()
+                : '';
 
-              if ((!nextNumber || !String(nextNumber).trim()) && (!nextDisplayName || !String(nextDisplayName).trim())) {
-                toast('Нужен номер или название места');
-                return;
-              }
+              if (identityValue) {
+                payload.number = identityValue;
+                payload.display_name = identityValue;
+              } else {
+                const currentNumber = sourceSpace?.number ? String(sourceSpace.number) : '';
+                const currentDisplayName = sourceSpace?.display_name ? String(sourceSpace.display_name) : '';
+                const nextNumber = window.prompt('Номер места', currentNumber);
+                const nextDisplayName = window.prompt('Название места', currentDisplayName);
 
-              if (nextNumber && String(nextNumber).trim()) {
-                payload.number = String(nextNumber).trim();
-              }
+                if ((!nextNumber || !String(nextNumber).trim()) && (!nextDisplayName || !String(nextDisplayName).trim())) {
+                  toast('Нужен номер или название места');
+                  return;
+                }
 
-              if (nextDisplayName && String(nextDisplayName).trim()) {
-                payload.display_name = String(nextDisplayName).trim();
+                if (nextNumber && String(nextNumber).trim()) {
+                  payload.number = String(nextNumber).trim();
+                }
+
+                if (nextDisplayName && String(nextDisplayName).trim()) {
+                  payload.display_name = String(nextDisplayName).trim();
+                }
               }
             }
 
@@ -4228,7 +4473,8 @@
                   btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
                   btns.push('<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать конфликт по месту" aria-label="Зафиксировать конфликт по месту">\u041a\u043e\u043d\u0444\u043b\u0438\u043a\u0442</button>');
                   btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '" title="Уточнить номер или название места" aria-label="Уточнить номер или название места">\u0423\u0442\u043e\u0447\u043d\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения">Требует уточнения</button>');
+                  btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '" title="Применить безопасное уточнение номера или названия места" aria-label="Применить безопасное уточнение номера или названия места">Применить уточнение</button>');
                 }
 
                 if ((!hitSpaceId || hitSpaceId <= 0) && chosenId && Number.isFinite(chosenId) && chosenId > 0 && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
@@ -4277,6 +4523,18 @@
               const decision = String(t.getAttribute('data-decision') || '');
               const marketSpaceId = Number(t.getAttribute('data-space-id') || 0);
               const shapeId = Number(t.getAttribute('data-shape-id') || 0);
+              if (decision === 'fix_space_identity') {
+                hidePopover();
+                openIdentityFixModal({
+                  decision,
+                  marketSpaceId: Number.isFinite(marketSpaceId) && marketSpaceId > 0 ? marketSpaceId : null,
+                  shapeId: Number.isFinite(shapeId) && shapeId > 0 ? shapeId : null,
+                  hit: lastHit,
+                  space: lastHit?.space || chosenSpace || null,
+                  observedTenantName: lastHit?.tenant?.name || '',
+                });
+                return;
+              }
               submitReviewDecision(decision, {
                 marketSpaceId: Number.isFinite(marketSpaceId) && marketSpaceId > 0 ? marketSpaceId : null,
                 shapeId: Number.isFinite(shapeId) && shapeId > 0 ? shapeId : null,
