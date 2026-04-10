@@ -46,7 +46,7 @@
 3. Сделать backup:
    ```bash
    mkdir -p /var/www/market/backups
-   pg_dump -h 127.0.0.1 -U market_user -d market -Fc -f /var/www/market/backups/prod_before_contract_space_apply_\$(date +%Y-%m-%d_%H-%M-%S).dump
+   pg_dump -h 127.0.0.1 -U market_user -d market -Fc -f /var/www/market/backups/prod_before_contract_space_apply_TIMESTAMP.dump
    ls -lh /var/www/market/backups | tail -3
    ```
 4. Сначала выполнить preview:
@@ -110,7 +110,7 @@
 
 * Код: `/var/www/market/current`
 * URL (прототип): `http://market.176.108.244.218.nip.io`
-* DB (SQLite): `/var/www/market/current/database/database.sqlite`
+* DB: PostgreSQL (`DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` из `.env`)
 * Redis prefix: `market_prod:`
 * Horizon UI: `http://market.176.108.244.218.nip.io/admin/horizon/dashboard`
 * Horizon service (systemd): `market-horizon.service`
@@ -120,7 +120,7 @@
 * Код: `/var/www/market-staging/current`
 * URL (прототип): `http://market-staging.176.108.244.218.nip.io`
 * Доступ: BasicAuth включён (пользователь `staging`, пароль — в htpasswd на сервере)
-* DB (SQLite): `/var/www/market-staging/current/database/database.sqlite`
+* DB: PostgreSQL (`DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` из `.env`)
 * Redis prefix: `market_staging:`
 * Horizon UI: `http://market-staging.176.108.244.218.nip.io/admin/horizon/dashboard`
 * Horizon service (systemd): `market-staging-horizon.service`
@@ -294,12 +294,20 @@ sudo systemctl is-active market-staging-horizon.service
 
 На текущем сервере production **нет** отдельного `/usr/local/bin/deploy_market_prod.sh`, поэтому деплой выполняем вручную.
 
-Перед любыми изменениями — бэкап SQLite:
+Перед любыми изменениями — сначала показать target DB и сделать backup PostgreSQL:
 
 ```bash
 cd /var/www/market/current
-mkdir -p database/backups
-cp database/database.sqlite database/backups/database_$(date +%F_%H%M%S).sqlite
+php artisan tinker --execute="
+$default = config('database.default');
+echo 'DB_CONNECTION='.config('database.default').PHP_EOL;
+echo 'DB_HOST='.config('database.connections.'.$default.'.host').PHP_EOL;
+echo 'DB_PORT='.config('database.connections.'.$default.'.port').PHP_EOL;
+echo 'DB_DATABASE='.config('database.connections.'.$default.'.database').PHP_EOL;
+echo 'DB_USERNAME='.config('database.connections.'.$default.'.username').PHP_EOL;
+"
+mkdir -p /var/www/market/backups
+pg_dump -h <DB_HOST> -p <DB_PORT> -U <DB_USERNAME> -d <DB_DATABASE> -Fc -f /var/www/market/backups/prod_before_deploy_TIMESTAMP.dump
 ```
 
 Деплой (важно выполнять под `www-data`, чтобы не ломать права):
@@ -309,13 +317,21 @@ sudo -u www-data bash -lc '
 set -euo pipefail
 cd /var/www/market/current
 git fetch origin
-git reset --hard origin/main
+git switch main && git pull --ff-only origin main
 composer install --no-dev --optimize-autoloader
 php artisan optimize:clear
-php artisan migrate --force
 php artisan filament:upgrade
 php artisan horizon:terminate || true
 git log -1 --oneline
+'
+```
+
+Если PR действительно содержит миграцию, выполните отдельным шагом:
+
+```bash
+sudo -u www-data bash -lc '
+cd /var/www/market/current
+php artisan migrate --force
 '
 ```
 
@@ -352,17 +368,23 @@ php artisan about
 php artisan optimize:clear
 ```
 
-### 8.2) Проверка доступа к SQLite и прав
+### 8.2) Проверка подключения к PostgreSQL и прав
 
 ```bash
-ls -la /var/www/market-staging/current/storage /var/www/market-staging/current/bootstrap/cache
-ls -la /var/www/market-staging/current/database/database.sqlite
+php artisan tinker --execute="
+$default = config('database.default');
+echo 'DB_CONNECTION='.config('database.default').PHP_EOL;
+echo 'DB_HOST='.config('database.connections.'.$default.'.host').PHP_EOL;
+echo 'DB_PORT='.config('database.connections.'.$default.'.port').PHP_EOL;
+echo 'DB_DATABASE='.config('database.connections.'.$default.'.database').PHP_EOL;
+echo 'DB_USERNAME='.config('database.connections.'.$default.'.username').PHP_EOL;
+"
 ```
 
 Ожидаемые требования:
 
 * `storage/` и `bootstrap/cache/` должны быть writable для пользователя веб-сервера (обычно `www-data`).
-* `database.sqlite` должен быть writable, иначе будут ошибки «readonly database» и проблемы с кешом/сессиями.
+* PostgreSQL-first: target DB должна совпадать с параметрами `DB_*` из `.env`.
 
 ### 8.3) Проверка состояния миграций
 
@@ -455,13 +477,13 @@ sudo tail -n 200 /var/log/nginx/access.log
 
 ### 10.1) Переменные `.env` «склеились»
 
-* Симптом: странные пути/значения, например `...database.sqliteREDIS_PREFIX=...`.
+* Симптом: странные пути/значения, например `...DB_DATABASE=...REDIS_PREFIX=...`.
 * Причина: нет перевода строки в конце `.env`.
 
-### 10.2) SQLite readonly / ошибки записи кеша
+### 10.2) PostgreSQL / проблемы с записью
 
 * Симптом: нельзя логиниться, кеш/сессии не пишутся, ошибки на запись.
-* Причина: права на `storage/`, `bootstrap/cache/`, `database.sqlite`.
+* Причина: права на `storage/`, `bootstrap/cache/` или неверные `DB_*`.
 
 ### 10.3) Horizon “inactive”
 
