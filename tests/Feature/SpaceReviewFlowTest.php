@@ -1,5 +1,7 @@
 <?php
 
+# tests/Feature/SpaceReviewFlowTest.php
+
 declare(strict_types=1);
 
 namespace Tests\Feature;
@@ -170,6 +172,72 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('Original name', $space->display_name);
         $this->assertSame('occupied', $space->status);
         $this->assertSame($user->id, $space->map_reviewed_by);
+    }
+
+    public function test_review_decision_endpoint_creates_observed_operation_for_identity_clarification(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'C-303',
+            'display_name' => 'Original name',
+            'status' => 'occupied',
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+            'market_space_id' => $space->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'operation')
+            ->assertJsonPath('operation.status', 'observed')
+            ->assertJsonPath('item.review_status', 'conflict');
+
+        $space->refresh();
+
+        $this->assertSame('C-303', $space->number);
+        $this->assertSame('Original name', $space->display_name);
+        $this->assertSame('conflict', $space->map_review_status);
+    }
+
+    public function test_review_decision_endpoint_applies_identity_fix_and_updates_live_fields(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'C-304',
+            'display_name' => 'Before fix',
+            'status' => 'occupied',
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::FIX_SPACE_IDENTITY,
+            'market_space_id' => $space->id,
+            'number' => 'C-304A',
+            'display_name' => 'After fix',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'operation')
+            ->assertJsonPath('operation.status', 'applied')
+            ->assertJsonPath('item.review_status', 'changed');
+
+        $space->refresh();
+
+        $this->assertSame('C-304A', $space->number);
+        $this->assertSame('After fix', $space->display_name);
+        $this->assertSame('changed', $space->map_review_status);
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void
