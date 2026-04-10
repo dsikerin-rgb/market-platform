@@ -114,6 +114,14 @@
                 color: #f8fafc;
             }
 
+            .mrr-link--button {
+                background: transparent;
+                appearance: none;
+                cursor: pointer;
+                font: inherit;
+                line-height: inherit;
+            }
+
             .mrr-empty {
                 border-radius: 1rem;
                 border: 1px dashed rgba(15, 23, 42, 0.14);
@@ -124,6 +132,184 @@
             .dark .mrr-empty {
                 border-color: rgba(148, 163, 184, 0.2);
                 color: #94a3b8;
+            }
+
+            .mrr-clarify-modal {
+                position: fixed;
+                inset: 0;
+                z-index: 60;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 1rem;
+            }
+
+            .mrr-clarify-modal.is-open {
+                display: flex;
+            }
+
+            .mrr-clarify-modal__backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.55);
+                backdrop-filter: blur(4px);
+            }
+
+            .mrr-clarify-modal__dialog {
+                position: relative;
+                width: min(560px, 100%);
+                border-radius: 1.25rem;
+                border: 1px solid rgba(148, 163, 184, 0.24);
+                background: rgba(255, 255, 255, 0.98);
+                box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+                padding: 1.25rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.95rem;
+            }
+
+            .dark .mrr-clarify-modal__dialog {
+                background: rgba(15, 23, 42, 0.98);
+                border-color: rgba(148, 163, 184, 0.24);
+            }
+
+            .mrr-clarify-modal__eyebrow {
+                font-size: 0.72rem;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .dark .mrr-clarify-modal__eyebrow {
+                color: #94a3b8;
+            }
+
+            .mrr-clarify-modal__title {
+                margin: 0;
+                font-size: 1.1rem;
+                line-height: 1.3;
+                color: #0f172a;
+            }
+
+            .dark .mrr-clarify-modal__title {
+                color: #f8fafc;
+            }
+
+            .mrr-clarify-modal__description {
+                margin: 0;
+                font-size: 0.9rem;
+                line-height: 1.5;
+                color: #475569;
+            }
+
+            .dark .mrr-clarify-modal__description {
+                color: #cbd5e1;
+            }
+
+            .mrr-clarify-modal__label {
+                font-size: 0.82rem;
+                font-weight: 700;
+                color: #334155;
+            }
+
+            .dark .mrr-clarify-modal__label {
+                color: #e2e8f0;
+            }
+
+            .mrr-clarify-modal__input {
+                width: 100%;
+                box-sizing: border-box;
+                border-radius: 0.9rem;
+                border: 1px solid rgba(148, 163, 184, 0.38);
+                background: #fff;
+                color: #0f172a;
+                padding: 0.85rem 0.95rem;
+                font-size: 0.95rem;
+                outline: none;
+            }
+
+            .dark .mrr-clarify-modal__input {
+                background: rgba(15, 23, 42, 0.96);
+                border-color: rgba(148, 163, 184, 0.34);
+                color: #f8fafc;
+            }
+
+            .mrr-clarify-modal__input:focus {
+                border-color: rgba(37, 99, 235, 0.85);
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            }
+
+            .mrr-clarify-modal__error {
+                min-height: 1.1rem;
+                font-size: 0.82rem;
+                color: #b91c1c;
+            }
+
+            .dark .mrr-clarify-modal__error {
+                color: #f87171;
+            }
+
+            .mrr-clarify-modal__actions {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 0.55rem;
+            }
+
+            .mrr-clarify-modal__button {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.35rem;
+                border-radius: 999px;
+                border: 1px solid rgba(15, 23, 42, 0.1);
+                padding: 0.45rem 0.78rem;
+                font-size: 0.85rem;
+                font-weight: 700;
+                color: #0f172a;
+                background: rgba(255, 255, 255, 0.95);
+                cursor: pointer;
+                appearance: none;
+            }
+
+            .dark .mrr-clarify-modal__button {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.92);
+                color: #f8fafc;
+            }
+
+            .mrr-clarify-modal__button--primary {
+                background: #0f172a;
+                border-color: #0f172a;
+                color: #fff;
+                box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+            }
+
+            .dark .mrr-clarify-modal__button--primary {
+                background: #2563eb;
+                border-color: #2563eb;
+            }
+
+            .mrr-clarify-modal__close {
+                position: absolute;
+                top: 0.75rem;
+                right: 0.75rem;
+                width: 2rem;
+                height: 2rem;
+                border-radius: 999px;
+                border: 1px solid rgba(148, 163, 184, 0.28);
+                background: rgba(248, 250, 252, 0.95);
+                color: #475569;
+                cursor: pointer;
+                appearance: none;
+                font-size: 1.1rem;
+                line-height: 1;
+            }
+
+            .dark .mrr-clarify-modal__close {
+                background: rgba(15, 23, 42, 0.92);
+                color: #cbd5e1;
             }
 
             .mrr-progress-grid {
@@ -704,6 +890,20 @@
                                                     </td>
                                                     <td>
                                                         <div class="mrr-links">
+                                                            @if (($row['decision'] ?? null) === 'space_identity_needs_clarification')
+                                                                <button
+                                                                    type="button"
+                                                                    class="mrr-link mrr-link--button"
+                                                                    data-mrr-clarify-action="open"
+                                                                    data-space-id="{{ $row['space_id'] }}"
+                                                                    data-space-number="{{ $row['number'] ?? '' }}"
+                                                                    data-space-display-name="{{ $row['display_name'] ?? '' }}"
+                                                                    title="Применить безопасное уточнение номера или названия места"
+                                                                    aria-label="Применить уточнение"
+                                                                >
+                                                                    Применить уточнение
+                                                                </button>
+                                                            @endif
                                                             <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                         </div>
@@ -844,7 +1044,178 @@
                         </div>
                     </section>
                 </div>
+
+                <div id="mrrClarifyModal" class="mrr-clarify-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-clarify-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrClarifyTitle"
+                        aria-describedby="mrrClarifyDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-clarify-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Нужно уточнить</div>
+                        <h3 id="mrrClarifyTitle" class="mrr-clarify-modal__title">Применить уточнение</h3>
+                        <p id="mrrClarifyDescription" class="mrr-clarify-modal__description">
+                            Введите, как это место обозначено на схеме, вывеске или на самом месте.
+                        </p>
+
+                        <label class="mrr-clarify-modal__label" for="mrrClarifyInput">Номер или название места</label>
+                        <input
+                            id="mrrClarifyInput"
+                            class="mrr-clarify-modal__input"
+                            type="text"
+                            autocomplete="off"
+                            spellcheck="false"
+                            inputmode="text"
+                        >
+                        <div id="mrrClarifyError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-clarify-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-clarify-save>Сохранить</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         @endif
+
+        <script>
+            (() => {
+                const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const modal = document.getElementById('mrrClarifyModal');
+                const input = document.getElementById('mrrClarifyInput');
+                const error = document.getElementById('mrrClarifyError');
+
+                if (!modal || !input || !error) {
+                    return;
+                }
+
+                const openModal = (button) => {
+                    modal.hidden = false;
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                    modal.dataset.spaceId = String(button.dataset.spaceId || '');
+                    input.value = button.dataset.spaceNumber || button.dataset.spaceDisplayName || '';
+                    error.textContent = '';
+
+                    requestAnimationFrame(() => {
+                        input.focus({ preventScroll: true });
+                        input.select();
+                    });
+                };
+
+                const closeModal = () => {
+                    modal.classList.remove('is-open');
+                    modal.hidden = true;
+                    modal.setAttribute('aria-hidden', 'true');
+                    delete modal.dataset.spaceId;
+                    error.textContent = '';
+                };
+
+                const save = async () => {
+                    const spaceId = Number(modal.dataset.spaceId || 0);
+                    const value = String(input.value || '').trim();
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        error.textContent = 'Не удалось определить место.';
+                        return;
+                    }
+
+                    if (!value) {
+                        error.textContent = 'Нужен номер или название места.';
+                        input.focus({ preventScroll: true });
+                        return;
+                    }
+
+                    error.textContent = '';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision: 'fix_space_identity',
+                            market_space_id: spaceId,
+                            number: value,
+                            display_name: value,
+                        }),
+                    });
+
+                    let json = null;
+                    try {
+                        json = await response.json();
+                    } catch (e) {
+                        json = null;
+                    }
+
+                    if (!response.ok || !json || json.ok !== true) {
+                        error.textContent = String(json?.message || 'Не удалось применить уточнение.');
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
+                document.addEventListener('click', (event) => {
+                    const button = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-clarify-action="open"]')
+                        : null;
+
+                    if (!button || !(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openModal(button);
+                });
+
+                modal.addEventListener('click', (event) => {
+                    if (!(event.target instanceof Element)) {
+                        return;
+                    }
+
+                    if (event.target.hasAttribute('data-mrr-clarify-close')) {
+                        event.preventDefault();
+                        closeModal();
+                        return;
+                    }
+
+                    if (event.target.hasAttribute('data-mrr-clarify-save')) {
+                        event.preventDefault();
+                        save().catch((errorInstance) => {
+                            error.textContent = String(errorInstance?.message || errorInstance);
+                        });
+                    }
+                });
+
+                input.addEventListener('keydown', (event) => {
+                    if (event.key !== 'Enter') {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    save().catch((errorInstance) => {
+                        error.textContent = String(errorInstance?.message || errorInstance);
+                    });
+                });
+
+                window.addEventListener('keydown', (event) => {
+                    if (!modal.classList.contains('is-open')) {
+                        return;
+                    }
+
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeModal();
+                    }
+                });
+            })();
+        </script>
     </div>
 </x-filament-panels::page>

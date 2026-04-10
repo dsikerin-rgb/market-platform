@@ -16,6 +16,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -238,6 +239,39 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('C-304A', $space->number);
         $this->assertSame('After fix', $space->display_name);
         $this->assertSame('changed', $space->map_review_status);
+    }
+
+    public function test_map_review_results_page_offers_apply_clarification_action_for_clarified_spaces(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'P-1',
+            'display_name' => 'Zoomir',
+            'status' => 'occupied',
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('Применить уточнение', false)
+            ->assertSee('mrrClarifyModal', false)
+            ->assertSee('data-mrr-clarify-action="open"', false);
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void
