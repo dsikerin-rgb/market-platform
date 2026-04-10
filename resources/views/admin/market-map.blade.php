@@ -1037,11 +1037,29 @@
       box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.06);
     }
     .legend-color.legend-fallback {
-      background: linear-gradient(135deg, rgba(125, 211, 252, 0.88), rgba(14, 165, 233, 0.82));
-      border: 1px solid #0ea5e9;
+      background: #7dd3fc;
+      border: 1px solid #0284c7;
       box-shadow:
         inset 0 0 0 1px rgba(255,255,255,.28),
-        0 0 0 1px rgba(14, 165, 233, 0.10);
+        0 0 0 1px rgba(2, 132, 199, 0.10);
+    }
+    .legend-color.legend-combined-review {
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(220, 38, 38, 0.42) 0 2px,
+          transparent 2px 7px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          rgba(31, 41, 55, 0.16) 0 1px,
+          transparent 1px 7px
+        ),
+        #7dd3fc;
+      border: 2px solid #0284c7;
+      box-shadow:
+        inset 0 0 0 1px rgba(180, 83, 9, 0.85),
+        inset 0 0 0 2px rgba(255,255,255,.18);
     }
     .legend-color.legend-rate-none {
       background: #cbd5e1;
@@ -1728,8 +1746,12 @@
               <span class="legend-color legend-fallback"></span>
               <span class="legend-label" title="У места есть арендатор, но точная связь с договорами и 1С не подтверждена">Связь с местом не подтверждена</span>
             </div>
+            <div class="legend-item">
+              <span class="legend-color legend-combined-review"></span>
+              <span class="legend-label" title="Место одновременно помечено как конфликтное и не имеет подтвержденной per-space связи">Конфликт + связь не подтверждена</span>
+            </div>
             <div class="legend-item legend-item--note">
-              <span class="legend-note">Ревизионные маркеры показываются только в режиме ревизии и не заменяют слой задолженности или ставки.</span>
+              <span class="legend-note">Остальные места в режиме ревизии показываются нейтрально. Ревизионные маркеры не заменяют слой задолженности или ставки.</span>
             </div>
           </div>
         </div>
@@ -3204,6 +3226,7 @@
               const showReviewMarkers = currentScenario === 'review';
               const isConflictReview = showReviewMarkers && hasSpace && isConflictReviewStatus(reviewStatus);
               const isTenantFallbackScope = showReviewMarkers && hasSpace && debtScope === 'tenant_fallback';
+              const isCombinedReviewMarker = isConflictReview && isTenantFallbackScope;
               const rentRateBand = getRentRateBand(s.space_rent_rate_value, rentLayerStats);
               
               // Цвета для debt status
@@ -3272,22 +3295,9 @@
               }
 
               if (showReviewMarkers) {
-                if (fillStyle === 'unlinked') {
-                  fo = 0.34;
-                  stroke = '#94a3b8';
-                } else if (fillStyle === 'vacant') {
-                  fo = 0.38;
-                  stroke = '#94a3b8';
-                } else if (fillStyle === 'debt') {
-                  fo = 0.34;
-                  stroke = '#475569';
-                } else if (fillStyle === 'rent' || fillStyle === 'rent-missing') {
-                  fo = 0.3;
-                  stroke = '#475569';
-                } else {
-                  fo = Math.min(fo, 0.2);
-                  stroke = '#64748b';
-                }
+                fill = '#dfe7ef';
+                stroke = '#94a3b8';
+                fo = 1;
               }
               
               const sw = BORDER_WIDTH_BASE;
@@ -3307,17 +3317,30 @@
                 '"></polygon>'
               );
 
-              if (isConflictReview) {
+              if (isCombinedReviewMarker) {
                 parts.push(
                   '<polygon points="' + pts +
-                  '" fill="#f59e0b" fill-opacity="1"' +
+                  '" fill="#7dd3fc" fill-opacity="1"' +
+                  '" stroke="#0284c7" stroke-opacity="' + (isSel ? '1' : '0.94') +
+                  '" stroke-width="' + (isSel ? (sw + 1.6) : 2.8) +
+                  '"></polygon>'
+                );
+                parts.push(
+                  '<polygon points="' + pts +
+                  '" fill="url(#conflictHatch)" fill-opacity="1"' +
+                  '" stroke="#b45309" stroke-opacity="' + (isSel ? '1' : '0.96') +
+                  '" stroke-width="' + (isSel ? (sw + 0.5) : 1.4) +
+                  '"></polygon>'
+                );
+              } else if (isConflictReview) {
+                parts.push(
+                  '<polygon points="' + pts +
+                  '" fill="url(#conflictHatch)" fill-opacity="1"' +
                   '" stroke="#b45309" stroke-opacity="' + (isSel ? '0.98' : '0.9') +
                   '" stroke-width="' + (isSel ? (sw + 1.1) : 2.1) +
                   '"></polygon>'
                 );
-              }
-
-              if (isTenantFallbackScope) {
+              } else if (isTenantFallbackScope) {
                 parts.push(
                   '<polygon points="' + pts +
                   '" fill="#7dd3fc" fill-opacity="1"' +
