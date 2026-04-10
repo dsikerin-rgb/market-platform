@@ -95,7 +95,7 @@ composer install --no-dev --optimize-autoloader
 # 4. Очистка кеша
 php artisan optimize:clear
 
-# 5. Миграции
+# 5. Миграции (только если PR действительно содержит миграцию)
 php artisan migrate --force
 
 # 6. Перезапуск Horizon
@@ -140,19 +140,25 @@ ssh my_projects "cd /var/www/market-staging/current && php artisan horizon:statu
 #### Деплой main
 
 ```bash
-ssh my_projects "cd /var/www/market/current && git fetch origin main && git checkout main && git reset --hard origin/main && sudo -u www-data php artisan optimize:clear && git rev-parse --short HEAD"
+ssh my_projects "cd /var/www/market/current && git fetch origin main && git switch main && git pull --ff-only origin main && sudo -u www-data php artisan optimize:clear && git rev-parse --short HEAD"
 ```
 
 #### Деплой конкретной ветки
 
 ```bash
-ssh my_projects "cd /var/www/market/current && git fetch origin <branch> && git checkout <branch> && git reset --hard origin/<branch> && sudo -u www-data php artisan optimize:clear"
+ssh my_projects "cd /var/www/market/current && git fetch origin <branch> && git switch <branch> && git pull --ff-only origin <branch> && sudo -u www-data php artisan optimize:clear"
 ```
 
 #### Полный деплой с миграциями и Horizon
 
 ```bash
-ssh my_projects "cd /var/www/market/current && git fetch origin main && git checkout main && git reset --hard origin/main && composer install --no-dev --optimize-autoloader && php artisan optimize:clear && php artisan migrate --force && php artisan filament:upgrade && php artisan horizon:terminate || true && git rev-parse --short HEAD && git log --oneline -1"
+ssh my_projects "cd /var/www/market/current && php artisan tinker --execute=\"echo \\\"DB_CONNECTION=\\\".config(\\\"database.default\\\").PHP_EOL; echo \\\"DB_HOST=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".host\\\").PHP_EOL; echo \\\"DB_PORT=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".port\\\").PHP_EOL; echo \\\"DB_DATABASE=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".database\\\").PHP_EOL; echo \\\"DB_USERNAME=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".username\\\").PHP_EOL;\" && mkdir -p /var/www/market/backups && pg_dump -h <DB_HOST> -p <DB_PORT> -U <DB_USERNAME> -d <DB_DATABASE> -Fc -f /var/www/market/backups/prod_before_deploy_TIMESTAMP.dump && git fetch origin main && git switch main && git pull --ff-only origin main && composer install --no-dev --optimize-autoloader && php artisan optimize:clear && php artisan filament:upgrade && php artisan horizon:terminate || true && git rev-parse --short HEAD && git log --oneline -1"
+```
+
+Если PR действительно содержит миграцию, выполните отдельным шагом:
+
+```bash
+ssh my_projects "cd /var/www/market/current && php artisan migrate --force"
 ```
 
 ---
@@ -227,10 +233,10 @@ gh pr create --base main --head fix/market-map-debt-display --title "..." --body
 ssh my_projects "cd /var/www/market/current && git status"
 
 # Если грязное - сохранить в backup-ветку
-ssh my_projects "cd /var/www/market/current && git checkout -b backup/local-$(date +%F)"
+ssh my_projects "cd /var/www/market/current && git checkout -b backup/local-YYYY-MM-DD"
 
-# Или использовать reset --hard (осторожно!)
-ssh my_projects "cd /var/www/market/current && git reset --hard origin/main"
+# Или вернуть main через fast-forward
+ssh my_projects "cd /var/www/market/current && git switch main && git pull --ff-only origin main"
 ```
 
 ### Точечное копирование файлов
@@ -266,7 +272,7 @@ ssh my_projects "sudo tail -f /var/log/nginx/error.log"
 
 ```bash
 ssh my_projects "ls -la /var/www/market/current/storage"
-ssh my_projects "ls -la /var/www/market/current/database/database.sqlite"
+ssh my_projects "cd /var/www/market/current && php artisan tinker --execute=\"echo \\\"DB_CONNECTION=\\\".config(\\\"database.default\\\").PHP_EOL; echo \\\"DB_HOST=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".host\\\").PHP_EOL; echo \\\"DB_PORT=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".port\\\").PHP_EOL; echo \\\"DB_DATABASE=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".database\\\").PHP_EOL; echo \\\"DB_USERNAME=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".username\\\").PHP_EOL;\""
 ```
 
 ---
