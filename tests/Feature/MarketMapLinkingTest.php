@@ -165,6 +165,27 @@ class MarketMapLinkingTest extends TestCase
         $response->assertViewHas('returnUrl', $returnUrl);
     }
 
+    public function test_market_map_uses_honest_review_labels_for_tenant_fallback_cases(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $response = $this->get(route('filament.admin.market-map', [
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('Ревизионный конфликт', false);
+        $response->assertSee('Связь с местом не подтверждена', false);
+        $response->assertSee('Ревизионные маркеры показываются только в режиме ревизии', false);
+        $response->assertDontSee('Спорное место', false);
+        $response->assertSee('Точная связь с местом не подтверждена', false);
+        $response->assertDontSee('Нет точной связи с местом', false);
+    }
+
     public function test_market_space_edit_status_view_shows_linked_state(): void
     {
         $linkedView = view('admin.market-space-edit', [

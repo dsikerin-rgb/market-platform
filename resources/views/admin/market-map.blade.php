@@ -33,11 +33,30 @@
     :root { color-scheme: light; }
     body {
       margin: 0;
+      min-height: 100vh;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
       color: #0f172a;
       background: #f8fafc;
     }
-    .wrap { padding: 16px; max-width: 1400px; margin: 0 auto; }
+    .wrap {
+      padding: 16px;
+      max-width: 1400px;
+      margin: 0 auto;
+      min-height: 100vh;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+    .map-layout {
+      margin-top: 14px;
+      flex: 1 1 auto;
+      min-height: 0;
+      height: calc(100vh - 46px);
+      max-height: calc(100vh - 46px);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
     .btnrow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 
     button {
@@ -255,12 +274,15 @@
     }
 
     .viewer {
-      margin-top: 14px;
       border: 1px solid rgba(148, 163, 184, 0.28);
       border-radius: 14px;
       overflow: hidden;
       background: transparent;
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .toolbar {
       padding: 9px 14px 7px;
@@ -950,9 +972,9 @@
       display: none;
     }
     .legend-stack {
-      margin-top: 8px;
       display: grid;
       gap: 0;
+      flex: 0 0 auto;
     }
     .legend-note {
       color: rgba(15, 23, 42, 0.72);
@@ -1014,6 +1036,13 @@
       border: 1px solid #b45309;
       box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.06);
     }
+    .legend-color.legend-fallback {
+      background: linear-gradient(135deg, rgba(125, 211, 252, 0.88), rgba(14, 165, 233, 0.82));
+      border: 1px solid #0ea5e9;
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.28),
+        0 0 0 1px rgba(14, 165, 233, 0.10);
+    }
     .legend-color.legend-rate-none {
       background: #cbd5e1;
       border: 1px solid #94a3b8;
@@ -1030,12 +1059,20 @@
       }
     }
     .stage {
-      height: calc(100vh - 190px);
-      min-height: 420px;
+      height: auto;
+      min-height: 0;
+      flex: 1 1 auto;
       overflow: auto;
       background: rgba(120,120,120,.04);
     }
     .stage.grabbing { cursor: grabbing; }
+
+    #viewerRoot {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
 
     .canvasWrap {
       position: relative;
@@ -1102,10 +1139,12 @@
 
     .iframe {
       width: 100%;
-      height: calc(100vh - 190px);
-      min-height: 420px;
+      height: 100%;
+      min-height: 0;
       border: 0;
       background: #fff;
+      display: block;
+      flex: 1 1 auto;
     }
 
     .popover {
@@ -1145,6 +1184,18 @@
       margin-top: 10px;
       padding-top: 10px;
       border-top: 1px solid rgba(255,255,255,.10);
+    }
+    .popover .row-warning {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(56, 189, 248, 0.48);
+      background: rgba(14, 165, 233, 0.16);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+    }
+    .popover .row-warning .row-value {
+      color: #e0f2fe;
+      font-weight: 700;
     }
 
     .popover .xbtn {
@@ -1406,7 +1457,8 @@
         </div>
       </div>
     @else
-      <div class="viewer">
+      <div class="map-layout">
+        <div class="viewer">
         <div class="toolbar">
           <div class="toolbar-row toolbar-row--hero">
             <!-- Left: Zoom, Controls & Search -->
@@ -1478,7 +1530,7 @@
                   @endif
 
                   <div class="toolbar-group toolbar-group--accent toolbar-group--segmented">
-                    <span class="toolbar-label">Слои</span>
+                    <span class="toolbar-label" id="layerToolbarLabel">Слои</span>
                     <button
                       id="layerDebt"
                       type="button"
@@ -1592,7 +1644,7 @@
         </div>
       </div>
 
-      <div class="legend-stack">
+        <div class="legend-stack">
         <!-- Легенда карты -->
         <div class="legend" id="legendDebt">
           <div class="legend-items">
@@ -1625,10 +1677,6 @@
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-color legend-conflict"></span>
-              <span class="legend-label" title="Привязанное место с конфликтом ревизии">Спорное место</span>
             </div>
             <div class="legend-item legend-item--note">
               <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам.</span>
@@ -1665,14 +1713,26 @@
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
             </div>
-            <div class="legend-item">
-              <span class="legend-color legend-conflict"></span>
-              <span class="legend-label" title="Привязанное место с конфликтом ревизии">Спорное место</span>
-            </div>
             <div class="legend-item legend-item--note">
               <span class="legend-note" id="rentLegendNote">Слой показывает относительную ставку по занятым местам.</span>
             </div>
           </div>
+        </div>
+        <div class="legend" id="legendReview" hidden>
+          <div class="legend-items">
+            <div class="legend-item">
+              <span class="legend-color legend-conflict"></span>
+              <span class="legend-label" title="Привязанное место требует ручной проверки по ревизии">Ревизионный конфликт</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-fallback"></span>
+              <span class="legend-label" title="У места есть арендатор, но точная связь с договорами и 1С не подтверждена">Связь с местом не подтверждена</span>
+            </div>
+            <div class="legend-item legend-item--note">
+              <span class="legend-note">Ревизионные маркеры показываются только в режиме ревизии и не заменяют слой задолженности или ставки.</span>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
 
@@ -1745,6 +1805,7 @@
         const layerRentBtn = document.getElementById('layerRent');
         const legendDebt = document.getElementById('legendDebt');
         const legendRent = document.getElementById('legendRent');
+        const legendReview = document.getElementById('legendReview');
         const rentLegendLow = document.getElementById('rentLegendLow');
         const rentLegendMid = document.getElementById('rentLegendMid');
         const rentLegendHigh = document.getElementById('rentLegendHigh');
@@ -1764,6 +1825,7 @@
         const scenarioMapBtn = document.getElementById('scenarioMap');
         const scenarioReviewBtn = document.getElementById('scenarioReview');
         const layerGroup = layerDebtBtn?.closest('.toolbar-group') || null;
+        const layerToolbarLabel = document.getElementById('layerToolbarLabel');
         const reviewToolbarRow = document.getElementById('reviewToolbarRow');
         const reviewNavRow = document.getElementById('reviewNavRow');
         const reviewNavPrevBtn = document.getElementById('reviewNavPrev');
@@ -1853,15 +1915,18 @@
         }
 
         function syncLayerButtonHelp() {
+          const reviewMode = isReviewMode();
           const debtHelp = (debtLegendNote?.textContent || 'Слой показывает статус задолженности по занятым местам.').trim();
           const rentHelp = (rentLegendNote?.textContent || 'Слой показывает относительную ставку по занятым местам.').trim();
           if (layerDebtBtn && debtHelp) {
-            layerDebtBtn.title = debtHelp;
-            layerDebtBtn.setAttribute('aria-label', debtHelp);
+            const debtTitle = reviewMode ? ('Фон карты: ' + debtHelp) : debtHelp;
+            layerDebtBtn.title = debtTitle;
+            layerDebtBtn.setAttribute('aria-label', debtTitle);
           }
           if (layerRentBtn && rentHelp) {
-            layerRentBtn.title = rentHelp;
-            layerRentBtn.setAttribute('aria-label', rentHelp);
+            const rentTitle = reviewMode ? ('Фон карты: ' + rentHelp) : rentHelp;
+            layerRentBtn.title = rentTitle;
+            layerRentBtn.setAttribute('aria-label', rentTitle);
           }
         }
 
@@ -2275,8 +2340,10 @@
         }
 
         function updateLegendVisibility() {
-          if (legendDebt) legendDebt.hidden = currentLayer !== 'debt';
-          if (legendRent) legendRent.hidden = currentLayer !== 'rent';
+          const reviewMode = isReviewMode();
+          if (legendDebt) legendDebt.hidden = reviewMode || currentLayer !== 'debt';
+          if (legendRent) legendRent.hidden = reviewMode || currentLayer !== 'rent';
+          if (legendReview) legendReview.hidden = !reviewMode;
           layerDebtBtn?.classList.toggle('is-active', currentLayer === 'debt');
           layerRentBtn?.classList.toggle('is-active', currentLayer === 'rent');
           syncLayerButtonHelp();
@@ -2386,6 +2453,10 @@
           scenarioMapBtn?.classList.toggle('is-active', !reviewMode);
           scenarioReviewBtn?.classList.toggle('is-active', reviewMode);
 
+          if (layerToolbarLabel) {
+            layerToolbarLabel.textContent = reviewMode ? 'Фон' : 'Слои';
+          }
+
           if (editToolbarRow) {
             editToolbarRow.style.display = 'flex';
           }
@@ -2447,6 +2518,10 @@
           currentScenario = mode === 'review' ? 'review' : 'map';
           hidePopover();
           updateScenarioUi();
+          updateLegendVisibility();
+          if (typeof redrawShapesRef === 'function') {
+            redrawShapesRef();
+          }
 
           const url = new URL(window.location.href);
           url.searchParams.set('mode', currentScenario);
@@ -3124,8 +3199,11 @@
               const hasSpace = isLinked;
               const hasTenant = hasSpace && (s.space_tenant_id !== null && s.space_tenant_id !== undefined);
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
+              const debtScope = typeof s.debt_status_scope === 'string' ? s.debt_status_scope : 'none';
               const reviewStatus = typeof s.space_review_status === 'string' ? s.space_review_status : '';
-              const isConflictReview = hasSpace && isConflictReviewStatus(reviewStatus);
+              const showReviewMarkers = currentScenario === 'review';
+              const isConflictReview = showReviewMarkers && hasSpace && isConflictReviewStatus(reviewStatus);
+              const isTenantFallbackScope = showReviewMarkers && hasSpace && debtScope === 'tenant_fallback';
               const rentRateBand = getRentRateBand(s.space_rent_rate_value, rentLayerStats);
               
               // Цвета для debt status
@@ -3192,6 +3270,25 @@
                 stroke = BORDER_COLOR;
                 fo = typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12;
               }
+
+              if (showReviewMarkers) {
+                if (fillStyle === 'unlinked') {
+                  fo = 0.34;
+                  stroke = '#94a3b8';
+                } else if (fillStyle === 'vacant') {
+                  fo = 0.38;
+                  stroke = '#94a3b8';
+                } else if (fillStyle === 'debt') {
+                  fo = 0.34;
+                  stroke = '#475569';
+                } else if (fillStyle === 'rent' || fillStyle === 'rent-missing') {
+                  fo = 0.3;
+                  stroke = '#475569';
+                } else {
+                  fo = Math.min(fo, 0.2);
+                  stroke = '#64748b';
+                }
+              }
               
               const sw = BORDER_WIDTH_BASE;
 
@@ -3213,10 +3310,20 @@
               if (isConflictReview) {
                 parts.push(
                   '<polygon points="' + pts +
-                  '" fill="url(#conflictHatch)" fill-opacity="' + (isSel ? '0.75' : '0.58') +
-                  '" stroke="#b45309" stroke-opacity="' + (isSel ? '0.95' : '0.8') +
-                  '" stroke-width="' + (isSel ? (sw + 0.8) : 1.6) +
-                  '" stroke-dasharray="5 4"></polygon>'
+                  '" fill="#f59e0b" fill-opacity="1"' +
+                  '" stroke="#b45309" stroke-opacity="' + (isSel ? '0.98' : '0.9') +
+                  '" stroke-width="' + (isSel ? (sw + 1.1) : 2.1) +
+                  '"></polygon>'
+                );
+              }
+
+              if (isTenantFallbackScope) {
+                parts.push(
+                  '<polygon points="' + pts +
+                  '" fill="#7dd3fc" fill-opacity="1"' +
+                  '" stroke="#0284c7" stroke-opacity="' + (isSel ? '0.96' : '0.88') +
+                  '" stroke-width="' + (isSel ? (sw + 1.0) : 2.0) +
+                  '"></polygon>'
                 );
               }
 
@@ -4393,21 +4500,21 @@
                     // Статус арендатора (нет точной связи с местом)
                     if (debtStatus === 'green') {
                       line4 = 'Статус арендатора: Нет задолженности';
-                      scopeExplanation = 'Нет точной связи с местом';
+                      scopeExplanation = 'Точная связь с местом не подтверждена';
                     } else if (debtStatus === 'pending') {
                       line4 = 'Статус арендатора: Срок не нарушен';
-                      scopeExplanation = 'Нет точной связи с местом';
+                      scopeExplanation = 'Точная связь с местом не подтверждена';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус арендатора: ' + escapeHtml(debtLabel))
                         : ('Просрочка арендатора: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
-                      scopeExplanation = 'Нет точной связи с местом';
+                      scopeExplanation = 'Точная связь с местом не подтверждена';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус арендатора: Нет данных 1С';
-                      scopeExplanation = debtSource ? ('Причина: ' + escapeHtml(debtSource)) : '';
+                      scopeExplanation = 'Точная связь с местом не подтверждена';
                     } else {
                       line4 = debtLabel ? ('Задолженность арендатора: ' + escapeHtml(debtLabel)) : 'Задолженность арендатора: —';
-                      scopeExplanation = 'Нет точной связи с местом';
+                      scopeExplanation = 'Точная связь с местом не подтверждена';
                     }
                   } else {
                     // scope=none или неизвестный
@@ -4453,6 +4560,7 @@
               const shapeId = hit.shape_id ? Number(hit.shape_id) : null;
               const hitSpaceId = hit.market_space_id ? Number(hit.market_space_id) : null;
               const hitTenantId = hit?.tenant?.id ? Number(hit.tenant.id) : (hit?.tenant_id ? Number(hit.tenant_id) : null);
+              const isTenantFallback = (hit.debt_status_scope || 'none') === 'tenant_fallback';
               const chosenId = getChosenSpaceId();
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
 
@@ -4466,13 +4574,15 @@
 
               if (isReviewMode()) {
                 if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
-                  btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что факт на месте совпадает с системой" aria-label="Отметить, что факт на месте совпадает с системой">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как свободное" aria-label="Отметить место как свободное">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
                   btns.push('<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать конфликт по месту" aria-label="Зафиксировать конфликт по месту">\u041a\u043e\u043d\u0444\u043b\u0438\u043a\u0442</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
                   btns.push('<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения">Требует уточнения</button>');
-                  btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '" title="Применить безопасное уточнение номера или названия места" aria-label="Применить безопасное уточнение номера или названия места">Применить уточнение</button>');
+                  if (!isTenantFallback) {
+                    btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что факт на месте совпадает с системой" aria-label="Отметить, что факт на месте совпадает с системой">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
+                    btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как свободное" aria-label="Отметить место как свободное">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
+                    btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
+                    btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
+                    btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '" title="Применить безопасное уточнение номера или названия места" aria-label="Применить безопасное уточнение номера или названия места">Применить уточнение</button>');
+                  }
                 }
 
                 if ((!hitSpaceId || hitSpaceId <= 0) && chosenId && Number.isFinite(chosenId) && chosenId > 0 && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
@@ -4498,7 +4608,7 @@
                   buildPopoverRow(line2) +
                   buildPopoverRow(line3) +
                   buildPopoverRow(line4) +
-                  buildPopoverRow(line5) +
+                  buildPopoverRow(line5, isTenantFallback ? 'row-warning' : '') +
                   buildPopoverRow(line6) +
                   buildPopoverRow(line7) +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +

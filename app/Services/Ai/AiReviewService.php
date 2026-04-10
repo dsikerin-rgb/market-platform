@@ -33,6 +33,27 @@ class AiReviewService
     ];
 
     /**
+     * Действия, которые нельзя советовать, если по месту есть только tenant_fallback.
+     */
+    private const FORBIDDEN_FOR_TENANT_FALLBACK = [
+        'matched',
+        'отметить, что факт на месте совпадает с системой',
+        'mark_space_free',
+        'отметить место как свободное',
+        'mark_space_service',
+        'отметить место как служебное',
+        'tenant_changed_on_site',
+        'отметить, что на месте другой арендатор',
+        'fix_space_identity',
+        'уточнить номер и название места',
+        'применить уточнение',
+        'bind_shape_to_space',
+        'привязать фигуру на карте к месту',
+        'unbind_shape_from_space',
+        'отвязать фигуру от места',
+    ];
+
+    /**
      * Семантический маппинг: map_review_status → ожидаемое observed-решение.
      */
     private const STATUS_TO_RECOMMENDATION = [
@@ -149,7 +170,11 @@ class AiReviewService
             }
 
             // Safety/semantic validation — единый для всех потребителей
-            $safety = $this->validateSafety($parsed, $pack['map_review_status'] ?? null);
+            $safety = $this->validateSafety(
+                $parsed,
+                $pack['map_review_status'] ?? null,
+                $pack['debt_context']['debt_scope'] ?? null
+            );
             if (! $safety['ok']) {
                 logger()->info('AI review safety violation', [
                     'space_id'    => $spaceId,
@@ -188,6 +213,8 @@ class AiReviewService
     private function buildSystemPrompt(array $pack): string
     {
         $status = $pack['map_review_status'];
+        $debtScope = $pack['debt_context']['debt_scope'] ?? 'none';
+        $otherSpacesTotal = (int) ($pack['tenant_context']['other_spaces_total'] ?? 0);
         $statusLabels = [
             'changed_tenant' => 'на месте другой арендатор',
             'conflict'       => 'конфликт по занятости',
@@ -223,16 +250,28 @@ class AiReviewService
         ];
         $expectedLabel = $expectedLabels[$expected] ?? $expected;
 
-        $safetyRules = $isDisputed
-            ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (статус «{$label}» — СПОРНЫЙ):\n"
-              . "1. ЗАПРЕЩЕНО рекомендовать действия, изменяющие данные: {$appliedList}\n"
-              . "2. РАЗРЕШЕНО рекомендовать только наблюдательные решения: {$observedList}\n"
-              . "3. Для этого статуса ТРЕБУЕТСЯ рекомендовать: '{$expectedLabel}'\n"
-              . "4. risk_score должен быть >= 7 для спорных статусов.\n"
-              . "5. Если данных недостаточно — добавь «требуется ручной review управляющим рынком»."
-            : "\n\nПРАВИЛА БЕЗОПАСНОСТИ:\n"
-              . "- Не предлагай действия, изменяющие данные, без достаточных данных.\n"
-              . "- risk_score >= 7, если есть риски потери данных.";
+        $safetyRules = $debtScope === 'tenant_fallback'
+            ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (точная связь с местом не подтверждена):\n"
+              . "1. На карточке виден статус арендатора, а не подтверждённый статус этого места.\n"
+              . "2. ЗАПРЕЩЕНО советовать подтверждать текущее место, менять его статус, уточнять номер/название или перепривязывать фигуру до выбора канонического места.\n"
+              . "3. У арендатора " . ($otherSpacesTotal > 0 ? "есть ещё {$otherSpacesTotal} место(места) в этом рынке — сравни их с текущим местом." : "не найдено других мест в этом рынке — опирайся только на доступные факты.") . "\n"
+              . "4. recommended_next_step должен вести к безопасному анализу: сравнить места арендатора, найти каноническое место, затем передать кейс на ручную проверку или перенос привязок.\n"
+              . "5. Не пересказывай текущий конфликт как решение. Объясни, почему подтверждение текущего места опасно.\n"
+              . "6. risk_score должен быть >= 7."
+            : ($isDisputed
+                ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (статус «{$label}» — СПОРНЫЙ):\n"
+                  . "1. ЗАПРЕЩЕНО рекомендовать действия, изменяющие данные: {$appliedList}\n"
+                  . "2. РАЗРЕШЕНО рекомендовать только наблюдательные решения: {$observedList}\n"
+                  . "3. Для этого статуса ТРЕБУЕТСЯ рекомендовать: '{$expectedLabel}'\n"
+                  . "4. risk_score должен быть >= 7 для спорных статусов.\n"
+                  . "5. Если данных недостаточно — добавь «требуется ручной review управляющим рынком»."
+                : "\n\nПРАВИЛА БЕЗОПАСНОСТИ:\n"
+                  . "- Не предлагай действия, изменяющие данные, без достаточных данных.\n"
+                  . "- risk_score >= 7, если есть риски потери данных.");
+
+        $recommendedExample = $debtScope === 'tenant_fallback'
+            ? '«Не подтверждать текущее место. Сравнить другие места арендатора в этом рынке, выбрать каноническое место и только после этого передать кейс на ручную проверку.»'
+            : '«Отметить конфликт по занятости и передать на ручную проверку управляющему рынком.»';
 
         return <<<PROMPT
 Ты — ассистент-аналитик для системы управления торговым рынком.
@@ -263,7 +302,7 @@ class AiReviewService
   * bind_shape_to_space → «привязать фигуру на карте к месту»
   * unbind_shape_from_space → «отвязать фигуру от места»
 - Формулируй recommended_next_step как человеческую инструкцию, например:
-  «Отметить конфликт по занятости и передать на ручную проверку управляющему рынком.»
+  {$recommendedExample}
 
 risk_score: 1-10, где 10 = только ручной review.
 confidence: 0.0-1.0.
@@ -278,8 +317,10 @@ PROMPT;
     {
         $space = $pack['space_snapshot'];
         $tenant = $pack['tenant_context'];
+        $accrual = $pack['accrual_context'] ?? [];
         $debt = $pack['debt_context'];
         $history = $pack['review_history'];
+        $otherSpaces = $tenant['other_spaces'] ?? [];
 
         $historyLines = count($history) > 0
             ? collect($history)->map(fn ($h) => "- {$h['decision']} ({$h['status']}): {$h['reason']} — {$h['effective_at']}")
@@ -292,6 +333,21 @@ PROMPT;
         $contractsInfo = $tenant['has_tenant'] && !empty($tenant['contracts'])
             ? count($tenant['contracts']) . ' контракт(ов)'
             : ($tenant['has_tenant'] ? 'контрактов к месту: 0' : 'арендатор не привязан');
+        $otherSpacesLines = count($otherSpaces) > 0
+            ? collect($otherSpaces)->map(fn ($otherSpace) => sprintf(
+                '- id: %d, number: %s, display: %s, status: %s, active: %s, shape: %s, exact_contract_link: %s, contracts: %d, accruals: %d, latest_accrual_period: %s',
+                (int) $otherSpace['id'],
+                (string) ($otherSpace['number'] ?? '—'),
+                (string) ($otherSpace['display_name'] ?? '—'),
+                (string) ($otherSpace['status'] ?? '—'),
+                !empty($otherSpace['is_active']) ? 'да' : 'нет',
+                !empty($otherSpace['has_map_shape']) ? 'да' : 'нет',
+                !empty($otherSpace['has_exact_contract_link']) ? 'да' : 'нет',
+                (int) ($otherSpace['contracts_count'] ?? 0),
+                (int) ($otherSpace['accruals_count'] ?? 0),
+                (string) ($otherSpace['latest_accrual_period'] ?? '—'),
+            ))->join("\n")
+            : '(нет других мест арендатора в этом рынке)';
 
         $parts = [];
         $parts[] = '[space]';
@@ -302,10 +358,20 @@ PROMPT;
         $parts[] = "has_tenant: {$hasTenant}";
         $parts[] = $tenantName;
         $parts[] = "contracts: {$contractsInfo}";
+        $parts[] = 'other_spaces_total: ' . (int) ($tenant['other_spaces_total'] ?? 0);
+        $parts[] = '';
+        $parts[] = '[tenant_other_spaces]';
+        $parts[] = $otherSpacesLines;
         $parts[] = '';
         $parts[] = '[debt]';
         $parts[] = "status: {$debt['debt_status']} ({$debt['debt_label']}), scope: {$debt['debt_scope']}";
         $parts[] = "total_debt: {$debt['total_debt']}, overdue: {$debt['overdue_days']}";
+        $parts[] = '';
+        $parts[] = '[accruals]';
+        $parts[] = 'count: ' . (int) ($accrual['count'] ?? 0);
+        $parts[] = 'latest_period: ' . (string) ($accrual['latest_period'] ?? '—');
+        $parts[] = 'latest_total_with_vat: ' . ($accrual['latest_total_with_vat'] ?? '—');
+        $parts[] = 'latest_source: ' . (string) ($accrual['latest_source'] ?? '—');
         $parts[] = '';
         $parts[] = '[history]';
         $parts[] = $historyLines;
@@ -365,14 +431,34 @@ PROMPT;
      *
      * @return array{ok: bool, error: string|null}
      */
-    private function validateSafety(array $parsed, ?string $mapReviewStatus): array
+    private function validateSafety(array $parsed, ?string $mapReviewStatus, ?string $debtScope): array
     {
+        $recommendation = mb_strtolower($parsed['recommended_next_step'], 'UTF-8');
+
+        if ($debtScope === 'tenant_fallback') {
+            foreach (self::FORBIDDEN_FOR_TENANT_FALLBACK as $forbidden) {
+                if (str_contains($recommendation, $forbidden)) {
+                    return [
+                        'ok'    => false,
+                        'error' => "Unsafe action forbidden for tenant_fallback: '{$forbidden}'",
+                    ];
+                }
+            }
+
+            if ($parsed['risk_score'] < 7) {
+                return [
+                    'ok'    => false,
+                    'error' => "Risk score too low for tenant_fallback: {$parsed['risk_score']} < 7",
+                ];
+            }
+
+            return ['ok' => true, 'error' => null];
+        }
+
         $isDisputed = in_array($mapReviewStatus, ['conflict', 'changed_tenant', 'not_found'], true);
         if (! $isDisputed) {
             return ['ok' => true, 'error' => null];
         }
-
-        $recommendation = strtolower($parsed['recommended_next_step']);
 
         foreach (self::FORBIDDEN_FOR_DISPUTED as $forbidden) {
             if (str_contains($recommendation, $forbidden)) {
