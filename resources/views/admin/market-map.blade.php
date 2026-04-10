@@ -3811,11 +3811,9 @@
               syncChosenSpaceReview(json.item);
             }
 
-            if (decision === 'bind_shape_to_space' || decision === 'unbind_shape_from_space') {
-              await loadShapes();
-              redrawShapes();
-              renderHandles();
-            }
+            await loadShapes();
+            redrawShapes();
+            renderHandles();
 
             hidePopover();
             toast(reviewDecisionSuccessMessage(decision));
