@@ -259,7 +259,7 @@
       border: 1px solid rgba(148, 163, 184, 0.28);
       border-radius: 14px;
       overflow: hidden;
-      background: #fff;
+      background: transparent;
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
     }
     .toolbar {
@@ -267,10 +267,12 @@
       display: grid;
       gap: 5px;
       position: relative;
-      border-bottom: 1px solid rgba(147, 197, 253, 0.32);
+      border-bottom: 1px solid rgba(147, 197, 253, 0.18);
       background:
-        radial-gradient(circle at top right, rgba(186, 230, 253, 0.55) 0%, rgba(186, 230, 253, 0) 34%),
-        linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(248, 250, 252, 0.98) 100%);
+        radial-gradient(circle at top right, rgba(186, 230, 253, 0.28) 0%, rgba(186, 230, 253, 0) 34%),
+        linear-gradient(180deg, rgba(239, 246, 255, 0.68) 0%, rgba(248, 250, 252, 0.76) 100%);
+      -webkit-backdrop-filter: blur(10px) saturate(115%);
+      backdrop-filter: blur(10px) saturate(115%);
     }
     .toolbar-row {
       display: flex;
@@ -333,6 +335,9 @@
       display: flex !important;
       align-items: center;
       position: relative;
+      width: fit-content !important;
+      min-width: 240px;
+      flex: 0 0 auto;
       background: rgba(255,255,255,0.8);
       border: 1px solid rgba(147, 197, 253, 0.38);
       border-radius: 11px;
@@ -354,8 +359,14 @@
       padding: 6px 12px 6px 30px !important;
       border: none !important;
       background: transparent !important;
+      box-shadow: none !important;
+      height: 34px !important;
+      min-height: 34px !important;
+      border-radius: 11px !important;
       color: inherit !important;
       font-size: 13px !important;
+      line-height: 20px !important;
+      display: block !important;
       white-space: nowrap !important;
       outline: none;
     }
@@ -938,6 +949,11 @@
     .legend[hidden] {
       display: none;
     }
+    .legend-stack {
+      margin-top: 8px;
+      display: grid;
+      gap: 0;
+    }
     .legend-note {
       color: rgba(15, 23, 42, 0.72);
       font-size: 10px;
@@ -946,8 +962,10 @@
     /* Легенда карты */
     .legend {
       padding: 8px 10px;
-      border-bottom: 1px solid rgba(120,120,120,.18);
-      background: rgba(255,255,255,.95);
+      border-bottom: 1px solid rgba(120,120,120,.12);
+      background: rgba(255,255,255,.17);
+      -webkit-backdrop-filter: blur(8px) saturate(120%);
+      backdrop-filter: blur(8px) saturate(120%);
       font-size: 11px;
     }
     .legend-items {
@@ -980,6 +998,21 @@
           transparent 2px 6px
         );
       border: 1px solid #94a3b8;
+    }
+    .legend-color.legend-conflict {
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(220, 38, 38, 0.42) 0 2px,
+          transparent 2px 7px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          rgba(31, 41, 55, 0.16) 0 1px,
+          transparent 1px 7px
+        );
+      border: 1px solid #b45309;
+      box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.06);
     }
     .legend-color.legend-rate-none {
       background: #cbd5e1;
@@ -1438,6 +1471,22 @@
           </div>
         </div>
 
+        <div id="viewerRoot">
+          <div class="stage" id="stage">
+            <div class="canvasWrap" id="canvasWrap">
+              <canvas id="canvas"></canvas>
+              <svg id="shapesSvg" class="shapesSvg" aria-hidden="true"></svg>
+              <div id="drawBox" class="drawBox" aria-hidden="true"></div>
+
+              <div id="overlay" class="overlay" aria-label="map-overlay">
+                <div id="handlesLayer" class="handlesLayer" aria-hidden="true"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend-stack">
         <!-- Легенда карты -->
         <div class="legend" id="legendDebt">
           <div class="legend-items">
@@ -1470,6 +1519,10 @@
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-conflict"></span>
+              <span class="legend-label" title="Привязанное место с конфликтом ревизии">Спорное место</span>
             </div>
             <div class="legend-item legend-item--note">
               <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам.</span>
@@ -1506,22 +1559,12 @@
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Разметка без привязки</span>
             </div>
+            <div class="legend-item">
+              <span class="legend-color legend-conflict"></span>
+              <span class="legend-label" title="Привязанное место с конфликтом ревизии">Спорное место</span>
+            </div>
             <div class="legend-item legend-item--note">
               <span class="legend-note" id="rentLegendNote">Слой показывает относительную ставку по занятым местам.</span>
-            </div>
-          </div>
-        </div>
-
-        <div id="viewerRoot">
-          <div class="stage" id="stage">
-            <div class="canvasWrap" id="canvasWrap">
-              <canvas id="canvas"></canvas>
-              <svg id="shapesSvg" class="shapesSvg" aria-hidden="true"></svg>
-              <div id="drawBox" class="drawBox" aria-hidden="true"></div>
-
-              <div id="overlay" class="overlay" aria-label="map-overlay">
-                <div id="handlesLayer" class="handlesLayer" aria-hidden="true"></div>
-              </div>
             </div>
           </div>
         </div>
@@ -2782,9 +2825,10 @@
               '<pattern id="unlinkedHatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">' +
               '<line x1="0" y1="0" x2="0" y2="8" stroke="#94a3b8" stroke-width="2" stroke-opacity="0.85"></line>' +
               '</pattern>' +
-              '<pattern id="conflictHatch" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(45)">' +
-              '<line x1="0" y1="0" x2="0" y2="12" stroke="#1f2937" stroke-width="2" stroke-opacity="0.18"></line>' +
-              '<line x1="6" y1="0" x2="6" y2="12" stroke="#dc2626" stroke-width="2" stroke-opacity="0.38"></line>' +
+              '<pattern id="conflictHatch" patternUnits="userSpaceOnUse" width="10" height="10">' +
+              '<path d="M 0 0 L 0 10" stroke="#dc2626" stroke-width="1.8" stroke-opacity="0.45"></path>' +
+              '<path d="M 5 0 L 5 10" stroke="#1f2937" stroke-width="1.2" stroke-opacity="0.18"></path>' +
+              '<path d="M 0 0 L 10 0" stroke="#dc2626" stroke-width="1.2" stroke-opacity="0.18"></path>' +
               '</pattern>' +
               '</defs>'
             );
