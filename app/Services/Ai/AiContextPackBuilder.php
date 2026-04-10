@@ -42,6 +42,7 @@ class AiContextPackBuilder
      *     map_review_status: string,
      *     space_snapshot: array,
      *     tenant_context: array,
+     *     accrual_context: array,
      *     debt_context: array,
      *     review_history: array,
      *     decision_options: array,
@@ -69,6 +70,7 @@ class AiContextPackBuilder
             'map_review_status' => $space->map_review_status,
             'space_snapshot'    => $this->buildSpaceSnapshot($space),
             'tenant_context'    => $this->buildTenantContext($space),
+            'accrual_context'   => $this->buildAccrualContext($space),
             'debt_context'      => $this->buildDebtContext($space, $marketId),
             'review_history'    => $this->buildReviewHistory($space->id, $marketId),
             'decision_options'  => $this->buildDecisionOptions($space->map_review_status),
@@ -129,9 +131,11 @@ class AiContextPackBuilder
     {
         if (! $space->tenant_id) {
             return [
-                'has_tenant' => false,
-                'tenant'     => null,
-                'contracts'  => [],
+                'has_tenant'         => false,
+                'tenant'             => null,
+                'contracts'          => [],
+                'other_spaces_total' => 0,
+                'other_spaces'       => [],
             ];
         }
 
@@ -159,9 +163,76 @@ class AiContextPackBuilder
             ])
             ->toArray();
 
+        $otherSpacesQuery = MarketSpace::query()
+            ->where('market_id', $space->market_id)
+            ->where('tenant_id', $space->tenant_id)
+            ->where('id', '<>', $space->id);
+
+        $otherSpacesTotal = (clone $otherSpacesQuery)->count();
+        $otherSpaces = (clone $otherSpacesQuery)
+            ->orderByDesc('is_active')
+            ->orderBy('id')
+            ->limit(5)
+            ->get([
+                'id',
+                'number',
+                'display_name',
+                'status',
+                'is_active',
+            ]);
+
+        $otherSpaceIds = $otherSpaces->pluck('id');
+        $spacesWithShapes = $otherSpaceIds->isEmpty()
+            ? collect()
+            : MarketSpaceMapShape::query()
+                ->where('market_id', $space->market_id)
+                ->whereIn('market_space_id', $otherSpaceIds->all())
+                ->pluck('market_space_id');
+
+        $contractStats = $otherSpaceIds->isEmpty()
+            ? collect()
+            : TenantContract::query()
+                ->where('market_id', $space->market_id)
+                ->whereIn('market_space_id', $otherSpaceIds->all())
+                ->selectRaw('market_space_id, COUNT(*) as contracts_count, SUM(CASE WHEN external_id IS NOT NULL THEN 1 ELSE 0 END) as exact_contracts_count')
+                ->groupBy('market_space_id')
+                ->get()
+                ->keyBy('market_space_id');
+
+        $accrualStats = $otherSpaceIds->isEmpty()
+            || ! Schema::hasTable('tenant_accruals')
+            || ! Schema::hasColumn('tenant_accruals', 'market_space_id')
+            || ! Schema::hasColumn('tenant_accruals', 'period')
+            ? collect()
+            : DB::table('tenant_accruals')
+                ->where('market_id', $space->market_id)
+                ->whereIn('market_space_id', $otherSpaceIds->all())
+                ->selectRaw('market_space_id, COUNT(*) as accruals_count, MAX(period) as latest_accrual_period')
+                ->groupBy('market_space_id')
+                ->get()
+                ->keyBy('market_space_id');
+
+        $otherSpacesPayload = $otherSpaces->map(function (MarketSpace $otherSpace) use ($spacesWithShapes, $contractStats, $accrualStats): array {
+            $stats = $contractStats->get($otherSpace->id);
+            $accrual = $accrualStats->get($otherSpace->id);
+
+            return [
+                'id'                      => (int) $otherSpace->id,
+                'number'                  => $otherSpace->number,
+                'display_name'            => $otherSpace->display_name,
+                'status'                  => $otherSpace->status,
+                'is_active'               => (bool) $otherSpace->is_active,
+                'has_map_shape'           => $spacesWithShapes->contains($otherSpace->id),
+                'contracts_count'         => $stats ? (int) $stats->contracts_count : 0,
+                'has_exact_contract_link' => $stats ? (int) $stats->exact_contracts_count > 0 : false,
+                'accruals_count'          => $accrual ? (int) $accrual->accruals_count : 0,
+                'latest_accrual_period'   => $accrual->latest_accrual_period ?? null,
+            ];
+        })->values()->all();
+
         return [
-            'has_tenant' => true,
-            'tenant'     => $tenant ? [
+            'has_tenant'         => true,
+            'tenant'             => $tenant ? [
                 'id'          => $tenant->id,
                 'name'        => $tenant->name,
                 'short_name'  => $tenant->short_name,
@@ -174,7 +245,43 @@ class AiContextPackBuilder
                 'type'        => $tenant->type,
                 'is_active'   => $tenant->is_active,
             ] : null,
-            'contracts'  => $contracts,
+            'contracts'          => $contracts,
+            'other_spaces_total' => $otherSpacesTotal,
+            'other_spaces'       => $otherSpacesPayload,
+        ];
+    }
+
+    // ──────────────────────────────────────────────
+    //  Accrual Context
+    // ──────────────────────────────────────────────
+
+    private function buildAccrualContext(MarketSpace $space): array
+    {
+        if (! Schema::hasTable('tenant_accruals')
+            || ! Schema::hasColumn('tenant_accruals', 'market_space_id')
+            || ! Schema::hasColumn('tenant_accruals', 'period')) {
+            return [
+                'count'                 => 0,
+                'latest_period'         => null,
+                'latest_total_with_vat' => null,
+                'latest_source'         => null,
+            ];
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->where('market_id', $space->market_id)
+            ->where('market_space_id', $space->id);
+
+        $latest = (clone $query)
+            ->orderByDesc('period')
+            ->orderByDesc('id')
+            ->first(['period', 'total_with_vat', 'source']);
+
+        return [
+            'count'                 => (int) (clone $query)->count(),
+            'latest_period'         => $latest->period ?? null,
+            'latest_total_with_vat' => isset($latest->total_with_vat) ? (float) $latest->total_with_vat : null,
+            'latest_source'         => $latest->source ?? null,
         ];
     }
 

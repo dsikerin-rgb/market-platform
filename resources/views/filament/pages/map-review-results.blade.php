@@ -217,6 +217,12 @@
                 color: #e2e8f0;
             }
 
+            .mrr-clarify-modal__field {
+                display: flex;
+                flex-direction: column;
+                gap: 0.45rem;
+            }
+
             .mrr-clarify-modal__input {
                 width: 100%;
                 box-sizing: border-box;
@@ -1061,15 +1067,28 @@
                             Введите, как это место обозначено на схеме, вывеске или на самом месте.
                         </p>
 
-                        <label class="mrr-clarify-modal__label" for="mrrClarifyInput">Номер или название места</label>
-                        <input
-                            id="mrrClarifyInput"
-                            class="mrr-clarify-modal__input"
-                            type="text"
-                            autocomplete="off"
-                            spellcheck="false"
-                            inputmode="text"
-                        >
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrClarifyNumberInput">Номер места</label>
+                            <input
+                                id="mrrClarifyNumberInput"
+                                class="mrr-clarify-modal__input"
+                                type="text"
+                                autocomplete="off"
+                                spellcheck="false"
+                                inputmode="text"
+                            >
+                        </div>
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrClarifyDisplayNameInput">Название места</label>
+                            <input
+                                id="mrrClarifyDisplayNameInput"
+                                class="mrr-clarify-modal__input"
+                                type="text"
+                                autocomplete="off"
+                                spellcheck="false"
+                                inputmode="text"
+                            >
+                        </div>
                         <div id="mrrClarifyError" class="mrr-clarify-modal__error" aria-live="polite"></div>
 
                         <div class="mrr-clarify-modal__actions">
@@ -1086,10 +1105,11 @@
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
                 const modal = document.getElementById('mrrClarifyModal');
-                const input = document.getElementById('mrrClarifyInput');
+                const numberInput = document.getElementById('mrrClarifyNumberInput');
+                const displayNameInput = document.getElementById('mrrClarifyDisplayNameInput');
                 const error = document.getElementById('mrrClarifyError');
 
-                if (!modal || !input || !error) {
+                if (!modal || !numberInput || !displayNameInput || !error) {
                     return;
                 }
 
@@ -1098,12 +1118,13 @@
                     modal.classList.add('is-open');
                     modal.setAttribute('aria-hidden', 'false');
                     modal.dataset.spaceId = String(button.dataset.spaceId || '');
-                    input.value = button.dataset.spaceNumber || button.dataset.spaceDisplayName || '';
+                    numberInput.value = button.dataset.spaceNumber || '';
+                    displayNameInput.value = button.dataset.spaceDisplayName || '';
                     error.textContent = '';
 
                     requestAnimationFrame(() => {
-                        input.focus({ preventScroll: true });
-                        input.select();
+                        numberInput.focus({ preventScroll: true });
+                        numberInput.select();
                     });
                 };
 
@@ -1117,16 +1138,17 @@
 
                 const save = async () => {
                     const spaceId = Number(modal.dataset.spaceId || 0);
-                    const value = String(input.value || '').trim();
+                    const numberValue = String(numberInput.value || '').trim();
+                    const displayNameValue = String(displayNameInput.value || '').trim();
 
                     if (!Number.isFinite(spaceId) || spaceId <= 0) {
                         error.textContent = 'Не удалось определить место.';
                         return;
                     }
 
-                    if (!value) {
+                    if (!numberValue && !displayNameValue) {
                         error.textContent = 'Нужен номер или название места.';
-                        input.focus({ preventScroll: true });
+                        numberInput.focus({ preventScroll: true });
                         return;
                     }
 
@@ -1142,8 +1164,8 @@
                         body: JSON.stringify({
                             decision: 'fix_space_identity',
                             market_space_id: spaceId,
-                            number: value,
-                            display_name: value,
+                            number: numberValue || null,
+                            display_name: displayNameValue || null,
                         }),
                     });
 
@@ -1194,14 +1216,16 @@
                     }
                 });
 
-                input.addEventListener('keydown', (event) => {
-                    if (event.key !== 'Enter') {
-                        return;
-                    }
+                [numberInput, displayNameInput].forEach((input) => {
+                    input.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Enter') {
+                            return;
+                        }
 
-                    event.preventDefault();
-                    save().catch((errorInstance) => {
-                        error.textContent = String(errorInstance?.message || errorInstance);
+                        event.preventDefault();
+                        save().catch((errorInstance) => {
+                            error.textContent = String(errorInstance?.message || errorInstance);
+                        });
                     });
                 });
 

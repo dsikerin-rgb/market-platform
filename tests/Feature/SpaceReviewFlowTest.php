@@ -241,7 +241,7 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('changed', $space->map_review_status);
     }
 
-    public function test_map_review_results_page_offers_apply_clarification_action_for_clarified_spaces(): void
+    public function test_map_review_results_page_renders_split_identity_clarification_fields(): void
     {
         $market = $this->createMarket();
         $user = $this->actingAsSuperAdmin((int) $market->id);
@@ -250,8 +250,8 @@ class SpaceReviewFlowTest extends TestCase
         ]);
 
         $space = $this->createSpace($market, [
-            'number' => 'P-1',
-            'display_name' => 'Zoomir',
+            'number' => 'П/3',
+            'display_name' => 'Зоомир',
             'status' => 'occupied',
         ]);
 
@@ -271,7 +271,12 @@ class SpaceReviewFlowTest extends TestCase
         Livewire::test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Применить уточнение', false)
             ->assertSee('mrrClarifyModal', false)
-            ->assertSee('data-mrr-clarify-action="open"', false);
+            ->assertSee('data-mrr-clarify-action="open"', false)
+            ->assertSee('mrrClarifyNumberInput', false)
+            ->assertSee('mrrClarifyDisplayNameInput', false)
+            ->assertDontSee('mrrClarifyInput', false)
+            ->assertSee('data-space-number="П/3"', false)
+            ->assertSee('data-space-display-name="Зоомир"', false);
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void
