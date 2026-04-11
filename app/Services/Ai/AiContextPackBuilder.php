@@ -44,6 +44,7 @@ class AiContextPackBuilder
      *     tenant_context: array,
      *     accrual_context: array,
      *     debt_context: array,
+     *     relation_context: array,
      *     review_history: array,
      *     decision_options: array,
      *     meta: array,
@@ -72,6 +73,7 @@ class AiContextPackBuilder
             'tenant_context'    => $this->buildTenantContext($space),
             'accrual_context'   => $this->buildAccrualContext($space),
             'debt_context'      => $this->buildDebtContext($space, $marketId),
+            'relation_context'  => $this->buildRelationContext($space, $marketId),
             'review_history'    => $this->buildReviewHistory($space->id, $marketId),
             'decision_options'  => $this->buildDecisionOptions($space->map_review_status),
             'meta'              => $this->buildMeta($space, $marketId),
@@ -286,6 +288,205 @@ class AiContextPackBuilder
     }
 
     // ──────────────────────────────────────────────
+    //  Relation Context
+    // ──────────────────────────────────────────────
+
+    private function buildRelationContext(MarketSpace $space, int $marketId): array
+    {
+        $candidateSpaces = $space->tenant_id
+            ? MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->where('tenant_id', $space->tenant_id)
+                ->where('id', '<>', $space->id)
+                ->orderByDesc('is_active')
+                ->orderBy('id')
+                ->limit(5)
+                ->get(['id', 'number', 'display_name', 'status', 'is_active'])
+            : collect();
+
+        $spaceIds = collect([(int) $space->id])
+            ->merge($candidateSpaces->pluck('id')->map(fn ($id): int => (int) $id))
+            ->unique()
+            ->values()
+            ->all();
+
+        $counts = $this->relationCountsForSpaces($spaceIds, $marketId);
+        $debtTotals = $this->debtTotalsForSpaces($spaceIds, $marketId);
+        $currentCounts = $counts[(int) $space->id] ?? $this->emptyRelationCounts();
+        $currentCounts['debt_total'] = $debtTotals[(int) $space->id] ?? null;
+
+        $candidates = $candidateSpaces
+            ->map(function (MarketSpace $candidate) use ($counts, $debtTotals): array {
+                $candidateId = (int) $candidate->id;
+                $candidateCounts = $counts[$candidateId] ?? $this->emptyRelationCounts();
+                $candidateCounts['debt_total'] = $debtTotals[$candidateId] ?? null;
+
+                return [
+                    'id' => $candidateId,
+                    'number' => $candidate->number,
+                    'display_name' => $candidate->display_name,
+                    'status' => $candidate->status,
+                    'is_active' => (bool) $candidate->is_active,
+                    'relation_counts' => $candidateCounts,
+                    'canonical_score' => $this->canonicalScore($candidateCounts),
+                ];
+            })
+            ->sortByDesc('canonical_score')
+            ->values()
+            ->all();
+
+        $bestCandidate = $candidates[0] ?? null;
+        $currentScore = $this->canonicalScore($currentCounts);
+
+        return [
+            'current_space' => [
+                'id' => (int) $space->id,
+                'number' => $space->number,
+                'display_name' => $space->display_name,
+                'status' => $space->status,
+                'is_active' => (bool) $space->is_active,
+                'relation_counts' => $currentCounts,
+                'canonical_score' => $currentScore,
+            ],
+            'same_tenant_candidates' => $candidates,
+            'likely_canonical_candidate_id' => $bestCandidate && (int) $bestCandidate['canonical_score'] > $currentScore
+                ? (int) $bestCandidate['id']
+                : null,
+            'duplicate_review_hint' => $bestCandidate && (int) $bestCandidate['canonical_score'] > $currentScore
+                ? 'У другого места того же арендатора больше подтверждённых связей. Текущее место нельзя подтверждать без выбора канонического места.'
+                : 'Каноническое место не определяется автоматически. Нужна ручная проверка связей.',
+        ];
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     * @return array<int, array<string, int|float|null>>
+     */
+    private function relationCountsForSpaces(array $spaceIds, int $marketId): array
+    {
+        if ($spaceIds === []) {
+            return [];
+        }
+
+        $definitions = [
+            'map_shapes' => ['market_space_map_shapes', 'market_space_id'],
+            'contracts' => ['tenant_contracts', 'market_space_id'],
+            'accruals' => ['tenant_accruals', 'market_space_id'],
+            'cabinet_links' => ['tenant_user_market_spaces', 'market_space_id'],
+            'tenant_bindings' => ['market_space_tenant_bindings', 'market_space_id'],
+            'products' => ['marketplace_products', 'market_space_id'],
+        ];
+
+        $result = [];
+        foreach ($spaceIds as $spaceId) {
+            $result[(int) $spaceId] = $this->emptyRelationCounts();
+        }
+
+        foreach ($definitions as $key => [$table, $column]) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $query = DB::table($table)->whereIn($column, $spaceIds);
+
+            if (Schema::hasColumn($table, 'market_id')) {
+                $query->where('market_id', $marketId);
+            }
+
+            $query
+                ->selectRaw($column . ' as space_id, COUNT(*) as aggregate')
+                ->groupBy($column)
+                ->get()
+                ->each(function ($row) use (&$result, $key): void {
+                    $spaceId = (int) ($row->space_id ?? 0);
+
+                    if ($spaceId > 0 && array_key_exists($spaceId, $result)) {
+                        $result[$spaceId][$key] = (int) ($row->aggregate ?? 0);
+                    }
+                });
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, int|float|null>
+     */
+    private function emptyRelationCounts(): array
+    {
+        return [
+            'map_shapes' => 0,
+            'contracts' => 0,
+            'accruals' => 0,
+            'cabinet_links' => 0,
+            'tenant_bindings' => 0,
+            'products' => 0,
+            'debt_total' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, int|float|null>  $counts
+     */
+    private function canonicalScore(array $counts): int
+    {
+        return ((int) ($counts['contracts'] ?? 0) * 5)
+            + ((int) ($counts['accruals'] ?? 0) * 3)
+            + ((int) ($counts['tenant_bindings'] ?? 0) * 3)
+            + ((int) ($counts['map_shapes'] ?? 0) * 2)
+            + ((int) ($counts['cabinet_links'] ?? 0) * 2)
+            + ((int) ($counts['products'] ?? 0) > 0 ? 1 : 0)
+            + ((float) ($counts['debt_total'] ?? 0) > 0 ? 2 : 0);
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     * @return array<int, float>
+     */
+    private function debtTotalsForSpaces(array $spaceIds, int $marketId): array
+    {
+        if ($spaceIds === []
+            || ! Schema::hasTable('tenant_contracts')
+            || ! Schema::hasColumn('tenant_contracts', 'market_space_id')
+            || ! Schema::hasColumn('tenant_contracts', 'external_id')
+            || ! Schema::hasTable('contract_debts')
+            || ! Schema::hasColumn('contract_debts', 'contract_external_id')
+            || ! Schema::hasColumn('contract_debts', 'debt_amount')) {
+            return [];
+        }
+
+        $contractRows = DB::table('tenant_contracts')
+            ->where('market_id', $marketId)
+            ->whereIn('market_space_id', $spaceIds)
+            ->whereNotNull('external_id')
+            ->get(['market_space_id', 'external_id']);
+
+        if ($contractRows->isEmpty()) {
+            return [];
+        }
+
+        $spaceByExternalId = $contractRows
+            ->mapWithKeys(fn ($row): array => [(string) $row->external_id => (int) $row->market_space_id])
+            ->all();
+
+        $debtRows = ContractDebt::currentStateQuery($marketId)
+            ->whereIn('cd.contract_external_id', array_keys($spaceByExternalId))
+            ->get(['cd.contract_external_id', 'cd.debt_amount']);
+
+        $totals = [];
+        foreach ($debtRows as $row) {
+            $spaceId = $spaceByExternalId[(string) $row->contract_external_id] ?? null;
+            if (! $spaceId) {
+                continue;
+            }
+
+            $totals[$spaceId] = (float) ($totals[$spaceId] ?? 0.0) + (float) ($row->debt_amount ?? 0);
+        }
+
+        return $totals;
+    }
+
+    // ──────────────────────────────────────────────
     //  Debt Context (нормализованный блок)
     // ──────────────────────────────────────────────
 
@@ -435,7 +636,7 @@ class AiContextPackBuilder
             'timezone'        => config('app.timezone'),
             'market_id'       => $marketId,
             'market_space_id' => $space->id,
-            'context_pack_version' => '1.0.0',
+            'context_pack_version' => '1.1.0',
             'read_only'       => true,
             'ai_call'         => false,
         ];
@@ -455,7 +656,7 @@ class AiContextPackBuilder
             'meta'    => [
                 'built_at' => now()->toDateTimeString(),
                 'timezone' => config('app.timezone'),
-                'context_pack_version' => '1.0.0',
+                'context_pack_version' => '1.1.0',
                 'read_only' => true,
                 'ai_call' => false,
             ],

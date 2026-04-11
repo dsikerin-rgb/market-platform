@@ -215,6 +215,8 @@ class AiReviewService
         $status = $pack['map_review_status'];
         $debtScope = $pack['debt_context']['debt_scope'] ?? 'none';
         $otherSpacesTotal = (int) ($pack['tenant_context']['other_spaces_total'] ?? 0);
+        $relationContext = $pack['relation_context'] ?? [];
+        $likelyCanonicalCandidateId = (int) ($relationContext['likely_canonical_candidate_id'] ?? 0);
         $statusLabels = [
             'changed_tenant' => 'на месте другой арендатор',
             'conflict'       => 'конфликт по занятости',
@@ -256,8 +258,10 @@ class AiReviewService
               . "2. ЗАПРЕЩЕНО советовать подтверждать текущее место, менять его статус, уточнять номер/название или перепривязывать фигуру до выбора канонического места.\n"
               . "3. У арендатора " . ($otherSpacesTotal > 0 ? "есть ещё {$otherSpacesTotal} место(места) в этом рынке — сравни их с текущим местом." : "не найдено других мест в этом рынке — опирайся только на доступные факты.") . "\n"
               . "4. recommended_next_step должен вести к безопасному анализу: сравнить места арендатора, найти каноническое место, затем передать кейс на ручную проверку или перенос привязок.\n"
-              . "5. Не пересказывай текущий конфликт как решение. Объясни, почему подтверждение текущего места опасно.\n"
-              . "6. risk_score должен быть >= 7."
+              . "5. Если relation_context показывает кандидата с договорами, начислениями, долгом 1С или tenant_bindings, укажи, что он вероятный кандидат на каноническое место.\n"
+              . ($likelyCanonicalCandidateId > 0 ? "6. В данных есть вероятный канонический кандидат: market_space_id={$likelyCanonicalCandidateId}. Не называй его окончательным без ручной проверки.\n" : "6. Если сильного кандидата нет, прямо напиши, что каноническое место не определяется автоматически.\n")
+              . "7. Не пересказывай текущий конфликт как решение. Объясни, почему подтверждение текущего места опасно.\n"
+              . "8. risk_score должен быть >= 7."
             : ($isDisputed
                 ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (статус «{$label}» — СПОРНЫЙ):\n"
                   . "1. ЗАПРЕЩЕНО рекомендовать действия, изменяющие данные: {$appliedList}\n"
@@ -320,6 +324,7 @@ PROMPT;
         $accrual = $pack['accrual_context'] ?? [];
         $debt = $pack['debt_context'];
         $history = $pack['review_history'];
+        $relations = $pack['relation_context'] ?? [];
         $otherSpaces = $tenant['other_spaces'] ?? [];
 
         $historyLines = count($history) > 0
@@ -349,6 +354,21 @@ PROMPT;
             ))->join("\n")
             : '(нет других мест арендатора в этом рынке)';
 
+        $currentRelations = $relations['current_space']['relation_counts'] ?? [];
+        $relationCandidates = $relations['same_tenant_candidates'] ?? [];
+        $currentRelationLine = $this->formatRelationLine($relations['current_space'] ?? [
+            'id' => $space['id'],
+            'number' => $space['number'],
+            'display_name' => $space['display_name'],
+            'status' => $space['status'],
+            'is_active' => $space['is_active'] ?? true,
+            'relation_counts' => $currentRelations,
+            'canonical_score' => 0,
+        ]);
+        $candidateRelationLines = count($relationCandidates) > 0
+            ? collect($relationCandidates)->map(fn ($candidate): string => $this->formatRelationLine($candidate))->join("\n")
+            : '(нет кандидатов того же арендатора)';
+
         $parts = [];
         $parts[] = '[space]';
         $parts[] = "id: {$space['id']}, number: {$space['number']}, display: {$space['display_name']}";
@@ -362,6 +382,13 @@ PROMPT;
         $parts[] = '';
         $parts[] = '[tenant_other_spaces]';
         $parts[] = $otherSpacesLines;
+        $parts[] = '';
+        $parts[] = '[relation_context]';
+        $parts[] = 'current: ' . $currentRelationLine;
+        $parts[] = 'likely_canonical_candidate_id: ' . (($relations['likely_canonical_candidate_id'] ?? null) ?: '—');
+        $parts[] = 'duplicate_review_hint: ' . (string) ($relations['duplicate_review_hint'] ?? '—');
+        $parts[] = 'candidates:';
+        $parts[] = $candidateRelationLines;
         $parts[] = '';
         $parts[] = '[debt]';
         $parts[] = "status: {$debt['debt_status']} ({$debt['debt_label']}), scope: {$debt['debt_scope']}";
@@ -377,6 +404,29 @@ PROMPT;
         $parts[] = $historyLines;
 
         return implode("\n", $parts);
+    }
+
+    private function formatRelationLine(array $space): string
+    {
+        $counts = is_array($space['relation_counts'] ?? null) ? $space['relation_counts'] : [];
+        $debtTotal = $counts['debt_total'] ?? null;
+
+        return sprintf(
+            'id: %d, number: %s, display: %s, status: %s, active: %s, score: %d, map_shapes: %d, contracts: %d, accruals: %d, debt_total: %s, cabinet_links: %d, tenant_bindings: %d, products: %d',
+            (int) ($space['id'] ?? 0),
+            (string) ($space['number'] ?? '—'),
+            (string) ($space['display_name'] ?? '—'),
+            (string) ($space['status'] ?? '—'),
+            ! empty($space['is_active']) ? 'да' : 'нет',
+            (int) ($space['canonical_score'] ?? 0),
+            (int) ($counts['map_shapes'] ?? 0),
+            (int) ($counts['contracts'] ?? 0),
+            (int) ($counts['accruals'] ?? 0),
+            $debtTotal === null ? '—' : (string) $debtTotal,
+            (int) ($counts['cabinet_links'] ?? 0),
+            (int) ($counts['tenant_bindings'] ?? 0),
+            (int) ($counts['products'] ?? 0),
+        );
     }
 
     /**

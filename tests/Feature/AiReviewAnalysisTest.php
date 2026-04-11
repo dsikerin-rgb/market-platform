@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -95,11 +96,27 @@ class AiReviewAnalysisTest extends TestCase
             'total_with_vat' => 11761.57,
         ]);
 
+        ContractDebt::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_external_id' => 'tenant-7',
+            'contract_external_id' => 'contract-573',
+            'period' => '2026-04',
+            'accrued_amount' => 11761.57,
+            'paid_amount' => 5000,
+            'debt_amount' => 6761.57,
+            'calculated_at' => '2026-04-10 12:00:00',
+            'source' => '1c',
+            'currency' => 'RUB',
+            'hash' => sha1('contract-573-2026-04'),
+        ]);
+
         $pack = app(AiContextPackBuilder::class)->build((int) $currentSpace->id, (int) $market->id);
 
         $this->assertSame(1, $pack['tenant_context']['other_spaces_total']);
         $this->assertCount(1, $pack['tenant_context']['other_spaces']);
         $this->assertSame(0, $pack['accrual_context']['count']);
+        $this->assertSame('1.1.0', $pack['meta']['context_pack_version']);
 
         $otherSpace = $pack['tenant_context']['other_spaces'][0];
 
@@ -110,6 +127,20 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertSame(1, $otherSpace['contracts_count']);
         $this->assertSame(1, $otherSpace['accruals_count']);
         $this->assertSame('2026-04-01', $otherSpace['latest_accrual_period']);
+
+        $relations = $pack['relation_context'];
+        $this->assertSame((int) $currentSpace->id, $relations['current_space']['id']);
+        $this->assertSame(0, $relations['current_space']['relation_counts']['contracts']);
+        $this->assertSame((int) $canonicalSpace->id, $relations['likely_canonical_candidate_id']);
+        $this->assertStringContainsString('больше подтверждённых связей', $relations['duplicate_review_hint']);
+
+        $candidateRelations = $relations['same_tenant_candidates'][0];
+        $this->assertSame((int) $canonicalSpace->id, $candidateRelations['id']);
+        $this->assertSame(1, $candidateRelations['relation_counts']['map_shapes']);
+        $this->assertSame(1, $candidateRelations['relation_counts']['contracts']);
+        $this->assertSame(1, $candidateRelations['relation_counts']['accruals']);
+        $this->assertSame(6761.57, $candidateRelations['relation_counts']['debt_total']);
+        $this->assertGreaterThan($relations['current_space']['canonical_score'], $candidateRelations['canonical_score']);
     }
 
     public function test_validate_safety_blocks_current_place_mutations_for_tenant_fallback(): void
