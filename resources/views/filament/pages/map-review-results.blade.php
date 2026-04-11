@@ -618,15 +618,16 @@
             }
 
             .mrr-hero-progress {
-                display: flex;
-                flex-direction: column;
-                gap: 0.85rem;
+                display: grid;
+                grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+                gap: 0.75rem;
+                align-items: center;
                 margin-top: 0.9rem;
                 max-width: 40rem;
             }
 
             .mrr-hero-progress .mrr-progress-bar {
-                max-width: 34rem;
+                width: 100%;
             }
 
             .mrr-progress-bar {
@@ -650,7 +651,7 @@
             }
 
             .mrr-chip-row--compact {
-                justify-content: flex-end;
+                justify-content: flex-start;
                 gap: 0.45rem;
             }
 
@@ -1062,6 +1063,10 @@
             }
 
             @media (max-width: 900px) {
+                .mrr-hero-progress {
+                    grid-template-columns: 1fr;
+                }
+
                 .mrr-hero-stats {
                     grid-template-columns: 1fr;
                     width: 100%;
