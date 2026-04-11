@@ -329,7 +329,12 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Договоры: 1', false)
             ->assertSee('Начисления: 1', false)
             ->assertSee('Открыть место', false)
-            ->assertSee('Открыть карту', false);
+            ->assertSee('Открыть карту', false)
+            ->assertSee('План разбора', false)
+            ->assertSee('mrrDuplicatePlanModal', false)
+            ->assertSee('План безопасного разбора', false)
+            ->assertSee('Это только подсказка для ручной проверки.', false)
+            ->assertSee('Договоры, начисления, долги и историю нельзя переносить автоматически', false);
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void
