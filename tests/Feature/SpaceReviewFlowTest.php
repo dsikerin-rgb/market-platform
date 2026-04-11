@@ -243,7 +243,7 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('changed', $space->map_review_status);
     }
 
-    public function test_map_review_results_page_renders_split_identity_clarification_fields(): void
+    public function test_map_review_results_page_renders_duplicate_review_plan_without_identity_fix_action(): void
     {
         $market = $this->createMarket();
         $user = $this->actingAsSuperAdmin((int) $market->id);
@@ -312,14 +312,14 @@ class SpaceReviewFlowTest extends TestCase
         ]);
 
         Livewire::test(\App\Filament\Pages\MapReviewResults::class)
-            ->assertSee('Применить уточнение', false)
-            ->assertSee('mrrClarifyModal', false)
-            ->assertSee('data-mrr-clarify-action="open"', false)
-            ->assertSee('mrrClarifyNumberInput', false)
-            ->assertSee('mrrClarifyDisplayNameInput', false)
+            ->assertDontSee('Применить уточнение', false)
+            ->assertDontSee('mrrClarifyModal', false)
+            ->assertDontSee('data-mrr-clarify-action="open"', false)
+            ->assertDontSee('mrrClarifyNumberInput', false)
+            ->assertDontSee('mrrClarifyDisplayNameInput', false)
             ->assertDontSee('mrrClarifyInput', false)
-            ->assertSee('data-space-number="П/3"', false)
-            ->assertSee('data-space-display-name="Зоомир"', false)
+            ->assertDontSee('data-space-number="П/3"', false)
+            ->assertDontSee('data-space-display-name="Зоомир"', false)
             ->assertSee('Связи и кандидаты', false)
             ->assertSee('Связи текущего места', false)
             ->assertSee('Карта: 1', false)
@@ -331,10 +331,199 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Открыть место', false)
             ->assertSee('Открыть карту', false)
             ->assertSee('План разбора', false)
+            ->assertSee('data-mrr-duplicate-plan-create', false)
             ->assertSee('mrrDuplicatePlanModal', false)
             ->assertSee('План безопасного разбора', false)
-            ->assertSee('Это только подсказка для ручной проверки.', false)
-            ->assertSee('Договоры, начисления, долги и историю нельзя переносить автоматически', false);
+            ->assertSee('Выбрать кандидата основным', false)
+            ->assertSee('Договоры, начисления и долги не переносятся', false);
+    }
+
+    public function test_review_decision_endpoint_resolves_duplicate_by_transferring_safe_links(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant A',
+            'is_active' => true,
+        ]);
+
+        $duplicate = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => 'P/3',
+            'display_name' => 'Zoo',
+            'status' => 'occupied',
+        ]);
+
+        $candidate = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => '5',
+            'display_name' => 'Zoo canonical',
+            'status' => 'occupied',
+        ]);
+
+        $duplicateShape = $this->createShape($market, (int) $duplicate->id);
+        $conflictingCandidateShape = $this->createShape($market, (int) $candidate->id);
+
+        DB::table('tenant_user_market_spaces')->insert([
+            'user_id' => $user->id,
+            'market_space_id' => $duplicate->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $productId = DB::table('marketplace_products')->insertGetId([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $duplicate->id,
+            'title' => 'Zoo product',
+            'slug' => 'zoo-product-' . $duplicate->id,
+            'currency' => 'RUB',
+            'stock_qty' => 0,
+            'is_active' => true,
+            'is_featured' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $candidate->id,
+            'number' => 'DOG-5',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $candidate->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('duplicate-resolution-candidate-accrual'),
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION,
+            'market_space_id' => $duplicate->id,
+            'candidate_market_space_id' => $candidate->id,
+            'reason' => 'Manual duplicate review',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'operation')
+            ->assertJsonPath('operation.status', 'applied')
+            ->assertJsonPath('operation.decision', SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION)
+            ->assertJsonPath('item.review_status', 'changed');
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_id', $duplicate->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('applied', $operation->status);
+        $this->assertSame(SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION, $operation->payload['decision'] ?? null);
+        $this->assertSame($candidate->id, $operation->payload['candidate_market_space_id'] ?? null);
+        $this->assertSame('Manual duplicate review', $operation->payload['reason'] ?? null);
+
+        $duplicate->refresh();
+        $duplicateShape->refresh();
+        $conflictingCandidateShape->refresh();
+        $contract->refresh();
+        $accrual->refresh();
+
+        $this->assertFalse((bool) $duplicate->is_active);
+        $this->assertSame('P/3', $duplicate->number);
+        $this->assertSame('Zoo', $duplicate->display_name);
+        $this->assertSame('occupied', $duplicate->status);
+        $this->assertSame('changed', $duplicate->map_review_status);
+        $this->assertSame($candidate->id, $duplicateShape->market_space_id);
+        $this->assertTrue((bool) $duplicateShape->is_active);
+        $this->assertNull($conflictingCandidateShape->market_space_id);
+        $this->assertFalse((bool) $conflictingCandidateShape->is_active);
+        $this->assertSame($candidate->id, $contract->market_space_id);
+        $this->assertSame($candidate->id, $accrual->market_space_id);
+        $this->assertSame($candidate->id, DB::table('marketplace_products')->where('id', $productId)->value('market_space_id'));
+
+        $this->assertDatabaseHas('tenant_user_market_spaces', [
+            'user_id' => $user->id,
+            'market_space_id' => $candidate->id,
+        ]);
+        $this->assertDatabaseMissing('tenant_user_market_spaces', [
+            'user_id' => $user->id,
+            'market_space_id' => $duplicate->id,
+        ]);
+    }
+
+    public function test_review_decision_endpoint_blocks_duplicate_resolution_when_duplicate_has_business_links(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant A',
+            'is_active' => true,
+        ]);
+
+        $duplicate = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => 'P/3',
+            'display_name' => 'Zoo',
+            'status' => 'occupied',
+        ]);
+
+        $candidate = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => '5',
+            'display_name' => 'Zoo canonical',
+            'status' => 'occupied',
+        ]);
+
+        $duplicateShape = $this->createShape($market, (int) $duplicate->id);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $duplicate->id,
+            'number' => 'DOG-DUP',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION,
+            'market_space_id' => $duplicate->id,
+            'candidate_market_space_id' => $candidate->id,
+            'reason' => 'Manual duplicate review',
+        ]);
+
+        $response->assertStatus(422);
+
+        $duplicate->refresh();
+        $duplicateShape->refresh();
+
+        $this->assertTrue((bool) $duplicate->is_active);
+        $this->assertSame($duplicate->id, $duplicateShape->market_space_id);
+        $this->assertTrue((bool) $duplicateShape->is_active);
+        $this->assertSame(0, Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_id', $duplicate->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->count());
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void

@@ -14,6 +14,7 @@ final class SpaceReviewDecision
     public const MARK_SPACE_SERVICE = 'mark_space_service';
     public const FIX_SPACE_IDENTITY = 'fix_space_identity';
     public const SPACE_IDENTITY_NEEDS_CLARIFICATION = 'space_identity_needs_clarification';
+    public const DUPLICATE_SPACE_NEEDS_RESOLUTION = 'duplicate_space_needs_resolution';
     public const OCCUPANCY_CONFLICT = 'occupancy_conflict';
     public const TENANT_CHANGED_ON_SITE = 'tenant_changed_on_site';
     public const SHAPE_NOT_FOUND = 'shape_not_found';
@@ -30,6 +31,7 @@ final class SpaceReviewDecision
             self::MARK_SPACE_SERVICE => 'Отметить место как служебное',
             self::FIX_SPACE_IDENTITY => 'Применить уточнение',
             self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'Требует уточнения',
+            self::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'Разбор дубля места',
             self::OCCUPANCY_CONFLICT => 'Конфликт по месту',
             self::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
             self::SHAPE_NOT_FOUND => 'Место не найдено на карте',
@@ -55,6 +57,7 @@ final class SpaceReviewDecision
             self::MARK_SPACE_FREE,
             self::MARK_SPACE_SERVICE,
             self::FIX_SPACE_IDENTITY,
+            self::DUPLICATE_SPACE_NEEDS_RESOLUTION,
         ];
     }
 
@@ -93,6 +96,11 @@ final class SpaceReviewDecision
         return $decision === self::TENANT_CHANGED_ON_SITE;
     }
 
+    public static function requiresCandidateSpaceId(string $decision): bool
+    {
+        return $decision === self::DUPLICATE_SPACE_NEEDS_RESOLUTION;
+    }
+
     public static function isIdentityFix(string $decision): bool
     {
         return $decision === self::FIX_SPACE_IDENTITY;
@@ -107,6 +115,7 @@ final class SpaceReviewDecision
     {
         return match ($decision) {
             self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'conflict',
+            self::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'changed',
             self::OCCUPANCY_CONFLICT => 'conflict',
             self::TENANT_CHANGED_ON_SITE => 'changed_tenant',
             self::SHAPE_NOT_FOUND => 'not_found',

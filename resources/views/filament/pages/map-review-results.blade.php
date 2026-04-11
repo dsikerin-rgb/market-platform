@@ -269,7 +269,15 @@
             }
 
             .mrr-duplicate-plan-modal .mrr-clarify-modal__dialog {
-                width: min(920px, 100%);
+                width: min(1040px, 100%);
+                max-height: calc(100dvh - 2rem);
+                overflow-y: auto;
+                padding: 1rem;
+                gap: 0.7rem;
+            }
+
+            .mrr-duplicate-plan-modal .mrr-clarify-modal__description {
+                line-height: 1.4;
             }
 
             .mrr-duplicate-plan__card {
@@ -335,10 +343,10 @@
             }
 
             .mrr-duplicate-plan__section {
-                margin-top: 1rem;
+                margin-top: 0.7rem;
                 border-radius: 1rem;
                 border: 1px solid rgba(15, 23, 42, 0.08);
-                padding: 0.9rem 1rem;
+                padding: 0.75rem 0.9rem;
             }
 
             .dark .mrr-duplicate-plan__section {
@@ -361,7 +369,7 @@
                 padding-left: 1.1rem;
                 color: #475569;
                 font-size: 0.86rem;
-                line-height: 1.5;
+                line-height: 1.42;
             }
 
             .dark .mrr-duplicate-plan__list {
@@ -1247,20 +1255,6 @@
                                                     </td>
                                                     <td>
                                                         <div class="mrr-links">
-                                                            @if (($row['decision'] ?? null) === 'space_identity_needs_clarification')
-                                                                <button
-                                                                    type="button"
-                                                                    class="mrr-link mrr-link--button"
-                                                                    data-mrr-clarify-action="open"
-                                                                    data-space-id="{{ $row['space_id'] }}"
-                                                                    data-space-number="{{ $row['number'] ?? '' }}"
-                                                                    data-space-display-name="{{ $row['display_name'] ?? '' }}"
-                                                                    title="Применить безопасное уточнение номера или названия места"
-                                                                    aria-label="Применить уточнение"
-                                                                >
-                                                                    Применить уточнение
-                                                                </button>
-                                                            @endif
                                                             <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                         </div>
@@ -1407,53 +1401,6 @@
                     </section>
                 </div>
 
-                <div id="mrrClarifyModal" class="mrr-clarify-modal" hidden aria-hidden="true">
-                    <div class="mrr-clarify-modal__backdrop" data-mrr-clarify-close></div>
-                    <div
-                        class="mrr-clarify-modal__dialog"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="mrrClarifyTitle"
-                        aria-describedby="mrrClarifyDescription"
-                    >
-                        <button type="button" class="mrr-clarify-modal__close" data-mrr-clarify-close aria-label="Закрыть">×</button>
-                        <div class="mrr-clarify-modal__eyebrow">Нужно уточнить</div>
-                        <h3 id="mrrClarifyTitle" class="mrr-clarify-modal__title">Применить уточнение</h3>
-                        <p id="mrrClarifyDescription" class="mrr-clarify-modal__description">
-                            Введите, как это место обозначено на схеме, вывеске или на самом месте.
-                        </p>
-
-                        <div class="mrr-clarify-modal__field">
-                            <label class="mrr-clarify-modal__label" for="mrrClarifyNumberInput">Номер места</label>
-                            <input
-                                id="mrrClarifyNumberInput"
-                                class="mrr-clarify-modal__input"
-                                type="text"
-                                autocomplete="off"
-                                spellcheck="false"
-                                inputmode="text"
-                            >
-                        </div>
-                        <div class="mrr-clarify-modal__field">
-                            <label class="mrr-clarify-modal__label" for="mrrClarifyDisplayNameInput">Название места</label>
-                            <input
-                                id="mrrClarifyDisplayNameInput"
-                                class="mrr-clarify-modal__input"
-                                type="text"
-                                autocomplete="off"
-                                spellcheck="false"
-                                inputmode="text"
-                            >
-                        </div>
-                        <div id="mrrClarifyError" class="mrr-clarify-modal__error" aria-live="polite"></div>
-
-                        <div class="mrr-clarify-modal__actions">
-                            <button type="button" class="mrr-clarify-modal__button" data-mrr-clarify-close>Отмена</button>
-                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-clarify-save>Сохранить</button>
-                        </div>
-                    </div>
-                </div>
-
                 <div id="mrrDuplicatePlanModal" class="mrr-clarify-modal mrr-duplicate-plan-modal" hidden aria-hidden="true">
                     <div class="mrr-clarify-modal__backdrop" data-mrr-duplicate-plan-close></div>
                     <div
@@ -1467,8 +1414,9 @@
                         <div class="mrr-clarify-modal__eyebrow">Разбор дубля</div>
                         <h3 id="mrrDuplicatePlanTitle" class="mrr-clarify-modal__title">План безопасного разбора</h3>
                         <p id="mrrDuplicatePlanDescription" class="mrr-clarify-modal__description">
-                            Это только подсказка для ручной проверки. Она не переносит связи, не меняет договоры и не архивирует места.
+                            Выберите основное место. Система перенесёт карту, кабинет и товары на него, а текущий дубль выведет из рабочего контура. Договоры, начисления и долги не переносятся.
                         </p>
+                        <div id="mrrDuplicatePlanError" class="mrr-clarify-modal__error" aria-live="polite"></div>
 
                         <div class="mrr-duplicate-plan__grid">
                             <div class="mrr-duplicate-plan__card">
@@ -1493,26 +1441,17 @@
                         </div>
 
                         <div class="mrr-duplicate-plan__section">
-                            <h4>Как принимать решение</h4>
+                            <h4>Что произойдёт после выбора</h4>
                             <ul class="mrr-duplicate-plan__list">
-                                <li>Каноническим должно стать место, где подтверждены договоры, начисления и данные 1С.</li>
-                                <li>Если карта и кабинет висят на другом месте, их можно рассматривать как кандидатов на перенос после проверки.</li>
-                                <li>Договоры, начисления, долги и историю нельзя переносить автоматически по одному клику без ручного подтверждения.</li>
-                                <li>Фиктивное место безопаснее сначала вывести из рабочего контура или архивировать, а не удалять физически.</li>
-                            </ul>
-                        </div>
-
-                        <div class="mrr-duplicate-plan__section">
-                            <h4>Следующее безопасное действие</h4>
-                            <ul class="mrr-duplicate-plan__list">
-                                <li>Откройте оба места и карту.</li>
-                                <li>Проверьте, где живут договоры, начисления, кабинет арендатора и привязка shape.</li>
-                                <li>Только после этого выбирайте каноническое место и формируйте отдельную операцию переноса связей.</li>
+                                <li>Кандидат станет основным местом для карты, кабинета и товаров.</li>
+                                <li>Текущее место будет выведено из рабочего контура через is_active = false.</li>
+                                <li>Договоры, начисления и долги не меняются. Если они есть на текущем дубле, действие будет заблокировано.</li>
                             </ul>
                         </div>
 
                         <div class="mrr-clarify-modal__actions">
-                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-duplicate-plan-close>Понятно</button>
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-duplicate-plan-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-duplicate-plan-create>Выбрать кандидата основным</button>
                         </div>
                     </div>
                 </div>
@@ -1523,144 +1462,6 @@
             (() => {
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
-                const modal = document.getElementById('mrrClarifyModal');
-                const numberInput = document.getElementById('mrrClarifyNumberInput');
-                const displayNameInput = document.getElementById('mrrClarifyDisplayNameInput');
-                const error = document.getElementById('mrrClarifyError');
-
-                if (!modal || !numberInput || !displayNameInput || !error) {
-                    return;
-                }
-
-                const openModal = (button) => {
-                    modal.hidden = false;
-                    modal.classList.add('is-open');
-                    modal.setAttribute('aria-hidden', 'false');
-                    modal.dataset.spaceId = String(button.dataset.spaceId || '');
-                    numberInput.value = button.dataset.spaceNumber || '';
-                    displayNameInput.value = button.dataset.spaceDisplayName || '';
-                    error.textContent = '';
-
-                    requestAnimationFrame(() => {
-                        numberInput.focus({ preventScroll: true });
-                        numberInput.select();
-                    });
-                };
-
-                const closeModal = () => {
-                    modal.classList.remove('is-open');
-                    modal.hidden = true;
-                    modal.setAttribute('aria-hidden', 'true');
-                    delete modal.dataset.spaceId;
-                    error.textContent = '';
-                };
-
-                const save = async () => {
-                    const spaceId = Number(modal.dataset.spaceId || 0);
-                    const numberValue = String(numberInput.value || '').trim();
-                    const displayNameValue = String(displayNameInput.value || '').trim();
-
-                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
-                        error.textContent = 'Не удалось определить место.';
-                        return;
-                    }
-
-                    if (!numberValue && !displayNameValue) {
-                        error.textContent = 'Нужен номер или название места.';
-                        numberInput.focus({ preventScroll: true });
-                        return;
-                    }
-
-                    error.textContent = '';
-
-                    const response = await fetch(reviewDecisionUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken,
-                        },
-                        body: JSON.stringify({
-                            decision: 'fix_space_identity',
-                            market_space_id: spaceId,
-                            number: numberValue || null,
-                            display_name: displayNameValue || null,
-                        }),
-                    });
-
-                    let json = null;
-                    try {
-                        json = await response.json();
-                    } catch (e) {
-                        json = null;
-                    }
-
-                    if (!response.ok || !json || json.ok !== true) {
-                        error.textContent = String(json?.message || 'Не удалось применить уточнение.');
-                        return;
-                    }
-
-                    window.location.reload();
-                };
-
-                document.addEventListener('click', (event) => {
-                    const button = event.target instanceof Element
-                        ? event.target.closest('[data-mrr-clarify-action="open"]')
-                        : null;
-
-                    if (!button || !(button instanceof HTMLElement)) {
-                        return;
-                    }
-
-                    event.preventDefault();
-                    openModal(button);
-                });
-
-                modal.addEventListener('click', (event) => {
-                    if (!(event.target instanceof Element)) {
-                        return;
-                    }
-
-                    if (event.target.hasAttribute('data-mrr-clarify-close')) {
-                        event.preventDefault();
-                        closeModal();
-                        return;
-                    }
-
-                    if (event.target.hasAttribute('data-mrr-clarify-save')) {
-                        event.preventDefault();
-                        save().catch((errorInstance) => {
-                            error.textContent = String(errorInstance?.message || errorInstance);
-                        });
-                    }
-                });
-
-                [numberInput, displayNameInput].forEach((input) => {
-                    input.addEventListener('keydown', (event) => {
-                        if (event.key !== 'Enter') {
-                            return;
-                        }
-
-                        event.preventDefault();
-                        save().catch((errorInstance) => {
-                            error.textContent = String(errorInstance?.message || errorInstance);
-                        });
-                    });
-                });
-
-                window.addEventListener('keydown', (event) => {
-                    if (!modal.classList.contains('is-open')) {
-                        return;
-                    }
-
-                    if (event.key === 'Escape') {
-                        event.preventDefault();
-                        closeModal();
-                    }
-                });
-            })();
-
-            (() => {
                 const modal = document.getElementById('mrrDuplicatePlanModal');
                 const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
@@ -1670,6 +1471,8 @@
                 const currentMapLink = document.getElementById('mrrDuplicatePlanCurrentMapLink');
                 const candidateSpaceLink = document.getElementById('mrrDuplicatePlanCandidateSpaceLink');
                 const candidateMapLink = document.getElementById('mrrDuplicatePlanCandidateMapLink');
+                const createButton = modal?.querySelector('[data-mrr-duplicate-plan-create]');
+                const error = document.getElementById('mrrDuplicatePlanError');
 
                 if (
                     !modal
@@ -1681,6 +1484,8 @@
                     || !currentMapLink
                     || !candidateSpaceLink
                     || !candidateMapLink
+                    || !createButton
+                    || !error
                 ) {
                     return;
                 }
@@ -1765,6 +1570,9 @@
                     setLink(currentMapLink, button.dataset.currentMapUrl);
                     setLink(candidateSpaceLink, button.dataset.candidateSpaceUrl);
                     setLink(candidateMapLink, button.dataset.candidateMapUrl);
+                    error.textContent = '';
+                    modal.dataset.currentSpaceId = currentSpaceId;
+                    modal.dataset.candidateSpaceId = candidateSpaceId;
 
                     modal.hidden = false;
                     modal.classList.add('is-open');
@@ -1775,6 +1583,51 @@
                     modal.classList.remove('is-open');
                     modal.hidden = true;
                     modal.setAttribute('aria-hidden', 'true');
+                    delete modal.dataset.currentSpaceId;
+                    delete modal.dataset.candidateSpaceId;
+                    error.textContent = '';
+                    createButton.removeAttribute('disabled');
+                    createButton.textContent = 'Выбрать кандидата основным';
+                };
+
+                const createDuplicateReviewOperation = async () => {
+                    const currentSpaceId = Number(modal.dataset.currentSpaceId || 0);
+                    const candidateSpaceId = Number(modal.dataset.candidateSpaceId || 0);
+
+                    if (!Number.isFinite(currentSpaceId) || currentSpaceId <= 0 || !Number.isFinite(candidateSpaceId) || candidateSpaceId <= 0) {
+                        error.textContent = 'Не удалось определить пару мест для разбора.';
+                        return;
+                    }
+
+                    createButton.setAttribute('disabled', 'disabled');
+                    createButton.textContent = 'Переносим связи...';
+                    error.textContent = '';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision: 'duplicate_space_needs_resolution',
+                            market_space_id: currentSpaceId,
+                            candidate_market_space_id: candidateSpaceId,
+                            reason: 'Выбрано основное место дубля; перенести безопасные связи.',
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        createButton.removeAttribute('disabled');
+                        createButton.textContent = 'Выбрать кандидата основным';
+                        error.textContent = String(data?.message || 'Не удалось перенести безопасные связи.');
+                        return;
+                    }
+
+                    window.location.reload();
                 };
 
                 document.addEventListener('click', (event) => {
@@ -1798,6 +1651,16 @@
                     if (event.target.hasAttribute('data-mrr-duplicate-plan-close')) {
                         event.preventDefault();
                         closeModal();
+                        return;
+                    }
+
+                    if (event.target.hasAttribute('data-mrr-duplicate-plan-create')) {
+                        event.preventDefault();
+                        createDuplicateReviewOperation().catch((errorInstance) => {
+                            createButton.removeAttribute('disabled');
+                            createButton.textContent = 'Выбрать кандидата основным';
+                            error.textContent = String(errorInstance?.message || errorInstance);
+                        });
                     }
                 });
 
