@@ -99,7 +99,7 @@ php artisan optimize:clear
 php artisan migrate --force
 
 # 6. Перезапуск Horizon
-php artisan horizon:terminate || true
+sudo -u www-data php artisan horizon:terminate || true
 ```
 
 ### Вариант B: Через SCP (для быстрых правок)
@@ -152,7 +152,7 @@ ssh my_projects "cd /var/www/market/current && git fetch origin <branch> && git 
 #### Полный деплой с миграциями и Horizon
 
 ```bash
-ssh my_projects "cd /var/www/market/current && php artisan tinker --execute=\"echo \\\"DB_CONNECTION=\\\".config(\\\"database.default\\\").PHP_EOL; echo \\\"DB_HOST=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".host\\\").PHP_EOL; echo \\\"DB_PORT=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".port\\\").PHP_EOL; echo \\\"DB_DATABASE=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".database\\\").PHP_EOL; echo \\\"DB_USERNAME=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".username\\\").PHP_EOL;\" && mkdir -p /var/www/market/backups && pg_dump -h <DB_HOST> -p <DB_PORT> -U <DB_USERNAME> -d <DB_DATABASE> -Fc -f /var/www/market/backups/prod_before_deploy_TIMESTAMP.dump && git fetch origin main && git switch main && git pull --ff-only origin main && composer install --no-dev --optimize-autoloader && php artisan optimize:clear && php artisan filament:upgrade && php artisan horizon:terminate || true && git rev-parse --short HEAD && git log --oneline -1"
+ssh my_projects "cd /var/www/market/current && php artisan tinker --execute=\"echo \\\"DB_CONNECTION=\\\".config(\\\"database.default\\\").PHP_EOL; echo \\\"DB_HOST=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".host\\\").PHP_EOL; echo \\\"DB_PORT=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".port\\\").PHP_EOL; echo \\\"DB_DATABASE=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".database\\\").PHP_EOL; echo \\\"DB_USERNAME=\\\".config(\\\"database.connections.\\\".config(\\\"database.default\\\").\\\".username\\\").PHP_EOL;\" && mkdir -p /var/www/market/backups && pg_dump -h <DB_HOST> -p <DB_PORT> -U <DB_USERNAME> -d <DB_DATABASE> -Fc -f /var/www/market/backups/prod_before_deploy_TIMESTAMP.dump && git fetch origin main && git switch main && git pull --ff-only origin main && composer install --no-dev --optimize-autoloader && php artisan optimize:clear && php artisan filament:upgrade && (sudo -u www-data php artisan horizon:terminate || true) && git rev-parse --short HEAD && git log --oneline -1"
 ```
 
 Если PR действительно содержит миграцию, выполните отдельным шагом:

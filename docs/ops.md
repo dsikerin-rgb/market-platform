@@ -255,7 +255,7 @@ sudo systemctl status market-staging-horizon.service --no-pager
 После деплоя обязательно:
 
 ```bash
-php artisan horizon:terminate || true
+sudo -u www-data php artisan horizon:terminate || true
 ```
 
 ---
@@ -321,7 +321,7 @@ git switch main && git pull --ff-only origin main
 composer install --no-dev --optimize-autoloader
 php artisan optimize:clear
 php artisan filament:upgrade
-php artisan horizon:terminate || true
+(sudo -u www-data php artisan horizon:terminate || true)
 git log -1 --oneline
 '
 ```
