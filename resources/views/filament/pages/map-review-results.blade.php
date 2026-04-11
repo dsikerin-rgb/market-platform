@@ -124,9 +124,27 @@
 
             .mrr-diagnostics {
                 display: flex;
-                min-width: 16rem;
+                min-width: 18rem;
                 flex-direction: column;
-                gap: 0.55rem;
+                gap: 0.65rem;
+            }
+
+            .mrr-diagnostics__section {
+                display: flex;
+                flex-direction: column;
+                gap: 0.42rem;
+            }
+
+            .mrr-diagnostics__section-title {
+                font-size: 0.72rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #334155;
+            }
+
+            .dark .mrr-diagnostics__section-title {
+                color: #e2e8f0;
             }
 
             .mrr-diagnostics__counts {
@@ -179,36 +197,31 @@
             .mrr-diagnostics__candidates {
                 display: flex;
                 flex-direction: column;
-                gap: 0.35rem;
-                border-left: 2px solid rgba(37, 99, 235, 0.22);
-                padding-left: 0.65rem;
-            }
-
-            .mrr-diagnostics__candidate-title {
-                font-size: 0.74rem;
-                font-weight: 800;
-                letter-spacing: 0.03em;
-                text-transform: uppercase;
-                color: #334155;
-            }
-
-            .dark .mrr-diagnostics__candidate-title {
-                color: #e2e8f0;
+                gap: 0.45rem;
             }
 
             .mrr-diagnostics__candidate {
                 display: grid;
-                gap: 0.14rem;
+                gap: 0.32rem;
+                border-left: 2px solid rgba(37, 99, 235, 0.26);
+                border-radius: 0.75rem;
+                background: rgba(248, 250, 252, 0.9);
+                padding: 0.55rem 0.65rem;
             }
 
-            .mrr-diagnostics__candidate a {
+            .dark .mrr-diagnostics__candidate {
+                background: rgba(15, 23, 42, 0.6);
+                border-left-color: rgba(96, 165, 250, 0.35);
+            }
+
+            .mrr-diagnostics__candidate-main {
                 font-size: 0.82rem;
                 font-weight: 700;
                 color: #1d4ed8;
                 text-decoration: none;
             }
 
-            .dark .mrr-diagnostics__candidate a {
+            .dark .mrr-diagnostics__candidate-main {
                 color: #93c5fd;
             }
 
@@ -219,6 +232,29 @@
 
             .dark .mrr-diagnostics__candidate-meta {
                 color: #94a3b8;
+            }
+
+            .mrr-diagnostics__candidate-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+            }
+
+            .mrr-diagnostics__candidate-action {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                padding: 0.18rem 0.48rem;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                text-decoration: none;
+            }
+
+            .dark .mrr-diagnostics__candidate-action {
+                border-color: rgba(96, 165, 250, 0.3);
+                color: #bfdbfe;
             }
 
             .mrr-empty {
@@ -1001,27 +1037,36 @@
                                                             $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
                                                         @endphp
                                                         <div class="mrr-diagnostics">
-                                                            <div class="mrr-diagnostics__counts">
-                                                                @foreach ($relationCounts as $item)
-                                                                    <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
-                                                                        {{ $item['label'] }}: {{ $item['count'] }}
-                                                                    </span>
-                                                                @endforeach
+                                                            <div class="mrr-diagnostics__section">
+                                                                <div class="mrr-diagnostics__section-title">Связи текущего места</div>
+                                                                <div class="mrr-diagnostics__counts">
+                                                                    @foreach ($relationCounts as $item)
+                                                                        <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
+                                                                            {{ $item['label'] }}: {{ $item['count'] }}
+                                                                        </span>
+                                                                    @endforeach
+                                                                </div>
                                                             </div>
 
                                                             @if ($candidateSpaces !== [])
-                                                                <div class="mrr-diagnostics__candidates">
-                                                                    <div class="mrr-diagnostics__candidate-title">Кандидаты того же арендатора</div>
-                                                                    @foreach ($candidateSpaces as $candidate)
-                                                                        <div class="mrr-diagnostics__candidate">
-                                                                            <a href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
-                                                                                #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
-                                                                            </a>
-                                                                            <div class="mrr-diagnostics__candidate-meta">
-                                                                                {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                <div class="mrr-diagnostics__section">
+                                                                    <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
+                                                                    <div class="mrr-diagnostics__candidates">
+                                                                        @foreach ($candidateSpaces as $candidate)
+                                                                            <div class="mrr-diagnostics__candidate">
+                                                                                <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
+                                                                                    #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
+                                                                                </a>
+                                                                                <div class="mrr-diagnostics__candidate-meta">
+                                                                                    {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                                </div>
+                                                                                <div class="mrr-diagnostics__candidate-actions">
+                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                    @endforeach
+                                                                        @endforeach
+                                                                    </div>
                                                                 </div>
                                                             @else
                                                                 <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>

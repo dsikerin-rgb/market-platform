@@ -321,12 +321,15 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('data-space-number="П/3"', false)
             ->assertSee('data-space-display-name="Зоомир"', false)
             ->assertSee('Связи и кандидаты', false)
+            ->assertSee('Связи текущего места', false)
             ->assertSee('Карта: 1', false)
             ->assertSee('Кабинет: 1', false)
             ->assertSee('Кандидаты того же арендатора', false)
             ->assertSee('#' . $candidate->id . ' · 5 / Зоомир ООО', false)
             ->assertSee('Договоры: 1', false)
-            ->assertSee('Начисления: 1', false);
+            ->assertSee('Начисления: 1', false)
+            ->assertSee('Открыть место', false)
+            ->assertSee('Открыть карту', false);
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void
