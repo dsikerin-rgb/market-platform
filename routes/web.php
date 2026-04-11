@@ -46,6 +46,7 @@ use App\Services\Debt\DebtAggregator;
 use App\Support\StaffConversationService;
 use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
+use App\Services\MarketMap\DuplicateSpaceResolutionService;
 use App\Services\Marketplace\MarketplaceContextService;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
@@ -1867,6 +1868,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'observed_tenant_name' => ['nullable', 'string', 'max:255'],
             'number' => ['nullable', 'string', 'max:255'],
             'display_name' => ['nullable', 'string', 'max:255'],
+            'candidate_market_space_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $space = MarketSpace::query()
@@ -1913,11 +1915,49 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'market_space_id' => (int) $space->id,
             'decision' => $decision,
         ];
+        $duplicateResolutionPreview = null;
 
         foreach (['shape_id', 'reason', 'observed_tenant_name', 'number', 'display_name'] as $field) {
             if (array_key_exists($field, $validated) && $validated[$field] !== null && $validated[$field] !== '') {
                 $payload[$field] = $validated[$field];
             }
+        }
+
+        if ($decision === SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION) {
+            $candidateSpaceId = (int) ($validated['candidate_market_space_id'] ?? 0);
+
+            if ($candidateSpaceId <= 0 || $candidateSpaceId === (int) $space->id) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Duplicate review candidate space is required.',
+                ], 422);
+            }
+
+            $candidateSpaceExists = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey($candidateSpaceId)
+                ->exists();
+
+            if (! $candidateSpaceExists) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Duplicate review candidate space was not found in the current market.',
+                ], 404);
+            }
+
+            $duplicateResolutionPreview = app(DuplicateSpaceResolutionService::class)->preview(
+                (int) $market->id,
+                (int) $space->id,
+                $candidateSpaceId,
+            );
+
+            $payload['candidate_market_space_id'] = $candidateSpaceId;
+            $payload['reason'] = $payload['reason'] ?? 'Выбрано основное место дубля; перенести безопасные связи.';
+            $payload['duplicate_resolution'] = [
+                'candidate_market_space_id' => $candidateSpaceId,
+                'transfer_counts' => $duplicateResolutionPreview['transfer_counts'] ?? [],
+                'blocking_counts' => $duplicateResolutionPreview['blocking_counts'] ?? [],
+            ];
         }
 
         if (isset($payload['shape_id'])) {
@@ -1934,7 +1974,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
-        $operation = Operation::query()->create([
+        $operation = DB::transaction(static fn (): Operation => Operation::query()->create([
             'market_id' => (int) $market->id,
             'entity_type' => 'market_space',
             'entity_id' => (int) $space->id,
@@ -1944,7 +1984,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'payload' => $payload,
             'comment' => isset($payload['reason']) ? (string) $payload['reason'] : null,
             'created_by' => $userId,
-        ]);
+        ]));
 
         $space->refresh();
 
@@ -1962,6 +2002,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                 'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
             ],
+            'resolution' => $duplicateResolutionPreview,
             'progress' => $buildMapReviewProgress($market),
         ]);
     })->name('filament.admin.market-map.review-decision');

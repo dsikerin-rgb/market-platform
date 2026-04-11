@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
+use App\Services\MarketMap\DuplicateSpaceResolutionService;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationPayloadValidator;
 use Carbon\CarbonImmutable;
@@ -234,6 +235,21 @@ class Operation extends Model
         $decision = (string) ($payload['decision'] ?? '');
 
         if ($decision === '') {
+            return;
+        }
+
+        if ($operation->status === 'applied' && $decision === SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION) {
+            $candidateSpaceId = (int) ($payload['candidate_market_space_id'] ?? 0);
+
+            if ($candidateSpaceId > 0) {
+                app(DuplicateSpaceResolutionService::class)->resolve(
+                    (int) $operation->market_id,
+                    $spaceId,
+                    $candidateSpaceId,
+                    $operation->created_by ? (int) $operation->created_by : null,
+                );
+            }
+
             return;
         }
 

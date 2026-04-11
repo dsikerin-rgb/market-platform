@@ -144,6 +144,16 @@ final class OperationPayloadValidator
             $normalized['observed_tenant_name'] = self::stringOrNull($payload['observed_tenant_name'] ?? null);
         }
 
+        if (SpaceReviewDecision::requiresCandidateSpaceId($decision)) {
+            $normalized['candidate_market_space_id'] = self::intOrNull($payload['candidate_market_space_id'] ?? null, true);
+
+            if (isset($payload['duplicate_resolution']) && is_array($payload['duplicate_resolution'])) {
+                $normalized['duplicate_resolution'] = $payload['duplicate_resolution'];
+            }
+        } elseif (array_key_exists('candidate_market_space_id', $payload)) {
+            $normalized['candidate_market_space_id'] = self::intOrNull($payload['candidate_market_space_id'] ?? null);
+        }
+
         if (SpaceReviewDecision::isIdentityFix($decision)) {
             $number = self::stringOrNull($payload['number'] ?? null);
             $displayName = self::stringOrNull($payload['display_name'] ?? null);
