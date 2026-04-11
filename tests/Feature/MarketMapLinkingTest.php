@@ -184,6 +184,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertDontSee('Спорное место', false);
         $response->assertSee('Точная связь с местом не подтверждена', false);
         $response->assertDontSee('Нет точной связи с местом', false);
+        $response->assertDontSee('>Применить уточнение</button>', false);
     }
 
     public function test_market_space_edit_status_view_shows_linked_state(): void

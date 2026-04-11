@@ -4604,7 +4604,6 @@
                     btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как свободное" aria-label="Отметить место как свободное">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
                     btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
                     btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
-                    btns.push('<button type="button" data-action="review-decision" data-decision="fix_space_identity" data-space-id="' + String(hitSpaceId) + '" title="Применить безопасное уточнение номера или названия места" aria-label="Применить безопасное уточнение номера или названия места">Применить уточнение</button>');
                   }
                 }
 
