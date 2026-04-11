@@ -122,6 +122,141 @@
                 line-height: inherit;
             }
 
+            .mrr-diagnostics {
+                display: flex;
+                min-width: 18rem;
+                flex-direction: column;
+                gap: 0.65rem;
+            }
+
+            .mrr-diagnostics__section {
+                display: flex;
+                flex-direction: column;
+                gap: 0.42rem;
+            }
+
+            .mrr-diagnostics__section-title {
+                font-size: 0.72rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #334155;
+            }
+
+            .dark .mrr-diagnostics__section-title {
+                color: #e2e8f0;
+            }
+
+            .mrr-diagnostics__counts {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+            }
+
+            .mrr-diagnostics__count {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid rgba(15, 23, 42, 0.09);
+                background: rgba(248, 250, 252, 0.9);
+                padding: 0.2rem 0.5rem;
+                font-size: 0.74rem;
+                font-weight: 700;
+                color: #475569;
+                white-space: nowrap;
+            }
+
+            .mrr-diagnostics__count--important {
+                border-color: rgba(37, 99, 235, 0.18);
+                background: rgba(239, 246, 255, 0.95);
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-diagnostics__count {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.72);
+                color: #cbd5e1;
+            }
+
+            .dark .mrr-diagnostics__count--important {
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(30, 64, 175, 0.24);
+                color: #bfdbfe;
+            }
+
+            .mrr-diagnostics__hint {
+                font-size: 0.78rem;
+                line-height: 1.35;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__hint {
+                color: #94a3b8;
+            }
+
+            .mrr-diagnostics__candidates {
+                display: flex;
+                flex-direction: column;
+                gap: 0.45rem;
+            }
+
+            .mrr-diagnostics__candidate {
+                display: grid;
+                gap: 0.32rem;
+                border-left: 2px solid rgba(37, 99, 235, 0.26);
+                border-radius: 0.75rem;
+                background: rgba(248, 250, 252, 0.9);
+                padding: 0.55rem 0.65rem;
+            }
+
+            .dark .mrr-diagnostics__candidate {
+                background: rgba(15, 23, 42, 0.6);
+                border-left-color: rgba(96, 165, 250, 0.35);
+            }
+
+            .mrr-diagnostics__candidate-main {
+                font-size: 0.82rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                text-decoration: none;
+            }
+
+            .dark .mrr-diagnostics__candidate-main {
+                color: #93c5fd;
+            }
+
+            .mrr-diagnostics__candidate-meta {
+                font-size: 0.75rem;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__candidate-meta {
+                color: #94a3b8;
+            }
+
+            .mrr-diagnostics__candidate-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+            }
+
+            .mrr-diagnostics__candidate-action {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                padding: 0.18rem 0.48rem;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                text-decoration: none;
+            }
+
+            .dark .mrr-diagnostics__candidate-action {
+                border-color: rgba(96, 165, 250, 0.3);
+                color: #bfdbfe;
+            }
+
             .mrr-empty {
                 border-radius: 1rem;
                 border: 1px dashed rgba(15, 23, 42, 0.14);
@@ -387,7 +522,41 @@
 
             /* AI-разбор колонка */
             .mrr-ai {
-                max-width: 320px;
+                max-width: none;
+            }
+
+            .mrr-ai-row td {
+                padding-top: 0;
+                background: rgba(248, 250, 252, 0.72);
+            }
+
+            .dark .mrr-ai-row td {
+                background: rgba(15, 23, 42, 0.35);
+            }
+
+            .mrr-ai-panel {
+                border-radius: 1rem;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                background: rgba(255, 255, 255, 0.86);
+                padding: 0.85rem 1rem;
+            }
+
+            .dark .mrr-ai-panel {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.72);
+            }
+
+            .mrr-ai-panel__title {
+                margin-bottom: 0.55rem;
+                font-size: 0.75rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #334155;
+            }
+
+            .dark .mrr-ai-panel__title {
+                color: #e2e8f0;
             }
 
             .mrr-sort-toggle {
@@ -849,8 +1018,8 @@
                                                 <th>Статус</th>
                                                 <th>Последнее решение</th>
                                                 <th>Кем и когда</th>
+                                                <th>Связи и кандидаты</th>
                                                 <th>Переходы</th>
-                                                <th>AI-разбор</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -895,6 +1064,49 @@
                                                         </div>
                                                     </td>
                                                     <td>
+                                                        @php
+                                                            $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
+                                                            $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
+                                                            $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
+                                                        @endphp
+                                                        <div class="mrr-diagnostics">
+                                                            <div class="mrr-diagnostics__section">
+                                                                <div class="mrr-diagnostics__section-title">Связи текущего места</div>
+                                                                <div class="mrr-diagnostics__counts">
+                                                                    @foreach ($relationCounts as $item)
+                                                                        <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
+                                                                            {{ $item['label'] }}: {{ $item['count'] }}
+                                                                        </span>
+                                                                    @endforeach
+                                                                </div>
+                                                            </div>
+
+                                                            @if ($candidateSpaces !== [])
+                                                                <div class="mrr-diagnostics__section">
+                                                                    <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
+                                                                    <div class="mrr-diagnostics__candidates">
+                                                                        @foreach ($candidateSpaces as $candidate)
+                                                                            <div class="mrr-diagnostics__candidate">
+                                                                                <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
+                                                                                    #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
+                                                                                </a>
+                                                                                <div class="mrr-diagnostics__candidate-meta">
+                                                                                    {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                                </div>
+                                                                                <div class="mrr-diagnostics__candidate-actions">
+                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                </div>
+                                                                            </div>
+                                                                        @endforeach
+                                                                    </div>
+                                                                </div>
+                                                            @else
+                                                                <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
+                                                            @endif
+                                                        </div>
+                                                    </td>
+                                                    <td>
                                                         <div class="mrr-links">
                                                             @if (($row['decision'] ?? null) === 'space_identity_needs_clarification')
                                                                 <button
@@ -914,7 +1126,9 @@
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                         </div>
                                                     </td>
-                                                    <td>
+                                                </tr>
+                                                <tr class="mrr-ai-row {{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
+                                                    <td colspan="6">
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
 
@@ -935,41 +1149,44 @@
                                                                 return $text;
                                                             };
                                                         @endphp
-                                                        <div class="mrr-ai">
-                                                            <div class="mrr-ai__priority mrr-ai__priority--{{ $priorityTone }}">
-                                                                <span class="mrr-ai__priority-label">{{ $row['priority_label'] }}</span>
-                                                                <span class="mrr-ai__priority-score">Приоритет {{ $row['priority_score'] }}/100</span>
+                                                        <div class="mrr-ai-panel">
+                                                            <div class="mrr-ai-panel__title">AI-разбор</div>
+                                                            <div class="mrr-ai">
+                                                                <div class="mrr-ai__priority mrr-ai__priority--{{ $priorityTone }}">
+                                                                    <span class="mrr-ai__priority-label">{{ $row['priority_label'] }}</span>
+                                                                    <span class="mrr-ai__priority-score">Приоритет {{ $row['priority_score'] }}/100</span>
+                                                                </div>
+                                                                <div class="mrr-ai__priority-reason">{{ $humanize($row['priority_reason']) }}</div>
+                                                                @if ($ai && filled($ai['summary']))
+                                                                    <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
+                                                                    <div class="mrr-ai__reason">
+                                                                        <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
+                                                                    </div>
+                                                                    <div class="mrr-ai__step">
+                                                                        <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
+                                                                    </div>
+                                                                    <div class="mrr-ai__badges">
+                                                                        <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">
+                                                                            ⚠ {{ $ai['risk_score'] }}/10
+                                                                        </span>
+                                                                        <span class="mrr-ai__badge mrr-ai__badge--conf" title="Уверенность {{ round($ai['confidence'] * 100) }}%">
+                                                                            🎯 {{ round($ai['confidence'] * 100) }}%
+                                                                        </span>
+                                                                    </div>
+                                                                @elseif ($hasAiKey)
+                                                                    <div class="mrr-ai mrr-ai--empty">
+                                                                        <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
+                                                                    </div>
+                                                                @elseif (empty($aiSummaries))
+                                                                    <div class="mrr-ai mrr-ai--empty">
+                                                                        <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
+                                                                    </div>
+                                                                @else
+                                                                    <div class="mrr-ai mrr-ai--skipped">
+                                                                        <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
+                                                                    </div>
+                                                                @endif
                                                             </div>
-                                                            <div class="mrr-ai__priority-reason">{{ $humanize($row['priority_reason']) }}</div>
-                                                            @if ($ai && filled($ai['summary']))
-                                                                <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
-                                                                <div class="mrr-ai__reason">
-                                                                    <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
-                                                                </div>
-                                                                <div class="mrr-ai__step">
-                                                                    <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
-                                                                </div>
-                                                                <div class="mrr-ai__badges">
-                                                                    <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">
-                                                                        ⚠ {{ $ai['risk_score'] }}/10
-                                                                    </span>
-                                                                    <span class="mrr-ai__badge mrr-ai__badge--conf" title="Уверенность {{ round($ai['confidence'] * 100) }}%">
-                                                                        🎯 {{ round($ai['confidence'] * 100) }}%
-                                                                    </span>
-                                                                </div>
-                                                            @elseif ($hasAiKey)
-                                                                <div class="mrr-ai mrr-ai--empty">
-                                                                    <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
-                                                                </div>
-                                                            @elseif (empty($aiSummaries))
-                                                                <div class="mrr-ai mrr-ai--empty">
-                                                                    <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
-                                                                </div>
-                                                            @else
-                                                                <div class="mrr-ai mrr-ai--skipped">
-                                                                    <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
-                                                                </div>
-                                                            @endif
                                                         </div>
                                                     </td>
                                                 </tr>

@@ -13,6 +13,8 @@ use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Operation;
 use App\Models\Tenant;
+use App\Models\TenantAccrual;
+use App\Models\TenantContract;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -249,10 +251,51 @@ class SpaceReviewFlowTest extends TestCase
             'filament.admin.selected_market_id' => (int) $market->id,
         ]);
 
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Зоомир ООО',
+            'is_active' => true,
+        ]);
+
         $space = $this->createSpace($market, [
             'number' => 'П/3',
             'display_name' => 'Зоомир',
             'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+        $this->createShape($market, (int) $space->id);
+
+        $candidate = $this->createSpace($market, [
+            'number' => '5',
+            'display_name' => 'Зоомир ООО',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $candidate->id,
+            'number' => 'DOG-5',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $candidate->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('review-result-candidate-accrual'),
+        ]);
+
+        DB::table('tenant_user_market_spaces')->insert([
+            'user_id' => $user->id,
+            'market_space_id' => $space->id,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Operation::create([
@@ -276,7 +319,17 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('mrrClarifyDisplayNameInput', false)
             ->assertDontSee('mrrClarifyInput', false)
             ->assertSee('data-space-number="П/3"', false)
-            ->assertSee('data-space-display-name="Зоомир"', false);
+            ->assertSee('data-space-display-name="Зоомир"', false)
+            ->assertSee('Связи и кандидаты', false)
+            ->assertSee('Связи текущего места', false)
+            ->assertSee('Карта: 1', false)
+            ->assertSee('Кабинет: 1', false)
+            ->assertSee('Кандидаты того же арендатора', false)
+            ->assertSee('#' . $candidate->id . ' · 5 / Зоомир ООО', false)
+            ->assertSee('Договоры: 1', false)
+            ->assertSee('Начисления: 1', false)
+            ->assertSee('Открыть место', false)
+            ->assertSee('Открыть карту', false);
     }
 
     public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void

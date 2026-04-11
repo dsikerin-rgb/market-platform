@@ -11,6 +11,7 @@ use App\Models\MarketSpace;
 use App\Models\Operation;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class MapReviewResultsService
@@ -115,7 +116,8 @@ class MapReviewResultsService
      *   reviewed_by_name:?string,
      *   decision:?string,
      *   decision_label:?string,
-     *   reason:?string
+     *   reason:?string,
+     *   diagnostics:array<string,mixed>
      * }>
      */
     public function needsAttention(int $marketId, int $limit = 50): array
@@ -138,6 +140,7 @@ class MapReviewResultsService
             ->get([
                 'id',
                 'location_id',
+                'tenant_id',
                 'number',
                 'display_name',
                 'code',
@@ -152,6 +155,7 @@ class MapReviewResultsService
 
         $spaceIds = $spaces->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $latestOperations = $this->latestSpaceReviewOperationsBySpace($marketId, $spaceIds);
+        $diagnostics = $this->buildSpaceDiagnostics($marketId, $spaces);
 
         $reviewerIds = $spaces->pluck('map_reviewed_by')
             ->filter(fn ($id) => filled($id))
@@ -163,7 +167,7 @@ class MapReviewResultsService
             ->whereIn('id', $reviewerIds)
             ->pluck('name', 'id');
 
-        return $spaces->map(function (MarketSpace $space) use ($latestOperations, $reviewers): array {
+        return $spaces->map(function (MarketSpace $space) use ($latestOperations, $reviewers, $diagnostics): array {
             $operation = $latestOperations->get((int) $space->id);
             $payload = is_array($operation?->payload) ? $operation->payload : [];
             $decision = filled($payload['decision'] ?? null) ? (string) $payload['decision'] : null;
@@ -180,8 +184,215 @@ class MapReviewResultsService
                 'decision' => $decision,
                 'decision_label' => $decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null,
                 'reason' => filled($payload['reason'] ?? null) ? trim((string) $payload['reason']) : null,
+                'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
             ];
         })->all();
+    }
+
+    /**
+     * @param  Collection<int, MarketSpace>  $spaces
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildSpaceDiagnostics(int $marketId, Collection $spaces): array
+    {
+        $spaceIds = $spaces->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        if ($spaceIds === []) {
+            return [];
+        }
+
+        $currentCounts = $this->relationCountsForSpaces($spaceIds);
+
+        $tenantIds = $spaces->pluck('tenant_id')
+            ->filter(fn ($id): bool => filled($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $candidateSpaces = $tenantIds !== []
+            ? MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->whereIn('tenant_id', $tenantIds)
+                ->when(
+                    Schema::hasColumn('market_spaces', 'is_active'),
+                    fn ($query) => $query->where('is_active', true)
+                )
+                ->orderByRaw('COALESCE(number, display_name, code) asc')
+                ->get(['id', 'tenant_id', 'number', 'display_name', 'code'])
+            : collect();
+
+        $candidateIds = $candidateSpaces->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
+        $candidateCounts = $this->relationCountsForSpaces($candidateIds);
+        $candidatesByTenant = $candidateSpaces->groupBy(fn (MarketSpace $space): int => (int) $space->tenant_id);
+
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant): array {
+            $spaceId = (int) $space->id;
+            $counts = $currentCounts[$spaceId] ?? [];
+            $tenantId = (int) ($space->tenant_id ?? 0);
+
+            $candidates = $tenantId > 0
+                ? $candidatesByTenant->get($tenantId, collect())
+                    ->reject(fn (MarketSpace $candidate): bool => (int) $candidate->id === $spaceId)
+                    ->take(5)
+                    ->map(function (MarketSpace $candidate) use ($candidateCounts): array {
+                        $candidateId = (int) $candidate->id;
+                        $counts = $candidateCounts[$candidateId] ?? [];
+
+                        return [
+                            'space_id' => $candidateId,
+                            'label' => $this->spaceLabel($candidate),
+                            'relation_counts' => $this->compactRelationCounts($counts),
+                        ];
+                    })->values()->all()
+                : [];
+
+            return [
+                $spaceId => [
+                    'relation_counts' => $this->displayRelationCounts($counts),
+                    'candidate_spaces' => $candidates,
+                    'has_candidates' => $candidates !== [],
+                ],
+            ];
+        })->all();
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     * @return array<int, array<string, int>>
+     */
+    private function relationCountsForSpaces(array $spaceIds): array
+    {
+        if ($spaceIds === []) {
+            return [];
+        }
+
+        $definitions = [
+            'map_shapes' => ['market_space_map_shapes', 'market_space_id'],
+            'contracts' => ['tenant_contracts', 'market_space_id'],
+            'accruals' => ['tenant_accruals', 'market_space_id'],
+            'cabinet_users' => ['tenant_user_market_spaces', 'market_space_id'],
+            'requests' => ['tenant_requests', 'market_space_id'],
+            'tickets' => ['tickets', 'market_space_id'],
+            'reviews' => ['tenant_reviews', 'market_space_id'],
+            'showcases' => ['tenant_space_showcases', 'market_space_id'],
+            'products' => ['marketplace_products', 'market_space_id'],
+            'chats' => ['marketplace_chats', 'market_space_id'],
+            'tenant_bindings' => ['market_space_tenant_bindings', 'market_space_id'],
+        ];
+
+        $result = [];
+
+        foreach ($spaceIds as $spaceId) {
+            $result[$spaceId] = array_fill_keys(array_keys($definitions), 0);
+        }
+
+        foreach ($definitions as $key => [$table, $column]) {
+            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            DB::table($table)
+                ->whereIn($column, $spaceIds)
+                ->selectRaw($column . ' as space_id, count(*) as aggregate')
+                ->groupBy($column)
+                ->get()
+                ->each(function ($row) use (&$result, $key): void {
+                    $spaceId = (int) ($row->space_id ?? 0);
+
+                    if ($spaceId > 0 && array_key_exists($spaceId, $result)) {
+                        $result[$spaceId][$key] = (int) ($row->aggregate ?? 0);
+                    }
+                });
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, int>  $counts
+     * @return list<array{key:string,label:string,count:int,important:bool}>
+     */
+    private function displayRelationCounts(array $counts): array
+    {
+        $definitions = [
+            'map_shapes' => ['label' => 'Карта', 'important' => true],
+            'contracts' => ['label' => 'Договоры', 'important' => true],
+            'accruals' => ['label' => 'Начисления', 'important' => true],
+            'cabinet_users' => ['label' => 'Кабинет', 'important' => true],
+            'requests' => ['label' => 'Заявки', 'important' => false],
+            'tickets' => ['label' => 'Тикеты', 'important' => false],
+            'reviews' => ['label' => 'Отзывы', 'important' => false],
+            'showcases' => ['label' => 'Витрина', 'important' => false],
+            'products' => ['label' => 'Товары', 'important' => false],
+            'chats' => ['label' => 'Чаты', 'important' => false],
+            'tenant_bindings' => ['label' => 'Связи', 'important' => false],
+        ];
+
+        $items = [];
+
+        foreach ($definitions as $key => $meta) {
+            $count = (int) ($counts[$key] ?? 0);
+
+            if (! $meta['important'] && $count <= 0) {
+                continue;
+            }
+
+            $items[] = [
+                'key' => $key,
+                'label' => $meta['label'],
+                'count' => $count,
+                'important' => (bool) $meta['important'],
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, int>  $counts
+     * @return list<string>
+     */
+    private function compactRelationCounts(array $counts): array
+    {
+        return collect($this->displayRelationCounts($counts))
+            ->filter(fn (array $item): bool => (bool) $item['important'] || (int) $item['count'] > 0)
+            ->map(fn (array $item): string => $item['label'] . ': ' . (int) $item['count'])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyDiagnostics(): array
+    {
+        return [
+            'relation_counts' => [],
+            'candidate_spaces' => [],
+            'has_candidates' => false,
+        ];
+    }
+
+    private function spaceLabel(MarketSpace $space): string
+    {
+        $number = trim((string) ($space->number ?? ''));
+        $name = trim((string) ($space->display_name ?? ''));
+
+        if ($number !== '' && $name !== '' && $number !== $name) {
+            return $number . ' / ' . $name;
+        }
+
+        return $number !== '' ? $number : ($name !== '' ? $name : ('#' . (int) $space->id));
     }
 
     /**
