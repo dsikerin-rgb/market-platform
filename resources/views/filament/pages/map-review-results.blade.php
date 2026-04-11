@@ -268,6 +268,10 @@
                 margin-top: 1rem;
             }
 
+            .mrr-duplicate-plan-modal .mrr-clarify-modal__dialog {
+                width: min(920px, 100%);
+            }
+
             .mrr-duplicate-plan__card {
                 border-radius: 1rem;
                 border: 1px solid rgba(15, 23, 42, 0.08);
