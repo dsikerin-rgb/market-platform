@@ -245,16 +245,129 @@
                 align-items: center;
                 border-radius: 999px;
                 border: 1px solid rgba(37, 99, 235, 0.18);
+                background: transparent;
                 padding: 0.18rem 0.48rem;
                 font-size: 0.72rem;
                 font-weight: 700;
                 color: #1d4ed8;
+                cursor: pointer;
+                font-family: inherit;
+                line-height: inherit;
                 text-decoration: none;
             }
 
             .dark .mrr-diagnostics__candidate-action {
                 border-color: rgba(96, 165, 250, 0.3);
                 color: #bfdbfe;
+            }
+
+            .mrr-duplicate-plan__grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 0.8rem;
+                margin-top: 1rem;
+            }
+
+            .mrr-duplicate-plan__card {
+                border-radius: 1rem;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                background: rgba(248, 250, 252, 0.85);
+                padding: 0.85rem;
+            }
+
+            .dark .mrr-duplicate-plan__card {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.56);
+            }
+
+            .mrr-duplicate-plan__card-title {
+                font-size: 0.75rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .mrr-duplicate-plan__space {
+                margin-top: 0.25rem;
+                font-size: 0.98rem;
+                font-weight: 800;
+                color: #0f172a;
+            }
+
+            .dark .mrr-duplicate-plan__space {
+                color: #f8fafc;
+            }
+
+            .mrr-duplicate-plan__counts {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+                margin-top: 0.65rem;
+            }
+
+            .mrr-duplicate-plan__links {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.45rem;
+                margin-top: 0.75rem;
+            }
+
+            .mrr-duplicate-plan__link {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                padding: 0.28rem 0.58rem;
+                font-size: 0.78rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                text-decoration: none;
+            }
+
+            .dark .mrr-duplicate-plan__link {
+                border-color: rgba(96, 165, 250, 0.3);
+                color: #bfdbfe;
+            }
+
+            .mrr-duplicate-plan__section {
+                margin-top: 1rem;
+                border-radius: 1rem;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                padding: 0.9rem 1rem;
+            }
+
+            .dark .mrr-duplicate-plan__section {
+                border-color: rgba(148, 163, 184, 0.16);
+            }
+
+            .mrr-duplicate-plan__section h4 {
+                margin: 0 0 0.55rem;
+                font-size: 0.86rem;
+                font-weight: 800;
+                color: #0f172a;
+            }
+
+            .dark .mrr-duplicate-plan__section h4 {
+                color: #f8fafc;
+            }
+
+            .mrr-duplicate-plan__list {
+                margin: 0;
+                padding-left: 1.1rem;
+                color: #475569;
+                font-size: 0.86rem;
+                line-height: 1.5;
+            }
+
+            .dark .mrr-duplicate-plan__list {
+                color: #cbd5e1;
+            }
+
+            @media (max-width: 760px) {
+                .mrr-duplicate-plan__grid {
+                    grid-template-columns: 1fr;
+                }
             }
 
             .mrr-empty {
@@ -1068,6 +1181,11 @@
                                                             $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
                                                             $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
                                                             $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
+                                                            $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
+
+                                                            if (filled($row['number']) && filled($row['display_name']) && $row['number'] !== $row['display_name']) {
+                                                                $currentSpaceLabel = $row['number'] . ' / ' . $row['display_name'];
+                                                            }
                                                         @endphp
                                                         <div class="mrr-diagnostics">
                                                             <div class="mrr-diagnostics__section">
@@ -1096,6 +1214,23 @@
                                                                                 <div class="mrr-diagnostics__candidate-actions">
                                                                                     <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                                                     <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        class="mrr-diagnostics__candidate-action"
+                                                                                        data-mrr-duplicate-plan="open"
+                                                                                        data-current-space-id="{{ $row['space_id'] }}"
+                                                                                        data-current-label="{{ $currentSpaceLabel }}"
+                                                                                        data-current-space-url="{{ $row['space_url'] }}"
+                                                                                        data-current-map-url="{{ $row['map_url'] }}"
+                                                                                        data-current-counts='@json($relationCounts)'
+                                                                                        data-candidate-space-id="{{ $candidate['space_id'] }}"
+                                                                                        data-candidate-label="{{ $candidate['label'] }}"
+                                                                                        data-candidate-space-url="{{ $candidate['space_url'] }}"
+                                                                                        data-candidate-map-url="{{ $candidate['map_url'] }}"
+                                                                                        data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
+                                                                                    >
+                                                                                        План разбора
+                                                                                    </button>
                                                                                 </div>
                                                                             </div>
                                                                         @endforeach
@@ -1314,6 +1449,69 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="mrrDuplicatePlanModal" class="mrr-clarify-modal mrr-duplicate-plan-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-duplicate-plan-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrDuplicatePlanTitle"
+                        aria-describedby="mrrDuplicatePlanDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-duplicate-plan-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Разбор дубля</div>
+                        <h3 id="mrrDuplicatePlanTitle" class="mrr-clarify-modal__title">План безопасного разбора</h3>
+                        <p id="mrrDuplicatePlanDescription" class="mrr-clarify-modal__description">
+                            Это только подсказка для ручной проверки. Она не переносит связи, не меняет договоры и не архивирует места.
+                        </p>
+
+                        <div class="mrr-duplicate-plan__grid">
+                            <div class="mrr-duplicate-plan__card">
+                                <div class="mrr-duplicate-plan__card-title">Текущее место из ревизии</div>
+                                <div id="mrrDuplicatePlanCurrentTitle" class="mrr-duplicate-plan__space">—</div>
+                                <div id="mrrDuplicatePlanCurrentCounts" class="mrr-duplicate-plan__counts"></div>
+                                <div class="mrr-duplicate-plan__links">
+                                    <a id="mrrDuplicatePlanCurrentSpaceLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть место</a>
+                                    <a id="mrrDuplicatePlanCurrentMapLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть карту</a>
+                                </div>
+                            </div>
+
+                            <div class="mrr-duplicate-plan__card">
+                                <div class="mrr-duplicate-plan__card-title">Возможное каноническое место</div>
+                                <div id="mrrDuplicatePlanCandidateTitle" class="mrr-duplicate-plan__space">—</div>
+                                <div id="mrrDuplicatePlanCandidateCounts" class="mrr-duplicate-plan__counts"></div>
+                                <div class="mrr-duplicate-plan__links">
+                                    <a id="mrrDuplicatePlanCandidateSpaceLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть место</a>
+                                    <a id="mrrDuplicatePlanCandidateMapLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть карту</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mrr-duplicate-plan__section">
+                            <h4>Как принимать решение</h4>
+                            <ul class="mrr-duplicate-plan__list">
+                                <li>Каноническим должно стать место, где подтверждены договоры, начисления и данные 1С.</li>
+                                <li>Если карта и кабинет висят на другом месте, их можно рассматривать как кандидатов на перенос после проверки.</li>
+                                <li>Договоры, начисления, долги и историю нельзя переносить автоматически по одному клику без ручного подтверждения.</li>
+                                <li>Фиктивное место безопаснее сначала вывести из рабочего контура или архивировать, а не удалять физически.</li>
+                            </ul>
+                        </div>
+
+                        <div class="mrr-duplicate-plan__section">
+                            <h4>Следующее безопасное действие</h4>
+                            <ul class="mrr-duplicate-plan__list">
+                                <li>Откройте оба места и карту.</li>
+                                <li>Проверьте, где живут договоры, начисления, кабинет арендатора и привязка shape.</li>
+                                <li>Только после этого выбирайте каноническое место и формируйте отдельную операцию переноса связей.</li>
+                            </ul>
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-duplicate-plan-close>Понятно</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         @endif
 
@@ -1444,6 +1642,159 @@
                             error.textContent = String(errorInstance?.message || errorInstance);
                         });
                     });
+                });
+
+                window.addEventListener('keydown', (event) => {
+                    if (!modal.classList.contains('is-open')) {
+                        return;
+                    }
+
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeModal();
+                    }
+                });
+            })();
+
+            (() => {
+                const modal = document.getElementById('mrrDuplicatePlanModal');
+                const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
+                const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
+                const currentCounts = document.getElementById('mrrDuplicatePlanCurrentCounts');
+                const candidateCounts = document.getElementById('mrrDuplicatePlanCandidateCounts');
+                const currentSpaceLink = document.getElementById('mrrDuplicatePlanCurrentSpaceLink');
+                const currentMapLink = document.getElementById('mrrDuplicatePlanCurrentMapLink');
+                const candidateSpaceLink = document.getElementById('mrrDuplicatePlanCandidateSpaceLink');
+                const candidateMapLink = document.getElementById('mrrDuplicatePlanCandidateMapLink');
+
+                if (
+                    !modal
+                    || !currentTitle
+                    || !candidateTitle
+                    || !currentCounts
+                    || !candidateCounts
+                    || !currentSpaceLink
+                    || !currentMapLink
+                    || !candidateSpaceLink
+                    || !candidateMapLink
+                ) {
+                    return;
+                }
+
+                const parseJson = (value, fallback) => {
+                    if (!value) {
+                        return fallback;
+                    }
+
+                    try {
+                        const parsed = JSON.parse(value);
+                        return parsed ?? fallback;
+                    } catch (e) {
+                        return fallback;
+                    }
+                };
+
+                const renderCounts = (target, counts) => {
+                    target.innerHTML = '';
+
+                    const items = Array.isArray(counts)
+                        ? counts
+                        : [];
+
+                    if (items.length === 0) {
+                        const empty = document.createElement('span');
+                        empty.className = 'mrr-diagnostics__hint';
+                        empty.textContent = 'Связей не найдено';
+                        target.appendChild(empty);
+                        return;
+                    }
+
+                    items.forEach((item) => {
+                        const badge = document.createElement('span');
+                        badge.className = 'mrr-diagnostics__count';
+
+                        if (typeof item === 'string') {
+                            badge.textContent = item;
+                        } else {
+                            const label = String(item?.label || '').trim();
+                            const count = Number(item?.count || 0);
+                            badge.textContent = label ? `${label}: ${count}` : String(count);
+
+                            if (item?.important) {
+                                badge.classList.add('mrr-diagnostics__count--important');
+                            }
+                        }
+
+                        target.appendChild(badge);
+                    });
+                };
+
+                const setLink = (link, href) => {
+                    const url = String(href || '').trim();
+
+                    if (!url) {
+                        link.removeAttribute('href');
+                        link.setAttribute('aria-disabled', 'true');
+                        return;
+                    }
+
+                    link.href = url;
+                    link.removeAttribute('aria-disabled');
+                };
+
+                const openModal = (button) => {
+                    const currentLabel = String(button.dataset.currentLabel || '').trim();
+                    const candidateLabel = String(button.dataset.candidateLabel || '').trim();
+                    const currentSpaceId = String(button.dataset.currentSpaceId || '').trim();
+                    const candidateSpaceId = String(button.dataset.candidateSpaceId || '').trim();
+
+                    currentTitle.textContent = currentLabel
+                        ? `#${currentSpaceId} · ${currentLabel}`
+                        : `#${currentSpaceId}`;
+                    candidateTitle.textContent = candidateLabel
+                        ? `#${candidateSpaceId} · ${candidateLabel}`
+                        : `#${candidateSpaceId}`;
+
+                    renderCounts(currentCounts, parseJson(button.dataset.currentCounts, []));
+                    renderCounts(candidateCounts, parseJson(button.dataset.candidateCounts, []));
+                    setLink(currentSpaceLink, button.dataset.currentSpaceUrl);
+                    setLink(currentMapLink, button.dataset.currentMapUrl);
+                    setLink(candidateSpaceLink, button.dataset.candidateSpaceUrl);
+                    setLink(candidateMapLink, button.dataset.candidateMapUrl);
+
+                    modal.hidden = false;
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                };
+
+                const closeModal = () => {
+                    modal.classList.remove('is-open');
+                    modal.hidden = true;
+                    modal.setAttribute('aria-hidden', 'true');
+                };
+
+                document.addEventListener('click', (event) => {
+                    const button = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-duplicate-plan="open"]')
+                        : null;
+
+                    if (!button || !(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openModal(button);
+                });
+
+                modal.addEventListener('click', (event) => {
+                    if (!(event.target instanceof Element)) {
+                        return;
+                    }
+
+                    if (event.target.hasAttribute('data-mrr-duplicate-plan-close')) {
+                        event.preventDefault();
+                        closeModal();
+                    }
                 });
 
                 window.addEventListener('keydown', (event) => {
