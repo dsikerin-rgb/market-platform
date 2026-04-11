@@ -1087,13 +1087,6 @@
 
                 <div class="aw-stat-grid">
                     <div class="aw-stat-card">
-                        <div class="aw-stat-label">Рынок</div>
-                        <div class="aw-stat-value" style="font-size: 1.15rem;">
-                            {{ $marketName }}
-                        </div>
-                    </div>
-
-                    <div class="aw-stat-card">
                         <div class="aw-stat-label">Проверено</div>
                         <div class="aw-stat-value">{{ number_format($progress['reviewed'], 0, ',', ' ') }}</div>
                     </div>
