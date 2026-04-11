@@ -10,12 +10,12 @@
             .mrr-table {
                 width: 100%;
                 border-collapse: collapse;
-                font-size: 0.9375rem;
+                font-size: 0.875rem;
             }
 
             .mrr-table th,
             .mrr-table td {
-                padding: 0.85rem 0.9rem;
+                padding: 0.72rem 0.78rem;
                 border-bottom: 1px solid rgba(15, 23, 42, 0.08);
                 text-align: left;
                 vertical-align: top;
@@ -27,7 +27,7 @@
             }
 
             .mrr-table th {
-                font-size: 0.75rem;
+                font-size: 0.68rem;
                 font-weight: 700;
                 letter-spacing: 0.04em;
                 text-transform: uppercase;
@@ -60,6 +60,30 @@
 
             .dark .mrr-place__meta {
                 color: #94a3b8;
+            }
+
+            .mrr-place__statusline {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.35rem;
+                margin-top: 0.15rem;
+            }
+
+            .mrr-table--needs th:nth-child(1) {
+                width: 17%;
+            }
+
+            .mrr-table--needs th:nth-child(2) {
+                width: 20%;
+            }
+
+            .mrr-table--needs th:nth-child(3) {
+                width: 49%;
+            }
+
+            .mrr-table--needs th:nth-child(4) {
+                width: 14%;
             }
 
             .mrr-badge {
@@ -584,6 +608,21 @@
                 gap: 1rem;
             }
 
+            .mrr-hero-progress {
+                display: grid;
+                grid-column: 1 / -1;
+                grid-template-columns: minmax(12rem, 1fr) auto;
+                gap: 0.85rem;
+                align-items: center;
+                margin-top: 1rem;
+                padding-top: 1rem;
+                border-top: 1px solid rgba(15, 23, 42, 0.08);
+            }
+
+            .dark .mrr-hero-progress {
+                border-top-color: rgba(148, 163, 184, 0.16);
+            }
+
             .mrr-progress-bar {
                 height: 0.75rem;
                 border-radius: 999px;
@@ -604,14 +643,19 @@
                 gap: 0.65rem;
             }
 
+            .mrr-chip-row--compact {
+                justify-content: flex-end;
+                gap: 0.45rem;
+            }
+
             .mrr-chip {
                 display: inline-flex;
                 align-items: center;
                 gap: 0.45rem;
                 border-radius: 999px;
                 border: 1px solid rgba(15, 23, 42, 0.08);
-                padding: 0.45rem 0.7rem;
-                font-size: 0.8125rem;
+                padding: 0.34rem 0.6rem;
+                font-size: 0.75rem;
                 color: #334155;
             }
 
@@ -999,6 +1043,27 @@
             .dark .mrr-ai__priority-reason {
                 color: #94a3b8;
             }
+
+            .mrr-applied-summary {
+                max-width: 34rem;
+                font-size: 0.8125rem;
+                line-height: 1.45;
+                color: #334155;
+            }
+
+            .dark .mrr-applied-summary {
+                color: #cbd5e1;
+            }
+
+            @media (max-width: 900px) {
+                .mrr-hero-progress {
+                    grid-template-columns: 1fr;
+                }
+
+                .mrr-chip-row--compact {
+                    justify-content: flex-start;
+                }
+            }
         </style>
     @endonce
 
@@ -1043,6 +1108,25 @@
                         <div class="aw-stat-value">{{ $progress['percent'] }}%</div>
                     </div>
                 </div>
+
+                @if ($hasSelectedMarket)
+                    <div class="mrr-hero-progress">
+                        <div class="mrr-progress-bar" aria-hidden="true">
+                            <span style="width: {{ $progress['percent'] }}%;"></span>
+                        </div>
+
+                        <div class="mrr-chip-row mrr-chip-row--compact">
+                            @forelse ($progress['counts'] as $status => $count)
+                                <div class="mrr-chip">
+                                    <strong>{{ $progress['labels'][$status] ?? $status }}</strong>
+                                    <span>{{ number_format($count, 0, ',', ' ') }}</span>
+                                </div>
+                            @empty
+                                <div class="mrr-chip">Ревизионных отметок пока нет</div>
+                            @endforelse
+                        </div>
+                    </div>
+                @endif
             </div>
         </section>
 
@@ -1057,58 +1141,6 @@
         @else
             <div class="aw-grid">
                 <div class="aw-column">
-                    <section class="aw-panel">
-                        <div class="aw-panel-head">
-                            <div>
-                                <h2 class="aw-panel-title">Общий прогресс</h2>
-                                <p class="aw-panel-copy">Статус ревизии по активным местам выбранного рынка.</p>
-                            </div>
-                        </div>
-
-                        <div class="aw-panel-body">
-                            <div class="mrr-progress-grid">
-                                <div class="aw-stat-card">
-                                    <div class="aw-stat-label">Всего мест</div>
-                                    <div class="aw-stat-value">{{ number_format($progress['total'], 0, ',', ' ') }}</div>
-                                </div>
-
-                                <div class="aw-stat-card">
-                                    <div class="aw-stat-label">Проверено</div>
-                                    <div class="aw-stat-value">{{ number_format($progress['reviewed'], 0, ',', ' ') }}</div>
-                                </div>
-
-                                <div class="aw-stat-card">
-                                    <div class="aw-stat-label">Осталось</div>
-                                    <div class="aw-stat-value">{{ number_format($progress['remaining'], 0, ',', ' ') }}</div>
-                                </div>
-
-                                <div class="aw-stat-card">
-                                    <div class="aw-stat-label">Процент</div>
-                                    <div class="aw-stat-value">{{ $progress['percent'] }}%</div>
-                                </div>
-                            </div>
-
-                            <div style="margin-top: 1rem;">
-                                <div class="mrr-progress-bar" aria-hidden="true">
-                                    <span style="width: {{ $progress['percent'] }}%;"></span>
-                                </div>
-                            </div>
-
-                            <div class="mrr-chip-row" style="margin-top: 1rem;">
-                                @forelse ($progress['counts'] as $status => $count)
-                                    <div class="mrr-chip">
-                                        <strong>{{ $progress['labels'][$status] ?? $status }}</strong>
-                                        <span>{{ number_format($count, 0, ',', ' ') }}</span>
-                                    </div>
-                                @empty
-                                    <div class="mrr-empty" style="width: 100%;">
-                                        Ревизионных отметок по выбранному рынку пока нет.
-                                    </div>
-                                @endforelse
-                            </div>
-                        </div>
-                    </section>
-
                     <section class="aw-panel">
                         <div class="aw-panel-head">
                             <div>
@@ -1136,13 +1168,11 @@
                                 <div class="mrr-empty">Сейчас нет мест, требующих уточнения.</div>
                             @else
                                 <div class="mrr-table-wrap">
-                                    <table class="mrr-table">
+                                    <table class="mrr-table mrr-table--needs">
                                         <thead>
                                             <tr>
                                                 <th>Место</th>
-                                                <th>Статус</th>
                                                 <th>Последнее решение</th>
-                                                <th>Кем и когда</th>
                                                 <th>Связи и кандидаты</th>
                                                 <th>Переходы</th>
                                             </tr>
@@ -1167,12 +1197,12 @@
                                                                     · {{ $row['location_name'] }}
                                                                 @endif
                                                             </div>
+                                                            <div class="mrr-place__statusline">
+                                                                <span class="mrr-badge mrr-badge--{{ $row['review_status'] }}">
+                                                                    {{ $row['review_status_label'] ?? '—' }}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                    </td>
-                                                    <td>
-                                                        <span class="mrr-badge mrr-badge--{{ $row['review_status'] }}">
-                                                            {{ $row['review_status_label'] ?? '—' }}
-                                                        </span>
                                                     </td>
                                                     <td>
                                                         <div class="mrr-place">
@@ -1180,12 +1210,9 @@
                                                             @if (filled($row['reason']))
                                                                 <div class="mrr-place__meta">{{ $row['reason'] }}</div>
                                                             @endif
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div class="mrr-place">
-                                                            <div class="mrr-place__title">{{ $row['reviewed_by_name'] ?: '—' }}</div>
-                                                            <div class="mrr-place__meta">{{ $row['reviewed_at'] ?: '—' }}</div>
+                                                            <div class="mrr-place__meta">
+                                                                {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td>
@@ -1261,7 +1288,7 @@
                                                     </td>
                                                 </tr>
                                                 <tr class="mrr-ai-row {{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
-                                                    <td colspan="6">
+                                                    <td colspan="4">
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
 
@@ -1378,7 +1405,7 @@
                                                             @endif
                                                         </div>
                                                     </td>
-                                                    <td>{{ $row['summary'] }}</td>
+                                                    <td><div class="mrr-applied-summary">{{ $row['summary'] }}</div></td>
                                                     <td>
                                                         <div class="mrr-place">
                                                             <div class="mrr-place__title">{{ $row['created_by_name'] ?: '—' }}</div>
