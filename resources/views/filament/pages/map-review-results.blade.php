@@ -522,7 +522,41 @@
 
             /* AI-разбор колонка */
             .mrr-ai {
-                max-width: 320px;
+                max-width: none;
+            }
+
+            .mrr-ai-row td {
+                padding-top: 0;
+                background: rgba(248, 250, 252, 0.72);
+            }
+
+            .dark .mrr-ai-row td {
+                background: rgba(15, 23, 42, 0.35);
+            }
+
+            .mrr-ai-panel {
+                border-radius: 1rem;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                background: rgba(255, 255, 255, 0.86);
+                padding: 0.85rem 1rem;
+            }
+
+            .dark .mrr-ai-panel {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.72);
+            }
+
+            .mrr-ai-panel__title {
+                margin-bottom: 0.55rem;
+                font-size: 0.75rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #334155;
+            }
+
+            .dark .mrr-ai-panel__title {
+                color: #e2e8f0;
             }
 
             .mrr-sort-toggle {
@@ -986,7 +1020,6 @@
                                                 <th>Кем и когда</th>
                                                 <th>Связи и кандидаты</th>
                                                 <th>Переходы</th>
-                                                <th>AI-разбор</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1093,7 +1126,9 @@
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                         </div>
                                                     </td>
-                                                    <td>
+                                                </tr>
+                                                <tr class="mrr-ai-row {{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
+                                                    <td colspan="6">
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
 
@@ -1114,41 +1149,44 @@
                                                                 return $text;
                                                             };
                                                         @endphp
-                                                        <div class="mrr-ai">
-                                                            <div class="mrr-ai__priority mrr-ai__priority--{{ $priorityTone }}">
-                                                                <span class="mrr-ai__priority-label">{{ $row['priority_label'] }}</span>
-                                                                <span class="mrr-ai__priority-score">Приоритет {{ $row['priority_score'] }}/100</span>
+                                                        <div class="mrr-ai-panel">
+                                                            <div class="mrr-ai-panel__title">AI-разбор</div>
+                                                            <div class="mrr-ai">
+                                                                <div class="mrr-ai__priority mrr-ai__priority--{{ $priorityTone }}">
+                                                                    <span class="mrr-ai__priority-label">{{ $row['priority_label'] }}</span>
+                                                                    <span class="mrr-ai__priority-score">Приоритет {{ $row['priority_score'] }}/100</span>
+                                                                </div>
+                                                                <div class="mrr-ai__priority-reason">{{ $humanize($row['priority_reason']) }}</div>
+                                                                @if ($ai && filled($ai['summary']))
+                                                                    <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
+                                                                    <div class="mrr-ai__reason">
+                                                                        <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
+                                                                    </div>
+                                                                    <div class="mrr-ai__step">
+                                                                        <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
+                                                                    </div>
+                                                                    <div class="mrr-ai__badges">
+                                                                        <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">
+                                                                            ⚠ {{ $ai['risk_score'] }}/10
+                                                                        </span>
+                                                                        <span class="mrr-ai__badge mrr-ai__badge--conf" title="Уверенность {{ round($ai['confidence'] * 100) }}%">
+                                                                            🎯 {{ round($ai['confidence'] * 100) }}%
+                                                                        </span>
+                                                                    </div>
+                                                                @elseif ($hasAiKey)
+                                                                    <div class="mrr-ai mrr-ai--empty">
+                                                                        <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
+                                                                    </div>
+                                                                @elseif (empty($aiSummaries))
+                                                                    <div class="mrr-ai mrr-ai--empty">
+                                                                        <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
+                                                                    </div>
+                                                                @else
+                                                                    <div class="mrr-ai mrr-ai--skipped">
+                                                                        <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
+                                                                    </div>
+                                                                @endif
                                                             </div>
-                                                            <div class="mrr-ai__priority-reason">{{ $humanize($row['priority_reason']) }}</div>
-                                                            @if ($ai && filled($ai['summary']))
-                                                                <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
-                                                                <div class="mrr-ai__reason">
-                                                                    <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
-                                                                </div>
-                                                                <div class="mrr-ai__step">
-                                                                    <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
-                                                                </div>
-                                                                <div class="mrr-ai__badges">
-                                                                    <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">
-                                                                        ⚠ {{ $ai['risk_score'] }}/10
-                                                                    </span>
-                                                                    <span class="mrr-ai__badge mrr-ai__badge--conf" title="Уверенность {{ round($ai['confidence'] * 100) }}%">
-                                                                        🎯 {{ round($ai['confidence'] * 100) }}%
-                                                                    </span>
-                                                                </div>
-                                                            @elseif ($hasAiKey)
-                                                                <div class="mrr-ai mrr-ai--empty">
-                                                                    <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
-                                                                </div>
-                                                            @elseif (empty($aiSummaries))
-                                                                <div class="mrr-ai mrr-ai--empty">
-                                                                    <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
-                                                                </div>
-                                                            @else
-                                                                <div class="mrr-ai mrr-ai--skipped">
-                                                                    <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
-                                                                </div>
-                                                            @endif
                                                         </div>
                                                     </td>
                                                 </tr>
