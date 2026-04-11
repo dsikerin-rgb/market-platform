@@ -608,19 +608,25 @@
                 gap: 1rem;
             }
 
-            .mrr-hero-progress {
-                display: grid;
-                grid-column: 1 / -1;
-                grid-template-columns: minmax(12rem, 1fr) auto;
-                gap: 0.85rem;
-                align-items: center;
-                margin-top: 1rem;
-                padding-top: 1rem;
-                border-top: 1px solid rgba(15, 23, 42, 0.08);
+            .mrr-hero-grid {
+                align-items: flex-start;
             }
 
-            .dark .mrr-hero-progress {
-                border-top-color: rgba(148, 163, 184, 0.16);
+            .mrr-hero-stats {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                min-width: min(100%, 27rem);
+            }
+
+            .mrr-hero-progress {
+                display: flex;
+                flex-direction: column;
+                gap: 0.85rem;
+                margin-top: 0.9rem;
+                max-width: 40rem;
+            }
+
+            .mrr-hero-progress .mrr-progress-bar {
+                max-width: 34rem;
             }
 
             .mrr-progress-bar {
@@ -1056,8 +1062,9 @@
             }
 
             @media (max-width: 900px) {
-                .mrr-hero-progress {
+                .mrr-hero-stats {
                     grid-template-columns: 1fr;
+                    width: 100%;
                 }
 
                 .mrr-chip-row--compact {
@@ -1069,7 +1076,7 @@
 
     <div class="aw-shell">
         <section class="aw-hero">
-            <div class="aw-hero-grid">
+            <div class="aw-hero-grid mrr-hero-grid">
                 <div class="aw-hero-copy">
                     <div class="aw-hero-title">
                         <div class="aw-hero-icon">
@@ -1083,9 +1090,28 @@
                             </p>
                         </div>
                     </div>
+
+                    @if ($hasSelectedMarket)
+                        <div class="mrr-hero-progress">
+                            <div class="mrr-progress-bar" aria-hidden="true">
+                                <span style="width: {{ $progress['percent'] }}%;"></span>
+                            </div>
+
+                            <div class="mrr-chip-row mrr-chip-row--compact">
+                                @forelse ($progress['counts'] as $status => $count)
+                                    <div class="mrr-chip">
+                                        <strong>{{ $progress['labels'][$status] ?? $status }}</strong>
+                                        <span>{{ number_format($count, 0, ',', ' ') }}</span>
+                                    </div>
+                                @empty
+                                    <div class="mrr-chip">Ревизионных отметок пока нет</div>
+                                @endforelse
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
-                <div class="aw-stat-grid">
+                <div class="aw-stat-grid mrr-hero-stats">
                     <div class="aw-stat-card">
                         <div class="aw-stat-label">Проверено</div>
                         <div class="aw-stat-value">{{ number_format($progress['reviewed'], 0, ',', ' ') }}</div>
@@ -1101,25 +1127,6 @@
                         <div class="aw-stat-value">{{ $progress['percent'] }}%</div>
                     </div>
                 </div>
-
-                @if ($hasSelectedMarket)
-                    <div class="mrr-hero-progress">
-                        <div class="mrr-progress-bar" aria-hidden="true">
-                            <span style="width: {{ $progress['percent'] }}%;"></span>
-                        </div>
-
-                        <div class="mrr-chip-row mrr-chip-row--compact">
-                            @forelse ($progress['counts'] as $status => $count)
-                                <div class="mrr-chip">
-                                    <strong>{{ $progress['labels'][$status] ?? $status }}</strong>
-                                    <span>{{ number_format($count, 0, ',', ' ') }}</span>
-                                </div>
-                            @empty
-                                <div class="mrr-chip">Ревизионных отметок пока нет</div>
-                            @endforelse
-                        </div>
-                    </div>
-                @endif
             </div>
         </section>
 
