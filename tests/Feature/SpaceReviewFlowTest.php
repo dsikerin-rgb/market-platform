@@ -462,6 +462,14 @@ class SpaceReviewFlowTest extends TestCase
             'user_id' => $user->id,
             'market_space_id' => $duplicate->id,
         ]);
+
+        Livewire::test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('Разбор дубля места', false)
+            ->assertSee('Основное: #' . $candidate->id . ' · 5 / Zoo canonical', false)
+            ->assertSee('Дубль выведен из контура: #' . $duplicate->id . ' · P/3 / Zoo', false)
+            ->assertSee('Перенесено: карта 1, кабинет 1, товары 1', false)
+            ->assertSee('Блокирующие связи на дубле: договоры 0, начисления 0', false)
+            ->assertSee('Договоры, начисления и долги не переносились', false);
     }
 
     public function test_review_decision_endpoint_blocks_duplicate_resolution_when_duplicate_has_business_links(): void

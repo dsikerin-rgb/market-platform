@@ -443,9 +443,21 @@ class MapReviewResultsService
             ->values()
             ->all();
 
+        $candidateSpaceIds = $operations
+            ->map(function (Operation $operation): int {
+                $payload = is_array($operation->payload) ? $operation->payload : [];
+
+                return (int) ($payload['candidate_market_space_id']
+                    ?? data_get($payload, 'duplicate_resolution.candidate_market_space_id')
+                    ?? 0);
+            })
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+
         $spaces = MarketSpace::query()
             ->with(['location:id,name'])
-            ->whereIn('id', $spaceIds)
+            ->whereIn('id', array_values(array_unique(array_merge($spaceIds, $candidateSpaceIds))))
             ->get([
                 'id',
                 'location_id',
@@ -481,7 +493,14 @@ class MapReviewResultsService
                 'location_name' => $space?->location?->name,
                 'decision' => $decision,
                 'decision_label' => SpaceReviewDecision::labels()[$decision] ?? $decision,
-                'summary' => $this->appliedDecisionSummary($decision, $payload),
+                'summary' => $this->appliedDecisionSummary(
+                    $decision,
+                    $payload,
+                    $space,
+                    $spaces->get((int) ($payload['candidate_market_space_id']
+                        ?? data_get($payload, 'duplicate_resolution.candidate_market_space_id')
+                        ?? 0))
+                ),
                 'effective_at' => $operation->effective_at?->format('d.m.Y H:i'),
                 'created_by_name' => $operation->created_by ? (string) ($creators[(int) $operation->created_by] ?? '—') : null,
                 'review_status' => $space?->map_review_status,
@@ -521,7 +540,12 @@ class MapReviewResultsService
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function appliedDecisionSummary(string $decision, array $payload): string
+    private function appliedDecisionSummary(
+        string $decision,
+        array $payload,
+        ?MarketSpace $space = null,
+        ?MarketSpace $candidate = null
+    ): string
     {
         return match ($decision) {
             SpaceReviewDecision::BIND_SHAPE_TO_SPACE => 'Фигура привязана к месту'
@@ -531,8 +555,51 @@ class MapReviewResultsService
             SpaceReviewDecision::MARK_SPACE_FREE => 'Место отмечено как свободное',
             SpaceReviewDecision::MARK_SPACE_SERVICE => 'Место отмечено как служебное',
             SpaceReviewDecision::FIX_SPACE_IDENTITY => $this->identityFixSummary($payload),
+            SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => $this->duplicateResolutionSummary(
+                $payload,
+                $space,
+                $candidate
+            ),
             default => '—',
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function duplicateResolutionSummary(array $payload, ?MarketSpace $space, ?MarketSpace $candidate): string
+    {
+        $transferCounts = data_get($payload, 'duplicate_resolution.transfer_counts', []);
+        $blockingCounts = data_get($payload, 'duplicate_resolution.blocking_counts', []);
+        $candidateId = (int) ($payload['candidate_market_space_id']
+            ?? data_get($payload, 'duplicate_resolution.candidate_market_space_id')
+            ?? 0);
+
+        $parts = [];
+
+        if ($candidateId > 0) {
+            $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#' . $candidateId);
+            $parts[] = 'Основное: #' . $candidateId . ' · ' . $candidateLabel;
+        }
+
+        if ($space) {
+            $parts[] = 'Дубль выведен из контура: #' . (int) $space->id . ' · ' . $this->spaceLabel($space);
+        }
+
+        if (is_array($transferCounts)) {
+            $parts[] = 'Перенесено: карта ' . (int) ($transferCounts['map_shapes'] ?? 0)
+                . ', кабинет ' . (int) ($transferCounts['cabinet_links'] ?? 0)
+                . ', товары ' . (int) ($transferCounts['marketplace_products'] ?? 0);
+        }
+
+        if (is_array($blockingCounts)) {
+            $parts[] = 'Блокирующие связи на дубле: договоры ' . (int) ($blockingCounts['contracts'] ?? 0)
+                . ', начисления ' . (int) ($blockingCounts['accruals'] ?? 0);
+        }
+
+        $parts[] = 'Договоры, начисления и долги не переносились';
+
+        return implode(' · ', $parts);
     }
 
     /**
