@@ -178,16 +178,25 @@ class MapReviewResults extends Page
             $spaceId = (int) ($row['space_id'] ?? 0);
             $aiSummary = $aiSummaries[$spaceId] ?? null;
             $priority = $this->buildAiPriorityMeta($row, is_array($aiSummary) ? $aiSummary : null);
+            $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
+            $diagnostics['candidate_spaces'] = array_map(
+                fn (array $candidate): array => $candidate + [
+                    'space_url' => $this->spaceUrl((int) ($candidate['space_id'] ?? 0)),
+                    'map_url' => $this->mapUrl((int) ($candidate['space_id'] ?? 0)),
+                ],
+                is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : []
+            );
 
-            $rows[] = $row + [
+            $rows[] = array_merge($row, [
                 'map_url' => $this->mapUrl($spaceId),
                 'space_url' => $this->spaceUrl($spaceId),
+                'diagnostics' => $diagnostics,
                 'priority_score' => $priority['priority_score'],
                 'priority_label' => $priority['priority_label'],
                 'priority_reason' => $priority['priority_reason'],
                 'priority_is_high' => $priority['priority_score'] >= 85,
                 '_priority_index' => $index,
-            ];
+            ]);
         }
 
         if ($sortMode === 'ai_priority') {

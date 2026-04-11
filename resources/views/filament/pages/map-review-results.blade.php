@@ -122,6 +122,105 @@
                 line-height: inherit;
             }
 
+            .mrr-diagnostics {
+                display: flex;
+                min-width: 16rem;
+                flex-direction: column;
+                gap: 0.55rem;
+            }
+
+            .mrr-diagnostics__counts {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+            }
+
+            .mrr-diagnostics__count {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid rgba(15, 23, 42, 0.09);
+                background: rgba(248, 250, 252, 0.9);
+                padding: 0.2rem 0.5rem;
+                font-size: 0.74rem;
+                font-weight: 700;
+                color: #475569;
+                white-space: nowrap;
+            }
+
+            .mrr-diagnostics__count--important {
+                border-color: rgba(37, 99, 235, 0.18);
+                background: rgba(239, 246, 255, 0.95);
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-diagnostics__count {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.72);
+                color: #cbd5e1;
+            }
+
+            .dark .mrr-diagnostics__count--important {
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(30, 64, 175, 0.24);
+                color: #bfdbfe;
+            }
+
+            .mrr-diagnostics__hint {
+                font-size: 0.78rem;
+                line-height: 1.35;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__hint {
+                color: #94a3b8;
+            }
+
+            .mrr-diagnostics__candidates {
+                display: flex;
+                flex-direction: column;
+                gap: 0.35rem;
+                border-left: 2px solid rgba(37, 99, 235, 0.22);
+                padding-left: 0.65rem;
+            }
+
+            .mrr-diagnostics__candidate-title {
+                font-size: 0.74rem;
+                font-weight: 800;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                color: #334155;
+            }
+
+            .dark .mrr-diagnostics__candidate-title {
+                color: #e2e8f0;
+            }
+
+            .mrr-diagnostics__candidate {
+                display: grid;
+                gap: 0.14rem;
+            }
+
+            .mrr-diagnostics__candidate a {
+                font-size: 0.82rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                text-decoration: none;
+            }
+
+            .dark .mrr-diagnostics__candidate a {
+                color: #93c5fd;
+            }
+
+            .mrr-diagnostics__candidate-meta {
+                font-size: 0.75rem;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__candidate-meta {
+                color: #94a3b8;
+            }
+
             .mrr-empty {
                 border-radius: 1rem;
                 border: 1px dashed rgba(15, 23, 42, 0.14);
@@ -849,6 +948,7 @@
                                                 <th>Статус</th>
                                                 <th>Последнее решение</th>
                                                 <th>Кем и когда</th>
+                                                <th>Связи и кандидаты</th>
                                                 <th>Переходы</th>
                                                 <th>AI-разбор</th>
                                             </tr>
@@ -892,6 +992,40 @@
                                                         <div class="mrr-place">
                                                             <div class="mrr-place__title">{{ $row['reviewed_by_name'] ?: '—' }}</div>
                                                             <div class="mrr-place__meta">{{ $row['reviewed_at'] ?: '—' }}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        @php
+                                                            $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
+                                                            $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
+                                                            $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
+                                                        @endphp
+                                                        <div class="mrr-diagnostics">
+                                                            <div class="mrr-diagnostics__counts">
+                                                                @foreach ($relationCounts as $item)
+                                                                    <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
+                                                                        {{ $item['label'] }}: {{ $item['count'] }}
+                                                                    </span>
+                                                                @endforeach
+                                                            </div>
+
+                                                            @if ($candidateSpaces !== [])
+                                                                <div class="mrr-diagnostics__candidates">
+                                                                    <div class="mrr-diagnostics__candidate-title">Кандидаты того же арендатора</div>
+                                                                    @foreach ($candidateSpaces as $candidate)
+                                                                        <div class="mrr-diagnostics__candidate">
+                                                                            <a href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
+                                                                                #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
+                                                                            </a>
+                                                                            <div class="mrr-diagnostics__candidate-meta">
+                                                                                {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                            </div>
+                                                                        </div>
+                                                                    @endforeach
+                                                                </div>
+                                                            @else
+                                                                <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
+                                                            @endif
                                                         </div>
                                                     </td>
                                                     <td>
