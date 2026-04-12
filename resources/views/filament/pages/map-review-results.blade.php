@@ -119,6 +119,44 @@
                 color: #0369a1;
             }
 
+            .mrr-assessment {
+                display: inline-flex;
+                width: fit-content;
+                align-items: center;
+                border-radius: 999px;
+                padding: 0.28rem 0.65rem;
+                font-size: 0.75rem;
+                font-weight: 800;
+                line-height: 1.25;
+            }
+
+            .mrr-assessment--danger {
+                background: rgba(239, 68, 68, 0.12);
+                color: #b91c1c;
+            }
+
+            .mrr-assessment--warning {
+                background: rgba(245, 158, 11, 0.12);
+                color: #92400e;
+            }
+
+            .mrr-assessment--neutral {
+                background: rgba(100, 116, 139, 0.12);
+                color: #475569;
+            }
+
+            .dark .mrr-assessment--danger {
+                color: #fecaca;
+            }
+
+            .dark .mrr-assessment--warning {
+                color: #fde68a;
+            }
+
+            .dark .mrr-assessment--neutral {
+                color: #cbd5e1;
+            }
+
             .mrr-links {
                 display: flex;
                 flex-wrap: wrap;
@@ -224,19 +262,10 @@
             }
 
             .mrr-diagnostics__assessment {
-                border-radius: 0.9rem;
-                border: 1px solid rgba(245, 158, 11, 0.2);
-                background: rgba(255, 251, 235, 0.74);
-                padding: 0.52rem 0.65rem;
+                max-width: 48rem;
                 font-size: 0.76rem;
                 line-height: 1.35;
-                color: #92400e;
-            }
-
-            .dark .mrr-diagnostics__assessment {
-                border-color: rgba(251, 191, 36, 0.24);
-                background: rgba(120, 53, 15, 0.18);
-                color: #fde68a;
+                color: #64748b;
             }
 
             .mrr-diagnostics__candidates {
@@ -1189,18 +1218,6 @@
                                     >
                                         Связь не подтверждена
                                     </a>
-                                    <a
-                                        class="mrr-sort-toggle__link {{ $needsAttentionSortMode === 'default' ? 'is-active' : '' }}"
-                                        href="{{ $needsAttentionSortDefaultUrl }}"
-                                    >
-                                        Обычный порядок
-                                    </a>
-                                    <a
-                                        class="mrr-sort-toggle__link {{ $needsAttentionSortMode === 'ai_priority' ? 'is-active' : '' }}"
-                                        href="{{ $needsAttentionSortAiUrl }}"
-                                    >
-                                        AI-приоритет
-                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -1215,7 +1232,7 @@
                                             <tr>
                                                 <th>Место</th>
                                                 <th>Последнее решение</th>
-                                                <th>Связи и кандидаты</th>
+                                                <th>Анализ связей</th>
                                                 <th>Переходы</th>
                                             </tr>
                                         </thead>
@@ -1282,6 +1299,9 @@
                                                             </div>
 
                                                             @if ($relationAssessment !== '')
+                                                                <span class="mrr-assessment mrr-assessment--{{ $row['assessment_tone'] ?? 'neutral' }}">
+                                                                    {{ $row['assessment_label'] ?? 'Требует проверки' }}
+                                                                </span>
                                                                 <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
                                                             @endif
 
