@@ -72,7 +72,7 @@ class StaffForm
                         ->required()
                         ->maxLength(255)
                         ->placeholder('Иванов Иван Иванович')
-                        ->columnSpan(['default' => 12, 'lg' => 8]),
+                        ->columnSpan(['default' => 12, 'md' => 6]),
 
                     Forms\Components\TextInput::make('email')
                         ->label('Email')
@@ -81,7 +81,7 @@ class StaffForm
                         ->maxLength(255)
                         ->unique(ignoreRecord: true)
                         ->placeholder('user@example.com')
-                        ->columnSpan(['default' => 12, 'lg' => 4]),
+                        ->columnSpan(['default' => 12, 'md' => 6]),
                 ]),
 
             Section::make('Доступ')
