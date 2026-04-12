@@ -40,31 +40,19 @@ class StaffInvitationForm
                 ->dehydrated(true);
         }
 
-        // --- Roles multi-select ---
-        $rolesSelect = Forms\Components\Select::make('roles')
-            ->label('Роли')
-            ->multiple()
-            ->preload()
-            ->searchable()
-            ->placeholder('Выберите роли для приглашения')
-            ->relationship(
-                name: 'roles',
-                titleAttribute: 'name',
-                modifyQueryUsing: function ($query) use ($user) {
-                    $query->where('name', '!=', 'merchant');
-
-                    if (! $user || ! $user->isSuperAdmin()) {
-                        $query->where('name', '!=', 'super-admin');
-                    }
-
-                    return $query;
-                },
+        // --- Roles multi-select (stored as JSON array, not relationship) ---
+        $roleOptions = Role::query()
+            ->where('name', '!=', 'merchant')
+            ->when(
+                ! ((bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
+                fn ($q) => $q->where('name', '!=', 'super-admin')
             )
-            ->getOptionLabelFromRecordUsing(function ($record) {
+            ->get()
+            ->mapWithKeys(function ($record) {
                 $name = (string) ($record->name ?? '');
 
                 if ($name === '') {
-                    return '—';
+                    return ['' => '—'];
                 }
 
                 $slug = Str::of($name)
@@ -79,11 +67,20 @@ class StaffInvitationForm
                 $translated = __($key);
 
                 if ($translated !== $key) {
-                    return $translated;
+                    return [$name => $translated];
                 }
 
-                return RoleScenarioCatalog::labelForSlug($slug, $name);
-            });
+                return [$name => RoleScenarioCatalog::labelForSlug($slug, $name)];
+            })
+            ->all();
+
+        $rolesSelect = Forms\Components\Select::make('roles')
+            ->label('Роли')
+            ->multiple()
+            ->options($roleOptions)
+            ->searchable()
+            ->placeholder('Выберите роли для приглашения')
+            ->dehydrated(true);
 
         // --- Invited by (auto) ---
         $invitedBy = Forms\Components\Hidden::make('invited_by')
@@ -150,29 +147,18 @@ class StaffInvitationForm
                 ->dehydrated(true);
         }
 
-        $rolesSelect = Forms\Components\Select::make('roles')
-            ->label('Роли')
-            ->multiple()
-            ->preload()
-            ->searchable()
-            ->relationship(
-                name: 'roles',
-                titleAttribute: 'name',
-                modifyQueryUsing: function ($query) use ($user) {
-                    $query->where('name', '!=', 'merchant');
-
-                    if (! $user || ! $user->isSuperAdmin()) {
-                        $query->where('name', '!=', 'super-admin');
-                    }
-
-                    return $query;
-                },
+        $roleOptions = Role::query()
+            ->where('name', '!=', 'merchant')
+            ->when(
+                ! ((bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
+                fn ($q) => $q->where('name', '!=', 'super-admin')
             )
-            ->getOptionLabelFromRecordUsing(function ($record) {
+            ->get()
+            ->mapWithKeys(function ($record) {
                 $name = (string) ($record->name ?? '');
 
                 if ($name === '') {
-                    return '—';
+                    return ['' => '—'];
                 }
 
                 $slug = Str::of($name)
@@ -187,11 +173,19 @@ class StaffInvitationForm
                 $translated = __($key);
 
                 if ($translated !== $key) {
-                    return $translated;
+                    return [$name => $translated];
                 }
 
-                return RoleScenarioCatalog::labelForSlug($slug, $name);
-            });
+                return [$name => RoleScenarioCatalog::labelForSlug($slug, $name)];
+            })
+            ->all();
+
+        $rolesSelect = Forms\Components\Select::make('roles')
+            ->label('Роли')
+            ->multiple()
+            ->options($roleOptions)
+            ->searchable()
+            ->dehydrated(true);
 
         return $schema->components([
             Section::make('Приглашение')
