@@ -114,6 +114,11 @@
                 color: #b91c1c;
             }
 
+            .mrr-badge--unconfirmed_link {
+                background: rgba(14, 165, 233, 0.16);
+                color: #0369a1;
+            }
+
             .mrr-links {
                 display: flex;
                 flex-wrap: wrap;
@@ -1166,8 +1171,24 @@
                         <div class="aw-panel-head">
                             <div>
                                 <h2 class="aw-panel-title">Нужно уточнить</h2>
-                                <p class="aw-panel-copy">Места со спорным или незавершённым ревизионным результатом.</p>
+                                <p class="aw-panel-copy">
+                                    {{ $attentionTab === 'unconfirmed_links'
+                                        ? 'Места на карте, где статус взят по арендатору, но точная связь с местом не подтверждена.'
+                                        : 'Места со спорным или незавершённым ревизионным результатом.' }}
+                                </p>
                                 <div class="mrr-sort-toggle">
+                                    <a
+                                        class="mrr-sort-toggle__link {{ $attentionTab === 'review' ? 'is-active' : '' }}"
+                                        href="{{ $attentionReviewUrl }}"
+                                    >
+                                        Ревизионные решения
+                                    </a>
+                                    <a
+                                        class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links' ? 'is-active' : '' }}"
+                                        href="{{ $attentionUnconfirmedUrl }}"
+                                    >
+                                        Связь не подтверждена
+                                    </a>
                                     <a
                                         class="mrr-sort-toggle__link {{ $needsAttentionSortMode === 'default' ? 'is-active' : '' }}"
                                         href="{{ $needsAttentionSortDefaultUrl }}"

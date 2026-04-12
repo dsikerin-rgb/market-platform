@@ -8,8 +8,10 @@ use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\Operation;
 use App\Models\User;
+use App\Services\Debt\DebtStatusResolver;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -27,6 +29,7 @@ class MapReviewResultsService
             'changed_tenant' => 'Сменился арендатор',
             'conflict' => 'Конфликт',
             'not_found' => 'Не найдено на карте',
+            'unconfirmed_link' => 'Связь с местом не подтверждена',
         ];
     }
 
@@ -184,6 +187,104 @@ class MapReviewResultsService
                 'decision' => $decision,
                 'decision_label' => $decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null,
                 'reason' => filled($payload['reason'] ?? null) ? trim((string) $payload['reason']) : null,
+                'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
+            ];
+        })->all();
+    }
+
+    /**
+     * @return list<array{
+     *   space_id:int,
+     *   number:?string,
+     *   display_name:?string,
+     *   location_name:?string,
+     *   review_status:string,
+     *   review_status_label:string,
+     *   reviewed_at:null,
+     *   reviewed_by_name:string,
+     *   decision:null,
+     *   decision_label:string,
+     *   reason:string,
+     *   diagnostics:array<string,mixed>
+     * }>
+     */
+    public function unconfirmedLinks(int $marketId, int $limit = 50): array
+    {
+        if ($marketId <= 0 || ! $this->hasMapReviewColumns()) {
+            return [];
+        }
+
+        $spaceIds = MarketSpaceMapShape::query()
+            ->where('market_id', $marketId)
+            ->where('is_active', true)
+            ->whereNotNull('market_space_id')
+            ->distinct()
+            ->pluck('market_space_id')
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values();
+
+        if ($spaceIds->isEmpty()) {
+            return [];
+        }
+
+        $spaces = MarketSpace::query()
+            ->with(['location:id,name'])
+            ->where('market_id', $marketId)
+            ->whereIn('id', $spaceIds)
+            ->whereNotNull('tenant_id')
+            ->whereNull('map_review_status')
+            ->when(
+                Schema::hasColumn('market_spaces', 'is_active'),
+                fn ($query) => $query->where('is_active', true)
+            )
+            ->orderByRaw('COALESCE(number, display_name, code) asc')
+            ->limit($limit * 3)
+            ->get([
+                'id',
+                'location_id',
+                'tenant_id',
+                'number',
+                'display_name',
+                'code',
+                'map_review_status',
+                'map_reviewed_at',
+                'map_reviewed_by',
+            ]);
+
+        if ($spaces->isEmpty()) {
+            return [];
+        }
+
+        $debtResolver = app(DebtStatusResolver::class);
+        $spaces = $spaces
+            ->filter(function (MarketSpace $space) use ($debtResolver, $marketId): bool {
+                $resolved = $debtResolver->resolveForMarketSpace((int) $space->id, $marketId);
+
+                return (string) data_get($resolved, 'extra.scope', 'none') === 'tenant_fallback';
+            })
+            ->take($limit)
+            ->values();
+
+        if ($spaces->isEmpty()) {
+            return [];
+        }
+
+        $diagnostics = $this->buildSpaceDiagnostics($marketId, $spaces);
+
+        return $spaces->map(function (MarketSpace $space) use ($diagnostics): array {
+            return [
+                'space_id' => (int) $space->id,
+                'number' => $space->number,
+                'display_name' => $space->display_name,
+                'location_name' => $space->location?->name,
+                'review_status' => 'unconfirmed_link',
+                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link') ?? 'Связь с местом не подтверждена',
+                'reviewed_at' => null,
+                'reviewed_by_name' => 'Система',
+                'decision' => null,
+                'decision_label' => 'Системно найдено',
+                'reason' => 'На карте используется статус арендатора, но точная связь с этим местом не подтверждена.',
                 'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
             ];
         })->all();

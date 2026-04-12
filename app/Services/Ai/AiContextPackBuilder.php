@@ -62,20 +62,26 @@ class AiContextPackBuilder
             return $this->errorPack($marketSpaceId, 'market_space_not_found');
         }
 
-        if (! in_array($space->map_review_status, ['changed_tenant', 'conflict', 'not_found'], true)) {
+        $debtContext = $this->buildDebtContext($space, $marketId);
+        $isUnconfirmedLink = (string) ($debtContext['debt_scope'] ?? 'none') === 'tenant_fallback';
+        $reviewStatus = $isUnconfirmedLink && ! in_array($space->map_review_status, ['changed_tenant', 'conflict', 'not_found'], true)
+            ? 'unconfirmed_link'
+            : (string) $space->map_review_status;
+
+        if (! in_array($reviewStatus, ['changed_tenant', 'conflict', 'not_found', 'unconfirmed_link'], true)) {
             return $this->errorPack($marketSpaceId, 'not_in_needs_clarification', $space->map_review_status);
         }
 
         return [
             'market_space_id'   => $space->id,
-            'map_review_status' => $space->map_review_status,
+            'map_review_status' => $reviewStatus,
             'space_snapshot'    => $this->buildSpaceSnapshot($space),
             'tenant_context'    => $this->buildTenantContext($space),
             'accrual_context'   => $this->buildAccrualContext($space),
-            'debt_context'      => $this->buildDebtContext($space, $marketId),
+            'debt_context'      => $debtContext,
             'relation_context'  => $this->buildRelationContext($space, $marketId),
             'review_history'    => $this->buildReviewHistory($space->id, $marketId),
-            'decision_options'  => $this->buildDecisionOptions($space->map_review_status),
+            'decision_options'  => $this->buildDecisionOptions($reviewStatus),
             'meta'              => $this->buildMeta($space, $marketId),
         ];
     }
@@ -600,6 +606,11 @@ class AiContextPackBuilder
             'not_found' => [
                 SpaceReviewDecision::SHAPE_NOT_FOUND,
                 SpaceReviewDecision::FIX_SPACE_IDENTITY,
+            ],
+            'unconfirmed_link' => [
+                SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+                SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION,
+                SpaceReviewDecision::OCCUPANCY_CONFLICT,
             ],
             default => $allDecisions,
         };

@@ -224,6 +224,7 @@ class AiReviewService
             'changed_tenant' => 'на месте другой арендатор',
             'conflict'       => 'конфликт по занятости',
             'not_found'      => 'место не найдено на карте',
+            'unconfirmed_link' => 'точная связь с местом не подтверждена',
         ];
         $label = $statusLabels[$status] ?? $status;
 
