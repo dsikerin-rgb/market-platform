@@ -369,7 +369,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Начисления: 1', false)
             ->assertSee('Открыть место', false)
             ->assertSee('Открыть карту', false)
-            ->assertSee('План разбора', false)
+            ->assertSee('Проверить как основное', false)
             ->assertSee('data-mrr-duplicate-plan-create', false)
             ->assertSee('mrrDuplicatePlanModal', false)
             ->assertSee('План безопасного разбора', false)
@@ -480,8 +480,9 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Связь с местом не подтверждена', false)
             ->assertDontSee('Обычный порядок', false)
             ->assertDontSee('AI-приоритет', false)
-            ->assertSee('Системно найдено', false)
-            ->assertSee('На карте используется статус арендатора, но точная связь с этим местом не подтверждена.', false)
+            ->assertDontSee('Последнее решение', false)
+            ->assertDontSee('Переходы', false)
+            ->assertDontSee('Системно найдено', false)
             ->assertSee('П/3', false)
             ->assertSee('Зоомир', false);
 
