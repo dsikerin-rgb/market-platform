@@ -2332,7 +2332,36 @@ html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header + *{
 
 /* Сжимаем отступ после фильтров (schema) */
 html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc{
-  margin-bottom: 0.75rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* === КРИТИЧНО: сжимаем отступ между фильтрами/табами и таблицей === */
+/* Таблица Filament: большой отступ сверху у .fi-ta-header / .fi-ta-content */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta{
+  margin-top: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta .fi-ta-header{
+  margin-top: 0 !important;
+  padding-top: 0.5rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta .fi-ta-content{
+  margin-top: 0 !important;
+}
+
+/* Tabs strip below filters: tighten spacing */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-tabs{
+  margin-bottom: 0.5rem !important;
+}
+
+/* Если табы идут отдельно от .fi-sc — сжимаем их */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs{
+  margin-bottom: 0.5rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs + .fi-ta{
+  margin-top: 0 !important;
 }
 
 /* Убираем лишний padding у контента */
