@@ -2307,6 +2307,39 @@ html:not([data-admin-overrides="0"]){
     --sidebar-width: 14.4rem;
   }
 }
+
+/* ====================================================================== */
+/* === List pages: halve the gap between hero, filters and table        === */
+/* ====================================================================== */
+/* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem. */
+html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-header{
+  margin-bottom: 1rem !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-header + .fi-sc,
+html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc{
+  margin-bottom: 1rem !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-page-content{
+  padding-top: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-list-page > .fi-page-header-main-ctn > .fi-header + *{
+  margin-top: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc + .fi-ta,
+html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc + * .fi-ta{
+  margin-top: 0 !important;
+}
+
+/* Tighten page-level stack gap on all list pages */
+html:not([data-admin-overrides="0"]) .fi-resource-list-page{
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem !important;
+}
 </style>
 
 {{-- Tabs stay in the relation-manager container and are positioned via CSS only. --}}
