@@ -209,6 +209,43 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('conflict', $space->map_review_status);
     }
 
+    public function test_review_decision_endpoint_does_not_duplicate_identity_clarification(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'C-305',
+            'display_name' => 'Original name',
+            'status' => 'occupied',
+        ]);
+
+        $payload = [
+            'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+            'market_space_id' => $space->id,
+        ];
+
+        $firstResponse = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', $payload);
+        $secondResponse = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', $payload);
+
+        $firstResponse->assertOk()
+            ->assertJsonPath('mode', 'operation');
+        $secondResponse->assertOk()
+            ->assertJsonPath('mode', 'already_marked')
+            ->assertJsonPath('message', 'Это место уже отмечено как требующее уточнения.');
+
+        $this->assertSame(1, Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->where('payload->decision', SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION)
+            ->count());
+    }
+
     public function test_review_decision_endpoint_applies_identity_fix_and_updates_live_fields(): void
     {
         $market = $this->createMarket();

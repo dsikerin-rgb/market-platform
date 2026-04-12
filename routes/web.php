@@ -1923,6 +1923,37 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
+        if ($decision === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION) {
+            $existingClarification = Operation::query()
+                ->where('market_id', (int) $market->id)
+                ->where('entity_type', 'market_space')
+                ->where('entity_id', (int) $space->id)
+                ->where('type', OperationType::SPACE_REVIEW)
+                ->where('payload->decision', SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION)
+                ->latest('id')
+                ->first();
+
+            if ($existingClarification) {
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'already_marked',
+                    'operation' => [
+                        'id' => (int) $existingClarification->id,
+                        'status' => (string) $existingClarification->status,
+                        'decision' => $decision,
+                    ],
+                    'message' => 'Это место уже отмечено как требующее уточнения.',
+                    'item' => [
+                        'market_space_id' => (int) $space->id,
+                        'review_status' => (string) ($space->map_review_status ?? ''),
+                        'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                        'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                    ],
+                    'progress' => $buildMapReviewProgress($market),
+                ]);
+            }
+        }
+
         if ($decision === SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION) {
             $candidateSpaceId = (int) ($validated['candidate_market_space_id'] ?? 0);
 
