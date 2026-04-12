@@ -79,11 +79,15 @@
             }
 
             .mrr-table--needs th:nth-child(3) {
-                width: 49%;
+                width: 63%;
             }
 
-            .mrr-table--needs th:nth-child(4) {
-                width: 14%;
+            .mrr-table--unconfirmed th:nth-child(1) {
+                width: 24%;
+            }
+
+            .mrr-table--unconfirmed th:nth-child(2) {
+                width: 76%;
             }
 
             .mrr-badge {
@@ -1073,13 +1077,14 @@
                                 <div class="mrr-empty">Сейчас нет мест, требующих уточнения.</div>
                             @else
                                 <div class="mrr-table-wrap">
-                                    <table class="mrr-table mrr-table--needs">
+                                    <table class="mrr-table mrr-table--needs {{ $attentionTab === 'unconfirmed_links' ? 'mrr-table--unconfirmed' : '' }}">
                                         <thead>
                                             <tr>
                                                 <th>Место</th>
-                                                <th>Последнее решение</th>
+                                                @if ($attentionTab !== 'unconfirmed_links')
+                                                    <th>Последнее решение</th>
+                                                @endif
                                                 <th>Анализ связей</th>
-                                                <th>Переходы</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1104,19 +1109,25 @@
                                                                     {{ $row['review_status_label'] ?? '—' }}
                                                                 </span>
                                                             </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        <div class="mrr-place">
-                                                            <div class="mrr-place__title">{{ $row['decision_label'] ?? '—' }}</div>
-                                                            @if (filled($row['reason']))
-                                                                <div class="mrr-place__meta">{{ $row['reason'] }}</div>
-                                                            @endif
-                                                            <div class="mrr-place__meta">
-                                                                {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
+                                                            <div class="mrr-links">
+                                                                <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
                                                             </div>
                                                         </div>
                                                     </td>
+                                                    @if ($attentionTab !== 'unconfirmed_links')
+                                                        <td>
+                                                            <div class="mrr-place">
+                                                                <div class="mrr-place__title">{{ $row['decision_label'] ?? '—' }}</div>
+                                                                @if (filled($row['reason']))
+                                                                    <div class="mrr-place__meta">{{ $row['reason'] }}</div>
+                                                                @endif
+                                                                <div class="mrr-place__meta">
+                                                                    {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    @endif
                                                     <td>
                                                         @php
                                                             $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
@@ -1178,7 +1189,7 @@
                                                                                         data-candidate-map-url="{{ $candidate['map_url'] }}"
                                                                                         data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
                                                                                     >
-                                                                                        План разбора
+                                                                                        {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
                                                                                     </button>
                                                                                 </div>
                                                                             </div>
@@ -1190,15 +1201,9 @@
                                                             @endif
                                                         </div>
                                                     </td>
-                                                    <td>
-                                                        <div class="mrr-links">
-                                                            <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                            <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                        </div>
-                                                    </td>
                                                 </tr>
                                                 <tr class="mrr-ai-row {{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
-                                                    <td colspan="4">
+                                                    <td colspan="{{ $attentionTab === 'unconfirmed_links' ? 2 : 3 }}">
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
 
