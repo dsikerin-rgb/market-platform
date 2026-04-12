@@ -2313,16 +2313,30 @@ html:not([data-admin-overrides="0"]){
 /* ====================================================================== */
 /* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem.
    Все List-страницы имеют класс вида fi-resource-*-list-page,
-   поэтому таргетим через атрибут class$="-list-page". */
+   поэтому таргетим через атрибут class$="-list-page".
+   Ключевой момент: отступы заданы через row-gap на flex/grid контейнерах,
+   а не через margin у дочерних элементов. */
 
 /* Сжимаем вертикальный стек на всех list-страницах */
 html:not([data-admin-overrides="0"]) [class*="-list-page"]{
   gap: 0.75rem !important;
 }
 
+/* КРИТИЧНО: row-gap на контейнере hero — уменьшаем */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-header-main-ctn{
+  row-gap: 0.5rem !important;
+  padding-block: 0.75rem !important;
+}
+
+/* КРИТИЧНО: row-gap на контенте — уменьшаем */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-content{
+  row-gap: 0.5rem !important;
+  padding-top: 0 !important;
+}
+
 /* Уменьшаем отступ после hero-заголовка */
 html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header{
-  margin-bottom: 0.75rem !important;
+  margin-bottom: 0 !important;
 }
 
 /* Убираем лишний top-отступ у элемента, следующего за header */
@@ -2332,7 +2346,34 @@ html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header + *{
 
 /* Сжимаем отступ после фильтров (schema) */
 html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc{
-  margin-bottom: 0.75rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Таблица Filament: убираем все верхние отступы */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta{
+  margin-top: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta .fi-ta-header{
+  margin-top: 0 !important;
+  padding-top: 0.5rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta .fi-ta-content{
+  margin-top: 0 !important;
+}
+
+/* Tabs strip: tighten spacing */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-tabs{
+  margin-bottom: 0.25rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs{
+  margin-bottom: 0.25rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs + .fi-ta{
+  margin-top: 0 !important;
 }
 
 /* Убираем лишний padding у контента */
