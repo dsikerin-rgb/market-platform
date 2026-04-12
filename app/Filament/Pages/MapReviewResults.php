@@ -58,8 +58,7 @@ class MapReviewResults extends Page
         $appliedChanges = $marketId ? $service->appliedChanges($marketId, 50) : [];
 
         $aiSummaries = $marketId ? $this->buildAiSummaries($marketId, $needsAttention) : [];
-        $needsAttentionSortMode = $this->needsAttentionSortMode();
-        $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiSummaries, $needsAttentionSortMode);
+        $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiSummaries, $attentionTab);
 
         return [
             'market' => $market,
@@ -77,9 +76,6 @@ class MapReviewResults extends Page
             'attentionTab' => $attentionTab,
             'attentionReviewUrl' => request()->fullUrlWithQuery(['tab' => 'review']),
             'attentionUnconfirmedUrl' => request()->fullUrlWithQuery(['tab' => 'unconfirmed_links']),
-            'needsAttentionSortMode' => $needsAttentionSortMode,
-            'needsAttentionSortDefaultUrl' => request()->fullUrlWithoutQuery(['sort']),
-            'needsAttentionSortAiUrl' => request()->fullUrlWithQuery(['sort' => 'ai_priority']),
             'appliedChanges' => array_map(
                 fn (array $row): array => $row + [
                     'map_url' => $this->mapUrl((int) $row['space_id']),
@@ -166,13 +162,6 @@ class MapReviewResults extends Page
         }
     }
 
-    protected function needsAttentionSortMode(): string
-    {
-        $mode = (string) request()->query('sort', 'default');
-
-        return in_array($mode, ['default', 'ai_priority'], true) ? $mode : 'default';
-    }
-
     protected function attentionTab(): string
     {
         $tab = (string) request()->query('tab', 'review');
@@ -185,7 +174,7 @@ class MapReviewResults extends Page
      * @param  array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>  $aiSummaries
      * @return array<int, array<string, mixed>>
      */
-    protected function buildNeedsAttentionRows(array $needsAttention, array $aiSummaries, string $sortMode): array
+    protected function buildNeedsAttentionRows(array $needsAttention, array $aiSummaries, string $attentionTab): array
     {
         $rows = [];
 
@@ -201,11 +190,15 @@ class MapReviewResults extends Page
                 ],
                 is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : []
             );
+            $assessment = $this->buildAssessmentMeta($diagnostics);
 
             $rows[] = array_merge($row, [
                 'map_url' => $this->mapUrl($spaceId),
                 'space_url' => $this->spaceUrl($spaceId),
                 'diagnostics' => $diagnostics,
+                'assessment_label' => $assessment['label'],
+                'assessment_tone' => $assessment['tone'],
+                'assessment_rank' => $assessment['rank'],
                 'priority_score' => $priority['priority_score'],
                 'priority_label' => $priority['priority_label'],
                 'priority_reason' => $priority['priority_reason'],
@@ -214,19 +207,49 @@ class MapReviewResults extends Page
             ]);
         }
 
-        if ($sortMode === 'ai_priority') {
+        if ($attentionTab === 'unconfirmed_links') {
             usort($rows, static function (array $left, array $right): int {
-                return ($right['priority_score'] <=> $left['priority_score'])
-                    ?: ($right['priority_is_high'] <=> $left['priority_is_high'])
+                return ($left['assessment_rank'] <=> $right['assessment_rank'])
+                    ?: ($right['priority_score'] <=> $left['priority_score'])
                     ?: ($left['_priority_index'] <=> $right['_priority_index']);
             });
         }
 
         return array_map(static function (array $row): array {
             unset($row['_priority_index']);
+            unset($row['assessment_rank']);
 
             return $row;
         }, $rows);
+    }
+
+    /**
+     * @param  array<string, mixed>  $diagnostics
+     * @return array{label:string,tone:string,rank:int}
+     */
+    private function buildAssessmentMeta(array $diagnostics): array
+    {
+        if ((bool) ($diagnostics['has_stronger_candidate'] ?? false)) {
+            return [
+                'label' => 'Есть более сильный кандидат',
+                'tone' => 'danger',
+                'rank' => 10,
+            ];
+        }
+
+        if ((bool) ($diagnostics['has_candidates'] ?? false)) {
+            return [
+                'label' => 'Текущее место не слабее',
+                'tone' => 'warning',
+                'rank' => 20,
+            ];
+        }
+
+        return [
+            'label' => 'Кандидатов не найдено',
+            'tone' => 'neutral',
+            'rank' => 30,
+        ];
     }
 
     /**
