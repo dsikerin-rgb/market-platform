@@ -10,4 +10,12 @@ class CreateStaffInvitation extends BaseCreateRecord
     protected static string $resource = StaffInvitationResource::class;
 
     protected static ?string $title = 'Создать приглашение';
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-invitations-create-page',
+        ];
+    }
 }
