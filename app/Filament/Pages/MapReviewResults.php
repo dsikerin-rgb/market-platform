@@ -49,7 +49,12 @@ class MapReviewResults extends Page
         /** @var MapReviewResultsService $service */
         $service = app(MapReviewResultsService::class);
 
-        $needsAttention = $marketId ? $service->needsAttention($marketId, 50) : [];
+        $attentionTab = $this->attentionTab();
+        $needsAttention = $marketId
+            ? ($attentionTab === 'unconfirmed_links'
+                ? $service->unconfirmedLinks($marketId, 50)
+                : $service->needsAttention($marketId, 50))
+            : [];
         $appliedChanges = $marketId ? $service->appliedChanges($marketId, 50) : [];
 
         $aiSummaries = $marketId ? $this->buildAiSummaries($marketId, $needsAttention) : [];
@@ -69,6 +74,9 @@ class MapReviewResults extends Page
                 'labels' => [],
             ],
             'needsAttention' => $needsAttentionRows,
+            'attentionTab' => $attentionTab,
+            'attentionReviewUrl' => request()->fullUrlWithQuery(['tab' => 'review']),
+            'attentionUnconfirmedUrl' => request()->fullUrlWithQuery(['tab' => 'unconfirmed_links']),
             'needsAttentionSortMode' => $needsAttentionSortMode,
             'needsAttentionSortDefaultUrl' => request()->fullUrlWithoutQuery(['sort']),
             'needsAttentionSortAiUrl' => request()->fullUrlWithQuery(['sort' => 'ai_priority']),
@@ -165,6 +173,13 @@ class MapReviewResults extends Page
         return in_array($mode, ['default', 'ai_priority'], true) ? $mode : 'default';
     }
 
+    protected function attentionTab(): string
+    {
+        $tab = (string) request()->query('tab', 'review');
+
+        return in_array($tab, ['review', 'unconfirmed_links'], true) ? $tab : 'review';
+    }
+
     /**
      * @param  list<array<string, mixed>>  $needsAttention
      * @param  array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>  $aiSummaries
@@ -228,6 +243,7 @@ class MapReviewResults extends Page
             'conflict' => 88,
             'changed_tenant' => 78,
             'not_found' => 72,
+            'unconfirmed_link' => 76,
         ];
 
         $priorityScore = $baseScores[$reviewStatus] ?? 60;

@@ -449,6 +449,44 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Начисления: 1', false);
     }
 
+    public function test_map_review_results_has_separate_tab_for_unconfirmed_space_links(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Зоомир ООО',
+            'debt_status' => 'orange',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'П/3',
+            'display_name' => 'Зоомир',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+        $this->createShape($market, (int) $space->id);
+
+        Livewire::withQueryParams(['tab' => 'unconfirmed_links'])
+            ->test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('Связь не подтверждена', false)
+            ->assertSee('Связь с местом не подтверждена', false)
+            ->assertSee('Системно найдено', false)
+            ->assertSee('На карте используется статус арендатора, но точная связь с этим местом не подтверждена.', false)
+            ->assertSee('П/3', false)
+            ->assertSee('Зоомир', false);
+
+        Livewire::withQueryParams(['tab' => 'review'])
+            ->test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('Сейчас нет мест, требующих уточнения.', false)
+            ->assertDontSee('Системно найдено', false);
+    }
+
     public function test_review_decision_endpoint_resolves_duplicate_by_transferring_safe_links(): void
     {
         $market = $this->createMarket();
