@@ -218,6 +218,22 @@
                 color: #94a3b8;
             }
 
+            .mrr-diagnostics__assessment {
+                border-radius: 0.9rem;
+                border: 1px solid rgba(245, 158, 11, 0.2);
+                background: rgba(255, 251, 235, 0.74);
+                padding: 0.52rem 0.65rem;
+                font-size: 0.76rem;
+                line-height: 1.35;
+                color: #92400e;
+            }
+
+            .dark .mrr-diagnostics__assessment {
+                border-color: rgba(251, 191, 36, 0.24);
+                background: rgba(120, 53, 15, 0.18);
+                color: #fde68a;
+            }
+
             .mrr-diagnostics__candidates {
                 display: flex;
                 flex-direction: column;
@@ -1225,6 +1241,7 @@
                                                             $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
                                                             $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
                                                             $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
+                                                            $relationAssessment = trim((string) ($diagnostics['relation_assessment'] ?? ''));
                                                             $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
 
                                                             if (filled($row['number']) && filled($row['display_name']) && $row['number'] !== $row['display_name']) {
@@ -1242,6 +1259,10 @@
                                                                     @endforeach
                                                                 </div>
                                                             </div>
+
+                                                            @if ($relationAssessment !== '')
+                                                                <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
+                                                            @endif
 
                                                             @if ($candidateSpaces !== [])
                                                                 <div class="mrr-diagnostics__section">
