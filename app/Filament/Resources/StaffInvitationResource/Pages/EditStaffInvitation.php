@@ -24,4 +24,12 @@ class EditStaffInvitation extends BaseEditRecord
                 ->label('Удалить'),
         ];
     }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-invitations-edit-page',
+        ];
+    }
 }
