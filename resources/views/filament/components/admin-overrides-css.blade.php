@@ -2455,6 +2455,57 @@ html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs + .fi-ta{
 html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-content{
   padding-top: 0 !important;
 }
+
+/* ====================================================================== */
+/* === Invitations: голубой стиль как у tenant/staff edit                === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-header,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-header{
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem 1.15rem;
+  border: 1px solid rgba(197, 212, 232, 0.96);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
+    linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-section,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-section{
+  border-color: #d8e3f1;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-section-header,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-section-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border-bottom: 1px solid #d8e3f1;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-section-content,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-section-content{
+  background: #f8fafc;
+  padding: 1.1rem 1.15rem 1.2rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-input-wrp,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-input-wrp{
+  border-color: #cfd9e8;
+  background: #ffffff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-input-wrp:focus-within,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-input-wrp:focus-within{
+  border-color: #5f8fdc;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+}
 </style>
 
 {{-- Tabs stay in the relation-manager container and are positioned via CSS only. --}}
