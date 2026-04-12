@@ -7,7 +7,6 @@ use App\Support\RoleScenarioCatalog;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
@@ -40,7 +39,7 @@ class StaffInvitationForm
                 ->dehydrated(true);
         }
 
-        // --- Roles multi-select (stored as JSON array, not relationship) ---
+        // --- Roles options (JSON array, not relationship) ---
         $roleOptions = Role::query()
             ->where('name', '!=', 'merchant')
             ->when(
@@ -74,14 +73,6 @@ class StaffInvitationForm
             })
             ->all();
 
-        $rolesSelect = Forms\Components\Select::make('roles')
-            ->label('Роли')
-            ->multiple()
-            ->options($roleOptions)
-            ->searchable()
-            ->placeholder('Выберите роли для приглашения')
-            ->dehydrated(true);
-
         // --- Invited by (auto) ---
         $invitedBy = Forms\Components\Hidden::make('invited_by')
             ->default(fn () => $user?->id)
@@ -90,6 +81,7 @@ class StaffInvitationForm
         return $schema->components([
             Section::make('Приглашение')
                 ->description('Отправьте приглашение по email для нового сотрудника')
+                ->columns(2)
                 ->schema([
                     $marketField,
 
@@ -99,26 +91,28 @@ class StaffInvitationForm
                         ->required()
                         ->maxLength(255)
                         ->unique(ignoreRecord: true)
-                        ->placeholder('new-user@example.com'),
+                        ->placeholder('new-user@example.com')
+                        ->columnSpan(1),
 
-                    Grid::make(2)->schema([
-                        $rolesSelect,
-                    ]),
+                    Forms\Components\Select::make('roles')
+                        ->label('Роли')
+                        ->multiple()
+                        ->options($roleOptions)
+                        ->searchable()
+                        ->placeholder('Выберите роли')
+                        ->dehydrated(true)
+                        ->columnSpan(1),
 
                     $invitedBy,
-                ])
-                ->columnSpan(['default' => 12, 'xl' => 8]),
 
-            Section::make('Срок действия')
-                ->description('Приглашение истечёт после указанной даты')
-                ->schema([
                     Forms\Components\DateTimePicker::make('expires_at')
                         ->label('Действует до')
                         ->default(fn () => now()->addDays(7))
                         ->helperText('По умолчанию — 7 дней')
-                        ->seconds(false),
+                        ->seconds(false)
+                        ->columnSpan(1),
                 ])
-                ->columnSpan(['default' => 12, 'xl' => 4]),
+                ->columnSpan(2),
         ]);
     }
 
@@ -180,16 +174,10 @@ class StaffInvitationForm
             })
             ->all();
 
-        $rolesSelect = Forms\Components\Select::make('roles')
-            ->label('Роли')
-            ->multiple()
-            ->options($roleOptions)
-            ->searchable()
-            ->dehydrated(true);
-
         return $schema->components([
             Section::make('Приглашение')
                 ->description('Информация о приглашении')
+                ->columns(2)
                 ->schema([
                     $marketField,
 
@@ -197,9 +185,16 @@ class StaffInvitationForm
                         ->label('Email')
                         ->email()
                         ->required()
-                        ->maxLength(255),
+                        ->maxLength(255)
+                        ->columnSpan(1),
 
-                    $rolesSelect,
+                    Forms\Components\Select::make('roles')
+                        ->label('Роли')
+                        ->multiple()
+                        ->options($roleOptions)
+                        ->searchable()
+                        ->dehydrated(true)
+                        ->columnSpan(1),
 
                     Forms\Components\Select::make('invited_by')
                         ->label('Кем приглашён')
@@ -223,28 +218,27 @@ class StaffInvitationForm
                             return $query->whereRaw('1 = 0');
                         })
                         ->searchable()
-                        ->preload(),
-                ])
-                ->columnSpan(['default' => 12, 'xl' => 7]),
+                        ->preload()
+                        ->columnSpan(1),
 
-            Section::make('Статус')
-                ->description('Токен и сроки приглашения')
-                ->schema([
                     Forms\Components\TextInput::make('token_hash')
                         ->label('Хэш токена')
                         ->disabled()
-                        ->dehydrated(false),
+                        ->dehydrated(false)
+                        ->columnSpan(1),
 
                     Forms\Components\DateTimePicker::make('expires_at')
                         ->label('Действует до')
-                        ->seconds(false),
+                        ->seconds(false)
+                        ->columnSpan(1),
 
                     Forms\Components\DateTimePicker::make('accepted_at')
                         ->label('Принят')
                         ->disabled()
-                        ->dehydrated(false),
+                        ->dehydrated(false)
+                        ->columnSpan(1),
                 ])
-                ->columnSpan(['default' => 12, 'xl' => 5]),
+                ->columnSpan(2),
         ]);
     }
 
