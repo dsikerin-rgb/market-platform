@@ -928,43 +928,6 @@
                 color: #e2e8f0;
             }
 
-            .mrr-ai__badges {
-                display: flex;
-                gap: 0.35rem;
-                flex-wrap: wrap;
-            }
-
-            .mrr-ai__badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 0.2rem;
-                border-radius: 999px;
-                padding: 0.2rem 0.5rem;
-                font-size: 0.6875rem;
-                font-weight: 600;
-                line-height: 1;
-            }
-
-            .mrr-ai__badge--risk {
-                background: rgba(234, 88, 12, 0.1);
-                color: #ea580c;
-            }
-
-            .dark .mrr-ai__badge--risk {
-                background: rgba(234, 88, 12, 0.15);
-                color: #fb923c;
-            }
-
-            .mrr-ai__badge--conf {
-                background: rgba(37, 99, 235, 0.1);
-                color: #2563eb;
-            }
-
-            .dark .mrr-ai__badge--conf {
-                background: rgba(37, 99, 235, 0.15);
-                color: #93c5fd;
-            }
-
             .mrr-ai--empty {
                 font-size: 0.75rem;
                 color: #94a3b8;
@@ -982,123 +945,6 @@
 
             .dark .mrr-ai__placeholder {
                 color: #64748b;
-            }
-
-            .mrr-ai__priority {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                gap: 0.35rem 0.5rem;
-                margin-bottom: 0.45rem;
-                padding: 0.45rem 0.55rem;
-                border-radius: 0.9rem;
-                background: rgba(248, 250, 252, 0.92);
-                border: 1px solid rgba(15, 23, 42, 0.08);
-            }
-
-            .dark .mrr-ai__priority {
-                background: rgba(15, 23, 42, 0.38);
-                border-color: rgba(148, 163, 184, 0.16);
-            }
-
-            .mrr-ai__priority--high {
-                background: rgba(239, 68, 68, 0.08);
-                border-color: rgba(239, 68, 68, 0.18);
-            }
-
-            .dark .mrr-ai__priority--high {
-                background: rgba(239, 68, 68, 0.12);
-                border-color: rgba(248, 113, 113, 0.2);
-            }
-
-            .mrr-ai__priority--medium {
-                background: rgba(245, 158, 11, 0.08);
-                border-color: rgba(245, 158, 11, 0.18);
-            }
-
-            .dark .mrr-ai__priority--medium {
-                background: rgba(245, 158, 11, 0.12);
-                border-color: rgba(251, 191, 36, 0.2);
-            }
-
-            .mrr-ai__priority--normal {
-                background: rgba(148, 163, 184, 0.08);
-                border-color: rgba(148, 163, 184, 0.14);
-            }
-
-            .dark .mrr-ai__priority--normal {
-                background: rgba(148, 163, 184, 0.1);
-                border-color: rgba(148, 163, 184, 0.18);
-            }
-
-            .mrr-ai__priority-label {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 999px;
-                padding: 0.24rem 0.55rem;
-                font-size: 0.75rem;
-                font-weight: 800;
-                line-height: 1.2;
-                letter-spacing: 0.01em;
-                background: #fff;
-                color: #0f172a;
-                border: 1px solid rgba(15, 23, 42, 0.08);
-            }
-
-            .dark .mrr-ai__priority-label {
-                background: rgba(15, 23, 42, 0.48);
-                color: #f8fafc;
-                border-color: rgba(148, 163, 184, 0.18);
-            }
-
-            .mrr-ai__priority--high .mrr-ai__priority-label {
-                color: #b91c1c;
-                border-color: rgba(239, 68, 68, 0.2);
-            }
-
-            .dark .mrr-ai__priority--high .mrr-ai__priority-label {
-                color: #fecaca;
-                border-color: rgba(248, 113, 113, 0.24);
-            }
-
-            .mrr-ai__priority--medium .mrr-ai__priority-label {
-                color: #b45309;
-                border-color: rgba(245, 158, 11, 0.22);
-            }
-
-            .dark .mrr-ai__priority--medium .mrr-ai__priority-label {
-                color: #fde68a;
-                border-color: rgba(251, 191, 36, 0.24);
-            }
-
-            .mrr-ai__priority--normal .mrr-ai__priority-label {
-                color: #334155;
-            }
-
-            .dark .mrr-ai__priority--normal .mrr-ai__priority-label {
-                color: #e2e8f0;
-            }
-
-            .mrr-ai__priority-score {
-                font-size: 0.75rem;
-                font-weight: 700;
-                color: #64748b;
-            }
-
-            .dark .mrr-ai__priority-score {
-                color: #94a3b8;
-            }
-
-            .mrr-ai__priority-reason {
-                margin-bottom: 0.4rem;
-                font-size: 0.75rem;
-                line-height: 1.45;
-                color: #64748b;
-            }
-
-            .dark .mrr-ai__priority-reason {
-                color: #94a3b8;
             }
 
             .mrr-applied-summary {
@@ -1240,9 +1086,6 @@
                                             @foreach ($needsAttention as $row)
                                                 @php
                                                     $ai = $aiSummaries[$row['space_id']] ?? null;
-                                                    $priorityTone = $row['priority_score'] >= 85
-                                                        ? 'high'
-                                                        : ($row['priority_score'] >= 65 ? 'medium' : 'normal');
                                                 @endphp
                                                 <tr class="{{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
                                                     <td>
@@ -1379,26 +1222,15 @@
                                                         <div class="mrr-ai-panel">
                                                             <div class="mrr-ai-panel__title">AI-разбор</div>
                                                             <div class="mrr-ai">
-                                                                <div class="mrr-ai__priority mrr-ai__priority--{{ $priorityTone }}">
-                                                                    <span class="mrr-ai__priority-label">{{ $row['priority_label'] }}</span>
-                                                                    <span class="mrr-ai__priority-score">Приоритет {{ $row['priority_score'] }}/100</span>
-                                                                </div>
-                                                                <div class="mrr-ai__priority-reason">{{ $humanize($row['priority_reason']) }}</div>
                                                                 @if ($ai && filled($ai['summary']))
-                                                                    <div class="mrr-ai__summary">{{ $humanize($ai['summary']) }}</div>
+                                                                    <div class="mrr-ai__summary">
+                                                                        <strong>Ситуация:</strong> {{ $humanize($ai['summary']) }}
+                                                                    </div>
                                                                     <div class="mrr-ai__reason">
                                                                         <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
                                                                     </div>
                                                                     <div class="mrr-ai__step">
                                                                         <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
-                                                                    </div>
-                                                                    <div class="mrr-ai__badges">
-                                                                        <span class="mrr-ai__badge mrr-ai__badge--risk" title="Риск {{ $ai['risk_score'] }}/10">
-                                                                            ⚠ {{ $ai['risk_score'] }}/10
-                                                                        </span>
-                                                                        <span class="mrr-ai__badge mrr-ai__badge--conf" title="Уверенность {{ round($ai['confidence'] * 100) }}%">
-                                                                            🎯 {{ round($ai['confidence'] * 100) }}%
-                                                                        </span>
                                                                     </div>
                                                                 @elseif ($hasAiKey)
                                                                     <div class="mrr-ai mrr-ai--empty">
