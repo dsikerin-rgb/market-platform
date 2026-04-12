@@ -71,19 +71,18 @@ class StaffForm
                         ->label('Имя / ФИО')
                         ->required()
                         ->maxLength(255)
-                        ->placeholder('Иванов Иван Иванович'),
+                        ->placeholder('Иванов Иван Иванович')
+                        ->columnSpan(['default' => 12, 'md' => 6]),
 
-                    Grid::make(2)->schema([
-                        Forms\Components\TextInput::make('email')
-                            ->label('Email')
-                            ->email()
-                            ->required()
-                            ->maxLength(255)
-                            ->unique(ignoreRecord: true)
-                            ->placeholder('user@example.com'),
-                    ])->columnSpan(1),
-                ])
-                ->columnSpan(['default' => 12, 'xl' => 7]),
+                    Forms\Components\TextInput::make('email')
+                        ->label('Email')
+                        ->email()
+                        ->required()
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true)
+                        ->placeholder('user@example.com')
+                        ->columnSpan(['default' => 12, 'md' => 6]),
+                ]),
 
             Section::make('Доступ')
                 ->description('Роли определяют права сотрудника в системе')
@@ -131,8 +130,7 @@ class StaffForm
 
                             return RoleScenarioCatalog::labelForSlug($slug, $name);
                         }),
-                ])
-                ->columnSpan(['default' => 12, 'xl' => 5]),
+                ]),
 
             Section::make('Telegram')
                 ->description('Одноразовый chat_id заполняется только при создании сотрудника.')
@@ -146,15 +144,14 @@ class StaffForm
                         ->validationMessages([
                             'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
                         ])
-                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null),
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'lg' => 6]),
                 ])
-                ->columnSpan(['default' => 12, 'xl' => 6])
                 ->visible(fn (string $operation): bool => $operation === 'create'),
 
             Section::make('Пароль')
                 ->description('Минимум 8 символов')
                 ->schema($passwordPair)
-                ->columnSpan(['default' => 12, 'xl' => 6])
                 ->visible(fn (string $operation): bool => $operation === 'create'),
 
             Section::make('Уведомления')
