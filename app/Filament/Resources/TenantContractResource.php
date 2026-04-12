@@ -420,10 +420,11 @@ class TenantContractResource extends BaseResource
                     ->color(fn (TenantContract $record): string => static::documentTypeColor((string) static::classificationForRecord($record)['category'])),
 
                 TextColumn::make('document_date')
-                    ->label('Дата из номера')
-                    ->state(fn (TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
-                    ->tooltip('Дата, извлеченная из номера договора.')
-                    ->headerTooltip('Дата, извлеченная из номера договора.')
+                    ->label('Дата договора')
+                    ->state(fn (TenantContract $record): string => static::effectiveOrderDateLabel($record))
+                    ->tooltip('Дата из номера договора. Если её нет, используется дата подписания из 1С.')
+                    ->headerTooltip('Дата из номера договора. Если её нет, используется дата подписания из 1С.')
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => static::applyContractDateSort($query, $direction))
                     ->toggleable(),
 
                 TextColumn::make('market_space_link')
@@ -473,6 +474,7 @@ class TenantContractResource extends BaseResource
                     ->state(fn (TenantContract $record): string => static::effectiveOrderDateLabel($record))
                     ->tooltip('Дата, по которой строится цепочка по месту.')
                     ->headerTooltip('Дата, по которой строится цепочка по месту.')
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => static::applyContractDateSort($query, $direction))
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn () => $isSuperAdmin),
 
@@ -718,7 +720,7 @@ class TenantContractResource extends BaseResource
                     ->color('primary')
                     ->url(fn (TenantContract $record): string => static::getUrl('edit', ['record' => $record])),
             ])
-            ->defaultSort('id', 'desc')
+            ->defaultSort(fn (Builder $query): Builder => static::applyContractDateSort($query, 'desc'))
             ->recordUrl(fn (TenantContract $record): ?string => static::canEdit($record)
                 ? static::getUrl('edit', ['record' => $record])
                 : null);
@@ -809,6 +811,36 @@ class TenantContractResource extends BaseResource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    private static function applyContractDateSort(Builder $query, string $direction): Builder
+    {
+        $direction = strtolower($direction) === 'asc' ? 'asc' : 'desc';
+
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return $query
+                ->orderBy('tenant_contracts.signed_at', $direction)
+                ->orderBy('tenant_contracts.id', $direction);
+        }
+
+        $documentDateExpression = static::postgresDocumentDateExpression();
+
+        return $query
+            ->orderByRaw(
+                'COALESCE(' . $documentDateExpression . ', tenant_contracts.signed_at) ' . $direction . ' NULLS LAST'
+            )
+            ->orderBy('tenant_contracts.id', $direction);
+    }
+
+    private static function postgresDocumentDateExpression(): string
+    {
+        $dateMatch = "substring(upper(tenant_contracts.number) from '\\mОТ\\s+([0-9]{2}\\.[0-9]{2}\\.[0-9]{2,4})\\M')";
+
+        return "CASE
+            WHEN {$dateMatch} IS NULL THEN NULL
+            WHEN {$dateMatch} ~ '^[0-9]{2}\\.[0-9]{2}\\.[0-9]{2}$' THEN to_date({$dateMatch}, 'DD.MM.YY')
+            ELSE to_date({$dateMatch}, 'DD.MM.YYYY')
+        END";
     }
 
     /**
