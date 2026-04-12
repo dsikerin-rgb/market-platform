@@ -79,15 +79,23 @@
             }
 
             .mrr-table--needs th:nth-child(3) {
-                width: 63%;
+                width: 31%;
+            }
+
+            .mrr-table--needs th:nth-child(4) {
+                width: 32%;
             }
 
             .mrr-table--unconfirmed th:nth-child(1) {
-                width: 24%;
+                width: 22%;
             }
 
             .mrr-table--unconfirmed th:nth-child(2) {
-                width: 76%;
+                width: 40%;
+            }
+
+            .mrr-table--unconfirmed th:nth-child(3) {
+                width: 38%;
             }
 
             .mrr-badge {
@@ -755,15 +763,6 @@
                 max-width: none;
             }
 
-            .mrr-ai-row td {
-                padding-top: 0;
-                background: rgba(248, 250, 252, 0.72);
-            }
-
-            .dark .mrr-ai-row td {
-                background: rgba(15, 23, 42, 0.35);
-            }
-
             .mrr-ai-panel {
                 border-radius: 1rem;
                 border: 1px solid rgba(15, 23, 42, 0.08);
@@ -1085,6 +1084,7 @@
                                                     <th>Последнее решение</th>
                                                 @endif
                                                 <th>Анализ связей</th>
+                                                <th>AI-разбор</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1201,9 +1201,7 @@
                                                             @endif
                                                         </div>
                                                     </td>
-                                                </tr>
-                                                <tr class="mrr-ai-row {{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
-                                                    <td colspan="{{ $attentionTab === 'unconfirmed_links' ? 2 : 3 }}">
+                                                    <td>
                                                         @php
                                                             $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
 
