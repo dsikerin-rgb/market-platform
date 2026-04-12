@@ -2309,6 +2309,75 @@ html:not([data-admin-overrides="0"]){
 }
 
 /* ====================================================================== */
+/* === Staff create page: match edit page styling                       === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page{
+    --staff-create-border: #d8e3f1;
+    --staff-create-surface: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-header{
+    padding: 1.05rem 1.2rem 0.95rem;
+    background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
+        linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
+    border: 1px solid #c5d4e8;
+    border-radius: 1.25rem;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-header .fi-header-heading{
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    font-size: clamp(1.08rem, 0.92rem + 0.8vw, 1.6rem);
+    line-height: 1.02;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-header .fi-header-subheading{
+    color: #334155;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    max-width: 42rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-section{
+    border-color: var(--staff-create-border);
+    border-radius: 1rem;
+    background: var(--staff-create-surface);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-section-content{
+    padding: 1rem 1.1rem 1.15rem;
+    overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-input-wrp{
+    border-color: #cfd9e8;
+    background: #ffffff;
+    transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-input-wrp:focus-within{
+    border-color: #5f8fdc;
+    box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-checkbox-list-option-label,
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-toggle label{
+    font-size: 0.92rem;
+}
+
+/* Compact fields: narrow inputs where full width is unnecessary */
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="email"]),
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="password"]),
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="telegram_chat_id"]),
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="market_id"]){
+    max-width: 28rem;
+}
+
+/* ====================================================================== */
 /* === List pages: halve the gap between hero, filters and table        === */
 /* ====================================================================== */
 /* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem.
@@ -2330,7 +2399,13 @@ html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-header-main-
 
 /* КРИТИЧНО: row-gap на контенте — уменьшаем */
 html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-content{
-  row-gap: 0.5rem !important;
+  row-gap: 0.25rem !important;
+  padding-top: 0 !important;
+}
+
+/* Сжимаем gap на контейнере таблицы */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta-ctn{
+  margin-top: 0 !important;
   padding-top: 0 !important;
 }
 
