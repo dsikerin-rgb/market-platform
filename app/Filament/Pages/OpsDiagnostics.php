@@ -453,6 +453,10 @@ class OpsDiagnostics extends Page
         $diskFree = @disk_free_space($diskPath);
         $diskTotal = @disk_total_space($diskPath);
 
+        $files = $this->getPgBackupFiles();
+        $totalSize = array_sum(array_column($files, 'size'));
+        $lastBackup = $files[0] ?? null;
+
         return [
             'dbHost' => $dbHost,
             'dbPort' => $dbPort,
@@ -460,6 +464,11 @@ class OpsDiagnostics extends Page
             'dbDriver' => (string) config('database.connections.pgsql.driver', 'pgsql'),
             'backupDir' => $backupDir,
             'backupDirExists' => is_dir($backupDir),
+            'totalBackups' => count($files),
+            'totalSize' => $totalSize,
+            'totalSizeHuman' => $this->formatBytes($totalSize),
+            'lastBackupTimeHuman' => $lastBackup ? Carbon::createFromTimestamp($lastBackup['mtime'])->diffForHumans() : 'Нет',
+            'lastBackupSizeHuman' => $lastBackup ? $lastBackup['sizeHuman'] : '',
             'diskFree' => is_int($diskFree) ? $diskFree : null,
             'diskFreeHuman' => is_int($diskFree) ? $this->formatBytes($diskFree) : null,
             'diskTotal' => is_int($diskTotal) ? $diskTotal : null,
@@ -504,6 +513,42 @@ class OpsDiagnostics extends Page
         usort($files, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
 
         return $files;
+    }
+
+    public function downloadPgBackup(string $file): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $this->ensureSuperAdmin();
+
+        $path = storage_path('app/backups/' . $file);
+        abort_if(! File::exists($path), 404, 'Файл бэкапа не найден.');
+
+        return response()->download($path, $file);
+    }
+
+    public function deletePgBackup(string $fileName): void
+    {
+        $this->ensureSuperAdmin();
+
+        $path = storage_path('app/backups/' . $fileName);
+
+        if (! File::exists($path)) {
+            Notification::make()
+                ->title('Файл не найден')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        File::delete($path);
+
+        Notification::make()
+            ->title('Бэкап удалён')
+            ->body($fileName)
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
     }
 
     /**

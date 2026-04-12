@@ -494,6 +494,18 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     })->name('filament.admin.switch-market');
 
     /**
+     * Скачивание бэкапов PostgreSQL (ops-diagnostics).
+     */
+    Route::get('/ops-diagnostics/download/{file}', function (string $file) {
+        abort_if(! auth()->user()?->isSuperAdmin(), 403, 'Доступ запрещён.');
+
+        $path = storage_path('app/backups/' . $file);
+        abort_if(! \Illuminate\Support\Facades\File::exists($path), 404, 'Файл не найден.');
+
+        return response()->download($path, $file);
+    })->name('filament.admin.ops-diagnostics.download');
+
+    /**
      * Единая логика выбора рынка + проверка доступа (просмотр карты).
      */
     $resolveMarketForMap = function (): Market {
