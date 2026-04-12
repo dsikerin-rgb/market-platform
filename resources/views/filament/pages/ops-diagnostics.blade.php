@@ -153,6 +153,18 @@
 
         $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
         $telescopeEnabledUntilHumanLocal = $telescopeEnabledUntilHuman ?? null;
+
+        $pgBackupDefaultsLocal = $pgBackupDefaults ?? [
+            'compressAfterDays' => 2,
+            'deleteArchiveAfterDays' => 60,
+        ];
+        $pgBackupStatusLocal = $pgBackupStatus ?? [];
+        $pgBackupFilesLocal = $pgBackupFiles ?? [];
+        $pgBackupPreviewLocal = $pgBackupPreview ?? [
+            'compress' => [],
+            'deleteDuplicates' => [],
+            'deleteArchives' => [],
+        ];
     @endphp
 
     @if ($canViewIntegrationJournal && ! $canUseOpsTools)
@@ -378,6 +390,144 @@
                     >
                         Очистить Telescope (48ч)
                     </x-filament::button>
+                </div>
+            </x-filament::section>
+
+            {{-- Бэкапы PostgreSQL --}}
+            <x-filament::section
+                heading="Бэкапы PostgreSQL"
+                description="Дампы базы данных через pg_dump и ротация без обращения к БД."
+            >
+                <div style="display:grid; gap: 1.5rem;">
+                    <div class="ops-kv-wrap">
+                        <div class="ops-kv">
+                            <div class="ops-kv-row ops-kv-head">
+                                <div>Параметр</div>
+                                <div>Значение</div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Хост / Порт</div>
+                                <div class="ops-kv-val">
+                                    <div class="ops-inline-code">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">База данных</div>
+                                <div class="ops-kv-val">
+                                    <div class="ops-inline-code">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Каталог бэкапов</div>
+                                <div class="ops-kv-val">
+                                    <div class="ops-inline-code">{{ $pgBackupStatusLocal['backupDir'] ?? '—' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Свободно / Всего</div>
+                                <div class="ops-kv-val">
+                                    {{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}
+                                    /
+                                    {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <x-filament::actions
+                            :actions="$this->getPgBackupActions()"
+                            :alignment="'start'"
+                        />
+                    </div>
+
+                    <div style="display:grid; gap:.75rem;">
+                        <div class="ops-muted" style="font-size:.875rem;">
+                            Предпросмотр ротации (сжатие старше {{ $pgBackupDefaultsLocal['compressAfterDays'] }} дн.,
+                            удаление архивов старше {{ $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.).
+                        </div>
+
+                        <div style="display:grid; gap:.75rem;">
+                            <div>
+                                <div class="ops-muted" style="font-weight:600;">Сжать (*.sql → *.sql.gz)</div>
+                                @if (! empty($pgBackupPreviewLocal['compress']))
+                                    <ul class="list-disc" style="padding-left: 1.25rem;">
+                                        @foreach ($pgBackupPreviewLocal['compress'] as $file)
+                                            <li class="ops-inline-code">{{ $file }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="ops-muted">Нет файлов для сжатия.</div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <div class="ops-muted" style="font-weight:600;">Удалить дубли (*.sql при наличии *.gz)</div>
+                                @if (! empty($pgBackupPreviewLocal['deleteDuplicates']))
+                                    <ul class="list-disc" style="padding-left: 1.25rem;">
+                                        @foreach ($pgBackupPreviewLocal['deleteDuplicates'] as $file)
+                                            <li class="ops-inline-code">{{ $file }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="ops-muted">Нет дублей для удаления.</div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <div class="ops-muted" style="font-weight:600;">Удалить архивы (*.sql.gz)</div>
+                                @if (! empty($pgBackupPreviewLocal['deleteArchives']))
+                                    <ul class="list-disc" style="padding-left: 1.25rem;">
+                                        @foreach ($pgBackupPreviewLocal['deleteArchives'] as $file)
+                                            <li class="ops-inline-code">{{ $file }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <div class="ops-muted">Нет архивов для удаления.</div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                            Файлы в storage/app/backups
+                        </div>
+                        <div class="ops-kv-wrap">
+                            <div class="ops-kv" style="min-width: 640px;">
+                                <div class="ops-kv-row ops-kv-head">
+                                    <div>Файл</div>
+                                    <div>Размер / Дата / Тип</div>
+                                </div>
+
+                                @forelse ($pgBackupFilesLocal as $file)
+                                    <div class="ops-kv-row">
+                                        <div class="ops-kv-key">
+                                            <span class="ops-inline-code">{{ $file['name'] }}</span>
+                                        </div>
+                                        <div class="ops-kv-val">
+                                            {{ $file['sizeHuman'] }}
+                                            ·
+                                            <span class="ops-inline-code">{{ $file['mtimeHuman'] }}</span>
+                                            ·
+                                            <x-filament::badge color="gray">
+                                                {{ $file['type'] === 'gz' ? 'gz' : 'sql' }}
+                                            </x-filament::badge>
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="ops-kv-row">
+                                        <div class="ops-kv-key">—</div>
+                                        <div class="ops-kv-val">Бэкапы ещё не создавались.</div>
+                                    </div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </x-filament::section>
         </div>
