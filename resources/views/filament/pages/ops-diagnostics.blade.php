@@ -497,7 +497,7 @@
                         class="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50"
                     >
                         <span>Предпросмотр ротации</span>
-                        <x-heroicon-o-chevron-down class="h-5 w-5 transition-transform" :class="open ? 'rotate-180' : ''" />
+                        <x-heroicon-o-chevron-down class="h-5 w-5 transition-transform" x-bind:class="open ? 'rotate-180' : ''" />
                     </button>
 
                     <div x-show="open" x-collapse class="mt-3 space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
