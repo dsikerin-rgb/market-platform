@@ -2311,34 +2311,33 @@ html:not([data-admin-overrides="0"]){
 /* ====================================================================== */
 /* === List pages: halve the gap between hero, filters and table        === */
 /* ====================================================================== */
-/* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem. */
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-header{
-  margin-bottom: 1rem !important;
-}
+/* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem.
+   Все List-страницы имеют класс вида fi-resource-*-list-page,
+   поэтому таргетим через атрибут class$="-list-page". */
 
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-header + .fi-sc,
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc{
-  margin-bottom: 1rem !important;
-}
-
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-page-content{
-  padding-top: 0 !important;
-}
-
-html:not([data-admin-overrides="0"]) .fi-resource-list-page > .fi-page-header-main-ctn > .fi-header + *{
-  margin-top: 0 !important;
-}
-
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc + .fi-ta,
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc + * .fi-ta{
-  margin-top: 0 !important;
-}
-
-/* Tighten page-level stack gap on all list pages */
-html:not([data-admin-overrides="0"]) .fi-resource-list-page{
-  display: flex;
-  flex-direction: column;
+/* Сжимаем вертикальный стек на всех list-страницах */
+html:not([data-admin-overrides="0"]) [class*="-list-page"]{
   gap: 0.75rem !important;
+}
+
+/* Уменьшаем отступ после hero-заголовка */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header{
+  margin-bottom: 0.75rem !important;
+}
+
+/* Убираем лишний top-отступ у элемента, следующего за header */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header + *{
+  margin-top: 0 !important;
+}
+
+/* Сжимаем отступ после фильтров (schema) */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc{
+  margin-bottom: 0.75rem !important;
+}
+
+/* Убираем лишний padding у контента */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-content{
+  padding-top: 0 !important;
 }
 </style>
 
