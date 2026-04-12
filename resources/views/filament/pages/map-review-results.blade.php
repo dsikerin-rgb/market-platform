@@ -70,32 +70,60 @@
                 margin-top: 0.15rem;
             }
 
+            .mrr-place__decision {
+                margin-top: 0.5rem;
+                padding: 0.5rem 0.6rem;
+                border-radius: 0.625rem;
+                background: rgba(248, 250, 252, 0.85);
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                display: flex;
+                flex-direction: column;
+                gap: 0.15rem;
+            }
+
+            .dark .mrr-place__decision {
+                background: rgba(30, 41, 59, 0.55);
+                border-color: rgba(71, 85, 105, 0.35);
+            }
+
+            .mrr-place__decision-label {
+                font-size: 0.8125rem;
+                font-weight: 600;
+                color: #0f172a;
+            }
+
+            .dark .mrr-place__decision-label {
+                color: #f1f5f9;
+            }
+
+            .mrr-place__decision-reason {
+                font-size: 0.75rem;
+                color: #475569;
+            }
+
+            .dark .mrr-place__decision-reason {
+                color: #94a3b8;
+            }
+
+            .mrr-place__decision-meta {
+                font-size: 0.6875rem;
+                color: #94a3b8;
+            }
+
+            .dark .mrr-place__decision-meta {
+                color: #64748b;
+            }
+
             .mrr-table--needs th:nth-child(1) {
-                width: 17%;
+                width: 24%;
             }
 
             .mrr-table--needs th:nth-child(2) {
-                width: 20%;
-            }
-
-            .mrr-table--needs th:nth-child(3) {
-                width: 31%;
-            }
-
-            .mrr-table--needs th:nth-child(4) {
-                width: 32%;
-            }
-
-            .mrr-table--unconfirmed th:nth-child(1) {
-                width: 22%;
-            }
-
-            .mrr-table--unconfirmed th:nth-child(2) {
                 width: 40%;
             }
 
-            .mrr-table--unconfirmed th:nth-child(3) {
-                width: 38%;
+            .mrr-table--needs th:nth-child(3) {
+                width: 36%;
             }
 
             .mrr-badge {
@@ -1080,9 +1108,6 @@
                                         <thead>
                                             <tr>
                                                 <th>Место</th>
-                                                @if ($attentionTab !== 'unconfirmed_links')
-                                                    <th>Последнее решение</th>
-                                                @endif
                                                 <th>Анализ связей</th>
                                                 <th>AI-разбор</th>
                                             </tr>
@@ -1109,25 +1134,23 @@
                                                                     {{ $row['review_status_label'] ?? '—' }}
                                                                 </span>
                                                             </div>
+                                                            @if ($attentionTab !== 'unconfirmed_links')
+                                                                <div class="mrr-place__decision">
+                                                                    <div class="mrr-place__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
+                                                                    @if (filled($row['reason']))
+                                                                        <div class="mrr-place__decision-reason">{{ $row['reason'] }}</div>
+                                                                    @endif
+                                                                    <div class="mrr-place__decision-meta">
+                                                                        {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
+                                                                    </div>
+                                                                </div>
+                                                            @endif
                                                             <div class="mrr-links">
                                                                 <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                                 <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
                                                             </div>
                                                         </div>
                                                     </td>
-                                                    @if ($attentionTab !== 'unconfirmed_links')
-                                                        <td>
-                                                            <div class="mrr-place">
-                                                                <div class="mrr-place__title">{{ $row['decision_label'] ?? '—' }}</div>
-                                                                @if (filled($row['reason']))
-                                                                    <div class="mrr-place__meta">{{ $row['reason'] }}</div>
-                                                                @endif
-                                                                <div class="mrr-place__meta">
-                                                                    {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    @endif
                                                     <td>
                                                         @php
                                                             $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
