@@ -325,6 +325,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Карта: 1', false)
             ->assertSee('Кабинет: 1', false)
             ->assertSee('Кандидаты того же арендатора', false)
+            ->assertSee('Есть кандидат с более сильными подтверждёнными связями. Его нужно проверить как возможное основное место.', false)
             ->assertSee('#' . $candidate->id . ' · 5 / Зоомир ООО', false)
             ->assertSee('Договоры: 1', false)
             ->assertSee('Начисления: 1', false)
@@ -336,6 +337,79 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('План безопасного разбора', false)
             ->assertSee('Выбрать кандидата основным', false)
             ->assertSee('Договоры, начисления и долги не переносятся', false);
+    }
+
+    public function test_map_review_results_warns_when_current_space_is_not_weaker_than_candidate(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Электрооборудование',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'П3/2',
+            'display_name' => 'Электрооборудование',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+        $this->createShape($market, (int) $space->id);
+
+        $candidate = $this->createSpace($market, [
+            'number' => 'П3/2/склад',
+            'display_name' => 'Электрооборудование',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('current-stronger-accrual-1'),
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'period' => now()->subMonth()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('current-stronger-accrual-2'),
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $candidate->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('weak-candidate-accrual'),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('Текущее место не слабее кандидатов по подтверждённым связям. Не выбирайте кандидата основным без дополнительной проверки.', false)
+            ->assertSee('#' . $candidate->id . ' · П3/2/склад / Электрооборудование', false)
+            ->assertSee('Начисления: 2', false)
+            ->assertSee('Начисления: 1', false);
     }
 
     public function test_review_decision_endpoint_resolves_duplicate_by_transferring_safe_links(): void

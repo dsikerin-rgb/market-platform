@@ -217,6 +217,9 @@ class AiReviewService
         $otherSpacesTotal = (int) ($pack['tenant_context']['other_spaces_total'] ?? 0);
         $relationContext = $pack['relation_context'] ?? [];
         $likelyCanonicalCandidateId = (int) ($relationContext['likely_canonical_candidate_id'] ?? 0);
+        $currentRelationScore = (int) data_get($relationContext, 'current_space.canonical_score', 0);
+        $bestCandidateScore = collect($relationContext['same_tenant_candidates'] ?? [])
+            ->max(fn (array $candidate): int => (int) ($candidate['canonical_score'] ?? 0)) ?? 0;
         $statusLabels = [
             'changed_tenant' => 'на месте другой арендатор',
             'conflict'       => 'конфликт по занятости',
@@ -259,7 +262,9 @@ class AiReviewService
               . "3. У арендатора " . ($otherSpacesTotal > 0 ? "есть ещё {$otherSpacesTotal} место(места) в этом рынке — сравни их с текущим местом." : "не найдено других мест в этом рынке — опирайся только на доступные факты.") . "\n"
               . "4. recommended_next_step должен вести к безопасному анализу: сравнить места арендатора, найти каноническое место, затем передать кейс на ручную проверку или перенос привязок.\n"
               . "5. Если relation_context показывает кандидата с договорами, начислениями, долгом 1С или tenant_bindings, укажи, что он вероятный кандидат на каноническое место.\n"
-              . ($likelyCanonicalCandidateId > 0 ? "6. В данных есть вероятный канонический кандидат: market_space_id={$likelyCanonicalCandidateId}. Не называй его окончательным без ручной проверки.\n" : "6. Если сильного кандидата нет, прямо напиши, что каноническое место не определяется автоматически.\n")
+              . ($likelyCanonicalCandidateId > 0
+                  ? "6. В данных есть вероятный канонический кандидат: market_space_id={$likelyCanonicalCandidateId}. Не называй его окончательным без ручной проверки.\n"
+                  : "6. Сильного кандидата нет: score текущего места={$currentRelationScore}, лучший кандидат={$bestCandidateScore}. НЕ называй ситуацию дублем только из-за похожего номера. Напиши, что текущее место не слабее кандидатов по подтверждённым связям, если это видно из relation_context.\n")
               . "7. Не пересказывай текущий конфликт как решение. Объясни, почему подтверждение текущего места опасно.\n"
               . "8. risk_score должен быть >= 7."
             : ($isDisputed

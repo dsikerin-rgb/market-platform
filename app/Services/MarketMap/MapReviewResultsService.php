@@ -240,27 +240,37 @@ class MapReviewResultsService
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
 
+            $currentScore = $this->relationStrengthScore($counts);
+
             $candidates = $tenantId > 0
                 ? $candidatesByTenant->get($tenantId, collect())
                     ->reject(fn (MarketSpace $candidate): bool => (int) $candidate->id === $spaceId)
                     ->take(5)
-                    ->map(function (MarketSpace $candidate) use ($candidateCounts): array {
+                    ->map(function (MarketSpace $candidate) use ($candidateCounts, $currentScore): array {
                         $candidateId = (int) $candidate->id;
                         $counts = $candidateCounts[$candidateId] ?? [];
+                        $candidateScore = $this->relationStrengthScore($counts);
 
                         return [
                             'space_id' => $candidateId,
                             'label' => $this->spaceLabel($candidate),
                             'relation_counts' => $this->compactRelationCounts($counts),
+                            'relation_score' => $candidateScore,
+                            'is_stronger_than_current' => $candidateScore > $currentScore,
                         ];
                     })->values()->all()
                 : [];
+
+            $hasStrongerCandidate = collect($candidates)
+                ->contains(fn (array $candidate): bool => (bool) ($candidate['is_stronger_than_current'] ?? false));
 
             return [
                 $spaceId => [
                     'relation_counts' => $this->displayRelationCounts($counts),
                     'candidate_spaces' => $candidates,
                     'has_candidates' => $candidates !== [],
+                    'relation_assessment' => $this->relationAssessment($counts, $candidates),
+                    'has_stronger_candidate' => $hasStrongerCandidate,
                 ],
             ];
         })->all();
@@ -369,6 +379,42 @@ class MapReviewResultsService
             ->map(fn (array $item): string => $item['label'] . ': ' . (int) $item['count'])
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<string, int>  $counts
+     */
+    private function relationStrengthScore(array $counts): int
+    {
+        return ((int) ($counts['contracts'] ?? 0) * 5)
+            + ((int) ($counts['accruals'] ?? 0) * 3)
+            + ((int) ($counts['tenant_bindings'] ?? 0) * 3)
+            + ((int) ($counts['map_shapes'] ?? 0) * 2)
+            + ((int) ($counts['cabinet_users'] ?? 0) * 2)
+            + ((int) ($counts['products'] ?? 0) > 0 ? 1 : 0);
+    }
+
+    /**
+     * @param  array<string, int>  $currentCounts
+     * @param  list<array<string, mixed>>  $candidates
+     */
+    private function relationAssessment(array $currentCounts, array $candidates): string
+    {
+        if ($candidates === []) {
+            return 'Других активных мест этого арендатора не найдено. Каноническое место не определяется автоматически.';
+        }
+
+        $currentScore = $this->relationStrengthScore($currentCounts);
+        $bestCandidate = collect($candidates)
+            ->sortByDesc(fn (array $candidate): int => (int) ($candidate['relation_score'] ?? 0))
+            ->first();
+        $bestScore = (int) ($bestCandidate['relation_score'] ?? 0);
+
+        if ($bestScore > $currentScore) {
+            return 'Есть кандидат с более сильными подтверждёнными связями. Его нужно проверить как возможное основное место.';
+        }
+
+        return 'Текущее место не слабее кандидатов по подтверждённым связям. Не выбирайте кандидата основным без дополнительной проверки.';
     }
 
     /**
