@@ -16,9 +16,17 @@ class RolesTable
         $recordActions = [];
 
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $recordActions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+            $recordActions[] = \Filament\Actions\EditAction::make()
+                ->label('Редактировать')
+                ->slideOver()
+                ->modalHeading(fn ($record) => 'Права роли: ' . ($record->label_ru ?: $record->name))
+                ->modalWidth('xl');
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $recordActions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+            $recordActions[] = \Filament\Tables\Actions\EditAction::make()
+                ->label('Редактировать')
+                ->slideOver()
+                ->modalHeading(fn ($record) => 'Права роли: ' . ($record->label_ru ?: $record->name))
+                ->modalWidth('xl');
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
@@ -34,25 +42,19 @@ class RolesTable
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('label_ru')
-                    ->label('Название')
+                    ->label('Роль')
                     ->formatStateUsing(fn ($state, $record) => $state ?: RoleScenarioCatalog::labelForSlug((string) $record->name, (string) $record->name))
                     ->searchable()
                     ->sortable()
                     ->weight('600')
-                    ->size('sm'),
-
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Код роли')
-                    ->searchable()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->description(fn ($record) => $record->name)
                     ->size('sm'),
 
                 Tables\Columns\TextColumn::make('role_profile')
                     ->label('Профиль')
                     ->getStateUsing(fn ($record) => RoleScenarioCatalog::descriptionForSlug((string) $record->name) ?? 'Кастомный профиль')
                     ->wrap()
-                    ->toggleable()
+                    ->limit(50)
                     ->size('sm')
                     ->color('gray-600'),
 
@@ -60,17 +62,17 @@ class RolesTable
                     ->label('Уведомления')
                     ->getStateUsing(fn ($record) => RoleScenarioCatalog::topicSummaryForSlug((string) $record->name))
                     ->wrap()
-                    ->toggleable()
                     ->size('sm')
-                    ->color('gray-500'),
+                    ->color('gray-500')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-                Tables\Columns\TextColumn::make('permissions.name')
+                Tables\Columns\TextColumn::make('permissions_count')
                     ->label('Права')
                     ->counts('permissions')
-                    ->formatStateUsing(fn ($state): string => $state . ' разрешений')
+                    ->badge()
+                    ->color('primary')
                     ->size('sm')
-                    ->color('gray')
-                    ->icon('heroicon-o-key'),
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Создана')
