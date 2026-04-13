@@ -3,9 +3,9 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\StaffInvitationResource\Pages;
+use App\Filament\Resources\StaffInvitationResource\Schemas\StaffInvitationForm;
 use App\Models\StaffInvitation;
 use Filament\Facades\Filament;
-use Filament\Forms;
 use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class StaffInvitationResource extends BaseResource
 {
-    
+
 
     protected static ?string $model = StaffInvitation::class;
 
@@ -70,93 +70,12 @@ class StaffInvitationResource extends BaseResource
     }
     public static function form(Schema $schema): Schema
     {
-        $user = Filament::auth()->user();
-        $selectedMarketId = static::selectedMarketIdFromSession();
+        return StaffInvitationForm::configure($schema);
+    }
 
-        $components = [];
-
-        if ((bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            if (filled($selectedMarketId)) {
-                $components[] = Forms\Components\Hidden::make('market_id')
-                    ->default(fn () => (int) $selectedMarketId)
-                    ->dehydrated(true);
-            } else {
-                $components[] = Forms\Components\Select::make('market_id')
-                    ->label('Рынок')
-                    ->relationship('market', 'name')
-                    ->required()
-                    ->searchable()
-                    ->preload()
-                    ->reactive()
-                    ->dehydrated(true);
-            }
-        } else {
-            $components[] = Forms\Components\Hidden::make('market_id')
-                ->default(fn () => $user?->market_id)
-                ->dehydrated(true);
-        }
-
-        $formFields = [
-            Forms\Components\TextInput::make('email')
-                ->label('Email')
-                ->email()
-                ->required()
-                ->maxLength(255),
-
-            Forms\Components\Textarea::make('roles')
-                ->label('Роли (JSON)')
-                ->rows(3)
-                ->formatStateUsing(fn ($state) => blank($state) ? '' : json_encode($state, JSON_UNESCAPED_UNICODE))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? (json_decode($state, true) ?? []) : []),
-
-            Forms\Components\TextInput::make('token_hash')
-                ->label('Хэш токена')
-                ->maxLength(255),
-
-            Forms\Components\DateTimePicker::make('expires_at')
-                ->label('Срок действия'),
-
-            Forms\Components\Select::make('invited_by')
-                ->label('Кем приглашён')
-                ->relationship('inviter', 'name', function (Builder $query) use ($user) {
-                    if (! $user) {
-                        return $query->whereRaw('1 = 0');
-                    }
-
-                    if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-                        $selectedMarketId = static::selectedMarketIdFromSession();
-
-                        return filled($selectedMarketId)
-                            ? $query->where('market_id', (int) $selectedMarketId)
-                            : $query;
-                    }
-
-                    if ($user->market_id) {
-                        return $query->where('market_id', (int) $user->market_id);
-                    }
-
-                    return $query->whereRaw('1 = 0');
-                })
-                ->searchable()
-                ->preload(),
-
-            Forms\Components\DateTimePicker::make('accepted_at')
-                ->label('Принят'),
-        ];
-
-        if (class_exists(Forms\Components\Grid::class)) {
-            return $schema->components([
-                Forms\Components\Grid::make(2)->components([
-                    ...$components,
-                    ...$formFields,
-                ]),
-            ]);
-        }
-
-        return $schema->components([
-            ...$components,
-            ...$formFields,
-        ]);
+    public static function editForm(Schema $schema): Schema
+    {
+        return StaffInvitationForm::editForm($schema);
     }
 
     public static function table(Table $table): Table

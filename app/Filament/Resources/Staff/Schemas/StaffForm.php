@@ -10,7 +10,6 @@ use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 
@@ -38,147 +37,150 @@ class StaffForm
             ->dehydrated(true);
 
         $passwordPair = [
-            Forms\Components\TextInput::make('password')
-                ->label('Пароль')
-                ->password()
-                ->revealable()
-                ->minLength(8)
-                ->required(fn (string $operation) => $operation === 'create')
-                ->dehydrated(fn ($state) => filled($state))
-                ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)
-                ->visible(fn (string $operation): bool => $operation === 'create'),
+            Grid::make(2)->schema([
+                Forms\Components\TextInput::make('password')
+                    ->label('Пароль')
+                    ->password()
+                    ->revealable()
+                    ->minLength(8)
+                    ->required(fn (string $operation) => $operation === 'create')
+                    ->autocomplete('new-password')
+                    ->dehydrated(fn ($state) => filled($state))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
 
-            Forms\Components\TextInput::make('password_confirmation')
-                ->label('Подтверждение пароля')
-                ->password()
-                ->revealable()
-                ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
-                ->same('password')
-                ->dehydrated(false)
-                ->visible(fn (string $operation): bool => $operation === 'create'),
+                Forms\Components\TextInput::make('password_confirmation')
+                    ->label('Подтверждение')
+                    ->password()
+                    ->revealable()
+                    ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
+                    ->same('password')
+                    ->autocomplete('new-password')
+                    ->dehydrated(false),
+            ]),
         ];
 
         return $schema->components([
             Section::make('Основные данные')
+                ->description('Имя, email и привязка к рынку')
                 ->schema([
                     Grid::make(2)->schema([
                         $marketSelect,
                         $marketHidden,
                     ]),
 
-                    Grid::make(12)->schema([
-                        Forms\Components\TextInput::make('name')
-                            ->label('Имя / ФИО')
-                            ->required()
-                            ->maxLength(255)
-                            ->columnSpan(9),
+                    Forms\Components\TextInput::make('name')
+                        ->label('Имя / ФИО')
+                        ->required()
+                        ->maxLength(255)
+                        ->placeholder('Иванов Иван Иванович')
+                        ->columnSpan(['default' => 12, 'md' => 6]),
 
-                        Forms\Components\TextInput::make('email')
-                            ->label('Email')
-                            ->email()
-                            ->required()
-                            ->maxLength(255)
-                            ->unique(ignoreRecord: true)
-                            ->columnSpan(3),
-                    ]),
-                ])
-                ->columnSpan(['default' => 6, 'xl' => 4]),
+                    Forms\Components\TextInput::make('email')
+                        ->label('Email')
+                        ->email()
+                        ->required()
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true)
+                        ->placeholder('user@example.com')
+                        ->autocomplete('new-email')
+                        ->columnSpan(['default' => 12, 'md' => 6]),
+                ]),
 
-            Section::make('Роли и доступ')
+            Section::make('Доступ')
+                ->description('Роли определяют права сотрудника в системе')
                 ->schema([
-                    Grid::make(2)->schema([
-                        Forms\Components\Select::make('roles')
-                            ->label('Роли')
-                            ->multiple()
-                            ->preload()
-                            ->searchable()
-                            ->relationship(
-                                name: 'roles',
-                                titleAttribute: 'name',
-                                modifyQueryUsing: function ($query) use ($user) {
-                                    $query->where('name', '!=', 'merchant');
+                    Forms\Components\Select::make('roles')
+                        ->label('Роли')
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->placeholder('Выберите одну или несколько ролей')
+                        ->relationship(
+                            name: 'roles',
+                            titleAttribute: 'name',
+                            modifyQueryUsing: function ($query) use ($user) {
+                                $query->where('name', '!=', 'merchant');
 
-                                    if (! $user || ! $user->isSuperAdmin()) {
-                                        $query->where('name', '!=', 'super-admin');
-                                    }
-
-                                    return $query;
-                                },
-                            )
-                            ->getOptionLabelFromRecordUsing(function ($record) {
-                                $name = (string) ($record->name ?? '');
-
-                                if ($name === '') {
-                                    return '—';
+                                if (! $user || ! $user->isSuperAdmin()) {
+                                    $query->where('name', '!=', 'super-admin');
                                 }
 
-                                $slug = Str::of($name)
-                                    ->trim()
-                                    ->lower()
-                                    ->replace('_', '-')
-                                    ->replace(' ', '-')
-                                    ->replace('--', '-')
-                                    ->toString();
+                                return $query;
+                            },
+                        )
+                        ->getOptionLabelFromRecordUsing(function ($record) {
+                            $name = (string) ($record->name ?? '');
 
-                                $key = "roles.{$slug}";
-                                $translated = __($key);
+                            if ($name === '') {
+                                return '—';
+                            }
 
-                                if ($translated !== $key) {
-                                    return $translated;
-                                }
+                            $slug = Str::of($name)
+                                ->trim()
+                                ->lower()
+                                ->replace('_', '-')
+                                ->replace(' ', '-')
+                                ->replace('--', '-')
+                                ->toString();
 
-                                return RoleScenarioCatalog::labelForSlug($slug, $name);
-                            }),
-                    ]),
-                ])
-                ->columnSpan(['default' => 6, 'xl' => 4]),
+                            $key = "roles.{$slug}";
+                            $translated = __($key);
+
+                            if ($translated !== $key) {
+                                return $translated;
+                            }
+
+                            return RoleScenarioCatalog::labelForSlug($slug, $name);
+                        }),
+                ]),
 
             Section::make('Telegram')
                 ->description('Одноразовый chat_id заполняется только при создании сотрудника.')
                 ->schema([
                     Forms\Components\TextInput::make('telegram_chat_id')
-                        ->label('Telegram (chat_id)')
-                        ->placeholder('например: 123456789')
-                        ->helperText('Нужен для доставки уведомлений в Telegram.')
+                        ->label('Telegram chat_id')
+                        ->placeholder('123456789')
+                        ->helperText('Цифровой ID чата для доставки уведомлений в Telegram.')
                         ->maxLength(32)
-                        ->regex('/^-?\\d+$/')
+                        ->regex('/^-?\d+$/')
                         ->validationMessages([
                             'regex' => 'Используйте только цифры и, при необходимости, знак "-" в начале.',
                         ])
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
-                        ->visible(fn (string $operation): bool => $operation === 'create'),
+                        ->columnSpan(['default' => 12, 'lg' => 6]),
                 ])
-                ->columnSpan(['default' => 12, 'xl' => 6])
                 ->visible(fn (string $operation): bool => $operation === 'create'),
 
-            Section::make('Безопасность')
-                ->description('Пароль задается только при создании сотрудника.')
+            Section::make('Пароль')
+                ->description('Минимум 8 символов')
                 ->schema($passwordPair)
-                ->columnSpan(['default' => 12, 'xl' => 6])
                 ->visible(fn (string $operation): bool => $operation === 'create'),
 
             Section::make('Уведомления')
-                ->description('Для super-admin и market-admin личные настройки доступны всегда.')
+                ->description('Каналы и события для уведомлений сотрудника')
                 ->schema([
                     Forms\Components\Toggle::make('notification_preferences.self_manage')
-                        ->label('Разрешить личные настройки')
+                        ->label('Личные настройки')
                         ->helperText('Пользователь сможет сам менять свои каналы и события в кабинете.')
                         ->default(false),
 
-                    Forms\Components\CheckboxList::make('notification_preferences.channels')
-                        ->label('Каналы доставки')
-                        ->options(UserNotificationPreferences::channelLabels())
-                        ->columns(3)
-                        ->helperText('Если пусто, применяются стандартные каналы.'),
+                    Grid::make(2)->schema([
+                        Forms\Components\CheckboxList::make('notification_preferences.channels')
+                            ->label('Каналы доставки')
+                            ->options(UserNotificationPreferences::channelLabels())
+                            ->columns(2)
+                            ->helperText('Если пусто — стандартные каналы.'),
 
-                    Forms\Components\CheckboxList::make('notification_preferences.topics')
-                        ->label('События')
-                        ->options(UserNotificationPreferences::topicLabels())
-                        ->default(UserNotificationPreferences::defaultTopicsForRoleNames([]))
-                        ->columns(2)
-                        ->helperText('Если пусто, пользователь не получает уведомления.'),
+                        Forms\Components\CheckboxList::make('notification_preferences.topics')
+                            ->label('События')
+                            ->options(UserNotificationPreferences::topicLabels())
+                            ->default(UserNotificationPreferences::defaultTopicsForRoleNames([]))
+                            ->columns(1)
+                            ->helperText('Если пусто — уведомления не приходят.'),
+                    ]),
                 ])
                 ->collapsible()
+                ->collapsed()
                 ->visible(fn (string $operation): bool => $operation === 'create'
                     && (bool) $user
                     && ($user->isSuperAdmin() || $user->isMarketAdmin())),

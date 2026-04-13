@@ -147,9 +147,6 @@
     </style>
 
     @php
-        // Backward compatibility:
-        // - ранее существовал только $telescopeEnabled (по config).
-        // - теперь (в новой версии OpsDiagnostics) есть $telescopeRecordingEnabled и $telescopeEnabledUntil/*.
         $telescopeInstalledLocal = isset($telescopeInstalled) ? (bool) $telescopeInstalled : false;
         $telescopeConfigEnabledLocal = $telescopeConfigEnabled ?? ($telescopeInstalledLocal ? (bool) config('telescope.enabled', true) : false);
         $telescopeRecordingEnabledLocal = $telescopeRecordingEnabled ?? ($telescopeEnabled ?? false);
@@ -157,13 +154,13 @@
         $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
         $telescopeEnabledUntilHumanLocal = $telescopeEnabledUntilHuman ?? null;
 
-        $sqliteBackupDefaultsLocal = $sqliteBackupDefaults ?? [
+        $pgBackupDefaultsLocal = $pgBackupDefaults ?? [
             'compressAfterDays' => 2,
             'deleteArchiveAfterDays' => 60,
         ];
-        $sqliteBackupStatusLocal = $sqliteBackupStatus ?? [];
-        $sqliteBackupFilesLocal = $sqliteBackupFiles ?? [];
-        $sqliteBackupPreviewLocal = $sqliteBackupPreview ?? [
+        $pgBackupStatusLocal = $pgBackupStatus ?? [];
+        $pgBackupFilesLocal = $pgBackupFiles ?? [];
+        $pgBackupPreviewLocal = $pgBackupPreview ?? [
             'compress' => [],
             'deleteDuplicates' => [],
             'deleteArchives' => [],
@@ -396,145 +393,159 @@
                 </div>
             </x-filament::section>
 
-            {{-- Бэкапы SQLite --}}
+            {{-- Бэкапы PostgreSQL --}}
             <x-filament::section
-                heading="Бэкапы SQLite"
-                description="Файловые бэкапы для текущего окружения и ротация без обращения к БД."
+                heading="Бэкапы PostgreSQL"
+                description="Управление дампами базы данных и ротация архивов."
             >
-                <div style="display:grid; gap: 1.5rem;">
-                    <div class="ops-kv-wrap">
-                        <div class="ops-kv">
-                            <div class="ops-kv-row ops-kv-head">
-                                <div>Параметр</div>
-                                <div>Значение</div>
-                            </div>
-
-                            <div class="ops-kv-row">
-                                <div class="ops-kv-key">SQLite файл</div>
-                                <div class="ops-kv-val">
-                                    <div class="ops-inline-code">{{ $sqliteBackupStatusLocal['dbPath'] ?? '—' }}</div>
-                                </div>
-                            </div>
-
-                            <div class="ops-kv-row">
-                                <div class="ops-kv-key">Размер</div>
-                                <div class="ops-kv-val">
-                                    {{ $sqliteBackupStatusLocal['dbSizeHuman'] ?? '—' }}
-                                </div>
-                            </div>
-
-                            <div class="ops-kv-row">
-                                <div class="ops-kv-key">Изменён</div>
-                                <div class="ops-kv-val">
-                                    <span class="ops-inline-code">{{ $sqliteBackupStatusLocal['dbMtimeHuman'] ?? '—' }}</span>
-                                </div>
-                            </div>
-
-                            <div class="ops-kv-row">
-                                <div class="ops-kv-key">Каталог бэкапов</div>
-                                <div class="ops-kv-val">
-                                    <div class="ops-inline-code">{{ $sqliteBackupStatusLocal['backupDir'] ?? '—' }}</div>
-                                </div>
-                            </div>
-
-                            <div class="ops-kv-row">
-                                <div class="ops-kv-key">Свободно / Всего</div>
-                                <div class="ops-kv-val">
-                                    {{ $sqliteBackupStatusLocal['diskFreeHuman'] ?? '—' }}
-                                    /
-                                    {{ $sqliteBackupStatusLocal['diskTotalHuman'] ?? '—' }}
-                                </div>
-                            </div>
-                        </div>
+                {{-- Статистика: 4 карточки в ряд --}}
+                <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">База данных</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
                     </div>
 
-                    <div>
-                        <x-filament::actions
-                            :actions="$this->getSqliteBackupActions()"
-                            :alignment="'start'"
-                        />
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Бэкапы</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
                     </div>
 
-                    <div style="display:grid; gap:.75rem;">
-                        <div class="ops-muted" style="font-size:.875rem;">
-                            Предпросмотр ротации (сжатие старше {{ $sqliteBackupDefaultsLocal['compressAfterDays'] }} дн.,
-                            удаление архивов старше {{ $sqliteBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.).
-                        </div>
-
-                        <div style="display:grid; gap:.75rem;">
-                            <div>
-                                <div class="ops-muted" style="font-weight:600;">Сжать (*.sqlite → *.sqlite.gz)</div>
-                                @if (! empty($sqliteBackupPreviewLocal['compress']))
-                                    <ul class="list-disc" style="padding-left: 1.25rem;">
-                                        @foreach ($sqliteBackupPreviewLocal['compress'] as $file)
-                                            <li class="ops-inline-code">{{ $file }}</li>
-                                        @endforeach
-                                    </ul>
-                                @else
-                                    <div class="ops-muted">Нет файлов для сжатия.</div>
-                                @endif
-                            </div>
-
-                            <div>
-                                <div class="ops-muted" style="font-weight:600;">Удалить дубли (*.sqlite при наличии *.gz)</div>
-                                @if (! empty($sqliteBackupPreviewLocal['deleteDuplicates']))
-                                    <ul class="list-disc" style="padding-left: 1.25rem;">
-                                        @foreach ($sqliteBackupPreviewLocal['deleteDuplicates'] as $file)
-                                            <li class="ops-inline-code">{{ $file }}</li>
-                                        @endforeach
-                                    </ul>
-                                @else
-                                    <div class="ops-muted">Нет дублей для удаления.</div>
-                                @endif
-                            </div>
-
-                            <div>
-                                <div class="ops-muted" style="font-weight:600;">Удалить архивы (*.sqlite.gz)</div>
-                                @if (! empty($sqliteBackupPreviewLocal['deleteArchives']))
-                                    <ul class="list-disc" style="padding-left: 1.25rem;">
-                                        @foreach ($sqliteBackupPreviewLocal['deleteArchives'] as $file)
-                                            <li class="ops-inline-code">{{ $file }}</li>
-                                        @endforeach
-                                    </ul>
-                                @else
-                                    <div class="ops-muted">Нет архивов для удаления.</div>
-                                @endif
-                            </div>
-                        </div>
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Последний бэкап</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
                     </div>
 
-                    <div>
-                        <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
-                            Файлы в database/backups
-                        </div>
-                        <div class="ops-kv-wrap">
-                            <div class="ops-kv" style="min-width: 640px;">
-                                <div class="ops-kv-row ops-kv-head">
-                                    <div>Файл</div>
-                                    <div>Размер / Дата / Тип</div>
-                                </div>
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Диск</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
+                    </div>
+                </div>
 
-                                @forelse ($sqliteBackupFilesLocal as $file)
-                                    <div class="ops-kv-row">
-                                        <div class="ops-kv-key">
-                                            <span class="ops-inline-code">{{ $file['name'] }}</span>
+                {{-- Действия --}}
+                <div style="margin-bottom:1.5rem;">
+                    <x-filament::actions :actions="$this->getPgBackupActions()" :alignment="'start'" />
+                </div>
+
+                {{-- Список файлов --}}
+                <div style="display:grid; gap:.75rem;">
+                    <p style="font-size:.875rem; font-weight:600; color:#374151;">Файлы бэкапов</p>
+
+                    @if (! empty($pgBackupFilesLocal))
+                        <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; overflow:hidden;">
+                            @foreach ($pgBackupFilesLocal as $idx => $file)
+                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding:.75rem 1rem; border-bottom:1px solid rgba(0,0,0,.06);{{ $idx === count($pgBackupFilesLocal) - 1 ? ' border-bottom:0;' : '' }}">
+                                    <div style="display:flex; align-items:center; gap:.75rem; flex:1; min-width:0;">
+                                        <div style="display:flex; align-items:center; justify-content:center; width:2.25rem; height:2.25rem; border-radius:.5rem; background:rgba(0,0,0,.06); flex-shrink:0;">
+                                            @if ($file['type'] === 'gz')
+                                                <x-heroicon-o-archive-box style="width:1.125rem; height:1.125rem; color:#6b7280;" />
+                                            @else
+                                                <x-heroicon-o-document-text style="width:1.125rem; height:1.125rem; color:#6b7280;" />
+                                            @endif
                                         </div>
-                                        <div class="ops-kv-val">
-                                            {{ $file['sizeHuman'] }}
-                                            ·
-                                            <span class="ops-inline-code">{{ $file['mtimeHuman'] }}</span>
-                                            ·
-                                            <x-filament::badge color="gray">
-                                                {{ $file['type'] === 'gz' ? 'gz' : 'sqlite' }}
-                                            </x-filament::badge>
+                                        <div style="min-width:0;">
+                                            <p style="font-size:.8125rem; font-weight:500; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $file['name'] }}</p>
+                                            <p style="font-size:.6875rem; color:#6b7280;">{{ $file['mtimeHuman'] }} · {{ $file['sizeHuman'] }}</p>
                                         </div>
                                     </div>
-                                @empty
-                                    <div class="ops-kv-row">
-                                        <div class="ops-kv-key">—</div>
-                                        <div class="ops-kv-val">Бэкапы ещё не создавались.</div>
+
+                                    <div style="display:flex; align-items:center; gap:.5rem; flex-shrink:0;">
+                                        <x-filament::badge :color="$file['type'] === 'gz' ? 'success' : 'gray'" size="sm">
+                                            {{ $file['type'] === 'gz' ? 'GZIP' : 'SQL' }}
+                                        </x-filament::badge>
+
+                                        <x-filament::button
+                                            tag="a"
+                                            :href="route('filament.admin.ops-diagnostics.download', ['file' => $file['name']])"
+                                            icon="heroicon-o-arrow-down-tray"
+                                            size="sm"
+                                            color="gray"
+                                            labeled-from="sm"
+                                        >
+                                            Скачать
+                                        </x-filament::button>
+
+                                        <x-filament::button
+                                            wire:click="deletePgBackup('{{ $file['name'] }}')"
+                                            icon="heroicon-o-trash"
+                                            size="sm"
+                                            color="danger"
+                                            outlined
+                                            labeled-from="sm"
+                                        >
+                                            Удалить
+                                        </x-filament::button>
                                     </div>
-                                @endforelse
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed rgba(0,0,0,.15); border-radius:.75rem; padding:2.5rem 1.5rem; text-align:center;">
+                            <svg style="flex-shrink:0; width:2.5rem; height:2.5rem; max-width:2.5rem; max-height:2.5rem; color:#9ca3af; margin-bottom:.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
+                            <p style="font-size:.8125rem; color:#6b7280;">Бэкапы ещё не создавались</p>
+                        </div>
+                    @endif
+                </div>
+
+                {{-- Предпросмотр ротации (скрыт по умолчанию) --}}
+                <div x-data="{ open: false }" style="margin-top:1.5rem;">
+                    <button
+                        @click="open = ! open"
+                        style="display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.5rem .75rem; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
+                    >
+                        <!-- Fix: replaced x-heroicon-o-chevron-down with inline svg to avoid Blade :class error -->
+                        <svg style="flex-shrink:0; width:1rem; height:1rem; max-width:1rem; max-height:1rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                        <span>Предпросмотр ротации</span>
+                    </button>
+
+                    <div x-show="open" x-collapse style="margin-top:.75rem; border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(0,0,0,.03); padding:1rem;">
+                        <p style="font-size:.6875rem; color:#6b7280; margin-bottom:.75rem;">
+                            Сжатие старше {{ $pgBackupDefaultsLocal['compressAfterDays'] }} дн., удаление архивов старше {{ $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.
+                        </p>
+
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem;">
+                            <div>
+                                <p style="font-size:.6875rem; font-weight:600; color:#374151;">Сжать (*.sql → *.gz)</p>
+                                @if (! empty($pgBackupPreviewLocal['compress']))
+                                    <ul style="margin-top:.25rem; padding-left:1rem;">
+                                        @foreach ($pgBackupPreviewLocal['compress'] as $f)
+                                            <li style="font-size:.6875rem; color:#6b7280;">• {{ $f }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <p style="margin-top:.25rem; font-size:.6875rem; color:#9ca3af;">Нет</p>
+                                @endif
+                            </div>
+                            <div>
+                                <p style="font-size:.6875rem; font-weight:600; color:#374151;">Удалить дубли</p>
+                                @if (! empty($pgBackupPreviewLocal['deleteDuplicates']))
+                                    <ul style="margin-top:.25rem; padding-left:1rem;">
+                                        @foreach ($pgBackupPreviewLocal['deleteDuplicates'] as $f)
+                                            <li style="font-size:.6875rem; color:#6b7280;">• {{ $f }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <p style="margin-top:.25rem; font-size:.6875rem; color:#9ca3af;">Нет</p>
+                                @endif
+                            </div>
+                            <div>
+                                <p style="font-size:.6875rem; font-weight:600; color:#374151;">Удалить архивы</p>
+                                @if (! empty($pgBackupPreviewLocal['deleteArchives']))
+                                    <ul style="margin-top:.25rem; padding-left:1rem;">
+                                        @foreach ($pgBackupPreviewLocal['deleteArchives'] as $f)
+                                            <li style="font-size:.6875rem; color:#6b7280;">• {{ $f }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <p style="margin-top:.25rem; font-size:.6875rem; color:#9ca3af;">Нет</p>
+                                @endif
                             </div>
                         </div>
                     </div>

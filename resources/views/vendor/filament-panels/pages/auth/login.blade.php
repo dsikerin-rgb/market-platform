@@ -20,9 +20,14 @@
             pointer-events: none;
             z-index: 0;
         }
-        .fi-simple-main {
+        .fi-simple-main,
+        .fi-simple-main > .fi-simple-page,
+        .fi-simple-main .fi-simple-page-content,
+        .fi-simple-main .fi-simple-main-ctn {
             padding: 0 !important;
             border-radius: 1.5rem !important;
+        }
+        .fi-simple-main {
             box-shadow: 0 20px 60px rgba(14, 116, 144, 0.15), 0 8px 24px rgba(3, 105, 161, 0.08);
         }
         .fi-simple-main-ctn {

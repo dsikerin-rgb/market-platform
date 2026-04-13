@@ -2309,36 +2309,253 @@ html:not([data-admin-overrides="0"]){
 }
 
 /* ====================================================================== */
+/* === Staff create page: match edit page styling                       === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page{
+    --staff-create-border: #d8e3f1;
+    --staff-create-surface: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-header{
+    padding: 1.05rem 1.2rem 0.95rem;
+    background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.13), transparent 24%),
+        linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
+    border: 1px solid #c5d4e8;
+    border-radius: 1.25rem;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-header .fi-header-heading{
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    font-size: clamp(1.08rem, 0.92rem + 0.8vw, 1.6rem);
+    line-height: 1.02;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-header .fi-header-subheading{
+    color: #334155;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    max-width: 42rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-section{
+    border-color: var(--staff-create-border);
+    border-radius: 1rem;
+    background: var(--staff-create-surface);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-section-content{
+    padding: 1rem 1.1rem 1.15rem;
+    overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-input-wrp{
+    border-color: #cfd9e8;
+    background: #ffffff;
+    transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-input-wrp:focus-within{
+    border-color: #5f8fdc;
+    box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-checkbox-list-option-label,
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-toggle label{
+    font-size: 0.92rem;
+}
+
+/* Compact fields: narrow inputs where full width is unnecessary */
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="email"]),
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="password"]),
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="telegram_chat_id"]),
+html:not([data-admin-overrides="0"]) .fi-resource-staff-create-page .fi-fo-field-wrp:has([name*="market_id"]){
+    max-width: 28rem;
+}
+
+/* ====================================================================== */
 /* === List pages: halve the gap between hero, filters and table        === */
 /* ====================================================================== */
-/* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem. */
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-header{
-  margin-bottom: 1rem !important;
+/* Дефолтный Filament gap ~2rem (space-y-8). Уменьшаем до ~1rem.
+   Все List-страницы имеют класс вида fi-resource-*-list-page,
+   поэтому таргетим через атрибут class$="-list-page".
+   Ключевой момент: отступы заданы через row-gap на flex/grid контейнерах,
+   а не через margin у дочерних элементов. */
+
+/* Сжимаем вертикальный стек на всех list-страницах */
+html:not([data-admin-overrides="0"]) [class*="-list-page"]{
+  gap: 0.75rem !important;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-header + .fi-sc,
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc{
-  margin-bottom: 1rem !important;
+/* КРИТИЧНО: row-gap на контейнере hero — уменьшаем */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-header-main-ctn{
+  row-gap: 0.5rem !important;
+  padding-block: 0.75rem !important;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-page-content{
+/* КРИТИЧНО: row-gap на контенте — уменьшаем */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-content{
+  row-gap: 0.25rem !important;
   padding-top: 0 !important;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-list-page > .fi-page-header-main-ctn > .fi-header + *{
+/* Сжимаем gap на контейнере таблицы */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta-ctn{
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Уменьшаем отступ после hero-заголовка */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header{
+  margin-bottom: 0 !important;
+}
+
+/* Убираем лишний top-отступ у элемента, следующего за header */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-header + *{
   margin-top: 0 !important;
 }
 
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc + .fi-ta,
-html:not([data-admin-overrides="0"]) .fi-resource-list-page .fi-sc + * .fi-ta{
+/* Сжимаем отступ после фильтров (schema) */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc{
+  margin-bottom: 0.5rem !important;
+}
+
+/* Таблица Filament: убираем все верхние отступы */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta{
   margin-top: 0 !important;
 }
 
-/* Tighten page-level stack gap on all list pages */
-html:not([data-admin-overrides="0"]) .fi-resource-list-page{
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta .fi-ta-header{
+  margin-top: 0 !important;
+  padding-top: 0.5rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-ta .fi-ta-content{
+  margin-top: 0 !important;
+}
+
+/* Tabs strip: tighten spacing */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-tabs{
+  margin-bottom: 0.25rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs{
+  margin-bottom: 0.25rem !important;
+}
+
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-sc-tabs + .fi-ta{
+  margin-top: 0 !important;
+}
+
+/* Убираем лишний padding у контента */
+html:not([data-admin-overrides="0"]) [class*="-list-page"] .fi-page-content{
+  padding-top: 0 !important;
+}
+
+/* ====================================================================== */
+/* === Invitations: голубой стиль как у tenant/staff edit                === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-header,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-header{
   display: flex;
   flex-direction: column;
-  gap: 0.75rem !important;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem 1.15rem;
+  border: 1px solid rgba(197, 212, 232, 0.96);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
+    linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-section,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-section{
+  border-color: #d8e3f1;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-section-header,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-section-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border-bottom: 1px solid #d8e3f1;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-section-content,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-section-content{
+  background: #f8fafc;
+  padding: 1.1rem 1.15rem 1.2rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-input-wrp,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-input-wrp{
+  border-color: #cfd9e8;
+  background: #ffffff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-create-page .fi-input-wrp:focus-within,
+html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-input-wrp:focus-within{
+  border-color: #5f8fdc;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
+}
+
+/* ====================================================================== */
+/* === Roles: голубой стиль как у tenant/staff edit                      === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-resource-roles-list-page .fi-header,
+html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-header{
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.1rem 1.2rem 1.15rem;
+  border: 1px solid rgba(197, 212, 232, 0.96);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 26%),
+    linear-gradient(180deg, #f4f8ff 0%, #e8effa 100%);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-roles-list-page .fi-section,
+html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-section{
+  border-color: #d8e3f1;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  overflow: visible;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-roles-list-page .fi-section-header,
+html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-section-header{
+  background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+  border-bottom: 1px solid #d8e3f1;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-roles-list-page .fi-section-content,
+html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-section-content{
+  background: #f8fafc;
+  padding: 1.1rem 1.15rem 1.2rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-roles-list-page .fi-input-wrp,
+html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-input-wrp{
+  border-color: #cfd9e8;
+  background: #ffffff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-roles-list-page .fi-input-wrp:focus-within,
+html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-input-wrp:focus-within{
+  border-color: #5f8fdc;
+  box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
 }
 </style>
 

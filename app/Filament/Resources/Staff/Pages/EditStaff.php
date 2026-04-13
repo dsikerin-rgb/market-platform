@@ -163,13 +163,14 @@ class EditStaff extends BaseEditRecord
                                 ->revealable()
                                 ->minLength(8)
                                 ->required()
-                                ->dehydrated(false),
+                                ->autocomplete('new-password'),
                             Forms\Components\TextInput::make('password_confirmation')
                                 ->label('Подтверждение пароля')
                                 ->password()
                                 ->revealable()
                                 ->required()
                                 ->same('password')
+                                ->autocomplete('new-password')
                                 ->dehydrated(false),
                         ]),
                 ])
@@ -184,9 +185,10 @@ class EditStaff extends BaseEditRecord
                         return;
                     }
 
-                    $this->record->forceFill([
-                        'password' => Hash::make($plainPassword),
-                    ])->save();
+                    // The User model has 'password' => 'hashed' cast, so it hashes automatically.
+                    // Using direct assignment to ensure the cast triggers correctly.
+                    $this->record->password = $plainPassword;
+                    $this->record->save();
 
                     Notification::make()
                         ->title('Пароль обновлен')

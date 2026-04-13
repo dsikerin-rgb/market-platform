@@ -37,8 +37,8 @@ class OpsDiagnostics extends Page
 
     private const TELESCOPE_DEFAULT_ENABLE_MINUTES = 30;
 
-    private const SQLITE_BACKUP_COMPRESS_AFTER_DAYS = 2;
-    private const SQLITE_BACKUP_DELETE_ARCHIVES_AFTER_DAYS = 60;
+    private const PG_BACKUP_COMPRESS_AFTER_DAYS = 2;
+    private const PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS = 60;
 
     /**
      * Импорт "подложки" карты из JSON (market_map_extract_*.json).
@@ -216,16 +216,17 @@ class OpsDiagnostics extends Page
         // Небольшая диагностика для карты (не ломает страницу, даже если таблицы нет)
         $mapStats = $this->getMapShapesStatsBestEffort();
 
-        $sqliteBackupDefaults = [
-            'compressAfterDays' => self::SQLITE_BACKUP_COMPRESS_AFTER_DAYS,
-            'deleteArchiveAfterDays' => self::SQLITE_BACKUP_DELETE_ARCHIVES_AFTER_DAYS,
+        // PostgreSQL backups
+        $pgBackupDefaults = [
+            'compressAfterDays' => self::PG_BACKUP_COMPRESS_AFTER_DAYS,
+            'deleteArchiveAfterDays' => self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS,
         ];
 
-        $sqliteBackupStatus = $this->getSqliteBackupStatus();
-        $sqliteBackupFiles = $this->getSqliteBackupFiles();
-        $sqliteBackupPreview = $this->getSqliteBackupRotationPreview(
-            self::SQLITE_BACKUP_COMPRESS_AFTER_DAYS,
-            self::SQLITE_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
+        $pgBackupStatus = $this->getPgBackupStatus();
+        $pgBackupFiles = $this->getPgBackupFiles();
+        $pgBackupPreview = $this->getPgBackupRotationPreview(
+            self::PG_BACKUP_COMPRESS_AFTER_DAYS,
+            self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
         );
 
         return [
@@ -256,49 +257,414 @@ class OpsDiagnostics extends Page
             'mapShapesTotal' => $mapStats['total'],
             'mapShapesUnlinked' => $mapStats['unlinked'],
 
-            // SQLite backups
-            'sqliteBackupDefaults' => $sqliteBackupDefaults,
-            'sqliteBackupStatus' => $sqliteBackupStatus,
-            'sqliteBackupFiles' => $sqliteBackupFiles,
-            'sqliteBackupPreview' => $sqliteBackupPreview,
+            // PostgreSQL backups
+            'pgBackupDefaults' => $pgBackupDefaults,
+            'pgBackupStatus' => $pgBackupStatus,
+            'pgBackupFiles' => $pgBackupFiles,
+            'pgBackupPreview' => $pgBackupPreview,
         ];
     }
 
     /**
-     * Action buttons for SQLite backups section (rendered in Blade).
+     * Action buttons for PostgreSQL backups section (rendered in Blade).
      */
-    public function getSqliteBackupActions(): array
+    public function getPgBackupActions(): array
     {
         return [
-            Action::make('createSqliteBackup')
+            Action::make('createPgBackup')
                 ->label('Создать бэкап')
                 ->icon('heroicon-m-arrow-down-tray')
                 ->color('primary')
                 ->action(function (): void {
-                    $this->createSqliteBackup();
+                    $this->createPgBackup();
                 }),
 
-            Action::make('rotateSqliteBackups')
+            Action::make('rotatePgBackups')
                 ->label('Ротация сейчас')
                 ->icon('heroicon-m-arrow-path')
                 ->color('warning')
                 ->requiresConfirmation()
-                ->modalHeading('Ротация бэкапов SQLite')
+                ->modalHeading('Ротация бэкапов PostgreSQL')
                 ->modalDescription(sprintf(
                     'Будут выполнены операции для текущего окружения. '
-                    . 'Сжатие *.sqlite старше %d дней (если нет *.sqlite.gz), '
-                    . 'удаление дублей *.sqlite при наличии *.sqlite.gz, '
-                    . 'удаление архивов *.sqlite.gz старше %d дней.',
-                    self::SQLITE_BACKUP_COMPRESS_AFTER_DAYS,
-                    self::SQLITE_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
+                    . 'Сжатие *.sql старше %d дней (если нет *.sql.gz), '
+                    . 'удаление дублей *.sql при наличии *.sql.gz, '
+                    . 'удаление архивов *.sql.gz старше %d дней.',
+                    self::PG_BACKUP_COMPRESS_AFTER_DAYS,
+                    self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
                 ))
                 ->action(function (): void {
-                    $this->rotateSqliteBackups(
-                        self::SQLITE_BACKUP_COMPRESS_AFTER_DAYS,
-                        self::SQLITE_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
+                    $this->rotatePgBackups(
+                        self::PG_BACKUP_COMPRESS_AFTER_DAYS,
+                        self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
                     );
                 }),
         ];
+    }
+
+    public function createPgBackup(): void
+    {
+        $this->ensureSuperAdmin();
+
+        $backupDir = storage_path('app/backups');
+        File::ensureDirectoryExists($backupDir);
+
+        $dbHost = (string) config('database.connections.pgsql.host', 'localhost');
+        $dbPort = (int) config('database.connections.pgsql.port', 5432);
+        $dbName = (string) config('database.connections.pgsql.database');
+        $dbUser = (string) config('database.connections.pgsql.username');
+
+        if ($dbName === '') {
+            Notification::make()
+                ->title('PostgreSQL БД не настроена')
+                ->body('Параметр database.connections.pgsql.database пуст.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $env = (string) config('app.env');
+        $timestamp = now()->format('Ymd_His');
+        $fileName = "database_{$env}_{$timestamp}.sql";
+        $targetPath = $backupDir . DIRECTORY_SEPARATOR . $fileName;
+
+        $pgDumpCmd = sprintf(
+            'PGPASSWORD=%s pg_dump -h %s -p %d -U %s -F p -f %s %s 2>&1',
+            escapeshellarg((string) config('database.connections.pgsql.password')),
+            escapeshellarg($dbHost),
+            $dbPort,
+            escapeshellarg($dbUser),
+            escapeshellarg($targetPath),
+            escapeshellarg($dbName)
+        );
+
+        $result = Process::timeout(300)->run($pgDumpCmd);
+
+        if (! $result->successful() || ! is_file($targetPath) || filesize($targetPath) <= 0) {
+            File::delete($targetPath);
+
+            Notification::make()
+                ->title('Не удалось создать бэкап')
+                ->body($result->errorOutput() ?: 'pg_dump завершился с ошибкой.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $size = File::size($targetPath);
+
+        Notification::make()
+            ->title('Бэкап PostgreSQL создан')
+            ->body(sprintf(
+                "%s\nРазмер: %s",
+                $fileName,
+                $this->formatBytes($size)
+            ))
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
+    }
+
+    public function rotatePgBackups(int $compressAfterDays, int $deleteArchiveAfterDays): void
+    {
+        $this->ensureSuperAdmin();
+
+        $backupDir = storage_path('app/backups');
+
+        if (! is_dir($backupDir)) {
+            Notification::make()
+                ->title('Директория бэкапов не найдена')
+                ->body("Отсутствует: {$backupDir}")
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $compressAfterDays = max(0, $compressAfterDays);
+        $deleteArchiveAfterDays = max(0, $deleteArchiveAfterDays);
+
+        $candidates = $this->getPgBackupRotationCandidates(
+            $compressAfterDays,
+            $deleteArchiveAfterDays
+        );
+
+        $compressed = 0;
+        $deletedDuplicates = 0;
+        $deletedArchives = 0;
+
+        try {
+            foreach ($candidates['compress'] as $sqlPath) {
+                $gzPath = $sqlPath . '.gz';
+
+                if (is_file($gzPath)) {
+                    continue;
+                }
+
+                if ($this->gzipFile($sqlPath, $gzPath)) {
+                    $compressed++;
+                }
+            }
+
+            foreach ($candidates['deleteDuplicates'] as $duplicatePath) {
+                if (File::delete($duplicatePath)) {
+                    $deletedDuplicates++;
+                }
+            }
+
+            foreach ($candidates['deleteArchives'] as $archivePath) {
+                if (File::delete($archivePath)) {
+                    $deletedArchives++;
+                }
+            }
+
+            Notification::make()
+                ->title('Ротация выполнена')
+                ->body(sprintf(
+                    "Сжато: %d\nУдалено дублей: %d\nУдалено архивов: %d",
+                    $compressed,
+                    $deletedDuplicates,
+                    $deletedArchives
+                ))
+                ->success()
+                ->send();
+
+            $this->dispatch('$refresh');
+        } catch (Throwable $e) {
+            Notification::make()
+                ->title('Ошибка ротации бэкапов')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    private function getPgBackupStatus(): array
+    {
+        $backupDir = storage_path('app/backups');
+        $dbHost = (string) config('database.connections.pgsql.host', 'localhost');
+        $dbPort = (int) config('database.connections.pgsql.port', 5432);
+        $dbName = (string) config('database.connections.pgsql.database');
+
+        $diskPath = is_dir($backupDir) ? $backupDir : storage_path('app');
+        $diskFree = @disk_free_space($diskPath);
+        $diskTotal = @disk_total_space($diskPath);
+
+        $files = $this->getPgBackupFiles();
+        $totalSize = array_sum(array_column($files, 'size'));
+        $lastBackup = $files[0] ?? null;
+
+        return [
+            'dbHost' => $dbHost,
+            'dbPort' => $dbPort,
+            'dbName' => $dbName,
+            'dbDriver' => (string) config('database.connections.pgsql.driver', 'pgsql'),
+            'backupDir' => $backupDir,
+            'backupDirExists' => is_dir($backupDir),
+            'totalBackups' => count($files),
+            'totalSize' => $totalSize,
+            'totalSizeHuman' => $this->formatBytes($totalSize),
+            'lastBackupTimeHuman' => $lastBackup ? Carbon::createFromTimestamp($lastBackup['mtime'])->diffForHumans() : 'Нет',
+            'lastBackupSizeHuman' => $lastBackup ? $lastBackup['sizeHuman'] : '',
+            'diskFree' => is_int($diskFree) ? $diskFree : null,
+            'diskFreeHuman' => is_int($diskFree) ? $this->formatBytes($diskFree) : null,
+            'diskTotal' => is_int($diskTotal) ? $diskTotal : null,
+            'diskTotalHuman' => is_int($diskTotal) ? $this->formatBytes($diskTotal) : null,
+        ];
+    }
+
+    /**
+     * @return array<int, array{name:string,size:int,sizeHuman:string,mtime:int,mtimeHuman:string,type:string}>
+     */
+    private function getPgBackupFiles(): array
+    {
+        $backupDir = storage_path('app/backups');
+
+        if (! is_dir($backupDir)) {
+            return [];
+        }
+
+        $files = [];
+
+        foreach (File::files($backupDir) as $file) {
+            $name = $file->getFilename();
+
+            if (! (str_ends_with($name, '.sql') || str_ends_with($name, '.sql.gz'))) {
+                continue;
+            }
+
+            $size = (int) $file->getSize();
+            $mtime = (int) $file->getMTime();
+            $type = str_ends_with($name, '.sql.gz') ? 'gz' : 'sql';
+
+            $files[] = [
+                'name' => $name,
+                'size' => $size,
+                'sizeHuman' => $this->formatBytes($size),
+                'mtime' => $mtime,
+                'mtimeHuman' => Carbon::createFromTimestamp($mtime)->toDateTimeString(),
+                'type' => $type,
+            ];
+        }
+
+        usort($files, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
+
+        return $files;
+    }
+
+    public function downloadPgBackup(string $file): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $this->ensureSuperAdmin();
+
+        $path = storage_path('app/backups/' . $file);
+        abort_if(! File::exists($path), 404, 'Файл бэкапа не найден.');
+
+        return response()->download($path, $file);
+    }
+
+    public function deletePgBackup(string $fileName): void
+    {
+        $this->ensureSuperAdmin();
+
+        $path = storage_path('app/backups/' . $fileName);
+
+        if (! File::exists($path)) {
+            Notification::make()
+                ->title('Файл не найден')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        File::delete($path);
+
+        Notification::make()
+            ->title('Бэкап удалён')
+            ->body($fileName)
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
+    }
+
+    /**
+     * @return array{compress:array<int,string>,deleteDuplicates:array<int,string>,deleteArchives:array<int,string>}
+     */
+    private function getPgBackupRotationCandidates(int $compressAfterDays, int $deleteArchiveAfterDays): array
+    {
+        $backupDir = storage_path('app/backups');
+
+        if (! is_dir($backupDir)) {
+            return [
+                'compress' => [],
+                'deleteDuplicates' => [],
+                'deleteArchives' => [],
+            ];
+        }
+
+        $compressBefore = now()->subDays($compressAfterDays);
+        $deleteArchiveBefore = now()->subDays($deleteArchiveAfterDays);
+
+        $sqlFiles = glob($backupDir . DIRECTORY_SEPARATOR . '*.sql') ?: [];
+        $gzFiles = glob($backupDir . DIRECTORY_SEPARATOR . '*.sql.gz') ?: [];
+
+        $gzBases = [];
+
+        foreach ($gzFiles as $gzPath) {
+            $base = basename($gzPath, '.sql.gz');
+            $gzBases[$base] = $gzPath;
+        }
+
+        $compress = [];
+        $deleteDuplicates = [];
+
+        foreach ($sqlFiles as $sqlPath) {
+            $base = basename($sqlPath, '.sql');
+
+            if (isset($gzBases[$base])) {
+                $deleteDuplicates[] = $sqlPath;
+                continue;
+            }
+
+            $mtime = filemtime($sqlPath);
+            if ($mtime !== false && Carbon::createFromTimestamp($mtime)->lessThan($compressBefore)) {
+                $compress[] = $sqlPath;
+            }
+        }
+
+        $deleteArchives = [];
+
+        foreach ($gzFiles as $gzPath) {
+            $mtime = filemtime($gzPath);
+            if ($mtime !== false && Carbon::createFromTimestamp($mtime)->lessThan($deleteArchiveBefore)) {
+                $deleteArchives[] = $gzPath;
+            }
+        }
+
+        return [
+            'compress' => $compress,
+            'deleteDuplicates' => $deleteDuplicates,
+            'deleteArchives' => $deleteArchives,
+        ];
+    }
+
+    /**
+     * @return array{compress:array<int,string>,deleteDuplicates:array<int,string>,deleteArchives:array<int,string>}
+     */
+    private function getPgBackupRotationPreview(int $compressAfterDays, int $deleteArchiveAfterDays): array
+    {
+        $candidates = $this->getPgBackupRotationCandidates($compressAfterDays, $deleteArchiveAfterDays);
+
+        return [
+            'compress' => array_map('basename', $candidates['compress']),
+            'deleteDuplicates' => array_map('basename', $candidates['deleteDuplicates']),
+            'deleteArchives' => array_map('basename', $candidates['deleteArchives']),
+        ];
+    }
+
+    private function gzipFile(string $sourcePath, string $targetPath): bool
+    {
+        $source = fopen($sourcePath, 'rb');
+        if ($source === false) {
+            return false;
+        }
+
+        $target = gzopen($targetPath, 'wb9');
+        if ($target === false) {
+            fclose($source);
+
+            return false;
+        }
+
+        stream_copy_to_stream($source, $target);
+        fclose($source);
+        gzclose($target);
+
+        if (! is_file($targetPath) || filesize($targetPath) <= 0) {
+            File::delete($targetPath);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+        $size = (float) $bytes;
+        $unit = 0;
+
+        while ($size >= 1024 && $unit < count($units) - 1) {
+            $size /= 1024;
+            $unit++;
+        }
+
+        return sprintf('%s %s', rtrim(rtrim(number_format($size, 2, '.', ''), '0'), '.'), $units[$unit]);
     }
 
     public function clearCaches(): void
@@ -461,322 +827,6 @@ class OpsDiagnostics extends Page
         $ts = Cache::get(self::TELESCOPE_ENABLED_UNTIL_CACHE_KEY);
 
         return $ts ? Carbon::createFromTimestamp((int) $ts) : null;
-    }
-
-    public function createSqliteBackup(): void
-    {
-        $this->ensureSuperAdmin();
-
-        $dbPath = database_path('database.sqlite');
-        $backupDir = database_path('backups');
-
-        if (! is_file($dbPath)) {
-            Notification::make()
-                ->title('SQLite база не найдена')
-                ->body("Файл отсутствует: {$dbPath}")
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        File::ensureDirectoryExists($backupDir);
-
-        $env = (string) config('app.env');
-        $timestamp = now()->format('Ymd_His');
-        $fileName = "database_{$env}_{$timestamp}.sqlite";
-        $targetPath = $backupDir . DIRECTORY_SEPARATOR . $fileName;
-
-        try {
-            if (! File::copy($dbPath, $targetPath)) {
-                throw new \RuntimeException('Не удалось скопировать файл базы данных.');
-            }
-
-            $size = File::size($targetPath);
-
-            if ($size <= 0) {
-                File::delete($targetPath);
-                throw new \RuntimeException('Размер бэкапа равен нулю.');
-            }
-
-            Notification::make()
-                ->title('Бэкап создан')
-                ->body(sprintf(
-                    "%s\nРазмер: %s",
-                    $fileName,
-                    $this->formatBytes($size)
-                ))
-                ->success()
-                ->send();
-
-            $this->dispatch('$refresh');
-        } catch (Throwable $e) {
-            Notification::make()
-                ->title('Не удалось создать бэкап')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
-    }
-
-    public function rotateSqliteBackups(int $compressAfterDays, int $deleteArchiveAfterDays): void
-    {
-        $this->ensureSuperAdmin();
-
-        $backupDir = database_path('backups');
-
-        if (! is_dir($backupDir)) {
-            Notification::make()
-                ->title('Директория бэкапов не найдена')
-                ->body("Отсутствует: {$backupDir}")
-                ->warning()
-                ->send();
-
-            return;
-        }
-
-        $compressAfterDays = max(0, $compressAfterDays);
-        $deleteArchiveAfterDays = max(0, $deleteArchiveAfterDays);
-
-        $candidates = $this->getSqliteBackupRotationCandidates(
-            $compressAfterDays,
-            $deleteArchiveAfterDays
-        );
-
-        $compressed = 0;
-        $deletedDuplicates = 0;
-        $deletedArchives = 0;
-
-        try {
-            foreach ($candidates['compress'] as $sqlitePath) {
-                $gzPath = $sqlitePath . '.gz';
-
-                if (is_file($gzPath)) {
-                    continue;
-                }
-
-                if ($this->gzipFile($sqlitePath, $gzPath)) {
-                    $compressed++;
-                }
-            }
-
-            foreach ($candidates['deleteDuplicates'] as $duplicatePath) {
-                if (File::delete($duplicatePath)) {
-                    $deletedDuplicates++;
-                }
-            }
-
-            foreach ($candidates['deleteArchives'] as $archivePath) {
-                if (File::delete($archivePath)) {
-                    $deletedArchives++;
-                }
-            }
-
-            Notification::make()
-                ->title('Ротация выполнена')
-                ->body(sprintf(
-                    "Сжато: %d\nУдалено дублей: %d\nУдалено архивов: %d",
-                    $compressed,
-                    $deletedDuplicates,
-                    $deletedArchives
-                ))
-                ->success()
-                ->send();
-
-            $this->dispatch('$refresh');
-        } catch (Throwable $e) {
-            Notification::make()
-                ->title('Ошибка ротации бэкапов')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
-    }
-
-    private function getSqliteBackupStatus(): array
-    {
-        $dbPath = database_path('database.sqlite');
-        $backupDir = database_path('backups');
-        $dbExists = is_file($dbPath);
-
-        $dbSize = $dbExists ? filesize($dbPath) : null;
-        $dbMtime = $dbExists ? filemtime($dbPath) : null;
-
-        $diskPath = is_dir($backupDir) ? $backupDir : dirname($dbPath);
-        $diskFree = @disk_free_space($diskPath);
-        $diskTotal = @disk_total_space($diskPath);
-
-        return [
-            'dbPath' => $dbPath,
-            'dbExists' => $dbExists,
-            'dbSize' => $dbSize,
-            'dbSizeHuman' => $dbSize !== null ? $this->formatBytes((int) $dbSize) : null,
-            'dbMtime' => $dbMtime,
-            'dbMtimeHuman' => $dbMtime !== null
-                ? Carbon::createFromTimestamp((int) $dbMtime)->toDateTimeString()
-                : null,
-            'backupDir' => $backupDir,
-            'backupDirExists' => is_dir($backupDir),
-            'diskFree' => is_int($diskFree) ? $diskFree : null,
-            'diskFreeHuman' => is_int($diskFree) ? $this->formatBytes($diskFree) : null,
-            'diskTotal' => is_int($diskTotal) ? $diskTotal : null,
-            'diskTotalHuman' => is_int($diskTotal) ? $this->formatBytes($diskTotal) : null,
-        ];
-    }
-
-    /**
-     * @return array<int, array{name:string,size:int,sizeHuman:string,mtime:int,mtimeHuman:string,type:string}>
-     */
-    private function getSqliteBackupFiles(): array
-    {
-        $backupDir = database_path('backups');
-
-        if (! is_dir($backupDir)) {
-            return [];
-        }
-
-        $files = [];
-
-        foreach (File::files($backupDir) as $file) {
-            $name = $file->getFilename();
-
-            if (! (str_ends_with($name, '.sqlite') || str_ends_with($name, '.sqlite.gz'))) {
-                continue;
-            }
-
-            $size = (int) $file->getSize();
-            $mtime = (int) $file->getMTime();
-            $type = str_ends_with($name, '.sqlite.gz') ? 'gz' : 'sqlite';
-
-            $files[] = [
-                'name' => $name,
-                'size' => $size,
-                'sizeHuman' => $this->formatBytes($size),
-                'mtime' => $mtime,
-                'mtimeHuman' => Carbon::createFromTimestamp($mtime)->toDateTimeString(),
-                'type' => $type,
-            ];
-        }
-
-        usort($files, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
-
-        return $files;
-    }
-
-    /**
-     * @return array{compress:array<int,string>,deleteDuplicates:array<int,string>,deleteArchives:array<int,string>}
-     */
-    private function getSqliteBackupRotationCandidates(int $compressAfterDays, int $deleteArchiveAfterDays): array
-    {
-        $backupDir = database_path('backups');
-
-        if (! is_dir($backupDir)) {
-            return [
-                'compress' => [],
-                'deleteDuplicates' => [],
-                'deleteArchives' => [],
-            ];
-        }
-
-        $compressBefore = now()->subDays($compressAfterDays);
-        $deleteArchiveBefore = now()->subDays($deleteArchiveAfterDays);
-
-        $sqliteFiles = glob($backupDir . DIRECTORY_SEPARATOR . '*.sqlite') ?: [];
-        $gzFiles = glob($backupDir . DIRECTORY_SEPARATOR . '*.sqlite.gz') ?: [];
-
-        $gzBases = [];
-
-        foreach ($gzFiles as $gzPath) {
-            $base = basename($gzPath, '.sqlite.gz');
-            $gzBases[$base] = $gzPath;
-        }
-
-        $compress = [];
-        $deleteDuplicates = [];
-
-        foreach ($sqliteFiles as $sqlitePath) {
-            $base = basename($sqlitePath, '.sqlite');
-
-            if (isset($gzBases[$base])) {
-                $deleteDuplicates[] = $sqlitePath;
-                continue;
-            }
-
-            $mtime = filemtime($sqlitePath);
-            if ($mtime !== false && Carbon::createFromTimestamp($mtime)->lessThan($compressBefore)) {
-                $compress[] = $sqlitePath;
-            }
-        }
-
-        $deleteArchives = [];
-
-        foreach ($gzFiles as $gzPath) {
-            $mtime = filemtime($gzPath);
-            if ($mtime !== false && Carbon::createFromTimestamp($mtime)->lessThan($deleteArchiveBefore)) {
-                $deleteArchives[] = $gzPath;
-            }
-        }
-
-        return [
-            'compress' => $compress,
-            'deleteDuplicates' => $deleteDuplicates,
-            'deleteArchives' => $deleteArchives,
-        ];
-    }
-
-    /**
-     * @return array{compress:array<int,string>,deleteDuplicates:array<int,string>,deleteArchives:array<int,string>}
-     */
-    private function getSqliteBackupRotationPreview(int $compressAfterDays, int $deleteArchiveAfterDays): array
-    {
-        $candidates = $this->getSqliteBackupRotationCandidates($compressAfterDays, $deleteArchiveAfterDays);
-
-        return [
-            'compress' => array_map('basename', $candidates['compress']),
-            'deleteDuplicates' => array_map('basename', $candidates['deleteDuplicates']),
-            'deleteArchives' => array_map('basename', $candidates['deleteArchives']),
-        ];
-    }
-
-    private function gzipFile(string $sourcePath, string $targetPath): bool
-    {
-        $source = fopen($sourcePath, 'rb');
-        if ($source === false) {
-            return false;
-        }
-
-        $target = gzopen($targetPath, 'wb9');
-        if ($target === false) {
-            fclose($source);
-
-            return false;
-        }
-
-        stream_copy_to_stream($source, $target);
-        fclose($source);
-        gzclose($target);
-
-        if (! is_file($targetPath) || filesize($targetPath) <= 0) {
-            File::delete($targetPath);
-
-            return false;
-        }
-
-        return true;
-    }
-
-    private function formatBytes(int $bytes): string
-    {
-        $units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
-        $size = (float) $bytes;
-        $unit = 0;
-
-        while ($size >= 1024 && $unit < count($units) - 1) {
-            $size /= 1024;
-            $unit++;
-        }
-
-        return sprintf('%s %s', rtrim(rtrim(number_format($size, 2, '.', ''), '0'), '.'), $units[$unit]);
     }
 
     private function ensureSuperAdmin(): void

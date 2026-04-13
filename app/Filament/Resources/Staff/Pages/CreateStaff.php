@@ -12,6 +12,26 @@ class CreateStaff extends BaseCreateRecord
 {
     protected static string $resource = StaffResource::class;
 
+    public function getBreadcrumbs(): array
+    {
+        return [
+            StaffResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+        ];
+    }
+
+    public function getSubheading(): string|null
+    {
+        return null;
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-staff-create-page',
+        ];
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $user = Filament::auth()->user();
