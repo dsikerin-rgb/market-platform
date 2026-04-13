@@ -17,9 +17,18 @@
             background-image: url('/images/login-pattern.png');
             background-size: 180px 180px;
             opacity: 0.15;
-            transform: rotate(45deg);
             pointer-events: none;
             z-index: 0;
+        }
+        .fi-simple-main,
+        .fi-simple-main > .fi-simple-page,
+        .fi-simple-main .fi-simple-page-content,
+        .fi-simple-main .fi-simple-main-ctn {
+            padding: 0 !important;
+            border-radius: 1.5rem !important;
+        }
+        .fi-simple-main {
+            box-shadow: 0 20px 60px rgba(14, 116, 144, 0.15), 0 8px 24px rgba(3, 105, 161, 0.08);
         }
         .fi-simple-main-ctn {
             position: relative;
@@ -35,6 +44,8 @@
             border-radius: 1.5rem;
             box-shadow: 0 20px 60px rgba(14, 116, 144, 0.12), 0 8px 24px rgba(3, 105, 161, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            z-index: 2;
         }
 
         .login-header {
