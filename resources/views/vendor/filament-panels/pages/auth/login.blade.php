@@ -2,12 +2,18 @@
     <style>
         .fi-simple-layout {
             background-color: #f0f9ff;
-            position: relative;
+            overflow: hidden;
+            min-height: 100vh;
         }
         .fi-simple-layout::before {
             content: '';
-            position: absolute;
-            inset: -200px;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 200vw;
+            height: 200vh;
+            margin-left: -100vw;
+            margin-top: -100vh;
             background-image: url('/images/login-pattern.png');
             background-size: 180px 180px;
             opacity: 0.15;
@@ -23,10 +29,12 @@
             max-width: 720px !important;
             width: 100%;
             margin: 0 auto;
-            background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border-radius: 1.5rem;
             box-shadow: 0 20px 60px rgba(14, 116, 144, 0.12), 0 8px 24px rgba(3, 105, 161, 0.08);
-            border: 1px solid rgba(186, 230, 253, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
         .login-header {
