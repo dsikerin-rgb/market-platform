@@ -1,5 +1,24 @@
 <x-filament-panels::page.simple :heading="null" :subheading="null" :logo="false">
     <style>
+        .fi-simple-layout {
+            background-color: #f0f9ff;
+            position: relative;
+        }
+        .fi-simple-layout::before {
+            content: '';
+            position: absolute;
+            inset: -200px;
+            background-image: url('/images/login-pattern.png');
+            background-size: 180px 180px;
+            opacity: 0.15;
+            transform: rotate(45deg);
+            pointer-events: none;
+            z-index: 0;
+        }
+        .fi-simple-main-ctn {
+            position: relative;
+            z-index: 1;
+        }
         .login-container {
             max-width: 720px !important;
             width: 100%;
@@ -12,7 +31,7 @@
 
         .login-header {
             background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%);
-            padding: 2rem 1.5rem;
+            padding: 1.25rem 1.5rem 1rem;
             text-align: center;
             color: white;
             position: relative;
