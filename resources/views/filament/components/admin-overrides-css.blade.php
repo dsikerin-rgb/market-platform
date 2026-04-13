@@ -2509,7 +2509,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-invitations-edit-page .fi-inpu
 
 /* === Login page styles === */
 .login-container {
-    max-width: 600px;
+    max-width: 720px;
     width: 100%;
     margin: 0 auto;
     background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
