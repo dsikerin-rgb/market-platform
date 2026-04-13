@@ -162,8 +162,7 @@ class EditStaff extends BaseEditRecord
                                 ->password()
                                 ->revealable()
                                 ->minLength(8)
-                                ->required()
-                                ->dehydrated(false),
+                                ->required(),
                             Forms\Components\TextInput::make('password_confirmation')
                                 ->label('Подтверждение пароля')
                                 ->password()
