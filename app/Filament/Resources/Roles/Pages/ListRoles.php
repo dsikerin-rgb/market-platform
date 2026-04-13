@@ -9,6 +9,24 @@ class ListRoles extends ListRecords
 {
     protected static string $resource = RoleResource::class;
 
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
+
+    public function getHeading(): string|\Illuminate\Support\HtmlString|null
+    {
+        return 'Роли и доступы';
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-roles-list-page',
+        ];
+    }
+
     protected function getHeaderActions(): array
     {
         $actions = [];

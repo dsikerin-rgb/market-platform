@@ -14,6 +14,26 @@ class EditRole extends BaseEditRecord
      */
     private const SYSTEM_ROLES = ['super-admin', 'market-admin', 'merchant'];
 
+    public function getBreadcrumbs(): array
+    {
+        return [
+            RoleResource::getUrl('index') => (string) static::$resource::getPluralModelLabel(),
+        ];
+    }
+
+    public function getSubheading(): string|\Illuminate\Support\HtmlString|null
+    {
+        return null;
+    }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-roles-edit-page',
+        ];
+    }
+
     protected function mutateFormDataBeforeFill(array $data): array
     {
         // guard всегда web
