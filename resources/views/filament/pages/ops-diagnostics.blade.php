@@ -398,61 +398,61 @@
                 heading="Бэкапы PostgreSQL"
                 description="Управление дампами базы данных и ротация архивов."
             >
-                {{-- Статистика --}}
-                <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-                        <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">База данных</p>
-                        <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
-                        <p class="text-xs text-gray-400">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
+                {{-- Статистика: 4 карточки в ряд --}}
+                <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">База данных</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
                     </div>
 
-                    <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-                        <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Бэкапы</p>
-                        <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
-                        <p class="text-xs text-gray-400">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Бэкапы</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
                     </div>
 
-                    <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-                        <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Последний бэкап</p>
-                        <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
-                        <p class="text-xs text-gray-400">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Последний бэкап</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
                     </div>
 
-                    <div class="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-                        <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Диск</p>
-                        <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
-                        <p class="text-xs text-gray-400">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
+                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
+                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Диск</p>
+                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
+                        <p style="font-size:.75rem; color:#9ca3af;">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
                     </div>
                 </div>
 
                 {{-- Действия --}}
-                <div class="mb-6">
+                <div style="margin-bottom:1.5rem;">
                     <x-filament::actions :actions="$this->getPgBackupActions()" :alignment="'start'" />
                 </div>
 
                 {{-- Список файлов --}}
-                <div class="space-y-3">
-                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Файлы бэкапов</h3>
+                <div style="display:grid; gap:.75rem;">
+                    <p style="font-size:.875rem; font-weight:600; color:#374151;">Файлы бэкапов</p>
 
                     @if (! empty($pgBackupFilesLocal))
-                        <div class="divide-y divide-gray-200 overflow-hidden rounded-xl border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
-                            @foreach ($pgBackupFilesLocal as $file)
-                                <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                                    <div class="flex items-center gap-3">
-                                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
+                        <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; overflow:hidden;">
+                            @foreach ($pgBackupFilesLocal as $idx => $file)
+                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding:.75rem 1rem; border-bottom:1px solid rgba(0,0,0,.06);{{ $idx === count($pgBackupFilesLocal) - 1 ? ' border-bottom:0;' : '' }}">
+                                    <div style="display:flex; align-items:center; gap:.75rem; flex:1; min-width:0;">
+                                        <div style="display:flex; align-items:center; justify-content:center; width:2.25rem; height:2.25rem; border-radius:.5rem; background:rgba(0,0,0,.06); flex-shrink:0;">
                                             @if ($file['type'] === 'gz')
-                                                <x-heroicon-o-archive-box class="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                                                <x-heroicon-o-archive-box style="width:1.125rem; height:1.125rem; color:#6b7280;" />
                                             @else
-                                                <x-heroicon-o-document-text class="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                                                <x-heroicon-o-document-text style="width:1.125rem; height:1.125rem; color:#6b7280;" />
                                             @endif
                                         </div>
-                                        <div class="min-w-0">
-                                            <p class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ $file['name'] }}</p>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ $file['mtimeHuman'] }} • {{ $file['sizeHuman'] }}</p>
+                                        <div style="min-width:0;">
+                                            <p style="font-size:.8125rem; font-weight:500; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $file['name'] }}</p>
+                                            <p style="font-size:.6875rem; color:#6b7280;">{{ $file['mtimeHuman'] }} · {{ $file['sizeHuman'] }}</p>
                                         </div>
                                     </div>
 
-                                    <div class="flex items-center gap-2">
+                                    <div style="display:flex; align-items:center; gap:.5rem; flex-shrink:0;">
                                         <x-filament::badge :color="$file['type'] === 'gz' ? 'success' : 'gray'" size="sm">
                                             {{ $file['type'] === 'gz' ? 'GZIP' : 'SQL' }}
                                         </x-filament::badge>
@@ -483,63 +483,67 @@
                             @endforeach
                         </div>
                     @else
-                        <div class="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 py-10 text-center dark:border-gray-700">
-                            <x-heroicon-o-inbox class="mb-2 h-10 w-10 text-gray-400" />
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Бэкапы ещё не создавались</p>
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed rgba(0,0,0,.15); border-radius:.75rem; padding:2.5rem 1.5rem; text-align:center;">
+                            <svg style="flex-shrink:0; width:2.5rem; height:2.5rem; max-width:2.5rem; max-height:2.5rem; color:#9ca3af; margin-bottom:.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
+                            <p style="font-size:.8125rem; color:#6b7280;">Бэкапы ещё не создавались</p>
                         </div>
                     @endif
                 </div>
 
                 {{-- Предпросмотр ротации (скрыт по умолчанию) --}}
-                <div x-data="{ open: false }" class="mt-6">
+                <div x-data="{ open: false }" style="margin-top:1.5rem;">
                     <button
                         @click="open = ! open"
-                        class="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700/50"
+                        style="display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.5rem .75rem; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
                     >
+                        <svg style="flex-shrink:0; width:1rem; height:1rem; max-width:1rem; max-height:1rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
                         <span>Предпросмотр ротации</span>
-                        <x-heroicon-o-chevron-down class="h-5 w-5 transition-transform" :class="open ? 'rotate-180' : ''" />
                     </button>
 
-                    <div x-show="open" x-collapse class="mt-3 space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                    <div x-show="open" x-collapse style="margin-top:.75rem; border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(0,0,0,.03); padding:1rem;">
+                        <p style="font-size:.6875rem; color:#6b7280; margin-bottom:.75rem;">
                             Сжатие старше {{ $pgBackupDefaultsLocal['compressAfterDays'] }} дн., удаление архивов старше {{ $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.
                         </p>
 
-                        <div class="grid gap-4 sm:grid-cols-3">
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem;">
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 dark:text-gray-300">Сжать (*.sql → *.gz)</p>
+                                <p style="font-size:.6875rem; font-weight:600; color:#374151;">Сжать (*.sql → *.gz)</p>
                                 @if (! empty($pgBackupPreviewLocal['compress']))
-                                    <ul class="mt-1 space-y-1">
+                                    <ul style="margin-top:.25rem; padding-left:1rem;">
                                         @foreach ($pgBackupPreviewLocal['compress'] as $f)
-                                            <li class="text-xs text-gray-500 dark:text-gray-400">• {{ $f }}</li>
+                                            <li style="font-size:.6875rem; color:#6b7280;">• {{ $f }}</li>
                                         @endforeach
                                     </ul>
                                 @else
-                                    <p class="mt-1 text-xs text-gray-400">Нет</p>
+                                    <p style="margin-top:.25rem; font-size:.6875rem; color:#9ca3af;">Нет</p>
                                 @endif
                             </div>
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 dark:text-gray-300">Удалить дубли</p>
+                                <p style="font-size:.6875rem; font-weight:600; color:#374151;">Удалить дубли</p>
                                 @if (! empty($pgBackupPreviewLocal['deleteDuplicates']))
-                                    <ul class="mt-1 space-y-1">
+                                    <ul style="margin-top:.25rem; padding-left:1rem;">
                                         @foreach ($pgBackupPreviewLocal['deleteDuplicates'] as $f)
-                                            <li class="text-xs text-gray-500 dark:text-gray-400">• {{ $f }}</li>
+                                            <li style="font-size:.6875rem; color:#6b7280;">• {{ $f }}</li>
                                         @endforeach
                                     </ul>
                                 @else
-                                    <p class="mt-1 text-xs text-gray-400">Нет</p>
+                                    <p style="margin-top:.25rem; font-size:.6875rem; color:#9ca3af;">Нет</p>
                                 @endif
                             </div>
                             <div>
-                                <p class="text-xs font-semibold text-gray-600 dark:text-gray-300">Удалить архивы</p>
+                                <p style="font-size:.6875rem; font-weight:600; color:#374151;">Удалить архивы</p>
                                 @if (! empty($pgBackupPreviewLocal['deleteArchives']))
-                                    <ul class="mt-1 space-y-1">
+                                    <ul style="margin-top:.25rem; padding-left:1rem;">
                                         @foreach ($pgBackupPreviewLocal['deleteArchives'] as $f)
-                                            <li class="text-xs text-gray-500 dark:text-gray-400">• {{ $f }}</li>
+                                            <li style="font-size:.6875rem; color:#6b7280;">• {{ $f }}</li>
                                         @endforeach
                                     </ul>
                                 @else
-                                    <p class="mt-1 text-xs text-gray-400">Нет</p>
+                                    <p style="margin-top:.25rem; font-size:.6875rem; color:#9ca3af;">Нет</p>
                                 @endif
                             </div>
                         </div>
