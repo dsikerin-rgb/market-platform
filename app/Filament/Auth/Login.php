@@ -14,6 +14,23 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 class Login extends BaseLogin
 {
+    protected string $view = 'filament-panels::pages.auth.login';
+
+    public function getHeading(): string
+    {
+        return '';
+    }
+
+    public function getSubHeading(): ?string
+    {
+        return null;
+    }
+
+    public function hasLogo(): bool
+    {
+        return false;
+    }
+
     public function mount(): void
     {
         if (Filament::auth()->check()) {
