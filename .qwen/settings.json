@@ -6,7 +6,24 @@
       "Bash(git push *)",
       "Bash(git reset *)",
       "Bash(git checkout *)",
-      "Bash(git *)"
+      "Bash(move *)",
+      "Bash(php *)",
+      "Bash(ssh *)",
+      "Bash(git stash)",
+      "Bash(git cherry-pick *)",
+      "Bash(git tag *)",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(curl *)",
+      "Bash(scp *)",
+      "Bash(sleep *)",
+      "Bash(git show *)",
+      "Bash(type *)",
+      "Bash(mkdir *)",
+      "Bash(del *)",
+      "Bash(findstr *)",
+      "Bash(dir *)",
+      "Bash(ren *)"
     ]
   },
   "$version": 3
