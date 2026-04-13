@@ -498,6 +498,7 @@
                         @click="open = ! open"
                         style="display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.5rem .75rem; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
                     >
+                        <!-- Fix: replaced x-heroicon-o-chevron-down with inline svg to avoid Blade :class error -->
                         <svg style="flex-shrink:0; width:1rem; height:1rem; max-width:1rem; max-height:1rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                         </svg>
