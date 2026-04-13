@@ -26,6 +26,7 @@ class RoleForm
             ->preload()
             ->required()
             ->reactive()
+            ->disabled(fn ($record) => $record && in_array($record->name, ['super-admin', 'market-admin', 'merchant']))
             ->afterStateHydrated(function ($state, callable $set) use ($roleOptions) {
                 if (is_string($state) && $state !== '' && ! array_key_exists($state, $roleOptions)) {
                     $set('name_custom', $state);
@@ -35,7 +36,7 @@ class RoleForm
             ->dehydrateStateUsing(fn ($state, $get) => $state === '__custom'
                 ? trim((string) $get('name_custom'))
                 : (string) $state)
-            ->helperText('Системные коды лучше не менять. Для новых прав используйте "Другая".')
+            ->helperText('Системные коды лучше не менять.')
             ->columnSpan(['default' => 12, 'md' => 4]);
 
         $customNameField = Forms\Components\TextInput::make('name_custom')
@@ -128,14 +129,59 @@ class RoleForm
             })
             ->columnSpan(['default' => 12, 'md' => 6]);
 
-        $permissionsField = Forms\Components\Select::make('permissions')
+        // --- Permissions CheckboxList with Grouping ---
+        $permissionsField = Forms\Components\CheckboxList::make('permissions')
             ->label('Доступы и разрешения')
-            ->multiple()
-            ->preload()
-            ->searchable()
-            ->relationship('permissions', 'name')
-            ->getOptionLabelFromRecordUsing(fn ($record): string => PermissionDisplayCatalog::label((string) $record->name))
-            ->helperText('Выберите права, которые должна предоставлять роль. Используйте поиск для быстрого фильтра.')
+            ->helperText('Выберите права, которые должна предоставлять роль.')
+            ->columns(1)
+            ->bulkToggleable()
+            ->options(function () {
+                $permissions = Permission::all()->sortBy('name');
+                $groups = [
+                    'Настройки рынка' => [],
+                    'Сотрудники' => [],
+                    'Арендаторы' => [],
+                    'Договоры' => [],
+                    'Маркетплейс' => [],
+                    'Заявки' => [],
+                    'Задачи' => [],
+                    'Контент' => [],
+                    'Интеграции' => [],
+                    'Другое' => [],
+                ];
+
+                $map = [
+                    'market-' => 'Настройки рынка',
+                    'staff-' => 'Сотрудники',
+                    'tenant-' => 'Арендаторы',
+                    'contract-' => 'Договоры',
+                    'marketplace-' => 'Маркетплейс',
+                    'request-' => 'Заявки',
+                    'task-' => 'Задачи',
+                    'content-' => 'Контент',
+                    'integration-' => 'Интеграции',
+                ];
+
+                foreach ($permissions as $perm) {
+                    $found = false;
+                    foreach ($map as $prefix => $groupName) {
+                        if (str_starts_with($perm->name, $prefix)) {
+                            $groups[$groupName][$perm->id] = PermissionDisplayCatalog::label($perm->name);
+                            $found = true;
+                            break;
+                        }
+                    }
+                    if (! $found) {
+                        $groups['Другое'][$perm->id] = PermissionDisplayCatalog::label($perm->name);
+                    }
+                }
+
+                // Remove empty groups
+                return array_filter($groups, fn ($g) => ! empty($g));
+            })
+            ->saveRelationshipsUsing(function ($record, $state) {
+                $record->permissions()->sync($state ?? []);
+            })
             ->columnSpan(2);
 
         return $schema->components([
