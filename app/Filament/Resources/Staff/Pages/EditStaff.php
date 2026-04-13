@@ -184,8 +184,9 @@ class EditStaff extends BaseEditRecord
                         return;
                     }
 
+                    // The User model has 'password' => 'hashed' cast, so it hashes automatically.
                     $this->record->forceFill([
-                        'password' => Hash::make($plainPassword),
+                        'password' => $plainPassword,
                     ])->save();
 
                     Notification::make()
