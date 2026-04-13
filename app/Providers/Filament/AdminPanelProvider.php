@@ -129,7 +129,7 @@ class AdminPanelProvider extends PanelProvider
             })
 
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::Sky,
             ])
 
             // Favicon (нативный способ Filament).
