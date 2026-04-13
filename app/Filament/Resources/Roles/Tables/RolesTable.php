@@ -37,41 +37,48 @@ class RolesTable
                     ->label('Название')
                     ->formatStateUsing(fn ($state, $record) => $state ?: RoleScenarioCatalog::labelForSlug((string) $record->name, (string) $record->name))
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->weight('600')
+                    ->size('sm'),
 
                 Tables\Columns\TextColumn::make('name')
                     ->label('Код роли')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->size('sm'),
 
                 Tables\Columns\TextColumn::make('role_profile')
                     ->label('Профиль')
                     ->getStateUsing(fn ($record) => RoleScenarioCatalog::descriptionForSlug((string) $record->name) ?? 'Кастомный профиль')
                     ->wrap()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->size('sm')
+                    ->color('gray-600'),
 
                 Tables\Columns\TextColumn::make('notification_topics')
-                    ->label('Сценарии уведомлений')
+                    ->label('Уведомления')
                     ->getStateUsing(fn ($record) => RoleScenarioCatalog::topicSummaryForSlug((string) $record->name))
                     ->wrap()
-                    ->toggleable(),
-
-                Tables\Columns\TextColumn::make('guard_name')
-                    ->label('Guard')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable()
+                    ->size('sm')
+                    ->color('gray-500'),
 
                 Tables\Columns\TextColumn::make('permissions.name')
                     ->label('Права')
                     ->formatStateUsing(fn (string $state): string => PermissionDisplayCatalog::label($state))
                     ->badge()
-                    ->separator(', '),
+                    ->separator(', ')
+                    ->size('sm')
+                    ->color('primary')
+                    ->limit(3),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Создана')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->size('sm'),
             ])
             ->filters([
                 //
