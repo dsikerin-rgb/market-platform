@@ -10,7 +10,6 @@ use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 
@@ -46,7 +45,7 @@ class StaffForm
                     ->minLength(8)
                     ->required(fn (string $operation) => $operation === 'create')
                     ->dehydrated(fn ($state) => filled($state))
-                    ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null),
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
 
                 Forms\Components\TextInput::make('password_confirmation')
                     ->label('Подтверждение')
