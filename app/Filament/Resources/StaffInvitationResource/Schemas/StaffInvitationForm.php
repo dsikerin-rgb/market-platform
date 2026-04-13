@@ -92,6 +92,7 @@ class StaffInvitationForm
                         ->maxLength(255)
                         ->unique(ignoreRecord: true)
                         ->placeholder('new-user@example.com')
+                        ->autocomplete('new-email')
                         ->columnSpan(1),
 
                     Forms\Components\Select::make('roles')
@@ -186,6 +187,7 @@ class StaffInvitationForm
                         ->email()
                         ->required()
                         ->maxLength(255)
+                        ->autocomplete('new-email')
                         ->columnSpan(1),
 
                     Forms\Components\Select::make('roles')

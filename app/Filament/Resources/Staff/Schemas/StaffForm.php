@@ -44,6 +44,7 @@ class StaffForm
                     ->revealable()
                     ->minLength(8)
                     ->required(fn (string $operation) => $operation === 'create')
+                    ->autocomplete('new-password')
                     ->dehydrated(fn ($state) => filled($state))
                     ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
 
@@ -53,6 +54,7 @@ class StaffForm
                     ->revealable()
                     ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
                     ->same('password')
+                    ->autocomplete('new-password')
                     ->dehydrated(false),
             ]),
         ];
@@ -80,6 +82,7 @@ class StaffForm
                         ->maxLength(255)
                         ->unique(ignoreRecord: true)
                         ->placeholder('user@example.com')
+                        ->autocomplete('new-email')
                         ->columnSpan(['default' => 12, 'md' => 6]),
                 ]),
 
