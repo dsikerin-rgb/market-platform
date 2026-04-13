@@ -16,7 +16,7 @@ class ListRoles extends ListRecords
 
     public function getHeading(): string|\Illuminate\Support\HtmlString|null
     {
-        return null;
+        return 'Роли и доступы';
     }
 
     public function getPageClasses(): array

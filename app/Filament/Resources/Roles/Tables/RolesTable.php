@@ -66,12 +66,11 @@ class RolesTable
 
                 Tables\Columns\TextColumn::make('permissions.name')
                     ->label('Права')
-                    ->formatStateUsing(fn (string $state): string => PermissionDisplayCatalog::label($state))
-                    ->badge()
-                    ->separator(', ')
+                    ->counts('permissions')
+                    ->formatStateUsing(fn ($state): string => $state . ' разрешений')
                     ->size('sm')
-                    ->color('primary')
-                    ->limit(3),
+                    ->color('gray')
+                    ->icon('heroicon-o-key'),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Создана')
