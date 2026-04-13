@@ -484,7 +484,7 @@
                         </div>
                     @else
                         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed rgba(0,0,0,.15); border-radius:.75rem; padding:2.5rem 1.5rem; text-align:center;">
-                            <svg style="width:2.5rem; height:2.5rem; color:#9ca3af; margin-bottom:.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <svg style="flex-shrink:0; width:2.5rem; height:2.5rem; max-width:2.5rem; max-height:2.5rem; color:#9ca3af; margin-bottom:.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                             </svg>
                             <p style="font-size:.8125rem; color:#6b7280;">Бэкапы ещё не создавались</p>
@@ -496,12 +496,12 @@
                 <div x-data="{ open: false }" style="margin-top:1.5rem;">
                     <button
                         @click="open = ! open"
-                        style="display:flex; align-items:center; justify-content:space-between; width:100%; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.75rem 1rem; text-align:left; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
+                        style="display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.5rem .75rem; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
                     >
-                        <span>Предпросмотр ротации</span>
-                        <svg style="width:1.25rem; height:1.25rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <svg style="flex-shrink:0; width:1rem; height:1rem; max-width:1rem; max-height:1rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
                         </svg>
+                        <span>Предпросмотр ротации</span>
                     </button>
 
                     <div x-show="open" x-collapse style="margin-top:.75rem; border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(0,0,0,.03); padding:1rem;">
