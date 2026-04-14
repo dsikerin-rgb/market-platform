@@ -15,6 +15,16 @@ class RoleForm
 {
     public static function configure(Schema $schema): Schema
     {
+        // Загружаем permissions один раз и переиспользуем на всей странице
+        $permissions = Permission::all()->sortBy('name');
+        $permissionsById = [];
+        $permissionsOptions = [];
+
+        foreach ($permissions as $perm) {
+            $permissionsById[$perm->id] = $perm->name;
+            $permissionsOptions[$perm->id] = PermissionDisplayCatalog::label($perm->name);
+        }
+
         $roleOptions = RoleScenarioCatalog::options() + [
             '__custom' => 'Другая (ввести вручную)',
         ];
@@ -26,6 +36,7 @@ class RoleForm
             ->preload()
             ->required()
             ->reactive()
+            ->disabled(fn ($record) => $record && in_array($record->name, ['super-admin', 'market-admin', 'merchant']))
             ->afterStateHydrated(function ($state, callable $set) use ($roleOptions) {
                 if (is_string($state) && $state !== '' && ! array_key_exists($state, $roleOptions)) {
                     $set('name_custom', $state);
@@ -35,7 +46,7 @@ class RoleForm
             ->dehydrateStateUsing(fn ($state, $get) => $state === '__custom'
                 ? trim((string) $get('name_custom'))
                 : (string) $state)
-            ->helperText('Системные коды лучше не менять. Для новых прав используйте "Другая".')
+            ->helperText('Системные коды лучше не менять.')
             ->columnSpan(['default' => 12, 'md' => 4]);
 
         $customNameField = Forms\Components\TextInput::make('name_custom')
@@ -88,7 +99,7 @@ class RoleForm
 
         $marketplacePermissionsField = Forms\Components\Placeholder::make('marketplace_permissions_preview')
             ->label('Права маркетплейса')
-            ->content(function ($get): HtmlString {
+            ->content(function ($get) use ($permissionsById): HtmlString {
                 $selected = collect($get('permissions') ?? [])
                     ->filter(fn ($value) => filled($value))
                     ->map(fn ($value) => is_numeric($value) ? (int) $value : (string) $value)
@@ -96,11 +107,13 @@ class RoleForm
 
                 $selectedIds = array_values(array_filter($selected, 'is_int'));
 
-                $selectedNames = Permission::query()
-                    ->when($selectedIds !== [], fn ($query) => $query->whereIn('id', $selectedIds))
-                    ->pluck('name')
-                    ->map(fn ($value): string => (string) $value)
-                    ->all();
+                // Берём имена из предзагруженной карты вместо DB-запроса
+                $selectedNames = [];
+                foreach ($selectedIds as $id) {
+                    if (isset($permissionsById[$id])) {
+                        $selectedNames[] = $permissionsById[$id];
+                    }
+                }
 
                 foreach ($selected as $value) {
                     if (is_string($value) && $value !== '') {
@@ -128,14 +141,16 @@ class RoleForm
             })
             ->columnSpan(['default' => 12, 'md' => 6]);
 
-        $permissionsField = Forms\Components\Select::make('permissions')
+        $permissionsField = Forms\Components\CheckboxList::make('permissions')
             ->label('Доступы и разрешения')
-            ->multiple()
-            ->preload()
+            ->helperText('Выберите права, которые должна предоставлять роль.')
+            ->columns(1)
+            ->bulkToggleable()
             ->searchable()
-            ->relationship('permissions', 'name')
-            ->getOptionLabelFromRecordUsing(fn ($record): string => PermissionDisplayCatalog::label((string) $record->name))
-            ->helperText('Выберите права, которые должна предоставлять роль. Используйте поиск для быстрого фильтра.')
+            ->options($permissionsOptions)
+            ->saveRelationshipsUsing(function ($record, $state) {
+                $record->permissions()->sync($state ?? []);
+            })
             ->columnSpan(2);
 
         return $schema->components([
