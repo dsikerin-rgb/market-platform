@@ -15,6 +15,16 @@ class RoleForm
 {
     public static function configure(Schema $schema): Schema
     {
+        // Загружаем permissions один раз и переиспользуем на всей странице
+        $permissions = Permission::all()->sortBy('name');
+        $permissionsById = [];
+        $permissionsOptions = [];
+
+        foreach ($permissions as $perm) {
+            $permissionsById[$perm->id] = $perm->name;
+            $permissionsOptions[$perm->id] = PermissionDisplayCatalog::label($perm->name);
+        }
+
         $roleOptions = RoleScenarioCatalog::options() + [
             '__custom' => 'Другая (ввести вручную)',
         ];
@@ -89,7 +99,7 @@ class RoleForm
 
         $marketplacePermissionsField = Forms\Components\Placeholder::make('marketplace_permissions_preview')
             ->label('Права маркетплейса')
-            ->content(function ($get): HtmlString {
+            ->content(function ($get) use ($permissionsById): HtmlString {
                 $selected = collect($get('permissions') ?? [])
                     ->filter(fn ($value) => filled($value))
                     ->map(fn ($value) => is_numeric($value) ? (int) $value : (string) $value)
@@ -97,11 +107,13 @@ class RoleForm
 
                 $selectedIds = array_values(array_filter($selected, 'is_int'));
 
-                $selectedNames = Permission::query()
-                    ->when($selectedIds !== [], fn ($query) => $query->whereIn('id', $selectedIds))
-                    ->pluck('name')
-                    ->map(fn ($value): string => (string) $value)
-                    ->all();
+                // Берём имена из предзагруженной карты вместо DB-запроса
+                $selectedNames = [];
+                foreach ($selectedIds as $id) {
+                    if (isset($permissionsById[$id])) {
+                        $selectedNames[] = $permissionsById[$id];
+                    }
+                }
 
                 foreach ($selected as $value) {
                     if (is_string($value) && $value !== '') {
@@ -129,56 +141,13 @@ class RoleForm
             })
             ->columnSpan(['default' => 12, 'md' => 6]);
 
-        // --- Permissions CheckboxList with Grouping ---
         $permissionsField = Forms\Components\CheckboxList::make('permissions')
             ->label('Доступы и разрешения')
             ->helperText('Выберите права, которые должна предоставлять роль.')
             ->columns(1)
             ->bulkToggleable()
-            ->options(function () {
-                $permissions = Permission::all()->sortBy('name');
-                $groups = [
-                    'Настройки рынка' => [],
-                    'Сотрудники' => [],
-                    'Арендаторы' => [],
-                    'Договоры' => [],
-                    'Маркетплейс' => [],
-                    'Заявки' => [],
-                    'Задачи' => [],
-                    'Контент' => [],
-                    'Интеграции' => [],
-                    'Другое' => [],
-                ];
-
-                $map = [
-                    'market-' => 'Настройки рынка',
-                    'staff-' => 'Сотрудники',
-                    'tenant-' => 'Арендаторы',
-                    'contract-' => 'Договоры',
-                    'marketplace-' => 'Маркетплейс',
-                    'request-' => 'Заявки',
-                    'task-' => 'Задачи',
-                    'content-' => 'Контент',
-                    'integration-' => 'Интеграции',
-                ];
-
-                foreach ($permissions as $perm) {
-                    $found = false;
-                    foreach ($map as $prefix => $groupName) {
-                        if (str_starts_with($perm->name, $prefix)) {
-                            $groups[$groupName][$perm->id] = PermissionDisplayCatalog::label($perm->name);
-                            $found = true;
-                            break;
-                        }
-                    }
-                    if (! $found) {
-                        $groups['Другое'][$perm->id] = PermissionDisplayCatalog::label($perm->name);
-                    }
-                }
-
-                // Remove empty groups
-                return array_filter($groups, fn ($g) => ! empty($g));
-            })
+            ->searchable()
+            ->options($permissionsOptions)
             ->saveRelationshipsUsing(function ($record, $state) {
                 $record->permissions()->sync($state ?? []);
             })
