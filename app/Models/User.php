@@ -187,23 +187,30 @@ class User extends Authenticatable implements FilamentUser
                 return true;
             }
 
+            // Арендаторы и их сотрудники — только в /cabinet
             if (method_exists($this, 'hasAnyRole') && $this->hasAnyRole(['merchant', 'merchant-user'])) {
                 return false;
             }
 
+            // Покупатели маркетплейса — не в админку
             if (method_exists($this, 'hasRole') && $this->hasRole('buyer')) {
                 return false;
             }
 
-            return app()->environment('local');
+            // Служебные роли tenant/user — не в админку
+            if (method_exists($this, 'hasRole') && $this->hasRole('tenant')) {
+                return false;
+            }
+
+            if (method_exists($this, 'hasRole') && $this->hasRole('user')) {
+                return false;
+            }
+
+            return false;
         }
 
         if (method_exists($this, 'hasAnyRole') && $this->hasAnyRole(['merchant', 'merchant-user'])) {
             return false;
-        }
-
-        if (app()->environment('local')) {
-            return true;
         }
 
         return false;
