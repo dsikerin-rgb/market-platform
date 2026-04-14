@@ -4,6 +4,9 @@ namespace App\Filament\Resources\Roles\Pages;
 
 use App\Filament\Resources\Roles\RoleResource;
 use App\Filament\Resources\Pages\BaseEditRecord;
+use App\Support\RoleScenarioCatalog;
+use Filament\Actions\Action;
+use Illuminate\Contracts\View\View;
 
 class EditRole extends BaseEditRecord
 {
@@ -26,12 +29,39 @@ class EditRole extends BaseEditRecord
         return null;
     }
 
+    public function getHeading(): \Illuminate\Contracts\Support\Htmlable|string
+    {
+        return '';
+    }
+
     public function getPageClasses(): array
     {
         return [
             ...parent::getPageClasses(),
             'fi-resource-roles-edit-page',
         ];
+    }
+
+    public function getHeader(): ?View
+    {
+        $role = $this->record;
+        $roleName = $role ? ($role->label_ru ?: $role->name) : 'Роль';
+        $isSystem = $role && in_array((string) $role->name, self::SYSTEM_ROLES, true);
+
+        $profileLabel = '';
+        $profileDescription = '';
+        if ($role && $role->name) {
+            $profileLabel = RoleScenarioCatalog::labelForSlug((string) $role->name);
+            $profileDescription = RoleScenarioCatalog::descriptionForSlug((string) $role->name);
+        }
+
+        return view('filament.pages.roles-edit-hero', [
+            'roleName' => $roleName,
+            'isSystem' => $isSystem,
+            'profileLabel' => $profileLabel,
+            'profileDescription' => $profileDescription,
+            'backUrl' => RoleResource::getUrl('index'),
+        ]);
     }
 
     protected function mutateFormDataBeforeFill(array $data): array
