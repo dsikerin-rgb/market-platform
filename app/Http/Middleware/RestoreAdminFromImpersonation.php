@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use App\Models\User;
 use App\Services\Cabinet\TenantImpersonationService;
+use App\Support\AdminPanelImpersonation;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -44,23 +45,13 @@ class RestoreAdminFromImpersonation
 
         $currentUser = Auth::user();
 
-        if ($currentUser instanceof User && $currentUser->hasAnyRole([
-            'super-admin',
-            'market-admin',
-            'market-manager',
-            'market-operator',
-        ])) {
+        if (AdminPanelImpersonation::hasAdminPanelRole($currentUser)) {
             return $next($request);
         }
 
         $impersonator = User::query()->find($impersonatorId);
 
-        if (! $impersonator || ! $impersonator->hasAnyRole([
-            'super-admin',
-            'market-admin',
-            'market-manager',
-            'market-operator',
-        ])) {
+        if (! $impersonator || ! AdminPanelImpersonation::hasAdminPanelRole($impersonator)) {
             return $next($request);
         }
 

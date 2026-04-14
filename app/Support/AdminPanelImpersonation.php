@@ -47,10 +47,27 @@ final class AdminPanelImpersonation
     {
         return $user instanceof User
             && $user->hasAnyRole([
+                // Платформенные администраторы
                 'super-admin',
+                // Управление рынком
+                'market-owner',
                 'market-admin',
                 'market-manager',
                 'market-operator',
+                // Внутренние роли рынка
+                'market-maintenance',
+                'market-engineer',
+                'market-it',
+                'market-accountant',
+                'market-finance',
+                'market-marketing',
+                'market-advertising',
+                'market-support',
+                'market-security',
+                'market-guard',
+                'market-hr',
+                // Базовая служебная роль
+                'staff',
             ]);
     }
 }
