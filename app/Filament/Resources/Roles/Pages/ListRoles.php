@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\Roles\Pages;
 
 use App\Filament\Resources\Roles\RoleResource;
+use App\Filament\Resources\StaffInvitationResource;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\View\View;
 
 class ListRoles extends ListRecords
 {
@@ -16,7 +18,12 @@ class ListRoles extends ListRecords
 
     public function getHeading(): string|\Illuminate\Support\HtmlString|null
     {
-        return 'Роли';
+        return null;
+    }
+
+    public function getSubheading(): string|\Illuminate\Support\HtmlString|null
+    {
+        return null;
     }
 
     public function getPageClasses(): array
@@ -27,22 +34,16 @@ class ListRoles extends ListRecords
         ];
     }
 
+    public function getHeader(): ?View
+    {
+        return view('filament.pages.roles-hero', [
+            'createUrl' => RoleResource::getUrl('create'),
+            'invitationUrl' => StaffInvitationResource::getUrl('index'),
+        ]);
+    }
+
     protected function getHeaderActions(): array
     {
-        $actions = [];
-
-        if (class_exists(\Filament\Actions\CreateAction::class)) {
-            $actions[] = \Filament\Actions\CreateAction::make()
-                ->label('Создать роль')
-                ->modalHeading('Создать роль')
-                ->modalDescription('Системные роли лучше не менять. Для новых сотрудников создавайте отдельные роли.');
-        } elseif (class_exists(\Filament\Pages\Actions\CreateAction::class)) {
-            $actions[] = \Filament\Pages\Actions\CreateAction::make()
-                ->label('Создать роль')
-                ->modalHeading('Создать роль')
-                ->modalDescription('Системные роли лучше не менять. Для новых сотрудников создавайте отдельные роли.');
-        }
-
-        return $actions;
+        return [];
     }
 }
