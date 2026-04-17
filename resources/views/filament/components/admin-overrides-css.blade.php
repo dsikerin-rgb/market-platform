@@ -1483,7 +1483,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .
   letter-spacing: -0.01em;
   font-size: clamp(1.08rem, 0.92rem + 0.8vw, 1.6rem);
   line-height: 1.02;
-  max-width: 13ch;
+  max-width: 20ch;
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-tenants-edit-page .fi-header .fi-header-subheading{
