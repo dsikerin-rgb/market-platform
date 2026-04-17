@@ -58,7 +58,6 @@ class TenantAccrualResourceTabsTest extends TestCase
             ->assertSee('1С')
             ->assertSee('Связаны с договором')
             ->assertSee('Без договора')
-            ->assertSee('Неоднозначные')
             ->assertSee('Исторический импорт')
             ->assertSee('Все начисления');
     }

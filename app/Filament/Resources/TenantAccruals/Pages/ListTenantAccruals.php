@@ -22,9 +22,11 @@ class ListTenantAccruals extends ListRecords
 
     protected array $queryString = [
         'activeTab' => ['as' => 'tab'],
+        'tenantId' => ['except' => null],
     ];
 
     public ?string $activeTab = null;
+    public ?int $tenantId = null;
 
     public function mount(): void
     {
@@ -40,6 +42,9 @@ class ListTenantAccruals extends ListRecords
         if (blank($this->activeTab)) {
             $this->activeTab = $this->resolveDefaultTab();
         }
+
+        $tenantId = request()->query('tenantId');
+        $this->tenantId = is_numeric($tenantId) && (int) $tenantId > 0 ? (int) $tenantId : null;
 
         if ($this->activeTab === 'ambiguous' && ! $this->hasAmbiguousOneCAccruals()) {
             $this->activeTab = $this->resolveDefaultTab();

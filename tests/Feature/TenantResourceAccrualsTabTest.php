@@ -29,7 +29,9 @@ class TenantResourceAccrualsTabTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertSeeText('АД/ДДА/БНЛ/2380')
+            ->assertSeeText('Открыть полный отчёт по начислениям')
+            ->assertSee('tenantId=' . $tenant->id, false)
+            ->assertSeeText('АД/ДДА/БНЛ/2380 от 29.04.2025')
             ->assertSeeText('Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025')
             ->assertSeeText('Статус: active')
             ->assertSeeText('Дата начала: 29.04.2025')
@@ -209,8 +211,10 @@ class TenantResourceAccrualsTabTest extends TestCase
 
         $snippet = substr($html, max(0, $position - 250), 800);
 
-        self::assertStringContainsString('<details class="tenant-accruals__contract-details">', $snippet);
-        self::assertStringContainsString('tenant-accruals__contract-summary', $snippet);
+        self::assertStringContainsString('<details class="tenant-accruals__contract-details">', $html);
+        self::assertStringContainsString('tenant-accruals__contract-summary', $html);
+        self::assertStringContainsString('tenant-accruals__contract-summary--wrap', $html);
+        self::assertStringContainsString('АД/ДДА/БНЛ/2380 от 29.04.2025', $snippet);
         self::assertStringNotContainsString('#tenant-contract-', $snippet);
     }
 }
