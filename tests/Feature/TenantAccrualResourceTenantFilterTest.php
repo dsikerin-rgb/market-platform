@@ -61,7 +61,6 @@ class TenantAccrualResourceTenantFilterTest extends TestCase
             ->assertSeeText('Аренда')
             ->assertSeeText('2026-04-10 12:00')
             ->assertSeeText('12,50')
-            ->assertSeeText('1 200,00 ₽')
             ->assertSeeText('1 500,00 ₽');
     }
 

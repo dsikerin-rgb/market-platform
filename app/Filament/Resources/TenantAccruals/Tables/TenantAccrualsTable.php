@@ -160,7 +160,7 @@ class TenantAccrualsTable
                     ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('utilities_amount')
                     ->label('Коммунальные')
