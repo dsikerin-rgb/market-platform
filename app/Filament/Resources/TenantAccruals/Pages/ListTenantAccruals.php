@@ -6,12 +6,20 @@ namespace App\Filament\Resources\TenantAccruals\Pages;
 
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
+use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Carbon\CarbonImmutable;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Html;
+use Filament\Schemas\Components\RenderHook;
+use Filament\Schemas\Schema;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use RuntimeException;
 
 class ListTenantAccruals extends ListRecords
@@ -71,6 +79,18 @@ class ListTenantAccruals extends ListRecords
     public function getHeaderWidgetsColumns(): int|array
     {
         return 1;
+    }
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Html::make(fn (): HtmlString => $this->renderTenantFilterBanner()),
+                $this->getTabsContentComponent(),
+                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
+                EmbeddedTable::make(),
+                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
+            ]);
     }
 
     public function getSubheading(): ?string
@@ -200,5 +220,64 @@ class ListTenantAccruals extends ListRecords
             ->startOfMonth()
             ->subMonths($lookbackMonths - 1)
             ->toDateString();
+    }
+
+    private function renderTenantFilterBanner(): HtmlString
+    {
+        $tenant = $this->resolveTenantFilterRecord();
+
+        if (! $tenant) {
+            return new HtmlString('');
+        }
+
+        $params = [];
+        if (filled($this->activeTab)) {
+            $params['tab'] = $this->activeTab;
+        }
+
+        $url = TenantAccrualResource::getUrl('index', $params);
+
+        return new HtmlString(
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid rgba(37,99,235,.22);background:rgba(37,99,235,.08);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;">'
+                . '<div>Показаны начисления арендатора: <strong>' . e((string) $tenant->name) . '</strong></div>'
+                . '<a href="' . e($url) . '" style="font-weight:600;text-decoration:underline;text-underline-offset:2px;">Показать все начисления</a>'
+                . '</div>'
+        );
+    }
+
+    private function resolveTenantFilterRecord(): ?Tenant
+    {
+        if (! $this->tenantId) {
+            return null;
+        }
+
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return null;
+        }
+
+        $query = Tenant::query()->whereKey($this->tenantId);
+
+        if ($user->isSuperAdmin()) {
+            $selectedMarketId = $this->selectedMarketIdFromSession();
+            if (filled($selectedMarketId)) {
+                $query->where('market_id', (int) $selectedMarketId);
+            }
+        } elseif ($user->market_id) {
+            $query->where('market_id', (int) $user->market_id);
+        } else {
+            return null;
+        }
+
+        return $query->first();
+    }
+
+    private function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
     }
 }
