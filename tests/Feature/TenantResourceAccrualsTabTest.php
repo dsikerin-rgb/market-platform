@@ -30,7 +30,11 @@ class TenantResourceAccrualsTabTest extends TestCase
         $response
             ->assertOk()
             ->assertSeeText('Открыть полный отчёт по начислениям')
-            ->assertSee('tenantId=' . $tenant->id, false)
+            ->assertSee('tenantId=' . $fixture['tenant']->id, false)
+            ->assertDontSeeText('Всего начислений')
+            ->assertSeeText('Последний период')
+            ->assertSeeText('Сумма по загруженным периодам')
+            ->assertSeeText('Сумма за последний период')
             ->assertSeeText('АД/ДДА/БНЛ/2380 от 29.04.2025')
             ->assertSeeText('Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025')
             ->assertSeeText('Статус: active')

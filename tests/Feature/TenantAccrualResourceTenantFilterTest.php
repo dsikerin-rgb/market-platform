@@ -50,10 +50,15 @@ class TenantAccrualResourceTenantFilterTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = $this->get(TenantAccrualResource::getUrl('index', ['tenantId' => $tenantA->id]));
+        $response = $this->get(TenantAccrualResource::getUrl('index', [
+            'tenantId' => $tenantA->id,
+            'tab' => 'one_c',
+        ]));
 
         $response
             ->assertOk()
+            ->assertSeeText('Показаны начисления арендатора: Tenant A')
+            ->assertSeeText('Показать все начисления')
             ->assertSeeText('Tenant A')
             ->assertDontSeeText('Tenant B')
             ->assertSeeText('Дата расчёта 1С')
@@ -62,6 +67,8 @@ class TenantAccrualResourceTenantFilterTest extends TestCase
             ->assertSeeText('2026-04-10 12:00')
             ->assertSeeText('12,50')
             ->assertSeeText('1 500,00 ₽');
+
+        $this->assertResetFilterLinkKeepsTabWithoutTenantId($response->getContent());
     }
 
     private function insertAccrual(
@@ -99,5 +106,16 @@ class TenantAccrualResourceTenantFilterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function assertResetFilterLinkKeepsTabWithoutTenantId(string $html): void
+    {
+        self::assertMatchesRegularExpression('/href="([^"]*)"[^>]*>Показать все начисления<\/a>/u', $html);
+        preg_match('/href="([^"]*)"[^>]*>Показать все начисления<\/a>/u', $html, $matches);
+
+        $href = html_entity_decode((string) ($matches[1] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        self::assertStringContainsString('tab=one_c', $href);
+        self::assertStringNotContainsString('tenantId=', $href);
     }
 }

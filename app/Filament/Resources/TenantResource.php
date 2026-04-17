@@ -2455,7 +2455,6 @@ class TenantResource extends BaseResource
         }
 
         $summaryCards = [
-            ['label' => 'Всего начислений', 'value' => (string) ($summary['count'] ?? 0), 'class' => 'tenant-accruals__summary-card--compact'],
             ['label' => 'Последний период', 'value' => (string) ($summary['last_period_label'] ?? '—')],
             ['label' => 'Сумма по загруженным периодам', 'value' => static::formatRub((float) ($summary['sum_all'] ?? 0))],
             ['label' => 'Сумма за последний период', 'value' => static::formatRub((float) ($summary['sum_last'] ?? 0))],
