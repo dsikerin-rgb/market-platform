@@ -8,6 +8,7 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Models\MarketLocation;
 use App\Models\TenantAccrual;
+use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -50,6 +51,12 @@ class TenantAccrualsTable
                     ->label('Период начисления')
                     ->date('Y-m')
                     ->sortable()
+                    ->toggleable(),
+
+                TextColumn::make('calculated_at')
+                    ->label('Дата расчёта 1С')
+                    ->getStateUsing(fn (TenantAccrual $record) => static::payloadValue($record, 'calculated_at'))
+                    ->formatStateUsing(fn ($state): string => static::formatDateTime($state))
                     ->toggleable(),
 
                 TextColumn::make('source')
@@ -137,8 +144,7 @@ class TenantAccrualsTable
                     ->numeric(decimalPlaces: 2)
                     ->sortable()
                     ->placeholder('—')
-                    ->visible(false)
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
 
                 TextColumn::make('rent_amount')
                     ->label('Аренда')
@@ -146,8 +152,15 @@ class TenantAccrualsTable
                     ->formatStateUsing(fn ($state): string => static::formatMoney($state))
                     ->sortable()
                     ->placeholder('—')
-                    ->visible(false)
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
+
+                TextColumn::make('rent_rate')
+                    ->label('Ставка аренды')
+                    ->alignEnd()
+                    ->formatStateUsing(fn ($state): string => static::formatMoney($state))
+                    ->sortable()
+                    ->placeholder('—')
+                    ->toggleable(),
 
                 TextColumn::make('utilities_amount')
                     ->label('Коммунальные')
@@ -428,5 +441,35 @@ class TenantAccrualsTable
         }
 
         return number_format($value, 2, ',', ' ') . $suffix;
+    }
+
+    private static function formatDateTime($state): string
+    {
+        if ($state === null || $state === '') {
+            return '—';
+        }
+
+        try {
+            return Carbon::parse((string) $state)->format('Y-m-d H:i');
+        } catch (\Throwable) {
+            return (string) $state;
+        }
+    }
+
+    private static function payloadValue(TenantAccrual $record, string $key): mixed
+    {
+        $payload = $record->payload;
+
+        if (is_array($payload)) {
+            return $payload[$key] ?? null;
+        }
+
+        if (! is_string($payload) || $payload === '') {
+            return null;
+        }
+
+        $decoded = json_decode($payload, true);
+
+        return is_array($decoded) ? ($decoded[$key] ?? null) : null;
     }
 }

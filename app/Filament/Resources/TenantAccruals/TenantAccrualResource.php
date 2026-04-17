@@ -76,7 +76,9 @@ class TenantAccrualResource extends BaseResource
 
     public static function table(Table $table): Table
     {
-        return TenantAccrualsTable::configure($table);
+        return TenantAccrualsTable::configure($table, [
+            'tenantId' => static::selectedTenantIdFromQuery(),
+        ]);
     }
 
     public static function hasTenantAccrualColumn(string $column): bool
@@ -109,6 +111,7 @@ class TenantAccrualResource extends BaseResource
     {
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
+        $tenantId = static::selectedTenantIdFromQuery();
 
         if (! $user) {
             return $query->whereRaw('1 = 0');
@@ -117,16 +120,20 @@ class TenantAccrualResource extends BaseResource
         if ($user->isSuperAdmin()) {
             $selectedMarketId = static::selectedMarketIdFromSession();
 
-            return filled($selectedMarketId)
-                ? $query->where('market_id', (int) $selectedMarketId)
-                : $query;
+            if (filled($selectedMarketId)) {
+                $query->where('market_id', (int) $selectedMarketId);
+            }
+        } elseif ($user->market_id) {
+            $query->where('market_id', $user->market_id);
+        } else {
+            return $query->whereRaw('1 = 0');
         }
 
-        if ($user->market_id) {
-            return $query->where('market_id', $user->market_id);
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
         }
 
-        return $query->whereRaw('1 = 0');
+        return $query;
     }
 
     public static function canViewAny(): bool
@@ -159,5 +166,12 @@ class TenantAccrualResource extends BaseResource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    private static function selectedTenantIdFromQuery(): ?int
+    {
+        $value = request()->query('tenantId');
+
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }
 }

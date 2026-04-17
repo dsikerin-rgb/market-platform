@@ -4,6 +4,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantResource\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\SpacesRelationManager;
@@ -257,6 +258,12 @@ class TenantResource extends BaseResource
                         Section::make('Начисления из 1С')
                             ->description('Каждая строка соответствует начислению по договору за период. По одному периоду может быть несколько договоров.')
                             ->schema([
+                                Forms\Components\Placeholder::make('accruals_report_link')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsReportLink($record))
+                                    ->columnSpanFull(),
+
                                 Forms\Components\Placeholder::make('accruals_registry')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
@@ -2534,11 +2541,6 @@ class TenantResource extends BaseResource
             $contractFullDocument = $contractNumber !== ''
                 ? $contractNumber
                 : ($sourceContractNumber !== '' ? $sourceContractNumber : ('Договор #' . $contractId));
-            $contractShortDocument = preg_replace('/\s+от\s+\d{2}\.\d{2}\.\d{4}$/u', '', $contractFullDocument);
-            if (! is_string($contractShortDocument) || trim($contractShortDocument) === '') {
-                $contractShortDocument = $contractFullDocument;
-            }
-
             if ($contractId > 0) {
                 $contractDetails = [
                     '<div class="tenant-accruals__contract-line">Полный документ: ' . e($contractFullDocument) . '</div>',
@@ -2580,7 +2582,7 @@ class TenantResource extends BaseResource
                 }
 
                 $contractCell = '<details class="tenant-accruals__contract-details">'
-                    . '<summary class="tenant-accruals__contract-summary">' . e($contractShortDocument) . '</summary>'
+                    . '<summary class="tenant-accruals__contract-summary tenant-accruals__contract-summary--wrap">' . e($contractFullDocument) . '</summary>'
                     . '<div class="tenant-accruals__contract-details-body">' . implode('', $contractDetails) . '</div>'
                     . '</details>';
             } elseif ($sourceContractNumber !== '') {
@@ -2638,6 +2640,7 @@ class TenantResource extends BaseResource
 .dark .tenant-accruals__warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.14)}
 .tenant-accruals__contract-details{display:flex;flex-direction:column;gap:4px}
 .tenant-accruals__contract-summary{cursor:pointer;font-weight:600;outline:none}
+.tenant-accruals__contract-summary--wrap{white-space:normal;word-break:break-word}
 .tenant-accruals__contract-details-body{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:12px;line-height:1.35}
 .tenant-accruals__contract-line{word-break:break-word}
 .tenant-accruals__table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(0,0,0,.10)}
@@ -2676,6 +2679,23 @@ class TenantResource extends BaseResource
 </div>';
 
         return new HtmlString($html);
+    }
+
+    private static function renderAccrualsReportLink(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('');
+        }
+
+        $url = TenantAccrualResource::getUrl('index', ['tenantId' => (int) $record->id]);
+
+        return new HtmlString(
+            '<div style="margin-bottom:12px;">'
+                . '<a href="' . e($url) . '" style="display:inline-flex;align-items:center;gap:8px;border-radius:10px;padding:10px 14px;background:#2563eb;color:#fff;font-size:13px;font-weight:600;text-decoration:none;line-height:1.2;">'
+                . 'Открыть полный отчёт по начислениям'
+                . '</a>'
+                . '</div>'
+        );
     }
 
     private static function renderAccrualSummaryCards(?Tenant $record): HtmlString
