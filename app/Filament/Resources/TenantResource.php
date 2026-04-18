@@ -3091,18 +3091,19 @@ class TenantResource extends BaseResource
             return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
         }
 
-        $totalDebt = (float) $rows->sum('debt_amount');
-        if ($totalDebt <= 0.009) {
+        $positiveDebtRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+
+        if ($positiveDebtRows->isEmpty()) {
             return static::renderPaymentDisciplineCard('Без просрочек', null, false);
         }
 
         $settings = static::resolveDebtMonitoringSettings((int) $record->market_id);
         $graceDays = (int) ($settings['grace_days'] ?? 5);
 
-        $positiveRows = $rows->filter(static function ($row): bool {
-            return (float) ($row->debt_amount ?? 0) > 0.009;
-        });
-        $agingRows = $positiveRows->isNotEmpty() ? $positiveRows : $rows;
+        $agingRows = $positiveDebtRows;
+        $positiveDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
         $dueDate = null;
         if ($hasDueDate) {
@@ -3162,7 +3163,7 @@ class TenantResource extends BaseResource
 
         $daysOverdue = max(1, $dueDate->diffInDays($now));
 
-        return static::renderPaymentDisciplineCard('Есть просрочка', $daysOverdue, true, false, $totalDebt);
+        return static::renderPaymentDisciplineCard('Есть просрочка', $daysOverdue, true, false, $positiveDebtAmount);
     }
 
     private static function renderPaymentDisciplineCard(string $stateLabel, ?int $daysOverdue, bool $isOverdue, bool $isNeutral = false, ?float $overdueAmount = null): HtmlString

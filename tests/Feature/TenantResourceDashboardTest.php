@@ -46,6 +46,30 @@ class TenantResourceDashboardTest extends TestCase
         }
     }
 
+    public function test_tenant_dashboard_ignores_credit_rows_when_positive_debt_exists(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-10 12:00:00'));
+        try {
+            $fixture = $this->createFixture(withDebt: true, withOffsettingCredit: true);
+
+            $this->actingAs($fixture['user']);
+
+            $response = $this->get(TenantResource::getUrl('edit', ['record' => $fixture['tenant']]));
+
+            $response->assertOk();
+            $html = $response->getContent();
+            $paymentCardText = $this->elementTextByClass($html, 'tenant-payment-discipline__card');
+
+            $this->assertStringContainsString('tenant-payment-discipline__card--overdue', $html);
+            $this->assertStringContainsString('Есть просрочка', $paymentCardText);
+            $this->assertStringContainsString('Просрочка: 4 дней', $paymentCardText);
+            $this->assertStringContainsString('Сумма просрочки: 1 200,00 ₽', $paymentCardText);
+            $this->assertStringNotContainsString('Без просрочек', $paymentCardText);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_tenant_dashboard_shows_neutral_payment_discipline_when_no_debt_data(): void
     {
         $fixture = $this->createFixture(withDebt: false);
@@ -71,7 +95,7 @@ class TenantResourceDashboardTest extends TestCase
     /**
      * @return array{market:Market,tenant:Tenant,contract:TenantContract,user:User}
      */
-    private function createFixture(bool $withDebt): array
+    private function createFixture(bool $withDebt, bool $withOffsettingCredit = false): array
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -123,6 +147,28 @@ class TenantResourceDashboardTest extends TestCase
                 'hash' => hash('sha256', 'tenant-discipline-row'),
                 'created_at' => '2026-04-01 10:00:00',
             ]);
+
+            if ($withOffsettingCredit) {
+                DB::table('contract_debts')->insert([
+                    'market_id' => (int) $market->id,
+                    'tenant_id' => (int) $tenant->id,
+                    'tenant_external_id' => 'tenant-101',
+                    'contract_external_id' => 'contract-101',
+                    'period' => '2026-03',
+                    'accrued_amount' => 0.00,
+                    'paid_amount' => 1200.00,
+                    'debt_amount' => -1200.00,
+                    'calculated_at' => '2026-04-02 10:00:00',
+                    'currency' => 'RUB',
+                    'source' => '1c',
+                    'raw_payload' => json_encode([
+                        'calculated_at' => '2026-04-02 10:00:00',
+                        'debt_amount' => -1200.00,
+                    ], JSON_UNESCAPED_UNICODE),
+                    'hash' => hash('sha256', 'tenant-discipline-credit-row'),
+                    'created_at' => '2026-04-02 10:00:00',
+                ]);
+            }
         }
 
         Role::findOrCreate('market-admin', 'web');
