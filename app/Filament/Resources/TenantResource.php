@@ -55,6 +55,9 @@ class TenantResource extends BaseResource
     /** @var array<string, array<string, mixed>> */
     private static array $accrualSummaryCache = [];
 
+    /** @var array<string, array<string, mixed>> */
+    private static array $marketAreaShareCache = [];
+
     /**
      * Группа динамическая:
      * - super-admin видит "Рынки"
@@ -104,6 +107,21 @@ class TenantResource extends BaseResource
         }
 
         return $schema->components([
+            Section::make()
+                ->visible(fn (?Tenant $record): bool => $record !== null)
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                ])
+                ->schema([
+                    Forms\Components\Placeholder::make('payment_discipline_summary')
+                        ->hiddenLabel()
+                        ->dehydrated(false)
+                        ->content(fn (?Tenant $record): HtmlString => static::renderPaymentDisciplineSummary($record))
+                        ->columnSpan(1),
+                ])
+                ->columnSpanFull(),
+
             $tabs->tabs([
                 Tab::make('Основное')
                     ->schema([
@@ -2983,6 +3001,330 @@ class TenantResource extends BaseResource
                 . '</div>'
             . '</div>'
         );
+    }
+
+    private static function renderPaymentDisciplineSummary(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div class="tenant-payment-discipline__empty">Данные появятся после сохранения арендатора.</div>');
+        }
+
+        if (
+            ! DbSchema::hasTable('contract_debts')
+            || ! static::hasColumn('contract_debts', 'tenant_id')
+            || ! static::hasColumn('contract_debts', 'debt_amount')
+        ) {
+            return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
+        }
+
+        $hasTenantExternalId = static::hasColumn('contract_debts', 'tenant_external_id');
+        $hasContractExternalId = static::hasColumn('contract_debts', 'contract_external_id');
+        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = static::hasColumn('contract_debts', 'period');
+        $hasDueDate = static::hasColumn('contract_debts', 'due_date');
+
+        $query = ContractDebt::currentStateQuery((int) $record->market_id);
+
+        if ($hasMarketId) {
+            $query->where('cd.market_id', (int) $record->market_id);
+        }
+
+        $contractExternalIds = [];
+        if (DbSchema::hasTable('tenant_contracts') && static::hasColumn('tenant_contracts', 'external_id')) {
+            $contractExternalIds = DB::table('tenant_contracts')
+                ->where('market_id', (int) $record->market_id)
+                ->where('tenant_id', (int) $record->id)
+                ->whereNotNull('external_id')
+                ->pluck('external_id')
+                ->map(static fn ($value): string => trim((string) $value))
+                ->filter(static fn (string $value): bool => $value !== '')
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        if ($hasContractExternalId && $contractExternalIds !== []) {
+            $query->whereIn('cd.contract_external_id', $contractExternalIds);
+        } elseif ($hasTenantExternalId) {
+            $tenantExternalId = trim((string) ($record->external_id ?? ''));
+            $oneCUid = trim((string) ($record->one_c_uid ?? ''));
+
+            if ($tenantExternalId !== '' || $oneCUid !== '') {
+                $query->where(function ($inner) use ($tenantExternalId, $oneCUid): void {
+                    if ($tenantExternalId !== '') {
+                        $inner->where('cd.tenant_external_id', $tenantExternalId);
+                    }
+
+                    if ($oneCUid !== '') {
+                        if ($tenantExternalId !== '') {
+                            $inner->orWhere('cd.tenant_external_id', $oneCUid);
+                        } else {
+                            $inner->where('cd.tenant_external_id', $oneCUid);
+                        }
+                    }
+                });
+            } else {
+                $query->where('cd.tenant_id', (int) $record->id);
+            }
+        } else {
+            $query->where('cd.tenant_id', (int) $record->id);
+        }
+
+        $fields = ['debt_amount'];
+        if ($hasDueDate) {
+            $fields[] = 'due_date';
+        }
+        if ($hasCalculatedAt) {
+            $fields[] = 'calculated_at';
+        }
+        if ($hasCreatedAt) {
+            $fields[] = 'created_at';
+        }
+        if ($hasPeriod) {
+            $fields[] = 'period';
+        }
+
+        $rows = $query->get($fields);
+        if ($rows->isEmpty()) {
+            return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
+        }
+
+        $positiveDebtRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+
+        if ($positiveDebtRows->isEmpty()) {
+            return static::renderPaymentDisciplineCard('Без просрочек', null, false);
+        }
+
+        $settings = static::resolveDebtMonitoringSettings((int) $record->market_id);
+        $graceDays = (int) ($settings['grace_days'] ?? 5);
+
+        $agingRows = $positiveDebtRows;
+        $positiveDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
+
+        $dueDate = null;
+        if ($hasDueDate) {
+            $earliestDueDate = $agingRows->min('due_date');
+            if (filled($earliestDueDate)) {
+                try {
+                    $dueDate = Carbon::parse((string) $earliestDueDate);
+                } catch (\Throwable) {
+                    $dueDate = null;
+                }
+            }
+        }
+
+        if ($dueDate === null && $hasCalculatedAt) {
+            $oldestCalculatedAt = $agingRows->min('calculated_at');
+            if (filled($oldestCalculatedAt)) {
+                try {
+                    $dueDate = Carbon::parse((string) $oldestCalculatedAt)->addDays($graceDays);
+                } catch (\Throwable) {
+                    $dueDate = null;
+                }
+            }
+        }
+
+        if ($dueDate === null && $hasCreatedAt) {
+            $oldestCreatedAt = $agingRows->min('created_at');
+            if (filled($oldestCreatedAt)) {
+                try {
+                    $dueDate = Carbon::parse((string) $oldestCreatedAt)->addDays($graceDays);
+                } catch (\Throwable) {
+                    $dueDate = null;
+                }
+            }
+        }
+
+        if ($dueDate === null && $hasPeriod) {
+            $oldestPeriod = $agingRows->min('period');
+            if (is_string($oldestPeriod) && preg_match('/^\d{4}-\d{2}/', $oldestPeriod) === 1) {
+                try {
+                    $dueDate = Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01')
+                        ->startOfMonth()
+                        ->addDays($graceDays);
+                } catch (\Throwable) {
+                    $dueDate = null;
+                }
+            }
+        }
+
+        if ($dueDate === null) {
+            return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
+        }
+
+        $now = Carbon::now();
+        if ($now->lte($dueDate)) {
+            return static::renderPaymentDisciplineCard('Без просрочек', null, false);
+        }
+
+        $daysOverdue = max(1, $dueDate->diffInDays($now));
+
+        return static::renderPaymentDisciplineCard('Есть просрочка', $daysOverdue, true, false, $positiveDebtAmount);
+    }
+
+    private static function renderPaymentDisciplineCard(string $stateLabel, ?int $daysOverdue, bool $isOverdue, bool $isNeutral = false, ?float $overdueAmount = null): HtmlString
+    {
+        $details = '';
+        if ($isOverdue && $daysOverdue !== null) {
+            $details .= '<div class="tenant-payment-discipline__details">Просрочка: <strong>' . e((string) $daysOverdue) . '</strong> дней</div>';
+        }
+        if ($isOverdue && $overdueAmount !== null && $overdueAmount > 0) {
+            $details .= '<div class="tenant-payment-discipline__details">Сумма просрочки: <strong>' . e(static::formatRub($overdueAmount)) . '</strong></div>';
+        }
+
+        $modifier = $isNeutral
+            ? ' tenant-payment-discipline__card--neutral'
+            : ($isOverdue ? ' tenant-payment-discipline__card--overdue' : ' tenant-payment-discipline__card--ok');
+
+        $stateClass = $isNeutral
+            ? ' tenant-payment-discipline__state--neutral'
+            : ($isOverdue ? ' tenant-payment-discipline__state--overdue' : ' tenant-payment-discipline__state--ok');
+
+        return new HtmlString(
+            '<style>
+                .tenant-payment-discipline{display:block}
+                .tenant-payment-discipline__card{display:flex;flex-direction:column;gap:10px;height:100%;min-height:132px;border:1px solid rgba(226,232,240,.95);border-radius:18px;padding:16px 18px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+                .dark .tenant-payment-discipline__card{border-color:rgba(255,255,255,.12);background:rgba(15,23,42,.45);box-shadow:none}
+                .tenant-payment-discipline__card--neutral{border-left:4px solid #64748b}
+                .tenant-payment-discipline__card--ok{border-left:4px solid #16a34a}
+                .tenant-payment-discipline__card--overdue{border-left:4px solid #dc2626}
+                .tenant-payment-discipline__header{display:flex;align-items:center;gap:12px}
+                .tenant-payment-discipline__icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;font-size:20px;font-weight:800;flex:0 0 auto}
+                .tenant-payment-discipline__icon--neutral{background:#e2e8f0;color:#475569}
+                .tenant-payment-discipline__icon--ok{background:rgba(22,163,74,.12);color:#16a34a}
+                .tenant-payment-discipline__icon--overdue{background:rgba(220,38,38,.12);color:#dc2626}
+                .tenant-payment-discipline__copy{min-width:0}
+                .tenant-payment-discipline__title{font-size:13px;font-weight:600;line-height:1.2;color:#64748b}
+                .tenant-payment-discipline__state{margin-top:2px;font-size:24px;font-weight:800;line-height:1.1}
+                .tenant-payment-discipline__state--neutral{color:#475569}
+                .tenant-payment-discipline__state--ok{color:#15803d}
+                .tenant-payment-discipline__state--overdue{color:#b91c1c}
+                .dark .tenant-payment-discipline__state--neutral{color:#cbd5e1}
+                .dark .tenant-payment-discipline__state--ok{color:#4ade80}
+                .dark .tenant-payment-discipline__state--overdue{color:#f87171}
+                .tenant-payment-discipline__details{font-size:13px;line-height:1.35;opacity:.88}
+            </style>
+            <div class="tenant-payment-discipline">
+                <div class="tenant-payment-discipline__card' . $modifier . '">
+                    <div class="tenant-payment-discipline__header">
+                        <div class="tenant-payment-discipline__icon tenant-payment-discipline__icon' . ($isNeutral ? '--neutral' : ($isOverdue ? '--overdue' : '--ok')) . '">' . e($isNeutral ? '·' : ($isOverdue ? '!' : '✓')) . '</div>
+                        <div class="tenant-payment-discipline__copy">
+                            <div class="tenant-payment-discipline__title">Платёжная дисциплина</div>
+                            <div class="tenant-payment-discipline__state' . $stateClass . '">' . e($stateLabel) . '</div>
+                        </div>
+                    </div>
+                    ' . $details . '
+                </div>
+            </div>'
+        );
+    }
+
+    private static function renderMarketAreaShareSummary(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div class="tenant-market-area-share__empty">Данные появятся после сохранения арендатора.</div>');
+        }
+
+        $data = static::marketAreaShareData($record);
+        if ($data === null) {
+            return new HtmlString(
+                '<div class="tenant-market-area-share">'
+                    . '<div class="tenant-market-area-share__card tenant-market-area-share__card--neutral">'
+                        . '<div class="tenant-market-area-share__title">Доля площади рынка</div>'
+                        . '<div class="tenant-market-area-share__state">Нет данных</div>'
+                    . '</div>'
+                . '</div>'
+            );
+        }
+
+        $percent = number_format((float) $data['share_percent'], 2, ',', ' ') . ' %';
+        $tenantArea = static::formatArea((float) $data['tenant_area']);
+        $marketArea = static::formatArea((float) $data['market_area']);
+
+        return new HtmlString(
+            '<style>
+                .tenant-market-area-share{display:block}
+                .tenant-market-area-share__card{display:flex;flex-direction:column;gap:10px;height:100%;min-height:132px;border:1px solid rgba(226,232,240,.95);border-radius:18px;padding:16px 18px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+                .dark .tenant-market-area-share__card{border-color:rgba(255,255,255,.12);background:rgba(15,23,42,.45);box-shadow:none}
+                .tenant-market-area-share__card--neutral{border-left:4px solid #64748b}
+                .tenant-market-area-share__header{display:flex;align-items:center;gap:12px}
+                .tenant-market-area-share__icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;font-size:20px;font-weight:800;flex:0 0 auto;background:rgba(37,99,235,.10);color:#2563eb}
+                .tenant-market-area-share__copy{min-width:0}
+                .tenant-market-area-share__title{font-size:13px;font-weight:600;line-height:1.2;color:#64748b}
+                .tenant-market-area-share__state{margin-top:2px;font-size:24px;font-weight:800;line-height:1.1;color:#1d4ed8}
+                .dark .tenant-market-area-share__state{color:#93c5fd}
+                .tenant-market-area-share__details{font-size:13px;line-height:1.35;opacity:.88}
+                .tenant-market-area-share__empty{font-size:13px;line-height:1.35;opacity:.82}
+            </style>
+            <div class="tenant-market-area-share">
+                <div class="tenant-market-area-share__card">
+                    <div class="tenant-market-area-share__header">
+                        <div class="tenant-market-area-share__icon">%</div>
+                        <div class="tenant-market-area-share__copy">
+                            <div class="tenant-market-area-share__title">Доля площади рынка</div>
+                            <div class="tenant-market-area-share__state">' . e($percent) . '</div>
+                        </div>
+                    </div>
+                    <div class="tenant-market-area-share__details">Площадь арендатора, м²: <strong>' . e($tenantArea) . '</strong> • Общая площадь рынка: <strong>' . e($marketArea) . '</strong></div>
+                </div>
+            </div>'
+        );
+    }
+
+    /**
+     * @return array{tenant_area:float,market_area:float,share_percent:float}|null
+     */
+    private static function marketAreaShareData(Tenant $record): ?array
+    {
+        $cacheKey = (string) $record->market_id . ':' . (string) $record->id;
+        if (isset(self::$marketAreaShareCache[$cacheKey])) {
+            return self::$marketAreaShareCache[$cacheKey];
+        }
+
+        if (! DbSchema::hasTable('market_spaces')) {
+            return null;
+        }
+
+        $areaColumn = static::hasColumn('market_spaces', 'area_sqm')
+            ? 'area_sqm'
+            : (static::hasColumn('market_spaces', 'area') ? 'area' : null);
+
+        if ($areaColumn === null) {
+            return null;
+        }
+
+        $marketQuery = DB::table('market_spaces')
+            ->where('market_id', (int) $record->market_id);
+
+        $tenantQuery = DB::table('market_spaces')
+            ->where('market_id', (int) $record->market_id)
+            ->where('tenant_id', (int) $record->id);
+
+        if (static::hasColumn('market_spaces', 'is_active')) {
+            $marketQuery->where('is_active', true);
+            $tenantQuery->where('is_active', true);
+        }
+
+        $tenantArea = (float) ((clone $tenantQuery)->sum($areaColumn) ?? 0);
+        $marketArea = (float) ((clone $marketQuery)->sum($areaColumn) ?? 0);
+
+        if ($marketArea <= 0.0) {
+            return null;
+        }
+
+        $data = [
+            'tenant_area' => max(0.0, $tenantArea),
+            'market_area' => max(0.0, $marketArea),
+            'share_percent' => round(($tenantArea / $marketArea) * 100, 2),
+        ];
+
+        self::$marketAreaShareCache[$cacheKey] = $data;
+
+        return $data;
     }
 
     private static function renderDebtStatusSummary(?Tenant $record): HtmlString
