@@ -118,7 +118,7 @@ class TenantResource extends BaseResource
                         ->hiddenLabel()
                         ->dehydrated(false)
                         ->content(fn (?Tenant $record): HtmlString => static::renderPaymentDisciplineSummary($record))
-                        ->columnSpan(1),
+                        ->columnSpanFull(),
                 ])
                 ->columnSpanFull(),
 
@@ -186,29 +186,6 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(2),
 
-                        Section::make('Задолженность')
-                            ->schema([
-                                Forms\Components\Placeholder::make('debt_status_summary')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderDebtStatusSummary($record))
-                                    ->columnSpanFull(),
-
-                                Forms\Components\Select::make('debt_status')
-                                    ->label('Задолженность')
-                                    ->options(static::debtStatusOptions())
-                                    ->native(false)
-                                    ->placeholder('Автоматически (из 1С)')
-                                    ->nullable()
-                                    ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('По умолчанию статус берётся автоматически из 1С по последнему снимку в contract_debts. Ручной выбор используйте только как временный override.')
-                                    ->columnSpan(1),
-
-                            ])
-                            ->columns([
-                                'default' => 1,
-                                'md' => 2,
-                            ]),
                     ]),
 
                 Tab::make('Торговые места')
@@ -421,7 +398,7 @@ class TenantResource extends BaseResource
         $debtStatusColumn
             ->badge()
             ->color(fn (Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
-            ->description(fn (Tenant $record) => static::resolveDebtStatusForDisplay($record)['mode'] === 'manual' ? 'Вручную' : 'Автоматически (1С)');
+            ->description('По данным 1С');
 
         return $table
             ->columns([
@@ -2873,14 +2850,6 @@ class TenantResource extends BaseResource
         ])->render());
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private static function debtStatusOptions(): array
-    {
-        return ['' => 'Автоматически (из 1С)'] + Tenant::DEBT_STATUS_LABELS;
-    }
-
     public static function debtStatusColor(?string $state): string
     {
         return match ($state) {
@@ -2888,16 +2857,6 @@ class TenantResource extends BaseResource
             'orange' => 'warning',
             'red' => 'danger',
             default => 'gray',
-        };
-    }
-
-    private static function debtStatusHex(?string $state): string
-    {
-        return match ($state) {
-            'green', 'pending' => '#16a34a',
-            'orange' => '#f59e0b',
-            'red' => '#dc2626',
-            default => '#6b7280',
         };
     }
 
@@ -3091,90 +3050,89 @@ class TenantResource extends BaseResource
             return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
         }
 
+        $updatedAtLabel = null;
+        if ($hasCalculatedAt) {
+            $latestUpdatedAt = $rows->max('calculated_at');
+            $updatedAtLabel = static::formatDebtSnapshotLabel($latestUpdatedAt);
+        } elseif ($hasCreatedAt) {
+            $latestUpdatedAt = $rows->max('created_at');
+            $updatedAtLabel = static::formatDebtSnapshotLabel($latestUpdatedAt);
+        } elseif ($hasPeriod) {
+            $latestUpdatedAt = $rows->max('period');
+            $updatedAtLabel = static::formatDebtSnapshotLabel($latestUpdatedAt, true);
+        }
+
         $positiveDebtRows = $rows->filter(static function ($row): bool {
             return (float) ($row->debt_amount ?? 0) > 0.009;
         });
 
         if ($positiveDebtRows->isEmpty()) {
-            return static::renderPaymentDisciplineCard('Без просрочек', null, false);
+            return static::renderPaymentDisciplineCard('Без просрочек', null, false, false, null, $updatedAtLabel);
         }
 
         $settings = static::resolveDebtMonitoringSettings((int) $record->market_id);
-        $graceDays = (int) ($settings['grace_days'] ?? 5);
-
-        $agingRows = $positiveDebtRows;
-        $positiveDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
-
-        $dueDate = null;
-        if ($hasDueDate) {
-            $earliestDueDate = $agingRows->min('due_date');
-            if (filled($earliestDueDate)) {
-                try {
-                    $dueDate = Carbon::parse((string) $earliestDueDate);
-                } catch (\Throwable) {
-                    $dueDate = null;
-                }
-            }
-        }
-
-        if ($dueDate === null && $hasCalculatedAt) {
-            $oldestCalculatedAt = $agingRows->min('calculated_at');
-            if (filled($oldestCalculatedAt)) {
-                try {
-                    $dueDate = Carbon::parse((string) $oldestCalculatedAt)->addDays($graceDays);
-                } catch (\Throwable) {
-                    $dueDate = null;
-                }
-            }
-        }
-
-        if ($dueDate === null && $hasCreatedAt) {
-            $oldestCreatedAt = $agingRows->min('created_at');
-            if (filled($oldestCreatedAt)) {
-                try {
-                    $dueDate = Carbon::parse((string) $oldestCreatedAt)->addDays($graceDays);
-                } catch (\Throwable) {
-                    $dueDate = null;
-                }
-            }
-        }
-
-        if ($dueDate === null && $hasPeriod) {
-            $oldestPeriod = $agingRows->min('period');
-            if (is_string($oldestPeriod) && preg_match('/^\d{4}-\d{2}/', $oldestPeriod) === 1) {
-                try {
-                    $dueDate = Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01')
-                        ->startOfMonth()
-                        ->addDays($graceDays);
-                } catch (\Throwable) {
-                    $dueDate = null;
-                }
-            }
-        }
-
-        if ($dueDate === null) {
-            return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
-        }
-
+        $graceDays = max(0, (int) ($settings['grace_days'] ?? 5));
         $now = Carbon::now();
-        if ($now->lte($dueDate)) {
-            return static::renderPaymentDisciplineCard('Без просрочек', null, false);
+
+        $overdueRows = [];
+        $oldestOverdueDueDate = null;
+        $hasResolvedDueDate = false;
+
+        foreach ($positiveDebtRows as $row) {
+            $rowDueDate = static::resolveDebtSnapshotDueDate(
+                $row,
+                $graceDays,
+                $hasDueDate,
+                $hasCalculatedAt,
+                $hasCreatedAt,
+                $hasPeriod,
+            );
+
+            if ($rowDueDate === null) {
+                continue;
+            }
+
+            $hasResolvedDueDate = true;
+
+            if ($rowDueDate->lte($now)) {
+                $overdueRows[] = (float) ($row->debt_amount ?? 0);
+
+                if ($oldestOverdueDueDate === null || $rowDueDate->lt($oldestOverdueDueDate)) {
+                    $oldestOverdueDueDate = $rowDueDate->copy();
+                }
+            }
         }
 
-        $daysOverdue = max(1, $dueDate->diffInDays($now));
+        if ($oldestOverdueDueDate === null) {
+            if (! $hasResolvedDueDate) {
+                return static::renderPaymentDisciplineCard('Нет данных', null, false, true, null, $updatedAtLabel);
+            }
 
-        return static::renderPaymentDisciplineCard('Есть просрочка', $daysOverdue, true, false, $positiveDebtAmount);
+            return static::renderPaymentDisciplineCard('Без просрочек', null, false, false, null, $updatedAtLabel);
+        }
+
+        $daysOverdue = max(1, $oldestOverdueDueDate->diffInDays($now));
+        $overdueAmount = (float) array_sum($overdueRows);
+
+        return static::renderPaymentDisciplineCard('Есть просрочка', $daysOverdue, true, false, $overdueAmount, $updatedAtLabel);
     }
 
-    private static function renderPaymentDisciplineCard(string $stateLabel, ?int $daysOverdue, bool $isOverdue, bool $isNeutral = false, ?float $overdueAmount = null): HtmlString
+    private static function renderPaymentDisciplineCard(string $stateLabel, ?int $daysOverdue, bool $isOverdue, bool $isNeutral = false, ?float $overdueAmount = null, ?string $updatedAtLabel = null): HtmlString
     {
-        $details = '';
+        $detailsParts = [];
         if ($isOverdue && $daysOverdue !== null) {
-            $details .= '<div class="tenant-payment-discipline__details">Просрочка: <strong>' . e((string) $daysOverdue) . '</strong> дней</div>';
+            $detailsParts[] = '<span class="tenant-payment-discipline__detail">Просрочка: <strong>' . e((string) $daysOverdue) . '</strong> дней</span>';
         }
         if ($isOverdue && $overdueAmount !== null && $overdueAmount > 0) {
-            $details .= '<div class="tenant-payment-discipline__details">Сумма просрочки: <strong>' . e(static::formatRub($overdueAmount)) . '</strong></div>';
+            $detailsParts[] = '<span class="tenant-payment-discipline__detail">Сумма просрочки: <strong>' . e(static::formatRub($overdueAmount)) . '</strong></span>';
         }
+        $details = $detailsParts !== []
+            ? '<div class="tenant-payment-discipline__details">' . implode('&nbsp;•&nbsp;', $detailsParts) . '</div>'
+            : '';
+
+        $meta = $updatedAtLabel !== null
+            ? '<div class="tenant-payment-discipline__meta">Обновлено: <strong>' . e($updatedAtLabel) . '</strong></div>'
+            : '';
 
         $modifier = $isNeutral
             ? ' tenant-payment-discipline__card--neutral'
@@ -3206,6 +3164,7 @@ class TenantResource extends BaseResource
                 .dark .tenant-payment-discipline__state--neutral{color:#cbd5e1}
                 .dark .tenant-payment-discipline__state--ok{color:#4ade80}
                 .dark .tenant-payment-discipline__state--overdue{color:#f87171}
+                .tenant-payment-discipline__meta{font-size:12px;line-height:1.35;opacity:.72}
                 .tenant-payment-discipline__details{font-size:13px;line-height:1.35;opacity:.88}
             </style>
             <div class="tenant-payment-discipline">
@@ -3217,10 +3176,79 @@ class TenantResource extends BaseResource
                             <div class="tenant-payment-discipline__state' . $stateClass . '">' . e($stateLabel) . '</div>
                         </div>
                     </div>
+                    ' . $meta . '
                     ' . $details . '
                 </div>
             </div>'
         );
+    }
+
+    private static function formatDebtSnapshotLabel(mixed $value, bool $period = false): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($period) {
+            return (string) $value;
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('d.m.Y H:i');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private static function resolveDebtSnapshotDueDate(object $row, int $graceDays, bool $hasDueDate, bool $hasCalculatedAt, bool $hasCreatedAt, bool $hasPeriod): ?Carbon
+    {
+        if ($hasDueDate) {
+            $dueDateValue = $row->due_date ?? null;
+            if (filled($dueDateValue)) {
+                try {
+                    return Carbon::parse((string) $dueDateValue);
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        if ($hasCalculatedAt) {
+            $calculatedAtValue = $row->calculated_at ?? null;
+            if (filled($calculatedAtValue)) {
+                try {
+                    return Carbon::parse((string) $calculatedAtValue)->addDays($graceDays);
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        if ($hasCreatedAt) {
+            $createdAtValue = $row->created_at ?? null;
+            if (filled($createdAtValue)) {
+                try {
+                    return Carbon::parse((string) $createdAtValue)->addDays($graceDays);
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        if ($hasPeriod) {
+            $periodValue = $row->period ?? null;
+            if (is_string($periodValue) && preg_match('/^\d{4}-\d{2}/', $periodValue) === 1) {
+                try {
+                    return Carbon::createFromFormat('Y-m-d', substr($periodValue, 0, 7) . '-01')
+                        ->startOfMonth()
+                        ->addDays($graceDays);
+                } catch (\Throwable) {
+                    return null;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static function renderMarketAreaShareSummary(?Tenant $record): HtmlString
@@ -3325,40 +3353,6 @@ class TenantResource extends BaseResource
         self::$marketAreaShareCache[$cacheKey] = $data;
 
         return $data;
-    }
-
-    private static function renderDebtStatusSummary(?Tenant $record): HtmlString
-    {
-        if (! $record) {
-            return new HtmlString('<div style="font-size:13px;opacity:.85;">Статус появится после сохранения арендатора.</div>');
-        }
-
-        $resolved = static::resolveDebtStatusForDisplay($record);
-        $label = $resolved['label'];
-        $color = static::debtStatusHex($resolved['status']);
-
-        $metaParts = [];
-        $metaParts[] = $resolved['mode'] === 'manual' ? 'Режим: вручную' : 'Режим: автоматически (1С)';
-
-        if (filled($resolved['updated_at'])) {
-            $metaParts[] = 'Обновлено: ' . e((string) $resolved['updated_at']);
-        }
-
-        if (filled($resolved['source'])) {
-            $metaParts[] = e((string) $resolved['source']);
-        }
-
-        $metaHtml = $metaParts === []
-            ? ''
-            : '<div style="margin-top:4px;opacity:.65;">' . implode(' • ', $metaParts) . '</div>';
-
-        $badge = '<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;border:1px solid ' . e($color) . ';color:' . e($color) . ';font-weight:600;font-size:12px;">'
-            . e($label)
-            . '</span>';
-
-        return new HtmlString(
-            '<div style="font-size:13px;">' . $badge . $metaHtml . '</div>'
-        );
     }
 
     /**
