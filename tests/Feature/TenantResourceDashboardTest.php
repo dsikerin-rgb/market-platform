@@ -34,7 +34,12 @@ class TenantResourceDashboardTest extends TestCase
             $paymentCardText = $this->elementTextByClass($html, 'tenant-payment-discipline__card');
 
             $this->assertStringContainsString('Платёжная дисциплина', $html);
+            $this->assertStringNotContainsString('tenant-debt-status__card', $html);
             $this->assertStringContainsString('tenant-payment-discipline__card--overdue', $html);
+            $this->assertMatchesRegularExpression(
+                '/Обновлено:\s*\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2}/u',
+                $paymentCardText,
+            );
             $this->assertStringContainsString('Есть просрочка', $paymentCardText);
             $this->assertStringContainsString('Просрочка: 4 дней', $paymentCardText);
             $this->assertStringContainsString('Сумма просрочки: 1 200,00 ₽', $paymentCardText);
@@ -60,11 +65,35 @@ class TenantResourceDashboardTest extends TestCase
             $html = $response->getContent();
             $paymentCardText = $this->elementTextByClass($html, 'tenant-payment-discipline__card');
 
+            $this->assertStringNotContainsString('tenant-debt-status__card', $html);
             $this->assertStringContainsString('tenant-payment-discipline__card--overdue', $html);
             $this->assertStringContainsString('Есть просрочка', $paymentCardText);
             $this->assertStringContainsString('Просрочка: 4 дней', $paymentCardText);
             $this->assertStringContainsString('Сумма просрочки: 1 200,00 ₽', $paymentCardText);
             $this->assertStringNotContainsString('Без просрочек', $paymentCardText);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_tenant_dashboard_counts_only_overdue_rows_in_overdue_amount(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-10 12:00:00'));
+        try {
+            $fixture = $this->createFixture(withDebt: true, withFuturePositiveDebt: true);
+
+            $this->actingAs($fixture['user']);
+
+            $response = $this->get(TenantResource::getUrl('edit', ['record' => $fixture['tenant']]));
+
+            $response->assertOk();
+            $html = $response->getContent();
+            $paymentCardText = $this->elementTextByClass($html, 'tenant-payment-discipline__card');
+
+            $this->assertStringContainsString('tenant-payment-discipline__card--overdue', $html);
+            $this->assertStringContainsString('Просрочка: 4 дней', $paymentCardText);
+            $this->assertStringContainsString('Сумма просрочки: 1 200,00 ₽', $paymentCardText);
+            $this->assertStringNotContainsString('Сумма просрочки: 2 100,00 ₽', $paymentCardText);
         } finally {
             Carbon::setTestNow();
         }
@@ -95,7 +124,7 @@ class TenantResourceDashboardTest extends TestCase
     /**
      * @return array{market:Market,tenant:Tenant,contract:TenantContract,user:User}
      */
-    private function createFixture(bool $withDebt, bool $withOffsettingCredit = false): array
+    private function createFixture(bool $withDebt, bool $withOffsettingCredit = false, bool $withFuturePositiveDebt = false): array
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -167,6 +196,28 @@ class TenantResourceDashboardTest extends TestCase
                     ], JSON_UNESCAPED_UNICODE),
                     'hash' => hash('sha256', 'tenant-discipline-credit-row'),
                     'created_at' => '2026-04-02 10:00:00',
+                ]);
+            }
+
+            if ($withFuturePositiveDebt) {
+                DB::table('contract_debts')->insert([
+                    'market_id' => (int) $market->id,
+                    'tenant_id' => (int) $tenant->id,
+                    'tenant_external_id' => 'tenant-101',
+                    'contract_external_id' => 'contract-101',
+                    'period' => '2026-05',
+                    'accrued_amount' => 1500.00,
+                    'paid_amount' => 600.00,
+                    'debt_amount' => 900.00,
+                    'calculated_at' => '2026-04-09 10:00:00',
+                    'currency' => 'RUB',
+                    'source' => '1c',
+                    'raw_payload' => json_encode([
+                        'calculated_at' => '2026-04-09 10:00:00',
+                        'debt_amount' => 900.00,
+                    ], JSON_UNESCAPED_UNICODE),
+                    'hash' => hash('sha256', 'tenant-discipline-future-row'),
+                    'created_at' => '2026-04-09 10:00:00',
                 ]);
             }
         }
