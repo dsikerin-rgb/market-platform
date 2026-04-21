@@ -214,6 +214,7 @@ class AiReviewService
     {
         $status = $pack['map_review_status'];
         $debtScope = $pack['debt_context']['debt_scope'] ?? 'none';
+        $reviewerNote = trim((string) ($pack['reviewer_note'] ?? ''));
         $otherSpacesTotal = (int) ($pack['tenant_context']['other_spaces_total'] ?? 0);
         $relationContext = $pack['relation_context'] ?? [];
         $likelyCanonicalCandidateId = (int) ($relationContext['likely_canonical_candidate_id'] ?? 0);
@@ -282,6 +283,9 @@ class AiReviewService
         $recommendedExample = $debtScope === 'tenant_fallback'
             ? '«Не подтверждать текущее место. Сравнить другие места арендатора в этом рынке, выбрать каноническое место и только после этого передать кейс на ручную проверку.»'
             : '«Отметить конфликт по занятости и передать на ручную проверку управляющему рынком.»';
+        $reviewerNoteRule = $reviewerNote !== ''
+            ? "\n- Если reviewer_note заполнен, считай его важным полевым сигналом ревизора: учитывай в summary/why_flagged/recommended_next_step, но не делай из заметки автоматический факт без проверки."
+            : '';
 
         return <<<PROMPT
 Ты — ассистент-аналитик для системы управления торговым рынком.
@@ -300,7 +304,7 @@ class AiReviewService
 }
 
 ВАЖНО:
-- Используй только русский язык.
+- Используй только русский язык.{$reviewerNoteRule}
 - НЕ используй технические кодов (occupancy_conflict, changed_tenant и т.д.).
 - Вместо кодов решений пиши понятные фразы:
   * occupancy_conflict → «отметить конфликт по занятости»
@@ -330,6 +334,7 @@ PROMPT;
         $accrual = $pack['accrual_context'] ?? [];
         $debt = $pack['debt_context'];
         $history = $pack['review_history'];
+        $reviewerNote = trim((string) ($pack['reviewer_note'] ?? ''));
         $relations = $pack['relation_context'] ?? [];
         $otherSpaces = $tenant['other_spaces'] ?? [];
 
@@ -406,6 +411,11 @@ PROMPT;
         $parts[] = 'latest_total_with_vat: ' . ($accrual['latest_total_with_vat'] ?? '—');
         $parts[] = 'latest_source: ' . (string) ($accrual['latest_source'] ?? '—');
         $parts[] = '';
+        if ($reviewerNote !== '') {
+            $parts[] = '[reviewer_note]';
+            $parts[] = $reviewerNote;
+            $parts[] = '';
+        }
         $parts[] = '[history]';
         $parts[] = $historyLines;
 
