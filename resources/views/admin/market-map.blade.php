@@ -1693,8 +1693,12 @@
               </span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" style="background: #dc2626;"></span>
-              <span class="legend-label">Просрочка от {{ $debtRedAfterDays ?? 30 }} дней</span>
+              <span class="legend-color" style="background: #b91c1c;"></span>
+              <span class="legend-label">Просрочка по месту от {{ $debtRedAfterDays ?? 30 }} дней (точная связь)</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color" style="background: #ef4444;"></span>
+              <span class="legend-label">Риск арендатора от {{ $debtRedAfterDays ?? 30 }} дней (tenant fallback)</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #94a3b8;"></span>
@@ -1709,7 +1713,7 @@
               <span class="legend-label">Разметка без привязки</span>
             </div>
             <div class="legend-item legend-item--note">
-              <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам.</span>
+              <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам и отдельно отмечает tenant fallback.</span>
             </div>
           </div>
         </div>
@@ -3246,7 +3250,11 @@
                 green: '#22c55e',
                 pending: '#22c55e',
                 orange: '#f59e0b',
-                red: '#dc2626',
+                red: {
+                  space: '#b91c1c',
+                  tenant_fallback: '#ef4444',
+                  default: '#dc2626',
+                },
                 gray: '#94a3b8',
               };
 
@@ -3266,7 +3274,12 @@
                 fillStyle = rentRateBand === 'none' ? 'rent-missing' : 'rent';
               } else if (debtStatus && debtColors[debtStatus]) {
                 // Есть арендатор и debt_status — используем debt цвет
-                debtFill = debtColors[debtStatus];
+                if (debtStatus === 'red') {
+                  const redPalette = debtColors.red;
+                  debtFill = redPalette[debtScope] || redPalette.default;
+                } else {
+                  debtFill = debtColors[debtStatus];
+                }
                 fillStyle = 'debt';
               } else {
                 // Место с арендатором, но нет debt_status — normal
