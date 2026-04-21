@@ -46,6 +46,7 @@ class AiContextPackBuilder
      *     debt_context: array,
      *     relation_context: array,
      *     review_history: array,
+     *     reviewer_note: ?string,
      *     decision_options: array,
      *     meta: array,
      * }
@@ -72,6 +73,8 @@ class AiContextPackBuilder
             return $this->errorPack($marketSpaceId, 'not_in_needs_clarification', $space->map_review_status);
         }
 
+        $reviewHistory = $this->buildReviewHistory($space->id, $marketId);
+
         return [
             'market_space_id'   => $space->id,
             'map_review_status' => $reviewStatus,
@@ -80,7 +83,8 @@ class AiContextPackBuilder
             'accrual_context'   => $this->buildAccrualContext($space),
             'debt_context'      => $debtContext,
             'relation_context'  => $this->buildRelationContext($space, $marketId),
-            'review_history'    => $this->buildReviewHistory($space->id, $marketId),
+            'review_history'    => $reviewHistory,
+            'reviewer_note'     => $this->extractLatestReviewerNote($reviewHistory),
             'decision_options'  => $this->buildDecisionOptions($reviewStatus),
             'meta'              => $this->buildMeta($space, $marketId),
         ];
@@ -580,6 +584,26 @@ class AiContextPackBuilder
             'effective_at'  => $op->effective_at?->toDateTimeString(),
             'created_by'    => $op->created_by,
         ])->toArray();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $reviewHistory
+     */
+    private function extractLatestReviewerNote(array $reviewHistory): ?string
+    {
+        foreach ($reviewHistory as $historyItem) {
+            $reason = trim((string) ($historyItem['reason'] ?? ''));
+            if ($reason !== '') {
+                return $reason;
+            }
+
+            $comment = trim((string) ($historyItem['comment'] ?? ''));
+            if ($comment !== '') {
+                return $comment;
+            }
+        }
+
+        return null;
     }
 
     // ──────────────────────────────────────────────
