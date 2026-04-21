@@ -8,6 +8,7 @@ namespace Tests\Feature;
 
 use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
+use App\Filament\Pages\MapReviewResults;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -207,6 +208,100 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('C-303', $space->number);
         $this->assertSame('Original name', $space->display_name);
         $this->assertSame('conflict', $space->map_review_status);
+    }
+
+    public function test_review_results_page_renders_quick_observed_actions(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'Q-101',
+            'display_name' => 'Quick review candidate',
+            'status' => 'occupied',
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+            'market_space_id' => $space->id,
+            'reason' => 'Observed on quick review',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('item.review_status', 'conflict');
+
+        $this->get(MapReviewResults::getUrl(['tab' => 'review']))
+            ->assertOk()
+            ->assertSee('Быстрое решение', false)
+            ->assertSee('Совпало', false)
+            ->assertSee('Конфликт по занятости', false)
+            ->assertSee('Фигура не найдена на карте', false)
+            ->assertSee('Требует уточнения', false);
+    }
+
+    public function test_review_decision_endpoint_supports_quick_observed_reasoned_decisions(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $cases = [
+            [
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Observed occupancy conflict',
+                'expected_review_status' => 'conflict',
+            ],
+            [
+                'decision' => SpaceReviewDecision::SHAPE_NOT_FOUND,
+                'reason' => 'Shape not found on map',
+                'expected_review_status' => 'not_found',
+            ],
+        ];
+
+        foreach ($cases as $index => $case) {
+            $space = $this->createSpace($market, [
+                'number' => 'Q-' . ($index + 201),
+                'display_name' => 'Quick case ' . ($index + 1),
+                'status' => 'occupied',
+            ]);
+
+            $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+                'decision' => $case['decision'],
+                'market_space_id' => $space->id,
+                'reason' => $case['reason'],
+            ]);
+
+            $response->assertOk()
+                ->assertJsonPath('ok', true)
+                ->assertJsonPath('mode', 'operation')
+                ->assertJsonPath('operation.status', 'observed')
+                ->assertJsonPath('item.review_status', $case['expected_review_status']);
+
+            $this->assertDatabaseHas('operations', [
+                'market_id' => $market->id,
+                'entity_type' => 'market_space',
+                'entity_id' => $space->id,
+                'type' => OperationType::SPACE_REVIEW,
+                'status' => 'observed',
+            ]);
+
+            $operation = Operation::query()
+                ->where('market_id', $market->id)
+                ->where('entity_type', 'market_space')
+                ->where('entity_id', $space->id)
+                ->where('type', OperationType::SPACE_REVIEW)
+                ->latest('id')
+                ->first();
+
+            $this->assertNotNull($operation);
+            $this->assertSame($case['decision'], $operation->payload['decision'] ?? null);
+        }
     }
 
     public function test_review_decision_endpoint_does_not_duplicate_identity_clarification(): void
@@ -688,7 +783,7 @@ class SpaceReviewFlowTest extends TestCase
             ->count());
     }
 
-    public function test_review_decision_endpoint_uses_lightweight_mark_for_matched(): void
+    public function test_review_decision_endpoint_creates_operation_for_matched(): void
     {
         $market = $this->createMarket();
         $this->actingAsSuperAdmin((int) $market->id);
@@ -709,11 +804,69 @@ class SpaceReviewFlowTest extends TestCase
             ->assertJsonPath('item.market_space_id', $space->id)
             ->assertJsonPath('item.review_status', 'matched');
 
-        $this->assertDatabaseMissing('operations', [
+        $this->assertDatabaseHas('operations', [
             'market_id' => $market->id,
             'entity_id' => $space->id,
             'type' => OperationType::SPACE_REVIEW,
+            'status' => 'observed',
         ]);
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('matched', $operation->payload['decision'] ?? null);
+    }
+
+    public function test_review_history_is_preserved_when_conflict_is_resolved_with_matched(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market);
+
+        $conflictResponse = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+            'market_space_id' => $space->id,
+            'reason' => 'Conflict detected on inspection',
+        ]);
+
+        $conflictResponse->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('operation.status', 'observed')
+            ->assertJsonPath('item.review_status', 'conflict');
+
+        $matchedResponse = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => 'matched',
+            'market_space_id' => $space->id,
+        ]);
+
+        $matchedResponse->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('item.review_status', 'matched');
+
+        $operations = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->orderBy('id')
+            ->get();
+
+        $this->assertCount(2, $operations);
+        $this->assertSame(SpaceReviewDecision::OCCUPANCY_CONFLICT, $operations[0]->payload['decision'] ?? null);
+        $this->assertSame('matched', $operations[1]->payload['decision'] ?? null);
+
+        $space->refresh();
+        $this->assertSame('matched', $space->map_review_status);
     }
 
     public function test_review_decision_endpoint_creates_operation_for_changed_cases(): void

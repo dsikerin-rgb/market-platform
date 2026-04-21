@@ -66,19 +66,19 @@
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
-                gap: 0.35rem;
-                margin-top: 0.15rem;
+                gap: 0.3rem;
+                margin-top: 0.1rem;
             }
 
             .mrr-place__decision {
-                margin-top: 0.5rem;
-                padding: 0.5rem 0.6rem;
+                margin-top: 0.42rem;
+                padding: 0.42rem 0.55rem;
                 border-radius: 0.625rem;
                 background: rgba(248, 250, 252, 0.85);
                 border: 1px solid rgba(148, 163, 184, 0.18);
                 display: flex;
                 flex-direction: column;
-                gap: 0.15rem;
+                gap: 0.12rem;
             }
 
             .dark .mrr-place__decision {
@@ -200,7 +200,77 @@
             .mrr-links {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 0.5rem;
+                gap: 0.38rem;
+            }
+
+            .mrr-quick-launcher {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                margin-top: 0.42rem;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                background: rgba(255, 255, 255, 0.9);
+                padding: 0.34rem 0.7rem;
+                font-size: 0.78rem;
+                font-weight: 800;
+                color: #1d4ed8;
+                cursor: pointer;
+                font-family: inherit;
+                line-height: 1.2;
+            }
+
+            .mrr-quick-launcher::before {
+                content: "•";
+                font-size: 0.95rem;
+                line-height: 1;
+            }
+
+            .dark .mrr-quick-launcher {
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(15, 23, 42, 0.55);
+                color: #bfdbfe;
+            }
+
+            .mrr-quick-review__choices {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+            }
+
+            .mrr-quick-review__choice {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.16);
+                background: rgba(255, 255, 255, 0.88);
+                padding: 0.22rem 0.52rem;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                cursor: pointer;
+                font-family: inherit;
+                line-height: 1.2;
+            }
+
+            .mrr-quick-review__choice--danger {
+                border-color: rgba(185, 28, 28, 0.2);
+                color: #b91c1c;
+            }
+
+            .mrr-quick-review__choice.is-selected {
+                box-shadow: inset 0 0 0 1px currentColor;
+            }
+
+            .dark .mrr-quick-review__choice {
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(15, 23, 42, 0.62);
+                color: #bfdbfe;
+            }
+
+            .dark .mrr-quick-review__choice--danger {
+                border-color: rgba(248, 113, 113, 0.28);
+                color: #fecaca;
             }
 
             .mrr-link {
@@ -209,8 +279,8 @@
                 gap: 0.35rem;
                 border-radius: 999px;
                 border: 1px solid rgba(15, 23, 42, 0.1);
-                padding: 0.42rem 0.72rem;
-                font-size: 0.8125rem;
+                padding: 0.36rem 0.64rem;
+                font-size: 0.8rem;
                 font-weight: 600;
                 color: #0f172a;
                 text-decoration: none;
@@ -231,15 +301,21 @@
 
             .mrr-diagnostics {
                 display: flex;
-                min-width: 18rem;
+                min-width: 17rem;
                 flex-direction: column;
-                gap: 0.65rem;
+                gap: 0.45rem;
             }
 
             .mrr-diagnostics__section {
                 display: flex;
                 flex-direction: column;
                 gap: 0.42rem;
+            }
+
+            .mrr-diagnostics__summary {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
             }
 
             .mrr-diagnostics__section-title {
@@ -305,6 +381,8 @@
                 max-width: 48rem;
                 font-size: 0.76rem;
                 line-height: 1.35;
+                margin-top: 0.05rem;
+                margin-bottom: 0.05rem;
                 color: #64748b;
             }
 
@@ -375,6 +453,42 @@
                 color: #bfdbfe;
             }
 
+            .mrr-diagnostics__details {
+                border-radius: 0.8rem;
+                border: 1px solid rgba(148, 163, 184, 0.12);
+                background: rgba(248, 250, 252, 0.52);
+                padding: 0.45rem 0.55rem;
+            }
+
+            .dark .mrr-diagnostics__details {
+                border-color: rgba(148, 163, 184, 0.12);
+                background: rgba(15, 23, 42, 0.28);
+            }
+
+            .mrr-diagnostics__details > summary {
+                cursor: pointer;
+                list-style: none;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #475569;
+                outline: none;
+            }
+
+            .mrr-diagnostics__details > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .dark .mrr-diagnostics__details > summary {
+                color: #cbd5e1;
+            }
+
+            .mrr-diagnostics__details-body {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                margin-top: 0.45rem;
+            }
+
             .mrr-duplicate-plan__grid {
                 display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -392,6 +506,29 @@
 
             .mrr-duplicate-plan-modal .mrr-clarify-modal__description {
                 line-height: 1.4;
+            }
+
+            .mrr-quick-review-modal .mrr-clarify-modal__dialog {
+                width: min(720px, 100%);
+            }
+
+            .mrr-quick-review-modal .mrr-clarify-modal__description {
+                line-height: 1.4;
+            }
+
+            .mrr-quick-review__hint {
+                margin-top: -0.2rem;
+                font-size: 0.78rem;
+                color: #64748b;
+            }
+
+            .dark .mrr-quick-review__hint {
+                color: #94a3b8;
+            }
+
+            .mrr-quick-review__field {
+                min-height: 7rem;
+                resize: vertical;
             }
 
             .mrr-duplicate-plan__card {
@@ -795,7 +932,7 @@
                 border-radius: 1rem;
                 border: 1px solid rgba(15, 23, 42, 0.08);
                 background: rgba(255, 255, 255, 0.86);
-                padding: 0.85rem 1rem;
+                padding: 0.7rem 0.85rem;
             }
 
             .dark .mrr-ai-panel {
@@ -804,8 +941,8 @@
             }
 
             .mrr-ai-panel__title {
-                margin-bottom: 0.55rem;
-                font-size: 0.75rem;
+                margin-bottom: 0.42rem;
+                font-size: 0.7rem;
                 font-weight: 800;
                 letter-spacing: 0.04em;
                 text-transform: uppercase;
@@ -911,10 +1048,10 @@
             }
 
             .mrr-ai__summary {
-                font-size: 0.8125rem;
+                font-size: 0.8rem;
                 color: #475569;
                 line-height: 1.45;
-                margin-bottom: 0.4rem;
+                margin-bottom: 0.3rem;
             }
 
             .dark .mrr-ai__summary {
@@ -925,7 +1062,7 @@
                 font-size: 0.75rem;
                 color: #64748b;
                 line-height: 1.4;
-                margin-bottom: 0.35rem;
+                margin-bottom: 0.28rem;
             }
 
             .dark .mrr-ai__reason {
@@ -944,7 +1081,7 @@
                 font-size: 0.75rem;
                 color: #64748b;
                 line-height: 1.4;
-                margin-bottom: 0.4rem;
+                margin-bottom: 0.1rem;
             }
 
             .dark .mrr-ai__step {
@@ -980,13 +1117,40 @@
 
             .mrr-applied-summary {
                 max-width: 34rem;
-                font-size: 0.8125rem;
+                font-size: 0.82rem;
                 line-height: 1.45;
-                color: #334155;
+                color: #475569;
             }
 
             .dark .mrr-applied-summary {
                 color: #cbd5e1;
+            }
+
+            .aw-panel--muted {
+                opacity: 0.9;
+            }
+
+            .aw-panel--muted .aw-panel-head {
+                margin-bottom: 0.65rem;
+            }
+
+            .aw-panel--muted .aw-panel-title {
+                font-size: 1.05rem;
+            }
+
+            .aw-panel--muted .aw-panel-copy {
+                font-size: 0.84rem;
+                color: #64748b;
+            }
+
+            .dark .aw-panel--muted .aw-panel-copy {
+                color: #94a3b8;
+            }
+
+            .aw-panel--muted .mrr-table th,
+            .aw-panel--muted .mrr-table td {
+                padding-top: 0.58rem;
+                padding-bottom: 0.58rem;
             }
 
             @media (max-width: 900px) {
@@ -1073,7 +1237,7 @@
         @else
             <div class="aw-grid">
                 <div class="aw-column">
-                    <section class="aw-panel">
+                    <section class="aw-panel aw-panel--muted">
                         <div class="aw-panel-head">
                             <div>
                                 <h2 class="aw-panel-title">Нужно уточнить</h2>
@@ -1144,6 +1308,14 @@
                                                                         {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
                                                                     </div>
                                                                 </div>
+                                                                <button
+                                                                    type="button"
+                                                                    class="mrr-quick-launcher"
+                                                                    data-mrr-quick-review-launcher
+                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                >
+                                                                    Быстрое решение
+                                                                </button>
                                                             @endif
                                                             <div class="mrr-links">
                                                                 <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
@@ -1166,7 +1338,7 @@
                                                         <div class="mrr-diagnostics">
                                                             <div class="mrr-diagnostics__section">
                                                                 <div class="mrr-diagnostics__section-title">Связи текущего места</div>
-                                                                <div class="mrr-diagnostics__counts">
+                                                                <div class="mrr-diagnostics__summary">
                                                                     @foreach ($relationCounts as $item)
                                                                         <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
                                                                             {{ $item['label'] }}: {{ $item['count'] }}
@@ -1182,46 +1354,51 @@
                                                                 <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
                                                             @endif
 
-                                                            @if ($candidateSpaces !== [])
-                                                                <div class="mrr-diagnostics__section">
-                                                                    <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
-                                                                    <div class="mrr-diagnostics__candidates">
-                                                                        @foreach ($candidateSpaces as $candidate)
-                                                                            <div class="mrr-diagnostics__candidate">
-                                                                                <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
-                                                                                    #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
-                                                                                </a>
-                                                                                <div class="mrr-diagnostics__candidate-meta">
-                                                                                    {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
-                                                                                </div>
-                                                                                <div class="mrr-diagnostics__candidate-actions">
-                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        class="mrr-diagnostics__candidate-action"
-                                                                                        data-mrr-duplicate-plan="open"
-                                                                                        data-current-space-id="{{ $row['space_id'] }}"
-                                                                                        data-current-label="{{ $currentSpaceLabel }}"
-                                                                                        data-current-space-url="{{ $row['space_url'] }}"
-                                                                                        data-current-map-url="{{ $row['map_url'] }}"
-                                                                                        data-current-counts='@json($relationCounts)'
-                                                                                        data-candidate-space-id="{{ $candidate['space_id'] }}"
-                                                                                        data-candidate-label="{{ $candidate['label'] }}"
-                                                                                        data-candidate-space-url="{{ $candidate['space_url'] }}"
-                                                                                        data-candidate-map-url="{{ $candidate['map_url'] }}"
-                                                                                        data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
-                                                                                    >
-                                                                                        {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
-                                                                                    </button>
-                                                                                </div>
+                                                            <details class="mrr-diagnostics__details">
+                                                                <summary>Показать подробности связей и кандидатов</summary>
+                                                                <div class="mrr-diagnostics__details-body">
+                                                                    @if ($candidateSpaces !== [])
+                                                                        <div class="mrr-diagnostics__section">
+                                                                            <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
+                                                                            <div class="mrr-diagnostics__candidates">
+                                                                                @foreach ($candidateSpaces as $candidate)
+                                                                                    <div class="mrr-diagnostics__candidate">
+                                                                                        <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
+                                                                                            #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
+                                                                                        </a>
+                                                                                        <div class="mrr-diagnostics__candidate-meta">
+                                                                                            {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                                        </div>
+                                                                                        <div class="mrr-diagnostics__candidate-actions">
+                                                                                            <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                                            <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                class="mrr-diagnostics__candidate-action"
+                                                                                                data-mrr-duplicate-plan="open"
+                                                                                                data-current-space-id="{{ $row['space_id'] }}"
+                                                                                                data-current-label="{{ $currentSpaceLabel }}"
+                                                                                                data-current-space-url="{{ $row['space_url'] }}"
+                                                                                                data-current-map-url="{{ $row['map_url'] }}"
+                                                                                                data-current-counts='@json($relationCounts)'
+                                                                                                data-candidate-space-id="{{ $candidate['space_id'] }}"
+                                                                                                data-candidate-label="{{ $candidate['label'] }}"
+                                                                                                data-candidate-space-url="{{ $candidate['space_url'] }}"
+                                                                                                data-candidate-map-url="{{ $candidate['map_url'] }}"
+                                                                                                data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
+                                                                                            >
+                                                                                                {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                @endforeach
                                                                             </div>
-                                                                        @endforeach
-                                                                    </div>
+                                                                        </div>
+                                                                    @else
+                                                                        <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
+                                                                    @endif
                                                                 </div>
-                                                            @else
-                                                                <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
-                                                            @endif
+                                                            </details>
                                                         </div>
                                                     </td>
                                                     <td>
@@ -1234,7 +1411,7 @@
                                                                 $map = [
                                                                     'occupancy_conflict'     => 'конфликт по занятости',
                                                                     'tenant_changed_on_site' => 'на месте другой арендатор',
-                                                                    'shape_not_found'        => 'место не найдено на карте',
+                                                                    'shape_not_found'        => 'фигура не найдена на карте',
                                                                     'mark_space_free'        => 'отметить место как свободное',
                                                                     'mark_space_service'     => 'отметить место как служебное',
                                                                     'fix_space_identity'     => 'уточнить номер и название',
@@ -1283,7 +1460,7 @@
                         </div>
                     </section>
 
-                    <section class="aw-panel">
+                    <section class="aw-panel aw-panel--muted">
                         <div class="aw-panel-head">
                             <div>
                                 <h2 class="aw-panel-title">Применено</h2>
@@ -1407,6 +1584,50 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="mrrQuickReviewModal" class="mrr-clarify-modal mrr-quick-review-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-quick-review-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrQuickReviewTitle"
+                        aria-describedby="mrrQuickReviewDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-quick-review-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Быстрое решение</div>
+                        <h3 id="mrrQuickReviewTitle" class="mrr-clarify-modal__title">Выберите вариант решения</h3>
+                        <p id="mrrQuickReviewDescription" class="mrr-clarify-modal__description">
+                            Выберите ручное решение для истории ревизии. Оно не меняет данные места. Если у места нет фигуры на карте, это отдельный контекст, а не автоматическое решение.
+                        </p>
+                        <div id="mrrQuickReviewError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <div class="mrr-quick-review__choices" role="group" aria-label="Выбор варианта решения">
+                                <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="matched" data-mrr-quick-reason-required="0">Совпало</button>
+                                <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="occupancy_conflict" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Конфликт по занятости">Конфликт по занятости</button>
+                                <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="shape_not_found" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Фигура не найдена на карте">Фигура не найдена на карте</button>
+                                <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="space_identity_needs_clarification" data-mrr-quick-reason-required="0">Требует уточнения</button>
+                            </div>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrQuickReviewReason">Комментарий к решению</label>
+                            <textarea
+                                id="mrrQuickReviewReason"
+                                class="mrr-clarify-modal__input mrr-quick-review__field"
+                                rows="4"
+                                placeholder="Коротко опишите, что увидели"
+                            ></textarea>
+                            <div class="mrr-quick-review__hint">Нужен для спорных решений. Сам по себе не меняет данные места.</div>
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-quick-review-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-quick-review-save>Сохранить</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         @endif
 
@@ -1414,6 +1635,13 @@
             (() => {
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const quickReviewModal = document.getElementById('mrrQuickReviewModal');
+                const quickReviewTitle = document.getElementById('mrrQuickReviewTitle');
+                const quickReviewDescription = document.getElementById('mrrQuickReviewDescription');
+                const quickReviewReason = document.getElementById('mrrQuickReviewReason');
+                const quickReviewError = document.getElementById('mrrQuickReviewError');
+                const quickReviewSave = quickReviewModal?.querySelector('[data-mrr-quick-review-save]');
+                const quickReviewChoiceButtons = Array.from(document.querySelectorAll('[data-mrr-quick-review-choice]'));
                 const modal = document.getElementById('mrrDuplicatePlanModal');
                 const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
@@ -1425,9 +1653,15 @@
                 const candidateMapLink = document.getElementById('mrrDuplicatePlanCandidateMapLink');
                 const createButton = modal?.querySelector('[data-mrr-duplicate-plan-create]');
                 const error = document.getElementById('mrrDuplicatePlanError');
+                const quickReviewState = {
+                    decision: '',
+                    label: '',
+                    reasonRequired: false,
+                    spaceId: 0,
+                };
 
                 if (
-                    !modal
+                    (!modal
                     || !currentTitle
                     || !candidateTitle
                     || !currentCounts
@@ -1437,7 +1671,8 @@
                     || !candidateSpaceLink
                     || !candidateMapLink
                     || !createButton
-                    || !error
+                    || !error)
+                    && !quickReviewModal
                 ) {
                     return;
                 }
@@ -1465,7 +1700,7 @@
                     if (items.length === 0) {
                         const empty = document.createElement('span');
                         empty.className = 'mrr-diagnostics__hint';
-                        empty.textContent = 'Связей не найдено';
+                        empty.textContent = 'СВЯЗЕЙ НЕ НАЙДЕНО';
                         target.appendChild(empty);
                         return;
                     }
@@ -1542,6 +1777,154 @@
                     createButton.textContent = 'Выбрать кандидата основным';
                 };
 
+                const syncQuickReviewChoiceState = () => {
+                    quickReviewChoiceButtons.forEach((choiceButton) => {
+                        const isSelected = String(choiceButton.dataset.mrrQuickReviewChoice || '') === quickReviewState.decision;
+                        choiceButton.classList.toggle('is-selected', isSelected);
+                    });
+                };
+
+                const openQuickReviewModal = (button) => {
+                    if (!quickReviewModal || !quickReviewTitle || !quickReviewDescription || !quickReviewReason || !quickReviewError || !quickReviewSave) {
+                        return;
+                    }
+
+                    const currentSpaceId = Number(button.closest('[data-mrr-space-id]')?.dataset.mrrSpaceId || 0);
+
+                    if (!Number.isFinite(currentSpaceId) || currentSpaceId <= 0) {
+                        return;
+                    }
+
+                    quickReviewState.spaceId = currentSpaceId;
+                    quickReviewState.decision = '';
+                    quickReviewState.label = '';
+                    quickReviewState.reasonRequired = false;
+
+                    quickReviewTitle.textContent = 'Выберите вариант решения';
+                    quickReviewDescription.textContent = 'Выберите ручное решение для истории ревизии. Оно не меняет данные места. Если у места нет фигуры на карте, это отдельный контекст, а не автоматическое решение.';
+                    quickReviewReason.value = '';
+                    quickReviewReason.required = false;
+                    quickReviewError.textContent = '';
+                    quickReviewSave.removeAttribute('disabled');
+                    quickReviewSave.textContent = 'Сохранить';
+                    syncQuickReviewChoiceState();
+
+                    quickReviewModal.hidden = false;
+                    quickReviewModal.classList.add('is-open');
+                    quickReviewModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => quickReviewReason.focus(), 0);
+                };
+
+                const closeQuickReviewModal = () => {
+                    if (!quickReviewModal || !quickReviewReason || !quickReviewError || !quickReviewSave) {
+                        return;
+                    }
+
+                    quickReviewModal.classList.remove('is-open');
+                    quickReviewModal.hidden = true;
+                    quickReviewModal.setAttribute('aria-hidden', 'true');
+                    quickReviewState.decision = '';
+                    quickReviewState.label = '';
+                    quickReviewState.reasonRequired = false;
+                    quickReviewState.spaceId = 0;
+                    quickReviewReason.value = '';
+                    quickReviewReason.required = false;
+                    quickReviewError.textContent = '';
+                    quickReviewSave.removeAttribute('disabled');
+                    quickReviewSave.textContent = 'Сохранить';
+                    syncQuickReviewChoiceState();
+                };
+
+                const sendQuickReview = async () => {
+                    if (!quickReviewModal || !quickReviewReason || !quickReviewError || !quickReviewSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(quickReviewState.spaceId || 0);
+                    const decision = String(quickReviewState.decision || '').trim();
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0 || !decision) {
+                        quickReviewError.textContent = 'Не удалось определить решение или место для сохранения.';
+                        return;
+                    }
+
+                    const reason = String(quickReviewReason.value || '').trim();
+                    if (quickReviewState.reasonRequired && !reason) {
+                        quickReviewError.textContent = 'Для этого решения нужен комментарий / reason.';
+                        quickReviewReason.focus();
+                        return;
+                    }
+
+                    quickReviewSave.setAttribute('disabled', 'disabled');
+                    quickReviewSave.textContent = 'Сохраняем...';
+                    quickReviewError.textContent = '';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision,
+                            market_space_id: spaceId,
+                            ...(reason ? { reason } : {}),
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        quickReviewSave.removeAttribute('disabled');
+                        quickReviewSave.textContent = 'Сохранить';
+                        quickReviewError.textContent = String(data?.message || 'Не удалось сохранить решение.');
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
+                const applyQuickReviewChoice = (button) => {
+                    if (!quickReviewModal || !quickReviewTitle || !quickReviewDescription || !quickReviewReason || !quickReviewError || !quickReviewSave) {
+                        return;
+                    }
+
+                    const decision = String(button.dataset.mrrQuickReviewChoice || '').trim();
+                    const label = String(button.textContent || decision).trim();
+                    const reasonRequired = String(button.dataset.mrrQuickReasonRequired || '0') === '1';
+                    const reasonTitle = String(button.dataset.mrrQuickReasonTitle || label || 'Решение').trim();
+
+                    if (!decision || !Number.isFinite(quickReviewState.spaceId) || quickReviewState.spaceId <= 0) {
+                        return;
+                    }
+
+                    quickReviewState.decision = decision;
+                    quickReviewState.label = label;
+                    quickReviewState.reasonRequired = reasonRequired;
+                    quickReviewTitle.textContent = reasonTitle || 'Выберите вариант решения';
+                    quickReviewDescription.textContent = reasonRequired
+                        ? 'Укажите короткий комментарий. Решение будет записано в историю ревизии без изменения данных места.'
+                        : 'Решение будет записано в историю ревизии без изменения данных места.';
+                    quickReviewReason.required = reasonRequired;
+                    quickReviewError.textContent = '';
+                    quickReviewSave.removeAttribute('disabled');
+                    quickReviewSave.textContent = 'Сохранить';
+                    syncQuickReviewChoiceState();
+
+                    if (!reasonRequired) {
+                        sendQuickReview().catch((errorInstance) => {
+                            quickReviewSave.removeAttribute('disabled');
+                            quickReviewSave.textContent = 'Сохранить';
+                            quickReviewError.textContent = String(errorInstance?.message || errorInstance);
+                        });
+                        return;
+                    }
+
+                    window.setTimeout(() => quickReviewReason.focus(), 0);
+                };
+
                 const createDuplicateReviewOperation = async () => {
                     const currentSpaceId = Number(modal.dataset.currentSpaceId || 0);
                     const candidateSpaceId = Number(modal.dataset.candidateSpaceId || 0);
@@ -1616,16 +1999,68 @@
                     }
                 });
 
+                document.addEventListener('click', (event) => {
+                    const launcher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-quick-review-launcher]')
+                        : null;
+
+                    if (launcher && launcher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openQuickReviewModal(launcher);
+                        return;
+                    }
+
+                    const button = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-quick-review-choice]')
+                        : null;
+
+                    if (!button || !(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    applyQuickReviewChoice(button);
+                });
+
                 window.addEventListener('keydown', (event) => {
-                    if (!modal.classList.contains('is-open')) {
+                    const quickOpen = quickReviewModal?.classList.contains('is-open');
+                    if (!modal.classList.contains('is-open') && !quickOpen) {
                         return;
                     }
 
                     if (event.key === 'Escape') {
                         event.preventDefault();
-                        closeModal();
+                        if (quickOpen) {
+                            closeQuickReviewModal();
+                        }
+                        if (modal.classList.contains('is-open')) {
+                            closeModal();
+                        }
                     }
                 });
+
+                if (quickReviewModal && quickReviewSave && quickReviewReason) {
+                    quickReviewModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-quick-review-close')) {
+                            event.preventDefault();
+                            closeQuickReviewModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-quick-review-save')) {
+                            event.preventDefault();
+                            sendQuickReview().catch((errorInstance) => {
+                                quickReviewSave.removeAttribute('disabled');
+                                quickReviewSave.textContent = 'Сохранить';
+                                quickReviewError.textContent = String(errorInstance?.message || errorInstance);
+                            });
+                        }
+                    });
+                }
             })();
         </script>
     </div>
