@@ -66,19 +66,19 @@
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
-                gap: 0.35rem;
-                margin-top: 0.15rem;
+                gap: 0.3rem;
+                margin-top: 0.1rem;
             }
 
             .mrr-place__decision {
-                margin-top: 0.5rem;
-                padding: 0.5rem 0.6rem;
+                margin-top: 0.42rem;
+                padding: 0.42rem 0.55rem;
                 border-radius: 0.625rem;
                 background: rgba(248, 250, 252, 0.85);
                 border: 1px solid rgba(148, 163, 184, 0.18);
                 display: flex;
                 flex-direction: column;
-                gap: 0.15rem;
+                gap: 0.12rem;
             }
 
             .dark .mrr-place__decision {
@@ -200,7 +200,7 @@
             .mrr-links {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 0.5rem;
+                gap: 0.38rem;
             }
 
             .mrr-link {
@@ -209,8 +209,8 @@
                 gap: 0.35rem;
                 border-radius: 999px;
                 border: 1px solid rgba(15, 23, 42, 0.1);
-                padding: 0.42rem 0.72rem;
-                font-size: 0.8125rem;
+                padding: 0.36rem 0.64rem;
+                font-size: 0.8rem;
                 font-weight: 600;
                 color: #0f172a;
                 text-decoration: none;
@@ -231,15 +231,21 @@
 
             .mrr-diagnostics {
                 display: flex;
-                min-width: 18rem;
+                min-width: 17rem;
                 flex-direction: column;
-                gap: 0.65rem;
+                gap: 0.45rem;
             }
 
             .mrr-diagnostics__section {
                 display: flex;
                 flex-direction: column;
                 gap: 0.42rem;
+            }
+
+            .mrr-diagnostics__summary {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
             }
 
             .mrr-diagnostics__section-title {
@@ -305,6 +311,8 @@
                 max-width: 48rem;
                 font-size: 0.76rem;
                 line-height: 1.35;
+                margin-top: 0.05rem;
+                margin-bottom: 0.05rem;
                 color: #64748b;
             }
 
@@ -373,6 +381,42 @@
             .dark .mrr-diagnostics__candidate-action {
                 border-color: rgba(96, 165, 250, 0.3);
                 color: #bfdbfe;
+            }
+
+            .mrr-diagnostics__details {
+                border-radius: 0.8rem;
+                border: 1px solid rgba(148, 163, 184, 0.12);
+                background: rgba(248, 250, 252, 0.52);
+                padding: 0.45rem 0.55rem;
+            }
+
+            .dark .mrr-diagnostics__details {
+                border-color: rgba(148, 163, 184, 0.12);
+                background: rgba(15, 23, 42, 0.28);
+            }
+
+            .mrr-diagnostics__details > summary {
+                cursor: pointer;
+                list-style: none;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #475569;
+                outline: none;
+            }
+
+            .mrr-diagnostics__details > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .dark .mrr-diagnostics__details > summary {
+                color: #cbd5e1;
+            }
+
+            .mrr-diagnostics__details-body {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                margin-top: 0.45rem;
             }
 
             .mrr-duplicate-plan__grid {
@@ -795,7 +839,7 @@
                 border-radius: 1rem;
                 border: 1px solid rgba(15, 23, 42, 0.08);
                 background: rgba(255, 255, 255, 0.86);
-                padding: 0.85rem 1rem;
+                padding: 0.7rem 0.85rem;
             }
 
             .dark .mrr-ai-panel {
@@ -804,8 +848,8 @@
             }
 
             .mrr-ai-panel__title {
-                margin-bottom: 0.55rem;
-                font-size: 0.75rem;
+                margin-bottom: 0.42rem;
+                font-size: 0.7rem;
                 font-weight: 800;
                 letter-spacing: 0.04em;
                 text-transform: uppercase;
@@ -911,10 +955,10 @@
             }
 
             .mrr-ai__summary {
-                font-size: 0.8125rem;
+                font-size: 0.8rem;
                 color: #475569;
                 line-height: 1.45;
-                margin-bottom: 0.4rem;
+                margin-bottom: 0.3rem;
             }
 
             .dark .mrr-ai__summary {
@@ -925,7 +969,7 @@
                 font-size: 0.75rem;
                 color: #64748b;
                 line-height: 1.4;
-                margin-bottom: 0.35rem;
+                margin-bottom: 0.28rem;
             }
 
             .dark .mrr-ai__reason {
@@ -944,7 +988,7 @@
                 font-size: 0.75rem;
                 color: #64748b;
                 line-height: 1.4;
-                margin-bottom: 0.4rem;
+                margin-bottom: 0.1rem;
             }
 
             .dark .mrr-ai__step {
@@ -980,13 +1024,40 @@
 
             .mrr-applied-summary {
                 max-width: 34rem;
-                font-size: 0.8125rem;
+                font-size: 0.82rem;
                 line-height: 1.45;
-                color: #334155;
+                color: #475569;
             }
 
             .dark .mrr-applied-summary {
                 color: #cbd5e1;
+            }
+
+            .aw-panel--muted {
+                opacity: 0.9;
+            }
+
+            .aw-panel--muted .aw-panel-head {
+                margin-bottom: 0.65rem;
+            }
+
+            .aw-panel--muted .aw-panel-title {
+                font-size: 1.05rem;
+            }
+
+            .aw-panel--muted .aw-panel-copy {
+                font-size: 0.84rem;
+                color: #64748b;
+            }
+
+            .dark .aw-panel--muted .aw-panel-copy {
+                color: #94a3b8;
+            }
+
+            .aw-panel--muted .mrr-table th,
+            .aw-panel--muted .mrr-table td {
+                padding-top: 0.58rem;
+                padding-bottom: 0.58rem;
             }
 
             @media (max-width: 900px) {
@@ -1073,7 +1144,7 @@
         @else
             <div class="aw-grid">
                 <div class="aw-column">
-                    <section class="aw-panel">
+                    <section class="aw-panel aw-panel--muted">
                         <div class="aw-panel-head">
                             <div>
                                 <h2 class="aw-panel-title">Нужно уточнить</h2>
@@ -1166,7 +1237,7 @@
                                                         <div class="mrr-diagnostics">
                                                             <div class="mrr-diagnostics__section">
                                                                 <div class="mrr-diagnostics__section-title">Связи текущего места</div>
-                                                                <div class="mrr-diagnostics__counts">
+                                                                <div class="mrr-diagnostics__summary">
                                                                     @foreach ($relationCounts as $item)
                                                                         <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
                                                                             {{ $item['label'] }}: {{ $item['count'] }}
@@ -1182,46 +1253,51 @@
                                                                 <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
                                                             @endif
 
-                                                            @if ($candidateSpaces !== [])
-                                                                <div class="mrr-diagnostics__section">
-                                                                    <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
-                                                                    <div class="mrr-diagnostics__candidates">
-                                                                        @foreach ($candidateSpaces as $candidate)
-                                                                            <div class="mrr-diagnostics__candidate">
-                                                                                <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
-                                                                                    #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
-                                                                                </a>
-                                                                                <div class="mrr-diagnostics__candidate-meta">
-                                                                                    {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
-                                                                                </div>
-                                                                                <div class="mrr-diagnostics__candidate-actions">
-                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        class="mrr-diagnostics__candidate-action"
-                                                                                        data-mrr-duplicate-plan="open"
-                                                                                        data-current-space-id="{{ $row['space_id'] }}"
-                                                                                        data-current-label="{{ $currentSpaceLabel }}"
-                                                                                        data-current-space-url="{{ $row['space_url'] }}"
-                                                                                        data-current-map-url="{{ $row['map_url'] }}"
-                                                                                        data-current-counts='@json($relationCounts)'
-                                                                                        data-candidate-space-id="{{ $candidate['space_id'] }}"
-                                                                                        data-candidate-label="{{ $candidate['label'] }}"
-                                                                                        data-candidate-space-url="{{ $candidate['space_url'] }}"
-                                                                                        data-candidate-map-url="{{ $candidate['map_url'] }}"
-                                                                                        data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
-                                                                                    >
-                                                                                        {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
-                                                                                    </button>
-                                                                                </div>
+                                                            <details class="mrr-diagnostics__details">
+                                                                <summary>Показать подробности связей и кандидатов</summary>
+                                                                <div class="mrr-diagnostics__details-body">
+                                                                    @if ($candidateSpaces !== [])
+                                                                        <div class="mrr-diagnostics__section">
+                                                                            <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
+                                                                            <div class="mrr-diagnostics__candidates">
+                                                                                @foreach ($candidateSpaces as $candidate)
+                                                                                    <div class="mrr-diagnostics__candidate">
+                                                                                        <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
+                                                                                            #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
+                                                                                        </a>
+                                                                                        <div class="mrr-diagnostics__candidate-meta">
+                                                                                            {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                                        </div>
+                                                                                        <div class="mrr-diagnostics__candidate-actions">
+                                                                                            <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                                            <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                class="mrr-diagnostics__candidate-action"
+                                                                                                data-mrr-duplicate-plan="open"
+                                                                                                data-current-space-id="{{ $row['space_id'] }}"
+                                                                                                data-current-label="{{ $currentSpaceLabel }}"
+                                                                                                data-current-space-url="{{ $row['space_url'] }}"
+                                                                                                data-current-map-url="{{ $row['map_url'] }}"
+                                                                                                data-current-counts='@json($relationCounts)'
+                                                                                                data-candidate-space-id="{{ $candidate['space_id'] }}"
+                                                                                                data-candidate-label="{{ $candidate['label'] }}"
+                                                                                                data-candidate-space-url="{{ $candidate['space_url'] }}"
+                                                                                                data-candidate-map-url="{{ $candidate['map_url'] }}"
+                                                                                                data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
+                                                                                            >
+                                                                                                {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                @endforeach
                                                                             </div>
-                                                                        @endforeach
-                                                                    </div>
+                                                                        </div>
+                                                                    @else
+                                                                        <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
+                                                                    @endif
                                                                 </div>
-                                                            @else
-                                                                <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
-                                                            @endif
+                                                            </details>
                                                         </div>
                                                     </td>
                                                     <td>
@@ -1283,7 +1359,7 @@
                         </div>
                     </section>
 
-                    <section class="aw-panel">
+                    <section class="aw-panel aw-panel--muted">
                         <div class="aw-panel-head">
                             <div>
                                 <h2 class="aw-panel-title">Применено</h2>
