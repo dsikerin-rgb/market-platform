@@ -17,6 +17,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\User;
+use App\Services\Ai\AiReviewService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -240,7 +241,9 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Совпало', false)
             ->assertSee('Конфликт по занятости', false)
             ->assertSee('Фигура не найдена на карте', false)
-            ->assertSee('Требует уточнения', false);
+            ->assertSee('Уточнить', false)
+            ->assertSee('Что значит «Уточнить»', false)
+            ->assertSee('Это ручное решение для случаев, когда номер, название или другая идентичность места требуют дополнительной проверки. Данные места не меняются, а в истории ревизии фиксируется сам факт, что нужен отдельный разбор.', false);
     }
 
     public function test_review_decision_endpoint_supports_quick_observed_reasoned_decisions(): void
@@ -585,6 +588,112 @@ class SpaceReviewFlowTest extends TestCase
             ->test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Сейчас нет мест, требующих уточнения.', false)
             ->assertDontSee('Системно найдено', false);
+    }
+
+    public function test_map_review_results_shows_ai_only_for_first_batch_with_clear_limit_message(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        app()->instance(AiReviewService::class, new class extends AiReviewService {
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                return [
+                    'review' => [
+                        'summary' => 'Проверить спорную связь',
+                        'why_flagged' => 'Есть спорный кейс',
+                        'recommended_next_step' => 'Открыть место и сверить контекст',
+                        'risk_score' => 6,
+                        'confidence' => 0.8,
+                    ],
+                    'error_type' => null,
+                ];
+            }
+        });
+
+        for ($i = 1; $i <= 6; $i++) {
+            $this->createSpace($market, [
+                'number' => 'AI-' . $i,
+                'display_name' => 'AI space ' . $i,
+                'map_review_status' => 'conflict',
+                'map_reviewed_at' => now()->subMinutes($i),
+            ]);
+        }
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('AI-разбор показан для первых 5 мест в текущем списке', false);
+    }
+
+    public function test_map_review_results_selects_ai_batch_from_current_visible_order(): void
+    {
+        $page = new class extends MapReviewResults
+        {
+            public function exposedBuildNeedsAttentionRows(array $needsAttention, array $aiSummaries, string $attentionTab): array
+            {
+                return $this->buildNeedsAttentionRows($needsAttention, $aiSummaries, $attentionTab);
+            }
+
+            public function exposedSelectVisibleAiBatch(array $rows): array
+            {
+                return $this->selectVisibleAiBatch($rows);
+            }
+        };
+
+        $needsAttention = [
+            ['space_id' => 101, 'review_status' => 'unconfirmed_link', 'diagnostics' => []],
+            ['space_id' => 102, 'review_status' => 'unconfirmed_link', 'diagnostics' => ['has_stronger_candidate' => true]],
+            ['space_id' => 103, 'review_status' => 'unconfirmed_link', 'diagnostics' => ['has_candidates' => true]],
+            ['space_id' => 104, 'review_status' => 'unconfirmed_link', 'diagnostics' => []],
+            ['space_id' => 105, 'review_status' => 'unconfirmed_link', 'diagnostics' => ['has_stronger_candidate' => true]],
+            ['space_id' => 106, 'review_status' => 'unconfirmed_link', 'diagnostics' => []],
+        ];
+
+        $visibleRows = $page->exposedBuildNeedsAttentionRows($needsAttention, [], 'unconfirmed_links');
+        $selectedBatch = $page->exposedSelectVisibleAiBatch($visibleRows);
+
+        $this->assertSame([102, 105, 103, 101, 104], array_column($selectedBatch, 'space_id'));
+    }
+
+    public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        app()->instance(AiReviewService::class, new class extends AiReviewService {
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                return [
+                    'review' => null,
+                    'error_type' => 'policy',
+                ];
+            }
+        });
+
+        $this->createSpace($market, [
+            'number' => 'AI-POLICY',
+            'display_name' => 'AI policy',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('AI-анализ отклонён проверкой качества ответа', false);
     }
 
     public function test_review_decision_endpoint_resolves_duplicate_by_transferring_safe_links(): void
