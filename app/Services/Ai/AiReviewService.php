@@ -129,6 +129,19 @@ class AiReviewService
     }
 
     /**
+     * Build the exact message pair used by the review page and CLI dry-run.
+     *
+     * @return array{system:string,user:string}
+     */
+    public function buildMessagesForPack(array $pack): array
+    {
+        return [
+            'system' => $this->buildSystemPrompt($pack),
+            'user' => $this->buildUserMessage($pack),
+        ];
+    }
+
+    /**
      * Основная логика: собрать context pack → отправить в GigaChat → валидировать.
      *
      * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null, error_type: 'connectivity'|'policy'|null}
@@ -152,8 +165,9 @@ class AiReviewService
                 verifySsl: (bool) config('gigachat.verify_ssl', true),
             );
 
-            $systemPrompt = $this->buildSystemPrompt($pack);
-            $userMessage = $this->buildUserMessage($pack);
+            $messages = $this->buildMessagesForPack($pack);
+            $systemPrompt = $messages['system'];
+            $userMessage = $messages['user'];
 
             $response = $client->chat([
                 ['role' => 'system', 'content' => $systemPrompt],
@@ -216,6 +230,9 @@ class AiReviewService
         $debtScope = $pack['debt_context']['debt_scope'] ?? 'none';
         $reviewerNote = trim((string) ($pack['reviewer_note'] ?? ''));
         $otherSpacesTotal = (int) ($pack['tenant_context']['other_spaces_total'] ?? 0);
+        $contractContour = $pack['tenant_context']['contract_contour'] ?? [];
+        $currentActiveContracts = (int) ($contractContour['active_current_total'] ?? 0);
+        $historicalContracts = (int) ($contractContour['historical_total'] ?? 0);
         $relationContext = $pack['relation_context'] ?? [];
         $likelyCanonicalCandidateId = (int) ($relationContext['likely_canonical_candidate_id'] ?? 0);
         $currentRelationScore = (int) data_get($relationContext, 'current_space.canonical_score', 0);
@@ -287,6 +304,10 @@ class AiReviewService
             ? "\n- Если reviewer_note заполнен, считай его важным полевым сигналом ревизора: учитывай в summary/why_flagged/recommended_next_step, но не делай из заметки автоматический факт без проверки."
             : '';
 
+        $reviewerNoteRule .= "\n- First evaluate the current active reality of the place. Historical contracts and old financial tail are supporting context, not the current state signal."
+            . "\n- Do not treat other places of the same tenant as automatic proof of a duplicate. Make that conclusion only when relation_context shows a clearly stronger candidate."
+            . "\n- In this context active current contracts: {$currentActiveContracts}; historical contracts: {$historicalContracts}.";
+
         return <<<PROMPT
 Ты — ассистент-аналитик для системы управления торговым рынком.
 Анализируй данные спорного торгового места и дай краткую структурированную рекомендацию.
@@ -337,6 +358,7 @@ PROMPT;
         $reviewerNote = trim((string) ($pack['reviewer_note'] ?? ''));
         $relations = $pack['relation_context'] ?? [];
         $otherSpaces = $tenant['other_spaces'] ?? [];
+        $contractContour = $tenant['contract_contour'] ?? [];
 
         $historyLines = count($history) > 0
             ? collect($history)->map(fn ($h) => "- {$h['decision']} ({$h['status']}): {$h['reason']} — {$h['effective_at']}")
@@ -391,6 +413,13 @@ PROMPT;
         $parts[] = "contracts: {$contractsInfo}";
         $parts[] = 'other_spaces_total: ' . (int) ($tenant['other_spaces_total'] ?? 0);
         $parts[] = '';
+        $parts[] = '[contract_contour]';
+        $parts[] = 'active_current_total: ' . (int) ($contractContour['active_current_total'] ?? 0);
+        $parts[] = 'historical_total: ' . (int) ($contractContour['historical_total'] ?? 0);
+        $parts[] = 'has_historical_tail: ' . (! empty($contractContour['has_historical_tail']) ? 'yes' : 'no');
+        $parts[] = 'active_current_contracts: ' . $this->formatContractContourLines($contractContour['active_current_contracts'] ?? []);
+        $parts[] = 'historical_contracts: ' . $this->formatContractContourLines($contractContour['historical_contracts'] ?? []);
+        $parts[] = '';
         $parts[] = '[tenant_other_spaces]';
         $parts[] = $otherSpacesLines;
         $parts[] = '';
@@ -428,7 +457,7 @@ PROMPT;
         $debtTotal = $counts['debt_total'] ?? null;
 
         return sprintf(
-            'id: %d, number: %s, display: %s, status: %s, active: %s, score: %d, map_shapes: %d, contracts: %d, accruals: %d, debt_total: %s, cabinet_links: %d, tenant_bindings: %d, products: %d',
+            'id: %d, number: %s, display: %s, status: %s, active: %s, score: %d, map_shapes: %d, contracts: %d, historical_contracts: %d, accruals: %d, debt_total: %s, cabinet_links: %d, tenant_bindings: %d, products: %d',
             (int) ($space['id'] ?? 0),
             (string) ($space['number'] ?? '—'),
             (string) ($space['display_name'] ?? '—'),
@@ -437,12 +466,35 @@ PROMPT;
             (int) ($space['canonical_score'] ?? 0),
             (int) ($counts['map_shapes'] ?? 0),
             (int) ($counts['contracts'] ?? 0),
+            (int) ($counts['historical_contracts'] ?? 0),
             (int) ($counts['accruals'] ?? 0),
             $debtTotal === null ? '—' : (string) $debtTotal,
             (int) ($counts['cabinet_links'] ?? 0),
             (int) ($counts['tenant_bindings'] ?? 0),
             (int) ($counts['products'] ?? 0),
         );
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $contracts
+     */
+    private function formatContractContourLines(array $contracts): string
+    {
+        if ($contracts === []) {
+            return '—';
+        }
+
+        return collect($contracts)
+            ->map(fn (array $contract): string => sprintf(
+                '#%d %s, status: %s, active: %s, start: %s, end: %s',
+                (int) ($contract['id'] ?? 0),
+                (string) ($contract['contract_number'] ?? '—'),
+                (string) ($contract['status'] ?? '—'),
+                ! empty($contract['is_active']) ? 'yes' : 'no',
+                (string) ($contract['start_date'] ?? '—'),
+                (string) ($contract['end_date'] ?? '—'),
+            ))
+            ->join('; ');
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Services\Ai\AiContextPackBuilder;
+use App\Services\Ai\AiReviewService;
 use App\Services\Ai\GigaChatClient;
 use Illuminate\Console\Command;
 use Illuminate\Http\Client\Factory as Http;
@@ -22,7 +23,7 @@ class AiReviewPlace extends Command
 
     protected $description = 'Send one market_space context pack to GigaChat and return structured review (read-only)';
 
-    public function handle(AiContextPackBuilder $packBuilder, Http $http): int
+    public function handle(AiContextPackBuilder $packBuilder, AiReviewService $reviewService, Http $http): int
     {
         $spaceId = (int) $this->argument('market_space_id');
         $marketId = $this->option('market_id')
@@ -66,8 +67,9 @@ class AiReviewPlace extends Command
         }
 
         // 3. Формируем messages
-        $systemPrompt = $this->buildSystemPrompt($pack);
-        $userMessage = $this->buildUserMessage($pack);
+        $messages = $reviewService->buildMessagesForPack($pack);
+        $systemPrompt = $messages['system'];
+        $userMessage = $messages['user'];
 
         // --dry-run: показать и выйти
         if ($this->option('dry-run')) {
@@ -281,6 +283,7 @@ PROMPT;
         $tenant = $pack['tenant_context'];
         $debt = $pack['debt_context'];
         $history = $pack['review_history'];
+        $contractContour = $tenant['contract_contour'] ?? [];
 
         $historyLines = count($history) > 0
             ? collect($history)->map(fn ($h) =>
@@ -311,6 +314,9 @@ PROMPT;
         $parts[] = "- has_tenant: {$hasTenant}";
         $parts[] = $tenantName;
         $parts[] = "- contracts: {$contractsInfo}";
+        $parts[] = "- active_current_contracts: " . (int) ($contractContour['active_current_total'] ?? 0);
+        $parts[] = "- historical_contracts: " . (int) ($contractContour['historical_total'] ?? 0);
+        $parts[] = "- has_historical_tail: " . (! empty($contractContour['has_historical_tail']) ? 'yes' : 'no');
         $parts[] = '';
         $parts[] = '[debt_context]';
         $parts[] = "- debt_status: {$debt['debt_status']} ({$debt['debt_label']})";
