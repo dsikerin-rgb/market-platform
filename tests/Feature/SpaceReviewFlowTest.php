@@ -630,7 +630,7 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::test(MapReviewResults::class)
             ->assertSee('Загрузить ИИ-разбор', false)
-            ->assertDontSee('AI-разбор показан для первых 5 мест в текущем списке', false);
+            ->assertDontSee('ИИ-разбор показан для первых 5 мест в текущем списке', false);
     }
 
     public function test_map_review_results_selects_ai_batch_from_current_visible_order(): void
@@ -663,7 +663,7 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame([102, 105, 103, 101, 104], array_column($selectedBatch, 'space_id'));
     }
 
-    public function test_map_review_results_loads_ai_on_demand_for_skipped_row(): void
+    public function test_map_review_results_loads_ai_on_demand_for_skipped_row_and_keeps_previous_loaded_rows(): void
     {
         $market = $this->createMarket();
         $this->actingAsSuperAdmin((int) $market->id);
@@ -681,9 +681,9 @@ class SpaceReviewFlowTest extends TestCase
             {
                 return [
                     'review' => [
-                        'summary' => 'Проверить спорную связь',
-                        'why_flagged' => 'Есть спорный кейс',
-                        'recommended_next_step' => 'Открыть место и сверить контекст',
+                        'summary' => 'Проверить спорную связь ' . $spaceId,
+                        'why_flagged' => 'Есть спорный кейс ' . $spaceId,
+                        'recommended_next_step' => 'Открыть место и сверить контекст ' . $spaceId,
                         'risk_score' => 6,
                         'confidence' => 0.8,
                     ],
@@ -704,7 +704,76 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::withQueryParams(['ai_load_space_id' => $spaces[5]->id])
             ->test(MapReviewResults::class)
-            ->assertSee('Проверить спорную связь', false);
+            ->assertSee('Проверить спорную связь ' . $spaces[5]->id, false);
+
+        $spaces[] = $this->createSpace($market, [
+            'number' => 'AI-OD-7',
+            'display_name' => 'AI on demand 7',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now()->subMinutes(7),
+        ]);
+
+        Livewire::withQueryParams(['ai_load_space_id' => $spaces[6]->id])
+            ->test(MapReviewResults::class)
+            ->assertSee('Проверить спорную связь ' . $spaces[5]->id, false)
+            ->assertSee('Проверить спорную связь ' . $spaces[6]->id, false);
+    }
+
+    public function test_map_review_results_keeps_persisted_ai_summary_when_current_batch_returns_null(): void
+    {
+        $page = new class extends MapReviewResults
+        {
+            public function exposedMergeAiData(array $current, array $persisted): array
+            {
+                return $this->mergeAiData($current, $persisted);
+            }
+        };
+
+        $persisted = [
+            'summaries' => [
+                101 => [
+                    'summary' => 'Persisted summary',
+                    'why_flagged' => 'Persisted reason',
+                    'recommended_next_step' => 'Persisted step',
+                    'risk_score' => 7,
+                    'confidence' => 0.9,
+                ],
+            ],
+            'errors' => [
+                101 => null,
+            ],
+            'meta' => [
+                'mode' => 'ok',
+                'limit' => 5,
+            ],
+        ];
+
+        $current = [
+            'summaries' => [
+                101 => null,
+                102 => [
+                    'summary' => 'Current summary',
+                    'why_flagged' => 'Current reason',
+                    'recommended_next_step' => 'Current step',
+                    'risk_score' => 5,
+                    'confidence' => 0.8,
+                ],
+            ],
+            'errors' => [
+                101 => 'policy',
+                102 => null,
+            ],
+            'meta' => [
+                'mode' => 'ok',
+                'limit' => 5,
+            ],
+        ];
+
+        $merged = $page->exposedMergeAiData($current, $persisted);
+
+        $this->assertSame('Persisted summary', $merged['summaries'][101]['summary']);
+        $this->assertSame(null, $merged['errors'][101]);
+        $this->assertSame('Current summary', $merged['summaries'][102]['summary']);
     }
 
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void
@@ -738,7 +807,7 @@ class SpaceReviewFlowTest extends TestCase
         ]);
 
         Livewire::test(MapReviewResults::class)
-            ->assertSee('AI-анализ отклонён проверкой качества ответа', false);
+            ->assertSee('ИИ-анализ отклонён проверкой качества ответа', false);
     }
 
     public function test_review_decision_endpoint_resolves_duplicate_by_transferring_safe_links(): void
