@@ -50,6 +50,7 @@ class MapReviewResults extends Page
         $service = app(MapReviewResultsService::class);
 
         $attentionTab = $this->attentionTab();
+        $aiLoadSpaceId = (int) request()->query('ai_load_space_id', 0);
         $needsAttention = $marketId
             ? ($attentionTab === 'unconfirmed_links'
                 ? $service->unconfirmedLinks($marketId, 50)
@@ -69,6 +70,11 @@ class MapReviewResults extends Page
                     'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
                 ],
             ];
+
+        if ($marketId && $aiLoadSpaceId > 0) {
+            $aiData = $this->mergeRequestedAiSummary($aiData, $marketId, $aiLoadSpaceId, $visibleNeedsAttentionRows);
+        }
+
         $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiData['summaries'], $attentionTab);
 
         return [
@@ -298,6 +304,69 @@ class MapReviewResults extends Page
             },
             $limitedRows
         )));
+    }
+
+    /**
+     * @param  array{
+     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
+     *   errors: array<int, 'connectivity'|'policy'|null>,
+     *   meta: array{mode:string,limit:int}
+     * }  $aiData
+     * @param  list<array{space_id:int}>  $visibleRows
+     * @return array{
+     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
+     *   errors: array<int, 'connectivity'|'policy'|null>,
+     *   meta: array{mode:string,limit:int}
+     * }
+     */
+    protected function mergeRequestedAiSummary(array $aiData, int $marketId, int $spaceId, array $visibleRows): array
+    {
+        if ($spaceId <= 0) {
+            return $aiData;
+        }
+
+        $isVisible = false;
+        foreach ($visibleRows as $row) {
+            if ((int) ($row['space_id'] ?? 0) === $spaceId) {
+                $isVisible = true;
+                break;
+            }
+        }
+
+        if (! $isVisible) {
+            return $aiData;
+        }
+
+        if (isset($aiData['summaries'][$spaceId])) {
+            return $aiData;
+        }
+
+        try {
+            $reviewService = app(AiReviewService::class);
+
+            if (! $reviewService->isAvailable()) {
+                return $aiData;
+            }
+
+            $fetchResult = $reviewService->getReviewForSpace($spaceId, $marketId);
+            $aiData['summaries'][$spaceId] = $fetchResult['review'] ?? null;
+            $aiData['errors'][$spaceId] = $fetchResult['error_type'] ?? null;
+            $aiData['meta']['mode'] = 'ok';
+
+            return $aiData;
+        } catch (\Throwable $e) {
+            logger()->warning('AI review on-demand fallback', [
+                'space_id' => $spaceId,
+                'market_id' => $marketId,
+                'message' => $e->getMessage(),
+            ]);
+
+            $aiData['summaries'][$spaceId] = null;
+            $aiData['errors'][$spaceId] = 'connectivity';
+            $aiData['meta']['mode'] = 'ok';
+
+            return $aiData;
+        }
     }
 
     /**
