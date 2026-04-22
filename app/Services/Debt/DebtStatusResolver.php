@@ -124,12 +124,13 @@ class DebtStatusResolver
             );
         }
 
-        // Получаем external_id контрактов, привязанных к этому месту
-        $contractExternalIds = DB::table('tenant_contracts')
-            ->where('market_space_id', $marketSpaceId)
-            ->where('market_id', $marketId)
-            ->whereNotNull('external_id')
-            ->pluck('external_id');
+        // Берём только текущий активный контрактный контур места.
+        // Исторические/неактивные договоры не должны давать scope=space.
+        $contractExternalIds = $this->resolveActiveContractExternalIdsForMarketSpace(
+            marketSpaceId: $marketSpaceId,
+            marketId: $marketId,
+            tenantId: (int) $space->tenant_id,
+        );
 
         // Точной связи с местом нет — используем tenant-fallback
         if ($contractExternalIds->isEmpty()) {
@@ -921,6 +922,55 @@ class DebtStatusResolver
             'yellow_after_days' => $debtMonitoring['yellow_after_days'] ?? $debtMonitoring['orange_after_days'] ?? 1,
             'red_after_days' => $debtMonitoring['red_after_days'] ?? 30,
         ];
+    }
+
+    private function resolveActiveContractExternalIdsForMarketSpace(
+        int $marketSpaceId,
+        int $marketId,
+        int $tenantId,
+    ): Collection {
+        if (
+            Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')
+        ) {
+            $now = now();
+
+            $bindingIds = DB::table('market_space_tenant_bindings as mstb')
+                ->join('tenant_contracts as tc', 'tc.id', '=', 'mstb.tenant_contract_id')
+                ->where('mstb.market_space_id', $marketSpaceId)
+                ->where('mstb.market_id', $marketId)
+                ->where('mstb.tenant_id', $tenantId)
+                ->whereNotNull('mstb.tenant_contract_id')
+                ->whereNotNull('tc.external_id')
+                ->where('tc.market_id', $marketId)
+                ->where('tc.tenant_id', $tenantId)
+                ->where('tc.is_active', true)
+                ->whereNotIn('tc.status', ['terminated', 'archived'])
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.started_at')
+                        ->orWhere('mstb.started_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.ended_at')
+                        ->orWhere('mstb.ended_at', '>', $now);
+                })
+                ->pluck('tc.external_id');
+
+            if ($bindingIds->isNotEmpty()) {
+                return $bindingIds->unique()->values();
+            }
+        }
+
+        return DB::table('tenant_contracts')
+            ->where('market_space_id', $marketSpaceId)
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->whereNotIn('status', ['terminated', 'archived'])
+            ->whereNotNull('external_id')
+            ->pluck('external_id')
+            ->unique()
+            ->values();
     }
 
     /**

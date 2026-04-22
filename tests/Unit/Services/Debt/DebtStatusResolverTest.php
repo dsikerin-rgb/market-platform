@@ -4,6 +4,7 @@
 namespace Tests\Unit\Services\Debt;
 
 use App\Models\Market;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
@@ -420,6 +421,82 @@ class DebtStatusResolverTest extends TestCase
         // После очистки кеша результат должен быть тем же (данные не менялись)
         $this->assertEquals($result1['status'], $result3['status']);
         $this->assertEquals($result1['label'], $result3['label']);
+    }
+
+    public function test_resolve_for_market_space_ignores_old_inactive_contract_debt_from_previous_tenant(): void
+    {
+        $previousTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Old tenant',
+            'external_id' => 'old-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        $currentTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Current tenant',
+            'external_id' => 'current-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => '101',
+            'code' => 'space-101',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $previousTenant->id,
+                'market_space_id' => $space->id,
+                'external_id' => 'old-contract-001',
+                'number' => 'OLD-001',
+                'status' => 'terminated',
+                'is_active' => false,
+                'starts_at' => Carbon::now()->subMonths(6),
+                'ends_at' => Carbon::now()->subMonth(),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $currentTenant->id,
+                'market_space_id' => $space->id,
+                'external_id' => 'current-contract-001',
+                'number' => 'CUR-001',
+                'status' => 'active',
+                'is_active' => true,
+                'starts_at' => Carbon::now()->subWeek(),
+                'ends_at' => null,
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $previousTenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $previousTenant->external_id,
+            'contract_external_id' => 'old-contract-001',
+            'period' => '2026-03',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => Carbon::now()->subDays(40),
+            'created_at' => Carbon::now()->subDays(40),
+            'hash' => sha1($previousTenant->external_id . '|old-contract-001|2026-03|10000|0|10000'),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertSame('auto', $result['mode']);
+        $this->assertSame('gray', $result['status']);
+        $this->assertSame('none', $result['extra']['scope'] ?? null);
     }
 
     /**
