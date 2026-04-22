@@ -3047,6 +3047,20 @@ class TenantResource extends BaseResource
 
         $rows = $query->get($fields);
         if ($rows->isEmpty()) {
+            $displayStatus = static::resolveDebtStatusForDisplay($record);
+            $displayState = (string) ($displayStatus['status'] ?? 'gray');
+
+            if (in_array($displayState, ['green', 'pending', 'orange', 'red'], true)) {
+                return static::renderPaymentDisciplineCard(
+                    (string) ($displayStatus['label'] ?? 'Нет данных'),
+                    null,
+                    in_array($displayState, ['orange', 'red'], true),
+                    false,
+                    null,
+                    $displayStatus['updated_at'] ?? null,
+                );
+            }
+
             return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
         }
 
