@@ -629,7 +629,8 @@ class SpaceReviewFlowTest extends TestCase
         }
 
         Livewire::test(MapReviewResults::class)
-            ->assertSee('AI-разбор показан для первых 5 мест в текущем списке', false);
+            ->assertSee('Загрузить ИИ-разбор', false)
+            ->assertDontSee('AI-разбор показан для первых 5 мест в текущем списке', false);
     }
 
     public function test_map_review_results_selects_ai_batch_from_current_visible_order(): void
@@ -660,6 +661,50 @@ class SpaceReviewFlowTest extends TestCase
         $selectedBatch = $page->exposedSelectVisibleAiBatch($visibleRows);
 
         $this->assertSame([102, 105, 103, 101, 104], array_column($selectedBatch, 'space_id'));
+    }
+
+    public function test_map_review_results_loads_ai_on_demand_for_skipped_row(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        app()->instance(AiReviewService::class, new class extends AiReviewService {
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                return [
+                    'review' => [
+                        'summary' => 'Проверить спорную связь',
+                        'why_flagged' => 'Есть спорный кейс',
+                        'recommended_next_step' => 'Открыть место и сверить контекст',
+                        'risk_score' => 6,
+                        'confidence' => 0.8,
+                    ],
+                    'error_type' => null,
+                ];
+            }
+        });
+
+        $spaces = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $spaces[] = $this->createSpace($market, [
+                'number' => 'AI-OD-' . $i,
+                'display_name' => 'AI on demand ' . $i,
+                'map_review_status' => 'conflict',
+                'map_reviewed_at' => now()->subMinutes($i),
+            ]);
+        }
+
+        Livewire::withQueryParams(['ai_load_space_id' => $spaces[5]->id])
+            ->test(MapReviewResults::class)
+            ->assertSee('Проверить спорную связь', false);
     }
 
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void

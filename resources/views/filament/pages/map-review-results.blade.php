@@ -1494,7 +1494,12 @@
                                                                     </div>
                                                                 @elseif (count($needsAttention) > $aiLimit)
                                                                     <div class="mrr-ai mrr-ai--skipped">
-                                                                        <span class="mrr-ai__placeholder">AI-разбор показан для первых {{ $aiLimit }} мест в текущем списке</span>
+                                                                        <a
+                                                                            class="mrr-link mrr-link--button"
+                                                                            href="{{ request()->fullUrlWithQuery(['ai_load_space_id' => $row['space_id']]) }}"
+                                                                        >
+                                                                            Загрузить ИИ-разбор
+                                                                        </a>
                                                                     </div>
                                                                 @else
                                                                     <div class="mrr-ai mrr-ai--empty">
