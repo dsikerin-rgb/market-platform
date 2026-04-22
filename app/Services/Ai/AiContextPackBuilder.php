@@ -146,14 +146,20 @@ class AiContextPackBuilder
                 'has_tenant'         => false,
                 'tenant'             => null,
                 'contracts'          => [],
+                'contract_contour'   => [
+                    'active_current_total' => 0,
+                    'historical_total' => 0,
+                    'has_historical_tail' => false,
+                    'active_current_contracts' => [],
+                    'historical_contracts' => [],
+                ],
                 'other_spaces_total' => 0,
                 'other_spaces'       => [],
             ];
         }
 
         $tenant = Tenant::query()->find($space->tenant_id);
-
-        $contracts = TenantContract::query()
+        $contractRows = TenantContract::query()
             ->where('market_id', $space->market_id)
             ->where('market_space_id', $space->id)
             ->get([
@@ -161,19 +167,28 @@ class AiContextPackBuilder
                 'external_id',
                 'number',
                 'status',
+                'is_active',
                 'starts_at',
                 'ends_at',
                 'tenant_id',
-            ])
+            ]);
+
+        $contracts = $contractRows
             ->map(fn ($c) => [
                 'id'              => $c->id,
                 'external_id'     => $c->external_id,
                 'contract_number' => $c->number,
                 'status'          => $c->status,
+                'is_active'       => (bool) $c->is_active,
                 'start_date'      => $c->starts_at?->toDateString(),
                 'end_date'        => $c->ends_at?->toDateString(),
             ])
             ->toArray();
+
+        $contractContour = $this->buildContractContour(
+            $contractRows->all(),
+            $space->tenant_id ? (int) $space->tenant_id : null,
+        );
 
         $otherSpacesQuery = MarketSpace::query()
             ->where('market_id', $space->market_id)
@@ -258,6 +273,7 @@ class AiContextPackBuilder
                 'is_active'   => $tenant->is_active,
             ] : null,
             'contracts'          => $contracts,
+            'contract_contour'   => $contractContour,
             'other_spaces_total' => $otherSpacesTotal,
             'other_spaces'       => $otherSpacesPayload,
         ];
@@ -380,7 +396,6 @@ class AiContextPackBuilder
 
         $definitions = [
             'map_shapes' => ['market_space_map_shapes', 'market_space_id'],
-            'contracts' => ['tenant_contracts', 'market_space_id'],
             'accruals' => ['tenant_accruals', 'market_space_id'],
             'cabinet_links' => ['tenant_user_market_spaces', 'market_space_id'],
             'tenant_bindings' => ['market_space_tenant_bindings', 'market_space_id'],
@@ -416,6 +431,15 @@ class AiContextPackBuilder
                 });
         }
 
+        foreach ($this->contractCountsForSpaces($spaceIds, $marketId) as $spaceId => $counts) {
+            if (! array_key_exists($spaceId, $result)) {
+                continue;
+            }
+
+            $result[$spaceId]['contracts'] = (int) ($counts['contracts'] ?? 0);
+            $result[$spaceId]['historical_contracts'] = (int) ($counts['historical_contracts'] ?? 0);
+        }
+
         return $result;
     }
 
@@ -427,6 +451,7 @@ class AiContextPackBuilder
         return [
             'map_shapes' => 0,
             'contracts' => 0,
+            'historical_contracts' => 0,
             'accruals' => 0,
             'cabinet_links' => 0,
             'tenant_bindings' => 0,
@@ -465,11 +490,9 @@ class AiContextPackBuilder
             return [];
         }
 
-        $contractRows = DB::table('tenant_contracts')
-            ->where('market_id', $marketId)
-            ->whereIn('market_space_id', $spaceIds)
-            ->whereNotNull('external_id')
-            ->get(['market_space_id', 'external_id']);
+        $contractRows = $this->activeContractQueryForSpaces($spaceIds, $marketId)
+            ->whereNotNull('tc.external_id')
+            ->get(['tc.market_space_id', 'tc.external_id']);
 
         if ($contractRows->isEmpty()) {
             return [];
@@ -529,11 +552,10 @@ class AiContextPackBuilder
             return null;
         }
 
-        $contractExternalIds = DB::table('tenant_contracts')
-            ->where('market_space_id', $space->id)
-            ->where('market_id', $marketId)
-            ->whereNotNull('external_id')
-            ->pluck('external_id');
+        $contractExternalIds = $this->activeContractQueryForSpaces([(int) $space->id], $marketId)
+            ->where('tc.market_space_id', $space->id)
+            ->whereNotNull('tc.external_id')
+            ->pluck('tc.external_id');
 
         if ($contractExternalIds->isEmpty()) {
             return null;
@@ -557,6 +579,161 @@ class AiContextPackBuilder
             'tenant_fallback' => 'tenant-level debt_status',
             default           => 'none',
         };
+    }
+
+    /**
+     * @param  list<TenantContract>  $contracts
+     * @return array{
+     *   active_current_total:int,
+     *   historical_total:int,
+     *   has_historical_tail:bool,
+     *   active_current_contracts:list<array<string,mixed>>,
+     *   historical_contracts:list<array<string,mixed>>
+     * }
+     */
+    private function buildContractContour(array $contracts, ?int $tenantId): array
+    {
+        $activeCurrent = [];
+        $historical = [];
+
+        foreach ($contracts as $contract) {
+            $payload = [
+                'id' => (int) $contract->id,
+                'external_id' => $contract->external_id,
+                'contract_number' => $contract->number,
+                'status' => $contract->status,
+                'is_active' => (bool) $contract->is_active,
+                'start_date' => $contract->starts_at?->toDateString(),
+                'end_date' => $contract->ends_at?->toDateString(),
+            ];
+
+            if ($this->isCurrentActiveContract($contract, $tenantId)) {
+                $activeCurrent[] = $payload;
+            } else {
+                $historical[] = $payload;
+            }
+        }
+
+        return [
+            'active_current_total' => count($activeCurrent),
+            'historical_total' => count($historical),
+            'has_historical_tail' => $historical !== [],
+            'active_current_contracts' => $activeCurrent,
+            'historical_contracts' => $historical,
+        ];
+    }
+
+    private function isCurrentActiveContract(TenantContract $contract, ?int $tenantId): bool
+    {
+        $now = now();
+        $status = (string) ($contract->status ?? '');
+
+        if ($tenantId !== null && (int) $contract->tenant_id !== $tenantId) {
+            return false;
+        }
+
+        if (! (bool) $contract->is_active) {
+            return false;
+        }
+
+        if (in_array($status, ['terminated', 'archived'], true)) {
+            return false;
+        }
+
+        if ($contract->starts_at !== null && $contract->starts_at->gt($now)) {
+            return false;
+        }
+
+        if ($contract->ends_at !== null && ! $contract->ends_at->gt($now)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     * @return array<int, array{contracts:int, historical_contracts:int}>
+     */
+    private function contractCountsForSpaces(array $spaceIds, int $marketId): array
+    {
+        if ($spaceIds === []
+            || ! Schema::hasTable('tenant_contracts')
+            || ! Schema::hasColumn('tenant_contracts', 'market_space_id')) {
+            return [];
+        }
+
+        $totals = DB::table('tenant_contracts')
+            ->where('market_id', $marketId)
+            ->whereIn('market_space_id', $spaceIds)
+            ->selectRaw('market_space_id as space_id, COUNT(*) as aggregate')
+            ->groupBy('market_space_id')
+            ->get()
+            ->mapWithKeys(fn ($row): array => [
+                (int) $row->space_id => ['total' => (int) $row->aggregate],
+            ])
+            ->all();
+
+        $activeTotals = $this->activeContractQueryForSpaces($spaceIds, $marketId)
+            ->selectRaw('tc.market_space_id as space_id, COUNT(*) as aggregate')
+            ->groupBy('tc.market_space_id')
+            ->get()
+            ->mapWithKeys(fn ($row): array => [
+                (int) $row->space_id => (int) $row->aggregate,
+            ])
+            ->all();
+
+        $result = [];
+        foreach ($spaceIds as $spaceId) {
+            $total = (int) (($totals[(int) $spaceId]['total'] ?? 0));
+            $active = (int) ($activeTotals[(int) $spaceId] ?? 0);
+
+            $result[(int) $spaceId] = [
+                'contracts' => $active,
+                'historical_contracts' => max($total - $active, 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     */
+    private function activeContractQueryForSpaces(array $spaceIds, int $marketId): \Illuminate\Database\Query\Builder
+    {
+        $query = DB::table('tenant_contracts as tc')
+            ->join('market_spaces as ms', function ($join): void {
+                $join->on('ms.id', '=', 'tc.market_space_id')
+                    ->on('ms.market_id', '=', 'tc.market_id');
+            })
+            ->where('tc.market_id', $marketId)
+            ->whereIn('tc.market_space_id', $spaceIds)
+            ->whereColumn('tc.tenant_id', 'ms.tenant_id');
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+            $query->where('tc.is_active', true);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $query->whereNotIn('tc.status', ['terminated', 'archived']);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('tc.starts_at')
+                    ->orWhere('tc.starts_at', '<=', now());
+            });
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('tc.ends_at')
+                    ->orWhere('tc.ends_at', '>', now());
+            });
+        }
+
+        return $query;
     }
 
     // ──────────────────────────────────────────────
@@ -671,7 +848,7 @@ class AiContextPackBuilder
             'timezone'        => config('app.timezone'),
             'market_id'       => $marketId,
             'market_space_id' => $space->id,
-            'context_pack_version' => '1.1.0',
+            'context_pack_version' => '1.2.0',
             'read_only'       => true,
             'ai_call'         => false,
         ];
@@ -691,7 +868,7 @@ class AiContextPackBuilder
             'meta'    => [
                 'built_at' => now()->toDateTimeString(),
                 'timezone' => config('app.timezone'),
-                'context_pack_version' => '1.1.0',
+                'context_pack_version' => '1.2.0',
                 'read_only' => true,
                 'ai_call' => false,
             ],
