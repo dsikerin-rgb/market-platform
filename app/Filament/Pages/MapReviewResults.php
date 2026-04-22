@@ -57,8 +57,19 @@ class MapReviewResults extends Page
             : [];
         $appliedChanges = $marketId ? $service->appliedChanges($marketId, 50) : [];
 
-        $aiSummaries = $marketId ? $this->buildAiSummaries($marketId, $needsAttention) : [];
-        $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiSummaries, $attentionTab);
+        $visibleNeedsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, [], $attentionTab);
+
+        $aiData = $marketId
+            ? $this->buildAiSummaries($marketId, $this->selectVisibleAiBatch($visibleNeedsAttentionRows))
+            : [
+                'summaries' => [],
+                'errors' => [],
+                'meta' => [
+                    'mode' => 'no_market',
+                    'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
+                ],
+            ];
+        $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiData['summaries'], $attentionTab);
 
         return [
             'market' => $market,
@@ -83,7 +94,9 @@ class MapReviewResults extends Page
                 ],
                 $appliedChanges
             ),
-            'aiSummaries' => $aiSummaries,
+            'aiSummaries' => $aiData['summaries'],
+            'aiErrors' => $aiData['errors'],
+            'aiMeta' => $aiData['meta'],
         ];
     }
 
@@ -95,31 +108,57 @@ class MapReviewResults extends Page
      * Policy/semantic fail НЕ включает cooldown — это единичный случай.
      *
      * @param  list<array{space_id:int}>  $needsAttention
-     * @return array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>
+     * @return array{
+     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
+     *   errors: array<int, 'connectivity'|'policy'|null>,
+     *   meta: array{mode:string,limit:int}
+     * }
      */
     protected function buildAiSummaries(int $marketId, array $needsAttention): array
     {
         if (empty($needsAttention)) {
-            return [];
+            return [
+                'summaries' => [],
+                'errors' => [],
+                'meta' => [
+                    'mode' => 'empty',
+                    'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
+                ],
+            ];
         }
 
         try {
             $reviewService = app(AiReviewService::class);
 
             if (! $reviewService->isAvailable()) {
-                return [];
+                return [
+                    'summaries' => [],
+                    'errors' => [],
+                    'meta' => [
+                        'mode' => 'disabled',
+                        'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
+                    ],
+                ];
             }
 
             // Quick cooldown: только если GigaChat недоступен на уровне сети/auth
             $downKey = 'gigachat_connectivity_down';
             if (Cache::get($downKey)) {
-                return [];
+                return [
+                    'summaries' => [],
+                    'errors' => [],
+                    'meta' => [
+                        'mode' => 'connectivity_cooldown',
+                        'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
+                    ],
+                ];
             }
 
             // Лимит: максимум 5 первых кейсов за один рендер страницы
             $limited = array_slice($needsAttention, 0, AiReviewService::MAX_REVIEWS_PER_BATCH);
 
             $results = [];
+            $errors = [];
             $connectivityFails = 0;
 
             foreach ($limited as $row) {
@@ -128,6 +167,7 @@ class MapReviewResults extends Page
                 try {
                     $fetchResult = $reviewService->getReviewForSpace($spaceId, $marketId);
                     $results[$spaceId] = $fetchResult['review'] ?? null;
+                    $errors[$spaceId] = $fetchResult['error_type'] ?? null;
 
                     // connectivity_fail -> candidate для cooldown
                     if (($fetchResult['error_type'] ?? null) === 'connectivity') {
@@ -141,6 +181,7 @@ class MapReviewResults extends Page
                     ]);
 
                     $results[$spaceId] = null;
+                    $errors[$spaceId] = 'connectivity';
                 }
 
                 // policy_fail -> НЕ включаем в cooldown (единичный случай)
@@ -151,14 +192,28 @@ class MapReviewResults extends Page
                 Cache::put($downKey, true, now()->addMinutes(5));
             }
 
-            return $results;
+            return [
+                'summaries' => $results,
+                'errors' => $errors,
+                'meta' => [
+                    'mode' => 'ok',
+                    'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
+                ],
+            ];
         } catch (\Throwable $e) {
             logger()->warning('AI review page fallback', [
                 'market_id' => $marketId,
                 'message' => $e->getMessage(),
             ]);
 
-            return [];
+            return [
+                'summaries' => [],
+                'errors' => [],
+                'meta' => [
+                    'mode' => 'page_error',
+                    'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
+                ],
+            ];
         }
     }
 
@@ -221,6 +276,28 @@ class MapReviewResults extends Page
 
             return $row;
         }, $rows);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array{space_id:int}>
+     */
+    protected function selectVisibleAiBatch(array $rows): array
+    {
+        $limitedRows = array_slice($rows, 0, AiReviewService::MAX_REVIEWS_PER_BATCH);
+
+        return array_values(array_filter(array_map(
+            static function (array $row): ?array {
+                $spaceId = (int) ($row['space_id'] ?? 0);
+
+                if ($spaceId <= 0) {
+                    return null;
+                }
+
+                return ['space_id' => $spaceId];
+            },
+            $limitedRows
+        )));
     }
 
     /**

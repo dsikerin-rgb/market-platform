@@ -526,6 +526,39 @@
                 color: #94a3b8;
             }
 
+            .mrr-quick-review__clarify {
+                border-radius: 1rem;
+                border: 1px solid rgba(59, 130, 246, 0.16);
+                background: rgba(239, 246, 255, 0.95);
+                padding: 0.9rem 1rem;
+            }
+
+            .dark .mrr-quick-review__clarify {
+                border-color: rgba(96, 165, 250, 0.22);
+                background: rgba(15, 23, 42, 0.45);
+            }
+
+            .mrr-quick-review__clarify-title {
+                font-size: 0.82rem;
+                font-weight: 800;
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-quick-review__clarify-title {
+                color: #bfdbfe;
+            }
+
+            .mrr-quick-review__clarify-text {
+                margin-top: 0.35rem;
+                font-size: 0.86rem;
+                line-height: 1.55;
+                color: #334155;
+            }
+
+            .dark .mrr-quick-review__clarify-text {
+                color: #cbd5e1;
+            }
+
             .mrr-quick-review__field {
                 min-height: 7rem;
                 resize: vertical;
@@ -1403,7 +1436,11 @@
                                                     </td>
                                                     <td>
                                                         @php
-                                                            $hasAiKey = array_key_exists($row['space_id'], $aiSummaries);
+                                                            $hasAiKey = array_key_exists($row['space_id'], $aiSummaries)
+                                                                || array_key_exists($row['space_id'], $aiErrors ?? []);
+                                                            $aiErrorType = $aiErrors[$row['space_id']] ?? null;
+                                                            $aiMode = (string) (($aiMeta['mode'] ?? 'ok'));
+                                                            $aiLimit = (int) (($aiMeta['limit'] ?? 5));
 
                                                             // Функция для замены технических кодов на русский текст
                                                             $humanize = function(?string $text): string {
@@ -1437,15 +1474,31 @@
                                                                     </div>
                                                                 @elseif ($hasAiKey)
                                                                     <div class="mrr-ai mrr-ai--empty">
-                                                                        <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
+                                                                        <span class="mrr-ai__placeholder">
+                                                                            @if ($aiErrorType === 'policy')
+                                                                                AI-анализ отклонён проверкой качества ответа
+                                                                            @elseif ($aiErrorType === 'connectivity')
+                                                                                AI-анализ временно недоступен из-за ошибки соединения
+                                                                            @else
+                                                                                AI-анализ недоступен
+                                                                            @endif
+                                                                        </span>
                                                                     </div>
-                                                                @elseif (empty($aiSummaries))
+                                                                @elseif ($aiMode === 'disabled')
+                                                                    <div class="mrr-ai mrr-ai--empty">
+                                                                        <span class="mrr-ai__placeholder">AI-разбор отключён в этом окружении</span>
+                                                                    </div>
+                                                                @elseif (in_array($aiMode, ['connectivity_cooldown', 'page_error'], true))
                                                                     <div class="mrr-ai mrr-ai--empty">
                                                                         <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
                                                                     </div>
-                                                                @else
+                                                                @elseif (count($needsAttention) > $aiLimit)
                                                                     <div class="mrr-ai mrr-ai--skipped">
-                                                                        <span class="mrr-ai__placeholder">AI-разбор показан для первых 5 мест</span>
+                                                                        <span class="mrr-ai__placeholder">AI-разбор показан для первых {{ $aiLimit }} мест в текущем списке</span>
+                                                                    </div>
+                                                                @else
+                                                                    <div class="mrr-ai mrr-ai--empty">
+                                                                        <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
                                                                     </div>
                                                                 @endif
                                                             </div>
@@ -1607,7 +1660,14 @@
                                 <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="matched" data-mrr-quick-reason-required="0">Совпало</button>
                                 <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="occupancy_conflict" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Конфликт по занятости">Конфликт по занятости</button>
                                 <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="shape_not_found" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Фигура не найдена на карте">Фигура не найдена на карте</button>
-                                <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="space_identity_needs_clarification" data-mrr-quick-reason-required="0">Требует уточнения</button>
+                                <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="space_identity_needs_clarification" data-mrr-quick-reason-required="0">Уточнить</button>
+                            </div>
+                        </div>
+
+                        <div class="mrr-quick-review__clarify">
+                            <div class="mrr-quick-review__clarify-title">Что значит «Уточнить»</div>
+                            <div class="mrr-quick-review__clarify-text">
+                                Это ручное решение для случаев, когда номер, название или другая идентичность места требуют дополнительной проверки. Данные места не меняются, а в истории ревизии фиксируется сам факт, что нужен отдельный разбор.
                             </div>
                         </div>
 
@@ -1923,8 +1983,6 @@
                     }
 
                     window.setTimeout(() => quickReviewReason.focus(), 0);
-                };
-
                 const createDuplicateReviewOperation = async () => {
                     const currentSpaceId = Number(modal.dataset.currentSpaceId || 0);
                     const candidateSpaceId = Number(modal.dataset.candidateSpaceId || 0);
