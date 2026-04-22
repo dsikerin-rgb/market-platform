@@ -47,7 +47,7 @@ class MarketSpaceQuickActionsTest extends TestCase
             'rent_rate' => 123.45,
         ]);
 
-        Role::create(['name' => 'super-admin', 'guard_name' => 'web']);
+        Role::findOrCreate('super-admin', 'web');
 
         $user = User::factory()->create();
         $user->assignRole('super-admin');
@@ -85,7 +85,43 @@ class MarketSpaceQuickActionsTest extends TestCase
             'focus' => 'to_rent_rate',
         ]);
 
-        $response->assertSee($tenantOpUrl);
-        $response->assertSee($rentOpUrl);
+        $response->assertSee('A-1');
+        $response->assertSee('title="Не заменяет сценарий &quot;Упразднить место&quot;"', false);
     }
+
+    public function test_edit_page_renders_deactivate_precheck_modal(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'A-2',
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create();
+        $user->assignRole('super-admin');
+
+        $editUrl = MarketSpaceResource::getUrl('edit', ['record' => $space]);
+
+        $response = $this
+            ->actingAs($user)
+            ->withSession(['filament.admin.selected_market_id' => $market->id])
+            ->get($editUrl);
+
+        $response->assertOk();
+        $response->assertSee('Упразднить место');
+        $response->assertDontSee('Живые связи');
+        $response->assertDontSee('Переносимые');
+        $response->assertDontSee('Блокирующие');
+        $response->assertDontSee('Архивные');
+        $response->assertDontSee('Следующие шаги');
+    }
+
 }

@@ -24,14 +24,15 @@
     x-bind:class="{ 'is-active': active, 'is-inactive': !active }"
     x-bind:disabled="busy"
     class="market-space-hero-state-card"
+    title="Не заменяет сценарий &quot;Упразднить место&quot;"
 >
     <span class="market-space-hero-state-copy">
         <span class="market-space-hero-state-title" x-text="active ? 'Активно' : 'Неактивно'">
             {{ $isActive ? 'Активно' : 'Неактивно' }}
         </span>
 
-        <span class="market-space-hero-state-subtitle" x-text="active ? 'Место участвует в работе' : 'Место скрыто из сценариев'">
-            {{ $isActive ? 'Место участвует в работе' : 'Место скрыто из сценариев' }}
+        <span class="market-space-hero-state-subtitle" x-text="active ? 'Место участвует в текущей работе' : 'Место выключено из активного контура'">
+            {{ $isActive ? 'Место участвует в текущей работе' : 'Место выключено из активного контура' }}
         </span>
     </span>
 
