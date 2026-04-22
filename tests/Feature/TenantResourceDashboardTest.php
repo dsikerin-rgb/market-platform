@@ -121,10 +121,33 @@ class TenantResourceDashboardTest extends TestCase
         $this->assertStringNotContainsString('Снимок', $paymentCardText);
     }
 
+    public function test_tenant_dashboard_uses_display_fallback_when_contract_debts_are_missing(): void
+    {
+        $fixture = $this->createFixture(withDebt: false, withOffsettingCredit: false, withFuturePositiveDebt: false, withAccrualsOnly: true);
+
+        $this->actingAs($fixture['user']);
+
+        $response = $this->get(TenantResource::getUrl('edit', ['record' => $fixture['tenant']]));
+
+        $response->assertOk();
+        $html = $response->getContent();
+        $paymentCardText = $this->elementTextByClass($html, 'tenant-payment-discipline__card');
+
+        $this->assertStringContainsString('tenant-payment-discipline__card--ok', $html);
+        $this->assertStringContainsString('Нет задолженности', $paymentCardText);
+        $this->assertStringNotContainsString('Нет данных', $paymentCardText);
+        $this->assertStringNotContainsString('Просрочка:', $paymentCardText);
+    }
+
     /**
      * @return array{market:Market,tenant:Tenant,contract:TenantContract,user:User}
      */
-    private function createFixture(bool $withDebt, bool $withOffsettingCredit = false, bool $withFuturePositiveDebt = false): array
+    private function createFixture(
+        bool $withDebt,
+        bool $withOffsettingCredit = false,
+        bool $withFuturePositiveDebt = false,
+        bool $withAccrualsOnly = false,
+    ): array
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -155,6 +178,24 @@ class TenantResourceDashboardTest extends TestCase
             'external_id' => 'contract-101',
             'is_active' => true,
         ]);
+
+        if ($withAccrualsOnly) {
+            DB::table('tenant_accruals')->insert([
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_contract_id' => (int) $contract->id,
+                'market_space_id' => null,
+                'period' => '2026-04-01',
+                'currency' => 'RUB',
+                'rent_amount' => 1500.00,
+                'status' => 'imported',
+                'source' => 'excel',
+                'source_row_hash' => hash('sha256', 'tenant-discipline-accrual-row'),
+                'imported_at' => '2026-04-01 10:00:00',
+                'created_at' => '2026-04-01 10:00:00',
+                'updated_at' => '2026-04-01 10:00:00',
+            ]);
+        }
 
         if ($withDebt) {
             DB::table('contract_debts')->insert([
