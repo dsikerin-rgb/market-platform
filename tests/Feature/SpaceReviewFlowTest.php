@@ -672,6 +672,9 @@ class SpaceReviewFlowTest extends TestCase
         ]);
 
         app()->instance(AiReviewService::class, new class extends AiReviewService {
+            /** @var array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}> */
+            private array $cached = [];
+
             public function isAvailable(): bool
             {
                 return true;
@@ -679,16 +682,25 @@ class SpaceReviewFlowTest extends TestCase
 
             public function getReviewForSpace(int $spaceId, int $marketId): array
             {
+                $review = [
+                    'summary' => 'Проверить спорную связь ' . $spaceId,
+                    'why_flagged' => 'Есть спорный кейс ' . $spaceId,
+                    'recommended_next_step' => 'Открыть место и сверить контекст ' . $spaceId,
+                    'risk_score' => 6,
+                    'confidence' => 0.8,
+                ];
+
+                $this->cached[$spaceId] = $review;
+
                 return [
-                    'review' => [
-                        'summary' => 'Проверить спорную связь ' . $spaceId,
-                        'why_flagged' => 'Есть спорный кейс ' . $spaceId,
-                        'recommended_next_step' => 'Открыть место и сверить контекст ' . $spaceId,
-                        'risk_score' => 6,
-                        'confidence' => 0.8,
-                    ],
+                    'review' => $review,
                     'error_type' => null,
                 ];
+            }
+
+            public function getCachedReviewForSpace(int $spaceId, int $marketId): ?array
+            {
+                return $this->cached[$spaceId] ?? null;
             }
         });
 
@@ -723,57 +735,27 @@ class SpaceReviewFlowTest extends TestCase
     {
         $page = new class extends MapReviewResults
         {
-            public function exposedMergeAiData(array $current, array $persisted): array
+            public function exposedLoadCachedVisibleAiSummaries(int $marketId, array $visibleRows): array
             {
-                return $this->mergeAiData($current, $persisted);
+                return $this->loadCachedVisibleAiSummaries($marketId, $visibleRows);
             }
         };
 
-        $persisted = [
-            'summaries' => [
-                101 => [
-                    'summary' => 'Persisted summary',
-                    'why_flagged' => 'Persisted reason',
-                    'recommended_next_step' => 'Persisted step',
-                    'risk_score' => 7,
-                    'confidence' => 0.9,
-                ],
-            ],
-            'errors' => [
-                101 => null,
-            ],
-            'meta' => [
-                'mode' => 'ok',
-                'limit' => 5,
-            ],
-        ];
+        app(AiReviewService::class)->cacheSuccess(101, 77, [
+            'summary' => 'Persisted summary',
+            'why_flagged' => 'Persisted reason',
+            'recommended_next_step' => 'Persisted step',
+            'risk_score' => 7,
+            'confidence' => 0.9,
+        ]);
 
-        $current = [
-            'summaries' => [
-                101 => null,
-                102 => [
-                    'summary' => 'Current summary',
-                    'why_flagged' => 'Current reason',
-                    'recommended_next_step' => 'Current step',
-                    'risk_score' => 5,
-                    'confidence' => 0.8,
-                ],
-            ],
-            'errors' => [
-                101 => 'policy',
-                102 => null,
-            ],
-            'meta' => [
-                'mode' => 'ok',
-                'limit' => 5,
-            ],
-        ];
+        $loaded = $page->exposedLoadCachedVisibleAiSummaries(77, [
+            ['space_id' => 101],
+            ['space_id' => 102],
+        ]);
 
-        $merged = $page->exposedMergeAiData($current, $persisted);
-
-        $this->assertSame('Persisted summary', $merged['summaries'][101]['summary']);
-        $this->assertSame(null, $merged['errors'][101]);
-        $this->assertSame('Current summary', $merged['summaries'][102]['summary']);
+        $this->assertSame('Persisted summary', $loaded[101]['summary']);
+        $this->assertArrayNotHasKey(102, $loaded);
     }
 
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void

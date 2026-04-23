@@ -104,6 +104,18 @@ class AiReviewService
     }
 
     /**
+     * Прочитать только успешный cached review без сетевого запроса.
+     *
+     * @return array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null
+     */
+    public function getCachedReviewForSpace(int $spaceId, int $marketId): ?array
+    {
+        $cached = Cache::get("ai_review_ok_{$marketId}_{$spaceId}");
+
+        return is_array($cached) ? $cached : null;
+    }
+
+    /**
      * Сохранить успешный review в кеш (для预热ки из CLI).
      */
     public function cacheSuccess(int $spaceId, int $marketId, array $review): void
