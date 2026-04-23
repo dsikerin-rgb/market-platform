@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-04-22 — DebtStatusResolver: исторические неактивные договоры исключены из space-level contour
+
+**Проблема**
+
+* `resolveForMarketSpace()` мог подтягивать старый неактивный договор по месту и красить место как текущую `space-level` проблему нового арендатора.
+
+**Что изменили**
+
+* `space-level debt` ограничили активным текущим контрактным контуром места:
+  * сначала через активные `market_space_tenant_bindings` + активные `tenant_contracts`
+  * затем через fallback только на активные договоры текущего арендатора этого места
+* исторические `inactive` / `terminated` / `archived` договоры исключили из `scope=space`
+
+**Эффект**
+
+* старый финансовый хвост больше не даёт ложный current `space-level debt`
+* `tenant-fallback` сохранён без изменения
+
+**Фиксация**
+
+* PR `#524`
+* commit `fb57121` — `fix(debt): ignore inactive historical contracts in market space resolver`
+
 ## 2026-03-17 — Стратегическое решение о привязке договоров к местам
 
 **Контекст:** после применения safe auto-link (6 bridge + 18 number) зафиксировали текущую стратегию и то, что ПОКА НЕ внедряем.

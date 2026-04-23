@@ -2217,10 +2217,16 @@
 
           if (method !== 'GET' && method !== 'HEAD') {
             if (CSRF_TOKEN) headers['X-CSRF-TOKEN'] = CSRF_TOKEN;
+          } else {
+            headers['Cache-Control'] = headers['Cache-Control'] || 'no-cache, no-store, must-revalidate';
+            headers['Pragma'] = headers['Pragma'] || 'no-cache';
           }
 
           opts.headers = headers;
           opts.credentials = 'same-origin';
+          if (method === 'GET' || method === 'HEAD') {
+            opts.cache = opts.cache || 'no-store';
+          }
 
           return fetch(url, opts);
         }
@@ -2860,6 +2866,14 @@
             return reviewNavItems.findIndex((item) => Number(item.id) === Number(chosenSpace.id));
           }
 
+          function isPendingReviewNavItem(item) {
+            return !String(item?.reviewStatus || '').trim();
+          }
+
+          function getPendingReviewNavCount() {
+            return reviewNavItems.reduce((count, item) => count + (isPendingReviewNavItem(item) ? 1 : 0), 0);
+          }
+
           function findNextPendingIndex(currentIndex) {
             if (!reviewNavItems.length) return -1;
 
@@ -2869,7 +2883,7 @@
             for (let step = 0; step < total; step++) {
               const index = (start + step) % total;
               const item = reviewNavItems[index];
-              if (!String(item?.reviewStatus || '').trim()) {
+              if (isPendingReviewNavItem(item)) {
                 return index;
               }
             }
@@ -2880,14 +2894,17 @@
           updateReviewNavUi = function () {
             const total = reviewNavItems.length;
             const currentIndex = getReviewCurrentIndex();
+            const pendingCount = getPendingReviewNavCount();
 
             if (reviewNavStatus) {
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
+              } else if (pendingCount === 0) {
+                reviewNavStatus.textContent = 'Непройденных мест не осталось';
               } else if (currentIndex >= 0) {
-                reviewNavStatus.textContent = 'Место ' + String(currentIndex + 1) + ' из ' + String(total);
+                reviewNavStatus.textContent = 'Место ' + String(currentIndex + 1) + ' из ' + String(total) + ' · осталось ' + String(pendingCount);
               } else {
-                reviewNavStatus.textContent = 'Место — из ' + String(total);
+                reviewNavStatus.textContent = 'Место — из ' + String(total) + ' · осталось ' + String(pendingCount);
               }
             }
 
@@ -2906,6 +2923,18 @@
 
           syncReviewNavFromShapes = function () {
             reviewNavItems = buildReviewNavItemsFromShapes();
+
+            if (chosenSpace) {
+              const currentReviewItem = reviewNavItems.find((item) => Number(item.id) === Number(chosenSpace.id));
+              if (currentReviewItem) {
+                setChosenSpace({
+                  ...chosenSpace,
+                  reviewStatus: currentReviewItem.reviewStatus || '',
+                  reviewStatusLabel: currentReviewItem.reviewStatusLabel || '',
+                }, { announce: false });
+              }
+            }
+
             updateReviewNavUi();
           };
 
@@ -3805,20 +3834,22 @@
 
 
           function syncChosenSpaceReview(item) {
-            if (!item || !chosenSpace) {
+            if (!item) {
               return;
             }
 
             const reviewedSpaceId = Number(item.market_space_id || 0);
-            if (!Number.isFinite(reviewedSpaceId) || reviewedSpaceId <= 0 || reviewedSpaceId !== Number(chosenSpace.id)) {
+            if (!Number.isFinite(reviewedSpaceId) || reviewedSpaceId <= 0) {
               return;
             }
 
-            setChosenSpace({
-              ...chosenSpace,
-              reviewStatus: item.review_status || '',
-              reviewStatusLabel: item.review_status_label || '',
-            }, { announce: false });
+            if (chosenSpace && reviewedSpaceId === Number(chosenSpace.id)) {
+              setChosenSpace({
+                ...chosenSpace,
+                reviewStatus: item.review_status || '',
+                reviewStatusLabel: item.review_status_label || '',
+              }, { announce: false });
+            }
 
             const reviewIndex = reviewNavItems.findIndex((entry) => Number(entry.id) === reviewedSpaceId);
             if (reviewIndex >= 0) {
@@ -3827,8 +3858,9 @@
                 reviewStatus: item.review_status || '',
                 reviewStatusLabel: item.review_status_label || '',
               };
-              updateReviewNavUi();
             }
+
+            updateReviewNavUi();
           }
 
 

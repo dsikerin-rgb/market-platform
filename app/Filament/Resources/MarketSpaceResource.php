@@ -791,23 +791,64 @@ class MarketSpaceResource extends BaseResource
             ->orderByDesc('effective_at')
             ->limit(50)
             ->get([
+                'id',
                 'effective_at',
                 'type',
                 'status',
                 'payload',
+                'comment',
+                'created_by',
             ]);
+
+        $creatorIds = $rows->pluck('created_by')
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $creators = $creatorIds === []
+            ? collect()
+            : DB::table('users')
+                ->whereIn('id', $creatorIds)
+                ->pluck('name', 'id');
 
         $items = $rows->map(function ($row): array {
             $payload = is_array($row->payload) ? $row->payload : (json_decode((string) $row->payload, true) ?: []);
-
             $labels = \App\Domain\Operations\OperationType::labels();
+            $type = (string) ($row->type ?? '');
+            $isReview = $type === \App\Domain\Operations\OperationType::SPACE_REVIEW;
+            $reviewDecision = $isReview ? trim((string) ($payload['decision'] ?? '')) : '';
+            $reviewDecisionLabel = $isReview && $reviewDecision !== ''
+                ? (\App\Domain\Operations\SpaceReviewDecision::labels()[$reviewDecision] ?? $reviewDecision)
+                : null;
 
-            return [
+            $item = [
                 'effective_at' => $row->effective_at ? (string) \Carbon\Carbon::parse($row->effective_at)->format('d.m.Y H:i') : '—',
-                'type' => $labels[$row->type] ?? (string) $row->type,
+                'type' => $labels[$type] ?? $type,
                 'status' => (string) $row->status,
-                'summary' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'is_review' => $isReview,
+                'review_decision' => $reviewDecision !== '' ? $reviewDecision : null,
+                'review_decision_label' => $reviewDecisionLabel,
+                'review_reason' => $isReview ? static::resolveReviewReason($payload, $row->comment ?? null) : null,
+                'review_observed_tenant_name' => $isReview ? static::stringOrNull($payload['observed_tenant_name'] ?? null) : null,
+                'summary' => $isReview
+                    ? static::buildReviewSummary($reviewDecision, $payload)
+                    : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
+
+            return $item;
+        })->values();
+
+        $items = $items->map(function (array $item) use ($rows, $creators): array {
+            $row = $rows->shift();
+            $authorName = $row && filled($row->created_by)
+                ? (string) ($creators[(int) $row->created_by] ?? '—')
+                : '—';
+
+            $item['author_name'] = $authorName;
+
+            return $item;
         })->all();
 
         return new HtmlString(view('filament.market-spaces.operations', [
@@ -818,6 +859,91 @@ class MarketSpaceResource extends BaseResource
                 'return_url' => request()->fullUrl(),
             ]),
         ])->render());
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildReviewSummary(string $decision, array $payload): string
+    {
+        return match ($decision) {
+            'matched' => 'Совпало с данными системы.',
+            \App\Domain\Operations\SpaceReviewDecision::OCCUPANCY_CONFLICT => 'Зафиксирован конфликт по занятости.',
+            \App\Domain\Operations\SpaceReviewDecision::TENANT_CHANGED_ON_SITE => 'Зафиксировано, что на месте другой арендатор.',
+            \App\Domain\Operations\SpaceReviewDecision::SHAPE_NOT_FOUND => 'Зафиксировано, что место не найдено на карте.',
+            \App\Domain\Operations\SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'Место помечено как требующее уточнения.',
+            \App\Domain\Operations\SpaceReviewDecision::MARK_SPACE_FREE => 'Место отмечено как свободное.',
+            \App\Domain\Operations\SpaceReviewDecision::MARK_SPACE_SERVICE => 'Место отмечено как служебное.',
+            \App\Domain\Operations\SpaceReviewDecision::BIND_SHAPE_TO_SPACE => 'Фигура привязана к месту.'
+                . (filled($payload['shape_id'] ?? null) ? ' Shape #' . (int) $payload['shape_id'] . '.' : ''),
+            \App\Domain\Operations\SpaceReviewDecision::UNBIND_SHAPE_FROM_SPACE => 'Фигура отвязана от места.'
+                . (filled($payload['shape_id'] ?? null) ? ' Shape #' . (int) $payload['shape_id'] . '.' : ''),
+            \App\Domain\Operations\SpaceReviewDecision::FIX_SPACE_IDENTITY => static::buildIdentitySummary($payload),
+            \App\Domain\Operations\SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => static::buildDuplicateSummary($payload),
+            default => 'Ревизионное решение зафиксировано.',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildIdentitySummary(array $payload): string
+    {
+        $parts = [];
+        $number = static::stringOrNull($payload['number'] ?? null);
+        $displayName = static::stringOrNull($payload['display_name'] ?? null);
+
+        if ($number !== null) {
+            $parts[] = 'Номер: ' . $number;
+        }
+
+        if ($displayName !== null) {
+            $parts[] = 'Название: ' . $displayName;
+        }
+
+        if ($parts === []) {
+            return 'Данные места уточнены.';
+        }
+
+        return 'Данные места уточнены. ' . implode(' · ', $parts);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildDuplicateSummary(array $payload): string
+    {
+        $candidateSpaceId = (int) ($payload['candidate_market_space_id'] ?? 0);
+
+        if ($candidateSpaceId <= 0) {
+            return 'Выполнен разбор дубля места.';
+        }
+
+        return 'Выполнен разбор дубля: основное место #' . $candidateSpaceId . '.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function resolveReviewReason(array $payload, mixed $fallbackComment): ?string
+    {
+        $reason = static::stringOrNull($payload['reason'] ?? null);
+        if ($reason !== null) {
+            return $reason;
+        }
+
+        return static::stringOrNull($fallbackComment);
+    }
+
+    private static function stringOrNull(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed !== '' ? $trimmed : null;
     }
 
     public static function table(Table $table): Table

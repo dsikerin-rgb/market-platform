@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
+use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\DuplicateSpaceResolutionService;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationPayloadValidator;
@@ -110,6 +111,7 @@ class Operation extends Model
 
             // Всегда пересчитываем срез места от applied-операций.
             // Это корректно обрабатывает create/update/status change (draft/canceled/applied).
+            app(AiReviewService::class)->clearCache($spaceId, (int) $operation->market_id);
             static::syncMarketSpaceSnapshotFromOperations((int) $operation->market_id, $spaceId);
         });
     }
@@ -237,6 +239,8 @@ class Operation extends Model
         if ($decision === '') {
             return;
         }
+
+        app(AiReviewService::class)->clearCache($spaceId, (int) $operation->market_id);
 
         if ($operation->status === 'applied' && $decision === SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION) {
             $candidateSpaceId = (int) ($payload['candidate_market_space_id'] ?? 0);

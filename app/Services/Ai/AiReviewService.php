@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class AiReviewService
 {
+    private const SUCCESS_CACHE_TTL_MINUTES = 10080;
+
     /**
      * Applied-действия, запрещённые для спорных статусов.
      */
@@ -94,7 +96,7 @@ class AiReviewService
     public function getReviewForSpace(int $spaceId, int $marketId): array
     {
         // Кэшируем только успешные ответы
-        $cacheKey = "ai_review_ok_{$marketId}_{$spaceId}";
+        $cacheKey = $this->cacheKey($spaceId, $marketId);
         $cached = Cache::get($cacheKey);
         if ($cached !== null) {
             return ['review' => $cached, 'error_type' => null];
@@ -110,7 +112,7 @@ class AiReviewService
      */
     public function getCachedReviewForSpace(int $spaceId, int $marketId): ?array
     {
-        $cached = Cache::get("ai_review_ok_{$marketId}_{$spaceId}");
+        $cached = Cache::get($this->cacheKey($spaceId, $marketId));
 
         return is_array($cached) ? $cached : null;
     }
@@ -120,8 +122,7 @@ class AiReviewService
      */
     public function cacheSuccess(int $spaceId, int $marketId, array $review): void
     {
-        $cacheKey = "ai_review_ok_{$marketId}_{$spaceId}";
-        Cache::put($cacheKey, $review, now()->addMinutes(10));
+        Cache::put($this->cacheKey($spaceId, $marketId), $review, $this->successCacheTtl());
     }
 
     /**
@@ -137,7 +138,7 @@ class AiReviewService
      */
     public function clearCache(int $spaceId, int $marketId): void
     {
-        Cache::forget("ai_review_ok_{$marketId}_{$spaceId}");
+        Cache::forget($this->cacheKey($spaceId, $marketId));
     }
 
     /**
@@ -212,8 +213,7 @@ class AiReviewService
             }
 
             // Кэшируем только успешный валидный ответ
-            $cacheKey = "ai_review_ok_{$marketId}_{$spaceId}";
-            Cache::put($cacheKey, $parsed, now()->addMinutes(10));
+            Cache::put($this->cacheKey($spaceId, $marketId), $parsed, $this->successCacheTtl());
 
             return ['review' => $parsed, 'error_type' => null];
         } catch (\GuzzleHttp\Exception\ConnectException|\GuzzleHttp\Exception\RequestException $e) {
@@ -461,6 +461,16 @@ PROMPT;
         $parts[] = $historyLines;
 
         return implode("\n", $parts);
+    }
+
+    private function cacheKey(int $spaceId, int $marketId): string
+    {
+        return "ai_review_ok_{$marketId}_{$spaceId}";
+    }
+
+    private function successCacheTtl(): \DateTimeInterface
+    {
+        return now()->addMinutes(self::SUCCESS_CACHE_TTL_MINUTES);
     }
 
     private function formatRelationLine(array $space): string
