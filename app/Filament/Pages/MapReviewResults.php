@@ -72,7 +72,7 @@ class MapReviewResults extends Page
             ];
 
         if ($marketId) {
-            $aiData['summaries'] = $this->loadCachedVisibleAiSummaries($marketId, $visibleNeedsAttentionRows)
+            $aiData['summaries'] = $this->loadCachedAiSummariesForRows($marketId, $needsAttention)
                 + ($aiData['summaries'] ?? []);
         }
 
@@ -153,7 +153,7 @@ class MapReviewResults extends Page
             }
 
             // Quick cooldown: только если GigaChat недоступен на уровне сети/auth
-            $downKey = 'gigachat_connectivity_down';
+            $downKey = $this->connectivityCooldownKey($marketId);
             if (Cache::get($downKey)) {
                 return [
                     'summaries' => [],
@@ -317,12 +317,21 @@ class MapReviewResults extends Page
      */
     protected function loadCachedVisibleAiSummaries(int $marketId, array $visibleRows): array
     {
+        return $this->loadCachedAiSummariesForRows($marketId, $visibleRows);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}>
+     */
+    protected function loadCachedAiSummariesForRows(int $marketId, array $rows): array
+    {
         /** @var AiReviewService $reviewService */
         $reviewService = app(AiReviewService::class);
 
         $summaries = [];
 
-        foreach ($visibleRows as $row) {
+        foreach ($rows as $row) {
             $spaceId = (int) ($row['space_id'] ?? 0);
 
             if ($spaceId <= 0) {
@@ -337,6 +346,11 @@ class MapReviewResults extends Page
         }
 
         return $summaries;
+    }
+
+    protected function connectivityCooldownKey(int $marketId): string
+    {
+        return 'gigachat_connectivity_down:market:' . $marketId;
     }
 
     /**

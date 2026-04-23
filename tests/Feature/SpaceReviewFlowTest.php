@@ -19,7 +19,9 @@ use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Ai\AiReviewService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -758,6 +760,89 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertArrayNotHasKey(102, $loaded);
     }
 
+    public function test_map_review_results_keeps_cached_ai_summary_for_current_row_outside_visible_batch(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        app()->instance(AiReviewService::class, new class extends AiReviewService {
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                return [
+                    'review' => [
+                        'summary' => 'Batch review ' . $spaceId,
+                        'why_flagged' => 'Batch reason ' . $spaceId,
+                        'recommended_next_step' => 'Batch step ' . $spaceId,
+                        'risk_score' => 5,
+                        'confidence' => 0.7,
+                    ],
+                    'error_type' => null,
+                ];
+            }
+        });
+
+        $spaces = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $spaces[] = $this->createSpace($market, [
+                'number' => 'AI-CACHED-' . $i,
+                'display_name' => 'AI cached ' . $i,
+                'map_review_status' => 'conflict',
+                'map_reviewed_at' => now()->subMinutes($i),
+            ]);
+        }
+
+        app(AiReviewService::class)->cacheSuccess($spaces[5]->id, (int) $market->id, [
+            'summary' => 'Persisted off-batch summary ' . $spaces[5]->id,
+            'why_flagged' => 'Persisted off-batch reason ' . $spaces[5]->id,
+            'recommended_next_step' => 'Persisted off-batch step ' . $spaces[5]->id,
+            'risk_score' => 9,
+            'confidence' => 0.91,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Persisted off-batch summary ' . $spaces[5]->id, false);
+    }
+
+    public function test_map_review_results_keeps_cached_ai_summary_on_repeat_visit_after_short_delay(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'AI-REVISIT-1',
+            'display_name' => 'AI revisit 1',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        app(AiReviewService::class)->cacheSuccess($space->id, (int) $market->id, [
+            'summary' => 'Stable revisit summary ' . $space->id,
+            'why_flagged' => 'Stable revisit reason ' . $space->id,
+            'recommended_next_step' => 'Stable revisit step ' . $space->id,
+            'risk_score' => 8,
+            'confidence' => 0.93,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Stable revisit summary ' . $space->id, false);
+
+        $this->travel(15)->minutes();
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Stable revisit summary ' . $space->id, false);
+    }
+
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void
     {
         $market = $this->createMarket();
@@ -790,6 +875,81 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::test(MapReviewResults::class)
             ->assertSee('ИИ-анализ отклонён проверкой качества ответа', false);
+    }
+
+    public function test_map_review_results_connectivity_cooldown_is_scoped_to_market(): void
+    {
+        Cache::flush();
+
+        $firstMarket = $this->createMarket();
+        $secondMarket = Market::create([
+            'name' => 'Test Market 2',
+            'slug' => 'test-market-2',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsSuperAdmin((int) $firstMarket->id);
+
+        $firstSpace = $this->createSpace($firstMarket, [
+            'number' => 'AI-COOLDOWN-1',
+            'display_name' => 'AI cooldown 1',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        $secondSpace = $this->createSpace($secondMarket, [
+            'number' => 'AI-COOLDOWN-2',
+            'display_name' => 'AI cooldown 2',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        app()->instance(AiReviewService::class, new class ((int) $firstMarket->id) extends AiReviewService {
+            public function __construct(private readonly int $failingMarketId)
+            {
+            }
+
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                if ($marketId === $this->failingMarketId) {
+                    return [
+                        'review' => null,
+                        'error_type' => 'connectivity',
+                    ];
+                }
+
+                return [
+                    'review' => [
+                        'summary' => 'Available summary ' . $spaceId,
+                        'why_flagged' => 'Available reason ' . $spaceId,
+                        'recommended_next_step' => 'Available step ' . $spaceId,
+                        'risk_score' => 6,
+                        'confidence' => 0.82,
+                    ],
+                    'error_type' => null,
+                ];
+            }
+        });
+
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $firstMarket->id,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertDontSee('Available summary ' . $firstSpace->id, false);
+
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $secondMarket->id,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Available summary ' . $secondSpace->id, false);
     }
 
     public function test_review_decision_endpoint_resolves_duplicate_by_transferring_safe_links(): void
@@ -1028,6 +1188,82 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('matched', $operation->payload['decision'] ?? null);
     }
 
+    public function test_review_decision_endpoint_clears_cached_ai_summary_for_reviewed_space(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        app(AiReviewService::class)->cacheSuccess($space->id, (int) $market->id, [
+            'summary' => 'Cached before review ' . $space->id,
+            'why_flagged' => 'Cached reason ' . $space->id,
+            'recommended_next_step' => 'Cached step ' . $space->id,
+            'risk_score' => 7,
+            'confidence' => 0.89,
+        ]);
+
+        $this->assertNotNull(app(AiReviewService::class)->getCachedReviewForSpace($space->id, (int) $market->id));
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => 'matched',
+            'market_space_id' => $space->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('item.review_status', 'matched');
+
+        $this->assertNull(app(AiReviewService::class)->getCachedReviewForSpace($space->id, (int) $market->id));
+    }
+
+    public function test_snapshot_affecting_operation_clears_cached_ai_summary_for_space(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $space = $this->createSpace($market, [
+            'area_sqm' => 10,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        app(AiReviewService::class)->cacheSuccess($space->id, (int) $market->id, [
+            'summary' => 'Cached before attrs change ' . $space->id,
+            'why_flagged' => 'Cached attrs reason ' . $space->id,
+            'recommended_next_step' => 'Cached attrs step ' . $space->id,
+            'risk_score' => 7,
+            'confidence' => 0.88,
+        ]);
+
+        $this->assertNotNull(app(AiReviewService::class)->getCachedReviewForSpace($space->id, (int) $market->id));
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_ATTRS_CHANGE,
+            'status' => 'applied',
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'area_sqm' => 25,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $space->refresh();
+
+        $this->assertSame(25.0, (float) $space->area_sqm);
+        $this->assertNull(app(AiReviewService::class)->getCachedReviewForSpace($space->id, (int) $market->id));
+    }
+
     public function test_review_history_is_preserved_when_conflict_is_resolved_with_matched(): void
     {
         $market = $this->createMarket();
@@ -1103,5 +1339,29 @@ class SpaceReviewFlowTest extends TestCase
             'type' => OperationType::SPACE_REVIEW,
             'status' => 'observed',
         ]);
+    }
+
+    public function test_market_map_review_navigation_uses_fresh_snapshot_and_explicitly_handles_no_pending_places(): void
+    {
+        $market = $this->createMarket();
+        $market->forceFill([
+            'settings' => [
+                'map_pdf_path' => 'market-maps/test-map.pdf',
+            ],
+        ])->save();
+
+        Storage::disk('local')->put('market-maps/test-map.pdf', 'fake pdf');
+
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $response = $this->get('/admin/market-map?mode=review');
+
+        $response->assertOk()
+            ->assertSee("opts.cache = opts.cache || 'no-store';", false)
+            ->assertSee("const pendingCount = getPendingReviewNavCount();", false)
+            ->assertSee("reviewNavStatus.textContent = 'Непройденных мест не осталось';", false);
     }
 }

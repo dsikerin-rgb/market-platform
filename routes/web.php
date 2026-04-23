@@ -1900,7 +1900,19 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $now = now();
 
         if ($decision === 'matched') {
-            $markMarketSpaceReviewed($space, 'matched', $userId, $now);
+            DB::transaction(static fn (): Operation => Operation::query()->create([
+                'market_id' => (int) $market->id,
+                'entity_type' => 'market_space',
+                'entity_id' => (int) $space->id,
+                'type' => OperationType::SPACE_REVIEW,
+                'effective_at' => $now,
+                'status' => 'observed',
+                'payload' => [
+                    'market_space_id' => (int) $space->id,
+                    'decision' => 'matched',
+                ],
+                'created_by' => $userId,
+            ]));
             $space->refresh();
 
             return response()->json([

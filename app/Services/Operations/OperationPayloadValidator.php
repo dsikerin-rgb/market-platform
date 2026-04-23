@@ -115,7 +115,9 @@ final class OperationPayloadValidator
     {
         $decision = self::stringOrNull($payload['decision'] ?? null, true);
 
-        if (! in_array($decision, SpaceReviewDecision::values(), true)) {
+        $isMatchedDecision = $decision === 'matched';
+
+        if (! in_array($decision, SpaceReviewDecision::values(), true) && ! $isMatchedDecision) {
             throw ValidationException::withMessages([
                 'payload.decision' => 'Недопустимое решение ревизии.',
             ]);

@@ -44,6 +44,20 @@
             opacity: 0.75;
             padding: 8px 0;
         }
+
+        .space-ops__review-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .space-ops__review-summary {
+            margin-bottom: 4px;
+        }
+
+        .space-ops__review-meta {
+            font-size: 12px;
+            opacity: 0.75;
+        }
     </style>
 @endonce
 
@@ -66,7 +80,27 @@
                         <td>{{ $row['effective_at'] ?? '—' }}</td>
                         <td>{{ $row['type'] ?? '—' }}</td>
                         <td>{{ $row['status'] ?? '—' }}</td>
-                        <td>{{ $row['summary'] ?? '—' }}</td>
+                        <td>
+                            @if (!empty($row['is_review']))
+                                <div class="space-ops__review">
+                                    <div class="space-ops__review-title">
+                                        {{ $row['review_decision_label'] ?? 'Ревизионное решение' }}
+                                    </div>
+                                    @if (!empty($row['summary']))
+                                        <div class="space-ops__review-summary">{{ $row['summary'] }}</div>
+                                    @endif
+                                    @if (!empty($row['review_observed_tenant_name']))
+                                        <div class="space-ops__review-meta">Фактический арендатор: {{ $row['review_observed_tenant_name'] }}</div>
+                                    @endif
+                                    @if (!empty($row['review_reason']))
+                                        <div class="space-ops__review-meta">Комментарий: {{ $row['review_reason'] }}</div>
+                                    @endif
+                                    <div class="space-ops__review-meta">Автор: {{ $row['author_name'] ?? '—' }}</div>
+                                </div>
+                            @else
+                                {{ $row['summary'] ?? '—' }}
+                            @endif
+                        </td>
                     </tr>
                 @endforeach
             </tbody>

@@ -114,6 +114,7 @@ final class SpaceReviewDecision
     public static function reviewStatusForDecision(string $decision): string
     {
         return match ($decision) {
+            'matched' => 'matched',
             self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'conflict',
             self::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'changed',
             self::OCCUPANCY_CONFLICT => 'conflict',
