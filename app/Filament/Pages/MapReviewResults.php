@@ -72,15 +72,12 @@ class MapReviewResults extends Page
             ];
 
         if ($marketId) {
-            $aiData = $this->mergeAiData($aiData, $this->loadPersistedAiData($marketId, $attentionTab));
+            $aiData['summaries'] = $this->loadCachedVisibleAiSummaries($marketId, $visibleNeedsAttentionRows)
+                + ($aiData['summaries'] ?? []);
         }
 
         if ($marketId && $aiLoadSpaceId > 0) {
             $aiData = $this->mergeRequestedAiSummary($aiData, $marketId, $aiLoadSpaceId, $visibleNeedsAttentionRows);
-        }
-
-        if ($marketId) {
-            $this->persistAiData($marketId, $attentionTab, $aiData);
         }
 
         $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiData['summaries'], $attentionTab);
@@ -315,83 +312,31 @@ class MapReviewResults extends Page
     }
 
     /**
-     * @return array{
-     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
-     *   errors: array<int, 'connectivity'|'policy'|null>
-     * }
+     * @param  list<array<string, mixed>>  $visibleRows
+     * @return array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}>
      */
-    protected function loadPersistedAiData(int $marketId, string $attentionTab): array
+    protected function loadCachedVisibleAiSummaries(int $marketId, array $visibleRows): array
     {
-        return session()->get($this->aiStateSessionKey($marketId, $attentionTab), [
-            'summaries' => [],
-            'errors' => [],
-        ]);
-    }
+        /** @var AiReviewService $reviewService */
+        $reviewService = app(AiReviewService::class);
 
-    /**
-     * @param  array{
-     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
-     *   errors: array<int, 'connectivity'|'policy'|null>,
-     *   meta: array{mode:string,limit:int}
-     * }  $current
-     * @param  array{
-     *   summaries?: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
-     *   errors?: array<int, 'connectivity'|'policy'|null>
-     * }  $persisted
-     * @return array{
-     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
-     *   errors: array<int, 'connectivity'|'policy'|null>,
-     *   meta: array{mode:string,limit:int}
-     * }
-     */
-    protected function mergeAiData(array $current, array $persisted): array
-    {
-        $merged = [
-            'summaries' => $persisted['summaries'] ?? [],
-            'errors' => $persisted['errors'] ?? [],
-            'meta' => $current['meta'] ?? [
-                'mode' => 'ok',
-                'limit' => AiReviewService::MAX_REVIEWS_PER_BATCH,
-            ],
-        ];
+        $summaries = [];
 
-        foreach (($current['summaries'] ?? []) as $spaceId => $summary) {
-            $spaceId = (int) $spaceId;
+        foreach ($visibleRows as $row) {
+            $spaceId = (int) ($row['space_id'] ?? 0);
 
-            if ($summary !== null) {
-                $merged['summaries'][$spaceId] = $summary;
-                $merged['errors'][$spaceId] = $current['errors'][$spaceId] ?? null;
-
+            if ($spaceId <= 0) {
                 continue;
             }
 
-            if (! array_key_exists($spaceId, $merged['summaries'])) {
-                $merged['summaries'][$spaceId] = null;
-                $merged['errors'][$spaceId] = $current['errors'][$spaceId] ?? null;
+            $cached = $reviewService->getCachedReviewForSpace($spaceId, $marketId);
+
+            if ($cached !== null) {
+                $summaries[$spaceId] = $cached;
             }
         }
 
-        return $merged;
-    }
-
-    /**
-     * @param  array{
-     *   summaries: array<int, array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null>,
-     *   errors: array<int, 'connectivity'|'policy'|null>,
-     *   meta: array{mode:string,limit:int}
-     * }  $aiData
-     */
-    protected function persistAiData(int $marketId, string $attentionTab, array $aiData): void
-    {
-        session()->put($this->aiStateSessionKey($marketId, $attentionTab), [
-            'summaries' => $aiData['summaries'] ?? [],
-            'errors' => $aiData['errors'] ?? [],
-        ]);
-    }
-
-    protected function aiStateSessionKey(int $marketId, string $attentionTab): string
-    {
-        return sprintf('map_review_results.ai_state.%d.%s', $marketId, $attentionTab);
+        return $summaries;
     }
 
     /**
