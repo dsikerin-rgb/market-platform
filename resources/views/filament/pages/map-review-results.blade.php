@@ -956,7 +956,7 @@
                 }
             }
 
-            /* AI-разбор колонка */
+            /* ИИ-разбор колонка */
             .mrr-ai {
                 max-width: none;
             }
@@ -1306,7 +1306,7 @@
                                             <tr>
                                                 <th>Место</th>
                                                 <th>Анализ связей</th>
-                                                <th>AI-разбор</th>
+                                                <th>ИИ-разбор</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1460,7 +1460,7 @@
                                                             };
                                                         @endphp
                                                         <div class="mrr-ai-panel">
-                                                            <div class="mrr-ai-panel__title">AI-разбор</div>
+                                                            <div class="mrr-ai-panel__title">ИИ-разбор</div>
                                                             <div class="mrr-ai">
                                                                 @if ($ai && filled($ai['summary']))
                                                                     <div class="mrr-ai__summary">
@@ -1476,17 +1476,17 @@
                                                                     <div class="mrr-ai mrr-ai--empty">
                                                                         <span class="mrr-ai__placeholder">
                                                                             @if ($aiErrorType === 'policy')
-                                                                                AI-анализ отклонён проверкой качества ответа
+                                                                                ИИ-анализ отклонён проверкой качества ответа
                                                                             @elseif ($aiErrorType === 'connectivity')
-                                                                                AI-анализ временно недоступен из-за ошибки соединения
+                                                                                ИИ-анализ временно недоступен из-за ошибки соединения
                                                                             @else
-                                                                                AI-анализ недоступен
+                                                                                ИИ-анализ недоступен
                                                                             @endif
                                                                         </span>
                                                                     </div>
                                                                 @elseif ($aiMode === 'disabled')
                                                                     <div class="mrr-ai mrr-ai--empty">
-                                                                        <span class="mrr-ai__placeholder">AI-разбор отключён в этом окружении</span>
+                                                                        <span class="mrr-ai__placeholder">ИИ-разбор отключён в этом окружении</span>
                                                                     </div>
                                                                 @elseif (in_array($aiMode, ['connectivity_cooldown', 'page_error'], true))
                                                                     <div class="mrr-ai mrr-ai--empty">
@@ -1503,7 +1503,7 @@
                                                                     </div>
                                                                 @else
                                                                     <div class="mrr-ai mrr-ai--empty">
-                                                                        <span class="mrr-ai__placeholder">AI-анализ недоступен</span>
+                                                                        <span class="mrr-ai__placeholder">ИИ-анализ недоступен</span>
                                                                     </div>
                                                                 @endif
                                                             </div>
@@ -1988,6 +1988,8 @@
                     }
 
                     window.setTimeout(() => quickReviewReason.focus(), 0);
+                };
+
                 const createDuplicateReviewOperation = async () => {
                     const currentSpaceId = Number(modal.dataset.currentSpaceId || 0);
                     const candidateSpaceId = Number(modal.dataset.candidateSpaceId || 0);
