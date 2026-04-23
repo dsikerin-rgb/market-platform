@@ -2241,6 +2241,7 @@
           return {
             id: Math.trunc(id),
             number: item?.number ? String(item.number) : '',
+            displayName: item?.displayName ? String(item.displayName) : (item?.display_name ? String(item.display_name) : ''),
             code: item?.code ? String(item.code) : '',
             tenantName: item?.tenant?.name ? String(item.tenant.name) : (item?.tenantName ? String(item.tenantName) : null),
             reviewStatus: item?.review_status ? String(item.review_status) : '',
@@ -2858,7 +2859,28 @@
               });
             }
 
+            items.sort(compareReviewNavItems);
+
             return items;
+          }
+
+          function getReviewNavSortLabel(item) {
+            const numberLabel = String(item?.number ?? '').trim();
+            const displayNameLabel = String(item?.displayName ?? '').trim();
+            const codeLabel = String(item?.code ?? '').trim();
+            return numberLabel || displayNameLabel || codeLabel || '#' + String(item?.id ?? '');
+          }
+
+          function compareReviewNavItems(left, right) {
+            const leftLabel = getReviewNavSortLabel(left);
+            const rightLabel = getReviewNavSortLabel(right);
+            const labelCompare = leftLabel.localeCompare(rightLabel, 'ru', { numeric: true, sensitivity: 'base' });
+
+            if (labelCompare !== 0) {
+              return labelCompare;
+            }
+
+            return Number(left?.id || 0) - Number(right?.id || 0);
           }
 
           function getReviewCurrentIndex() {
@@ -4649,6 +4671,7 @@
               const chosenId = getChosenSpaceId();
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
               let reviewNotice = '';
+              let reviewHint = '';
 
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
                 btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '" title="Открыть карточку торгового места в новой вкладке" aria-label="Открыть карточку торгового места в новой вкладке">Открыть место</button>');
@@ -4660,6 +4683,8 @@
 
               if (isReviewMode()) {
                 if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
+                  reviewHint = '<div class="row row-review-note"><span class="row-label">Подсказка: </span><span class="row-value">Свободно — место фактически пустое. Совпало — место занято и соответствует данным системы.</span></div>';
+
                   if (hasReviewMark) {
                     reviewNotice = '<div class="row row-review-note"><span class="row-label">Ревизия: </span><span class="row-value">Уже отмечено' + (hitReviewStatusText ? ': ' + escapeHtml(hitReviewStatusText) : '') + '</span></div>';
                   }
@@ -4671,8 +4696,8 @@
                     btns.push('<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения">Требует уточнения</button>');
                   }
                   if (!isTenantFallback) {
-                    btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что факт на месте совпадает с системой" aria-label="Отметить, что факт на месте совпадает с системой">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
-                    btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как свободное" aria-label="Отметить место как свободное">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
+                    btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Используйте, если место занято и соответствует данным системы" aria-label="Используйте, если место занято и соответствует данным системы">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
+                    btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Используйте, если место фактически пустое" aria-label="Используйте, если место фактически пустое">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
                     btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
                     btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');
                   }
@@ -4705,6 +4730,7 @@
                   buildPopoverRow(line6) +
                   buildPopoverRow(line7) +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
+                  reviewHint +
                   reviewNotice +
                   actions +
                 '</div>'

@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Symfony\Component\Process\Process;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -1363,5 +1364,65 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee("opts.cache = opts.cache || 'no-store';", false)
             ->assertSee("const pendingCount = getPendingReviewNavCount();", false)
             ->assertSee("reviewNavStatus.textContent = 'Непройденных мест не осталось';", false);
+    }
+
+    public function test_market_map_review_navigation_sorts_items_by_visible_label_order(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $start = strpos($blade, 'function getReviewNavSortLabel(item)');
+        $end = strpos($blade, 'function getReviewCurrentIndex()', $start);
+
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+        $this->assertGreaterThan($start, $end);
+
+        $script = substr($blade, $start, $end - $start);
+        $script .= <<<'JS'
+
+const items = [
+  { id: 1, number: '1', code: '', displayName: '' },
+  { id: 2, number: '2', code: '', displayName: '' },
+  { id: 10, number: '10', code: '', displayName: '' },
+  { id: 20, number: '', code: '', displayName: '11' },
+  { id: 30, number: '', code: '12', displayName: '' },
+];
+
+const order = items.slice().sort(compareReviewNavItems).map((item) => String(item.id));
+console.log(JSON.stringify(order));
+JS;
+
+        $process = new Process(['node', '-e', $script]);
+        $process->setTimeout(20);
+        $process->run();
+
+        $this->assertTrue($process->isSuccessful(), $process->getErrorOutput() ?: $process->getOutput());
+
+        $order = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame(['1', '2', '10', '20', '30'], $order);
+    }
+
+    public function test_market_map_review_navigation_explains_matched_vs_free_buttons(): void
+    {
+        $market = $this->createMarket();
+        $market->forceFill([
+            'settings' => [
+                'map_pdf_path' => 'market-maps/test-map.pdf',
+            ],
+        ])->save();
+
+        Storage::disk('local')->put('market-maps/test-map.pdf', 'fake pdf');
+
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $response = $this->get('/admin/market-map?mode=review');
+
+        $response->assertOk()
+            ->assertSee('Используйте, если место занято и соответствует данным системы', false)
+            ->assertSee('Используйте, если место фактически пустое', false)
+            ->assertSee('Свободно — место фактически пустое. Совпало — место занято и соответствует данным системы.', false);
     }
 }
