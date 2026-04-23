@@ -4673,6 +4673,16 @@
               let reviewNotice = '';
               let reviewHint = '';
 
+              function shouldShowMatchedReviewDecision(hasTenant, isTenantFallback) {
+                return hasTenant && !isTenantFallback;
+              }
+
+              function getReviewHintText(hasTenant) {
+                return hasTenant
+                  ? '<div class="row row-review-note"><span class="row-label">Подсказка: </span><span class="row-value">Свободно — место фактически пустое. Совпало — место занято и соответствует данным системы.</span></div>'
+                  : '<div class="row row-review-note"><span class="row-label">Подсказка: </span><span class="row-value">Свободно — место фактически пустое.</span></div>';
+              }
+
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
                 btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '" title="Открыть карточку торгового места в новой вкладке" aria-label="Открыть карточку торгового места в новой вкладке">Открыть место</button>');
               }
@@ -4683,7 +4693,7 @@
 
               if (isReviewMode()) {
                 if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
-                  reviewHint = '<div class="row row-review-note"><span class="row-label">Подсказка: </span><span class="row-value">Свободно — место фактически пустое. Совпало — место занято и соответствует данным системы.</span></div>';
+                  reviewHint = getReviewHintText(hasTenant);
 
                   if (hasReviewMark) {
                     reviewNotice = '<div class="row row-review-note"><span class="row-label">Ревизия: </span><span class="row-value">Уже отмечено' + (hitReviewStatusText ? ': ' + escapeHtml(hitReviewStatusText) : '') + '</span></div>';
@@ -4695,8 +4705,10 @@
                   } else {
                     btns.push('<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения">Требует уточнения</button>');
                   }
-                  if (!isTenantFallback) {
+                  if (shouldShowMatchedReviewDecision(hasTenant, isTenantFallback)) {
                     btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Используйте, если место занято и соответствует данным системы" aria-label="Используйте, если место занято и соответствует данным системы">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
+                  }
+                  if (!isTenantFallback) {
                     btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(hitSpaceId) + '" title="Используйте, если место фактически пустое" aria-label="Используйте, если место фактически пустое">\u0421\u0432\u043e\u0431\u043e\u0434\u043d\u043e</button>');
                     btns.push('<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(hitSpaceId) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное">\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435</button>');
                     btns.push('<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(hitSpaceId) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор">\u0421\u043c\u0435\u043d\u0438\u043b\u0441\u044f \u0430\u0440\u0435\u043d\u0434\u0430\u0442\u043e\u0440</button>');

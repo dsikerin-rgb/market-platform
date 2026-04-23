@@ -1402,27 +1402,42 @@ JS;
         $this->assertSame(['1', '2', '10', '20', '30'], $order);
     }
 
-    public function test_market_map_review_navigation_explains_matched_vs_free_buttons(): void
+    public function test_market_map_review_navigation_hides_matched_on_free_spaces(): void
     {
-        $market = $this->createMarket();
-        $market->forceFill([
-            'settings' => [
-                'map_pdf_path' => 'market-maps/test-map.pdf',
-            ],
-        ])->save();
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $start = strpos($blade, 'function shouldShowMatchedReviewDecision(');
+        $end = strpos($blade, 'if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0)', $start);
 
-        Storage::disk('local')->put('market-maps/test-map.pdf', 'fake pdf');
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+        $this->assertGreaterThan($start, $end);
 
-        $this->actingAsSuperAdmin((int) $market->id);
-        $this->withSession([
-            'filament.admin.selected_market_id' => (int) $market->id,
-        ]);
+        $script = substr($blade, $start, $end - $start);
+        $script .= <<<'JS'
 
-        $response = $this->get('/admin/market-map?mode=review');
+const payload = {
+  free_space: shouldShowMatchedReviewDecision(false, false),
+  occupied_space: shouldShowMatchedReviewDecision(true, false),
+  fallback_space: shouldShowMatchedReviewDecision(true, true),
+  free_hint: getReviewHintText(false),
+  occupied_hint: getReviewHintText(true),
+};
 
-        $response->assertOk()
-            ->assertSee('Используйте, если место занято и соответствует данным системы', false)
-            ->assertSee('Используйте, если место фактически пустое', false)
-            ->assertSee('Свободно — место фактически пустое. Совпало — место занято и соответствует данным системы.', false);
+console.log(JSON.stringify(payload));
+JS;
+
+        $process = new Process(['node', '-e', $script]);
+        $process->setTimeout(20);
+        $process->run();
+
+        $this->assertTrue($process->isSuccessful(), $process->getErrorOutput() ?: $process->getOutput());
+
+        $payload = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertFalse($payload['free_space']);
+        $this->assertTrue($payload['occupied_space']);
+        $this->assertFalse($payload['fallback_space']);
+        $this->assertStringNotContainsString('Совпало', $payload['free_hint']);
+        $this->assertStringContainsString('Совпало', $payload['occupied_hint']);
     }
 }
