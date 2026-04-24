@@ -3060,7 +3060,7 @@
               return;
             }
 
-            const currentIndex = getReviewCurrentIndex();
+            let currentIndex = getReviewCurrentIndex();
             let targetIndex = -1;
 
             if (kind === 'prev') {
@@ -3072,6 +3072,8 @@
                 targetIndex = currentIndex + 1;
               }
             } else if (kind === 'next-pending') {
+              await loadShapes();
+              currentIndex = getReviewCurrentIndex();
               const nextPendingTarget = await resolveNextPendingReviewTarget(currentIndex);
               targetIndex = nextPendingTarget ? nextPendingTarget.index : -1;
             }
