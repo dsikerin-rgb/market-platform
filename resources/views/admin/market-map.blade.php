@@ -2892,6 +2892,32 @@
             return !String(item?.reviewStatus || '').trim();
           }
 
+          function syncReviewNavItemFromSpace(space) {
+            const spaceId = Number(space?.id || 0);
+            if (!Number.isFinite(spaceId) || spaceId <= 0) {
+              return null;
+            }
+
+            const reviewIndex = reviewNavItems.findIndex((entry) => Number(entry.id) === spaceId);
+            if (reviewIndex < 0) {
+              return null;
+            }
+
+            const currentItem = reviewNavItems[reviewIndex];
+            const nextItem = {
+              ...currentItem,
+              number: space?.number ?? currentItem.number ?? '',
+              displayName: space?.displayName ?? currentItem.displayName ?? '',
+              code: space?.code ?? currentItem.code ?? '',
+              tenantName: space?.tenantName ?? currentItem.tenantName ?? null,
+              reviewStatus: space?.reviewStatus ?? '',
+              reviewStatusLabel: space?.reviewStatusLabel ?? '',
+            };
+
+            reviewNavItems[reviewIndex] = nextItem;
+            return nextItem;
+          }
+
           function getPendingReviewNavCount() {
             return reviewNavItems.reduce((count, item) => count + (isPendingReviewNavItem(item) ? 1 : 0), 0);
           }
@@ -2911,6 +2937,74 @@
             }
 
             return -1;
+          }
+
+          async function fetchReviewNavSpaceById(spaceId) {
+            if (!SPACE_URL) {
+              return null;
+            }
+
+            const normalizedSpaceId = Number(spaceId || 0);
+            if (!Number.isFinite(normalizedSpaceId) || normalizedSpaceId <= 0) {
+              return null;
+            }
+
+            try {
+              const url = new URL(SPACE_URL, window.location.origin);
+              url.searchParams.set('id', String(Math.trunc(normalizedSpaceId)));
+
+              const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+              const json = await res.json();
+              if (!res.ok || !json || json.ok !== true || !json.found) {
+                return null;
+              }
+
+              return normalizeChosenSpace(json.item || null);
+            } catch (error) {
+              console.error(error);
+              return null;
+            }
+          }
+
+          async function resolveNextPendingReviewTarget(currentIndex, resolveSpace = fetchReviewNavSpaceById) {
+            if (!reviewNavItems.length) {
+              return null;
+            }
+
+            const total = reviewNavItems.length;
+            const start = currentIndex >= 0 ? currentIndex + 1 : 0;
+            const canValidateAgainstServer = typeof resolveSpace === 'function' && Boolean(SPACE_URL);
+
+            for (let step = 0; step < total; step++) {
+              const index = (start + step) % total;
+              const item = reviewNavItems[index];
+              if (!isPendingReviewNavItem(item)) {
+                continue;
+              }
+
+              let nextItem = item;
+
+              if (canValidateAgainstServer) {
+                const freshSpace = await resolveSpace(Number(item.id || 0));
+                if (!freshSpace) {
+                  continue;
+                }
+
+                nextItem = syncReviewNavItemFromSpace(freshSpace) || {
+                  ...item,
+                  ...freshSpace,
+                };
+              }
+
+              if (isPendingReviewNavItem(nextItem)) {
+                return {
+                  index,
+                  item: nextItem,
+                };
+              }
+            }
+
+            return null;
           }
 
           updateReviewNavUi = function () {
@@ -2978,7 +3072,8 @@
                 targetIndex = currentIndex + 1;
               }
             } else if (kind === 'next-pending') {
-              targetIndex = findNextPendingIndex(currentIndex);
+              const nextPendingTarget = await resolveNextPendingReviewTarget(currentIndex);
+              targetIndex = nextPendingTarget ? nextPendingTarget.index : -1;
             }
 
             if (targetIndex < 0 || targetIndex >= reviewNavItems.length) {
@@ -4662,6 +4757,7 @@
               const shapeId = hit.shape_id ? Number(hit.shape_id) : null;
               const hitSpaceId = hit.market_space_id ? Number(hit.market_space_id) : null;
               const hitTenantId = hit?.tenant?.id ? Number(hit.tenant.id) : (hit?.tenant_id ? Number(hit.tenant_id) : null);
+              const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
               const isTenantFallback = (hit.debt_status_scope || 'none') === 'tenant_fallback';
               const hitReviewStatus = String(hit.review_status || hit.space_review_status || hit?.space?.review_status || hit?.space?.map_review_status || '').trim();
               const hitReviewStatusLabel = String(hit.review_status_label || hit.space_review_status_label || hit?.space?.review_status_label || '').trim();
@@ -4693,7 +4789,7 @@
 
               if (isReviewMode()) {
                 if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
-                  reviewHint = getReviewHintText(hasTenant);
+                  reviewHint = getReviewHintText(hitHasTenant);
 
                   if (hasReviewMark) {
                     reviewNotice = '<div class="row row-review-note"><span class="row-label">Ревизия: </span><span class="row-value">Уже отмечено' + (hitReviewStatusText ? ': ' + escapeHtml(hitReviewStatusText) : '') + '</span></div>';
@@ -4705,7 +4801,7 @@
                   } else {
                     btns.push('<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(hitSpaceId) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения">Требует уточнения</button>');
                   }
-                  if (shouldShowMatchedReviewDecision(hasTenant, isTenantFallback)) {
+                  if (shouldShowMatchedReviewDecision(hitHasTenant, isTenantFallback)) {
                     btns.push('<button type="button" data-action="review-decision" data-decision="matched" data-space-id="' + String(hitSpaceId) + '" title="Используйте, если место занято и соответствует данным системы" aria-label="Используйте, если место занято и соответствует данным системы">\u0421\u043e\u0432\u043f\u0430\u043b\u043e</button>');
                   }
                   if (!isTenantFallback) {

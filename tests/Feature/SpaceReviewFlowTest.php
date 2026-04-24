@@ -1405,6 +1405,9 @@ JS;
     public function test_market_map_review_navigation_hides_matched_on_free_spaces(): void
     {
         $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $variableLine = "const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;";
+        $this->assertStringContainsString($variableLine, $blade);
+
         $start = strpos($blade, 'function shouldShowMatchedReviewDecision(');
         $end = strpos($blade, 'if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0)', $start);
 
@@ -1416,11 +1419,31 @@ JS;
         $script .= <<<'JS'
 
 const payload = {
-  free_space: shouldShowMatchedReviewDecision(false, false),
-  occupied_space: shouldShowMatchedReviewDecision(true, false),
-  fallback_space: shouldShowMatchedReviewDecision(true, true),
-  free_hint: getReviewHintText(false),
-  occupied_hint: getReviewHintText(true),
+  free_space: (() => {
+    const hit = { space_tenant_id: null };
+    const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+    return shouldShowMatchedReviewDecision(hitHasTenant, false);
+  })(),
+  occupied_space: (() => {
+    const hit = { space_tenant_id: 15 };
+    const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+    return shouldShowMatchedReviewDecision(hitHasTenant, false);
+  })(),
+  fallback_space: (() => {
+    const hit = { space_tenant_id: 15 };
+    const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+    return shouldShowMatchedReviewDecision(hitHasTenant, true);
+  })(),
+  free_hint: (() => {
+    const hit = { space_tenant_id: null };
+    const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+    return getReviewHintText(hitHasTenant);
+  })(),
+  occupied_hint: (() => {
+    const hit = { space_tenant_id: 15 };
+    const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+    return getReviewHintText(hitHasTenant);
+  })(),
 };
 
 console.log(JSON.stringify(payload));
@@ -1439,5 +1462,77 @@ JS;
         $this->assertFalse($payload['fallback_space']);
         $this->assertStringNotContainsString('Совпало', $payload['free_hint']);
         $this->assertStringContainsString('Совпало', $payload['occupied_hint']);
+    }
+
+    public function test_market_map_review_navigation_skips_stale_reviewed_candidate_for_next_pending(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $start = strpos($blade, 'function isPendingReviewNavItem(item)');
+        $end = strpos($blade, 'updateReviewNavUi = function ()', $start);
+
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+        $this->assertGreaterThan($start, $end);
+
+        $script = "const SPACE_URL = '/admin/market-map/space';\nlet reviewNavItems = [];\n";
+        $script .= substr($blade, $start, $end - $start);
+        $script .= <<<'JS'
+
+reviewNavItems = [
+  { id: 1, number: '1', reviewStatus: 'matched', reviewStatusLabel: 'Совпало' },
+  { id: 2, number: '2', reviewStatus: '', reviewStatusLabel: '' },
+  { id: 3, number: '3', reviewStatus: '', reviewStatusLabel: '' },
+];
+
+(async () => {
+  const requested = [];
+  const target = await resolveNextPendingReviewTarget(0, async (spaceId) => {
+    requested.push(spaceId);
+
+    if (spaceId === 2) {
+      return {
+        id: 2,
+        number: '2',
+        reviewStatus: 'conflict',
+        reviewStatusLabel: 'Конфликт',
+      };
+    }
+
+    if (spaceId === 3) {
+      return {
+        id: 3,
+        number: '3',
+        reviewStatus: '',
+        reviewStatusLabel: '',
+      };
+    }
+
+    return null;
+  });
+
+  console.log(JSON.stringify({
+    targetIndex: target ? target.index : null,
+    targetId: target?.item?.id ?? null,
+    requested,
+    statuses: reviewNavItems.map((item) => item.reviewStatus || ''),
+  }));
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+JS;
+
+        $process = new Process(['node', '-e', $script]);
+        $process->setTimeout(20);
+        $process->run();
+
+        $this->assertTrue($process->isSuccessful(), $process->getErrorOutput() ?: $process->getOutput());
+
+        $payload = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame(2, $payload['targetIndex']);
+        $this->assertSame(3, $payload['targetId']);
+        $this->assertSame([2, 3], $payload['requested']);
+        $this->assertSame(['matched', 'conflict', ''], $payload['statuses']);
     }
 }
