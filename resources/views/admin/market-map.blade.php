@@ -2986,14 +2986,12 @@
 
               if (canValidateAgainstServer) {
                 const freshSpace = await resolveSpace(Number(item.id || 0));
-                if (!freshSpace) {
-                  continue;
+                if (freshSpace) {
+                  nextItem = syncReviewNavItemFromSpace(freshSpace) || {
+                    ...item,
+                    ...freshSpace,
+                  };
                 }
-
-                nextItem = syncReviewNavItemFromSpace(freshSpace) || {
-                  ...item,
-                  ...freshSpace,
-                };
               }
 
               if (isPendingReviewNavItem(nextItem)) {
@@ -4767,16 +4765,9 @@
               const chosenId = getChosenSpaceId();
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
               let reviewNotice = '';
-              let reviewHint = '';
 
               function shouldShowMatchedReviewDecision(hasTenant, isTenantFallback) {
                 return hasTenant && !isTenantFallback;
-              }
-
-              function getReviewHintText(hasTenant) {
-                return hasTenant
-                  ? '<div class="row row-review-note"><span class="row-label">Подсказка: </span><span class="row-value">Свободно — место фактически пустое. Совпало — место занято и соответствует данным системы.</span></div>'
-                  : '<div class="row row-review-note"><span class="row-label">Подсказка: </span><span class="row-value">Свободно — место фактически пустое.</span></div>';
               }
 
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
@@ -4789,8 +4780,6 @@
 
               if (isReviewMode()) {
                 if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
-                  reviewHint = getReviewHintText(hitHasTenant);
-
                   if (hasReviewMark) {
                     reviewNotice = '<div class="row row-review-note"><span class="row-label">Ревизия: </span><span class="row-value">Уже отмечено' + (hitReviewStatusText ? ': ' + escapeHtml(hitReviewStatusText) : '') + '</span></div>';
                   }
@@ -4838,7 +4827,6 @@
                   buildPopoverRow(line6) +
                   buildPopoverRow(line7) +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
-                  reviewHint +
                   reviewNotice +
                   actions +
                 '</div>'
