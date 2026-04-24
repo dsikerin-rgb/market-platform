@@ -1472,9 +1472,9 @@ JS;
 
         $payload = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
 
-        $this->assertSame(1, $payload['targetIndex']);
-        $this->assertSame(2, $payload['targetId']);
-        $this->assertSame([2], $payload['requested']);
+        $this->assertSame(2, $payload['targetIndex']);
+        $this->assertSame(3, $payload['targetId']);
+        $this->assertSame([2, 3], $payload['requested']);
         $this->assertSame(['matched', '', ''], $payload['statuses']);
     }
 }

@@ -2986,12 +2986,14 @@
 
               if (canValidateAgainstServer) {
                 const freshSpace = await resolveSpace(Number(item.id || 0));
-                if (freshSpace) {
-                  nextItem = syncReviewNavItemFromSpace(freshSpace) || {
-                    ...item,
-                    ...freshSpace,
-                  };
+                if (!freshSpace) {
+                  continue;
                 }
+
+                nextItem = syncReviewNavItemFromSpace(freshSpace) || {
+                  ...item,
+                  ...freshSpace,
+                };
               }
 
               if (isPendingReviewNavItem(nextItem)) {
