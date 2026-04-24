@@ -1361,7 +1361,9 @@ class SpaceReviewFlowTest extends TestCase
         $response = $this->get('/admin/market-map?mode=review');
 
         $response->assertOk()
+            ->assertHeader('Cache-Control', 'max-age=0, must-revalidate, no-cache, no-store, private')
             ->assertSee("opts.cache = opts.cache || 'no-store';", false)
+            ->assertSee('await loadShapes();', false)
             ->assertSee("const pendingCount = getPendingReviewNavCount();", false)
             ->assertSee("reviewNavStatus.textContent = 'Непройденных мест не осталось';", false);
     }
