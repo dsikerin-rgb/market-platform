@@ -1904,6 +1904,7 @@
         let currentLayer = 'debt';
         let redrawShapesRef = null;
         let reviewNavItems = [];
+        let isProgrammaticNavigation = false;
         let updateReviewNavUi = () => {};
         let syncReviewNavFromShapes = () => {};
         let navigateReview = async () => {};
@@ -3085,7 +3086,9 @@
 
             const target = reviewNavItems[targetIndex];
             setChosenSpace(target, { announce: false });
-            await refreshChosenSpaceFromServer();
+            if (kind !== 'next-pending') {
+              await refreshChosenSpaceFromServer();
+            }
             updateReviewNavUi();
 
             if (!target?.bbox) return;
@@ -3105,6 +3108,7 @@
             const clientX = rect.left + Number(viewportPoint[0]);
             const clientY = rect.top + Number(viewportPoint[1]);
 
+            isProgrammaticNavigation = true;
             overlay.dispatchEvent(new MouseEvent('click', {
               bubbles: true,
               cancelable: true,
@@ -4427,6 +4431,10 @@
           }
 
           function onMove(e) {
+            if (isProgrammaticNavigation) {
+              isProgrammaticNavigation = false;
+            }
+
             if (draggingVertex && currentViewport) {
               draggingVertexMoved = true;
 
@@ -4522,6 +4530,8 @@
           async function onClick(e) {
             e.stopPropagation();
 
+            const wasProgrammaticClick = isProgrammaticNavigation;
+
             if (drawingRect) return;
             if (!page || !currentViewport) return;
 
@@ -4611,7 +4621,9 @@
                 : null;
 
               if (nextChosen) {
-                setChosenSpace(nextChosen, { announce: false });
+                if (!wasProgrammaticClick) {
+                  setChosenSpace(nextChosen, { announce: false });
+                }
               }
 
               if (CAN_EDIT && editMode && tool === 'select' && hit.shape_id) {

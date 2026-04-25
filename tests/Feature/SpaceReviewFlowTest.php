@@ -1416,7 +1416,7 @@ JS;
     public function test_market_map_review_navigation_skips_stale_reviewed_candidate_for_next_pending(): void
     {
         $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
-        $start = strpos($blade, 'function isPendingReviewNavItem(item)');
+        $start = strpos($blade, 'function getReviewCurrentIndex()');
         $end = strpos($blade, 'updateReviewNavUi = function ()', $start);
 
         $this->assertIsInt($start);
@@ -1478,5 +1478,83 @@ JS;
         $this->assertSame(3, $payload['targetId']);
         $this->assertSame([2, 3], $payload['requested']);
         $this->assertSame(['matched', '', ''], $payload['statuses']);
+    }
+
+    public function test_market_map_review_navigation_advances_across_repeated_next_pending_clicks(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $start = strpos($blade, 'function getReviewCurrentIndex()');
+        $end = strpos($blade, 'function normalizeBbox(raw)', $start);
+
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+        $this->assertGreaterThan($start, $end);
+
+        $script = "const SPACE_URL = '/admin/market-map/space';\n";
+        $script .= "let reviewNavItems = [];\n";
+        $script .= "let chosenSpace = null;\n";
+        $script .= "let currentViewport = { convertToViewportPoint: () => [0, 0] };\n";
+        $script .= "let canvas = { getBoundingClientRect: () => ({ left: 0, top: 0 }) };\n";
+        $script .= "let overlay = { dispatchEvent: () => {} };\n";
+        $script .= "let isProgrammaticNavigation = false;\n";
+        $script .= "let navigateReview = null;\n";
+        $script .= "let updateReviewNavUi = function () {};\n";
+        $script .= "function setChosenSpace(space) { chosenSpace = space ? { ...space } : null; }\n";
+        $script .= "async function loadShapes() {}\n";
+        $script .= "async function refreshChosenSpaceFromServer() { chosenSpace = null; }\n";
+        $script .= "async function centerOnBbox() {}\n";
+        $script .= "function nextUiFrame() { return Promise.resolve(); }\n";
+        $script .= "function MouseEvent(type, init) { this.type = type; this.init = init || {}; }\n";
+        $script .= "const window = { location: { origin: 'http://example.test' } };\n";
+        $script .= substr($blade, $start, $end - $start);
+        $script .= <<<'JS'
+
+updateReviewNavUi = function () {};
+fetchReviewNavSpaceById = async function (spaceId) {
+  return reviewNavItems.find((item) => Number(item.id) === Number(spaceId)) || null;
+};
+
+reviewNavItems = [
+  { id: 1, number: '1', reviewStatus: 'matched', reviewStatusLabel: 'matched', bbox: { x1: 0, y1: 0, x2: 10, y2: 10 } },
+  { id: 2, number: '2', reviewStatus: '', reviewStatusLabel: '', bbox: { x1: 10, y1: 0, x2: 20, y2: 10 } },
+  { id: 3, number: '3', reviewStatus: '', reviewStatusLabel: '', bbox: { x1: 20, y1: 0, x2: 30, y2: 10 } },
+];
+chosenSpace = { ...reviewNavItems[0] };
+
+(async () => {
+  await navigateReview('next-pending');
+  const firstChosenId = chosenSpace ? chosenSpace.id : null;
+
+  await navigateReview('next-pending');
+  const secondChosenId = chosenSpace ? chosenSpace.id : null;
+
+  console.log(JSON.stringify({
+    firstChosenId,
+    secondChosenId,
+  }));
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+JS;
+
+        $scriptPath = tempnam(sys_get_temp_dir(), 'review-nav-next-pending-');
+        $this->assertNotFalse($scriptPath);
+        file_put_contents($scriptPath, $script);
+
+        try {
+            $process = new Process(['node', $scriptPath]);
+            $process->setTimeout(20);
+            $process->run();
+
+            $this->assertTrue($process->isSuccessful(), $process->getErrorOutput() ?: $process->getOutput());
+
+            $payload = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+        } finally {
+            @unlink($scriptPath);
+        }
+
+        $this->assertSame(2, $payload['firstChosenId']);
+        $this->assertSame(3, $payload['secondChosenId']);
     }
 }
