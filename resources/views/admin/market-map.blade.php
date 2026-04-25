@@ -4619,8 +4619,8 @@
                   })
                 : null;
 
-              if (nextChosen) {
-                  setChosenSpace(nextChosen, { announce: false });
+              if (nextChosen && !wasProgrammaticClick) {
+                setChosenSpace(nextChosen, { announce: false });
               }
 
               if (CAN_EDIT && editMode && tool === 'select' && hit.shape_id) {

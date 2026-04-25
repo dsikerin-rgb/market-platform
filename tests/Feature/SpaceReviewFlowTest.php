@@ -1557,4 +1557,92 @@ JS;
         $this->assertSame(2, $payload['firstChosenId']);
         $this->assertSame(3, $payload['secondChosenId']);
     }
+
+    public function test_market_map_review_navigation_programmatic_hit_test_does_not_restore_previous_space(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $start = strpos($blade, 'async function onClick(e)');
+        $end = strpos($blade, "popover?.addEventListener('click', (e) => {", $start);
+
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+        $this->assertGreaterThan($start, $end);
+
+        $script = "let chosenSpace = { id: 2, number: '2', reviewStatus: '', reviewStatusLabel: '' };\n";
+        $script .= "let isProgrammaticNavigation = true;\n";
+        $script .= "let drawingRect = false;\n";
+        $script .= "let page = {};\n";
+        $script .= "let currentViewport = { convertToPdfPoint: () => [1, 1] };\n";
+        $script .= "let CAN_EDIT = false;\n";
+        $script .= "let editMode = false;\n";
+        $script .= "let tool = 'select';\n";
+        $script .= "let polyDrawing = false;\n";
+        $script .= "let polyDraft = [];\n";
+        $script .= "let moved = false;\n";
+        $script .= "let selectedShapeId = null;\n";
+        $script .= "let lastHit = null;\n";
+        $script .= "let HIT_URL = '/admin/market-map/hit-test';\n";
+        $script .= "let MAP_PAGE = 1;\n";
+        $script .= "let MAP_VERSION = 1;\n";
+        $script .= "let popover = null;\n";
+        $script .= "const window = { location: { origin: 'http://example.test' } };\n";
+        $script .= "function getCanvasPointFromClient() { return { x: 1, y: 1 }; }\n";
+        $script .= "function showPopoverAt() {}\n";
+        $script .= "function escapeHtml(value) { return String(value ?? ''); }\n";
+        $script .= "function normalizeChosenSpace(item) { return { id: Number(item.id || 0), number: String(item.number || ''), reviewStatus: String(item.review_status || ''), reviewStatusLabel: String(item.review_status_label || '') }; }\n";
+        $script .= "function setChosenSpace(space) { chosenSpace = space ? { ...space } : null; }\n";
+        $script .= "function setSelectedShape() {}\n";
+        $script .= "function clearHandles() {}\n";
+        $script .= "function distanceSq() { return 999999; }\n";
+        $script .= "async function finishPolygon() {}\n";
+        $script .= "function redrawShapes() {}\n";
+        $script .= "function toast() {}\n";
+        $script .= "async function insertVertexAtClick() {}\n";
+        $script .= "function rentRateUnitLabel() { return ''; }\n";
+        $script .= "function formatMoneyRu(value) { return String(value); }\n";
+        $script .= "function buildPopoverRow() { return ''; }\n";
+        $script .= "function getChosenSpaceId() { return chosenSpace ? chosenSpace.id : null; }\n";
+        $script .= "function formatSpaceLabel(space) { return String(space?.number || ''); }\n";
+        $script .= "function isReviewMode() { return false; }\n";
+        $script .= "async function apiFetch() { return { json: async () => ({ ok: true, hit: { market_space_id: 1, space_tenant_id: 123, space_review_status: 'conflict', space_review_status_label: 'Конфликт', space: { id: 1, number: '1', code: '', review_status: 'conflict', review_status_label: 'Конфликт' }, tenant: { id: 77, name: 'Tenant' } } }) }; }\n";
+        $script .= substr($blade, $start, $end - $start);
+        $script .= <<<'JS'
+
+(async () => {
+  await onClick({
+    stopPropagation() {},
+    clientX: 10,
+    clientY: 10,
+    altKey: false,
+  });
+
+  console.log(JSON.stringify({
+    chosenId: chosenSpace ? chosenSpace.id : null,
+    isProgrammaticNavigation,
+  }));
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+JS;
+
+        $scriptPath = tempnam(sys_get_temp_dir(), 'review-nav-programmatic-hit-');
+        $this->assertNotFalse($scriptPath);
+        file_put_contents($scriptPath, $script);
+
+        try {
+            $process = new Process(['node', $scriptPath]);
+            $process->setTimeout(20);
+            $process->run();
+
+            $this->assertTrue($process->isSuccessful(), $process->getErrorOutput() ?: $process->getOutput());
+
+            $payload = json_decode(trim($process->getOutput()), true, flags: JSON_THROW_ON_ERROR);
+        } finally {
+            @unlink($scriptPath);
+        }
+
+        $this->assertSame(2, $payload['chosenId']);
+        $this->assertFalse($payload['isProgrammaticNavigation']);
+    }
 }
