@@ -4431,10 +4431,6 @@
           }
 
           function onMove(e) {
-            if (isProgrammaticNavigation) {
-              isProgrammaticNavigation = false;
-            }
-
             if (draggingVertex && currentViewport) {
               draggingVertexMoved = true;
 
@@ -4531,6 +4527,9 @@
             e.stopPropagation();
 
             const wasProgrammaticClick = isProgrammaticNavigation;
+            if (isProgrammaticNavigation) {
+              isProgrammaticNavigation = false;
+            }
 
             if (drawingRect) return;
             if (!page || !currentViewport) return;
@@ -4621,9 +4620,7 @@
                 : null;
 
               if (nextChosen) {
-                if (!wasProgrammaticClick) {
                   setChosenSpace(nextChosen, { announce: false });
-                }
               }
 
               if (CAN_EDIT && editMode && tool === 'select' && hit.shape_id) {
