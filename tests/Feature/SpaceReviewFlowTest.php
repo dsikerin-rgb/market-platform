@@ -1365,7 +1365,8 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee("opts.cache = opts.cache || 'no-store';", false)
             ->assertSee('await loadShapes();', false)
             ->assertSee("const pendingCount = getPendingReviewNavCount();", false)
-            ->assertSee("reviewNavStatus.textContent = 'Непройденных мест не осталось';", false);
+            ->assertSee('Непройденных мест не осталось', false)
+            ->assertSee('Есть непройденные места без фигур на карте', false);
     }
 
     public function test_market_map_review_navigation_sorts_items_by_visible_label_order(): void

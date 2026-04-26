@@ -3012,12 +3012,15 @@
             const total = reviewNavItems.length;
             const currentIndex = getReviewCurrentIndex();
             const pendingCount = getPendingReviewNavCount();
+            const remainingTotal = Math.max(0, Number(reviewProgressState?.remaining ?? 0) || 0);
 
             if (reviewNavStatus) {
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
               } else if (pendingCount === 0) {
-                reviewNavStatus.textContent = 'Непройденных мест не осталось';
+                reviewNavStatus.textContent = remainingTotal > 0
+                  ? 'Есть непройденные места без фигур на карте'
+                  : 'Непройденных мест не осталось';
               } else if (currentIndex >= 0) {
                 reviewNavStatus.textContent = 'Место ' + String(currentIndex + 1) + ' из ' + String(total) + ' · осталось ' + String(pendingCount);
               } else {
@@ -3034,7 +3037,15 @@
             }
 
             if (reviewNavNextPendingBtn) {
-              reviewNavNextPendingBtn.disabled = findNextPendingIndex(currentIndex) === -1;
+              const noPending = findNextPendingIndex(currentIndex) === -1;
+              reviewNavNextPendingBtn.disabled = noPending;
+              if (noPending && remainingTotal > 0) {
+                reviewNavNextPendingBtn.title = 'Есть непройденные места без фигур на карте';
+                reviewNavNextPendingBtn.setAttribute('aria-label', 'Есть непройденные места без фигур на карте');
+              } else {
+                reviewNavNextPendingBtn.title = 'Следующее непройденное';
+                reviewNavNextPendingBtn.setAttribute('aria-label', 'Следующее непройденное');
+              }
             }
           };
 
