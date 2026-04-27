@@ -1744,6 +1744,135 @@ JS;
             ->assertJsonPath('ok', true);
     }
 
+    public function test_market_map_spaces_without_shapes_with_q_search(): void
+    {
+        if (! Schema::hasTable('market_space_map_shapes') || ! $this->hasMapReviewColumns()) {
+            $this->markTestSkipped('Required schema for map review is not available.');
+        }
+
+        $market = Market::create([
+            'name' => 'Test Market',
+            'slug' => 'test-market-without-shapes-search',
+        ]);
+
+        // Место 1: без shape, номер "101"
+        $space101 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '101',
+            'code' => 'space-101',
+            'display_name' => 'Кофейня',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+
+        // Место 2: без shape, номер "102", tenant "Одежда"
+        $tenant2 = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Одежда',
+            'short_name' => 'Одежда',
+            'display_name' => 'Магазин одежды',
+        ]);
+        $space102 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '102',
+            'code' => 'space-102',
+            'display_name' => '',
+            'tenant_id' => $tenant2->id,
+            'is_active' => true,
+        ]);
+
+        // Место 3: без shape, номер "201"
+        $space201 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '201',
+            'code' => 'space-201',
+            'display_name' => 'Сувениры',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+
+        // Место 4: с usable shape (не должно попасть в without_shapes)
+        $spaceWithShape = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '301',
+            'code' => 'space-301',
+            'display_name' => 'Ресторан',
+            'tenant_id' => null,
+            'is_active' => true,
+        ]);
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $spaceWithShape->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 100, 'y' => 100],
+                ['x' => 200, 'y' => 100],
+                ['x' => 200, 'y' => 200],
+                ['x' => 100, 'y' => 200],
+            ],
+            'bbox_x1' => 100,
+            'bbox_y1' => 100,
+            'bbox_x2' => 200,
+            'bbox_y2' => 200,
+            'is_active' => true,
+        ]);
+
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        // Тест 1: без q возвращает все места без shape (кроме места с usable shape)
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&limit=50');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(3, $items, 'Без поиска должны вернуться 3 места без shape');
+
+        $ids = array_column($items, 'id');
+        $this->assertContains($space101->id, $ids);
+        $this->assertContains($space102->id, $ids);
+        $this->assertContains($space201->id, $ids);
+        $this->assertNotContains($spaceWithShape->id, $ids);
+
+        // Тест 2: поиск по номеру "101" находит только одно место
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&q=101');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+        $this->assertEquals('101', $items[0]['number']);
+
+        // Тест 3: поиск по tenant name "Одежда" находит место 102
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&q=Одежда');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+        $this->assertEquals('102', $items[0]['number']);
+
+        // Тест 4: поиск по tenant short_name "ООО" находит место 102
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&q=ООО');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+        $this->assertEquals('102', $items[0]['number']);
+
+        // Тест 5: поиск по display_name "Кофейня" находит место 101
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&q=Кофейня');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(1, $items);
+        $this->assertEquals('101', $items[0]['number']);
+
+        // Тест 6: поиск по несуществующему запросу возвращает пустой массив
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&q=НесуществующийЗапрос12345');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(0, $items);
+
+        // Тест 7: место с usable shape не попадает даже при совпадении поиска
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1&q=Ресторан');
+        $response->assertOk();
+        $items = $response->json('items');
+        $this->assertCount(0, $items, 'Место с usable shape не должно попасть даже при совпадении поиска');
+    }
+
     private function hasMapReviewColumns(): bool
     {
         if (! Schema::hasTable('market_spaces')) {

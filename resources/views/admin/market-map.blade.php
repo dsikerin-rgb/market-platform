@@ -1670,15 +1670,24 @@
           role="dialog"
           aria-label="Панель мест без фигур"
         >
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-            <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: #1e293b;">Места без фигур</h3>
-            <button
-              id="closeWithoutShapesPanel"
-              type="button"
-              style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; padding: 4px 8px; line-height: 1; border-radius: 4px;"
-              title="Закрыть панель"
-              aria-label="Закрыть панель"
-            >×</button>
+          <div style="display: flex; flex-direction: column; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: #1e293b;">Места без фигур</h3>
+              <button
+                id="closeWithoutShapesPanel"
+                type="button"
+                style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; padding: 4px 8px; line-height: 1; border-radius: 4px;"
+                title="Закрыть панель"
+                aria-label="Закрыть панель"
+              >×</button>
+            </div>
+            <input
+              id="withoutShapesSearch"
+              type="text"
+              placeholder="Поиск по номеру / названию / арендатору"
+              aria-label="Поиск мест без фигур"
+              style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; font-size: 14px;"
+            />
           </div>
           <div id="withoutShapesPanelContent" style="flex: 1; overflow-y: auto; padding: 0;">
             <div style="text-align: center; padding: 40px 20px; color: #64748b;">Загрузка...</div>
@@ -4398,9 +4407,11 @@
           const withoutShapesPanelContent = document.getElementById('withoutShapesPanelContent');
           const closeWithoutShapesPanelBtn = document.getElementById('closeWithoutShapesPanel');
           const withoutShapesPanelOverlay = document.getElementById('withoutShapesPanelOverlay');
+          const withoutShapesSearchInput = document.getElementById('withoutShapesSearch');
           let withoutShapesPanelOpen = false;
+          let withoutShapesSearchTimer = null;
 
-          async function loadWithoutShapesList() {
+          async function loadWithoutShapesList(searchQuery = '') {
             if (!withoutShapesPanelContent) return;
 
             withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;">Загрузка...</div>';
@@ -4409,6 +4420,9 @@
               const url = new URL(SPACES_URL, window.location.origin);
               url.searchParams.set('without_shapes', '1');
               url.searchParams.set('limit', '50');
+              if (searchQuery && String(searchQuery).trim() !== '') {
+                url.searchParams.set('q', String(searchQuery).trim());
+              }
 
               const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
               const json = await res.json();
@@ -4421,7 +4435,7 @@
               const items = Array.isArray(json.items) ? json.items : [];
 
               if (!items.length) {
-                withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;">Нет мест без фигур</div>';
+                withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;">Нет мест без фигур' + (searchQuery ? ' по запросу "' + escapeHtml(searchQuery) + '"' : '') + '</div>';
                 return;
               }
 
