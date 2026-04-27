@@ -1393,6 +1393,24 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                   });
             });
 
+            // Поиск по строке q (номер / код / display_name / арендатор)
+            $rawQ = trim((string) ($validated['q'] ?? ''));
+            if ($rawQ !== '') {
+                $qEsc = str_replace(['%', '_'], ['\%', '\\_'], $rawQ);
+                $qLike = '%' . $qEsc . '%';
+
+                $query->where(function ($qq) use ($qLike) {
+                    $qq->where('number', 'like', $qLike)
+                       ->orWhere('code', 'like', $qLike)
+                       ->orWhere('display_name', 'like', $qLike)
+                       ->orWhereHas('tenant', function ($tq) use ($qLike) {
+                           $tq->where('name', 'like', $qLike)
+                              ->orWhere('display_name', 'like', $qLike)
+                              ->orWhere('short_name', 'like', $qLike);
+                       });
+                });
+            }
+
             $rows = $query
                 ->orderBy('number')
                 ->orderBy('id')
