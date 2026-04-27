@@ -1319,16 +1319,119 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Поиск мест для автокомплита (номер/код/арендатор/ID).
      * Поддерживает ?number= и ?q=.
+     * Поддерживает ?without_shapes=1 для получения непройденных мест без фигур.
      */
-    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel) {
+    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:64'],
             'number' => ['nullable', 'string', 'max:64'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'without_shapes' => ['nullable', 'boolean'],
         ]);
 
+        $withoutShapes = (bool) ($validated['without_shapes'] ?? false);
+
+        // Режим: список мест без usable bbox для ревизии
+        if ($withoutShapes) {
+            $limit = (int) ($validated['limit'] ?? 200);
+
+            // Проверяем наличие таблиц и колонок
+            if (! Schema::hasTable('market_space_map_shapes')) {
+                return response()->json([
+                    'ok' => false,
+                    'items' => [],
+                    'message' => 'Таблица market_space_map_shapes ещё не создана (выполни миграции).',
+                ], 422);
+            }
+
+            if (! $hasMapReviewColumns()) {
+                return response()->json([
+                    'ok' => false,
+                    'items' => [],
+                    'message' => 'Колонки map_review_status отсутствуют в market_spaces.',
+                ], 422);
+            }
+
+            // Запрос: активные места без map_review_status И без usable bbox
+            // Usable bbox = active shape с (bbox_x1/bbox_y1/bbox_x2/bbox_y2 NOT NULL) ИЛИ (polygon ≥3 точек)
+            $query = MarketSpace::query()
+                ->with(['tenant'])
+                ->where('market_id', (int) $market->id)
+                ->whereNull('map_review_status');
+
+            // Фильтр по is_active если колонка существует
+            if (Schema::hasColumn('market_spaces', 'is_active')) {
+                $query->where('is_active', true);
+            }
+
+            // Исключаем места у которых ЕСТЬ usable shape для review navigation
+            // (согласовано с buildReviewNavItemsFromShapes() на фронте)
+            //
+            // Usable shape = is_active = true И (bbox ИЛИ polygon fallback):
+            //   - bbox_x1/bbox_y1/bbox_x2/bbox_y2 NOT NULL И bbox_x1 < bbox_x2 И bbox_y1 < bbox_y2
+            //     → готовый usable bbox
+            //   - ИЛИ JSON_LENGTH(polygon) >= 3  →  bbox вычисляется из polygon
+            //
+            // whereDoesntHave инвертирует: вернёт места БЕЗ usable shape
+            $query->whereDoesntHave('mapShapes', function ($q) {
+                $q->where('is_active', true)
+                  ->where(function ($sub) {
+                      // Вариант 1: есть bbox с корректными размерами (x1 < x2 и y1 < y2)
+                      $sub->whereNotNull('bbox_x1')
+                          ->whereNotNull('bbox_y1')
+                          ->whereNotNull('bbox_x2')
+                          ->whereNotNull('bbox_y2')
+                          ->whereColumn('bbox_x1', '<', 'bbox_x2')
+                          ->whereColumn('bbox_y1', '<', 'bbox_y2');
+                      
+                      // Вариант 2: polygon с ≥3 точками (fallback для вычисляемого bbox)
+                      // orWhere внутри $sub гарантирует что это условие
+                      // применяется вместе с is_active = true (внешний where)
+                      $sub->orWhereJsonLength('polygon', '>=', 3);
+                  });
+            });
+
+            $rows = $query
+                ->orderBy('number')
+                ->orderBy('id')
+                ->limit($limit)
+                ->get(['id', 'number', 'code', 'display_name', 'tenant_id']);
+
+            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel): array {
+                $tenant = $space->tenant;
+
+                $tenantName = null;
+                if ($tenant) {
+                    $tenantName = (string) ($tenant->display_name ?? '');
+                    if ($tenantName === '') {
+                        $tenantName = (string) ($tenant->short_name ?? '');
+                    }
+                    if ($tenantName === '') {
+                        $tenantName = (string) ($tenant->name ?? '');
+                    }
+                }
+
+                return [
+                    'id' => (int) $space->id,
+                    'number' => (string) ($space->number ?? ''),
+                    'code' => (string) ($space->code ?? ''),
+                    'display_name' => (string) ($space->display_name ?? ''),
+                    'review_status' => '',
+                    'review_status_label' => '',
+                    'tenant' => $tenant ? [
+                        'id' => (int) ($tenant->id ?? 0),
+                        'name' => (string) ($tenantName ?? ''),
+                    ] : null,
+                    'without_shapes' => true,
+                ];
+            })->values();
+
+            return response()->json(['ok' => true, 'items' => $items, 'meta' => ['without_shapes' => true, 'count' => count($items)]]);
+        }
+
+        // Обычный режим поиска
         $raw = trim((string) ($validated['q'] ?? $validated['number'] ?? ''));
         $raw = str_replace(["\n", "\r", "\t"], ' ', $raw);
         $q = trim(str_replace(['№', '#'], '', $raw));

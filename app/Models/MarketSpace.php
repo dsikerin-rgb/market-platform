@@ -229,4 +229,9 @@ class MarketSpace extends Model
         return $this->belongsToMany(User::class, 'tenant_user_market_spaces', 'market_space_id', 'user_id')
             ->withTimestamps();
     }
+
+    public function mapShapes(): HasMany
+    {
+        return $this->hasMany(MarketSpaceMapShape::class, 'market_space_id', 'id');
+    }
 }

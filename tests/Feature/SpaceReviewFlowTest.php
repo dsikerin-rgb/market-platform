@@ -21,6 +21,7 @@ use App\Services\Ai\AiReviewService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Symfony\Component\Process\Process;
@@ -1557,5 +1558,198 @@ JS;
 
         $this->assertSame(2, $payload['firstChosenId']);
         $this->assertSame(3, $payload['secondChosenId']);
+    }
+
+    public function test_market_map_spaces_without_shapes_filter_returns_unreviewed_places_without_usable_bbox(): void
+    {
+        $this->withoutExceptionHandling();
+
+        $market = Market::create([
+            'name' => 'Test Market',
+            'slug' => 'test-market-spaces-without-shapes',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Test Tenant',
+            'short_name' => 'TT',
+        ]);
+
+        // Место 1: непройденное, без shape → ПОПАДАЕТ
+        $spaceWithoutShape = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '1',
+            'code' => 'space-1',
+            'tenant_id' => $tenant->id,
+            'is_active' => true,
+        ]);
+
+        // Место 2: непройденное, с active shape и usable bbox → НЕ попадает
+        $spaceWithUsableBbox = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '2',
+            'code' => 'space-2',
+            'tenant_id' => $tenant->id,
+            'is_active' => true,
+        ]);
+
+        if (Schema::hasTable('market_space_map_shapes')) {
+            MarketSpaceMapShape::create([
+                'market_id' => $market->id,
+                'market_space_id' => $spaceWithUsableBbox->id,
+                'page' => 1,
+                'version' => 1,
+                'polygon' => [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 0], ['x' => 10, 'y' => 10], ['x' => 0, 'y' => 10]],
+                'bbox_x1' => 0,
+                'bbox_y1' => 0,
+                'bbox_x2' => 10,
+                'bbox_y2' => 10,
+                'is_active' => true,
+            ]);
+        }
+
+        // Место 3: непройденное, с active shape но БЕЗ usable bbox (polygon <3 точек) → ПОПАДАЕТ
+        // bbox_x1..y2 = 0 (не null, но x1 >= x2 и y1 >= y2 → не usable)
+        $spaceWithUnusableBbox = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '3',
+            'code' => 'space-3',
+            'tenant_id' => $tenant->id,
+            'is_active' => true,
+        ]);
+
+        if (Schema::hasTable('market_space_map_shapes')) {
+            MarketSpaceMapShape::create([
+                'market_id' => $market->id,
+                'market_space_id' => $spaceWithUnusableBbox->id,
+                'page' => 1,
+                'version' => 1,
+                'polygon' => [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 10]], // только 2 точки
+                'bbox_x1' => 0,
+                'bbox_y1' => 0,
+                'bbox_x2' => 0,
+                'bbox_y2' => 0,
+                'is_active' => true,
+            ]);
+        }
+
+        // Место 4: непройденное, с active shape но БЕЗ usable bbox (bbox 0/0/0/0, polygon empty) → ПОПАДАЕТ
+        $spaceWithZeroBbox = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '4',
+            'code' => 'space-4',
+            'tenant_id' => $tenant->id,
+            'is_active' => true,
+        ]);
+
+        if (Schema::hasTable('market_space_map_shapes')) {
+            MarketSpaceMapShape::create([
+                'market_id' => $market->id,
+                'market_space_id' => $spaceWithZeroBbox->id,
+                'page' => 1,
+                'version' => 1,
+                'polygon' => [],
+                'bbox_x1' => 0,
+                'bbox_y1' => 0,
+                'bbox_x2' => 0,
+                'bbox_y2' => 0,
+                'is_active' => true,
+            ]);
+        }
+
+        // Место 5: пройденное (есть map_review_status), без shape → НЕ попадает
+        $spaceReviewed = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '5',
+            'code' => 'space-5',
+            'tenant_id' => $tenant->id,
+            'is_active' => true,
+            'map_review_status' => 'matched',
+            'map_reviewed_at' => now(),
+        ]);
+
+        // Место 6: неактивное, без shape → НЕ попадает
+        $spaceInactive = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '6',
+            'code' => 'space-6',
+            'tenant_id' => $tenant->id,
+            'is_active' => false,
+        ]);
+
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1');
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('meta.without_shapes', true);
+
+        $items = $response->json('items');
+        $this->assertIsArray($items);
+
+        $ids = array_column($items, 'id');
+
+        // ДОЛЖНЫ попасть: непройденные, активные, без usable bbox
+        $this->assertContains($spaceWithoutShape->id, $ids, 'Место без shape должно попасть');
+        $this->assertContains($spaceWithUnusableBbox->id, $ids, 'Место с unusable bbox (polygon <3) должно попасть');
+        $this->assertContains($spaceWithZeroBbox->id, $ids, 'Место с zero bbox должно попасть');
+
+        // НЕ должны попасть
+        $this->assertNotContains($spaceWithUsableBbox->id, $ids, 'Место с usable bbox не должно попасть');
+        $this->assertNotContains($spaceReviewed->id, $ids, 'Пройденное место не должно попасть');
+        $this->assertNotContains($spaceInactive->id, $ids, 'Неактивное место не должно попасть');
+
+        // Проверяем структуру ответа
+        $item = reset($items);
+        if ($item) {
+            $this->assertArrayHasKey('id', $item);
+            $this->assertArrayHasKey('number', $item);
+            $this->assertArrayHasKey('code', $item);
+            $this->assertArrayHasKey('display_name', $item);
+            $this->assertArrayHasKey('tenant', $item);
+            $this->assertArrayHasKey('without_shapes', $item);
+            $this->assertTrue($item['without_shapes']);
+        }
+    }
+
+    public function test_market_map_spaces_without_shapes_filter_requires_tables_and_columns(): void
+    {
+        $market = Market::create([
+            'name' => 'Test Market',
+            'slug' => 'test-market-without-shapes-requirements',
+        ]);
+
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        // Если таблица market_space_map_shapes не существует, должен быть error
+        if (! Schema::hasTable('market_space_map_shapes')) {
+            $response = $this->get('/admin/market-map/spaces?without_shapes=1');
+            $response->assertStatus(422)
+                ->assertJsonPath('ok', false);
+            return;
+        }
+
+        // Если колонки map_review_status нет, должен быть error
+        if (! $this->hasMapReviewColumns()) {
+            $response = $this->get('/admin/market-map/spaces?without_shapes=1');
+            $response->assertStatus(422)
+                ->assertJsonPath('ok', false);
+            return;
+        }
+
+        // Если всё есть — успешный ответ
+        $response = $this->get('/admin/market-map/spaces?without_shapes=1');
+        $response->assertOk()
+            ->assertJsonPath('ok', true);
+    }
+
+    private function hasMapReviewColumns(): bool
+    {
+        if (! Schema::hasTable('market_spaces')) {
+            return false;
+        }
+
+        return Schema::hasColumn('market_spaces', 'map_review_status');
     }
 }
