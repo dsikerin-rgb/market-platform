@@ -1541,6 +1541,7 @@
                   <button id="reviewNavNextPending" type="button" title="Перейти к следующему непройденному месту" aria-label="Перейти к следующему непройденному месту">Следующее непройденное →</button>
                   <button id="reviewNavNext" type="button" title="Перейти к следующему месту в очереди ревизии" aria-label="Перейти к следующему месту в очереди ревизии">Следующее →</button>
                 </div>
+                <span class="pill" id="noShapesEntry" style="display:none;">Без фигур: <span id="noShapesCount">N</span></span>
               </div>
             @else
               <div class="toolbar-group toolbar-group--hero-center"></div>
@@ -1672,7 +1673,9 @@
             </div>
           </div>
         </div>
+
       </div>
+
 
         <div class="legend-stack">
         <!-- Легенда карты -->
@@ -3015,6 +3018,12 @@
             const remainingTotal = Math.max(0, Number(reviewProgressState?.remaining ?? 0) || 0);
 
             if (reviewNavStatus) {
+              const noShapesEntry = document.getElementById('noShapesEntry');
+              const noShapesCount = document.getElementById('noShapesCount');
+              const withoutShapesCount = remainingTotal - pendingCount;
+              noShapesCount.textContent = String(withoutShapesCount);
+              noShapesEntry.style.display = withoutShapesCount > 0 ? 'inline-flex' : 'none';
+
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
               } else if (pendingCount === 0) {
