@@ -1541,7 +1541,17 @@
                   <button id="reviewNavNextPending" type="button" title="Перейти к следующему непройденному месту" aria-label="Перейти к следующему непройденному месту">Следующее непройденное →</button>
                   <button id="reviewNavNext" type="button" title="Перейти к следующему месту в очереди ревизии" aria-label="Перейти к следующему месту в очереди ревизии">Следующее →</button>
                 </div>
-                <span class="pill" id="noShapesEntry" style="display:none;">Без фигур: <span id="noShapesCount">N</span></span>
+                <button
+                  id="noShapesEntry"
+                  type="button"
+                  class="pill"
+                  style="display:none; cursor: pointer; border: none; background: transparent;"
+                  title="Показать список мест без фигур"
+                  aria-label="Показать список мест без фигур"
+                  hidden
+                >
+                  Без фигур: <span id="noShapesCount">N</span>
+                </button>
               </div>
             @else
               <div class="toolbar-group toolbar-group--hero-center"></div>
@@ -1649,6 +1659,39 @@
             </div>
           @endif
         </div>
+
+        <!-- Right slide-over panel for places without shapes -->
+        <div
+          id="withoutShapesPanel"
+          class="without-shapes-panel"
+          style="position: fixed; top: 0; right: 0; bottom: 0; width: 380px; background: #ffffff; box-shadow: -4px 0 24px rgba(0,0,0,0.15); z-index: 9999; transform: translateX(100%); transition: transform 0.25s ease-in-out; display: flex; flex-direction: column;"
+          hidden
+          aria-hidden="true"
+          role="dialog"
+          aria-label="Панель мест без фигур"
+        >
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
+            <h3 style="margin: 0; font-size: 15px; font-weight: 600; color: #1e293b;">Места без фигур</h3>
+            <button
+              id="closeWithoutShapesPanel"
+              type="button"
+              style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; padding: 4px 8px; line-height: 1; border-radius: 4px;"
+              title="Закрыть панель"
+              aria-label="Закрыть панель"
+            >×</button>
+          </div>
+          <div id="withoutShapesPanelContent" style="flex: 1; overflow-y: auto; padding: 0;">
+            <div style="text-align: center; padding: 40px 20px; color: #64748b;">Загрузка...</div>
+          </div>
+        </div>
+
+        <!-- Overlay for slide-over panel -->
+        <div
+          id="withoutShapesPanelOverlay"
+          style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 9998; opacity: 0; pointer-events: none; transition: opacity 0.25s ease-in-out;"
+          hidden
+          aria-hidden="true"
+        ></div>
 
         <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
           <div class="map-load-progress__meta">
@@ -3023,6 +3066,9 @@
               const withoutShapesCount = remainingTotal - pendingCount;
               noShapesCount.textContent = String(withoutShapesCount);
               noShapesEntry.style.display = withoutShapesCount > 0 ? 'inline-flex' : 'none';
+              noShapesEntry.hidden = withoutShapesCount <= 0;
+              noShapesEntry.disabled = withoutShapesCount <= 0;
+              noShapesEntry.title = withoutShapesCount > 0 ? ('Показать ' + String(withoutShapesCount) + ' мест без фигур') : 'Нет мест без фигур';
 
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
@@ -4344,6 +4390,176 @@
               console.error(err);
               toast(String(err?.message || err));
             });
+          });
+
+          // Without shapes list functionality (right slide-over panel)
+          const noShapesEntryBtn = document.getElementById('noShapesEntry');
+          const withoutShapesPanel = document.getElementById('withoutShapesPanel');
+          const withoutShapesPanelContent = document.getElementById('withoutShapesPanelContent');
+          const closeWithoutShapesPanelBtn = document.getElementById('closeWithoutShapesPanel');
+          const withoutShapesPanelOverlay = document.getElementById('withoutShapesPanelOverlay');
+          let withoutShapesPanelOpen = false;
+
+          async function loadWithoutShapesList() {
+            if (!withoutShapesPanelContent) return;
+
+            withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;">Загрузка...</div>';
+
+            try {
+              const url = new URL(SPACES_URL, window.location.origin);
+              url.searchParams.set('without_shapes', '1');
+              url.searchParams.set('limit', '50');
+
+              const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+              const json = await res.json();
+
+              if (!res.ok || !json || json.ok !== true) {
+                withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #dc2626;">Ошибка загрузки: ' + escapeHtml(json?.message || String(res.status)) + '</div>';
+                return;
+              }
+
+              const items = Array.isArray(json.items) ? json.items : [];
+
+              if (!items.length) {
+                withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;">Нет мест без фигур</div>';
+                return;
+              }
+
+              const rows = items.map((item) => {
+                const id = Number(item?.id || 0);
+                const number = String(item?.number || item?.code || '—').trim();
+                const tenantName = item?.tenant?.name ? String(item.tenant.name) : 'не указан';
+                const spaceUrl = '/admin/market-spaces/' + String(id) + '/edit';
+                return '<div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #e2e8f0;">' +
+                  '<div style="display: flex; justify-content: space-between; align-items: center;">' +
+                    '<div style="min-width: 0; flex: 1;">' +
+                      '<div style="font-weight: 500; color: #1e293b; margin-bottom: 2px;">№' + escapeHtml(number) + '</div>' +
+                      '<div style="font-size: 13px; color: #64748b;">' + escapeHtml(tenantName) + '</div>' +
+                    '</div>' +
+                    '<a href="' + escapeHtml(spaceUrl) + '" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; text-decoration: none; white-space: nowrap; font-weight: 500;">Открыть место →</a>' +
+                  '</div>' +
+                  '<button type="button" data-action="select-for-drawing" data-space-id="' + String(id) + '" data-space-number="' + escapeHtml(number) + '" data-space-tenant="' + escapeHtml(tenantName) + '" style="font-size: 13px; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 500; text-align: center; transition: background 0.15s;">Выбрать для отрисовки</button>' +
+                '</div>';
+              });
+
+              withoutShapesPanelContent.innerHTML = rows.join('');
+            } catch (e) {
+              console.error(e);
+              withoutShapesPanelContent.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #dc2626;">Ошибка: ' + escapeHtml(e?.message || String(e)) + '</div>';
+            }
+          }
+
+          function openWithoutShapesPanel() {
+            if (!withoutShapesPanel || !withoutShapesPanelOverlay) return;
+
+            withoutShapesPanelOpen = true;
+            withoutShapesPanel.hidden = false;
+            withoutShapesPanel.setAttribute('aria-hidden', 'false');
+            withoutShapesPanelOverlay.hidden = false;
+            withoutShapesPanelOverlay.setAttribute('aria-hidden', 'false');
+
+            // Force reflow for transition
+            requestAnimationFrame(() => {
+              withoutShapesPanel.style.transform = 'translateX(0)';
+              withoutShapesPanelOverlay.style.opacity = '1';
+              withoutShapesPanelOverlay.style.pointerEvents = 'auto';
+            });
+
+            loadWithoutShapesList();
+          }
+
+          function closeWithoutShapesPanel() {
+            if (!withoutShapesPanel || !withoutShapesPanelOverlay) return;
+
+            withoutShapesPanelOpen = false;
+            withoutShapesPanel.style.transform = 'translateX(100%)';
+            withoutShapesPanelOverlay.style.opacity = '0';
+            withoutShapesPanelOverlay.style.pointerEvents = 'none';
+
+            // Wait for transition to complete before hiding
+            setTimeout(() => {
+              if (!withoutShapesPanelOpen) {
+                withoutShapesPanel.hidden = true;
+                withoutShapesPanel.setAttribute('aria-hidden', 'true');
+                withoutShapesPanelOverlay.hidden = true;
+                withoutShapesPanelOverlay.setAttribute('aria-hidden', 'true');
+              }
+            }, 250);
+          }
+
+          noShapesEntryBtn?.addEventListener('click', () => {
+            if (withoutShapesPanelOpen) {
+              closeWithoutShapesPanel();
+            } else {
+              openWithoutShapesPanel();
+            }
+          });
+
+          closeWithoutShapesPanelBtn?.addEventListener('click', () => {
+            closeWithoutShapesPanel();
+          });
+
+          withoutShapesPanelOverlay?.addEventListener('click', () => {
+            closeWithoutShapesPanel();
+          });
+
+          window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && withoutShapesPanelOpen) {
+              closeWithoutShapesPanel();
+            }
+          });
+
+          // Handle "select for drawing" button clicks within the panel
+          withoutShapesPanelContent?.addEventListener('click', (e) => {
+            const t = e.target;
+            if (!(t instanceof HTMLElement)) return;
+
+            const action = t.getAttribute('data-action');
+            if (action === 'select-for-drawing') {
+              const spaceId = Number(t.getAttribute('data-space-id') || 0);
+              const spaceNumber = t.getAttribute('data-space-number') || '';
+              const spaceTenant = t.getAttribute('data-space-tenant') || '';
+
+              if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                toast('Некорректный ID места');
+                return;
+              }
+
+              const next = normalizeChosenSpace({
+                id: spaceId,
+                number: spaceNumber,
+                code: '',
+                tenantName: spaceTenant !== 'не указан' ? spaceTenant : null,
+              });
+
+              if (next) {
+                // Переключаем в режим карты (edit mode не работает в режиме ревизии)
+                if (isReviewMode()) {
+                  setScenario('map');
+                }
+
+                setChosenSpace(next, { announce: true });
+
+                // Включаем edit mode через существующий механизм
+                if (CAN_EDIT && toggleEditBtn && !editMode) {
+                  editMode = true;
+                  isEditMode = true;
+                  syncEditToggleUi();
+
+                  if (toolSelectBtn) toolSelectBtn.style.display = 'inline-flex';
+                  if (toolRectBtn) toolRectBtn.style.display = 'inline-flex';
+                  if (toolPolyBtn) toolPolyBtn.style.display = 'inline-flex';
+
+                  updateScenarioUi();
+                  setTool('select');
+                  setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить');
+                  toast('Разметка включена');
+                }
+
+                closeWithoutShapesPanel();
+                toast('Место выбрано для отрисовки');
+              }
+            }
           });
 
           let isDown = false;
