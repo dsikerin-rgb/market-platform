@@ -202,3 +202,47 @@
 * Horizon доступен из админки и корректно ограничен по роли `super-admin` (local/staging/prod).
 * Staging и prod синхронизированы по версии `c5f9ab6`.
 * Horizon в prod работает как systemd-сервис и готов к эксплуатации.
+
+## 2026-04-28 — PR #549: ops diagnostics backup fix и system_settings
+
+PR: #549 `Codex/ops diagnostics backup fix`
+Итоговый commit main: `b895f06`
+
+### Что вошло
+- исправления `OpsDiagnostics` / backup diagnostics;
+- стабилизация ключей строк backup-log;
+- обязательный reason/comment для `space_identity_needs_clarification`;
+- миграция `2026_04_28_000001_create_system_settings_table`.
+
+### Staging
+- перед деплоем выполнен DB barrier;
+- фактическая БД: PostgreSQL, `market_staging`;
+- backup создан вне репозитория:
+  `/var/www/market-staging/backups/database_before_pr549_20260428_203501.sql`;
+- размер backup: `52M`;
+- staging обновлён до `b895f06`;
+- `php artisan migrate --force` выполнен;
+- `migrate:status`: `2026_04_28_000001_create_system_settings_table ... Ran`;
+- `php artisan horizon:status`: `Horizon is running`;
+- UI smoke-check пройден:
+  - `/admin/ops-diagnostics`;
+  - `/admin/market-map`;
+  - `/admin/map-review-results`.
+
+### Production
+- перед деплоем выполнен DB barrier;
+- фактическая БД: PostgreSQL, `market`;
+- backup создан вне репозитория:
+  `/var/www/market/backups/database_before_pr549_20260428_205033.sql`;
+- размер backup: `7.2M`;
+- prod обновлён до `b895f06`;
+- `php artisan migrate --force` выполнен;
+- `migrate:status`: `2026_04_28_000001_create_system_settings_table ... Ran`;
+- `php artisan horizon:status`: `Horizon is running`;
+- UI smoke-check пройден:
+  - `/admin/ops-diagnostics`;
+  - `/admin/market-map`;
+  - `/admin/map-review-results`.
+
+### Замечание
+`php artisan horizon:terminate` на staging/prod выдавал warning `Operation not permitted` по PID, но post-deploy smoke-check подтвердил `Horizon is running`. Отдельного rollback не потребовалось.
