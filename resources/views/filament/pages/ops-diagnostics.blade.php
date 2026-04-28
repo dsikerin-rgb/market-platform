@@ -144,6 +144,154 @@
         .ops-muted {
             opacity: .85;
         }
+
+        .ops-backup-settings-card {
+            border: 1px solid rgba(0, 0, 0, 0.10);
+            border-radius: 1rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-card {
+                border-color: rgba(255, 255, 255, 0.12);
+                background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(17, 24, 39, 0.88));
+                box-shadow: none;
+            }
+        }
+
+        .ops-backup-settings-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .ops-backup-settings-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .55rem;
+            border-radius: 999px;
+            background: rgba(14, 165, 233, 0.10);
+            color: #0f7490;
+            font-size: .6875rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            text-transform: uppercase;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-kicker {
+                background: rgba(14, 165, 233, 0.18);
+                color: #7dd3fc;
+            }
+        }
+
+        .ops-backup-settings-title {
+            margin-top: .15rem;
+            font-size: .95rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-title {
+                color: #f9fafb;
+            }
+        }
+
+        .ops-backup-settings-meta {
+            margin-top: .25rem;
+            font-size: .75rem;
+            line-height: 1.45;
+            color: #6b7280;
+            max-width: 56rem;
+        }
+
+        .ops-backup-settings-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-top: .75rem;
+        }
+
+        .ops-backup-settings-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            border-radius: 999px;
+            padding: .3rem .6rem;
+            background: rgba(14, 165, 233, 0.10);
+            color: #0f7490;
+            font-size: .6875rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            text-transform: uppercase;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-chip {
+                background: rgba(14, 165, 233, 0.18);
+                color: #7dd3fc;
+            }
+        }
+
+        .ops-backup-settings-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .ops-backup-settings-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .ops-backup-settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ops-backup-field {
+            display: grid;
+            gap: .35rem;
+        }
+
+        .ops-backup-field-label {
+            font-size: .75rem;
+            font-weight: 700;
+            color: #374151;
+            line-height: 1.2;
+        }
+
+        .ops-backup-input {
+            width: 100%;
+            border: 1px solid rgba(0, 0, 0, .12);
+            border-radius: .75rem;
+            padding: .85rem .9rem;
+            font-size: .875rem;
+            background: rgba(255, 255, 255, .96);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-input {
+                border-color: rgba(255, 255, 255, .14);
+                background: rgba(17, 24, 39, .75);
+                color: #f9fafb;
+            }
+        }
+
+        .ops-backup-help {
+            font-size: .6875rem;
+            color: #6b7280;
+            line-height: 1.4;
+        }
     </style>
 
     @php
@@ -425,9 +573,99 @@
                     </div>
                 </div>
 
+                <div wire:loading.flex wire:target="createPgBackup, rotatePgBackups" style="margin-bottom:1rem; font-size:.75rem; color:#6b7280;">
+                    Выполняется операция с бэкапом, это может занять время.
+                </div>
+
                 {{-- Действия --}}
                 <div style="margin-bottom:1.5rem;">
-                    <x-filament::actions :actions="$this->getPgBackupActions()" :alignment="'start'" />
+                    <div class="ops-backup-settings-card">
+                        <div class="ops-backup-settings-head">
+                            <div>
+                                <div class="ops-backup-settings-kicker">Технические параметры</div>
+                                <p class="ops-backup-settings-title">Настройки бэкапов</p>
+                                <p class="ops-backup-settings-meta">
+                                    Управляют тем, как создается бэкап и как дальше применяется ротация.
+                                    Параметры вступают в силу сразу для ручной кнопки и scheduler.
+                                </p>
+                                <div class="ops-backup-settings-chip-row">
+                                    <span class="ops-backup-settings-chip">pg_dump</span>
+                                    <span class="ops-backup-settings-chip">ручной запуск</span>
+                                    <span class="ops-backup-settings-chip">scheduler</span>
+                                </div>
+                            </div>
+
+                            <x-filament::button
+                                wire:click="savePgBackupSettings"
+                                wire:loading.attr="disabled"
+                                wire:target="savePgBackupSettings"
+                                color="primary"
+                                icon="heroicon-o-check"
+                                size="sm"
+                            >
+                                Сохранить
+                            </x-filament::button>
+                        </div>
+
+                        <div class="ops-backup-settings-grid">
+                            <label class="ops-backup-field">
+                                <span class="ops-backup-field-label">Путь к pg_dump</span>
+                                <input
+                                    class="ops-backup-input"
+                                    type="text"
+                                    wire:model.defer="pgBackupSettings.dump_binary"
+                                    placeholder="Автоопределение"
+                                >
+                                <span class="ops-backup-help">Если пусто, используется путь из Laragon или `PATH`.</span>
+                            </label>
+
+                            <label class="ops-backup-field">
+                                <span class="ops-backup-field-label">Сжимать старше, дней</span>
+                                <input
+                                    class="ops-backup-input"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    wire:model.defer="pgBackupSettings.compress_after_days"
+                                >
+                            </label>
+
+                            <label class="ops-backup-field">
+                                <span class="ops-backup-field-label">Удалять архивы старше, дней</span>
+                                <input
+                                    class="ops-backup-input"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    wire:model.defer="pgBackupSettings.delete_archive_after_days"
+                                >
+                            </label>
+                        </div>
+                    </div>
+                </div>                <div style="margin-bottom:1.5rem; display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                    <x-filament::button
+                        wire:click="createPgBackup"
+                        wire:loading.attr="disabled"
+                        wire:target="createPgBackup"
+                        color="primary"
+                        icon="heroicon-m-arrow-down-tray"
+                    >
+                        Создать бэкап
+                    </x-filament::button>
+
+                    <x-filament::button
+                        wire:click="rotatePgBackups({{ (int) $pgBackupDefaultsLocal['compressAfterDays'] }}, {{ (int) $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }})"
+                        wire:loading.attr="disabled"
+                        wire:target="rotatePgBackups"
+                        color="warning"
+                        icon="heroicon-m-arrow-path"
+                    >
+                        Ротация сейчас
+                    </x-filament::button>
+                </div>
+
+                <div wire:loading.flex wire:target="createPgBackup, rotatePgBackups" style="margin-bottom:1rem; font-size:.75rem; color:#6b7280;">
+                    Выполняется операция с бэкапом, это может занять время.
                 </div>
 
                 {{-- Список файлов --}}
@@ -490,6 +728,10 @@
                             <p style="font-size:.8125rem; color:#6b7280;">Бэкапы ещё не создавались</p>
                         </div>
                     @endif
+                </div>
+
+                <div wire:loading.flex wire:target="createPgBackup, rotatePgBackups" style="margin-bottom:1rem; font-size:.75rem; color:#6b7280;">
+                    Выполняется операция с бэкапом, это может занять время.
                 </div>
 
                 {{-- Предпросмотр ротации (скрыт по умолчанию) --}}

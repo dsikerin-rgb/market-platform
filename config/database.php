@@ -61,6 +61,7 @@ return [
             'database' => env('DB_DATABASE', 'market'),
             'username' => env('DB_USERNAME'),
             'password' => env('DB_PASSWORD'),
+            'dump_binary' => env('PG_DUMP_PATH'),
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,

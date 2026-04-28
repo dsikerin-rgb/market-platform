@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Support\AdminPanelImpersonation;
+use App\Services\PostgresBackupService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -37,8 +38,6 @@ class OpsDiagnostics extends Page
 
     private const TELESCOPE_DEFAULT_ENABLE_MINUTES = 30;
 
-    private const PG_BACKUP_COMPRESS_AFTER_DAYS = 2;
-    private const PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS = 60;
 
     /**
      * Импорт "подложки" карты из JSON (market_map_extract_*.json).
@@ -61,6 +60,30 @@ class OpsDiagnostics extends Page
     protected static ?string $navigationLabel = 'Диагностика';
     protected static ?string $title = 'Диагностика (Ops)';
 
+    /**
+     * @var array<string, mixed>
+     */
+    public array $pgBackupSettings = [];
+
+    /**
+     * @var array<string, mixed>
+     */
+    public array $pgBackupStatus = [];
+
+    /**
+     * @var array<int, array<string, mixed>>
+     */
+    public array $pgBackupFiles = [];
+
+    /**
+     * @var array<string, array<int, string>>
+     */
+    public array $pgBackupPreview = [
+        'compress' => [],
+        'deleteDuplicates' => [],
+        'deleteArchives' => [],
+    ];
+
     public static function canAccess(): bool
     {
         $user = AdminPanelImpersonation::resolveAdminUser(Filament::auth()->user());
@@ -79,6 +102,11 @@ class OpsDiagnostics extends Page
     public static function shouldRegisterNavigation(): bool
     {
         return static::canAccess();
+    }
+
+    public function mount(): void
+    {
+        $this->refreshPgBackupState();
     }
 
     /**
@@ -217,17 +245,11 @@ class OpsDiagnostics extends Page
         $mapStats = $this->getMapShapesStatsBestEffort();
 
         // PostgreSQL backups
+        $pgBackupSettings = $this->pgBackupSettings ?: $this->getPgBackupSettings();
         $pgBackupDefaults = [
-            'compressAfterDays' => self::PG_BACKUP_COMPRESS_AFTER_DAYS,
-            'deleteArchiveAfterDays' => self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS,
+            'compressAfterDays' => (int) $pgBackupSettings['compress_after_days'],
+            'deleteArchiveAfterDays' => (int) $pgBackupSettings['delete_archive_after_days'],
         ];
-
-        $pgBackupStatus = $this->getPgBackupStatus();
-        $pgBackupFiles = $this->getPgBackupFiles();
-        $pgBackupPreview = $this->getPgBackupRotationPreview(
-            self::PG_BACKUP_COMPRESS_AFTER_DAYS,
-            self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
-        );
 
         return [
             'canUseOpsTools' => true,
@@ -259,9 +281,13 @@ class OpsDiagnostics extends Page
 
             // PostgreSQL backups
             'pgBackupDefaults' => $pgBackupDefaults,
-            'pgBackupStatus' => $pgBackupStatus,
-            'pgBackupFiles' => $pgBackupFiles,
-            'pgBackupPreview' => $pgBackupPreview,
+            'pgBackupSettings' => $pgBackupSettings,
+            'pgBackupStatus' => $this->pgBackupStatus ?: $this->getPgBackupStatus(),
+            'pgBackupFiles' => $this->pgBackupFiles ?: $this->getPgBackupFiles(),
+            'pgBackupPreview' => $this->pgBackupPreview ?: $this->getPgBackupRotationPreview(
+                (int) $pgBackupSettings['compress_after_days'],
+                (int) $pgBackupSettings['delete_archive_after_days']
+            ),
         ];
     }
 
@@ -290,13 +316,13 @@ class OpsDiagnostics extends Page
                     . 'Сжатие *.sql старше %d дней (если нет *.sql.gz), '
                     . 'удаление дублей *.sql при наличии *.sql.gz, '
                     . 'удаление архивов *.sql.gz старше %d дней.',
-                    self::PG_BACKUP_COMPRESS_AFTER_DAYS,
-                    self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
+                    (int) $this->getPgBackupSettings()['compress_after_days'],
+                    (int) $this->getPgBackupSettings()['delete_archive_after_days']
                 ))
                 ->action(function (): void {
                     $this->rotatePgBackups(
-                        self::PG_BACKUP_COMPRESS_AFTER_DAYS,
-                        self::PG_BACKUP_DELETE_ARCHIVES_AFTER_DAYS
+                        (int) $this->getPgBackupSettings()['compress_after_days'],
+                        (int) $this->getPgBackupSettings()['delete_archive_after_days']
                     );
                 }),
         ];
@@ -305,141 +331,93 @@ class OpsDiagnostics extends Page
     public function createPgBackup(): void
     {
         $this->ensureSuperAdmin();
+        $result = $this->postgresBackupService()->createBackup();
 
-        $backupDir = storage_path('app/backups');
-        File::ensureDirectoryExists($backupDir);
-
-        $dbHost = (string) config('database.connections.pgsql.host', 'localhost');
-        $dbPort = (int) config('database.connections.pgsql.port', 5432);
-        $dbName = (string) config('database.connections.pgsql.database');
-        $dbUser = (string) config('database.connections.pgsql.username');
-
-        if ($dbName === '') {
-            Notification::make()
-                ->title('PostgreSQL БД не настроена')
-                ->body('Параметр database.connections.pgsql.database пуст.')
-                ->danger()
-                ->send();
-
-            return;
-        }
-
-        $env = (string) config('app.env');
-        $timestamp = now()->format('Ymd_His');
-        $fileName = "database_{$env}_{$timestamp}.sql";
-        $targetPath = $backupDir . DIRECTORY_SEPARATOR . $fileName;
-
-        $pgDumpCmd = sprintf(
-            'PGPASSWORD=%s pg_dump -h %s -p %d -U %s -F p -f %s %s 2>&1',
-            escapeshellarg((string) config('database.connections.pgsql.password')),
-            escapeshellarg($dbHost),
-            $dbPort,
-            escapeshellarg($dbUser),
-            escapeshellarg($targetPath),
-            escapeshellarg($dbName)
-        );
-
-        $result = Process::timeout(300)->run($pgDumpCmd);
-
-        if (! $result->successful() || ! is_file($targetPath) || filesize($targetPath) <= 0) {
-            File::delete($targetPath);
-
+        if (! ($result['success'] ?? false)) {
             Notification::make()
                 ->title('Не удалось создать бэкап')
-                ->body($result->errorOutput() ?: 'pg_dump завершился с ошибкой.')
+                ->body((string) ($result['error'] ?? 'pg_dump завершился с ошибкой.'))
                 ->danger()
                 ->send();
 
             return;
         }
-
-        $size = File::size($targetPath);
 
         Notification::make()
             ->title('Бэкап PostgreSQL создан')
             ->body(sprintf(
                 "%s\nРазмер: %s",
-                $fileName,
-                $this->formatBytes($size)
+                (string) $result['fileName'],
+                (string) $result['sizeHuman']
             ))
             ->success()
             ->send();
 
+        $this->refreshPgBackupState();
         $this->dispatch('$refresh');
     }
 
     public function rotatePgBackups(int $compressAfterDays, int $deleteArchiveAfterDays): void
     {
         $this->ensureSuperAdmin();
+        $result = $this->postgresBackupService()->rotateBackups($compressAfterDays, $deleteArchiveAfterDays);
 
-        $backupDir = storage_path('app/backups');
-
-        if (! is_dir($backupDir)) {
+        if (! ($result['success'] ?? false)) {
             Notification::make()
-                ->title('Директория бэкапов не найдена')
-                ->body("Отсутствует: {$backupDir}")
-                ->warning()
+                ->title('Ошибка ротации бэкапов')
+                ->body((string) ($result['error'] ?? 'Не удалось выполнить ротацию.'))
+                ->danger()
                 ->send();
 
             return;
         }
 
-        $compressAfterDays = max(0, $compressAfterDays);
-        $deleteArchiveAfterDays = max(0, $deleteArchiveAfterDays);
+        Notification::make()
+            ->title('Ротация выполнена')
+            ->body(sprintf(
+                "Сжато: %d\nУдалено дублей: %d\nУдалено архивов: %d",
+                (int) ($result['compressed'] ?? 0),
+                (int) ($result['deletedDuplicates'] ?? 0),
+                (int) ($result['deletedArchives'] ?? 0)
+            ))
+            ->success()
+            ->send();
 
-        $candidates = $this->getPgBackupRotationCandidates(
-            $compressAfterDays,
-            $deleteArchiveAfterDays
-        );
+        $this->refreshPgBackupState();
+        $this->dispatch('$refresh');
+    }
 
-        $compressed = 0;
-        $deletedDuplicates = 0;
-        $deletedArchives = 0;
+    /**
+     * @return array{
+     *   dump_binary:string,
+     *   compress_after_days:int,
+     *   delete_archive_after_days:int
+     * }
+     */
+    private function getPgBackupSettings(): array
+    {
+        return $this->postgresBackupService()->getSettings();
+    }
 
-        try {
-            foreach ($candidates['compress'] as $sqlPath) {
-                $gzPath = $sqlPath . '.gz';
+    public function savePgBackupSettings(): void
+    {
+        $this->ensureSuperAdmin();
 
-                if (is_file($gzPath)) {
-                    continue;
-                }
+        $this->pgBackupSettings = [
+            'dump_binary' => trim((string) ($this->pgBackupSettings['dump_binary'] ?? '')),
+            'compress_after_days' => max(0, (int) ($this->pgBackupSettings['compress_after_days'] ?? 2)),
+            'delete_archive_after_days' => max(0, (int) ($this->pgBackupSettings['delete_archive_after_days'] ?? 60)),
+        ];
 
-                if ($this->gzipFile($sqlPath, $gzPath)) {
-                    $compressed++;
-                }
-            }
+        app(PostgresBackupService::class)->saveSettings($this->pgBackupSettings);
 
-            foreach ($candidates['deleteDuplicates'] as $duplicatePath) {
-                if (File::delete($duplicatePath)) {
-                    $deletedDuplicates++;
-                }
-            }
+        Notification::make()
+            ->title('Настройки бэкапов сохранены')
+            ->success()
+            ->send();
 
-            foreach ($candidates['deleteArchives'] as $archivePath) {
-                if (File::delete($archivePath)) {
-                    $deletedArchives++;
-                }
-            }
-
-            Notification::make()
-                ->title('Ротация выполнена')
-                ->body(sprintf(
-                    "Сжато: %d\nУдалено дублей: %d\nУдалено архивов: %d",
-                    $compressed,
-                    $deletedDuplicates,
-                    $deletedArchives
-                ))
-                ->success()
-                ->send();
-
-            $this->dispatch('$refresh');
-        } catch (Throwable $e) {
-            Notification::make()
-                ->title('Ошибка ротации бэкапов')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
+        $this->refreshPgBackupState();
+        $this->dispatch('$refresh');
     }
 
     private function getPgBackupStatus(): array
@@ -548,7 +526,24 @@ class OpsDiagnostics extends Page
             ->success()
             ->send();
 
+        $this->refreshPgBackupState();
         $this->dispatch('$refresh');
+    }
+
+    private function refreshPgBackupState(): void
+    {
+        $this->pgBackupSettings = $this->getPgBackupSettings();
+        $this->pgBackupStatus = $this->getPgBackupStatus();
+        $this->pgBackupFiles = $this->getPgBackupFiles();
+        $this->pgBackupPreview = $this->getPgBackupRotationPreview(
+            (int) $this->pgBackupSettings['compress_after_days'],
+            (int) $this->pgBackupSettings['delete_archive_after_days']
+        );
+    }
+
+    private function postgresBackupService(): PostgresBackupService
+    {
+        return app(PostgresBackupService::class);
     }
 
     /**
