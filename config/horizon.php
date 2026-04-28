@@ -161,6 +161,18 @@ return [
             'timeout' => 60,
             'nice' => 0,
         ],
+        'supervisor-backups' => [
+            'connection' => 'redis',
+            'queue' => ['backups'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 1,
+            'timeout' => 1800,
+            'nice' => 0,
+        ],
     ],
 
     /*
@@ -179,6 +191,10 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-backups' => [
+                'maxProcesses' => 1,
+                'timeout' => 1800,
+            ],
         ],
 
         'staging' => [
@@ -187,10 +203,17 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-backups' => [
+                'maxProcesses' => 1,
+                'timeout' => 1800,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
+                'maxProcesses' => 1,
+            ],
+            'supervisor-backups' => [
                 'maxProcesses' => 1,
             ],
         ],

@@ -111,6 +111,59 @@
             gap: 2rem;
         }
 
+        .ops-info-stack {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .ops-info-item {
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: .9rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(249, 250, 251, .94));
+            padding: .9rem 1rem;
+            font-size: .875rem;
+            line-height: 1.55;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-info-item {
+                border-color: rgba(255, 255, 255, .12);
+                background: linear-gradient(180deg, rgba(17, 24, 39, .98), rgba(17, 24, 39, .90));
+            }
+        }
+
+        .ops-info-item strong {
+            font-weight: 700;
+        }
+
+        .ops-command-stack {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .ops-command-group {
+            display: grid;
+            gap: .5rem;
+        }
+
+        .ops-command-title {
+            font-size: .875rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-command-title {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-command-help {
+            font-size: .75rem;
+            color: #6b7280;
+            line-height: 1.45;
+        }
+
         /* КОД-БЛОКИ: теперь ПЕРЕНОСЯТСЯ, не вылезают за экран */
         .ops-codeblock {
             border-radius: .75rem;
@@ -144,6 +197,385 @@
         .ops-muted {
             opacity: .85;
         }
+
+        .ops-backup-settings-card {
+            border: 1px solid rgba(0, 0, 0, 0.10);
+            border-radius: 1rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-card {
+                border-color: rgba(255, 255, 255, 0.12);
+                background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(17, 24, 39, 0.88));
+                box-shadow: none;
+            }
+        }
+
+        .ops-backup-settings-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .ops-backup-settings-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            padding: .25rem .55rem;
+            border-radius: 999px;
+            background: rgba(14, 165, 233, 0.10);
+            color: #0f7490;
+            font-size: .6875rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            text-transform: uppercase;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-kicker {
+                background: rgba(14, 165, 233, 0.18);
+                color: #7dd3fc;
+            }
+        }
+
+        .ops-backup-settings-title {
+            margin-top: .15rem;
+            font-size: .95rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-title {
+                color: #f9fafb;
+            }
+        }
+
+        .ops-backup-settings-meta {
+            margin-top: .25rem;
+            font-size: .75rem;
+            line-height: 1.45;
+            color: #6b7280;
+            max-width: 56rem;
+        }
+
+        .ops-backup-settings-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-top: .75rem;
+        }
+
+        .ops-backup-settings-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: .35rem;
+            border-radius: 999px;
+            padding: .3rem .6rem;
+            background: rgba(14, 165, 233, 0.10);
+            color: #0f7490;
+            font-size: .6875rem;
+            font-weight: 700;
+            letter-spacing: .02em;
+            text-transform: uppercase;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-settings-chip {
+                background: rgba(14, 165, 233, 0.18);
+                color: #7dd3fc;
+            }
+        }
+
+        .ops-backup-settings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            align-items: start;
+        }
+
+        @media (max-width: 640px) {
+            .ops-backup-settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ops-backup-field--wide {
+            grid-column: 1 / -1;
+        }
+
+        .ops-backup-field {
+            display: grid;
+            gap: .35rem;
+        }
+
+        .ops-backup-field-label {
+            font-size: .75rem;
+            font-weight: 700;
+            color: #374151;
+            line-height: 1.2;
+        }
+
+        .ops-backup-input {
+            width: 100%;
+            border: 1px solid rgba(0, 0, 0, .12);
+            border-radius: .75rem;
+            padding: .85rem .9rem;
+            font-size: .875rem;
+            background: rgba(255, 255, 255, .96);
+            min-height: 3.25rem;
+            box-sizing: border-box;
+        }
+
+        .ops-backup-input--compact {
+            width: min(100%, 8rem);
+            justify-self: start;
+            text-align: left;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-input {
+                border-color: rgba(255, 255, 255, .14);
+                background: rgba(17, 24, 39, .75);
+                color: #f9fafb;
+            }
+        }
+
+        .ops-backup-help {
+            font-size: .6875rem;
+            color: #6b7280;
+            line-height: 1.4;
+        }
+
+        .ops-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 1100px) {
+            .ops-stat-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .ops-stat-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ops-stat-card {
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: .95rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(249, 250, 251, .94));
+            padding: .95rem 1rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-stat-card {
+                border-color: rgba(255, 255, 255, .12);
+                background: linear-gradient(180deg, rgba(17, 24, 39, .98), rgba(17, 24, 39, .90));
+            }
+        }
+
+        .ops-stat-label {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #6b7280;
+        }
+
+        .ops-stat-value {
+            margin-top: .25rem;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+            overflow-wrap: anywhere;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-stat-value {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-stat-subtext {
+            margin-top: .15rem;
+            font-size: .75rem;
+            color: #94a3b8;
+            overflow-wrap: anywhere;
+        }
+
+        .ops-backup-actions-row {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            align-items: center;
+        }
+
+        .ops-loading-note {
+            margin-bottom: 1rem;
+            font-size: .75rem;
+            color: #6b7280;
+        }
+
+        .ops-backup-files-section {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .ops-backup-files-title {
+            font-size: .875rem;
+            font-weight: 700;
+            color: #374151;
+        }
+
+        .ops-backup-files-list {
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: 1rem;
+            overflow: hidden;
+            background: rgba(255, 255, 255, .92);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-files-list {
+                border-color: rgba(255, 255, 255, .12);
+                background: rgba(17, 24, 39, .82);
+            }
+        }
+
+        .ops-backup-file-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .75rem;
+            padding: .85rem 1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, .06);
+        }
+
+        .ops-backup-file-row:last-child {
+            border-bottom: 0;
+        }
+
+        .ops-backup-file-meta {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .ops-backup-file-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: .625rem;
+            background: rgba(0, 0, 0, .06);
+            flex-shrink: 0;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-file-icon {
+                background: rgba(255, 255, 255, .08);
+            }
+        }
+
+        .ops-backup-file-name {
+            font-size: .8125rem;
+            font-weight: 600;
+            color: #0f172a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-file-name {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-backup-file-meta-text {
+            font-size: .6875rem;
+            color: #6b7280;
+        }
+
+        .ops-backup-file-actions {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            flex-shrink: 0;
+        }
+
+        .ops-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed rgba(0, 0, 0, .15);
+            border-radius: 1rem;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-empty-state {
+                border-color: rgba(255, 255, 255, .18);
+            }
+        }
+
+        .ops-toggle-preview {
+            margin-top: 1.25rem;
+        }
+
+        .ops-toggle-preview-button {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            border-radius: .75rem;
+            border: 1px solid rgba(0, 0, 0, .10);
+            background: rgba(0, 0, 0, .03);
+            padding: .6rem .85rem;
+            font-size: .8125rem;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-toggle-preview-button {
+                border-color: rgba(255, 255, 255, .12);
+                background: rgba(255, 255, 255, .06);
+                color: #e5e7eb;
+            }
+        }
+
+        .ops-toggle-preview-panel {
+            margin-top: .75rem;
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: 1rem;
+            background: rgba(0, 0, 0, .03);
+            padding: 1rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-toggle-preview-panel {
+                border-color: rgba(255, 255, 255, .12);
+                background: rgba(255, 255, 255, .06);
+            }
+        }
     </style>
 
     @php
@@ -154,17 +586,22 @@
         $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
         $telescopeEnabledUntilHumanLocal = $telescopeEnabledUntilHuman ?? null;
 
+        $pgBackupSettingsLocal = $this->pgBackupSettings ?: ($pgBackupSettings ?? []);
         $pgBackupDefaultsLocal = $pgBackupDefaults ?? [
-            'compressAfterDays' => 2,
-            'deleteArchiveAfterDays' => 60,
+            'compressAfterDays' => isset($pgBackupSettingsLocal['compress_after_days'])
+                ? (int) $pgBackupSettingsLocal['compress_after_days']
+                : 2,
+            'deleteArchiveAfterDays' => isset($pgBackupSettingsLocal['delete_archive_after_days'])
+                ? (int) $pgBackupSettingsLocal['delete_archive_after_days']
+                : 60,
         ];
-        $pgBackupStatusLocal = $pgBackupStatus ?? [];
-        $pgBackupFilesLocal = $pgBackupFiles ?? [];
-        $pgBackupPreviewLocal = $pgBackupPreview ?? [
+        $pgBackupStatusLocal = $this->pgBackupStatus ?: ($pgBackupStatus ?? []);
+        $pgBackupFilesLocal = $this->pgBackupFiles ?: ($pgBackupFiles ?? []);
+        $pgBackupPreviewLocal = $this->pgBackupPreview ?: ($pgBackupPreview ?? [
             'compress' => [],
             'deleteDuplicates' => [],
             'deleteArchives' => [],
-        ];
+        ]);
     @endphp
 
     @if ($canViewIntegrationJournal && ! $canUseOpsTools)
@@ -346,6 +783,7 @@
                     <x-filament::button
                         icon="heroicon-m-arrow-path"
                         wire:click="clearCaches"
+                        title="Выполняет php artisan optimize:clear."
                     >
                         Очистить кэши
                     </x-filament::button>
@@ -356,6 +794,7 @@
                         icon="heroicon-m-play"
                         wire:click="enableTelescope30m"
                         :disabled="! $telescopeInstalled || $telescopeRecordingEnabledLocal"
+                        title="Включает запись Telescope на 30 минут и автоматически выключает её по TTL. Доступ только super-admin."
                     >
                         Включить Telescope (30 мин)
                     </x-filament::button>
@@ -387,6 +826,7 @@
                         icon="heroicon-m-trash"
                         wire:click="pruneTelescope"
                         :disabled="! $telescopeInstalled"
+                        title="Удаляет записи Telescope старше 48 часов, если Telescope установлен и таблицы доступны."
                     >
                         Очистить Telescope (48ч)
                     </x-filament::button>
@@ -394,52 +834,141 @@
             </x-filament::section>
 
             {{-- Бэкапы PostgreSQL --}}
-            <x-filament::section
-                heading="Бэкапы PostgreSQL"
-                description="Управление дампами базы данных и ротация архивов."
-            >
+            <div wire:poll.visible.15s="refreshPgBackupState">
+                <x-filament::section
+                    heading="Бэкапы PostgreSQL"
+                    description="Управление дампами базы данных и ротация архивов."
+                >
                 {{-- Статистика: 4 карточки в ряд --}}
-                <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1rem; margin-bottom:1.5rem;">
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">База данных</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
+                <div class="ops-stat-grid">
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">База данных</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
+                        <p class="ops-stat-subtext">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
                     </div>
 
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Бэкапы</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">Бэкапы</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
+                        <p class="ops-stat-subtext">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
                     </div>
 
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Последний бэкап</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">Последний бэкап</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
+                        <p class="ops-stat-subtext">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
                     </div>
 
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Диск</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">Диск</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
+                        <p class="ops-stat-subtext">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
                     </div>
+                </div>
+
+                <div class="ops-loading-note" wire:loading.flex wire:target="rotatePgBackups">
+                    Выполняется ротация бэкапов, это может занять время.
                 </div>
 
                 {{-- Действия --}}
                 <div style="margin-bottom:1.5rem;">
-                    <x-filament::actions :actions="$this->getPgBackupActions()" :alignment="'start'" />
+                    <div class="ops-backup-settings-card">
+                        <div class="ops-backup-settings-head">
+                            <div>
+                                <div class="ops-backup-settings-kicker">Технические параметры</div>
+                                <p class="ops-backup-settings-title">Настройки бэкапов</p>
+                                <p class="ops-backup-settings-meta">
+                                    Управляют тем, как создается бэкап и как дальше применяется ротация.
+                                    Параметры вступают в силу сразу для ручной кнопки и scheduler.
+                                </p>
+                                <div class="ops-backup-settings-chip-row">
+                                    <span class="ops-backup-settings-chip">pg_dump</span>
+                                    <span class="ops-backup-settings-chip">ручной запуск</span>
+                                    <span class="ops-backup-settings-chip">scheduler</span>
+                                </div>
+                            </div>
+
+                            <x-filament::button
+                                wire:click="savePgBackupSettings"
+                                wire:loading.attr="disabled"
+                                wire:target="savePgBackupSettings"
+                                color="primary"
+                                icon="heroicon-o-check"
+                                size="sm"
+                            >
+                                Сохранить
+                            </x-filament::button>
+                        </div>
+
+                        <div class="ops-backup-settings-grid">
+                            <label class="ops-backup-field ops-backup-field--wide">
+                                <span class="ops-backup-field-label">Путь к pg_dump</span>
+                                <input
+                                    class="ops-backup-input"
+                                    type="text"
+                                    wire:model.defer="pgBackupSettings.dump_binary"
+                                    placeholder="Автоопределение"
+                                >
+                                <span class="ops-backup-help">Если пусто, используется путь из Laragon или `PATH`.</span>
+                            </label>
+
+                            <label class="ops-backup-field">
+                                <span class="ops-backup-field-label">Сжимать старше, дней</span>
+                                <input
+                                    class="ops-backup-input ops-backup-input--compact"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    wire:model.defer="pgBackupSettings.compress_after_days"
+                                >
+                            </label>
+
+                            <label class="ops-backup-field">
+                                <span class="ops-backup-field-label">Удалять архивы старше, дней</span>
+                                <input
+                                    class="ops-backup-input ops-backup-input--compact"
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    wire:model.defer="pgBackupSettings.delete_archive_after_days"
+                                >
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ops-backup-actions-row">
+                    <x-filament::button
+                        wire:click="createPgBackup"
+                        wire:loading.attr="disabled"
+                        wire:target="createPgBackup"
+                        color="primary"
+                        icon="heroicon-m-arrow-down-tray"
+                    >
+                        Создать бэкап
+                    </x-filament::button>
+
+                    <x-filament::button
+                        wire:click="rotatePgBackups({{ (int) $pgBackupDefaultsLocal['compressAfterDays'] }}, {{ (int) $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }})"
+                        wire:loading.attr="disabled"
+                        wire:target="rotatePgBackups"
+                        color="warning"
+                        icon="heroicon-m-arrow-path"
+                    >
+                        Ротация сейчас
+                    </x-filament::button>
                 </div>
 
                 {{-- Список файлов --}}
-                <div style="display:grid; gap:.75rem;">
-                    <p style="font-size:.875rem; font-weight:600; color:#374151;">Файлы бэкапов</p>
+                <div class="ops-backup-files-section">
+                    <p class="ops-backup-files-title">Файлы бэкапов</p>
 
                     @if (! empty($pgBackupFilesLocal))
-                        <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; overflow:hidden;">
+                        <div class="ops-backup-files-list">
                             @foreach ($pgBackupFilesLocal as $idx => $file)
-                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding:.75rem 1rem; border-bottom:1px solid rgba(0,0,0,.06);{{ $idx === count($pgBackupFilesLocal) - 1 ? ' border-bottom:0;' : '' }}">
-                                    <div style="display:flex; align-items:center; gap:.75rem; flex:1; min-width:0;">
-                                        <div style="display:flex; align-items:center; justify-content:center; width:2.25rem; height:2.25rem; border-radius:.5rem; background:rgba(0,0,0,.06); flex-shrink:0;">
+                                <div class="ops-backup-file-row">
+                                    <div class="ops-backup-file-meta">
+                                        <div class="ops-backup-file-icon">
                                             @if ($file['type'] === 'gz')
                                                 <x-heroicon-o-archive-box style="width:1.125rem; height:1.125rem; color:#6b7280;" />
                                             @else
@@ -447,12 +976,12 @@
                                             @endif
                                         </div>
                                         <div style="min-width:0;">
-                                            <p style="font-size:.8125rem; font-weight:500; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $file['name'] }}</p>
-                                            <p style="font-size:.6875rem; color:#6b7280;">{{ $file['mtimeHuman'] }} · {{ $file['sizeHuman'] }}</p>
+                                            <p class="ops-backup-file-name">{{ $file['name'] }}</p>
+                                            <p class="ops-backup-file-meta-text">{{ $file['mtimeHuman'] }} · {{ $file['sizeHuman'] }}</p>
                                         </div>
                                     </div>
 
-                                    <div style="display:flex; align-items:center; gap:.5rem; flex-shrink:0;">
+                                    <div class="ops-backup-file-actions">
                                         <x-filament::badge :color="$file['type'] === 'gz' ? 'success' : 'gray'" size="sm">
                                             {{ $file['type'] === 'gz' ? 'GZIP' : 'SQL' }}
                                         </x-filament::badge>
@@ -483,7 +1012,7 @@
                             @endforeach
                         </div>
                     @else
-                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed rgba(0,0,0,.15); border-radius:.75rem; padding:2.5rem 1.5rem; text-align:center;">
+                        <div class="ops-empty-state">
                             <svg style="flex-shrink:0; width:2.5rem; height:2.5rem; max-width:2.5rem; max-height:2.5rem; color:#9ca3af; margin-bottom:.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                             </svg>
@@ -493,10 +1022,10 @@
                 </div>
 
                 {{-- Предпросмотр ротации (скрыт по умолчанию) --}}
-                <div x-data="{ open: false }" style="margin-top:1.5rem;">
+                <div class="ops-toggle-preview" x-data="{ open: false }">
                     <button
                         @click="open = ! open"
-                        style="display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.5rem .75rem; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
+                        class="ops-toggle-preview-button"
                     >
                         <!-- Fix: replaced x-heroicon-o-chevron-down with inline svg to avoid Blade :class error -->
                         <svg style="flex-shrink:0; width:1rem; height:1rem; max-width:1rem; max-height:1rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -505,7 +1034,7 @@
                         <span>Предпросмотр ротации</span>
                     </button>
 
-                    <div x-show="open" x-collapse style="margin-top:.75rem; border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(0,0,0,.03); padding:1rem;">
+                    <div x-show="open" x-collapse class="ops-toggle-preview-panel">
                         <p style="font-size:.6875rem; color:#6b7280; margin-bottom:.75rem;">
                             Сжатие старше {{ $pgBackupDefaultsLocal['compressAfterDays'] }} дн., удаление архивов старше {{ $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.
                         </p>
@@ -550,39 +1079,20 @@
                         </div>
                     </div>
                 </div>
-            </x-filament::section>
+                </x-filament::section>
+            </div>
         </div>
 
         {{-- Правая колонка: Примечания + Команды --}}
         <div class="ops-notes">
             <div class="ops-side-stack">
-                <x-filament::section heading="Примечания">
-                    <div style="display:grid; gap:.75rem; font-size:.875rem; line-height:1.5;">
-                        <p>
-                            <span style="font-weight:600;">Очистить кэши</span> выполняет
-                            <span class="ops-inline-code">php artisan optimize:clear</span>.
-                        </p>
-
-                        <p>
-                            <span style="font-weight:600;">Включить Telescope</span> включает <span style="font-weight:600;">запись</span>
-                            на 30 минут и автоматически выключает её по TTL.
-                            Доступ к UI ограничен ролью <span class="ops-inline-code">super-admin</span>.
-                        </p>
-
-                        <p>
-                            <span style="font-weight:600;">Очистить Telescope</span> удаляет записи старше 48 часов
-                            (если Telescope установлен и таблицы доступны).
-                        </p>
-                    </div>
-                </x-filament::section>
-
                 <x-filament::section
                     heading="Полезные команды"
                     description="Шпаргалка для сервера. Выполнять в терминале, не в браузере."
                 >
-                    <div style="display:grid; gap: 1rem;">
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                    <div class="ops-command-stack">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Локации проекта
                             </div>
                             <div class="ops-codeblock">
@@ -594,8 +1104,8 @@ cd /var/www/market/current</code></pre>
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Проверить версию (коммит) на окружении
                             </div>
                             <div class="ops-codeblock">
@@ -604,8 +1114,8 @@ sudo -u www-data git -C /var/www/market/current log -1 --oneline</code></pre>
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Обновить окружение до последнего main (без merge)
                             </div>
                             <div class="ops-codeblock">
@@ -619,8 +1129,8 @@ sudo -u www-data git -C /var/www/market/current pull --ff-only origin main</code
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Логи/блокировки деплоя staging
                             </div>
                             <div class="ops-codeblock">
@@ -632,8 +1142,8 @@ ls -la /var/www/market-staging/current/storage/framework/deploy-market-staging.l
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Очистка кешей Laravel (ручной вариант)
                             </div>
                             <div class="ops-codeblock">
