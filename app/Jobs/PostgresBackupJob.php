@@ -45,10 +45,6 @@ class PostgresBackupJob implements ShouldQueue
                 throw $e;
             }
 
-            Log::warning('Redis queue unavailable, running backup synchronously in local', [
-                'message' => $e->getMessage(),
-            ]);
-
             $job->handle(app(PostgresBackupService::class));
         }
     }
