@@ -45,11 +45,11 @@ class PostgresBackupJob implements ShouldQueue
                 throw $e;
             }
 
-            Log::warning('Redis queue unavailable, falling back to database queue', [
+            Log::warning('Redis queue unavailable, running backup synchronously in local', [
                 'message' => $e->getMessage(),
             ]);
 
-            Queue::connection(config('queue.default', 'database'))->pushOn('default', $job);
+            $job->handle(app(PostgresBackupService::class));
         }
     }
 
