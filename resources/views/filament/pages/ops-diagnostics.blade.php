@@ -580,17 +580,22 @@
         $telescopeEnabledUntilLocal = $telescopeEnabledUntil ?? null;
         $telescopeEnabledUntilHumanLocal = $telescopeEnabledUntilHuman ?? null;
 
+        $pgBackupSettingsLocal = $this->pgBackupSettings ?: ($pgBackupSettings ?? []);
         $pgBackupDefaultsLocal = $pgBackupDefaults ?? [
-            'compressAfterDays' => 2,
-            'deleteArchiveAfterDays' => 60,
+            'compressAfterDays' => isset($pgBackupSettingsLocal['compress_after_days'])
+                ? (int) $pgBackupSettingsLocal['compress_after_days']
+                : 2,
+            'deleteArchiveAfterDays' => isset($pgBackupSettingsLocal['delete_archive_after_days'])
+                ? (int) $pgBackupSettingsLocal['delete_archive_after_days']
+                : 60,
         ];
-        $pgBackupStatusLocal = $pgBackupStatus ?? [];
-        $pgBackupFilesLocal = $pgBackupFiles ?? [];
-        $pgBackupPreviewLocal = $pgBackupPreview ?? [
+        $pgBackupStatusLocal = $this->pgBackupStatus ?: ($pgBackupStatus ?? []);
+        $pgBackupFilesLocal = $this->pgBackupFiles ?: ($pgBackupFiles ?? []);
+        $pgBackupPreviewLocal = $this->pgBackupPreview ?: ($pgBackupPreview ?? [
             'compress' => [],
             'deleteDuplicates' => [],
             'deleteArchives' => [],
-        ];
+        ]);
     @endphp
 
     @if ($canViewIntegrationJournal && ! $canUseOpsTools)
