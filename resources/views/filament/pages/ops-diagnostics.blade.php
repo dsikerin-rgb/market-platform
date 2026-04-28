@@ -111,6 +111,59 @@
             gap: 2rem;
         }
 
+        .ops-info-stack {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .ops-info-item {
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: .9rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(249, 250, 251, .94));
+            padding: .9rem 1rem;
+            font-size: .875rem;
+            line-height: 1.55;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-info-item {
+                border-color: rgba(255, 255, 255, .12);
+                background: linear-gradient(180deg, rgba(17, 24, 39, .98), rgba(17, 24, 39, .90));
+            }
+        }
+
+        .ops-info-item strong {
+            font-weight: 700;
+        }
+
+        .ops-command-stack {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .ops-command-group {
+            display: grid;
+            gap: .5rem;
+        }
+
+        .ops-command-title {
+            font-size: .875rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-command-title {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-command-help {
+            font-size: .75rem;
+            color: #6b7280;
+            line-height: 1.45;
+        }
+
         /* КОД-БЛОКИ: теперь ПЕРЕНОСЯТСЯ, не вылезают за экран */
         .ops-codeblock {
             border-radius: .75rem;
@@ -242,20 +295,19 @@
 
         .ops-backup-settings-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 1rem;
-        }
-
-        @media (max-width: 900px) {
-            .ops-backup-settings-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
+            align-items: start;
         }
 
         @media (max-width: 640px) {
             .ops-backup-settings-grid {
                 grid-template-columns: 1fr;
             }
+        }
+
+        .ops-backup-field--wide {
+            grid-column: 1 / -1;
         }
 
         .ops-backup-field {
@@ -277,6 +329,8 @@
             padding: .85rem .9rem;
             font-size: .875rem;
             background: rgba(255, 255, 255, .96);
+            min-height: 3.25rem;
+            box-sizing: border-box;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -832,7 +886,7 @@
                         </div>
 
                         <div class="ops-backup-settings-grid">
-                            <label class="ops-backup-field">
+                            <label class="ops-backup-field ops-backup-field--wide">
                                 <span class="ops-backup-field-label">Путь к pg_dump</span>
                                 <input
                                     class="ops-backup-input"
@@ -1017,22 +1071,20 @@
         <div class="ops-notes">
             <div class="ops-side-stack">
                 <x-filament::section heading="Примечания">
-                    <div style="display:grid; gap:.75rem; font-size:.875rem; line-height:1.5;">
-                        <p>
-                            <span style="font-weight:600;">Очистить кэши</span> выполняет
-                            <span class="ops-inline-code">php artisan optimize:clear</span>.
-                        </p>
+                    <div class="ops-info-stack">
+                        <div class="ops-info-item">
+                            <strong>Очистить кэши</strong> выполняет <span class="ops-inline-code">php artisan optimize:clear</span>.
+                        </div>
 
-                        <p>
-                            <span style="font-weight:600;">Включить Telescope</span> включает <span style="font-weight:600;">запись</span>
-                            на 30 минут и автоматически выключает её по TTL.
+                        <div class="ops-info-item">
+                            <strong>Включить Telescope</strong> включает <strong>запись</strong> на 30 минут и автоматически выключает её по TTL.
                             Доступ к UI ограничен ролью <span class="ops-inline-code">super-admin</span>.
-                        </p>
+                        </div>
 
-                        <p>
-                            <span style="font-weight:600;">Очистить Telescope</span> удаляет записи старше 48 часов
+                        <div class="ops-info-item">
+                            <strong>Очистить Telescope</strong> удаляет записи старше 48 часов
                             (если Telescope установлен и таблицы доступны).
-                        </p>
+                        </div>
                     </div>
                 </x-filament::section>
 
@@ -1040,9 +1092,9 @@
                     heading="Полезные команды"
                     description="Шпаргалка для сервера. Выполнять в терминале, не в браузере."
                 >
-                    <div style="display:grid; gap: 1rem;">
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                    <div class="ops-command-stack">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Локации проекта
                             </div>
                             <div class="ops-codeblock">
@@ -1054,8 +1106,8 @@ cd /var/www/market/current</code></pre>
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Проверить версию (коммит) на окружении
                             </div>
                             <div class="ops-codeblock">
@@ -1064,8 +1116,8 @@ sudo -u www-data git -C /var/www/market/current log -1 --oneline</code></pre>
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Обновить окружение до последнего main (без merge)
                             </div>
                             <div class="ops-codeblock">
@@ -1079,8 +1131,8 @@ sudo -u www-data git -C /var/www/market/current pull --ff-only origin main</code
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Логи/блокировки деплоя staging
                             </div>
                             <div class="ops-codeblock">
@@ -1092,8 +1144,8 @@ ls -la /var/www/market-staging/current/storage/framework/deploy-market-staging.l
                             </div>
                         </div>
 
-                        <div>
-                            <div class="ops-muted" style="font-size:.875rem; font-weight:600; margin-bottom:.5rem;">
+                        <div class="ops-command-group">
+                            <div class="ops-command-title">
                                 Очистка кешей Laravel (ручной вариант)
                             </div>
                             <div class="ops-codeblock">
