@@ -51,11 +51,19 @@ class PostgresBackupJob implements ShouldQueue
 
     public function handle(PostgresBackupService $service): void
     {
+        Log::channel('backups')->info('Postgres backup started', [
+            'rotate' => $this->rotate,
+            'compress_after_days' => $this->compressAfterDays,
+            'delete_archive_after_days' => $this->deleteArchiveAfterDays,
+        ]);
+
         $result = $service->createBackup();
 
         if (! ($result['success'] ?? false)) {
             throw new RuntimeException((string) ($result['error'] ?? 'Не удалось создать бэкап.'));
         }
+
+        $rotation = null;
 
         if ($this->rotate) {
             $rotation = $service->rotateBackups($this->compressAfterDays, $this->deleteArchiveAfterDays);
@@ -63,13 +71,25 @@ class PostgresBackupJob implements ShouldQueue
             if (! ($rotation['success'] ?? false)) {
                 throw new RuntimeException((string) ($rotation['error'] ?? 'Не удалось выполнить ротацию.'));
             }
-
         }
+
+        Log::channel('backups')->info('Postgres backup finished', [
+            'file_name' => $result['fileName'] ?? null,
+            'size_human' => $result['sizeHuman'] ?? null,
+            'rotate' => $this->rotate,
+            'compress_after_days' => $this->compressAfterDays,
+            'delete_archive_after_days' => $this->deleteArchiveAfterDays,
+            'rotation' => is_array($rotation) ? [
+                'compressed' => $rotation['compressed'] ?? 0,
+                'deleted_duplicates' => $rotation['deletedDuplicates'] ?? 0,
+                'deleted_archives' => $rotation['deletedArchives'] ?? 0,
+            ] : null,
+        ]);
     }
 
     public function failed(Throwable $e): void
     {
-        Log::error('Postgres backup job failed', [
+        Log::channel('backups')->error('Postgres backup failed', [
             'message' => $e->getMessage(),
             'rotate' => $this->rotate,
             'compress_after_days' => $this->compressAfterDays,

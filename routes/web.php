@@ -505,6 +505,20 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         return response()->download($path, $file);
     })->name('filament.admin.ops-diagnostics.download');
 
+    Route::get('/ops-diagnostics/backups-log', function () {
+        abort_if(! auth()->user()?->isSuperAdmin(), 403, 'Доступ запрещён.');
+
+        $files = collect(\Illuminate\Support\Facades\File::files(storage_path('logs')))
+            ->filter(static fn ($file): bool => str_starts_with($file->getFilename(), 'backups') && str_ends_with($file->getFilename(), '.log'))
+            ->sortByDesc(static fn ($file): int => $file->getMTime());
+
+        $latest = $files->first();
+
+        abort_if(! $latest, 404, 'Файл backup-log не найден.');
+
+        return response()->file($latest->getPathname());
+    })->name('filament.admin.ops-diagnostics.backup-log');
+
     /**
      * Единая логика выбора рынка + проверка доступа (просмотр карты).
      */

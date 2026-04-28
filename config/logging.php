@@ -73,6 +73,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'backups' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/backups.log'),
+            'level' => env('LOG_BACKUPS_LEVEL', 'info'),
+            'days' => env('LOG_BACKUPS_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

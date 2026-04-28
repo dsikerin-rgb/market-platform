@@ -85,6 +85,11 @@ class OpsDiagnostics extends Page
         'deleteArchives' => [],
     ];
 
+    /**
+     * @var array<string, mixed>
+     */
+    public array $pgBackupLog = [];
+
     public static function canAccess(): bool
     {
         $user = AdminPanelImpersonation::resolveAdminUser(Filament::auth()->user());
@@ -289,6 +294,7 @@ class OpsDiagnostics extends Page
                 (int) $pgBackupSettings['compress_after_days'],
                 (int) $pgBackupSettings['delete_archive_after_days']
             ),
+            'pgBackupLog' => $this->pgBackupLog ?: $this->getLatestPgBackupLog(),
         ];
     }
 
@@ -533,6 +539,75 @@ class OpsDiagnostics extends Page
             (int) $this->pgBackupSettings['compress_after_days'],
             (int) $this->pgBackupSettings['delete_archive_after_days']
         );
+        $this->pgBackupLog = $this->getLatestPgBackupLog();
+    }
+
+    /**
+     * @return array{exists:bool,name:?string,path:?string,mtime:?int,mtimeHuman:?string,size:?int,sizeHuman:?string}
+     */
+    private function getLatestPgBackupLog(): array
+    {
+        $logDir = storage_path('logs');
+
+        if (! is_dir($logDir)) {
+            return [
+                'exists' => false,
+                'name' => null,
+                'path' => null,
+                'mtime' => null,
+                'mtimeHuman' => null,
+                'size' => null,
+                'sizeHuman' => null,
+            ];
+        }
+
+        $files = [];
+
+        foreach (File::files($logDir) as $file) {
+            $name = $file->getFilename();
+
+            if (! str_starts_with($name, 'backups') || ! str_ends_with($name, '.log')) {
+                continue;
+            }
+
+            $mtime = (int) $file->getMTime();
+            $size = (int) $file->getSize();
+
+            $files[] = [
+                'name' => $name,
+                'path' => $file->getPathname(),
+                'mtime' => $mtime,
+                'mtimeHuman' => Carbon::createFromTimestamp($mtime)->toDateTimeString(),
+                'size' => $size,
+                'sizeHuman' => $this->formatBytes($size),
+            ];
+        }
+
+        usort($files, static fn (array $a, array $b): int => $b['mtime'] <=> $a['mtime']);
+
+        $latest = $files[0] ?? null;
+
+        if (! $latest) {
+            return [
+                'exists' => false,
+                'name' => null,
+                'path' => null,
+                'mtime' => null,
+                'mtimeHuman' => null,
+                'size' => null,
+                'sizeHuman' => null,
+            ];
+        }
+
+        return [
+            'exists' => true,
+            'name' => $latest['name'],
+            'path' => $latest['path'],
+            'mtime' => $latest['mtime'],
+            'mtimeHuman' => $latest['mtimeHuman'],
+            'size' => $latest['size'],
+            'sizeHuman' => $latest['sizeHuman'],
+        ];
     }
 
     private function postgresBackupService(): PostgresBackupService

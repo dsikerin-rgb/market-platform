@@ -602,6 +602,7 @@
             'deleteDuplicates' => [],
             'deleteArchives' => [],
         ]);
+        $pgBackupLogLocal = $this->pgBackupLog ?: ($pgBackupLog ?? []);
     @endphp
 
     @if ($canViewIntegrationJournal && ! $canUseOpsTools)
@@ -960,6 +961,25 @@
                 </div>
 
                 {{-- Список файлов --}}
+                @if (! empty($pgBackupLogLocal['exists']))
+                    <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:1rem;">
+                        <x-filament::button
+                            tag="a"
+                            href="{{ route('filament.admin.ops-diagnostics.backup-log') }}"
+                            icon="heroicon-o-document-text"
+                            size="sm"
+                            color="gray"
+                            labeled-from="sm"
+                        >
+                            Последний backup-log
+                        </x-filament::button>
+
+                        <span class="ops-backup-help">
+                            {{ $pgBackupLogLocal['name'] }} · {{ $pgBackupLogLocal['mtimeHuman'] }} · {{ $pgBackupLogLocal['sizeHuman'] }}
+                        </span>
+                    </div>
+                @endif
+
                 <div class="ops-backup-files-section">
                     <p class="ops-backup-files-title">Файлы бэкапов</p>
 
