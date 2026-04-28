@@ -520,7 +520,7 @@ class MarketSettings extends Page
                     ->columns(12),
 
                 Section::make('Карта рынка')
-                    ->description('PDF-карта для просмотра с масштабированием и перемещением.')
+                    ->description('PDF-подложка используется для отображения и разметки торговых мест на карте.')
                     ->schema([
                         Forms\Components\FileUpload::make('map_pdf_path')
                             ->label('Карта (PDF)')
@@ -1259,7 +1259,7 @@ class MarketSettings extends Page
 
         if (blank($this->data['map_pdf_path'] ?? null)) {
             return new HtmlString(
-                '<div class="text-sm text-gray-500">Сначала загрузите PDF-карту и сохраните настройки.</div>'
+                '<div class="text-sm text-gray-500">PDF-подложка не загружена</div>'
             );
         }
 
@@ -1272,7 +1272,7 @@ class MarketSettings extends Page
             'class="fi-btn fi-btn-color-primary fi-btn-size-md" ' .
             'style="display:inline-flex;align-items:center;justify-content:center;gap:.5rem;' .
             'padding:.55rem .95rem;border-radius:.75rem;font-weight:600;text-decoration:none;">' .
-                '<span class="fi-btn-label">&#1050;&#1072;&#1088;&#1090;&#1072;</span>' .
+                '<span class="fi-btn-label">&#1054;&#1090;&#1082;&#1088;&#1099;&#1090;&#1100; PDF</span>' .
             '</a>'
         );
     }
