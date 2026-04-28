@@ -1908,7 +1908,7 @@
 
         const toggleEditBtn = document.getElementById('toggleEdit');
         const editToolbarRow = toggleEditBtn?.closest('.toolbar-row') || null;
-        const mapEditGroup = toggleEditBtn?.closest('.toolbar-group') || null;
+        const mapEditGroup = toggleEditBtn?.closest('.toolbar-group--control-segmented') || null;
         const toolSelectBtn = document.getElementById('toolSelect');
         const toolRectBtn = document.getElementById('toolRect');
         const toolPolyBtn = document.getElementById('toolPoly');
@@ -2560,7 +2560,11 @@
           }
 
           if (mapEditGroup) {
-            mapEditGroup.style.display = reviewMode ? 'none' : 'inline-flex';
+            if (reviewMode) {
+              mapEditGroup.style.setProperty('display', 'none', 'important');
+            } else {
+              mapEditGroup.style.removeProperty('display');
+            }
           }
 
           if (reviewNavRow) {
