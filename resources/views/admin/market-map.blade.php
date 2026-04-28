@@ -4421,6 +4421,41 @@
           const withoutShapesSearchInput = document.getElementById('withoutShapesSearch');
           let withoutShapesPanelOpen = false;
           let withoutShapesSearchTimer = null;
+          const withoutShapesExpandedRows = new Set();
+
+          function syncWithoutShapesRowActions(spaceId, expanded) {
+            if (!withoutShapesPanelContent || !Number.isFinite(spaceId) || spaceId <= 0) return;
+
+            const row = withoutShapesPanelContent.querySelector('[data-without-shapes-row-id="' + String(Math.trunc(spaceId)) + '"]');
+            if (!row) return;
+
+            const actions = row.querySelector('[data-without-shapes-actions]');
+            const toggle = row.querySelector('[data-action="toggle-without-shape-actions"]');
+
+            if (actions) {
+              actions.style.display = expanded ? 'flex' : 'none';
+              actions.hidden = !expanded;
+              actions.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+            }
+
+            if (toggle instanceof HTMLButtonElement) {
+              toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+              toggle.textContent = expanded ? 'Скрыть действия ▴' : 'Действия ▾';
+            }
+          }
+
+          function setWithoutShapesRowExpanded(spaceId, expanded) {
+            const id = Number(Math.trunc(Number(spaceId) || 0));
+            if (!Number.isFinite(id) || id <= 0) return;
+
+            if (expanded) {
+              withoutShapesExpandedRows.add(id);
+            } else {
+              withoutShapesExpandedRows.delete(id);
+            }
+
+            syncWithoutShapesRowActions(id, expanded);
+          }
 
           async function loadWithoutShapesList(searchQuery = '') {
             if (!withoutShapesPanelContent) return;
@@ -4454,16 +4489,29 @@
                 const id = Number(item?.id || 0);
                 const number = String(item?.number || item?.code || '—').trim();
                 const tenantName = item?.tenant?.name ? String(item.tenant.name) : 'не указан';
-                const spaceUrl = '/admin/market-spaces/' + String(id) + '/edit';
-                return '<div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #e2e8f0;">' +
-                  '<div style="display: flex; justify-content: space-between; align-items: center;">' +
+                const tenantId = item?.tenant?.id ? Number(item.tenant.id) : (item?.tenant_id ? Number(item.tenant_id) : 0);
+                const isExpanded = withoutShapesExpandedRows.has(id);
+                const actionsId = 'without-shapes-actions-' + String(id);
+                let actions = '<div data-without-shapes-actions="' + String(id) + '" id="' + actionsId + '" style="display: ' + (isExpanded ? 'flex' : 'none') + '; flex-direction: column; gap: 8px; margin-top: 2px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; align-items: stretch;" aria-hidden="' + (isExpanded ? 'false' : 'true') + '">';
+
+                actions += '<button type="button" data-action="select-for-drawing" data-space-id="' + String(id) + '" data-space-number="' + escapeHtml(number) + '" data-space-tenant="' + escapeHtml(tenantName) + '" style="width: 100%; font-size: 13px; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 12px; cursor: pointer; font-weight: 600; text-align: left; transition: background 0.15s;">Выбрать для отрисовки</button>';
+                actions += '<a href="/admin/market-spaces/' + String(id) + '/edit" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; font-weight: 500; display: flex; align-items: center; justify-content: flex-start; text-decoration: none;">Открыть место →</a>';
+
+                if (tenantId && Number.isFinite(tenantId) && tenantId > 0) {
+                  actions += '<a href="/admin/tenants/' + String(tenantId) + '/edit" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; font-weight: 500; display: flex; align-items: center; justify-content: flex-start; text-decoration: none;">Открыть арендатора →</a>';
+                }
+
+                actions += '</div>';
+
+                return '<div data-without-shapes-row-id="' + String(id) + '" style="display: flex; flex-direction: column; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #e2e8f0;">' +
+                  '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">' +
                     '<div style="min-width: 0; flex: 1;">' +
                       '<div style="font-weight: 500; color: #1e293b; margin-bottom: 2px;">№' + escapeHtml(number) + '</div>' +
                       '<div style="font-size: 13px; color: #64748b;">' + escapeHtml(tenantName) + '</div>' +
                     '</div>' +
-                    '<a href="' + escapeHtml(spaceUrl) + '" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; text-decoration: none; white-space: nowrap; font-weight: 500;">Открыть место →</a>' +
+                    '<button type="button" data-action="toggle-without-shape-actions" data-space-id="' + String(id) + '" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" aria-controls="' + actionsId + '" style="font-size: 13px; color: #0f172a; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; cursor: pointer; font-weight: 600; white-space: nowrap;">' + (isExpanded ? 'Скрыть действия ▴' : 'Действия ▾') + '</button>' +
                   '</div>' +
-                  '<button type="button" data-action="select-for-drawing" data-space-id="' + String(id) + '" data-space-number="' + escapeHtml(number) + '" data-space-tenant="' + escapeHtml(tenantName) + '" style="font-size: 13px; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 500; text-align: center; transition: background 0.15s;">Выбрать для отрисовки</button>' +
+                  actions +
                 '</div>';
               });
 
@@ -4557,6 +4605,17 @@
             if (!(t instanceof HTMLElement)) return;
 
             const action = t.getAttribute('data-action');
+            if (action === 'toggle-without-shape-actions') {
+              const spaceId = Number(t.getAttribute('data-space-id') || 0);
+              if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                return;
+              }
+
+              const nextExpanded = !withoutShapesExpandedRows.has(Math.trunc(spaceId));
+              setWithoutShapesRowExpanded(spaceId, nextExpanded);
+              return;
+            }
+
             if (action === 'select-for-drawing') {
               const spaceId = Number(t.getAttribute('data-space-id') || 0);
               const spaceNumber = t.getAttribute('data-space-number') || '';
