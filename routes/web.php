@@ -2070,16 +2070,29 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ], 422);
         }
 
+        $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
+
+        if (SpaceReviewDecision::requiresReason($decision) && $reason === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Для этого решения нужен комментарий.',
+            ], 422);
+        }
+
         $payload = [
             'market_space_id' => (int) $space->id,
             'decision' => $decision,
         ];
         $duplicateResolutionPreview = null;
 
-        foreach (['shape_id', 'reason', 'observed_tenant_name', 'number', 'display_name'] as $field) {
+        foreach (['shape_id', 'observed_tenant_name', 'number', 'display_name'] as $field) {
             if (array_key_exists($field, $validated) && $validated[$field] !== null && $validated[$field] !== '') {
                 $payload[$field] = $validated[$field];
             }
+        }
+
+        if ($reason !== '') {
+            $payload['reason'] = $reason;
         }
 
         if ($decision === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION) {
