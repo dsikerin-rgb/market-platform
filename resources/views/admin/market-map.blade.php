@@ -4126,8 +4126,11 @@
               payload.shape_id = Math.trunc(shapeId);
             }
 
-            if (decision === 'occupancy_conflict' || decision === 'shape_not_found') {
-              const reason = window.prompt('Комментарий для ревизии', '');
+            if (decision === 'occupancy_conflict' || decision === 'shape_not_found' || decision === 'space_identity_needs_clarification') {
+              const reasonPrompt = decision === 'space_identity_needs_clarification'
+                ? 'Напишите, что хотели бы уточнить.'
+                : 'Комментарий для ревизии';
+              const reason = window.prompt(reasonPrompt, '');
               if (!reason || !String(reason).trim()) {
                 return;
               }

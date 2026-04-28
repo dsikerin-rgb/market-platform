@@ -85,6 +85,7 @@ final class SpaceReviewDecision
     public static function requiresReason(string $decision): bool
     {
         return in_array($decision, [
+            self::SPACE_IDENTITY_NEEDS_CLARIFICATION,
             self::OCCUPANCY_CONFLICT,
             self::TENANT_CHANGED_ON_SITE,
             self::SHAPE_NOT_FOUND,

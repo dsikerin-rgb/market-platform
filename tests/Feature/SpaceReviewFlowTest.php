@@ -183,7 +183,7 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame($user->id, $space->map_reviewed_by);
     }
 
-    public function test_review_decision_endpoint_creates_observed_operation_for_identity_clarification(): void
+    public function test_review_decision_endpoint_rejects_identity_clarification_without_reason(): void
     {
         $market = $this->createMarket();
         $this->actingAsSuperAdmin((int) $market->id);
@@ -202,6 +202,38 @@ class SpaceReviewFlowTest extends TestCase
             'market_space_id' => $space->id,
         ]);
 
+        $response->assertStatus(422)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('message', 'Для этого решения нужен комментарий.');
+
+        $this->assertDatabaseMissing('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+        ]);
+    }
+
+    public function test_review_decision_endpoint_creates_observed_operation_for_identity_clarification_with_reason(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'C-303',
+            'display_name' => 'Original name',
+            'status' => 'occupied',
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+            'market_space_id' => $space->id,
+            'reason' => 'Needs manual clarification',
+        ]);
+
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('mode', 'operation')
@@ -213,6 +245,18 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame('C-303', $space->number);
         $this->assertSame('Original name', $space->display_name);
         $this->assertSame('conflict', $space->map_review_status);
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('Needs manual clarification', $operation->comment);
+        $this->assertSame('Needs manual clarification', $operation->payload['reason'] ?? null);
     }
 
     public function test_review_results_page_renders_quick_observed_actions(): void
@@ -328,6 +372,7 @@ class SpaceReviewFlowTest extends TestCase
         $payload = [
             'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
             'market_space_id' => $space->id,
+            'reason' => 'Needs manual clarification',
         ];
 
         $firstResponse = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', $payload);
