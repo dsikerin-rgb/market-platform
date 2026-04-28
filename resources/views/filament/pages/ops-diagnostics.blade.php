@@ -986,7 +986,10 @@
                     @if (! empty($pgBackupFilesLocal))
                         <div class="ops-backup-files-list">
                             @foreach ($pgBackupFilesLocal as $idx => $file)
-                                <div class="ops-backup-file-row">
+                                <div
+                                    class="ops-backup-file-row"
+                                    wire:key="pg-backup-row-{{ $file['name'] }}"
+                                >
                                     <div class="ops-backup-file-meta">
                                         <div class="ops-backup-file-icon">
                                             @if ($file['type'] === 'gz')
