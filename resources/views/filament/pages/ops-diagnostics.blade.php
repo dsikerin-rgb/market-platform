@@ -823,10 +823,11 @@
             </x-filament::section>
 
             {{-- Бэкапы PostgreSQL --}}
-            <x-filament::section
-                heading="Бэкапы PostgreSQL"
-                description="Управление дампами базы данных и ротация архивов."
-            >
+            <div wire:poll.visible.15s="refreshPgBackupState">
+                <x-filament::section
+                    heading="Бэкапы PostgreSQL"
+                    description="Управление дампами базы данных и ротация архивов."
+                >
                 {{-- Статистика: 4 карточки в ряд --}}
                 <div class="ops-stat-grid">
                     <div class="ops-stat-card">
@@ -1067,7 +1068,8 @@
                         </div>
                     </div>
                 </div>
-            </x-filament::section>
+                </x-filament::section>
+            </div>
         </div>
 
         {{-- Правая колонка: Примечания + Команды --}}

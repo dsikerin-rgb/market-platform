@@ -524,7 +524,7 @@ class OpsDiagnostics extends Page
         $this->dispatch('$refresh');
     }
 
-    private function refreshPgBackupState(): void
+    public function refreshPgBackupState(): void
     {
         $this->pgBackupSettings = $this->getPgBackupSettings();
         $this->pgBackupStatus = $this->getPgBackupStatus();
