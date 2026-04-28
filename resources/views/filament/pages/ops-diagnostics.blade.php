@@ -333,6 +333,12 @@
             box-sizing: border-box;
         }
 
+        .ops-backup-input--compact {
+            width: min(100%, 8rem);
+            justify-self: start;
+            text-align: left;
+        }
+
         @media (prefers-color-scheme: dark) {
             .ops-backup-input {
                 border-color: rgba(255, 255, 255, .14);
@@ -909,7 +915,7 @@
                             <label class="ops-backup-field">
                                 <span class="ops-backup-field-label">Сжимать старше, дней</span>
                                 <input
-                                    class="ops-backup-input"
+                                    class="ops-backup-input ops-backup-input--compact"
                                     type="number"
                                     min="0"
                                     step="1"
@@ -920,7 +926,7 @@
                             <label class="ops-backup-field">
                                 <span class="ops-backup-field-label">Удалять архивы старше, дней</span>
                                 <input
-                                    class="ops-backup-input"
+                                    class="ops-backup-input ops-backup-input--compact"
                                     type="number"
                                     min="0"
                                     step="1"
