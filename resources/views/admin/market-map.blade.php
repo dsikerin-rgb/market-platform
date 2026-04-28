@@ -1498,9 +1498,6 @@
                   <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
                   <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
                   <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
-                  @if ($canOpenPdf)
-                    <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
-                  @endif
                 </div>
 
                 @if ($canEdit)
@@ -1686,7 +1683,7 @@
               type="text"
               placeholder="Поиск по номеру / названию / арендатору"
               aria-label="Поиск мест без фигур"
-              style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; font-size: 14px;"
+              style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; font-size: 14px; box-sizing: border-box; max-width: 100%;"
             />
           </div>
           <div id="withoutShapesPanelContent" style="flex: 1; overflow-y: auto; padding: 0;">
@@ -4521,6 +4518,17 @@
             if (e.key === 'Escape' && withoutShapesPanelOpen) {
               closeWithoutShapesPanel();
             }
+          });
+
+          // Поиск в панели мест без фигур — live search с debounce
+          withoutShapesSearchInput?.addEventListener('input', (e) => {
+            const value = String(e.target.value || '').trim();
+            if (withoutShapesSearchTimer) {
+              clearTimeout(withoutShapesSearchTimer);
+            }
+            withoutShapesSearchTimer = setTimeout(() => {
+              loadWithoutShapesList(value);
+            }, 250);
           });
 
           // Handle "select for drawing" button clicks within the panel
