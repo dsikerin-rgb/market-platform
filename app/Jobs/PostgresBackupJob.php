@@ -22,10 +22,6 @@ class PostgresBackupJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public string $connection = 'redis';
-
-    public string $queue = 'backups';
-
     public int $timeout = 1800;
 
     public int $tries = 1;

@@ -772,6 +772,7 @@
                     <x-filament::button
                         icon="heroicon-m-arrow-path"
                         wire:click="clearCaches"
+                        title="Выполняет php artisan optimize:clear."
                     >
                         Очистить кэши
                     </x-filament::button>
@@ -782,6 +783,7 @@
                         icon="heroicon-m-play"
                         wire:click="enableTelescope30m"
                         :disabled="! $telescopeInstalled || $telescopeRecordingEnabledLocal"
+                        title="Включает запись Telescope на 30 минут и автоматически выключает её по TTL. Доступ только super-admin."
                     >
                         Включить Telescope (30 мин)
                     </x-filament::button>
@@ -813,6 +815,7 @@
                         icon="heroicon-m-trash"
                         wire:click="pruneTelescope"
                         :disabled="! $telescopeInstalled"
+                        title="Удаляет записи Telescope старше 48 часов, если Telescope установлен и таблицы доступны."
                     >
                         Очистить Telescope (48ч)
                     </x-filament::button>
@@ -1070,24 +1073,6 @@
         {{-- Правая колонка: Примечания + Команды --}}
         <div class="ops-notes">
             <div class="ops-side-stack">
-                <x-filament::section heading="Примечания">
-                    <div class="ops-info-stack">
-                        <div class="ops-info-item">
-                            <strong>Очистить кэши</strong> выполняет <span class="ops-inline-code">php artisan optimize:clear</span>.
-                        </div>
-
-                        <div class="ops-info-item">
-                            <strong>Включить Telescope</strong> включает <strong>запись</strong> на 30 минут и автоматически выключает её по TTL.
-                            Доступ к UI ограничен ролью <span class="ops-inline-code">super-admin</span>.
-                        </div>
-
-                        <div class="ops-info-item">
-                            <strong>Очистить Telescope</strong> удаляет записи старше 48 часов
-                            (если Telescope установлен и таблицы доступны).
-                        </div>
-                    </div>
-                </x-filament::section>
-
                 <x-filament::section
                     heading="Полезные команды"
                     description="Шпаргалка для сервера. Выполнять в терминале, не в браузере."
