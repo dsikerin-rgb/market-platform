@@ -51,12 +51,6 @@ class PostgresBackupJob implements ShouldQueue
 
     public function handle(PostgresBackupService $service): void
     {
-        Log::info('Postgres backup job started', [
-            'rotate' => $this->rotate,
-            'compress_after_days' => $this->compressAfterDays,
-            'delete_archive_after_days' => $this->deleteArchiveAfterDays,
-        ]);
-
         $result = $service->createBackup();
 
         if (! ($result['success'] ?? false)) {
@@ -70,21 +64,7 @@ class PostgresBackupJob implements ShouldQueue
                 throw new RuntimeException((string) ($rotation['error'] ?? 'Не удалось выполнить ротацию.'));
             }
 
-            Log::info('Postgres backup job finished', [
-                'file_name' => $result['fileName'] ?? null,
-                'size_human' => $result['sizeHuman'] ?? null,
-                'compressed' => $rotation['compressed'] ?? 0,
-                'deleted_duplicates' => $rotation['deletedDuplicates'] ?? 0,
-                'deleted_archives' => $rotation['deletedArchives'] ?? 0,
-            ]);
-
-            return;
         }
-
-        Log::info('Postgres backup job finished', [
-            'file_name' => $result['fileName'] ?? null,
-            'size_human' => $result['sizeHuman'] ?? null,
-        ]);
     }
 
     public function failed(Throwable $e): void
