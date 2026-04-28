@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Services\PostgresBackupService;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Foundation\Bus\PendingDispatch;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +16,6 @@ use Throwable;
 
 class PostgresBackupJob implements ShouldQueue
 {
-    use Dispatchable;
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
@@ -37,10 +35,22 @@ class PostgresBackupJob implements ShouldQueue
         bool $rotate = false,
         int $compressAfterDays = 2,
         int $deleteArchiveAfterDays = 60,
-    ): PendingDispatch {
-        return self::dispatch($rotate, $compressAfterDays, $deleteArchiveAfterDays)
-            ->onConnection('redis')
-            ->onQueue('backups');
+    ): void {
+        $job = new self($rotate, $compressAfterDays, $deleteArchiveAfterDays);
+
+        try {
+            Queue::connection('redis')->pushOn('backups', $job);
+        } catch (Throwable $e) {
+            if (! app()->environment('local')) {
+                throw $e;
+            }
+
+            Log::warning('Redis queue unavailable, falling back to database queue', [
+                'message' => $e->getMessage(),
+            ]);
+
+            Queue::connection(config('queue.default', 'database'))->pushOn('default', $job);
+        }
     }
 
     public function handle(PostgresBackupService $service): void
