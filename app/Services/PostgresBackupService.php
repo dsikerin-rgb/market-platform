@@ -40,7 +40,7 @@ class PostgresBackupService
         $pgDumpBinary = $this->resolvePgDumpBinary();
 
         try {
-            $result = Process::timeout(300)
+            $result = Process::timeout(1800)
                 ->env([
                     'PGPASSWORD' => $dbPassword,
                 ])

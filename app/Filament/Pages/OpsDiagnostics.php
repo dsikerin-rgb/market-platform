@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Jobs\PostgresBackupJob;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Support\AdminPanelImpersonation;
 use App\Services\PostgresBackupService;
@@ -331,12 +332,13 @@ class OpsDiagnostics extends Page
     public function createPgBackup(): void
     {
         $this->ensureSuperAdmin();
-        $result = $this->postgresBackupService()->createBackup();
 
-        if (! ($result['success'] ?? false)) {
+        try {
+            PostgresBackupJob::queueBackup();
+        } catch (Throwable $e) {
             Notification::make()
-                ->title('Не удалось создать бэкап')
-                ->body((string) ($result['error'] ?? 'pg_dump завершился с ошибкой.'))
+                ->title('Не удалось поставить бэкап в очередь')
+                ->body($e->getMessage())
                 ->danger()
                 ->send();
 
@@ -344,17 +346,9 @@ class OpsDiagnostics extends Page
         }
 
         Notification::make()
-            ->title('Бэкап PostgreSQL создан')
-            ->body(sprintf(
-                "%s\nРазмер: %s",
-                (string) $result['fileName'],
-                (string) $result['sizeHuman']
-            ))
+            ->title('Бэкап поставлен в очередь')
             ->success()
             ->send();
-
-        $this->refreshPgBackupState();
-        $this->dispatch('$refresh');
     }
 
     public function rotatePgBackups(int $compressAfterDays, int $deleteArchiveAfterDays): void

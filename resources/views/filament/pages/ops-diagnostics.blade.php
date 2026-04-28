@@ -851,8 +851,8 @@
                     </div>
                 </div>
 
-                <div class="ops-loading-note" wire:loading.flex wire:target="createPgBackup, rotatePgBackups">
-                    Выполняется операция с бэкапом, это может занять время.
+                <div class="ops-loading-note" wire:loading.flex wire:target="rotatePgBackups">
+                    Выполняется ротация бэкапов, это может занять время.
                 </div>
 
                 {{-- Действия --}}
