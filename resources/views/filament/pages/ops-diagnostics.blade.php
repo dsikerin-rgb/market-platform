@@ -292,6 +292,230 @@
             color: #6b7280;
             line-height: 1.4;
         }
+
+        .ops-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 1100px) {
+            .ops-stat-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .ops-stat-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ops-stat-card {
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: .95rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(249, 250, 251, .94));
+            padding: .95rem 1rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-stat-card {
+                border-color: rgba(255, 255, 255, .12);
+                background: linear-gradient(180deg, rgba(17, 24, 39, .98), rgba(17, 24, 39, .90));
+            }
+        }
+
+        .ops-stat-label {
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #6b7280;
+        }
+
+        .ops-stat-value {
+            margin-top: .25rem;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+            overflow-wrap: anywhere;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-stat-value {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-stat-subtext {
+            margin-top: .15rem;
+            font-size: .75rem;
+            color: #94a3b8;
+            overflow-wrap: anywhere;
+        }
+
+        .ops-backup-actions-row {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            align-items: center;
+        }
+
+        .ops-loading-note {
+            margin-bottom: 1rem;
+            font-size: .75rem;
+            color: #6b7280;
+        }
+
+        .ops-backup-files-section {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .ops-backup-files-title {
+            font-size: .875rem;
+            font-weight: 700;
+            color: #374151;
+        }
+
+        .ops-backup-files-list {
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: 1rem;
+            overflow: hidden;
+            background: rgba(255, 255, 255, .92);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-files-list {
+                border-color: rgba(255, 255, 255, .12);
+                background: rgba(17, 24, 39, .82);
+            }
+        }
+
+        .ops-backup-file-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .75rem;
+            padding: .85rem 1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, .06);
+        }
+
+        .ops-backup-file-row:last-child {
+            border-bottom: 0;
+        }
+
+        .ops-backup-file-meta {
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .ops-backup-file-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: .625rem;
+            background: rgba(0, 0, 0, .06);
+            flex-shrink: 0;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-file-icon {
+                background: rgba(255, 255, 255, .08);
+            }
+        }
+
+        .ops-backup-file-name {
+            font-size: .8125rem;
+            font-weight: 600;
+            color: #0f172a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-backup-file-name {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-backup-file-meta-text {
+            font-size: .6875rem;
+            color: #6b7280;
+        }
+
+        .ops-backup-file-actions {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            flex-shrink: 0;
+        }
+
+        .ops-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed rgba(0, 0, 0, .15);
+            border-radius: 1rem;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-empty-state {
+                border-color: rgba(255, 255, 255, .18);
+            }
+        }
+
+        .ops-toggle-preview {
+            margin-top: 1.25rem;
+        }
+
+        .ops-toggle-preview-button {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            border-radius: .75rem;
+            border: 1px solid rgba(0, 0, 0, .10);
+            background: rgba(0, 0, 0, .03);
+            padding: .6rem .85rem;
+            font-size: .8125rem;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-toggle-preview-button {
+                border-color: rgba(255, 255, 255, .12);
+                background: rgba(255, 255, 255, .06);
+                color: #e5e7eb;
+            }
+        }
+
+        .ops-toggle-preview-panel {
+            margin-top: .75rem;
+            border: 1px solid rgba(0, 0, 0, .10);
+            border-radius: 1rem;
+            background: rgba(0, 0, 0, .03);
+            padding: 1rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-toggle-preview-panel {
+                border-color: rgba(255, 255, 255, .12);
+                background: rgba(255, 255, 255, .06);
+            }
+        }
     </style>
 
     @php
@@ -547,33 +771,33 @@
                 description="Управление дампами базы данных и ротация архивов."
             >
                 {{-- Статистика: 4 карточки в ряд --}}
-                <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:1rem; margin-bottom:1.5rem;">
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">База данных</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
+                <div class="ops-stat-grid">
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">База данных</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['dbName'] ?? '—' }}</p>
+                        <p class="ops-stat-subtext">{{ $pgBackupStatusLocal['dbHost'] ?? '—' }}:{{ $pgBackupStatusLocal['dbPort'] ?? '—' }}</p>
                     </div>
 
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Бэкапы</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">Бэкапы</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['totalBackups'] ?? 0 }}</p>
+                        <p class="ops-stat-subtext">Общий: {{ $pgBackupStatusLocal['totalSizeHuman'] ?? '0 Б' }}</p>
                     </div>
 
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Последний бэкап</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">Последний бэкап</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['lastBackupTimeHuman'] ?? 'Нет' }}</p>
+                        <p class="ops-stat-subtext">{{ $pgBackupStatusLocal['lastBackupSizeHuman'] ?? '' }}</p>
                     </div>
 
-                    <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(255,255,255,.95); padding:1rem;">
-                        <p style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:#6b7280;">Диск</p>
-                        <p style="margin-top:.25rem; font-size:1.125rem; font-weight:700; color:#0f172a;">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
-                        <p style="font-size:.75rem; color:#9ca3af;">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
+                    <div class="ops-stat-card">
+                        <p class="ops-stat-label">Диск</p>
+                        <p class="ops-stat-value">{{ $pgBackupStatusLocal['diskFreeHuman'] ?? '—' }}</p>
+                        <p class="ops-stat-subtext">Всего: {{ $pgBackupStatusLocal['diskTotalHuman'] ?? '—' }}</p>
                     </div>
                 </div>
 
-                <div wire:loading.flex wire:target="createPgBackup, rotatePgBackups" style="margin-bottom:1rem; font-size:.75rem; color:#6b7280;">
+                <div class="ops-loading-note" wire:loading.flex wire:target="createPgBackup, rotatePgBackups">
                     Выполняется операция с бэкапом, это может занять время.
                 </div>
 
@@ -642,7 +866,9 @@
                             </label>
                         </div>
                     </div>
-                </div>                <div style="margin-bottom:1.5rem; display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                </div>
+
+                <div class="ops-backup-actions-row">
                     <x-filament::button
                         wire:click="createPgBackup"
                         wire:loading.attr="disabled"
@@ -664,20 +890,16 @@
                     </x-filament::button>
                 </div>
 
-                <div wire:loading.flex wire:target="createPgBackup, rotatePgBackups" style="margin-bottom:1rem; font-size:.75rem; color:#6b7280;">
-                    Выполняется операция с бэкапом, это может занять время.
-                </div>
-
                 {{-- Список файлов --}}
-                <div style="display:grid; gap:.75rem;">
-                    <p style="font-size:.875rem; font-weight:600; color:#374151;">Файлы бэкапов</p>
+                <div class="ops-backup-files-section">
+                    <p class="ops-backup-files-title">Файлы бэкапов</p>
 
                     @if (! empty($pgBackupFilesLocal))
-                        <div style="border:1px solid rgba(0,0,0,.10); border-radius:.75rem; overflow:hidden;">
+                        <div class="ops-backup-files-list">
                             @foreach ($pgBackupFilesLocal as $idx => $file)
-                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; padding:.75rem 1rem; border-bottom:1px solid rgba(0,0,0,.06);{{ $idx === count($pgBackupFilesLocal) - 1 ? ' border-bottom:0;' : '' }}">
-                                    <div style="display:flex; align-items:center; gap:.75rem; flex:1; min-width:0;">
-                                        <div style="display:flex; align-items:center; justify-content:center; width:2.25rem; height:2.25rem; border-radius:.5rem; background:rgba(0,0,0,.06); flex-shrink:0;">
+                                <div class="ops-backup-file-row">
+                                    <div class="ops-backup-file-meta">
+                                        <div class="ops-backup-file-icon">
                                             @if ($file['type'] === 'gz')
                                                 <x-heroicon-o-archive-box style="width:1.125rem; height:1.125rem; color:#6b7280;" />
                                             @else
@@ -685,12 +907,12 @@
                                             @endif
                                         </div>
                                         <div style="min-width:0;">
-                                            <p style="font-size:.8125rem; font-weight:500; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ $file['name'] }}</p>
-                                            <p style="font-size:.6875rem; color:#6b7280;">{{ $file['mtimeHuman'] }} · {{ $file['sizeHuman'] }}</p>
+                                            <p class="ops-backup-file-name">{{ $file['name'] }}</p>
+                                            <p class="ops-backup-file-meta-text">{{ $file['mtimeHuman'] }} · {{ $file['sizeHuman'] }}</p>
                                         </div>
                                     </div>
 
-                                    <div style="display:flex; align-items:center; gap:.5rem; flex-shrink:0;">
+                                    <div class="ops-backup-file-actions">
                                         <x-filament::badge :color="$file['type'] === 'gz' ? 'success' : 'gray'" size="sm">
                                             {{ $file['type'] === 'gz' ? 'GZIP' : 'SQL' }}
                                         </x-filament::badge>
@@ -721,7 +943,7 @@
                             @endforeach
                         </div>
                     @else
-                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; border:1px dashed rgba(0,0,0,.15); border-radius:.75rem; padding:2.5rem 1.5rem; text-align:center;">
+                        <div class="ops-empty-state">
                             <svg style="flex-shrink:0; width:2.5rem; height:2.5rem; max-width:2.5rem; max-height:2.5rem; color:#9ca3af; margin-bottom:.5rem;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
                             </svg>
@@ -730,15 +952,11 @@
                     @endif
                 </div>
 
-                <div wire:loading.flex wire:target="createPgBackup, rotatePgBackups" style="margin-bottom:1rem; font-size:.75rem; color:#6b7280;">
-                    Выполняется операция с бэкапом, это может занять время.
-                </div>
-
                 {{-- Предпросмотр ротации (скрыт по умолчанию) --}}
-                <div x-data="{ open: false }" style="margin-top:1.5rem;">
+                <div class="ops-toggle-preview" x-data="{ open: false }">
                     <button
                         @click="open = ! open"
-                        style="display:inline-flex; align-items:center; gap:.5rem; border-radius:.5rem; border:1px solid rgba(0,0,0,.10); background:rgba(0,0,0,.03); padding:.5rem .75rem; font-size:.8125rem; font-weight:500; color:#374151; cursor:pointer;"
+                        class="ops-toggle-preview-button"
                     >
                         <!-- Fix: replaced x-heroicon-o-chevron-down with inline svg to avoid Blade :class error -->
                         <svg style="flex-shrink:0; width:1rem; height:1rem; max-width:1rem; max-height:1rem; transition:transform .2s;" x-bind:style="open ? 'transform:rotate(180deg)' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -747,7 +965,7 @@
                         <span>Предпросмотр ротации</span>
                     </button>
 
-                    <div x-show="open" x-collapse style="margin-top:.75rem; border:1px solid rgba(0,0,0,.10); border-radius:.75rem; background:rgba(0,0,0,.03); padding:1rem;">
+                    <div x-show="open" x-collapse class="ops-toggle-preview-panel">
                         <p style="font-size:.6875rem; color:#6b7280; margin-bottom:.75rem;">
                             Сжатие старше {{ $pgBackupDefaultsLocal['compressAfterDays'] }} дн., удаление архивов старше {{ $pgBackupDefaultsLocal['deleteArchiveAfterDays'] }} дн.
                         </p>
