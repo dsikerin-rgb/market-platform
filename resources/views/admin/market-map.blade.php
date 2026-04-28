@@ -1498,9 +1498,6 @@
                   <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
                   <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
                   <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
-                  @if ($canOpenPdf)
-                    <a class="pill" href="{{ $pdfUrl }}" target="_blank" rel="noopener noreferrer" title="Открыть исходный PDF-план в новой вкладке" aria-label="Открыть исходный PDF-план в новой вкладке">Открыть PDF</a>
-                  @endif
                 </div>
 
                 @if ($canEdit)
