@@ -4457,6 +4457,29 @@
             syncWithoutShapesRowActions(id, expanded);
           }
 
+          function withoutShapesActionStyle(variant = 'neutral') {
+            const base = 'font-size: 12px; line-height: 1.2; min-height: 32px; padding: 6px 10px; border-radius: 999px; cursor: pointer; font-weight: 700; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; white-space: nowrap; width: auto; align-self: flex-start;';
+
+            switch (variant) {
+              case 'primary':
+                return base + ' color: #065f46; background: #ecfdf5; border: 1px solid #a7f3d0;';
+              case 'neutral-link':
+                return base + ' color: #0369a1; background: #ffffff; border: 1px solid #cbd5e1;';
+              case 'danger':
+                return base + ' color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3;';
+              case 'info':
+                return base + ' color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe;';
+              case 'success':
+                return base + ' color: #15803d; background: #ecfdf5; border: 1px solid #bbf7d0;';
+              case 'warning':
+                return base + ' color: #c2410c; background: #fff7ed; border: 1px solid #fed7aa;';
+              case 'service':
+                return base + ' color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0;';
+              default:
+                return base + ' color: #334155; background: #ffffff; border: 1px solid #cbd5e1;';
+            }
+          }
+
           async function loadWithoutShapesList(searchQuery = '') {
             if (!withoutShapesPanelContent) return;
 
@@ -4492,23 +4515,23 @@
                 const tenantId = item?.tenant?.id ? Number(item.tenant.id) : (item?.tenant_id ? Number(item.tenant_id) : 0);
                 const isExpanded = withoutShapesExpandedRows.has(id);
                 const actionsId = 'without-shapes-actions-' + String(id);
-                let actions = '<div data-without-shapes-actions="' + String(id) + '" id="' + actionsId + '" style="display: ' + (isExpanded ? 'flex' : 'none') + '; flex-direction: column; gap: 8px; margin-top: 2px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; align-items: stretch;" aria-hidden="' + (isExpanded ? 'false' : 'true') + '">';
+                let actions = '<div data-without-shapes-actions="' + String(id) + '" id="' + actionsId + '" style="display: ' + (isExpanded ? 'flex' : 'none') + '; flex-direction: column; gap: 8px; margin-top: 2px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; align-items: flex-start;" aria-hidden="' + (isExpanded ? 'false' : 'true') + '">';
 
-                actions += '<button type="button" data-action="select-for-drawing" data-space-id="' + String(id) + '" data-space-number="' + escapeHtml(number) + '" data-space-tenant="' + escapeHtml(tenantName) + '" style="width: 100%; font-size: 13px; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 12px; cursor: pointer; font-weight: 600; text-align: left; transition: background 0.15s;">Выбрать для отрисовки</button>';
-                actions += '<a href="/admin/market-spaces/' + String(id) + '/edit" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; font-weight: 500; display: flex; align-items: center; justify-content: flex-start; text-decoration: none;">Открыть место →</a>';
+                actions += '<button type="button" data-action="select-for-drawing" data-space-id="' + String(id) + '" data-space-number="' + escapeHtml(number) + '" data-space-tenant="' + escapeHtml(tenantName) + '" style="' + withoutShapesActionStyle('primary') + '">Выбрать для отрисовки</button>';
+                actions += '<a href="/admin/market-spaces/' + String(id) + '/edit" target="_blank" rel="noopener" style="' + withoutShapesActionStyle('neutral-link') + '">Открыть место →</a>';
 
                 if (tenantId && Number.isFinite(tenantId) && tenantId > 0) {
-                  actions += '<a href="/admin/tenants/' + String(tenantId) + '/edit" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; font-weight: 500; display: flex; align-items: center; justify-content: flex-start; text-decoration: none;">Открыть арендатора →</a>';
+                  actions += '<a href="/admin/tenants/' + String(tenantId) + '/edit" target="_blank" rel="noopener" style="' + withoutShapesActionStyle('neutral-link') + '">Открыть арендатора →</a>';
                 }
 
                 actions += '<div style="margin-top: 4px; padding-top: 8px; border-top: 1px solid #dbeafe; display: flex; flex-direction: column; gap: 6px;">';
                 actions += '<div style="font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #1d4ed8;">Ревизия</div>';
                 actions += '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
-                actions += '<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(id) + '" title="Зафиксировать конфликт по месту" aria-label="Зафиксировать конфликт по месту" style="font-size: 12px; color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Конфликт</button>';
-                actions += '<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(id) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения" style="font-size: 12px; color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Требует уточнения</button>';
-                actions += '<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(id) + '" title="Используйте, если место фактически пустое" aria-label="Используйте, если место фактически пустое" style="font-size: 12px; color: #15803d; background: #ecfdf5; border: 1px solid #bbf7d0; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Свободно</button>';
-                actions += '<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(id) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное" style="font-size: 12px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Служебное</button>';
-                actions += '<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(id) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор" style="font-size: 12px; color: #7c2d12; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Сменился арендатор</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(id) + '" title="Зафиксировать конфликт по месту" aria-label="Зафиксировать конфликт по месту" style="' + withoutShapesActionStyle('danger') + '">Конфликт</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(id) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения" style="' + withoutShapesActionStyle('info') + '">Требует уточнения</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(id) + '" title="Используйте, если место фактически пустое" aria-label="Используйте, если место фактически пустое" style="' + withoutShapesActionStyle('success') + '">Свободно</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(id) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное" style="' + withoutShapesActionStyle('service') + '">Служебное</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(id) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор" style="' + withoutShapesActionStyle('warning') + '">Сменился арендатор</button>';
                 actions += '</div>';
                 actions += '</div>';
 
