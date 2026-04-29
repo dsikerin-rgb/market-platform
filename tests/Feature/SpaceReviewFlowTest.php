@@ -646,6 +646,58 @@ class SpaceReviewFlowTest extends TestCase
             ->assertDontSee('Системно найдено', false);
     }
 
+    public function test_map_review_results_renders_attention_filters_with_correct_data_attributes(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        // Создаём место с decision = space_identity_needs_clarification
+        $space = $this->createSpace($market, [
+            'number' => 'FILTER-TEST',
+            'display_name' => 'Filter test space',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+                'reason' => 'Needs manual clarification',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            // Проверяем наличие кнопок фильтров
+            ->assertSee('Уточнить номер / название', false)
+            ->assertSee('Конфликт по занятости', false)
+            ->assertSee('Сменился арендатор', false)
+            ->assertSee('Фигура не найдена', false)
+            ->assertSee('Все', false)
+            // Проверяем data-атрибуты фильтров
+            ->assertSee('data-mrr-attention-filter="all"', false)
+            ->assertSee('data-mrr-attention-filter="occupancy_conflict"', false)
+            ->assertSee('data-mrr-attention-filter="space_identity_needs_clarification"', false)
+            ->assertSee('data-mrr-attention-filter="tenant_changed_on_site"', false)
+            ->assertSee('data-mrr-attention-filter="shape_not_found"', false)
+            // Проверяем наличие карточки с правильным data-mrr-decision
+            ->assertSee('data-mrr-attention-card', false)
+            ->assertSee('data-mrr-decision="space_identity_needs_clarification"', false)
+            // Проверяем наличие счётчика
+            ->assertSee('class="mrr-attention-filter-count"', false)
+            // Проверяем что карточка видна (есть номер места)
+            ->assertSee('FILTER-TEST', false);
+    }
+
     public function test_map_review_results_shows_ai_only_for_first_batch_with_clear_limit_message(): void
     {
         $market = $this->createMarket();
