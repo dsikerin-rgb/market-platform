@@ -263,6 +263,12 @@
                 color: #b91c1c;
             }
 
+            .mrr-quick-review__choice--success {
+                border-color: rgba(34, 197, 94, 0.22);
+                color: #15803d;
+                background: rgba(240, 253, 244, 0.96);
+            }
+
             .mrr-quick-review__choice.is-selected {
                 box-shadow: inset 0 0 0 1px currentColor;
             }
@@ -276,6 +282,12 @@
             .dark .mrr-quick-review__choice--danger {
                 border-color: rgba(248, 113, 113, 0.28);
                 color: #fecaca;
+            }
+
+            .dark .mrr-quick-review__choice--success {
+                border-color: rgba(74, 222, 128, 0.28);
+                background: rgba(15, 23, 42, 0.62);
+                color: #bbf7d0;
             }
 
             .mrr-needs-list {
@@ -708,6 +720,16 @@
 
             .dark .mrr-quick-review__clarify {
                 border-color: rgba(96, 165, 250, 0.22);
+                background: rgba(15, 23, 42, 0.45);
+            }
+
+            .mrr-quick-review__clarify--success {
+                border-color: rgba(34, 197, 94, 0.18);
+                background: rgba(240, 253, 244, 0.95);
+            }
+
+            .dark .mrr-quick-review__clarify--success {
+                border-color: rgba(74, 222, 128, 0.22);
                 background: rgba(15, 23, 42, 0.45);
             }
 
@@ -2049,13 +2071,21 @@
                         <div class="mrr-clarify-modal__field">
                             <div class="mrr-quick-review__choices" role="group" aria-label="Выбор варианта решения">
                                 <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="matched" data-mrr-quick-reason-required="0">Совпало</button>
+                                <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--success" data-mrr-quick-review-choice="mark_space_free" data-mrr-quick-reason-required="0">Подтвердить свободно</button>
                                 <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="occupancy_conflict" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Конфликт по занятости">Конфликт по занятости</button>
                                 <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="shape_not_found" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Фигура не найдена на карте">Фигура не найдена на карте</button>
                                 <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="space_identity_needs_clarification" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Требует уточнения">Уточнить</button>
                             </div>
                         </div>
 
-                        <div class="mrr-quick-review__clarify">
+                        <div class="mrr-quick-review__clarify mrr-quick-review__clarify--success" data-mrr-quick-review-hint="mark_space_free" hidden>
+                            <div class="mrr-quick-review__clarify-title">Что значит «Подтвердить свободно»</div>
+                            <div class="mrr-quick-review__clarify-text">
+                                Место будет окончательно зафиксировано как свободное. Статус места изменится на свободное, локальная текущая привязка будет закрыта, а договорные и финансовые хвосты не будут изменены автоматически.
+                            </div>
+                        </div>
+
+                        <div class="mrr-quick-review__clarify" data-mrr-quick-review-hint="space_identity_needs_clarification" hidden>
                             <div class="mrr-quick-review__clarify-title">Что значит «Уточнить»</div>
                             <div class="mrr-quick-review__clarify-text">
                                 Это ручное решение для случаев, когда номер, название или другая идентичность места требуют дополнительной проверки. Данные места не меняются, а в истории ревизии фиксируется сам факт, что нужен отдельный разбор.
@@ -2093,6 +2123,7 @@
                 const quickReviewError = document.getElementById('mrrQuickReviewError');
                 const quickReviewSave = quickReviewModal?.querySelector('[data-mrr-quick-review-save]');
                 const quickReviewChoiceButtons = Array.from(document.querySelectorAll('[data-mrr-quick-review-choice]'));
+                const quickReviewHintBlocks = Array.from(document.querySelectorAll('[data-mrr-quick-review-hint]'));
                 const modal = document.getElementById('mrrDuplicatePlanModal');
                 const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
@@ -2235,6 +2266,12 @@
                     });
                 };
 
+                const syncQuickReviewHintState = (decision) => {
+                    quickReviewHintBlocks.forEach((hintBlock) => {
+                        hintBlock.hidden = String(hintBlock.dataset.mrrQuickReviewHint || '') !== decision;
+                    });
+                };
+
                 const openQuickReviewModal = (button) => {
                     if (!quickReviewModal || !quickReviewTitle || !quickReviewDescription || !quickReviewReason || !quickReviewError || !quickReviewSave) {
                         return;
@@ -2252,13 +2289,14 @@
                     quickReviewState.reasonRequired = false;
 
                     quickReviewTitle.textContent = 'Выберите вариант решения';
-                    quickReviewDescription.textContent = 'Выберите ручное решение для истории ревизии. Оно не меняет данные места. Если у места нет фигуры на карте, это отдельный контекст, а не автоматическое решение.';
+                    quickReviewDescription.textContent = 'Выберите ручное решение для истории ревизии. Некоторые варианты только фиксируют наблюдение, а варианты подтверждения применяют безопасное изменение к месту.';
                     quickReviewReason.value = '';
                     quickReviewReason.required = false;
                     quickReviewError.textContent = '';
                     quickReviewSave.removeAttribute('disabled');
                     quickReviewSave.textContent = 'Сохранить';
                     syncQuickReviewChoiceState();
+                    syncQuickReviewHintState('');
 
                     quickReviewModal.hidden = false;
                     quickReviewModal.classList.add('is-open');
@@ -2285,6 +2323,7 @@
                     quickReviewSave.removeAttribute('disabled');
                     quickReviewSave.textContent = 'Сохранить';
                     syncQuickReviewChoiceState();
+                    syncQuickReviewHintState('');
                 };
 
                 const sendQuickReview = async () => {
@@ -2363,6 +2402,7 @@
                     quickReviewSave.removeAttribute('disabled');
                     quickReviewSave.textContent = 'Сохранить';
                     syncQuickReviewChoiceState();
+                    syncQuickReviewHintState(decision);
 
                     if (!reasonRequired) {
                         sendQuickReview().catch((errorInstance) => {
