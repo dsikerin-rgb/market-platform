@@ -491,6 +491,7 @@ class SpaceReviewFlowTest extends TestCase
             'payload' => [
                 'market_space_id' => $space->id,
                 'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+                'reason' => 'Needs manual clarification',
             ],
             'created_by' => $user->id,
         ]);
@@ -504,7 +505,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertDontSee('mrrClarifyInput', false)
             ->assertDontSee('data-space-number="П/3"', false)
             ->assertDontSee('data-space-display-name="Зоомир"', false)
-            ->assertSee('Анализ связей', false)
+            ->assertSee('План безопасного разбора', false)
             ->assertSee('Связи текущего места', false)
             ->assertSee('Карта: 1', false)
             ->assertSee('Кабинет: 1', false)
@@ -586,6 +587,7 @@ class SpaceReviewFlowTest extends TestCase
             'payload' => [
                 'market_space_id' => $space->id,
                 'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+                'reason' => 'Needs manual clarification',
             ],
             'created_by' => $user->id,
         ]);
@@ -1233,6 +1235,59 @@ class SpaceReviewFlowTest extends TestCase
 
         $this->assertNotNull($operation);
         $this->assertSame('matched', $operation->payload['decision'] ?? null);
+    }
+
+    public function test_review_decision_endpoint_applies_mark_space_free_and_shows_it_in_applied_changes(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'status' => 'occupied',
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            'market_space_id' => $space->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'operation')
+            ->assertJsonPath('operation.status', 'applied')
+            ->assertJsonPath('item.market_space_id', $space->id)
+            ->assertJsonPath('item.review_status', 'changed')
+            ->assertJsonPath('item.review_status_label', 'Есть безопасное изменение');
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('applied', $operation->status);
+        $this->assertSame(SpaceReviewDecision::MARK_SPACE_FREE, $operation->payload['decision'] ?? null);
+        $this->assertSame($space->id, $operation->payload['market_space_id'] ?? null);
+        $this->assertNull($operation->comment);
+        $this->assertSame($user->id, $operation->created_by);
+
+        $space->refresh();
+        $this->assertSame('vacant', $space->status);
+        $this->assertSame('changed', $space->map_review_status);
+        $this->assertNotNull($space->map_reviewed_at);
+        $this->assertSame($user->id, $space->map_reviewed_by);
+
+        Livewire::withQueryParams(['tab' => 'review'])
+            ->test(MapReviewResults::class)
+            ->assertSee('Применено', false)
+            ->assertSee('Отметить место как свободное', false)
+            ->assertSee('Есть безопасное изменение', false);
     }
 
     public function test_review_decision_endpoint_clears_cached_ai_summary_for_reviewed_space(): void
