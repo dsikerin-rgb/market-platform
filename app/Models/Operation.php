@@ -317,6 +317,10 @@ class Operation extends Model
         if ($space->isDirty()) {
             $space->save();
         }
+
+        if ($decision === SpaceReviewDecision::MARK_SPACE_FREE) {
+            self::closeSpaceSnapshotBindings((int) $operation->market_id, $space->id);
+        }
     }
 
     public static function rebuildMarketSpaceSnapshot(int $marketId, int $spaceId): void
@@ -331,5 +335,22 @@ class Operation extends Model
             OperationType::RENT_RATE_CHANGE,
             OperationType::SPACE_ATTRS_CHANGE,
         ], true);
+    }
+
+    private static function closeSpaceSnapshotBindings(int $marketId, int $spaceId): void
+    {
+        $now = now();
+
+        DB::table('market_space_tenant_bindings')
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId)
+            ->whereNull('tenant_contract_id')
+            ->where('binding_type', 'space_snapshot')
+            ->whereNull('ended_at')
+            ->update([
+                'ended_at' => $now,
+                'updated_at' => $now,
+                'resolution_reason' => 'space_marked_free',
+            ]);
     }
 }

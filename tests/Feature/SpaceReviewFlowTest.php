@@ -1290,6 +1290,118 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Есть безопасное изменение', false);
     }
 
+    public function test_review_decision_endpoint_applies_mark_space_free_and_closes_only_snapshot_binding(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Snapshot Tenant',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => now()->subDay(),
+            'ended_at' => null,
+            'binding_type' => 'space_snapshot',
+            'confidence' => 'medium',
+            'source' => 'market_space_snapshot',
+            'created_by_user_id' => $user->id,
+            'resolution_reason' => 'space_snapshot_changed',
+            'meta' => json_encode([
+                'status' => 'occupied',
+                'is_active' => true,
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'SNAP-001',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'binding_type' => 'space_snapshot',
+            'ended_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'ended_at' => null,
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            'market_space_id' => $space->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'operation')
+            ->assertJsonPath('operation.status', 'applied')
+            ->assertJsonPath('item.review_status', 'changed')
+            ->assertJsonPath('item.review_status_label', 'Есть безопасное изменение');
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('applied', $operation->status);
+        $this->assertSame(SpaceReviewDecision::MARK_SPACE_FREE, $operation->payload['decision'] ?? null);
+        $this->assertSame($space->id, $operation->payload['market_space_id'] ?? null);
+
+        $space->refresh();
+        $this->assertSame('vacant', $space->status);
+        $this->assertSame('changed', $space->map_review_status);
+
+        $snapshotBinding = DB::table('market_space_tenant_bindings')
+            ->where('market_space_id', $space->id)
+            ->whereNull('tenant_contract_id')
+            ->where('binding_type', 'space_snapshot')
+            ->orderByDesc('id')
+            ->first();
+
+        $contractBinding = DB::table('market_space_tenant_bindings')
+            ->where('market_space_id', $space->id)
+            ->where('tenant_contract_id', $contract->id)
+            ->orderByDesc('id')
+            ->first();
+
+        $this->assertNotNull($snapshotBinding);
+        $this->assertNotNull($contractBinding);
+        $this->assertNotNull($snapshotBinding->ended_at);
+        $this->assertNull($contractBinding->ended_at);
+        $this->assertTrue((bool) $contract->fresh()->is_active);
+    }
     public function test_review_decision_endpoint_clears_cached_ai_summary_for_reviewed_space(): void
     {
         $market = $this->createMarket();
