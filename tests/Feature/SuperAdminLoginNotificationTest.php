@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Market;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Notifications\Channels\TelegramChannel;
 use App\Notifications\UserLoggedInNotification;
@@ -262,7 +263,12 @@ class SuperAdminLoginNotificationTest extends TestCase
 
         $merchant = User::factory()->create([
             'market_id' => (int) $market->id,
-            'tenant_id' => 123,
+            'tenant_id' => Tenant::query()->create([
+                'market_id' => (int) $market->id,
+                'name' => 'Merchant Tenant',
+                'short_name' => 'Merchant Tenant',
+                'is_active' => true,
+            ])->getKey(),
             'email' => 'merchant@example.test',
         ]);
         $merchant->assignRole('merchant');

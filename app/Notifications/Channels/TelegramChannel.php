@@ -45,7 +45,7 @@ class TelegramChannel
         }
 
         $apiBase = rtrim((string) config('services.telegram.api_base', 'https://api.telegram.org'), '/');
-        $timeout = min(3, max(2, (int) config('services.telegram.timeout', 3)));
+        $timeout = max(2, (int) config('services.telegram.timeout', 10));
 
         try {
             $response = Http::timeout($timeout)
