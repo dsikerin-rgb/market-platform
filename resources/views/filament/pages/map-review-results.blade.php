@@ -154,6 +154,11 @@
                 color: #b91c1c;
             }
 
+            .mrr-badge--success {
+                background: rgba(34, 197, 94, 0.14);
+                color: #15803d;
+            }
+
             .mrr-badge--unconfirmed_link {
                 background: rgba(14, 165, 233, 0.16);
                 color: #0369a1;
@@ -303,9 +308,9 @@
 
             .mrr-needs-card > summary {
                 display: flex;
-                align-items: flex-start;
+                align-items: center;
                 justify-content: space-between;
-                gap: 1rem;
+                gap: 0.75rem;
                 cursor: pointer;
                 list-style: none;
                 outline: none;
@@ -320,20 +325,47 @@
                 display: flex;
                 flex: 1;
                 flex-direction: column;
-                gap: 0.25rem;
+                justify-content: center;
+                gap: 0.22rem;
             }
 
-            .mrr-needs-card__summary-head {
+            .mrr-needs-card__summary-top {
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
-                gap: 0.42rem;
+                gap: 0.35rem;
+            }
+
+            .mrr-needs-card__summary-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0.22rem;
+                align-items: start;
+            }
+
+            .mrr-needs-card__summary-place,
+            .mrr-needs-card__summary-brief {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0.12rem;
+            }
+
+            .mrr-needs-card__summary-place {
+                align-items: flex-start;
+            }
+
+            .mrr-needs-card__summary-brief {
+                align-items: flex-start;
+                justify-content: flex-start;
+                text-align: left;
             }
 
             .mrr-needs-card__decision-label {
                 font-size: 0.8125rem;
                 font-weight: 700;
                 color: #0f172a;
+                text-align: left;
             }
 
             .dark .mrr-needs-card__decision-label {
@@ -341,12 +373,14 @@
             }
 
             .mrr-needs-card__reason {
-                font-size: 0.75rem;
+                font-size: 0.73rem;
                 color: #475569;
                 display: -webkit-box;
                 overflow: hidden;
                 -webkit-box-orient: vertical;
                 -webkit-line-clamp: 2;
+                line-height: 1.35;
+                text-align: left;
             }
 
             .dark .mrr-needs-card__reason {
@@ -358,8 +392,8 @@
                 flex-shrink: 0;
                 align-items: center;
                 justify-content: flex-end;
-                min-width: 6rem;
-                padding: 0.28rem 0;
+                min-width: 5.5rem;
+                padding: 0.18rem 0;
                 font-size: 0.75rem;
                 font-weight: 800;
                 color: #1d4ed8;
@@ -1298,6 +1332,192 @@
                 color: #cbd5e1;
             }
 
+            .mrr-applied-list {
+                display: flex;
+                flex-direction: column;
+                gap: 0.8rem;
+            }
+
+            .mrr-applied-card {
+                border-radius: 1rem;
+                border: 1px solid rgba(34, 197, 94, 0.18);
+                background: rgba(240, 253, 244, 0.84);
+                padding: 0.7rem 0.8rem;
+            }
+
+            .dark .mrr-applied-card {
+                border-color: rgba(74, 222, 128, 0.2);
+                background: rgba(15, 23, 42, 0.34);
+            }
+
+            .mrr-applied-card > summary {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.75rem;
+                cursor: pointer;
+                list-style: none;
+                outline: none;
+            }
+
+            .mrr-applied-card > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .mrr-applied-card__summary-main {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: 0.22rem;
+            }
+
+            .mrr-applied-card__summary-top {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.35rem;
+            }
+
+            .mrr-applied-card__summary-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0.22rem;
+                align-items: start;
+            }
+
+            .mrr-applied-card__summary-place,
+            .mrr-applied-card__summary-brief {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0.12rem;
+            }
+
+            .mrr-applied-card__summary-place {
+                align-items: flex-start;
+            }
+
+            .mrr-applied-card__summary-brief {
+                align-items: flex-start;
+                justify-content: flex-start;
+                text-align: left;
+            }
+
+            .mrr-applied-card__decision-label {
+                font-size: 0.8125rem;
+                font-weight: 700;
+                color: #166534;
+                text-align: left;
+            }
+
+            .dark .mrr-applied-card__decision-label {
+                color: #dcfce7;
+            }
+
+            .mrr-applied-card__reason {
+                font-size: 0.73rem;
+                color: #475569;
+                display: -webkit-box;
+                overflow: hidden;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+                line-height: 1.35;
+                text-align: left;
+            }
+
+            .dark .mrr-applied-card__reason {
+                color: #cbd5e1;
+            }
+
+            .mrr-applied-card__toggle {
+                display: inline-flex;
+                flex-shrink: 0;
+                align-items: center;
+                justify-content: flex-end;
+                min-width: 5.5rem;
+                padding: 0.18rem 0;
+                font-size: 0.75rem;
+                font-weight: 800;
+                color: #15803d;
+                white-space: nowrap;
+            }
+
+            .dark .mrr-applied-card__toggle {
+                color: #86efac;
+            }
+
+            .mrr-applied-card__toggle-close {
+                display: none;
+            }
+
+            .mrr-applied-card[open] .mrr-applied-card__toggle-open {
+                display: none;
+            }
+
+            .mrr-applied-card[open] .mrr-applied-card__toggle-close {
+                display: inline;
+            }
+
+            .mrr-applied-card__body {
+                margin-top: 0.65rem;
+                padding-top: 0.65rem;
+                border-top: 1px solid rgba(34, 197, 94, 0.14);
+            }
+
+            .dark .mrr-applied-card__body {
+                border-top-color: rgba(74, 222, 128, 0.16);
+            }
+
+            .mrr-applied-card__badge {
+                display: inline-flex;
+                flex-shrink: 0;
+                align-items: center;
+                justify-content: flex-end;
+            }
+
+            .mrr-applied-card__body-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
+                gap: 0.7rem;
+                align-items: start;
+            }
+
+            .mrr-applied-card__column {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0.35rem;
+            }
+
+            .mrr-applied-card__label {
+                font-size: 0.7rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #16a34a;
+            }
+
+            .dark .mrr-applied-card__label {
+                color: #86efac;
+            }
+
+            .mrr-applied-card__meta {
+                font-size: 0.78rem;
+                line-height: 1.42;
+                color: #64748b;
+            }
+
+            .dark .mrr-applied-card__meta {
+                color: #cbd5e1;
+            }
+
+            @media (max-width: 1140px) {
+                .mrr-applied-card__body-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
             .aw-panel--muted {
                 opacity: 0.9;
             }
@@ -1480,7 +1700,7 @@
                                         <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}">
                                             <summary>
                                                 <div class="mrr-needs-card__summary-main">
-                                                    <div class="mrr-needs-card__summary-head">
+                                                    <div class="mrr-needs-card__summary-top">
                                                         <div class="mrr-place__title">
                                                             {{ $row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id'])) }}
                                                         </div>
@@ -1488,18 +1708,24 @@
                                                             {{ $row['review_status_label'] ?? '—' }}
                                                         </span>
                                                     </div>
-                                                    <div class="mrr-place__meta">
-                                                        {{ $row['display_name'] ?: 'Без отображаемого названия' }}
-                                                        @if (filled($row['location_name']))
-                                                            · {{ $row['location_name'] }}
-                                                        @endif
+                                                    <div class="mrr-needs-card__summary-grid">
+                                                        <div class="mrr-needs-card__summary-place">
+                                                            <div class="mrr-place__meta">
+                                                                {{ $row['display_name'] ?: 'Без отображаемого названия' }}
+                                                                @if (filled($row['location_name']))
+                                                                    · {{ $row['location_name'] }}
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                        <div class="mrr-needs-card__summary-brief">
+                                                            @if ($attentionTab !== 'unconfirmed_links')
+                                                                <div class="mrr-needs-card__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
+                                                            @endif
+                                                            @if (filled($row['reason']))
+                                                                <div class="mrr-needs-card__reason">{{ $row['reason'] }}</div>
+                                                            @endif
+                                                        </div>
                                                     </div>
-                                                    @if ($attentionTab !== 'unconfirmed_links')
-                                                        <div class="mrr-needs-card__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
-                                                    @endif
-                                                    @if (filled($row['reason']))
-                                                        <div class="mrr-needs-card__reason">{{ $row['reason'] }}</div>
-                                                    @endif
                                                 </div>
 
                                                 <div class="mrr-needs-card__toggle" aria-hidden="true">
@@ -1676,25 +1902,21 @@
                             @if ($appliedChanges === [])
                                 <div class="mrr-empty">Применённых ревизионных изменений по выбранному рынку пока нет.</div>
                             @else
-                                <div class="mrr-table-wrap">
-                                    <table class="mrr-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Место</th>
-                                                <th>Что применено</th>
-                                                <th>Детали</th>
-                                                <th>Кем и когда</th>
-                                                <th>Переходы</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach ($appliedChanges as $row)
-                                                <tr>
-                                                    <td>
-                                                        <div class="mrr-place">
-                                                            <div class="mrr-place__title">
-                                                                {{ $row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id'])) }}
-                                                            </div>
+                                <div class="mrr-applied-list">
+                                    @foreach ($appliedChanges as $row)
+                                        <details class="mrr-applied-card">
+                                            <summary>
+                                                <div class="mrr-applied-card__summary-main">
+                                                    <div class="mrr-applied-card__summary-top">
+                                                        <div class="mrr-place__title">
+                                                            {{ $row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id'])) }}
+                                                        </div>
+                                                        <span class="mrr-badge mrr-badge--success">
+                                                            {{ $row['review_status_label'] ?: 'Применено' }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="mrr-applied-card__summary-grid">
+                                                        <div class="mrr-applied-card__summary-place">
                                                             <div class="mrr-place__meta">
                                                                 {{ $row['display_name'] ?: 'Без отображаемого названия' }}
                                                                 @if (filled($row['location_name']))
@@ -1702,32 +1924,53 @@
                                                                 @endif
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                    <td>
-                                                        <div class="mrr-place">
-                                                            <div class="mrr-place__title">{{ $row['decision_label'] }}</div>
-                                                            @if (filled($row['review_status_label']))
-                                                                <div class="mrr-place__meta">{{ $row['review_status_label'] }}</div>
+                                                        <div class="mrr-applied-card__summary-brief">
+                                                            <div class="mrr-applied-card__decision-label">{{ $row['decision_label'] }}</div>
+                                                            @if (filled($row['summary']))
+                                                                <div class="mrr-applied-card__reason">{{ $row['summary'] }}</div>
                                                             @endif
                                                         </div>
-                                                    </td>
-                                                    <td><div class="mrr-applied-summary">{{ $row['summary'] }}</div></td>
-                                                    <td>
-                                                        <div class="mrr-place">
-                                                            <div class="mrr-place__title">{{ $row['created_by_name'] ?: '—' }}</div>
-                                                            <div class="mrr-place__meta">{{ $row['effective_at'] ?: '—' }}</div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mrr-applied-card__toggle" aria-hidden="true">
+                                                    <span class="mrr-applied-card__toggle-open">Подробнее ▾</span>
+                                                    <span class="mrr-applied-card__toggle-close">Скрыть ▴</span>
+                                                </div>
+                                            </summary>
+
+                                            <div class="mrr-applied-card__body">
+                                                <div class="mrr-applied-card__body-grid">
+                                                    <div class="mrr-applied-card__column">
+                                                        <div class="mrr-applied-card__label">Что применено</div>
+                                                        <div class="mrr-place__title">{{ $row['decision_label'] }}</div>
+                                                        @if (filled($row['review_status_label']))
+                                                            <div class="mrr-applied-card__meta">{{ $row['review_status_label'] }}</div>
+                                                        @endif
+                                                    </div>
+
+                                                    <div class="mrr-applied-card__column">
+                                                        <div class="mrr-applied-card__label">Детали</div>
+                                                        <div class="mrr-applied-summary">{{ $row['summary'] }}</div>
+                                                    </div>
+
+                                                    <div class="mrr-applied-card__column">
+                                                        <div class="mrr-applied-card__label">Кем и когда</div>
+                                                        <div class="mrr-place__title">{{ $row['created_by_name'] ?: '—' }}</div>
+                                                        <div class="mrr-place__meta">{{ $row['effective_at'] ?: '—' }}</div>
+                                                    </div>
+
+                                                    <div class="mrr-applied-card__column">
+                                                        <div class="mrr-applied-card__label">Переходы</div>
                                                         <div class="mrr-links">
                                                             <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    @endforeach
                                 </div>
                             @endif
                         </div>
