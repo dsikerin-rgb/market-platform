@@ -319,7 +319,11 @@ class Operation extends Model
         }
 
         if ($decision === SpaceReviewDecision::MARK_SPACE_FREE) {
-            self::closeSpaceSnapshotBindings((int) $operation->market_id, $space->id);
+            self::closeSpaceSnapshotBindings((int) $operation->market_id, $space->id, 'space_marked_free');
+        }
+
+        if ($decision === SpaceReviewDecision::MARK_SPACE_SERVICE) {
+            self::closeSpaceSnapshotBindings((int) $operation->market_id, $space->id, 'space_marked_service');
         }
     }
 
@@ -337,7 +341,7 @@ class Operation extends Model
         ], true);
     }
 
-    private static function closeSpaceSnapshotBindings(int $marketId, int $spaceId): void
+    private static function closeSpaceSnapshotBindings(int $marketId, int $spaceId, string $resolutionReason): void
     {
         $now = now();
 
@@ -350,7 +354,7 @@ class Operation extends Model
             ->update([
                 'ended_at' => $now,
                 'updated_at' => $now,
-                'resolution_reason' => 'space_marked_free',
+                'resolution_reason' => $resolutionReason,
             ]);
     }
 }
