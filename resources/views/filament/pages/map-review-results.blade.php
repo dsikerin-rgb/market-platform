@@ -1717,14 +1717,11 @@
                                                                 @endif
                                                             </div>
                                                         </div>
-                                                        <div class="mrr-needs-card__summary-brief">
-                                                            @if ($attentionTab !== 'unconfirmed_links')
-                                                                <div class="mrr-needs-card__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
-                                                            @endif
-                                                            @if (filled($row['reason']))
+                                                        @if (filled($row['reason']))
+                                                            <div class="mrr-needs-card__summary-brief">
                                                                 <div class="mrr-needs-card__reason">{{ $row['reason'] }}</div>
-                                                            @endif
-                                                        </div>
+                                                            </div>
+                                                        @endif
                                                     </div>
                                                 </div>
 
