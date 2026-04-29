@@ -273,6 +273,145 @@
                 color: #fecaca;
             }
 
+            .mrr-needs-list {
+                display: flex;
+                flex-direction: column;
+                gap: 0.8rem;
+            }
+
+            .mrr-needs-card {
+                border-radius: 1rem;
+                border: 1px solid rgba(148, 163, 184, 0.12);
+                background: rgba(248, 250, 252, 0.7);
+                padding: 0.85rem 0.9rem;
+            }
+
+            .dark .mrr-needs-card {
+                border-color: rgba(148, 163, 184, 0.12);
+                background: rgba(15, 23, 42, 0.34);
+            }
+
+            .mrr-needs-card--priority {
+                border-color: rgba(59, 130, 246, 0.22);
+                background: rgba(239, 246, 255, 0.88);
+            }
+
+            .dark .mrr-needs-card--priority {
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(15, 23, 42, 0.42);
+            }
+
+            .mrr-needs-card > summary {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 1rem;
+                cursor: pointer;
+                list-style: none;
+                outline: none;
+            }
+
+            .mrr-needs-card > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .mrr-needs-card__summary-main {
+                min-width: 0;
+                display: flex;
+                flex: 1;
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+
+            .mrr-needs-card__summary-head {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.42rem;
+            }
+
+            .mrr-needs-card__decision-label {
+                font-size: 0.8125rem;
+                font-weight: 700;
+                color: #0f172a;
+            }
+
+            .dark .mrr-needs-card__decision-label {
+                color: #f8fafc;
+            }
+
+            .mrr-needs-card__reason {
+                font-size: 0.75rem;
+                color: #475569;
+                display: -webkit-box;
+                overflow: hidden;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 2;
+            }
+
+            .dark .mrr-needs-card__reason {
+                color: #94a3b8;
+            }
+
+            .mrr-needs-card__toggle {
+                display: inline-flex;
+                flex-shrink: 0;
+                align-items: center;
+                justify-content: flex-end;
+                min-width: 6rem;
+                padding: 0.28rem 0;
+                font-size: 0.75rem;
+                font-weight: 800;
+                color: #1d4ed8;
+                white-space: nowrap;
+            }
+
+            .dark .mrr-needs-card__toggle {
+                color: #bfdbfe;
+            }
+
+            .mrr-needs-card__toggle-close {
+                display: none;
+            }
+
+            .mrr-needs-card[open] .mrr-needs-card__toggle-open {
+                display: none;
+            }
+
+            .mrr-needs-card[open] .mrr-needs-card__toggle-close {
+                display: inline;
+            }
+
+            .mrr-needs-card__body {
+                margin-top: 0.85rem;
+                padding-top: 0.85rem;
+                border-top: 1px solid rgba(148, 163, 184, 0.14);
+            }
+
+            .dark .mrr-needs-card__body {
+                border-top-color: rgba(148, 163, 184, 0.16);
+            }
+
+            .mrr-needs-card__body-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.15fr) minmax(0, 1fr);
+                gap: 0.85rem;
+                align-items: start;
+            }
+
+            .mrr-needs-card__column {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0.6rem;
+            }
+
+            @media (max-width: 1140px) {
+                .mrr-needs-card__body-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
             .mrr-link {
                 display: inline-flex;
                 align-items: center;
@@ -1300,74 +1439,104 @@
                             @if ($needsAttention === [])
                                 <div class="mrr-empty">Сейчас нет мест, требующих уточнения.</div>
                             @else
-                                <div class="mrr-table-wrap">
-                                    <table class="mrr-table mrr-table--needs {{ $attentionTab === 'unconfirmed_links' ? 'mrr-table--unconfirmed' : '' }}">
-                                        <thead>
-                                            <tr>
-                                                <th>Место</th>
-                                                <th>Анализ связей</th>
-                                                <th>ИИ-разбор</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @foreach ($needsAttention as $row)
-                                                @php
-                                                    $ai = $aiSummaries[$row['space_id']] ?? null;
-                                                @endphp
-                                                <tr class="{{ $row['priority_is_high'] ? 'mrr-row--priority' : '' }}">
-                                                    <td>
-                                                        <div class="mrr-place">
-                                                            <div class="mrr-place__title">
-                                                                {{ $row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id'])) }}
-                                                            </div>
-                                                            <div class="mrr-place__meta">
-                                                                {{ $row['display_name'] ?: 'Без отображаемого названия' }}
-                                                                @if (filled($row['location_name']))
-                                                                    · {{ $row['location_name'] }}
-                                                                @endif
-                                                            </div>
-                                                            <div class="mrr-place__statusline">
-                                                                <span class="mrr-badge mrr-badge--{{ $row['review_status'] }}">
-                                                                    {{ $row['review_status_label'] ?? '—' }}
-                                                                </span>
-                                                            </div>
-                                                            @if ($attentionTab !== 'unconfirmed_links')
-                                                                <div class="mrr-place__decision">
-                                                                    <div class="mrr-place__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
-                                                                    @if (filled($row['reason']))
-                                                                        <div class="mrr-place__decision-reason">{{ $row['reason'] }}</div>
-                                                                    @endif
-                                                                    <div class="mrr-place__decision-meta">
-                                                                        {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
-                                                                    </div>
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    class="mrr-quick-launcher"
-                                                                    data-mrr-quick-review-launcher
-                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                >
-                                                                    Быстрое решение
-                                                                </button>
-                                                            @endif
-                                                            <div class="mrr-links">
-                                                                <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td>
-                                                        @php
-                                                            $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
-                                                            $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
-                                                            $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
-                                                            $relationAssessment = trim((string) ($diagnostics['relation_assessment'] ?? ''));
-                                                            $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
+                                <div class="mrr-needs-list">
+                                    @foreach ($needsAttention as $row)
+                                        @php
+                                            $ai = $aiSummaries[$row['space_id']] ?? null;
+                                            $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
+                                            $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
+                                            $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
+                                            $relationAssessment = trim((string) ($diagnostics['relation_assessment'] ?? ''));
+                                            $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
 
-                                                            if (filled($row['number']) && filled($row['display_name']) && $row['number'] !== $row['display_name']) {
-                                                                $currentSpaceLabel = $row['number'] . ' / ' . $row['display_name'];
-                                                            }
-                                                        @endphp
+                                            if (filled($row['number']) && filled($row['display_name']) && $row['number'] !== $row['display_name']) {
+                                                $currentSpaceLabel = $row['number'] . ' / ' . $row['display_name'];
+                                            }
+
+                                            $hasAiKey = array_key_exists($row['space_id'], $aiSummaries)
+                                                || array_key_exists($row['space_id'], $aiErrors ?? []);
+                                            $aiErrorType = $aiErrors[$row['space_id']] ?? null;
+                                            $aiMode = (string) (($aiMeta['mode'] ?? 'ok'));
+                                            $aiLimit = (int) (($aiMeta['limit'] ?? 5));
+
+                                            // Функция для замены технических кодов на русский текст
+                                            $humanize = function(?string $text): string {
+                                                if (blank($text)) return '';
+                                                $map = [
+                                                    'occupancy_conflict'     => 'конфликт по занятости',
+                                                    'tenant_changed_on_site' => 'на месте другой арендатор',
+                                                    'shape_not_found'        => 'фигура не найдена на карте',
+                                                    'mark_space_free'        => 'отметить место как свободное',
+                                                    'mark_space_service'     => 'отметить место как служебное',
+                                                    'fix_space_identity'     => 'уточнить номер и название',
+                                                    'bind_shape_to_space'    => 'привязать фигуру к месту',
+                                                    'unbind_shape_from_space'=> 'отвязать фигуру',
+                                                ];
+                                                $text = str_replace(array_keys($map), array_values($map), $text);
+                                                return $text;
+                                            };
+                                        @endphp
+
+                                        <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}">
+                                            <summary>
+                                                <div class="mrr-needs-card__summary-main">
+                                                    <div class="mrr-needs-card__summary-head">
+                                                        <div class="mrr-place__title">
+                                                            {{ $row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id'])) }}
+                                                        </div>
+                                                        <span class="mrr-badge mrr-badge--{{ $row['review_status'] }}">
+                                                            {{ $row['review_status_label'] ?? '—' }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="mrr-place__meta">
+                                                        {{ $row['display_name'] ?: 'Без отображаемого названия' }}
+                                                        @if (filled($row['location_name']))
+                                                            · {{ $row['location_name'] }}
+                                                        @endif
+                                                    </div>
+                                                    @if ($attentionTab !== 'unconfirmed_links')
+                                                        <div class="mrr-needs-card__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
+                                                    @endif
+                                                    @if (filled($row['reason']))
+                                                        <div class="mrr-needs-card__reason">{{ $row['reason'] }}</div>
+                                                    @endif
+                                                </div>
+
+                                                <div class="mrr-needs-card__toggle" aria-hidden="true">
+                                                    <span class="mrr-needs-card__toggle-open">Подробнее ▾</span>
+                                                    <span class="mrr-needs-card__toggle-close">Скрыть ▴</span>
+                                                </div>
+                                            </summary>
+
+                                            <div class="mrr-needs-card__body">
+                                                <div class="mrr-needs-card__body-grid">
+                                                    <div class="mrr-needs-card__column mrr-needs-card__column--main">
+                                                        @if ($attentionTab !== 'unconfirmed_links')
+                                                            <div class="mrr-place__decision">
+                                                                <div class="mrr-place__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
+                                                                @if (filled($row['reason']))
+                                                                    <div class="mrr-place__decision-reason">{{ $row['reason'] }}</div>
+                                                                @endif
+                                                                <div class="mrr-place__decision-meta">
+                                                                    {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                class="mrr-quick-launcher"
+                                                                data-mrr-quick-review-launcher
+                                                                data-mrr-space-id="{{ $row['space_id'] }}"
+                                                            >
+                                                                Быстрое решение
+                                                            </button>
+                                                        @endif
+                                                        <div class="mrr-links">
+                                                            <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                            <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mrr-needs-card__column">
                                                         <div class="mrr-diagnostics">
                                                             <div class="mrr-diagnostics__section">
                                                                 <div class="mrr-diagnostics__section-title">Связи текущего места</div>
@@ -1433,32 +1602,9 @@
                                                                 </div>
                                                             </details>
                                                         </div>
-                                                    </td>
-                                                    <td>
-                                                        @php
-                                                            $hasAiKey = array_key_exists($row['space_id'], $aiSummaries)
-                                                                || array_key_exists($row['space_id'], $aiErrors ?? []);
-                                                            $aiErrorType = $aiErrors[$row['space_id']] ?? null;
-                                                            $aiMode = (string) (($aiMeta['mode'] ?? 'ok'));
-                                                            $aiLimit = (int) (($aiMeta['limit'] ?? 5));
+                                                    </div>
 
-                                                            // Функция для замены технических кодов на русский текст
-                                                            $humanize = function(?string $text): string {
-                                                                if (blank($text)) return '';
-                                                                $map = [
-                                                                    'occupancy_conflict'     => 'конфликт по занятости',
-                                                                    'tenant_changed_on_site' => 'на месте другой арендатор',
-                                                                    'shape_not_found'        => 'фигура не найдена на карте',
-                                                                    'mark_space_free'        => 'отметить место как свободное',
-                                                                    'mark_space_service'     => 'отметить место как служебное',
-                                                                    'fix_space_identity'     => 'уточнить номер и название',
-                                                                    'bind_shape_to_space'    => 'привязать фигуру к месту',
-                                                                    'unbind_shape_from_space'=> 'отвязать фигуру',
-                                                                ];
-                                                                $text = str_replace(array_keys($map), array_values($map), $text);
-                                                                return $text;
-                                                            };
-                                                        @endphp
+                                                    <div class="mrr-needs-card__column">
                                                         <div class="mrr-ai-panel">
                                                             <div class="mrr-ai-panel__title">ИИ-разбор</div>
                                                             <div class="mrr-ai">
@@ -1508,11 +1654,11 @@
                                                                 @endif
                                                             </div>
                                                         </div>
-                                                    </td>
-                                                </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    @endforeach
                                 </div>
                             @endif
                         </div>
