@@ -4638,6 +4638,27 @@
             const t = e.target;
             if (!(t instanceof HTMLElement)) return;
 
+            const reviewDecisionBtn = t.closest('[data-action="review-decision"]');
+            if (reviewDecisionBtn instanceof HTMLElement) {
+              const decision = String(reviewDecisionBtn.getAttribute('data-decision') || '');
+              const marketSpaceId = Number(reviewDecisionBtn.getAttribute('data-space-id') || 0);
+              if (!decision) {
+                return;
+              }
+              if (!Number.isFinite(marketSpaceId) || marketSpaceId <= 0) {
+                toast('Некорректный ID места');
+                return;
+              }
+
+              submitReviewDecision(decision, {
+                marketSpaceId: Math.trunc(marketSpaceId),
+              }).catch((err) => {
+                console.error(err);
+                toast(String(err?.message || err));
+              });
+              return;
+            }
+
             const action = t.getAttribute('data-action');
             if (action === 'toggle-without-shape-actions') {
               const spaceId = Number(t.getAttribute('data-space-id') || 0);
