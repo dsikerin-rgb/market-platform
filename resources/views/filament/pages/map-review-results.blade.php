@@ -296,6 +296,81 @@
                 gap: 0.8rem;
             }
 
+            .mrr-attention-filters {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.45rem;
+                margin-bottom: 0.9rem;
+            }
+
+            .mrr-attention-filter {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 999px;
+                border: 1px solid rgba(148, 163, 184, 0.22);
+                background: rgba(248, 250, 252, 0.7);
+                padding: 0.38rem 0.75rem;
+                font-size: 0.78rem;
+                font-weight: 600;
+                color: #475569;
+                cursor: pointer;
+                transition: all 0.16s ease;
+            }
+
+            .dark .mrr-attention-filter {
+                border-color: rgba(148, 163, 184, 0.2);
+                background: rgba(15, 23, 42, 0.35);
+                color: #cbd5e1;
+            }
+
+            .mrr-attention-filter:hover {
+                border-color: rgba(59, 130, 246, 0.35);
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-attention-filter:hover {
+                color: #93c5fd;
+            }
+
+            .mrr-attention-filter.is-active {
+                border-color: #2563eb;
+                background: #2563eb;
+                color: #fff;
+            }
+
+            .dark .mrr-attention-filter.is-active {
+                border-color: #3b82f6;
+                background: #3b82f6;
+            }
+
+            .mrr-attention-filter-count {
+                margin-left: auto;
+                font-size: 0.75rem;
+                color: #64748b;
+                font-weight: 500;
+            }
+
+            .dark .mrr-attention-filter-count {
+                color: #94a3b8;
+            }
+
+            .mrr-needs-card.is-hidden {
+                display: none;
+            }
+
+            .mrr-attention-no-results {
+                text-align: center;
+                padding: 1.2rem;
+                color: #64748b;
+                font-size: 0.85rem;
+            }
+
+            .dark .mrr-attention-no-results {
+                color: #94a3b8;
+            }
+
             .mrr-needs-card {
                 border-radius: 1rem;
                 border: 1px solid rgba(148, 163, 184, 0.12);
@@ -1681,6 +1756,14 @@
                             @if ($needsAttention === [])
                                 <div class="mrr-empty">Сейчас нет мест, требующих уточнения.</div>
                             @else
+                                <div class="mrr-attention-filters" role="group" aria-label="Фильтры карточек">
+                                    <button type="button" class="mrr-attention-filter is-active" data-mrr-attention-filter="all">Все</button>
+                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="occupancy_conflict">Конфликт по занятости</button>
+                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="space_identity_needs_clarification">Уточнить номер / название</button>
+                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="tenant_changed_on_site">Сменился арендатор</button>
+                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="shape_not_found">Фигура не найдена</button>
+                                    <span class="mrr-attention-filter-count" aria-live="polite"></span>
+                                </div>
                                 <div class="mrr-needs-list">
                                     @foreach ($needsAttention as $row)
                                         @php
@@ -1719,7 +1802,10 @@
                                             };
                                         @endphp
 
-                                        <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}">
+                                        <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}"
+                                                 data-mrr-attention-card
+                                                 data-mrr-review-status="{{ $row['review_status'] ?? '' }}"
+                                                 data-mrr-decision="{{ $row['decision'] ?? '' }}">
                                             <summary>
                                                 <div class="mrr-needs-card__summary-main">
                                                     <div class="mrr-needs-card__summary-top">
@@ -2550,6 +2636,72 @@
                                 quickReviewError.textContent = String(errorInstance?.message || errorInstance);
                             });
                         }
+                    });
+                }
+
+                // --- Фильтры карточек "Нужно уточнить" ---
+                const attentionFilterButtons = Array.from(document.querySelectorAll('[data-mrr-attention-filter]'));
+                const attentionCards = Array.from(document.querySelectorAll('[data-mrr-attention-card]'));
+                const attentionFilterCount = document.querySelector('.mrr-attention-filter-count');
+
+                if (attentionFilterButtons.length > 0 && attentionCards.length > 0) {
+                    const updateFilterCount = () => {
+                        const visibleCount = attentionCards.filter(card => !card.classList.contains('is-hidden')).length;
+                        const totalCount = attentionCards.length;
+                        if (attentionFilterCount) {
+                            if (visibleCount === totalCount) {
+                                attentionFilterCount.textContent = `${totalCount} карточек`;
+                            } else {
+                                attentionFilterCount.textContent = `${visibleCount} из ${totalCount}`;
+                            }
+                        }
+                    };
+
+                    const applyFilter = (filterValue) => {
+                        let visibleCount = 0;
+
+                        attentionCards.forEach(card => {
+                            const decision = String(card.dataset.mrrDecision || '').trim();
+                            const shouldShow = filterValue === 'all' || decision === filterValue;
+
+                            if (shouldShow) {
+                                card.classList.remove('is-hidden');
+                                visibleCount++;
+                            } else {
+                                card.classList.add('is-hidden');
+                            }
+                        });
+
+                        // Показать сообщение, если нет карточек
+                        const needsAttentionPanel = document.querySelector('.aw-panel--muted .mrr-panel-body');
+                        if (needsAttentionPanel) {
+                            let noResultsMsg = needsAttentionPanel.querySelector('.mrr-attention-no-results');
+                            if (!noResultsMsg) {
+                                noResultsMsg = document.createElement('div');
+                                noResultsMsg.className = 'mrr-attention-no-results';
+                                noResultsMsg.textContent = 'Нет карточек по выбранному фильтру';
+                                needsAttentionPanel.insertBefore(noResultsMsg, needsAttentionPanel.querySelector('.mrr-needs-list'));
+                            }
+                            noResultsMsg.hidden = visibleCount > 0;
+                        }
+
+                        updateFilterCount();
+                    };
+
+                    // Инициализация: по умолчанию "all"
+                    applyFilter('all');
+
+                    // Обработчики кликов
+                    attentionFilterButtons.forEach(button => {
+                        button.addEventListener('click', () => {
+                            const filterValue = String(button.dataset.mrrAttentionFilter || 'all').trim();
+
+                            // Обновить активную кнопку
+                            attentionFilterButtons.forEach(btn => btn.classList.remove('is-active'));
+                            button.classList.add('is-active');
+
+                            applyFilter(filterValue);
+                        });
                     });
                 }
             })();
