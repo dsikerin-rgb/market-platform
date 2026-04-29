@@ -4501,6 +4501,17 @@
                   actions += '<a href="/admin/tenants/' + String(tenantId) + '/edit" target="_blank" rel="noopener" style="font-size: 13px; color: #0284c7; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px 12px; cursor: pointer; width: 100%; font-weight: 500; display: flex; align-items: center; justify-content: flex-start; text-decoration: none;">Открыть арендатора →</a>';
                 }
 
+                actions += '<div style="margin-top: 4px; padding-top: 8px; border-top: 1px solid #dbeafe; display: flex; flex-direction: column; gap: 6px;">';
+                actions += '<div style="font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #1d4ed8;">Ревизия</div>';
+                actions += '<div style="display: flex; flex-wrap: wrap; gap: 6px;">';
+                actions += '<button type="button" data-action="review-decision" data-decision="occupancy_conflict" data-space-id="' + String(id) + '" title="Зафиксировать конфликт по месту" aria-label="Зафиксировать конфликт по месту" style="font-size: 12px; color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Конфликт</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="space_identity_needs_clarification" data-space-id="' + String(id) + '" title="Зафиксировать, что место требует уточнения" aria-label="Зафиксировать, что место требует уточнения" style="font-size: 12px; color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Требует уточнения</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="mark_space_free" data-space-id="' + String(id) + '" title="Используйте, если место фактически пустое" aria-label="Используйте, если место фактически пустое" style="font-size: 12px; color: #15803d; background: #ecfdf5; border: 1px solid #bbf7d0; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Свободно</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="mark_space_service" data-space-id="' + String(id) + '" title="Отметить место как служебное" aria-label="Отметить место как служебное" style="font-size: 12px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Служебное</button>';
+                actions += '<button type="button" data-action="review-decision" data-decision="tenant_changed_on_site" data-space-id="' + String(id) + '" title="Отметить, что на месте другой арендатор" aria-label="Отметить, что на месте другой арендатор" style="font-size: 12px; color: #7c2d12; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-weight: 700;">Сменился арендатор</button>';
+                actions += '</div>';
+                actions += '</div>';
+
                 actions += '</div>';
 
                 return '<div data-without-shapes-row-id="' + String(id) + '" style="display: flex; flex-direction: column; gap: 8px; padding: 14px 20px; border-bottom: 1px solid #e2e8f0;">' +
