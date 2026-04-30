@@ -70,9 +70,6 @@ class RevenueYearChartWidget extends ChartWidget
         $latestDebtYm = $this->resolveLatestDebtMonth($marketId);
 
         $parts = [
-            'Локация: ' . (string) $market->name,
-            'TZ: ' . $tz,
-            'Источник: 1С',
             'Период графика: до ' . $this->formatMonthLabel($selectedYm, $tz),
         ];
 
@@ -153,7 +150,7 @@ class RevenueYearChartWidget extends ChartWidget
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'К оплате (1С)',
+                    'label' => 'К оплате',
                     'data' => $payableData,
                     'yAxisID' => 'y',
                     'tension' => 0.25,
@@ -165,7 +162,7 @@ class RevenueYearChartWidget extends ChartWidget
                     'spanGaps' => false,
                 ],
                 [
-                    'label' => 'Мест в 1С-контуре, %',
+                    'label' => 'Охват мест, %',
                     'data' => $coveragePctData,
                     'yAxisID' => 'y1',
                     'tension' => 0.25,
@@ -315,7 +312,7 @@ class RevenueYearChartWidget extends ChartWidget
             }
         }
 
-        $start = CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
+        $start = $this->parseMonthStart($ym, $tz);
 
         return [$ym, $start];
     }
@@ -323,9 +320,18 @@ class RevenueYearChartWidget extends ChartWidget
     private function formatMonthLabel(string $ym, string $tz): string
     {
         try {
-            return CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->format('m.Y');
+            return $this->parseMonthStart($ym, $tz)->format('m.Y');
         } catch (\Throwable) {
             return $ym;
+        }
+    }
+
+    private function parseMonthStart(string $ym, string $tz): CarbonImmutable
+    {
+        try {
+            return CarbonImmutable::createFromFormat('!Y-m', $ym, $tz)->startOfMonth();
+        } catch (\Throwable) {
+            return CarbonImmutable::createFromFormat('Y-m', $ym, $tz)->startOfMonth();
         }
     }
 
@@ -365,7 +371,7 @@ class RevenueYearChartWidget extends ChartWidget
             'labels' => $labels,
             'datasets' => [
                 [
-                    'label' => 'К оплате (1С)',
+                    'label' => 'К оплате',
                     'data' => array_fill(0, $count, null),
                     'yAxisID' => 'y',
                     'tension' => 0.25,
@@ -377,7 +383,7 @@ class RevenueYearChartWidget extends ChartWidget
                     'spanGaps' => false,
                 ],
                 [
-                    'label' => 'Мест в 1С-контуре, %',
+                    'label' => 'Охват мест, %',
                     'data' => array_fill(0, $count, null),
                     'yAxisID' => 'y1',
                     'tension' => 0.25,
