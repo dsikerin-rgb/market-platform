@@ -122,7 +122,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         }
 
         if ($maintenanceSpaces > 0) {
-            $labels[] = 'На обслуживании (' . $maintenanceSpaces . ')';
+            $labels[] = 'Служебные места (' . $maintenanceSpaces . ')';
             $data[] = $maintenanceSpaces;
             $backgroundColor[] = '#A855F7';
             $borderColor[] = '#FFFFFF';
