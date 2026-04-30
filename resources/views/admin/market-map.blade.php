@@ -3471,6 +3471,7 @@
 
             setChosenSpace(normalized, { announce: !!opts.announce });
             const freshSpace = await refreshChosenSpaceFromServer() || normalized;
+            await loadShapes();
             const targetShape = findUsableShapeForSpaceId(freshSpace.id);
 
             if (!targetShape) {
