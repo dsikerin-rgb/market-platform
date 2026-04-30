@@ -50,16 +50,14 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
         }
 
         $market = Market::query()
-            ->select(['id', 'name', 'timezone'])
+            ->select(['id'])
             ->find($marketId);
 
         if (! $market) {
             return null;
         }
 
-        $tz = $this->resolveTimezone($market->timezone);
-
-        return 'Локация: ' . (string) $market->name . ' • TZ: ' . $tz . ' • Последние 12 импортов /api/1c/contract-debts';
+        return 'Последние 12 импортов /api/1c/contract-debts';
     }
 
     protected function getData(): array
