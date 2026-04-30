@@ -1186,6 +1186,34 @@
       color: inherit;
       white-space: nowrap;
     }
+    @media (max-width: 1120px) {
+      .legend-stack {
+        width: min(980px, calc(100vw - 20px));
+        bottom: 10px;
+      }
+      .legend.toolbar-group.toolbar-group--accent {
+        min-height: 30px;
+        padding: 2px;
+        border-radius: 10px;
+      }
+      .legend-items {
+        gap: 5px;
+      }
+      .legend-item {
+        gap: 4px;
+        min-height: 22px;
+        padding: 1px 8px;
+        border-radius: 7px;
+        font-size: 9px;
+      }
+      .legend-color {
+        width: 12px;
+        height: 12px;
+      }
+      .legend-label {
+        font-size: 9px;
+      }
+    }
     @media (max-width: 900px) {
       .toolbar {
         padding: 12px 12px 10px;
@@ -1868,11 +1896,11 @@
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #b91c1c;"></span>
-              <span class="legend-label">Просрочка по месту от {{ $debtRedAfterDays ?? 30 }} дней (точная связь)</span>
+              <span class="legend-label">Просрочка по месту от {{ $debtRedAfterDays ?? 30 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #ef4444;"></span>
-              <span class="legend-label">Риск арендатора от {{ $debtRedAfterDays ?? 30 }} дней (tenant fallback)</span>
+              <span class="legend-label">Риск арендатора от {{ $debtRedAfterDays ?? 30 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #94a3b8;"></span>
@@ -1884,7 +1912,7 @@
             </div>
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
-              <span class="legend-label">Разметка без привязки</span>
+              <span class="legend-label">Без привязки</span>
             </div>
           </div>
         </div>
@@ -1916,7 +1944,7 @@
             </div>
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
-              <span class="legend-label">Разметка без привязки</span>
+              <span class="legend-label">Без привязки</span>
             </div>
           </div>
         </div>
