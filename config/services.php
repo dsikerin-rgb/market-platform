@@ -42,6 +42,10 @@ return [
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
         'api_base' => env('TELEGRAM_API_BASE', 'https://api.telegram.org'),
         'timeout' => (int) env('TELEGRAM_HTTP_TIMEOUT', 10),
+        'connect_to_ips' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('TELEGRAM_API_CONNECT_TO_IPS', ''))
+        ))),
     ],
 
 ];

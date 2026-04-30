@@ -52,6 +52,7 @@ This runbook covers notification delivery health checks and Telegram delivery va
      - `TELEGRAM_BOT_TOKEN=...`
      - `TELEGRAM_BOT_USERNAME=market_tasks_notify_bot`
      - `TELEGRAM_API_BASE=https://api.telegram.org`
+     - if prod cannot reach Telegram because of network routing, set `TELEGRAM_API_CONNECT_TO_IPS=149.154.167.220`
      - then `php artisan optimize:clear`
 
 ## Self-link flow (user cabinet)

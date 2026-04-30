@@ -46,32 +46,83 @@ class TelegramChannel
 
         $apiBase = rtrim((string) config('services.telegram.api_base', 'https://api.telegram.org'), '/');
         $timeout = max(2, (int) config('services.telegram.timeout', 10));
+        $connectToIps = $this->connectToIps();
+        $host = (string) (parse_url($apiBase, PHP_URL_HOST) ?: 'api.telegram.org');
+        $attempts = array_values(array_unique(array_merge([null], $connectToIps), SORT_REGULAR));
+        $lastResponse = null;
+        $lastException = null;
 
-        try {
-            $response = Http::timeout($timeout)
-                ->asForm()
-                ->post("{$apiBase}/bot{$token}/sendMessage", [
+        foreach ($attempts as $connectToIp) {
+            try {
+                $request = Http::timeout($timeout)->asForm();
+
+                if (is_string($connectToIp) && $connectToIp !== '') {
+                    $request = $request->withOptions([
+                        'curl' => [
+                            CURLOPT_CONNECT_TO => [
+                                "{$host}:443:{$connectToIp}:443",
+                            ],
+                        ],
+                    ]);
+                }
+
+                $response = $request->post("{$apiBase}/bot{$token}/sendMessage", [
                     'chat_id' => $chatId,
                     'text' => $text,
                     'disable_web_page_preview' => true,
                 ]);
 
-            if (! $response->successful() || (bool) $response->json('ok') !== true) {
-                Log::warning('Telegram API returned a non-success response.', [
-                    'notification' => $notification::class,
-                    'notifiable' => $notifiable::class,
-                    'status' => $response->status(),
-                    'body' => mb_substr((string) $response->body(), 0, 1000),
-                ]);
+                if ($response->successful() && (bool) $response->json('ok') === true) {
+                    return;
+                }
+
+                $lastResponse = $response;
+            } catch (Throwable $e) {
+                $lastException = $e;
             }
-        } catch (Throwable $e) {
+        }
+
+        if ($lastResponse !== null) {
+            Log::warning('Telegram API returned a non-success response.', [
+                'notification' => $notification::class,
+                'notifiable' => $notifiable::class,
+                'status' => $lastResponse->status(),
+                'body' => mb_substr((string) $lastResponse->body(), 0, 1000),
+                'connect_to_ips' => $connectToIps,
+            ]);
+
+            return;
+        }
+
+        if ($lastException !== null) {
             Log::warning('Telegram notification failed; request will continue without it.', [
                 'notification' => $notification::class,
                 'notifiable' => $notifiable::class,
-                'exception' => $e::class,
-                'message' => $e->getMessage(),
+                'exception' => $lastException::class,
+                'message' => $lastException->getMessage(),
+                'connect_to_ips' => $connectToIps,
             ]);
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function connectToIps(): array
+    {
+        $ips = config('services.telegram.connect_to_ips', []);
+
+        if (! is_array($ips)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(
+                static fn ($ip): string => is_string($ip) ? trim($ip) : '',
+                $ips,
+            ),
+            static fn (string $ip): bool => filter_var($ip, FILTER_VALIDATE_IP) !== false,
+        ));
     }
 
     /**
