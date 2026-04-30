@@ -2302,6 +2302,63 @@ JS;
         $this->assertNotContains((int) $spaceWithShapes->id, $ids);
     }
 
+    public function test_applied_space_review_shows_auto_close_info_when_payload_contains_auto_closed_by_reconciliation(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'AUTO-CLOSE-TEST',
+            'display_name' => 'Auto-close test space',
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => now(),
+        ]);
+
+        $operation = Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'observed_tenant_name' => 'Some tenant',
+                'reason' => 'Tenant changed on site',
+                'auto_closed_by_reconciliation' => true,
+                'auto_close_at' => '2026-04-30 11:06:00',
+                'auto_close_binding_id' => 247,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $this->assertTrue($operation->payload['auto_closed_by_reconciliation'] ?? false);
+        $this->assertSame('2026-04-30 11:06:00', $operation->payload['auto_close_at'] ?? null);
+        $this->assertSame(247, $operation->payload['auto_close_binding_id'] ?? null);
+
+        $service = app(\App\Services\MarketMap\MapReviewResultsService::class);
+        $changes = $service->appliedChanges((int) $market->id, 50);
+
+        $this->assertNotEmpty($changes, 'Applied changes should not be empty');
+
+        $autoClosedChange = collect($changes)->first(fn ($change) => $change['space_id'] === $space->id);
+
+        $this->assertNotNull($autoClosedChange, 'Should find change for space');
+        $this->assertTrue($autoClosedChange['is_auto_closed'] ?? false, 'is_auto_closed should be true');
+        $this->assertSame('30.04.2026 11:06', $autoClosedChange['auto_close_at'] ?? null);
+        $this->assertSame(247, $autoClosedChange['auto_close_binding_id'] ?? null);
+
+        $html = Livewire::test(MapReviewResults::class)->html();
+
+        $this->assertStringContainsString('AUTO-CLOSE-TEST', $html, 'Space number should be in HTML');
+        $this->assertStringContainsString('Закрыто автоматически', $html, 'Auto-close label should be in HTML');
+        $this->assertStringContainsString('Основание: договорная привязка #247', $html, 'Binding ID should be in HTML');
+    }
+
     private function hasMapReviewColumns(): bool
     {
         if (! Schema::hasTable('market_spaces')) {

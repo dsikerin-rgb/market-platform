@@ -178,6 +178,19 @@ final class OperationPayloadValidator
             }
         }
 
+        if (array_key_exists('auto_closed_by_reconciliation', $payload)) {
+            $normalized['auto_closed_by_reconciliation'] = (bool) $payload['auto_closed_by_reconciliation'];
+        }
+
+        if (array_key_exists('auto_close_at', $payload)) {
+            $value = $payload['auto_close_at'];
+            $normalized['auto_close_at'] = $value !== null ? (string) $value : null;
+        }
+
+        if (array_key_exists('auto_close_binding_id', $payload)) {
+            $normalized['auto_close_binding_id'] = self::intOrNull($payload['auto_close_binding_id'] ?? null);
+        }
+
         return $normalized;
     }
 
