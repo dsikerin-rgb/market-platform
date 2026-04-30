@@ -140,14 +140,11 @@ class NotifySuperAdminsAboutUserLogin
             (string) $actor->getKey(),
             trim((string) ($this->request->ip() ?? '')),
             trim((string) ($this->request->userAgent() ?? '')),
-            trim((string) $this->request->headers->get('referer', '')),
-            trim((string) $this->request->path()),
-            (string) floor(time() / 5),
         ];
 
         $key = 'auth:' . sha1(implode('|', $parts));
 
-        return ! Cache::add($key, true, now()->addSeconds(5));
+        return ! Cache::add($key, true, now()->addSeconds(30));
     }
 
     private function canReceiveSecurityNotifications(User $user): bool
