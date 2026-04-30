@@ -698,7 +698,7 @@ class EditMarketSpace extends BaseEditRecord
             'vacant' => 'Свободно',
             'occupied' => 'Занято',
             'reserved' => 'Зарезервировано',
-            'maintenance' => 'На обслуживании',
+            'maintenance' => 'Служебное место',
             default => $state,
         };
     }
