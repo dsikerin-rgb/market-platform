@@ -1499,7 +1499,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->limit($limit)
             ->get(['id', 'number', 'code', 'area_sqm', 'status', 'tenant_id']);
 
-        $items = $rows->map(static function (MarketSpace $space): array {
+        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel): array {
             $tenant = $space->tenant;
 
             $tenantName = null;

@@ -276,7 +276,7 @@
     .viewer {
       border: 1px solid rgba(148, 163, 184, 0.28);
       border-radius: 14px;
-      overflow: hidden;
+      overflow: visible;
       background: transparent;
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
       display: flex;
@@ -289,6 +289,8 @@
       display: grid;
       gap: 5px;
       position: relative;
+      z-index: 130;
+      overflow: visible;
       border-bottom: 1px solid rgba(147, 197, 253, 0.18);
       background:
         radial-gradient(circle at top right, rgba(186, 230, 253, 0.28) 0%, rgba(186, 230, 253, 0) 34%),
@@ -315,7 +317,7 @@
       gap: 12px;
       flex-wrap: nowrap !important;
       white-space: nowrap !important;
-      overflow-x: auto !important;
+      overflow: visible !important;
     }
     .toolbar-group--hero-left {
       display: flex !important;
@@ -350,6 +352,7 @@
       justify-content: flex-start !important;
       flex-wrap: nowrap !important;
       white-space: nowrap !important;
+      overflow: visible !important;
       margin-left: 0 !important;
       padding-left: 0 !important;
     }
@@ -422,21 +425,26 @@
     }
     .toolbar-row.toolbar-row--edit-hint {
       display: none;
-      position: absolute;
-      left: 14px;
-      top: 86px;
-      z-index: 6;
+      align-items: center;
+      justify-content: center;
+      padding: 0 14px;
       pointer-events: none;
     }
     .toolbar-row.toolbar-row--review-status {
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 4px 8px;
-      border-radius: 10px;
-      border: 1px solid rgba(147, 197, 253, 0.44);
-      background: linear-gradient(180deg, rgba(219, 234, 254, 0.86) 0%, rgba(239, 246, 255, 0.92) 100%);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.78);
+      padding: 0 8px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .toolbar-row.toolbar-row--review-no-shapes {
+      display: none;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 0 0 6px;
     }
     .toolbar-group {
       display: flex;
@@ -678,10 +686,12 @@
       justify-content: flex-end;
     }
     .toolbar-group.toolbar-group--review-status-group {
-      width: 100%;
+      width: fit-content;
+      max-width: calc(100vw - 28px);
       gap: 4px;
       justify-content: flex-start;
       flex-wrap: nowrap;
+      pointer-events: auto;
     }
     .toolbar-group.toolbar-group--utility {
       margin-left: auto;
@@ -699,17 +709,85 @@
       align-items: center;
       font-size: 11px;
     }
-    #editHint {
-      min-height: 30px;
-      padding: 6px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(147, 197, 253, 0.34);
+    .map-zoom-anchor {
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      height: 0;
+      pointer-events: none;
+    }
+    .map-zoom-controls {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 90;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+      max-width: calc(100% - 28px);
+      transform: translateX(var(--map-stage-scroll-left, 0px));
+    }
+    .map-zoom-controls .toolbar-group--accent {
       background: rgba(255,255,255,.94);
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-      color: #475569;
-      font-size: 11px;
-      line-height: 1.35;
-      white-space: nowrap;
+    }
+    .map-review-status-anchor {
+      position: sticky;
+      top: 0;
+      z-index: 91;
+      height: 0;
+      pointer-events: none;
+    }
+    .map-review-status-controls {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      width: max-content;
+      max-width: calc(100% - 28px);
+      pointer-events: auto;
+    }
+    .map-edit-hint-anchor {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      z-index: 95;
+      display: flex;
+      justify-content: center;
+      width: min(100vw - 28px, 1000px);
+      pointer-events: none;
+    }
+    .map-edit-hint {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      padding: 0 14px;
+      pointer-events: none;
+    }
+    .map-edit-hint__group {
+      pointer-events: auto;
+      width: max-content;
+      max-width: calc(100vw - 28px);
+      justify-content: center;
+    }
+    .toolbar-group.toolbar-group--review-status-group {
+      width: fit-content;
+      max-width: calc(100vw - 28px);
+      gap: 4px;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      pointer-events: auto;
+    }
+    #editHint {
+      white-space: normal;
+      text-align: center;
+      max-width: 100%;
+      width: fit-content;
+      pointer-events: auto;
     }
     #reviewNavStatus {
       display: inline-flex;
@@ -969,12 +1047,20 @@
       }
     }
     .legend[hidden] {
-      display: none;
+      display: none !important;
     }
     .legend-stack {
+      position: absolute;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      width: min(1400px, calc(100vw - 32px));
       display: grid;
+      justify-items: center;
       gap: 0;
       flex: 0 0 auto;
+      pointer-events: none;
+      z-index: 93;
     }
     .legend-note {
       color: rgba(15, 23, 42, 0.72);
@@ -983,22 +1069,54 @@
     
     /* Легенда карты */
     .legend {
-      padding: 8px 10px;
-      border-bottom: 1px solid rgba(120,120,120,.12);
-      background: rgba(255,255,255,.17);
-      -webkit-backdrop-filter: blur(8px) saturate(120%);
-      backdrop-filter: blur(8px) saturate(120%);
+      padding: 0;
+      border-bottom: 0;
+      background: transparent;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
       font-size: 11px;
+      pointer-events: auto;
+    }
+    .legend.toolbar-group.toolbar-group--accent {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: max-content;
+      min-height: 36px;
+      padding: 3px;
+      border-radius: 12px;
+      background: var(--map-control-bg);
+      border: 1px solid var(--map-control-border);
+      box-shadow: var(--map-control-shadow);
+    }
+    .legend.toolbar-group.toolbar-group--accent[hidden] {
+      display: none !important;
     }
     .legend-items {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
     }
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
+      min-height: 26px;
+      padding: 2px 11px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.58);
+      color: #1e3a8a;
+      -webkit-text-fill-color: #1e3a8a;
+      font-size: 11px;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: none;
+      transition: background .18s ease, border-color .18s ease, color .18s ease;
+    }
+    .legend-item:hover {
+      background: rgba(255,255,255,.88);
+      border-color: rgba(147, 197, 253, 0.34);
     }
     .legend-item.legend-item--note { display: none; }
     .legend-color {
@@ -1066,7 +1184,36 @@
       border: 1px solid #94a3b8;
     }
     .legend-label {
+      color: inherit;
       white-space: nowrap;
+    }
+    @media (max-width: 1120px) {
+      .legend-stack {
+        width: min(980px, calc(100vw - 20px));
+        bottom: 10px;
+      }
+      .legend.toolbar-group.toolbar-group--accent {
+        min-height: 30px;
+        padding: 2px;
+        border-radius: 10px;
+      }
+      .legend-items {
+        gap: 5px;
+      }
+      .legend-item {
+        gap: 4px;
+        min-height: 22px;
+        padding: 1px 8px;
+        border-radius: 7px;
+        font-size: 9px;
+      }
+      .legend-color {
+        width: 12px;
+        height: 12px;
+      }
+      .legend-label {
+        font-size: 9px;
+      }
     }
     @media (max-width: 900px) {
       .toolbar {
@@ -1077,6 +1224,7 @@
       }
     }
     .stage {
+      position: relative;
       height: auto;
       min-height: 0;
       flex: 1 1 auto;
@@ -1494,18 +1642,25 @@
             <!-- Left: Zoom, Controls & Search -->
             <div class="toolbar-group toolbar-group--hero-left">
               <div class="toolbar-group--hero-top">
-                <div class="toolbar-group toolbar-group--accent">
-                  <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
-                  <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
-                  <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
-                </div>
-
                 @if ($canEdit)
                   <div class="toolbar-group toolbar-group--accent toolbar-group--control-segmented">
                     <button id="toggleEdit" type="button" title="Включить редактирование разметки карты" aria-label="Включить редактирование разметки карты">Редактирование</button>
                     <button id="toolSelect" type="button" style="display:none;" title="Редактировать существующую разметку" aria-label="Редактировать существующую разметку">Редактировать</button>
                     <button id="toolRect" type="button" style="display:none;" title="Нарисовать прямоугольную область" aria-label="Нарисовать прямоугольную область">Прямоугольник</button>
                     <button id="toolPoly" type="button" style="display:none;" title="Нарисовать полигон по точкам" aria-label="Нарисовать полигон по точкам">Полигон</button>
+                  </div>
+                @endif
+                @if ($canEdit)
+                  <div class="toolbar-group toolbar-group--accent toolbar-group--control-segmented" id="reviewNoShapesGroup" style="display:none;">
+                    <button
+                      id="noShapesEntry"
+                      type="button"
+                      title="Показать список мест без фигур"
+                      aria-label="Показать список мест без фигур"
+                      hidden
+                    >
+                      Мест без фигур: <span id="noShapesCount">N</span>
+                    </button>
                   </div>
                 @endif
               </div>
@@ -1538,17 +1693,6 @@
                   <button id="reviewNavNextPending" type="button" title="Перейти к следующему непройденному месту" aria-label="Перейти к следующему непройденному месту">Следующее непройденное →</button>
                   <button id="reviewNavNext" type="button" title="Перейти к следующему месту в очереди ревизии" aria-label="Перейти к следующему месту в очереди ревизии">Следующее →</button>
                 </div>
-                <button
-                  id="noShapesEntry"
-                  type="button"
-                  class="pill"
-                  style="display:none; cursor: pointer; border: none; background: transparent;"
-                  title="Показать список мест без фигур"
-                  aria-label="Показать список мест без фигур"
-                  hidden
-                >
-                  Без фигур: <span id="noShapesCount">N</span>
-                </button>
               </div>
             @else
               <div class="toolbar-group toolbar-group--hero-center"></div>
@@ -1625,36 +1769,10 @@
 
                 <span class="pill" id="spaceIdState" style="display:none;" title="Текущий ID выбранного места">ID: —</span>
               </div>
-
-              <div class="toolbar-group toolbar-group--utility">
-                <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
-              </div>
-            @else
-              <div class="toolbar-group toolbar-group--utility">
-                <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
-              </div>
             @endif
+
           </div>
 
-          <div class="toolbar-row toolbar-row--edit-hint" id="editHintRow" aria-hidden="true">
-            <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить</span>
-          </div>
-
-          @if ($canEdit)
-            <div class="toolbar-row toolbar-row--review-status" id="reviewToolbarRow">
-              <div class="toolbar-group toolbar-group--review-status-group">
-                <span class="pill" id="reviewNavStatus">Места не загружены</span>
-                <button id="reviewNotFound" type="button" style="display:none;" hidden title="Отметить, что выбранное место не найдено на карте" aria-label="Отметить, что выбранное место не найдено на карте">Не найдено на карте</button>
-                <div class="review-progress" id="reviewProgress" aria-live="polite" title="Прогресс ревизии по местам">
-                  <div class="review-progress__track">
-                    <div class="review-progress__fill" id="reviewProgressFill"></div>
-                  </div>
-                  <span class="review-progress__text" id="reviewProgressText">0 / 0</span>
-                </div>
-                <div class="review-summary" id="reviewSummary"></div>
-              </div>
-            </div>
-          @endif
         </div>
 
         <!-- Right slide-over panel for places without shapes -->
@@ -1699,7 +1817,7 @@
           aria-hidden="true"
         ></div>
 
-        <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
+          <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
           <div class="map-load-progress__meta">
             <span class="map-load-progress__text" id="mapLoadProgressText">Загрузка карты…</span>
             <span class="map-load-progress__percent" id="mapLoadProgressPercent">0%</span>
@@ -1709,26 +1827,59 @@
           </div>
         </div>
 
-        <div id="viewerRoot">
-          <div class="stage" id="stage">
-            <div class="canvasWrap" id="canvasWrap">
-              <canvas id="canvas"></canvas>
-              <svg id="shapesSvg" class="shapesSvg" aria-hidden="true"></svg>
-              <div id="drawBox" class="drawBox" aria-hidden="true"></div>
-
-              <div id="overlay" class="overlay" aria-label="map-overlay">
-                <div id="handlesLayer" class="handlesLayer" aria-hidden="true"></div>
+          <div id="viewerRoot">
+            <div class="stage" id="stage">
+              <div class="map-zoom-anchor">
+                <div class="map-zoom-controls" id="mapZoomControls" aria-label="Управление масштабом карты">
+                  <div class="toolbar-group toolbar-group--accent">
+                    <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
+                    <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
+                    <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
+                  </div>
+                  <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
+                </div>
               </div>
+              @if ($canEdit)
+                <div class="map-review-status-anchor">
+                  <div class="map-review-status-controls">
+                    <div class="toolbar-row toolbar-row--review-status" id="reviewToolbarRow">
+                      <div class="toolbar-group toolbar-group--review-status-group toolbar-group--accent">
+                        <span class="pill" id="reviewNavStatus">Места не загружены</span>
+                        <button id="reviewNotFound" type="button" style="display:none;" hidden title="Отметить, что выбранное место не найдено на карте" aria-label="Отметить, что выбранное место не найдено на карте">Не найдено на карте</button>
+                        <div class="review-progress" id="reviewProgress" aria-live="polite" title="Прогресс ревизии по местам">
+                          <div class="review-progress__track">
+                            <div class="review-progress__fill" id="reviewProgressFill"></div>
+                          </div>
+                          <span class="review-progress__text" id="reviewProgressText">0 / 0</span>
+                        </div>
+                        <div class="review-summary" id="reviewSummary"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              @endif
+              <div class="map-edit-hint-anchor">
+                <div class="toolbar-row toolbar-row--edit-hint map-edit-hint" id="editHintRow" aria-hidden="true">
+                  <div class="toolbar-group toolbar-group--accent map-edit-hint__group">
+                    <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить</span>
+                  </div>
+                </div>
+              </div>
+              <div class="canvasWrap" id="canvasWrap">
+                <canvas id="canvas"></canvas>
+                <svg id="shapesSvg" class="shapesSvg" aria-hidden="true"></svg>
+                <div id="drawBox" class="drawBox" aria-hidden="true"></div>
+
+                <div id="overlay" class="overlay" aria-label="map-overlay">
+                  <div id="handlesLayer" class="handlesLayer" aria-hidden="true"></div>
+                </div>
             </div>
           </div>
         </div>
 
-      </div>
-
-
         <div class="legend-stack">
         <!-- Легенда карты -->
-        <div class="legend" id="legendDebt">
+        <div class="legend toolbar-group toolbar-group--accent" id="legendDebt">
           <div class="legend-items">
             <div class="legend-item">
               <span class="legend-color" style="background: #22c55e;"></span>
@@ -1746,11 +1897,11 @@
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #b91c1c;"></span>
-              <span class="legend-label">Просрочка по месту от {{ $debtRedAfterDays ?? 30 }} дней (точная связь)</span>
+              <span class="legend-label">Просрочка по месту от {{ $debtRedAfterDays ?? 30 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #ef4444;"></span>
-              <span class="legend-label">Риск арендатора от {{ $debtRedAfterDays ?? 30 }} дней (tenant fallback)</span>
+              <span class="legend-label">Риск арендатора от {{ $debtRedAfterDays ?? 30 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #94a3b8;"></span>
@@ -1762,14 +1913,11 @@
             </div>
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
-              <span class="legend-label">Разметка без привязки</span>
-            </div>
-            <div class="legend-item legend-item--note">
-              <span class="legend-note" id="debtLegendNote">Слой показывает статус задолженности по занятым местам и отдельно отмечает tenant fallback.</span>
+              <span class="legend-label">Без привязки</span>
             </div>
           </div>
         </div>
-        <div class="legend" id="legendRent" hidden>
+        <div class="legend toolbar-group toolbar-group--accent" id="legendRent" hidden>
           <div class="legend-items">
             <div class="legend-item">
               <span class="legend-color" style="background: #fef3c7;"></span>
@@ -1797,14 +1945,11 @@
             </div>
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
-              <span class="legend-label">Разметка без привязки</span>
-            </div>
-            <div class="legend-item legend-item--note">
-              <span class="legend-note" id="rentLegendNote">Слой показывает относительную ставку по занятым местам.</span>
+              <span class="legend-label">Без привязки</span>
             </div>
           </div>
         </div>
-        <div class="legend" id="legendReview" hidden>
+        <div class="legend toolbar-group toolbar-group--accent" id="legendReview" hidden>
           <div class="legend-items">
             <div class="legend-item">
               <span class="legend-color legend-conflict"></span>
@@ -1817,9 +1962,6 @@
             <div class="legend-item">
               <span class="legend-color legend-combined-review"></span>
               <span class="legend-label" title="Место одновременно помечено как конфликтное и не имеет подтвержденной per-space связи">Конфликт + связь не подтверждена</span>
-            </div>
-            <div class="legend-item legend-item--note">
-              <span class="legend-note">Остальные места в режиме ревизии показываются нейтрально. Ревизионные маркеры не заменяют слой задолженности или ставки.</span>
             </div>
           </div>
         </div>
@@ -1900,7 +2042,6 @@
         const rentLegendMid = document.getElementById('rentLegendMid');
         const rentLegendHigh = document.getElementById('rentLegendHigh');
         const rentLegendTop = document.getElementById('rentLegendTop');
-        const rentLegendNote = document.getElementById('rentLegendNote');
 
         const popover = document.getElementById('popover');
         const popoverBody = document.getElementById('popoverBody');
@@ -1922,6 +2063,7 @@
         const reviewNavNextPendingBtn = document.getElementById('reviewNavNextPending');
         const reviewNavNextBtn = document.getElementById('reviewNavNext');
         const reviewNavStatus = document.getElementById('reviewNavStatus');
+        const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
         const reviewNotFoundBtn = document.getElementById('reviewNotFound');
         const mapLoadProgress = document.getElementById('mapLoadProgress');
         const mapLoadProgressFill = document.getElementById('mapLoadProgressFill');
@@ -1941,7 +2083,7 @@
         const identityFixModal = document.getElementById('identityFixModal');
         const identityFixInput = document.getElementById('identityFixInput');
         const identityFixClose = document.getElementById('identityFixClose');
-        const utilityGroup = scaleLabel?.closest('.toolbar-group') || null;
+        const utilityGroup = document.querySelector('.toolbar-row--controls .toolbar-group--utility') || null;
 
         const editHint = document.getElementById('editHint');
         const editHintRow = document.getElementById('editHintRow');
@@ -2007,8 +2149,8 @@
 
         function syncLayerButtonHelp() {
           const reviewMode = isReviewMode();
-          const debtHelp = (debtLegendNote?.textContent || 'Слой показывает статус задолженности по занятым местам.').trim();
-          const rentHelp = (rentLegendNote?.textContent || 'Слой показывает относительную ставку по занятым местам.').trim();
+          const debtHelp = 'Слой показывает статус задолженности по занятым местам и отдельно отмечает tenant fallback.';
+          const rentHelp = 'Слой показывает относительную ставку по занятым местам.';
           if (layerDebtBtn && debtHelp) {
             const debtTitle = reviewMode ? ('Фон карты: ' + debtHelp) : debtHelp;
             layerDebtBtn.title = debtTitle;
@@ -2439,9 +2581,18 @@
 
         function updateLegendVisibility() {
           const reviewMode = isReviewMode();
-          if (legendDebt) legendDebt.hidden = reviewMode || currentLayer !== 'debt';
-          if (legendRent) legendRent.hidden = reviewMode || currentLayer !== 'rent';
-          if (legendReview) legendReview.hidden = !reviewMode;
+          const editModeActive = isEditMode && !reviewMode;
+
+          if (legendDebt) legendDebt.hidden = editModeActive || reviewMode || currentLayer !== 'debt';
+          if (legendRent) legendRent.hidden = editModeActive || reviewMode || currentLayer !== 'rent';
+          if (legendReview) legendReview.hidden = editModeActive || !reviewMode;
+          if (editHintRow) {
+            editHintRow.hidden = !editModeActive;
+            editHintRow.style.display = editModeActive ? 'flex' : 'none';
+          }
+          if (editHint) {
+            editHint.style.display = editModeActive ? 'inline-flex' : 'none';
+          }
           layerDebtBtn?.classList.toggle('is-active', currentLayer === 'debt');
           layerRentBtn?.classList.toggle('is-active', currentLayer === 'rent');
           syncLayerButtonHelp();
@@ -2473,18 +2624,6 @@
             rentLegendTop.textContent = stats
               ? ('Высокая ставка от ' + formatLegendRateValue(stats.highMax) + unitText)
               : 'Высокая ставка';
-          }
-
-          if (rentLegendNote) {
-            if (!stats) {
-              rentLegendNote.textContent = 'Нет данных по ставке для занятых мест.';
-            } else if (stats.mixedUnits) {
-              rentLegendNote.textContent = 'Слой показывает относительную ставку; единицы измерения различаются.';
-            } else if (stats.unit) {
-              rentLegendNote.textContent = 'Слой показывает относительную ставку по занятым местам (' + rentRateUnitLabel(stats.unit) + ').';
-            } else {
-              rentLegendNote.textContent = 'Слой показывает относительную ставку по занятым местам.';
-            }
           }
           syncLayerButtonHelp();
         }
@@ -2547,12 +2686,39 @@
 
         function updateScenarioUi() {
           const reviewMode = isReviewMode();
+          const noShapesEntry = document.getElementById('noShapesEntry');
+          const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
 
           scenarioMapBtn?.classList.toggle('is-active', !reviewMode);
           scenarioReviewBtn?.classList.toggle('is-active', reviewMode);
 
           if (layerToolbarLabel) {
             layerToolbarLabel.textContent = reviewMode ? 'Фон' : 'Слои';
+          }
+
+          if (layerGroup) {
+            if (reviewMode) {
+              layerGroup.style.visibility = 'hidden';
+              layerGroup.style.pointerEvents = 'none';
+            } else {
+              layerGroup.style.visibility = 'visible';
+              layerGroup.style.pointerEvents = '';
+            }
+          }
+
+          if (reviewNoShapesGroup) {
+            if (reviewMode) {
+              reviewNoShapesGroup.style.setProperty('display', 'flex', 'important');
+            } else {
+              reviewNoShapesGroup.style.setProperty('display', 'none', 'important');
+            }
+            reviewNoShapesGroup.hidden = !reviewMode;
+          }
+
+          if (noShapesEntry) {
+            noShapesEntry.style.display = reviewMode ? 'inline-flex' : 'none';
+            noShapesEntry.hidden = !reviewMode;
+            noShapesEntry.disabled = !reviewMode;
           }
 
           if (editToolbarRow) {
@@ -2600,20 +2766,6 @@
             spaceIdState.style.display = 'none';
           }
 
-          if (editHintRow) {
-            editHintRow.style.display = isEditMode && !reviewMode ? 'flex' : 'none';
-          }
-          if (editHint) {
-            editHint.style.display = isEditMode && !reviewMode ? 'inline-flex' : 'none';
-          }
-
-          // Pill "Без фигур" — только в режиме Ревизия
-          const noShapesEntry = document.getElementById('noShapesEntry');
-          if (noShapesEntry) {
-            noShapesEntry.style.display = reviewMode ? noShapesEntry.style.display || 'inline-flex' : 'none';
-            noShapesEntry.hidden = !reviewMode;
-          }
-
           if (reviewMode && isEditMode) {
             isEditMode = false;
           }
@@ -2621,6 +2773,7 @@
           updateChosenPill();
           updateReviewNavUi();
           updateReviewProgress();
+          updateLegendVisibility();
         }
 
         function setScenario(mode) {
@@ -2864,6 +3017,13 @@
           }
 
           const ctx = canvas.getContext('2d');
+
+          function syncStageOverlayOffsets() {
+            stage.style.setProperty('--map-stage-scroll-left', stage.scrollLeft + 'px');
+          }
+
+          stage.addEventListener('scroll', syncStageOverlayOffsets, { passive: true });
+          syncStageOverlayOffsets();
           if (!ctx) {
             fallbackToIframe('no 2d context');
             return;
@@ -3077,15 +3237,26 @@
             const pendingCount = getPendingReviewNavCount();
             const remainingTotal = Math.max(0, Number(reviewProgressState?.remaining ?? 0) || 0);
 
-            if (reviewNavStatus) {
+          if (reviewNavStatus) {
               const noShapesEntry = document.getElementById('noShapesEntry');
               const noShapesCount = document.getElementById('noShapesCount');
+              const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
               const withoutShapesCount = remainingTotal - pendingCount;
               noShapesCount.textContent = String(withoutShapesCount);
-              noShapesEntry.style.display = withoutShapesCount > 0 ? 'inline-flex' : 'none';
-              noShapesEntry.hidden = withoutShapesCount <= 0;
-              noShapesEntry.disabled = withoutShapesCount <= 0;
+              const showNoShapesEntry = isReviewMode() && withoutShapesCount > 0;
+              noShapesEntry.style.display = showNoShapesEntry ? 'inline-flex' : 'none';
+              noShapesEntry.hidden = !showNoShapesEntry;
+              noShapesEntry.disabled = !showNoShapesEntry;
               noShapesEntry.title = withoutShapesCount > 0 ? ('Показать ' + String(withoutShapesCount) + ' мест без фигур') : 'Нет мест без фигур';
+              if (reviewNoShapesGroup) {
+                const showNoShapesGroup = isReviewMode() && withoutShapesCount > 0;
+                if (showNoShapesGroup) {
+                  reviewNoShapesGroup.style.setProperty('display', 'flex', 'important');
+                } else {
+                  reviewNoShapesGroup.style.setProperty('display', 'none', 'important');
+                }
+                reviewNoShapesGroup.hidden = !showNoShapesGroup;
+              }
 
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
@@ -3758,6 +3929,7 @@
             if (Array.isArray(v)) {
               stage.scrollLeft = Math.max(0, v[0] - stage.clientWidth / 2);
               stage.scrollTop = Math.max(0, v[1] - stage.clientHeight / 2);
+              syncStageOverlayOffsets();
             }
           }
 
@@ -3832,6 +4004,7 @@
 
             stage.scrollLeft = Math.max(0, relX * canvas.width - stage.clientWidth / 2);
             stage.scrollTop  = Math.max(0, relY * canvas.height - stage.clientHeight / 2);
+            syncStageOverlayOffsets();
 
             setScaleLabel();
             redrawShapes();
