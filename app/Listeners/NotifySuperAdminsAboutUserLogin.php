@@ -140,11 +140,43 @@ class NotifySuperAdminsAboutUserLogin
             (string) $actor->getKey(),
             trim((string) ($this->request->ip() ?? '')),
             trim((string) ($this->request->userAgent() ?? '')),
+            $this->sessionFingerprint(),
+            $this->requestFingerprint(),
         ];
 
         $key = 'auth:' . sha1(implode('|', $parts));
 
-        return ! Cache::add($key, true, now()->addSeconds(30));
+        return ! Cache::add($key, true, now()->addSeconds(5));
+    }
+
+    private function sessionFingerprint(): string
+    {
+        if (! $this->request->hasSession()) {
+            return '';
+        }
+
+        return trim((string) $this->request->session()->getId());
+    }
+
+    private function requestFingerprint(): string
+    {
+        $path = trim($this->request->path(), '/');
+        $refererPath = trim((string) parse_url(
+            (string) $this->request->headers->get('referer', ''),
+            PHP_URL_PATH,
+        ), '/');
+
+        if ($path === 'admin/login' || ($path === 'livewire/update' && $refererPath === 'admin/login')) {
+            return 'admin-login-flow';
+        }
+
+        $routeName = trim((string) ($this->request->route()?->getName() ?? ''));
+
+        if ($routeName !== '') {
+            return 'route:' . $routeName;
+        }
+
+        return 'path:' . $path . '|referer:' . $refererPath;
     }
 
     private function canReceiveSecurityNotifications(User $user): bool

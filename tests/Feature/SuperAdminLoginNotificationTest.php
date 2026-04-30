@@ -283,6 +283,66 @@ class SuperAdminLoginNotificationTest extends TestCase
         Notification::assertSentToTimes($superAdmin, UserLoggedInNotification::class, 1);
     }
 
+    public function test_distinct_login_sessions_are_not_deduplicated(): void
+    {
+        Notification::fake();
+        config([
+            'services.telegram.enabled' => true,
+            'services.telegram.bot_token' => 'test-token',
+        ]);
+
+        $market = Market::query()->create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('market-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'super-admin-distinct-sessions@example.test',
+            'telegram_chat_id' => '123456',
+            'notification_preferences' => [
+                'self_manage' => true,
+                'channels' => ['database', 'telegram'],
+                'topics' => UserNotificationPreferences::TOPICS,
+            ],
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        $actor = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'email' => 'staff-distinct-sessions@example.test',
+        ]);
+        $actor->assignRole('market-admin');
+
+        $firstRequest = Request::create('/admin/login', 'POST', server: [
+            'REMOTE_ADDR' => '203.0.113.17',
+            'HTTP_USER_AGENT' => 'PHPUnit Distinct Sessions Test',
+        ]);
+        $firstSession = app('session')->driver();
+        $firstSession->setId('login-session-one');
+        $firstSession->start();
+        $firstRequest->setLaravelSession($firstSession);
+        $this->app->instance('request', $firstRequest);
+        Event::dispatch(new Login('web', $actor, false));
+
+        $secondRequest = Request::create('/admin/login', 'POST', server: [
+            'REMOTE_ADDR' => '203.0.113.17',
+            'HTTP_USER_AGENT' => 'PHPUnit Distinct Sessions Test',
+        ]);
+        $secondSession = app('session')->driver();
+        $secondSession->setId('login-session-two');
+        $secondSession->start();
+        $secondRequest->setLaravelSession($secondSession);
+        $this->app->instance('request', $secondRequest);
+        Event::dispatch(new Login('web', $actor, false));
+
+        Notification::assertSentToTimes($superAdmin, UserLoggedInNotification::class, 2);
+    }
+
     public function test_impersonation_consume_does_not_send_admin_login_notification(): void
     {
         Notification::fake();
