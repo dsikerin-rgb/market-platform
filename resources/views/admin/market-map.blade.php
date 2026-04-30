@@ -2441,6 +2441,7 @@
             tenantName: item?.tenant?.name ? String(item.tenant.name) : (item?.tenantName ? String(item.tenantName) : null),
             reviewStatus: item?.review_status ? String(item.review_status) : '',
             reviewStatusLabel: item?.review_status_label ? String(item.review_status_label) : '',
+            bindingRisk: item?.binding_risk && typeof item.binding_risk === 'object' ? item.binding_risk : null,
           };
         }
 
@@ -2828,14 +2829,16 @@
               localStorage.removeItem(LS_KEY_CHOSEN);
               return;
             }
-            const payload = {
-              id: chosenSpace.id,
-              number: chosenSpace.number,
-              code: chosenSpace.code,
-              tenantName: chosenSpace.tenantName,
-              reviewStatus: chosenSpace.reviewStatus,
-              reviewStatusLabel: chosenSpace.reviewStatusLabel,
-            };
+              const payload = {
+                id: chosenSpace.id,
+                number: chosenSpace.number,
+                code: chosenSpace.code,
+                displayName: chosenSpace.displayName,
+                tenantName: chosenSpace.tenantName,
+                reviewStatus: chosenSpace.reviewStatus,
+                reviewStatusLabel: chosenSpace.reviewStatusLabel,
+                bindingRisk: chosenSpace.bindingRisk ?? null,
+              };
             localStorage.setItem(LS_KEY_CHOSEN, JSON.stringify(payload));
           } catch {}
         }
@@ -2845,9 +2848,11 @@
             id: space.id,
             number: space.number || '',
             code: space.code || '',
+            displayName: space.displayName || space.display_name || '',
             tenantName: space.tenantName ?? null,
             reviewStatus: space.reviewStatus ?? '',
             reviewStatusLabel: space.reviewStatusLabel ?? '',
+            bindingRisk: space.bindingRisk ?? space.binding_risk ?? null,
           } : null;
           chosenSpace = next;
           updateChosenPill();
@@ -2862,6 +2867,27 @@
           if (opts.announce && next) {
             toast('Выбрано место ' + formatSpaceLabel(next) + ' (ID ' + String(next.id) + ')');
           }
+        }
+
+        function confirmBindingRisk(space) {
+          const warnings = Array.isArray(space?.bindingRisk?.warnings) ? space.bindingRisk.warnings.filter(Boolean) : [];
+          if (!warnings.length) {
+            return true;
+          }
+
+          const number = String(space?.number || space?.code || space?.id || '—').trim();
+          const message = [
+            'У выбранного места уже есть действующие связи:',
+            '',
+            ...warnings.map((warning) => '• ' + warning),
+            '',
+            'Привязка изменит только связь разметки с местом.',
+            'Договоры, начисления, задолженность и арендатор не переносятся.',
+            '',
+            'Продолжить привязку к месту №' + number + '?',
+          ];
+
+          return window.confirm(message.join('\n'));
         }
 
         function closeSpaceDropdown() {
@@ -2894,8 +2920,11 @@
             row.dataset.index = String(idx);
             row.textContent = formatSpaceDropdownLabel(item);
             row.addEventListener('click', () => {
-              setChosenSpace(item, { announce: true });
               closeSpaceDropdown();
+              focusChosenSpaceOnMap(item, { announce: true }).catch((err) => {
+                console.error(err);
+                toast('Не удалось показать место на карте');
+              });
             });
             spaceDropdown.appendChild(row);
           });
@@ -2975,17 +3004,19 @@
             const json = await res.json();
             if (!res.ok || !json || json.ok !== true || !json.found) {
               setChosenSpace(null, { announce: false });
-              return;
+              return null;
             }
             const normalized = normalizeChosenSpace(json.item || null);
             if (!normalized) {
               setChosenSpace(null, { announce: false });
-              return;
+              return null;
             }
             setChosenSpace(normalized, { announce: false });
+            return normalized;
           } catch (e) {
             console.error(e);
             setChosenSpace(null, { announce: false });
+            return null;
           }
         }
 
@@ -3410,6 +3441,54 @@
             const bbox = normalizeBbox(shape);
             if (bbox) return bbox;
             return bboxFromPolygon(shape.polygon);
+          }
+
+          function findUsableShapeForSpaceId(spaceId) {
+            const normalizedSpaceId = Number(spaceId || 0);
+            if (!Number.isFinite(normalizedSpaceId) || normalizedSpaceId <= 0) {
+              return null;
+            }
+
+            for (const shape of Array.isArray(shapes) ? shapes : []) {
+              const shapeSpaceId = Number(shape?.market_space_id || shape?.space_id || 0);
+              if (!Number.isFinite(shapeSpaceId) || shapeSpaceId !== normalizedSpaceId) {
+                continue;
+              }
+
+              if (resolveShapeBbox(shape)) {
+                return shape;
+              }
+            }
+
+            return null;
+          }
+
+          async function focusChosenSpaceOnMap(space, opts = {}) {
+            const normalized = space ? normalizeChosenSpace(space) : null;
+            if (!normalized) {
+              return;
+            }
+
+            setChosenSpace(normalized, { announce: !!opts.announce });
+            const freshSpace = await refreshChosenSpaceFromServer() || normalized;
+            const targetShape = findUsableShapeForSpaceId(freshSpace.id);
+
+            if (!targetShape) {
+              toast('У этого места ещё нет разметки. Выберите непривязанную фигуру на карте и привяжите её к месту.');
+              return;
+            }
+
+            const bbox = resolveShapeBbox(targetShape);
+            if (!bbox) {
+              toast('Не удалось показать место на карте.');
+              return;
+            }
+
+            if (targetShape?.id) {
+              setSelectedShape(targetShape.id);
+            }
+
+            await centerOnBbox(bbox, { zoomFactor: 1.2 });
           }
 
           function setScaleLabel() {
@@ -4523,8 +4602,11 @@
                 e.preventDefault();
                 const item = searchResults[searchIndex];
                 if (item) {
-                  setChosenSpace(item, { announce: true });
                   closeSpaceDropdown();
+                  focusChosenSpaceOnMap(item, { announce: true }).catch((err) => {
+                    console.error(err);
+                    toast('Не удалось показать место на карте');
+                  });
                 } else if (String(spaceSearchInput.value || '').trim()) {
                   toast('Выбери место из списка');
                 }
@@ -5339,6 +5421,7 @@
               const hasReviewMark = hitReviewStatus !== '';
               const hasConflictReviewMark = hitReviewStatus === 'conflict';
               const chosenId = getChosenSpaceId();
+              const chosenShape = chosenId ? findUsableShapeForSpaceId(chosenId) : null;
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
               let reviewNotice = '';
 
@@ -5376,7 +5459,7 @@
                   }
                 }
 
-                if ((!hitSpaceId || hitSpaceId <= 0) && chosenId && Number.isFinite(chosenId) && chosenId > 0 && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
+                if ((!hitSpaceId || hitSpaceId <= 0) && chosenId && Number.isFinite(chosenId) && chosenId > 0 && !chosenShape && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
                   btns.push('<button type="button" data-action="review-decision" data-decision="bind_shape_to_space" data-space-id="' + String(chosenId) + '" data-shape-id="' + String(shapeId) + '">\u041f\u0440\u0438\u0432\u044f\u0437\u0430\u0442\u044c \u043a \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u043c\u0443 \u043c\u0435\u0441\u0442\u0443</button>');
                 }
               }
@@ -5434,6 +5517,14 @@
                   observedTenantName: lastHit?.tenant?.name || '',
                 });
                 return;
+              }
+              if (decision === 'bind_shape_to_space') {
+                const bindingTarget = chosenSpace && Number(chosenSpace.id) === marketSpaceId
+                  ? chosenSpace
+                  : null;
+                if (bindingTarget && !confirmBindingRisk(bindingTarget)) {
+                  return;
+                }
               }
               submitReviewDecision(decision, {
                 marketSpaceId: Number.isFinite(marketSpaceId) && marketSpaceId > 0 ? marketSpaceId : null,

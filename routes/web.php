@@ -561,6 +561,113 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         return $market;
     };
 
+    $bindingRiskWarnings = static function (
+        bool $hasTenant,
+        bool $hasActiveContract,
+        bool $hasAccruals,
+        ?string $debtStatus,
+        ?string $debtStatusLabel = null
+    ): array {
+        $warnings = [];
+
+        if ($hasTenant) {
+            $warnings[] = 'У места уже есть арендатор.';
+        }
+
+        if ($hasActiveContract) {
+            $warnings[] = 'У места есть активный договор.';
+        }
+
+        if ($hasAccruals) {
+            $warnings[] = 'По месту есть начисления.';
+        }
+
+        if (in_array($debtStatus, ['pending', 'orange', 'red'], true)) {
+            $warnings[] = 'По арендатору есть статус задолженности: ' . trim((string) ($debtStatusLabel ?: $debtStatus));
+        }
+
+        return $warnings;
+    };
+
+    $buildBindingRiskForSpace = static function (Market $market, MarketSpace $space) use ($bindingRiskWarnings): array {
+        $tenant = $space->tenant instanceof Tenant ? $space->tenant : null;
+        $debtStatus = $tenant ? trim((string) ($tenant->debt_status ?? '')) : '';
+        $debtStatusLabel = null;
+
+        if ($debtStatus !== '') {
+            try {
+                $debtStatusLabel = app(DebtStatusResolver::class)->labelForStatus($debtStatus, (int) $market->id);
+            } catch (\Throwable) {
+                $debtStatusLabel = Tenant::DEBT_STATUS_LABELS[$debtStatus] ?? $debtStatus;
+            }
+        }
+
+        $hasTenant = $tenant !== null || (int) ($space->tenant_id ?? 0) > 0;
+        $today = now()->toDateString();
+
+        $hasActiveContract = Schema::hasTable('tenant_contracts')
+            && DB::table('tenant_contracts')
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $space->id)
+                ->where('is_active', true)
+                ->where(function ($q) use ($today): void {
+                    $q->whereNull('ends_at')
+                        ->orWhereDate('ends_at', '>=', $today);
+                })
+                ->exists();
+
+        $hasAccruals = Schema::hasTable('tenant_accruals')
+            && DB::table('tenant_accruals')
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $space->id)
+                ->exists();
+
+        $warnings = $bindingRiskWarnings(
+            $hasTenant,
+            $hasActiveContract,
+            $hasAccruals,
+            $debtStatus !== '' ? $debtStatus : null,
+            $debtStatusLabel,
+        );
+
+        return [
+            'has_tenant' => $hasTenant,
+            'has_active_contract' => $hasActiveContract,
+            'has_accruals' => $hasAccruals,
+            'debt_status' => $debtStatus !== '' ? $debtStatus : null,
+            'debt_status_label' => $debtStatusLabel,
+            'requires_confirmation' => ! empty($warnings),
+            'warnings' => $warnings,
+        ];
+    };
+
+    $marketSpaceHasUsableShape = static function (int $marketId, int $spaceId, ?int $ignoreShapeId = null): bool {
+        if (! Schema::hasTable('market_space_map_shapes')) {
+            return false;
+        }
+
+        $query = MarketSpaceMapShape::query()
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId)
+            ->where('is_active', true)
+            ->where(static function ($sub): void {
+                $sub->where(static function ($bbox): void {
+                    $bbox->whereNotNull('bbox_x1')
+                        ->whereNotNull('bbox_y1')
+                        ->whereNotNull('bbox_x2')
+                        ->whereNotNull('bbox_y2')
+                        ->whereColumn('bbox_x1', '<', 'bbox_x2')
+                        ->whereColumn('bbox_y1', '<', 'bbox_y2');
+                })->orWhereJsonLength('polygon', '>=', 3);
+            });
+
+        if ($ignoreShapeId !== null && $ignoreShapeId > 0) {
+            $query->whereKeyNot($ignoreShapeId);
+        }
+
+        return $query->exists();
+    };
+
     /**
      * Редактирование разметки: market-admin + super-admin (+ markets.update как запасной вариант).
      */
@@ -1255,7 +1362,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * - ?id=123
      * - ?number=П3/2  (по точному совпадению number либо code)
      */
-    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel) {
+    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildBindingRiskForSpace) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1310,6 +1417,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
+        $bindingRisk = $buildBindingRiskForSpace($market, $space);
+
         return response()->json([
             'ok' => true,
             'found' => true,
@@ -1326,6 +1435,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
                 ] : null,
+                'binding_risk' => $bindingRisk,
             ],
         ]);
     })->name('filament.admin.market-map.space');
@@ -1335,7 +1445,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * Поддерживает ?number= и ?q=.
      * Поддерживает ?without_shapes=1 для получения непройденных мест без фигур.
      */
-    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns) {
+    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns, $bindingRiskWarnings, $buildBindingRiskForSpace) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1431,7 +1541,37 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->limit($limit)
                 ->get(['id', 'number', 'code', 'display_name', 'tenant_id']);
 
-            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel): array {
+            $spaceIds = $rows->pluck('id')->map(static fn ($id): int => (int) $id)->values();
+            $today = now()->toDateString();
+
+            $activeContractSpaceIds = collect();
+            if (Schema::hasTable('tenant_contracts') && $spaceIds->isNotEmpty()) {
+                $activeContractSpaceIds = DB::table('tenant_contracts')
+                    ->where('market_id', (int) $market->id)
+                    ->whereIn('market_space_id', $spaceIds)
+                    ->where('is_active', true)
+                    ->where(function ($q) use ($today): void {
+                        $q->whereNull('ends_at')
+                            ->orWhereDate('ends_at', '>=', $today);
+                    })
+                    ->pluck('market_space_id')
+                    ->map(static fn ($id): int => (int) $id);
+            }
+
+            $accrualSpaceIds = collect();
+            if (Schema::hasTable('tenant_accruals') && $spaceIds->isNotEmpty()) {
+                $accrualSpaceIds = DB::table('tenant_accruals')
+                    ->where('market_id', (int) $market->id)
+                    ->whereIn('market_space_id', $spaceIds)
+                    ->distinct()
+                    ->pluck('market_space_id')
+                    ->map(static fn ($id): int => (int) $id);
+            }
+
+            $activeContractSpaceIdSet = $activeContractSpaceIds->flip();
+            $accrualSpaceIdSet = $accrualSpaceIds->flip();
+
+            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $activeContractSpaceIdSet, $accrualSpaceIdSet, $bindingRiskWarnings): array {
                 $tenant = $space->tenant;
 
                 $tenantName = null;
@@ -1445,6 +1585,21 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     }
                 }
 
+                $debtStatus = $tenant ? trim((string) ($tenant->debt_status ?? '')) : '';
+                $hasTenant = $tenant !== null || (int) ($space->tenant_id ?? 0) > 0;
+                $hasActiveContract = $activeContractSpaceIdSet->has((int) $space->id);
+                $hasAccruals = $accrualSpaceIdSet->has((int) $space->id);
+                $debtStatusLabel = $debtStatus !== ''
+                    ? (Tenant::DEBT_STATUS_LABELS[$debtStatus] ?? $debtStatus)
+                    : null;
+                $bindingWarnings = $bindingRiskWarnings(
+                    $hasTenant,
+                    $hasActiveContract,
+                    $hasAccruals,
+                    $debtStatus !== '' ? $debtStatus : null,
+                    $debtStatusLabel,
+                );
+
                 return [
                     'id' => (int) $space->id,
                     'number' => (string) ($space->number ?? ''),
@@ -1457,6 +1612,15 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'name' => (string) ($tenantName ?? ''),
                     ] : null,
                     'without_shapes' => true,
+                    'binding_risk' => [
+                        'has_tenant' => $hasTenant,
+                        'has_active_contract' => $hasActiveContract,
+                        'has_accruals' => $hasAccruals,
+                        'debt_status' => $debtStatus !== '' ? $debtStatus : null,
+                        'debt_status_label' => $debtStatusLabel,
+                        'requires_confirmation' => ! empty($bindingWarnings),
+                        'warnings' => $bindingWarnings,
+                    ],
                 ];
             })->values();
 
@@ -1499,7 +1663,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->limit($limit)
             ->get(['id', 'number', 'code', 'area_sqm', 'status', 'tenant_id']);
 
-        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel): array {
+        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market): array {
             $tenant = $space->tenant;
 
             $tenantName = null;
@@ -1512,6 +1676,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     $tenantName = (string) ($tenant->name ?? '');
                 }
             }
+
+            $bindingRisk = $buildBindingRiskForSpace($market, $space);
 
             return [
                 'id' => (int) $space->id,
@@ -1526,6 +1692,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'id' => (int) ($tenant->id ?? 0),
                     'name' => (string) ($tenantName ?? ''),
                 ] : null,
+                'binding_risk' => $bindingRisk,
             ];
         })->values();
 
@@ -1995,7 +2162,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $hasMapReviewColumns,
         $markMarketSpaceReviewed,
         $buildMapReviewProgress,
-        $mapReviewStatusLabel
+        $mapReviewStatusLabel,
+        $marketSpaceHasUsableShape
     ) {
         $ensureCanEditShapes();
         $market = $resolveMarketForMap();
@@ -2174,6 +2342,22 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'ok' => false,
                     'message' => 'Map review shape was not found in the current market.',
                 ], 404);
+            }
+
+            if ($decision === SpaceReviewDecision::BIND_SHAPE_TO_SPACE) {
+                if ((int) ($shape->market_space_id ?? 0) > 0 && (int) $shape->market_space_id !== (int) $space->id) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'Эта разметка уже привязана к другому месту. Сначала отвяжите её или выберите другую разметку.',
+                    ], 422);
+                }
+
+                if ($marketSpaceHasUsableShape((int) $market->id, (int) $space->id, (int) $shape->id)) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'У этого места уже есть привязанная разметка. Выберите место без разметки.',
+                    ], 422);
+                }
             }
         }
 
