@@ -727,6 +727,7 @@
       flex-wrap: wrap;
       pointer-events: auto;
       max-width: calc(100% - 28px);
+      transform: translateX(var(--map-stage-scroll-left, 0px));
     }
     .map-zoom-controls .toolbar-group--accent {
       background: rgba(255,255,255,.94);
@@ -3016,6 +3017,13 @@
           }
 
           const ctx = canvas.getContext('2d');
+
+          function syncStageOverlayOffsets() {
+            stage.style.setProperty('--map-stage-scroll-left', stage.scrollLeft + 'px');
+          }
+
+          stage.addEventListener('scroll', syncStageOverlayOffsets, { passive: true });
+          syncStageOverlayOffsets();
           if (!ctx) {
             fallbackToIframe('no 2d context');
             return;
@@ -3921,6 +3929,7 @@
             if (Array.isArray(v)) {
               stage.scrollLeft = Math.max(0, v[0] - stage.clientWidth / 2);
               stage.scrollTop = Math.max(0, v[1] - stage.clientHeight / 2);
+              syncStageOverlayOffsets();
             }
           }
 
@@ -3995,6 +4004,7 @@
 
             stage.scrollLeft = Math.max(0, relX * canvas.width - stage.clientWidth / 2);
             stage.scrollTop  = Math.max(0, relY * canvas.height - stage.clientHeight / 2);
+            syncStageOverlayOffsets();
 
             setScaleLabel();
             redrawShapes();
