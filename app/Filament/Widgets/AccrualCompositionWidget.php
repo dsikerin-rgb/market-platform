@@ -57,7 +57,7 @@ class AccrualCompositionWidget extends ChartWidget
         }
 
         $market = Market::query()
-            ->select(['id', 'name', 'timezone'])
+            ->select(['id', 'timezone'])
             ->find($marketId);
 
         if (! $market) {
@@ -68,8 +68,7 @@ class AccrualCompositionWidget extends ChartWidget
         [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
         [$effectiveMonthYm] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
-        return 'Локация: ' . (string) $market->name
-            . ' • ' . $this->formatMonthLabel($effectiveMonthYm, $tz)
+        return $this->formatMonthLabel($effectiveMonthYm, $tz)
             . ' • Источник: 1С (детализация начислений)';
     }
 
