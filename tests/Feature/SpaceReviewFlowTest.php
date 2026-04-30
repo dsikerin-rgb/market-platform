@@ -147,6 +147,70 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame($user->id, $space->map_reviewed_by);
     }
 
+    public function test_market_map_space_endpoint_returns_binding_risk_for_bound_business_data(): void
+    {
+        $market = $this->createMarket();
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Risk',
+            'debt_status' => 'orange',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => 'R-101',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'DOG-RISK',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $space->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('space-endpoint-binding-risk'),
+        ]);
+
+        $response = $this->get('/admin/market-map/space?id=' . $space->id);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('found', true)
+            ->assertJsonPath('item.id', $space->id)
+            ->assertJsonPath('item.binding_risk.has_tenant', true)
+            ->assertJsonPath('item.binding_risk.has_active_contract', true)
+            ->assertJsonPath('item.binding_risk.has_accruals', true)
+            ->assertJsonPath('item.binding_risk.debt_status', 'orange')
+            ->assertJsonPath('item.binding_risk.requires_confirmation', true);
+
+        $warnings = $response->json('item.binding_risk.warnings');
+        $debtStatusLabel = $response->json('item.binding_risk.debt_status_label');
+        $this->assertIsArray($warnings);
+        $this->assertIsString($debtStatusLabel);
+        $this->assertNotSame('', trim($debtStatusLabel));
+        $this->assertContains('У места уже есть арендатор.', $warnings);
+        $this->assertContains('У места есть активный договор.', $warnings);
+        $this->assertContains('По месту есть начисления.', $warnings);
+        $this->assertTrue(collect($warnings)->contains(
+            static fn ($warning): bool => str_contains((string) $warning, 'По арендатору есть статус задолженности:')
+        ));
+    }
+
     public function test_observed_space_review_marks_space_without_mutating_live_fields(): void
     {
         $market = $this->createMarket();
@@ -2092,7 +2156,11 @@ JS;
             $this->assertArrayHasKey('display_name', $item);
             $this->assertArrayHasKey('tenant', $item);
             $this->assertArrayHasKey('without_shapes', $item);
+            $this->assertArrayHasKey('binding_risk', $item);
             $this->assertTrue($item['without_shapes']);
+            $this->assertIsArray($item['binding_risk']);
+            $this->assertArrayHasKey('requires_confirmation', $item['binding_risk']);
+            $this->assertArrayHasKey('warnings', $item['binding_risk']);
         }
     }
 
