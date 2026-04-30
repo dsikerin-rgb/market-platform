@@ -131,6 +131,55 @@
             background: rgba(21, 128, 61, 0.12);
         }
 
+        .market-attention-widget__empty--dismissing {
+            pointer-events: none;
+            animation: market-attention-empty-out 360ms ease forwards;
+        }
+
+        .market-attention-widget__empty-close {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 9999px;
+            color: rgba(16, 185, 129, 0.9);
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.35);
+            transition: transform 120ms ease, background-color 120ms ease, color 120ms ease;
+        }
+
+        .market-attention-widget__empty-close:hover {
+            transform: scale(1.04);
+            background: rgba(255, 255, 255, 0.92);
+            color: rgb(5, 150, 105);
+        }
+
+        .dark .market-attention-widget__empty-close {
+            color: rgba(167, 243, 208, 0.95);
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        .dark .market-attention-widget__empty-close:hover {
+            background: rgba(15, 23, 42, 0.82);
+            color: rgb(220, 252, 231);
+        }
+
+        @keyframes market-attention-empty-out {
+            0% {
+                opacity: 1;
+                transform: translate3d(0, 0, 0) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translate3d(0, -0.5rem, 0) scale(0.98);
+            }
+        }
+
         .market-attention-widget__toast-layout {
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
@@ -506,7 +555,75 @@
                 </div>
 
                 @if ($items === [])
-                    <div class="market-attention-widget__empty relative z-10{{ $useToastStack ? ' market-attention-widget__toast-empty' : '' }}">
+                    @php
+                        $emptyDismissStorageKey = implode(':', [
+                            'market-attention-dismiss-empty',
+                            $dismissUserKey,
+                            $dismissMarketKey,
+                            md5(json_encode([
+                                'heading' => $emptyHeading ?? null,
+                                'description' => $emptyDescription ?? null,
+                            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
+                        ]);
+                    @endphp
+
+                    <div
+                        x-data="{
+                            open: true,
+                            closing: false,
+                            storageKey: @js($emptyDismissStorageKey),
+                            init() {
+                                try {
+                                    const dismissedUntil = Number(window.localStorage.getItem(this.storageKey) || 0);
+
+                                    if (dismissedUntil > Date.now()) {
+                                        this.open = false;
+
+                                        return;
+                                    }
+
+                                    window.localStorage.removeItem(this.storageKey);
+
+                                    window.setTimeout(() => {
+                                        this.dismiss();
+                                    }, 8000);
+                                } catch (error) {
+                                }
+                            },
+                            dismiss() {
+                                if (this.closing || ! this.open) {
+                                    return;
+                                }
+
+                                this.closing = true;
+
+                                try {
+                                    const now = new Date();
+                                    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+                                    window.localStorage.setItem(this.storageKey, String(tomorrow.getTime()));
+                                } catch (error) {
+                                }
+
+                                window.setTimeout(() => {
+                                    this.open = false;
+                                }, 360);
+                            }
+                        }"
+                        x-cloak
+                        x-show="open"
+                        x-bind:class="{ 'market-attention-widget__empty--dismissing': closing }"
+                        class="market-attention-widget__empty relative z-10{{ $useToastStack ? ' market-attention-widget__toast-empty' : '' }}"
+                    >
+                        <button
+                            type="button"
+                            class="market-attention-widget__empty-close"
+                            x-on:click.stop="dismiss()"
+                            aria-label="?????? ?????????"
+                        >
+                            <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
+                        </button>
+
                         <div class="flex items-start gap-4">
                             <div class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-success-500/12 text-success-600 ring-1 ring-inset ring-success-500/20 dark:bg-success-400/12 dark:text-success-300 dark:ring-success-400/20">
                                 <x-filament::icon icon="heroicon-m-check-badge" class="h-6 w-6" />
