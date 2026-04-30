@@ -2065,6 +2065,19 @@
                                                         <div class="mrr-place__meta">{{ $row['effective_at'] ?: '—' }}</div>
                                                     </div>
 
+                                                    @if ($row['is_auto_closed'])
+                                                        <div class="mrr-applied-card__column">
+                                                            <div class="mrr-applied-card__label">Закрыто автоматически</div>
+                                                            <div class="mrr-place__title">Система</div>
+                                                            @if (filled($row['auto_close_binding_id']))
+                                                                <div class="mrr-place__meta">Основание: договорная привязка #{{ $row['auto_close_binding_id'] }}</div>
+                                                            @endif
+                                                            @if (filled($row['auto_close_at']))
+                                                                <div class="mrr-place__meta">{{ $row['auto_close_at'] }}</div>
+                                                            @endif
+                                                        </div>
+                                                    @endif
+
                                                     <div class="mrr-applied-card__column">
                                                         <div class="mrr-applied-card__label">Переходы</div>
                                                         <div class="mrr-links">

@@ -632,6 +632,10 @@ class MapReviewResultsService
             $space = $spaces->get($spaceId);
             $decision = (string) ($payload['decision'] ?? '');
 
+            $isAutoClosed = (bool) ($payload['auto_closed_by_reconciliation'] ?? false);
+            $autoCloseAt = $payload['auto_close_at'] ?? null;
+            $autoCloseBindingId = $payload['auto_close_binding_id'] ?? null;
+
             return [
                 'operation_id' => (int) $operation->id,
                 'space_id' => $spaceId,
@@ -652,6 +656,9 @@ class MapReviewResultsService
                 'created_by_name' => $operation->created_by ? (string) ($creators[(int) $operation->created_by] ?? '—') : null,
                 'review_status' => $space?->map_review_status,
                 'review_status_label' => $this->reviewStatusLabel($space?->map_review_status),
+                'is_auto_closed' => $isAutoClosed,
+                'auto_close_at' => $autoCloseAt ? (new \DateTime($autoCloseAt))->format('d.m.Y H:i') : null,
+                'auto_close_binding_id' => $autoCloseBindingId ? (int) $autoCloseBindingId : null,
             ];
         })->all();
     }
