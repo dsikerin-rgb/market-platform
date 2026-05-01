@@ -1429,6 +1429,182 @@
       border-color: rgba(191, 219, 254, .56);
     }
 
+    /* UI для привязки фигуры к месту в popup - светлая тема */
+    .popover .bind-shape-ui {
+      margin-top: 10px;
+      padding: 10px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+    .popover .bind-shape-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+    .popover .bind-shape-search {
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .popover .bind-shape-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #1e293b;
+      font-size: 13px;
+      outline: none;
+    }
+    .popover .bind-shape-input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+    }
+    .popover .bind-shape-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 0;
+      overflow: hidden;
+      background: #fff;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 100;
+      margin-top: 4px;
+      transition: max-height .15s ease, opacity .15s ease;
+      opacity: 0;
+      border: 1px solid #e2e8f0;
+    }
+    .popover .bind-shape-dropdown.show {
+      max-height: 200px;
+      overflow-y: auto;
+      opacity: 1;
+    }
+    .popover .bind-shape-option {
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #1e293b;
+      border-bottom: 1px solid #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .popover .bind-shape-option:last-child {
+      border-bottom: none;
+    }
+    .popover .bind-shape-option:hover:not([disabled]) {
+      background: #f8fafc;
+    }
+    .popover .bind-shape-option[disabled] {
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+    .popover .bind-shape-option--empty {
+      padding: 8px 10px;
+      color: #64748b;
+      font-size: 12px;
+      cursor: default;
+    }
+    .popover .bind-shape-btn {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #10b981;
+      background: #10b981;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .popover .bind-shape-btn:hover:not(:disabled) {
+      background: #059669;
+      border-color: #059669;
+    }
+    .popover .bind-shape-btn:disabled {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+      color: #64748b;
+      -webkit-text-fill-color: #64748b;
+    }
+    .popover .bind-shape-status {
+      margin-top: 8px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .popover .bind-shape-status--hidden {
+      display: none;
+    }
+    .popover .bind-shape-status--loading {
+      color: #3b82f6;
+    }
+    .popover .bind-shape-status--success {
+      color: #10b981;
+    }
+    .popover .bind-shape-status--error {
+      color: #ef4444;
+    }
+    .popover .bind-shape-hint {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 6px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    /* Light theme modifier for unbound shape popup */
+    .popover.popover--unbound-shape {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+    }
+    .popover.popover--unbound-shape .t {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .popover.popover--unbound-shape .row {
+      color: #334155;
+    }
+    .popover.popover--unbound-shape .muted,
+    .popover.popover--unbound-shape .row-meta {
+      color: #64748b;
+    }
+    .popover.popover--unbound-shape .bind-shape-ui {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+    .popover.popover--unbound-shape .bind-shape-header {
+      color: #1e293b;
+    }
+    .popover.popover--unbound-shape .act {
+      margin-top: 10px;
+    }
+    .popover.popover--unbound-shape .xbtn {
+      background: #f8fafc;
+      border: 1px solid #94a3b8;
+      color: #334155;
+      -webkit-text-fill-color: #334155;
+    }
+    .popover.popover--unbound-shape .xbtn:hover {
+      background: #e2e8f0;
+      border-color: #64748b;
+      color: #0f172a;
+    }
+    .popover.popover--unbound-shape .act button[data-action="delete-shape"] {
+      color: #dc2626;
+      -webkit-text-fill-color: #dc2626;
+      border-color: #ef4444;
+      background: #fff;
+    }
+    .popover.popover--unbound-shape .act button[data-action="delete-shape"]:hover {
+      background: #fef2f2;
+      border-color: #dc2626;
+      color: #b91c1c;
+    }
+
     .identity-fix-modal {
       position: fixed;
       inset: 0;
@@ -2330,10 +2506,17 @@
           });
         }
 
-        function showPopoverAt(clientX, clientY, html) {
+        function showPopoverAt(clientX, clientY, html, isUnboundShape = false) {
           if (!popover || !popoverBody) return;
 
           popoverBody.innerHTML = html;
+
+          // Управление классом для светлой темы popup непривязанной фигуры
+          if (isUnboundShape) {
+            popover.classList.add('popover--unbound-shape');
+          } else {
+            popover.classList.remove('popover--unbound-shape');
+          }
 
           const pad = 10;
           popover.classList.add('show');
@@ -5218,7 +5401,8 @@
 
             showPopoverAt(
               e.clientX, e.clientY,
-              '<div class="t">Поиск…</div><div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>'
+              '<div class="t">Поиск…</div><div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>',
+              false
             );
 
             try {
@@ -5233,7 +5417,7 @@
 
               if (!json || json.ok !== true) {
                 const msg = escapeHtml(json?.message || 'Ошибка hit-test');
-                showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + msg + '</div>');
+                showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + msg + '</div>', false);
                 return;
               }
 
@@ -5249,7 +5433,8 @@
                   e.clientX, e.clientY,
                   '<div class="t">Нет попадания</div>' +
                   '<div class="row muted">' + msg + '</div>' +
-                  '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>'
+                  '<div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>',
+                  false
                 );
                 return;
               }
@@ -5431,6 +5616,22 @@
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
               let reviewNotice = '';
 
+              // UI для привязки непривязанной фигуры к месту (MVP) - вне actions
+              let bindShapeHtml = '';
+              const isUnboundShape = (!hitSpaceId || hitSpaceId <= 0) && shapeId && Number.isFinite(shapeId) && shapeId > 0;
+              if (isUnboundShape && CAN_EDIT) {
+                bindShapeHtml = '<div class="bind-shape-ui" data-bind-shape-id="' + String(shapeId) + '">' +
+                  '<div class="bind-shape-header">Привязать разметку к месту</div>' +
+                  '<div class="bind-shape-search">' +
+                    '<input type="text" class="bind-shape-input" placeholder="Номер / ID / арендатор" autocomplete="off">' +
+                    '<div class="bind-shape-dropdown"></div>' +
+                  '</div>' +
+                  '<div class="bind-shape-hint">Привязка будет к выбранному месту. Арендатор используется только для поиска.</div>' +
+                  '<button type="button" class="bind-shape-btn" data-action="bind-shape-btn" disabled>Привязать</button>' +
+                  '<div class="bind-shape-status bind-shape-status--hidden" data-bind-status></div>' +
+                '</div>';
+              }
+
               function shouldShowMatchedReviewDecision(hasTenant, isTenantFallback) {
                 return hasTenant && !isTenantFallback;
               }
@@ -5493,12 +5694,14 @@
                   buildPopoverRow(line7) +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
                   reviewNotice +
+                  bindShapeHtml +
                   actions +
-                '</div>'
+                '</div>',
+                isUnboundShape && CAN_EDIT
               );
             } catch (err) {
               console.error(err);
-              showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">Не удалось выполнить запрос hit-test.</div>');
+              showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">Не удалось выполнить запрос hit-test.</div>', false);
             }
           }
 
@@ -5587,6 +5790,190 @@
               }
               return;
             }
+
+            // Обработчик bind-shape-btn (только привязка, без поиска)
+            const bindSection = t.closest('.bind-shape-ui');
+            if (bindSection instanceof HTMLElement) {
+              const shapeId = Number(bindSection.getAttribute('data-bind-shape-id') || 0);
+              const action = t.getAttribute('data-action');
+
+              if (action === 'bind-shape-btn') {
+                const input = bindSection.querySelector('.bind-shape-input');
+                const bindBtn = t;
+                const status = bindSection.querySelector('[data-bind-status]');
+                const spaceId = Number(input?.dataset?.spaceId || 0);
+
+                if (!Number.isFinite(shapeId) || shapeId <= 0) {
+                  toast('Ошибка: ID фигуры не найден');
+                  return;
+                }
+
+                if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                  toast('Сначала выберите место из списка');
+                  return;
+                }
+
+                const existingShape = findUsableShapeForSpaceId(spaceId);
+                if (existingShape && Number(existingShape.id) !== shapeId) {
+                  toast('У выбранного места уже есть фигура. Сначала проверьте место.');
+                  if (status) {
+                    status.className = 'bind-shape-status bind-shape-status--error';
+                    status.textContent = 'У выбранного места уже есть фигура (shape #' + String(existingShape.id) + ')';
+                  }
+                  return;
+                }
+
+                if (bindBtn) {
+                  bindBtn.disabled = true;
+                  bindBtn.textContent = 'Привязка…';
+                }
+                if (status) {
+                  status.className = 'bind-shape-status bind-shape-status--loading';
+                  status.textContent = 'Привязываю фигуру к месту…';
+                }
+
+                (async () => {
+                  try {
+                    const shapesBaseUrl = SHAPES_BASE || '/admin/market-map/shapes';
+                    const url = shapesBaseUrl + '/' + String(shapeId);
+
+                    const res = await apiFetch(url, {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF_TOKEN,
+                      },
+                      body: JSON.stringify({ market_space_id: spaceId }),
+                    });
+
+                    const json = await res.json();
+
+                    if (!res.ok || !json || json.ok !== true) {
+                      const msg = json?.message || 'Ошибка привязки';
+                      toast(msg);
+                      if (status) {
+                        status.className = 'bind-shape-status bind-shape-status--error';
+                        status.textContent = msg;
+                      }
+                      if (bindBtn) {
+                        bindBtn.disabled = false;
+                        bindBtn.textContent = 'Привязать';
+                      }
+                      return;
+                    }
+
+                    toast('Фигура привязана к месту');
+                    if (status) {
+                      status.className = 'bind-shape-status bind-shape-status--success';
+                      status.textContent = 'Готово!';
+                    }
+
+                    await loadShapes();
+                    redrawShapes();
+
+                    setTimeout(() => {
+                      hidePopover();
+                    }, 500);
+
+                  } catch (err) {
+                    console.error(err);
+                    const msg = String(err?.message || err || 'Ошибка');
+                    toast(msg);
+                    if (status) {
+                      status.className = 'bind-shape-status bind-shape-status--error';
+                      status.textContent = msg;
+                    }
+                    if (bindBtn) {
+                      bindBtn.disabled = false;
+                      bindBtn.textContent = 'Привязать';
+                    }
+                  }
+                })();
+                return;
+              }
+            }
+          });
+
+          // Обработчик input события для поиска мест
+          popover?.addEventListener('input', (e) => {
+            const input = e.target;
+            if (!(input instanceof HTMLInputElement)) return;
+
+            const bindSection = input.closest('.bind-shape-ui');
+            if (!bindSection) return;
+
+            const dropdown = bindSection.querySelector('.bind-shape-dropdown');
+            const bindBtn = bindSection.querySelector('.bind-shape-btn');
+            const status = bindSection.querySelector('[data-bind-status]');
+
+            const value = String(input.value || '').trim();
+
+            if (dropdown) {
+              dropdown.innerHTML = '';
+              dropdown.classList.remove('show');
+            }
+            if (status) {
+              status.className = 'bind-shape-status bind-shape-status--hidden';
+              status.textContent = '';
+            }
+            if (bindBtn) bindBtn.disabled = true;
+
+            if (!SPACES_URL || !value || value.length < 2) return;
+
+            (async () => {
+              try {
+                const url = new URL(SPACES_URL, window.location.origin);
+                url.searchParams.set('q', value);
+                url.searchParams.set('limit', '15');
+
+                const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+                const json = await res.json();
+
+                if (!res.ok || !json || json.ok !== true) return;
+
+                const items = json.items || [];
+                if (!dropdown) return;
+
+                if (!items.length) {
+                  dropdown.innerHTML = '<div class="bind-shape-option--empty">Ничего не найдено</div>';
+                  dropdown.classList.add('show');
+                  return;
+                }
+
+                dropdown.innerHTML = items.map((item) => {
+                  const spaceId = Number(item?.id || 0);
+                  const number = item?.number ? String(item.number) : '';
+                  const code = item?.code ? String(item.code) : '';
+                  const tenantName = item?.tenant?.name ? String(item.tenant.name) : '';
+                  const label = 'Место №' + (number || code || spaceId) + (tenantName ? (' — ' + escapeHtml(tenantName)) : '');
+                  const hasShape = findUsableShapeForSpaceId(spaceId);
+                  const disabled = hasShape ? 'disabled' : '';
+                  const hint = hasShape ? ' (у места уже есть фигура)' : '';
+                  return '<div class="bind-shape-option" data-space-id="' + String(spaceId) + '" ' + disabled + '>' + label + hint + '</div>';
+                }).join('');
+
+                dropdown.classList.add('show');
+
+                dropdown.querySelectorAll('.bind-shape-option').forEach(opt => {
+                  opt.addEventListener('click', () => {
+                    if (opt.hasAttribute('disabled')) return;
+                    const selectedSpaceId = Number(opt.getAttribute('data-space-id') || 0);
+                    const selectedItem = items.find(i => Number(i?.id) === selectedSpaceId);
+                    if (selectedItem) {
+                      const number = selectedItem?.number ? String(selectedItem.number) : '';
+                      const code = selectedItem?.code ? String(selectedItem.code) : '';
+                      input.value = 'Место №' + (number || code || selectedSpaceId) + ' (ID ' + String(selectedSpaceId) + ')';
+                      input.dataset.spaceId = String(selectedSpaceId);
+                    }
+                    dropdown.innerHTML = '';
+                    dropdown.classList.remove('show');
+                    if (bindBtn) bindBtn.disabled = false;
+                  });
+                });
+              } catch (err) {
+                console.error(err);
+              }
+            })();
           });
 
           window.addEventListener('keydown', async (e) => {
