@@ -3471,7 +3471,11 @@
 
             setChosenSpace(normalized, { announce: !!opts.announce });
             const freshSpace = await refreshChosenSpaceFromServer() || normalized;
-            const targetShape = findUsableShapeForSpaceId(freshSpace.id);
+            let targetShape = findUsableShapeForSpaceId(freshSpace.id);
+            if (!targetShape) {
+                await loadShapes();
+                targetShape = findUsableShapeForSpaceId(freshSpace.id);
+            }
 
             if (!targetShape) {
               toast('У этого места ещё нет разметки. Выберите непривязанную фигуру на карте и привяжите её к месту.');
