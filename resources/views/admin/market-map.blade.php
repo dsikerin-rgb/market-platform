@@ -2898,6 +2898,8 @@
           searchIndex = -1;
         }
 
+        let focusChosenSpaceOnMap = null;
+
         function renderSpaceDropdown(items) {
           if (!spaceDropdown) return;
           spaceDropdown.innerHTML = '';
@@ -3463,7 +3465,7 @@
             return null;
           }
 
-          async function focusChosenSpaceOnMap(space, opts = {}) {
+          focusChosenSpaceOnMap = async function (space, opts = {}) {
             const normalized = space ? normalizeChosenSpace(space) : null;
             if (!normalized) {
               return;
@@ -3493,7 +3495,7 @@
             }
 
             await centerOnBbox(bbox, { zoomFactor: 1.2 });
-          }
+          };
 
           function setScaleLabel() {
             if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
