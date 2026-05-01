@@ -5894,6 +5894,15 @@
             }
           });
 
+          // Не даём кликам внутри UI привязки закрывать popup
+          ['pointerdown', 'mousedown', 'click'].forEach((eventName) => {
+            popover?.addEventListener(eventName, (event) => {
+              if (event.target instanceof Element && event.target.closest('.bind-shape-ui')) {
+                event.stopPropagation();
+              }
+            });
+          });
+
           // Обработчик input события для поиска мест
           popover?.addEventListener('input', (e) => {
             const input = e.target;
@@ -5955,7 +5964,9 @@
                 dropdown.classList.add('show');
 
                 dropdown.querySelectorAll('.bind-shape-option').forEach(opt => {
-                  opt.addEventListener('click', () => {
+                  opt.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
                     if (opt.hasAttribute('disabled')) return;
                     const selectedSpaceId = Number(opt.getAttribute('data-space-id') || 0);
                     const selectedItem = items.find(i => Number(i?.id) === selectedSpaceId);
