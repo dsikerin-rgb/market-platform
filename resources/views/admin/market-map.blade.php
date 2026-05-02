@@ -749,6 +749,7 @@
       width: max-content;
       max-width: calc(100% - 28px);
       pointer-events: auto;
+      transform: translateX(var(--map-stage-scroll-left, 0px));
     }
     .map-edit-hint-anchor {
       position: fixed;
