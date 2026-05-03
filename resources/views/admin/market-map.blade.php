@@ -2269,6 +2269,7 @@
         const LS_KEY_LAYER = 'mp.marketMap.market_' + String(MARKET_ID) + '.layer';
 
         let chosenSpace = null;
+        let drawingSpace = null;
         let isEditMode = false;
         let currentScenario = INITIAL_MAP_MODE === 'review' ? 'review' : 'map';
         let reviewProgressState = INITIAL_REVIEW_PROGRESS || {};
@@ -2612,6 +2613,20 @@
 
         function getChosenSpaceId() {
           return chosenSpace?.id ?? null;
+        }
+
+        function getDrawingSpaceId() {
+          return drawingSpace?.id ?? null;
+        }
+
+        function setDrawingSpace(space, opts = {}) {
+          drawingSpace = space ? normalizeChosenSpace(space) : null;
+          if (opts.announce && drawingSpace) {
+            toast('Для отрисовки: Место ' + formatSpaceLabel(drawingSpace) + ' (ID ' + String(drawingSpace.id) + ')');
+          }
+          if (!drawingSpace && opts.announce) {
+            toast('Место для отрисовки сброшено');
+          }
         }
 
         function normalizeChosenSpace(item) {
@@ -4295,8 +4310,21 @@
           }
 
           async function createShape(pdfPolygon) {
-            const msId = getChosenSpaceId();
+            const msId = getDrawingSpaceId();
             const hasTyped = spaceSearchInput && String(spaceSearchInput.value || '').trim().length > 0;
+
+            // Guard: если drawingSpace выбран, проверяем наличие существующей фигуры
+            if (msId) {
+              const existingShape = findUsableShapeForSpaceId(msId);
+              if (existingShape) {
+                toast('У места для отрисовки уже есть фигура. Выберите место без фигуры.');
+                if (typeof setSelectedShape === 'function') {
+                  setSelectedShape(existingShape.id);
+                }
+                return;
+              }
+            }
+
             if (!msId && hasTyped) {
               toast('Выбери место из списка');
             }
@@ -4325,6 +4353,12 @@
             await loadShapes();
             redrawShapes();
             renderHandles();
+
+            // Сброс drawingSpace после успешного создания фигуры с привязкой
+            if (msId) {
+              setDrawingSpace(null, { announce: false });
+            }
+
             toast(msId ? ('Разметка сохранена (ID ' + String(msId) + ')') : 'Разметка сохранена без привязки — выбери место и привяжи');
           }
 
@@ -5138,6 +5172,7 @@
                 }
 
                 setChosenSpace(next, { announce: true });
+                setDrawingSpace(next, { announce: true });
 
                 // Включаем edit mode через существующий механизм
                 if (CAN_EDIT && toggleEditBtn && !editMode) {
@@ -5621,14 +5656,25 @@
               let bindShapeHtml = '';
               const isUnboundShape = (!hitSpaceId || hitSpaceId <= 0) && shapeId && Number.isFinite(shapeId) && shapeId > 0;
               if (isUnboundShape && CAN_EDIT) {
+                // Если drawingSpace выбран — предзаполняем input
+                const hasDrawingSpace = drawingSpace && Number(drawingSpace.id) > 0;
+                const drawingSpaceLabel = hasDrawingSpace
+                  ? ('Место №' + (drawingSpace.number || drawingSpace.code || drawingSpace.id) + ' (ID ' + String(drawingSpace.id) + ')')
+                  : '';
+                const drawingSpaceDataId = hasDrawingSpace ? String(drawingSpace.id) : '';
+                const btnDisabledAttr = hasDrawingSpace ? '' : ' disabled';
+                const hint = hasDrawingSpace
+                  ? ('Будет привязано к месту для отрисовки. Можно выбрать другое через поиск.')
+                  : ('Выберите место через поиск. Арендатор используется только для поиска.');
+
                 bindShapeHtml = '<div class="bind-shape-ui" data-bind-shape-id="' + String(shapeId) + '">' +
                   '<div class="bind-shape-header">Привязать разметку к месту</div>' +
                   '<div class="bind-shape-search">' +
-                    '<input type="text" class="bind-shape-input" placeholder="Номер / ID / арендатор" autocomplete="off">' +
+                    '<input type="text" class="bind-shape-input" placeholder="Номер / ID / арендатор" autocomplete="off" value="' + escapeHtml(drawingSpaceLabel) + '" data-space-id="' + drawingSpaceDataId + '">' +
                     '<div class="bind-shape-dropdown"></div>' +
                   '</div>' +
-                  '<div class="bind-shape-hint">Привязка будет к выбранному месту. Арендатор используется только для поиска.</div>' +
-                  '<button type="button" class="bind-shape-btn" data-action="bind-shape-btn" disabled>Привязать</button>' +
+                  '<div class="bind-shape-hint">' + escapeHtml(hint) + '</div>' +
+                  '<button type="button" class="bind-shape-btn" data-action="bind-shape-btn"' + btnDisabledAttr + '>Привязать</button>' +
                   '<div class="bind-shape-status bind-shape-status--hidden" data-bind-status></div>' +
                 '</div>';
               }
@@ -5867,6 +5913,12 @@
                     if (status) {
                       status.className = 'bind-shape-status bind-shape-status--success';
                       status.textContent = 'Готово!';
+                    }
+
+                    // Сброс drawingSpace, если привязали именно к нему
+                    const currentDrawingSpaceId = getDrawingSpaceId();
+                    if (currentDrawingSpaceId && Number(currentDrawingSpaceId) === Number(spaceId)) {
+                      setDrawingSpace(null, { announce: false });
                     }
 
                     await loadShapes();
