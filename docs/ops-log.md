@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-03 — Переход на PostgreSQL для staging/prod
+
+**DB-контур staging/prod:**
+- Staging: `DB_CONNECTION=pgsql`, `DB_DATABASE=market_staging`
+- Production: `DB_CONNECTION=pgsql`, `DB_DATABASE=market`
+
+**Правила для deploy/migration:**
+1. Перед миграциями выполнять DB-барьер:
+   - Показать DB config (без пароля): `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`
+   - Сделать backup через `pg_dump` в `/var/www/market-*/backups/`
+   - Проверить размер backup-файла
+2. Только после backup разрешать `php artisan migrate --force`
+3. **Запрещено на staging/prod:**
+   - `php artisan migrate:fresh`
+   - `php artisan migrate:refresh`
+   - `php artisan db:wipe`
+   - Любые `fresh/refresh/wipe`
+
+**Примечание:**
+- SQLite (`database.sqlite`) используется только для локальной разработки/testing
+- Для staging/prod SQLite-команды и backup через SQLite **не применяются**
+
+---
+
 ## 2026-04-22 — DebtStatusResolver: исторические неактивные договоры исключены из space-level contour
 
 **Проблема**
@@ -144,6 +168,10 @@
 ---
 
 ## 2026-01-03 — Horizon: доступ только super-admin, выравнивание staging/prod, запуск systemd в prod
+
+**LEGACY — PostgreSQL вместо SQLite с 2026-03**
+
+Эта запись относится к историческому периоду до перехода на PostgreSQL. С марта 2026 staging/prod используют PostgreSQL, backup выполняется через `pg_dump`, а не SQLite.
 
 **Контекст:** подготовка эксплуатационного контура очередей и мониторинга, унификация Horizon между local/staging/prod.
 
