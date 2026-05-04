@@ -338,29 +338,36 @@ class MarketSpaceResource extends BaseResource
                                     ->hintIconTooltip('Отображаемое имя места. После создания меняется только через режим "Карта -> Ревизия", чтобы не расходиться с ревизией идентичности места.')
                                     ->nullable(),
 
-                                Forms\Components\Toggle::make('has_space_grouping')
-                                    ->label('Входит в группу')
-                                    ->default(fn (?MarketSpace $record): bool => filled($record?->space_group_token) || filled($record?->space_group_slot))
-                                    ->dehydrated(false)
+                                Forms\Components\Select::make('space_group_role')
+                                    ->label('Тип группировки')
+                                    ->options([
+                                        'none' => 'Обычное место',
+                                        'parent' => 'Является группой',
+                                        'child' => 'Входит в группу',
+                                    ])
+                                    ->default('none')
+                                    ->required()
                                     ->live()
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Включайте только для мест, которые входят в состав общей группы: острова, холодильной линии или другой общей зоны.')
-                                    ->afterStateUpdated(function (bool $state, callable $set): void {
-                                        if ($state) {
-                                            return;
+                                    ->hintIconTooltip('Определяет, как место участвует в группировке. "Обычное место" — не входит в группу. "Является группой" — это контейнер для подчинённых мест. "Входит в группу" — это часть группы (острова, холодильной линии и т.п.).')
+                                    ->afterStateUpdated(function (?string $state, callable $set): void {
+                                        if ($state === 'none') {
+                                            $set('space_group_token', null);
+                                            $set('space_group_slot', null);
+                                        } elseif ($state === 'parent') {
+                                            $set('space_group_slot', null);
                                         }
-
-                                        $set('space_group_token', null);
-                                        $set('space_group_slot', null);
                                     }),
 
                                 Section::make('Групповое место')
-                                    ->visible(fn (callable $get): bool => (bool) $get('has_space_grouping'))
+                                    ->visible(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
                                     ->schema([
                                         Forms\Components\TextInput::make('space_group_token')
                                             ->label('Группа мест')
                                             ->maxLength(255)
                                             ->placeholder('Например: ОС8, ХК1, ПАВИЛЬОН3')
+                                            ->visible(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
+                                            ->required(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
                                             ->hintIcon('heroicon-m-question-mark-circle')
                                             ->hintIconTooltip('Используйте для группировки мест внутри острова, холодильной линии или другой общей зоны. Заполняется для мест, которые входят в состав одной группы. Это упрощает привязку договоров вроде ОС8 14-15. Для ОС8/14 и ОС8/15 указывайте одну и ту же группу ОС8.')
                                             ->nullable(),
@@ -369,6 +376,8 @@ class MarketSpaceResource extends BaseResource
                                             ->label('Номер внутри группы')
                                             ->maxLength(255)
                                             ->placeholder('Например: 14, 15, 14-15')
+                                            ->visible(fn (callable $get): bool => $get('space_group_role') === 'child')
+                                            ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
                                             ->hintIcon('heroicon-m-question-mark-circle')
                                             ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции. Для одиночного места указывайте один номер, например 14. Для комбинированного служебного обозначения можно хранить 14-15.')
                                             ->nullable(),

@@ -1,4 +1,5 @@
 <?php
+# app/Models/MarketSpace.php
 
 namespace App\Models;
 
@@ -17,6 +18,16 @@ class MarketSpace extends Model
 {
     use HasFactory;
 
+    public const SPACE_GROUP_ROLE_NONE = 'none';
+    public const SPACE_GROUP_ROLE_PARENT = 'parent';
+    public const SPACE_GROUP_ROLE_CHILD = 'child';
+
+    public const SPACE_GROUP_ROLES = [
+        self::SPACE_GROUP_ROLE_NONE,
+        self::SPACE_GROUP_ROLE_PARENT,
+        self::SPACE_GROUP_ROLE_CHILD,
+    ];
+
     /**
      * @var list<string>
      */
@@ -28,6 +39,7 @@ class MarketSpace extends Model
         'code',
         'space_group_token',
         'space_group_slot',
+        'space_group_role',
         'display_name',
         'activity_type',
         'area_sqm',
@@ -49,6 +61,7 @@ class MarketSpace extends Model
         'rent_rate_updated_at' => 'datetime',
         'map_reviewed_at' => 'datetime',
         'is_active' => 'boolean',
+        'space_group_role' => 'string',
     ];
 
     protected static function booted(): void
@@ -168,8 +181,24 @@ class MarketSpace extends Model
         $slot = preg_replace('/\s*([,-])\s*/u', '$1', $slot) ?? $slot;
         $slot = preg_replace('/\s+/u', ' ', $slot) ?? $slot;
 
-        $this->space_group_token = $token !== '' ? $token : null;
-        $this->space_group_slot = $slot !== '' ? $slot : null;
+        $role = $this->space_group_role ?? null;
+
+        if (! in_array($role, self::SPACE_GROUP_ROLES, true)) {
+            $role = self::SPACE_GROUP_ROLE_NONE;
+        }
+
+        if ($role === self::SPACE_GROUP_ROLE_NONE) {
+            $this->space_group_token = null;
+            $this->space_group_slot = null;
+        } elseif ($role === self::SPACE_GROUP_ROLE_PARENT) {
+            $this->space_group_token = $token !== '' ? $token : null;
+            $this->space_group_slot = null;
+        } elseif ($role === self::SPACE_GROUP_ROLE_CHILD) {
+            $this->space_group_token = $token !== '' ? $token : null;
+            $this->space_group_slot = $slot !== '' ? $slot : null;
+        }
+
+        $this->space_group_role = $role;
     }
 
     public function market(): BelongsTo
