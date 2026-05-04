@@ -1,4 +1,5 @@
 <?php
+# app/Console/Commands/BackfillMarketSpaceGroupsCommand.php
 
 declare(strict_types=1);
 
@@ -52,12 +53,16 @@ class BackfillMarketSpaceGroupsCommand extends Command
 
                 $changed++;
 
+                $spaceGroupRole = $groupSegments !== null && $groupSegments !== ''
+                    ? MarketSpace::SPACE_GROUP_ROLE_CHILD
+                    : MarketSpace::SPACE_GROUP_ROLE_PARENT;
+
                 if (count($examples) < $limit) {
                     $examples[] = [
                         'id' => (int) $space->id,
                         'number' => (string) $space->number,
-                        'from' => trim((string) ($space->space_group_token ?? '')) . ' / ' . trim((string) ($space->space_group_slot ?? '')),
-                        'to' => $groupToken . ' / ' . $groupSegments,
+                        'from' => trim((string) ($space->space_group_token ?? '')) . ' / ' . trim((string) ($space->space_group_slot ?? '')) . ' / ' . ($space->space_group_role ?? 'null'),
+                        'to' => $groupToken . ' / ' . $groupSegments . ' / ' . $spaceGroupRole,
                     ];
                 }
 
@@ -65,6 +70,7 @@ class BackfillMarketSpaceGroupsCommand extends Command
                     $space->forceFill([
                         'space_group_token' => $groupToken,
                         'space_group_slot' => $groupSegments,
+                        'space_group_role' => $spaceGroupRole,
                     ])->save();
                 }
             }
