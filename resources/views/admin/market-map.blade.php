@@ -1510,10 +1510,18 @@
       font-size: 12px;
       cursor: default;
     }
+    .popover .bind-shape-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-start;
+    }
     .popover .bind-shape-btn {
-      width: 100%;
-      padding: 8px 12px;
-      border-radius: 6px;
+      width: auto;
+      min-width: 104px;
+      padding: 7px 14px;
+      border-radius: 999px;
       border: 1px solid #10b981;
       background: #10b981;
       color: #fff;
@@ -1547,6 +1555,22 @@
     }
     .popover .bind-shape-status--error {
       color: #ef4444;
+    }
+    .popover .bind-shape-create-btn {
+      width: auto;
+      min-width: 172px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid #93c5fd;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .popover .bind-shape-create-btn:hover {
+      background: #dbeafe;
+      border-color: #60a5fa;
     }
     .popover .bind-shape-hint {
       font-size: 11px;
@@ -2190,6 +2214,7 @@
         const SPACE_URL  = @json($spaceUrl,  JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const SPACES_URL = @json($spacesUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         const REVIEW_DECISION_URL = @json($reviewDecisionUrl ?? '', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        const CREATE_SPACE_URL = @json(\App\Filament\Resources\MarketSpaceResource::getUrl('create'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const CAN_EDIT  = @json((bool) $canEdit);
         const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
@@ -2444,6 +2469,20 @@
 
           if (el._t) clearTimeout(el._t);
           el._t = setTimeout(() => el.classList.remove('show'), 1400);
+        }
+
+        function buildCreateSpaceAndBindUrl(shapeId, preferredNumber = '') {
+          const url = new URL(CREATE_SPACE_URL, window.location.origin);
+          url.searchParams.set('shape_id', String(Math.trunc(shapeId)));
+          url.searchParams.set('market_id', String(MARKET_ID));
+          url.searchParams.set('return_url', window.location.href);
+
+          const normalizedNumber = String(preferredNumber || '').trim();
+          if (normalizedNumber) {
+            url.searchParams.set('number', normalizedNumber);
+          }
+
+          return url.toString();
         }
 
         function hidePopover() {
@@ -5814,7 +5853,10 @@
                     '<div class="bind-shape-dropdown"></div>' +
                   '</div>' +
                   '<div class="bind-shape-hint">' + escapeHtml(hint) + '</div>' +
-                  '<button type="button" class="bind-shape-btn" data-action="bind-shape-btn"' + btnDisabledAttr + '>Привязать</button>' +
+                  '<div class="bind-shape-actions">' +
+                    '<button type="button" class="bind-shape-btn" data-action="bind-shape-btn"' + btnDisabledAttr + '>Привязать</button>' +
+                    '<button type="button" class="bind-shape-create-btn" data-action="create-space-and-bind">Создать место и привязать</button>' +
+                  '</div>' +
                   '<div class="bind-shape-status bind-shape-status--hidden" data-bind-status></div>' +
                 '</div>';
               }
@@ -5997,6 +6039,22 @@
             if (bindSection instanceof HTMLElement) {
               const shapeId = Number(bindSection.getAttribute('data-bind-shape-id') || 0);
               const action = t.getAttribute('data-action');
+
+              if (action === 'create-space-and-bind') {
+                if (!Number.isFinite(shapeId) || shapeId <= 0) {
+                  toast('Ошибка: ID фигуры не найден');
+                  return;
+                }
+
+                const input = bindSection.querySelector('.bind-shape-input');
+                const selectedSpaceId = Number(input?.dataset?.spaceId || 0);
+                const preferredNumber = Number.isFinite(selectedSpaceId) && selectedSpaceId > 0
+                  ? ''
+                  : String(input?.value || '').trim();
+
+                window.location.href = buildCreateSpaceAndBindUrl(shapeId, preferredNumber);
+                return;
+              }
 
               if (action === 'bind-shape-btn') {
                 const input = bindSection.querySelector('.bind-shape-input');
