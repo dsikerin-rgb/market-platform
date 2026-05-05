@@ -1,9 +1,12 @@
 <?php
+# tests/Feature/MarketMapLinkingTest.php
 
 declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\MarketSpaceResource\Pages\CreateMarketSpace;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -12,6 +15,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -251,6 +255,160 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_effective_tenant_name', $parentTenant->display_name);
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
+    public function test_create_market_space_page_creates_space_and_binds_requested_shape(): void
+    {
+        $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
+        $shape = MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 20, 'y' => 10],
+                ['x' => 20, 'y' => 20],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 20,
+            'bbox_y2' => 20,
+            'is_active' => true,
+        ]);
+        $returnUrl = route('filament.admin.market-map', [
+            'market_id' => $market->id,
+            'page' => 1,
+            'version' => 1,
+        ]);
+
+        Livewire::withQueryParams([
+            'shape_id' => $shape->id,
+            'market_id' => $market->id,
+            'return_url' => $returnUrl,
+            'number' => 'OS7 6',
+        ])
+            ->test(CreateMarketSpace::class)
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'OS7 6',
+                'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+                'space_group_parent_id' => $parent->id,
+                'space_group_slot' => '6',
+            ])
+            ->call('create')
+            ->assertHasNoErrors()
+            ->assertRedirect($returnUrl);
+
+        $space = MarketSpace::query()
+            ->where('market_id', $market->id)
+            ->where('number', 'OS7 6')
+            ->firstOrFail();
+
+        $shape->refresh();
+
+        $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_CHILD, $space->space_group_role);
+        $this->assertSame($parent->id, $space->space_group_parent_id);
+        $this->assertSame('6', $space->space_group_slot);
+        $this->assertNull($space->tenant_id);
+        $this->assertSame($space->id, $shape->market_space_id);
+    }
+
+    public function test_create_market_space_page_rejects_duplicate_number_for_same_market(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $shape = MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 20, 'y' => 10],
+                ['x' => 20, 'y' => 20],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 20,
+            'bbox_y2' => 20,
+            'is_active' => true,
+        ]);
+        MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6',
+        ]);
+
+        Livewire::withQueryParams([
+            'shape_id' => $shape->id,
+            'market_id' => $market->id,
+        ])
+            ->test(CreateMarketSpace::class)
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'OS7 6',
+            ])
+            ->call('create')
+            ->assertHasErrors(['data.number']);
+
+        $shape->refresh();
+
+        $this->assertNull($shape->market_space_id);
+        $this->assertSame(1, MarketSpace::query()->where('market_id', $market->id)->where('number', 'OS7 6')->count());
+    }
+
+    public function test_create_market_space_page_allows_normal_creation_without_shape_id(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $component = Livewire::test(CreateMarketSpace::class)
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'A-901',
+            ])
+            ->call('create')
+            ->assertHasNoErrors();
+
+        $space = MarketSpace::query()
+            ->where('market_id', $market->id)
+            ->where('number', 'A-901')
+            ->firstOrFail();
+
+        $component->assertRedirect(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+        $this->assertNull($space->tenant_id);
+    }
+
+    public function test_create_market_space_page_rejects_protocol_relative_return_url(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $component = Livewire::withQueryParams([
+            'return_url' => '//attacker.example/path',
+        ])
+            ->test(CreateMarketSpace::class)
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'A-902',
+            ])
+            ->call('create')
+            ->assertHasNoErrors();
+
+        $space = MarketSpace::query()
+            ->where('market_id', $market->id)
+            ->where('number', 'A-902')
+            ->firstOrFail();
+
+        $component->assertRedirect(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+    }
 
     public function test_market_map_endpoints_expose_inherited_group_financial_status_for_child(): void
     {
@@ -369,5 +527,4 @@ class MarketMapLinkingTest extends TestCase
         $hitResponse->assertJsonPath('hit.space_financial_source', 'parent');
         $hitResponse->assertJsonPath('hit.space_financial_source_space_number', (string) $parent->number);
     }
-
 }
