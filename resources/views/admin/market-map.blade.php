@@ -3953,7 +3953,9 @@
 
               // Проверяем состояние места
               const hasSpace = isLinked;
-              const hasTenant = hasSpace && (s.space_tenant_id !== null && s.space_tenant_id !== undefined);
+              const hasTenant = hasSpace && (s.space_effective_is_occupied !== null && s.space_effective_is_occupied !== undefined
+                ? Boolean(s.space_effective_is_occupied)
+                : (s.space_tenant_id !== null && s.space_tenant_id !== undefined));
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
               const debtScope = typeof s.debt_status_scope === 'string' ? s.debt_status_scope : 'none';
               const reviewStatus = typeof s.space_review_status === 'string' ? s.space_review_status : '';
