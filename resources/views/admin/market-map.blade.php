@@ -2750,10 +2750,13 @@
           for (const item of items) {
             const rate = Number(item?.space_rent_rate_value);
             const hasSpace = !!item?.market_space_id;
+            const occupancySource = item?.space_occupancy_source ? String(item.space_occupancy_source) : 'none';
             const hasTenant = hasSpace
               && (item?.space_effective_is_occupied !== null && item?.space_effective_is_occupied !== undefined
                 ? Boolean(item.space_effective_is_occupied)
-                : (item?.space_tenant_id !== null && item?.space_tenant_id !== undefined));
+                : (occupancySource === 'parent'
+                  || (item?.space_effective_tenant_id !== null && item?.space_effective_tenant_id !== undefined)
+                  || (item?.space_tenant_id !== null && item?.space_tenant_id !== undefined)));
 
             if (!hasTenant || !Number.isFinite(rate) || rate <= 0) continue;
 
@@ -3953,9 +3956,12 @@
 
               // Проверяем состояние места
               const hasSpace = isLinked;
+              const occupancySource = s.space_occupancy_source ? String(s.space_occupancy_source) : 'none';
               const hasTenant = hasSpace && (s.space_effective_is_occupied !== null && s.space_effective_is_occupied !== undefined
                 ? Boolean(s.space_effective_is_occupied)
-                : (s.space_tenant_id !== null && s.space_tenant_id !== undefined));
+                : (occupancySource === 'parent'
+                  || (s.space_effective_tenant_id !== null && s.space_effective_tenant_id !== undefined)
+                  || (s.space_tenant_id !== null && s.space_tenant_id !== undefined)));
               const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
               const debtScope = typeof s.debt_status_scope === 'string' ? s.debt_status_scope : 'none';
               const reviewStatus = typeof s.space_review_status === 'string' ? s.space_review_status : '';
@@ -3992,7 +3998,7 @@
               } else if (currentLayer === 'rent') {
                 rentFill = rentRateColors[rentRateBand] || rentRateColors.none;
                 fillStyle = rentRateBand === 'none' ? 'rent-missing' : 'rent';
-              } else if (debtStatus && debtColors[debtStatus]) {
+              } else if (debtStatus && debtColors[debtStatus] && !(occupancySource === 'parent' && debtStatus === 'gray')) {
                 // Есть арендатор и debt_status — используем debt цвет
                 if (debtStatus === 'red') {
                   const redPalette = debtColors.red;
@@ -4033,10 +4039,16 @@
                 stroke = BORDER_COLOR;
                 fo = 0.96;
               } else {
-                // Normal: обычная заливка
-                fill = s.fill_color || '#00A3FF';
+                // Normal: обычная заливка; для inherited child берём цвет source-space
+                const inheritedSourceId = occupancySource === 'parent' ? Number(s.space_occupancy_source_space_id || 0) : 0;
+                const inheritedSourceShape = inheritedSourceId > 0 && Array.isArray(shapes)
+                  ? shapes.find(shape => Number(shape?.market_space_id || shape?.space_id || 0) === inheritedSourceId) || null
+                  : null;
+                fill = inheritedSourceShape?.fill_color || s.fill_color || '#00A3FF';
                 stroke = BORDER_COLOR;
-                fo = typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12;
+                fo = typeof inheritedSourceShape?.fill_opacity === 'number'
+                  ? inheritedSourceShape.fill_opacity
+                  : (typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12);
               }
 
               if (showReviewMarkers) {
@@ -5555,10 +5567,12 @@
                 }
 
                 // Проверяем наличие арендатора
+                const occupancySource = hit.space_occupancy_source ? String(hit.space_occupancy_source) : 'none';
                 const hasTenant = hit.space_effective_is_occupied !== null && hit.space_effective_is_occupied !== undefined
                   ? Boolean(hit.space_effective_is_occupied)
-                  : (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined);
-                const occupancySource = hit.space_occupancy_source ? String(hit.space_occupancy_source) : 'none';
+                  : (occupancySource === 'parent'
+                    || (hit.space_effective_tenant_id !== null && hit.space_effective_tenant_id !== undefined)
+                    || (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined));
                 const sourceSpaceLabel = hit.space_occupancy_source_space_number
                   ? String(hit.space_occupancy_source_space_number)
                   : '';
@@ -5690,7 +5704,9 @@
               const hitTenantId = hit?.tenant?.id ? Number(hit.tenant.id) : (hit?.tenant_id ? Number(hit.tenant_id) : null);
               const hitHasTenant = hit.space_effective_is_occupied !== null && hit.space_effective_is_occupied !== undefined
                 ? Boolean(hit.space_effective_is_occupied)
-                : (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined);
+                : (occupancySource === 'parent'
+                  || (hit.space_effective_tenant_id !== null && hit.space_effective_tenant_id !== undefined)
+                  || (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined));
               const isTenantFallback = (hit.debt_status_scope || 'none') === 'tenant_fallback';
               const hitReviewStatus = String(hit.review_status || hit.space_review_status || hit?.space?.review_status || hit?.space?.map_review_status || '').trim();
               const hitReviewStatusLabel = String(hit.review_status_label || hit.space_review_status_label || hit?.space?.review_status_label || '').trim();
