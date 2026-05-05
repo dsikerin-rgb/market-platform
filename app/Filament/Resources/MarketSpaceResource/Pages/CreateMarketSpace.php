@@ -57,7 +57,10 @@ class CreateMarketSpace extends BaseCreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $this->assertUniqueNumberWithinMarket($data);
-        $this->resolvePendingShapeForMarket(isset($data['market_id']) ? (int) $data['market_id'] : null);
+
+        if ($this->pendingShapeId !== null) {
+            $this->resolvePendingShapeForMarket(isset($data['market_id']) ? (int) $data['market_id'] : null);
+        }
 
         return $data;
     }
@@ -232,6 +235,10 @@ class CreateMarketSpace extends BaseCreateRecord
         }
 
         if (str_starts_with($value, '/')) {
+            if (str_starts_with($value, '//')) {
+                return null;
+            }
+
             return $value;
         }
 

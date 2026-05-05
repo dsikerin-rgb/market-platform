@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\MarketSpaceResource\Pages\CreateMarketSpace;
 use App\Models\Market;
 use App\Models\MarketSpace;
@@ -357,6 +358,56 @@ class MarketMapLinkingTest extends TestCase
 
         $this->assertNull($shape->market_space_id);
         $this->assertSame(1, MarketSpace::query()->where('market_id', $market->id)->where('number', 'OS7 6')->count());
+    }
+
+    public function test_create_market_space_page_allows_normal_creation_without_shape_id(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $component = Livewire::test(CreateMarketSpace::class)
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'A-901',
+            ])
+            ->call('create')
+            ->assertHasNoErrors();
+
+        $space = MarketSpace::query()
+            ->where('market_id', $market->id)
+            ->where('number', 'A-901')
+            ->firstOrFail();
+
+        $component->assertRedirect(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+        $this->assertNull($space->tenant_id);
+    }
+
+    public function test_create_market_space_page_rejects_protocol_relative_return_url(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $component = Livewire::withQueryParams([
+            'return_url' => '//attacker.example/path',
+        ])
+            ->test(CreateMarketSpace::class)
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'A-902',
+            ])
+            ->call('create')
+            ->assertHasNoErrors();
+
+        $space = MarketSpace::query()
+            ->where('market_id', $market->id)
+            ->where('number', 'A-902')
+            ->firstOrFail();
+
+        $component->assertRedirect(MarketSpaceResource::getUrl('edit', ['record' => $space]));
     }
 
     public function test_market_map_endpoints_expose_inherited_group_financial_status_for_child(): void
