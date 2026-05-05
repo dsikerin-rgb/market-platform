@@ -377,7 +377,7 @@ class MarketSpaceResource extends BaseResource
                                         Forms\Components\Select::make('space_group_parent_id')
                                             ->label('Группа')
                                             ->options(function (?MarketSpace $record): array {
-                                                $user = \Filament\Filament::auth()->user();
+                                                $user = Filament::auth()->user();
                                                 $marketId = $user?->isSuperAdmin()
                                                     ? static::selectedMarketIdFromSession()
                                                     : $user?->market_id;
