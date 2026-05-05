@@ -12,7 +12,9 @@ class SpaceGroupRoleTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function test_none_role_clears_token_and_slot(): void
+    // === Legacy token/slot tests ===
+
+    public function test_none_role_clears_token_slot_and_parent_id(): void
     {
         $market = Market::create(['name' => 'Test Market']);
 
@@ -22,13 +24,15 @@ class SpaceGroupRoleTest extends TestCase
             'space_group_token' => 'OS8',
             'space_group_slot' => '14',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'space_group_parent_id' => 999,
         ]);
 
         $this->assertNull($space->space_group_token);
         $this->assertNull($space->space_group_slot);
+        $this->assertNull($space->space_group_parent_id);
     }
 
-    public function test_parent_role_keeps_token_and_clears_slot(): void
+    public function test_parent_role_keeps_legacy_token_and_clears_slot_and_parent_id(): void
     {
         $market = Market::create(['name' => 'Test Market']);
 
@@ -38,15 +42,22 @@ class SpaceGroupRoleTest extends TestCase
             'space_group_token' => 'OS8',
             'space_group_slot' => '14',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_parent_id' => 999,
         ]);
 
         $this->assertEquals('OS8', $space->space_group_token);
         $this->assertNull($space->space_group_slot);
+        $this->assertNull($space->space_group_parent_id);
     }
 
-    public function test_child_role_keeps_token_and_slot(): void
+    public function test_child_role_keeps_legacy_token_and_slot_and_allows_parent_id(): void
     {
         $market = Market::create(['name' => 'Test Market']);
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
 
         $space = MarketSpace::create([
             'market_id' => $market->id,
@@ -54,15 +65,22 @@ class SpaceGroupRoleTest extends TestCase
             'space_group_token' => 'OS8',
             'space_group_slot' => '14',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
         ]);
 
         $this->assertEquals('OS8', $space->space_group_token);
         $this->assertEquals('14', $space->space_group_slot);
+        $this->assertEquals($parent->id, $space->space_group_parent_id);
     }
 
-    public function test_changing_from_child_to_parent_clears_slot(): void
+    public function test_changing_from_child_to_parent_clears_slot_and_parent_id_but_keeps_token(): void
     {
         $market = Market::create(['name' => 'Test Market']);
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
 
         $space = MarketSpace::create([
             'market_id' => $market->id,
@@ -70,15 +88,17 @@ class SpaceGroupRoleTest extends TestCase
             'space_group_token' => 'OS8',
             'space_group_slot' => '14',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
         ]);
 
         $space->update(['space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT]);
 
         $this->assertEquals('OS8', $space->space_group_token);
         $this->assertNull($space->space_group_slot);
+        $this->assertNull($space->space_group_parent_id);
     }
 
-    public function test_changing_from_parent_to_none_clears_token_and_slot(): void
+    public function test_changing_from_parent_to_none_clears_token_slot_and_parent_id(): void
     {
         $market = Market::create(['name' => 'Test Market']);
 
@@ -88,15 +108,17 @@ class SpaceGroupRoleTest extends TestCase
             'space_group_token' => 'OS8',
             'space_group_slot' => '14',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_parent_id' => 999,
         ]);
 
         $space->update(['space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE]);
 
         $this->assertNull($space->space_group_token);
         $this->assertNull($space->space_group_slot);
+        $this->assertNull($space->space_group_parent_id);
     }
 
-    public function test_unknown_role_normalizes_to_none_and_clears_token_slot(): void
+    public function test_unknown_role_normalizes_to_none_and_clears_token_slot_and_parent_id(): void
     {
         $market = Market::create(['name' => 'Test Market']);
 
@@ -106,10 +128,107 @@ class SpaceGroupRoleTest extends TestCase
             'space_group_token' => 'OS8',
             'space_group_slot' => '14',
             'space_group_role' => 'invalid_role',
+            'space_group_parent_id' => 999,
         ]);
 
         $this->assertNull($space->space_group_token);
         $this->assertNull($space->space_group_slot);
+        $this->assertNull($space->space_group_parent_id);
         $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_NONE, $space->space_group_role);
+    }
+
+    // === New space_group_parent_id tests ===
+
+    public function test_child_can_belong_to_parent_through_parent_id(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'A-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_slot' => '6',
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $this->assertEquals($parent->id, $child->space_group_parent_id);
+        $this->assertTrue($child->spaceGroupParent()->exists());
+    }
+
+    public function test_parent_cannot_keep_parent_id_after_save(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_parent_id' => 999,
+        ]);
+
+        $this->assertNull($parent->space_group_parent_id);
+    }
+
+    public function test_changing_child_to_none_clears_parent_id(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'A-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_slot' => '6',
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $child->update(['space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE]);
+
+        $this->assertNull($child->space_group_parent_id);
+        $this->assertNull($child->space_group_token);
+        $this->assertNull($child->space_group_slot);
+    }
+
+    public function test_space_group_children_relation_works(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
+
+        $child1 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'A-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_slot' => '6',
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $child2 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'A-7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_slot' => '7',
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $children = $parent->spaceGroupChildren()->get();
+        $childIds = $children->pluck('id')->sort()->values()->all();
+        $expectedIds = [$child1->id, $child2->id];
+        sort($expectedIds);
+
+        $this->assertCount(2, $children);
+        $this->assertEquals($expectedIds, $childIds);
     }
 }

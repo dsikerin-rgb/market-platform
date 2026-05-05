@@ -342,45 +342,91 @@ class MarketSpaceResource extends BaseResource
                                     ->label('Тип группировки')
                                     ->options([
                                         'none' => 'Обычное место',
-                                        'parent' => 'Является группой',
-                                        'child' => 'Входит в группу',
+                                        'parent' => 'Групповое место (родитель)',
+                                        'child' => 'Входит в группу (child)',
                                     ])
                                     ->default('none')
                                     ->required()
                                     ->live()
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Определяет, как место участвует в группировке. "Обычное место" — не входит в группу. "Является группой" — это контейнер для подчинённых мест. "Входит в группу" — это часть группы (острова, холодильной линии и т.п.).')
+                                    ->hintIconTooltip('Определяет, как место участвует в группировке. "Обычное место" — не входит в группу. "Групповое место" — это контейнер для подчинённых мест (например, остров ОС7). "Входит в группу" — это часть группы, выбирает родителя из списка.')
                                     ->afterStateUpdated(function (?string $state, callable $set): void {
                                         if ($state === 'none') {
                                             $set('space_group_token', null);
                                             $set('space_group_slot', null);
+                                            $set('space_group_parent_id', null);
                                         } elseif ($state === 'parent') {
                                             $set('space_group_slot', null);
+                                            $set('space_group_parent_id', null);
+                                            // space_group_token не трогаем — legacy поле, может быть уже установлено
+                                        } elseif ($state === 'child') {
+                                            // space_group_token не трогаем — legacy поле
+                                            // space_group_parent_id не трогаем — устанавливается через Select
+                                            // space_group_slot не трогаем — вводится пользователем
                                         }
                                     }),
 
-                                Section::make('Групповое место')
+                                Section::make('Группировка')
                                     ->visible(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
                                     ->schema([
-                                        Forms\Components\TextInput::make('space_group_token')
-                                            ->label('Группа мест')
-                                            ->maxLength(255)
-                                            ->placeholder('Например: ОС8, ХК1, ПАВИЛЬОН3')
-                                            ->visible(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
-                                            ->required(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
+                                        Forms\Components\Placeholder::make('parent_info')
+                                            ->label('Групповое место')
+                                            ->content('Это групповое место. Его номер остаётся как в 1С, например ОС7 6, 7, 8. Дочерние места будут выбирать эту группу из списка.')
+                                            ->visible(fn (callable $get): bool => $get('space_group_role') === 'parent'),
+
+                                        Forms\Components\Select::make('space_group_parent_id')
+                                            ->label('Группа')
+                                            ->options(function (?MarketSpace $record): array {
+                                                $user = \Filament\Filament::auth()->user();
+                                                $marketId = $user?->isSuperAdmin()
+                                                    ? static::selectedMarketIdFromSession()
+                                                    : $user?->market_id;
+
+                                                if (!$marketId) {
+                                                    return [];
+                                                }
+
+                                                // Показываем только parent-группы из того же рынка, исключая текущую запись
+                                                $query = \App\Models\MarketSpace::query()
+                                                    ->where('market_id', (int) $marketId)
+                                                    ->where('space_group_role', \App\Models\MarketSpace::SPACE_GROUP_ROLE_PARENT);
+
+                                                if ($record) {
+                                                    $query->where('id', '!=', $record->id);
+                                                }
+
+                                                return $query->orderBy('number')
+                                                    ->orderBy('display_name')
+                                                    ->get()
+                                                    ->mapWithKeys(function ($s): array {
+                                                        $label = $s->number ?? '';
+                                                        if ($s->display_name) {
+                                                            if ($label !== '') {
+                                                                $label .= ' — ';
+                                                            }
+                                                            $label .= $s->display_name;
+                                                        }
+                                                        $label .= ' #' . $s->id;
+                                                        return [$s->id => $label];
+                                                    })
+                                                    ->toArray();
+                                            })
+                                            ->visible(fn (callable $get): bool => $get('space_group_role') === 'child')
+                                            ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
+                                            ->searchable()
+                                            ->preload()
+                                            ->placeholder('Выберите родительскую группу')
                                             ->hintIcon('heroicon-m-question-mark-circle')
-                                            ->hintIconTooltip('Используйте для группировки мест внутри острова, холодильной линии или другой общей зоны. Заполняется для мест, которые входят в состав одной группы. Это упрощает привязку договоров вроде ОС8 14-15. Для ОС8/14 и ОС8/15 указывайте одну и ту же группу ОС8.')
-                                            ->nullable(),
+                                            ->hintIconTooltip('Родительская группа — это контейнер для связанных мест (например, остров ОС7). Child-места выбирают группу из списка, а не вводят текст вручную.'),
 
                                         Forms\Components\TextInput::make('space_group_slot')
                                             ->label('Номер внутри группы')
                                             ->maxLength(255)
-                                            ->placeholder('Например: 14, 15, 14-15')
+                                            ->placeholder('Например: 6, 7, 8')
                                             ->visible(fn (callable $get): bool => $get('space_group_role') === 'child')
                                             ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
                                             ->hintIcon('heroicon-m-question-mark-circle')
-                                            ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции. Для одиночного места указывайте один номер, например 14. Для комбинированного служебного обозначения можно хранить 14-15.')
-                                            ->nullable(),
+                                            ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции.'),
                                     ])
                                     ->columns([
                                         'default' => 1,

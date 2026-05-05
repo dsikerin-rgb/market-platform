@@ -40,6 +40,7 @@ class MarketSpace extends Model
         'space_group_token',
         'space_group_slot',
         'space_group_role',
+        'space_group_parent_id',
         'display_name',
         'activity_type',
         'area_sqm',
@@ -62,6 +63,7 @@ class MarketSpace extends Model
         'map_reviewed_at' => 'datetime',
         'is_active' => 'boolean',
         'space_group_role' => 'string',
+        'space_group_parent_id' => 'integer',
     ];
 
     protected static function booted(): void
@@ -188,14 +190,20 @@ class MarketSpace extends Model
         }
 
         if ($role === self::SPACE_GROUP_ROLE_NONE) {
+            // none: очистить всё
             $this->space_group_token = null;
             $this->space_group_slot = null;
+            $this->space_group_parent_id = null;
         } elseif ($role === self::SPACE_GROUP_ROLE_PARENT) {
-            $this->space_group_token = $token !== '' ? $token : null;
+            // parent: очистить slot и parent_id, но НЕ очищать token (legacy)
             $this->space_group_slot = null;
+            $this->space_group_parent_id = null;
+            // space_group_token оставляем как legacy-поле, не трогаем
         } elseif ($role === self::SPACE_GROUP_ROLE_CHILD) {
-            $this->space_group_token = $token !== '' ? $token : null;
+            // child: нормализовать slot, НЕ трогать token (legacy) и parent_id
             $this->space_group_slot = $slot !== '' ? $slot : null;
+            // space_group_token оставляем как legacy-поле, не трогаем
+            // space_group_parent_id не трогаем — он устанавливается через Select в UI
         }
 
         $this->space_group_role = $role;
@@ -262,5 +270,15 @@ class MarketSpace extends Model
     public function mapShapes(): HasMany
     {
         return $this->hasMany(MarketSpaceMapShape::class, 'market_space_id', 'id');
+    }
+
+    public function spaceGroupParent(): BelongsTo
+    {
+        return $this->belongsTo(MarketSpace::class, 'space_group_parent_id');
+    }
+
+    public function spaceGroupChildren(): HasMany
+    {
+        return $this->hasMany(MarketSpace::class, 'space_group_parent_id');
     }
 }
