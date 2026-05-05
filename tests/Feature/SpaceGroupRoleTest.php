@@ -5,6 +5,7 @@ namespace Tests\Feature;
 
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\Tenant;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -230,5 +231,100 @@ class SpaceGroupRoleTest extends TestCase
 
         $this->assertCount(2, $children);
         $this->assertEquals($expectedIds, $childIds);
+    }
+
+    public function test_child_space_inherits_effective_occupancy_from_parent_when_direct_tenant_is_missing(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $parentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Parent Tenant LLC',
+            'short_name' => 'Parent Tenant',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'tenant_id' => $parentTenant->id,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $this->assertNull($child->tenant_id);
+        $this->assertSame('parent', $child->effectiveOccupancySource());
+        $this->assertTrue($child->isEffectivelyOccupied());
+        $this->assertSame($parentTenant->id, $child->effectiveTenantId());
+        $this->assertSame($parentTenant->display_name, $child->effectiveTenantName());
+        $this->assertTrue($child->effectiveOccupancySourceSpace()->is($parent));
+    }
+
+    public function test_child_space_prefers_direct_tenant_over_parent_effective_occupancy(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $parentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Parent Tenant LLC',
+            'short_name' => 'Parent Tenant',
+            'is_active' => true,
+        ]);
+        $childTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Child Tenant LLC',
+            'short_name' => 'Child Tenant',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'tenant_id' => $parentTenant->id,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'tenant_id' => $childTenant->id,
+        ]);
+
+        $this->assertSame($childTenant->id, $child->tenant_id);
+        $this->assertSame('direct', $child->effectiveOccupancySource());
+        $this->assertTrue($child->isEffectivelyOccupied());
+        $this->assertSame($childTenant->id, $child->effectiveTenantId());
+        $this->assertSame($childTenant->display_name, $child->effectiveTenantName());
+        $this->assertTrue($child->effectiveOccupancySourceSpace()->is($child));
+    }
+
+    public function test_child_space_without_parent_tenant_stays_free(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $this->assertNull($child->tenant_id);
+        $this->assertSame('none', $child->effectiveOccupancySource());
+        $this->assertFalse($child->isEffectivelyOccupied());
+        $this->assertNull($child->effectiveTenantId());
+        $this->assertNull($child->effectiveTenantName());
+        $this->assertNull($child->effectiveOccupancySourceSpace());
     }
 }

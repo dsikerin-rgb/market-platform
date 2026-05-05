@@ -151,6 +151,44 @@ class MarketSpaceResource extends BaseResource
         };
     }
 
+    private static function renderEffectiveOccupancy(?MarketSpace $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">Появится после сохранения торгового места.</div>');
+        }
+
+        $source = $record->effectiveOccupancySource();
+        $tenantName = $record->effectiveTenantName();
+        $sourceSpace = $record->effectiveOccupancySourceSpace();
+
+        if ($source === 'none' || ! $sourceSpace instanceof MarketSpace) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">Свободно</div>');
+        }
+
+        $sourceLabel = trim((string) ($sourceSpace->number ?? ''));
+        if ($sourceLabel === '') {
+            $sourceLabel = trim((string) ($sourceSpace->code ?? ''));
+        }
+        if ($sourceLabel === '') {
+            $sourceLabel = trim((string) ($sourceSpace->display_name ?? ''));
+        }
+        if ($sourceLabel === '') {
+            $sourceLabel = '#' . (int) $sourceSpace->id;
+        }
+
+        $tenantLabel = $tenantName ?: '—';
+        $title = $source === 'parent'
+            ? 'Занято через группу: ' . $sourceLabel
+            : 'Занято';
+
+        $html = '<div style="display:grid;gap:4px;">'
+            . '<div style="font-size:13px;font-weight:700;color:#0f172a;">' . e($title) . '</div>'
+            . '<div style="font-size:13px;opacity:.88;">Арендатор: ' . e($tenantLabel) . '</div>'
+            . '</div>';
+
+        return new HtmlString($html);
+    }
+
     
     public static function getGloballySearchableAttributes(): array
     {
@@ -283,6 +321,16 @@ class MarketSpaceResource extends BaseResource
                                         return blank($marketId);
                                     })
                                     ->nullable(),
+
+                                Section::make('Фактическая занятость')
+                                    ->schema([
+                                        Forms\Components\Placeholder::make('effective_occupancy')
+                                            ->hiddenLabel()
+                                            ->content(fn (?MarketSpace $record): HtmlString => static::renderEffectiveOccupancy($record))
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->columnSpanFull()
+                                    ->compact(),
 
                                 Forms\Components\TextInput::make('number')
                                     ->label('Номер места')

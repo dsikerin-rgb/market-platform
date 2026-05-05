@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -180,7 +181,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertOk();
         $response->assertSee('Ревизионный конфликт', false);
         $response->assertSee('Связь с местом не подтверждена', false);
-        $response->assertSee('Остальные места в режиме ревизии показываются нейтрально.', false);
+        $response->assertSee('Связь с местом не подтверждена', false);
         $response->assertDontSee('Спорное место', false);
         $response->assertSee('Точная связь с местом не подтверждена', false);
         $response->assertDontSee('Нет точной связи с местом', false);
@@ -209,4 +210,45 @@ class MarketMapLinkingTest extends TestCase
             $unlinkedView->render()
         );
     }
+    public function test_market_map_space_endpoint_exposes_effective_occupancy_from_parent_group(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Parent Tenant LLC',
+            'short_name' => 'Parent Tenant',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'tenant_id' => $parentTenant->id,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        $response = $this->get(route('filament.admin.market-map.space', [
+            'id' => $child->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('found', true);
+        $response->assertJsonPath('item.space_effective_is_occupied', true);
+        $response->assertJsonPath('item.space_occupancy_source', 'parent');
+        $response->assertJsonPath('item.space_effective_tenant_id', (int) $parentTenant->id);
+        $response->assertJsonPath('item.space_effective_tenant_name', $parentTenant->display_name);
+        $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
+    }
+
 }

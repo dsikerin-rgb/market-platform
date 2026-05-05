@@ -2632,12 +2632,27 @@
         function normalizeChosenSpace(item) {
           const id = Number(item?.id);
           if (!Number.isFinite(id) || id <= 0) return null;
+          const effectiveTenantName = item?.space_effective_tenant_name !== null && item?.space_effective_tenant_name !== undefined
+            ? String(item.space_effective_tenant_name)
+            : '';
+          const directTenantName = item?.tenant?.name ? String(item.tenant.name) : (item?.tenantName ? String(item.tenantName) : '');
           return {
             id: Math.trunc(id),
             number: item?.number ? String(item.number) : '',
             displayName: item?.displayName ? String(item.displayName) : (item?.display_name ? String(item.display_name) : ''),
             code: item?.code ? String(item.code) : '',
-            tenantName: item?.tenant?.name ? String(item.tenant.name) : (item?.tenantName ? String(item.tenantName) : null),
+            tenantName: effectiveTenantName || directTenantName || null,
+            effectiveTenantId: item?.space_effective_tenant_id !== null && item?.space_effective_tenant_id !== undefined
+              ? Number(item.space_effective_tenant_id)
+              : null,
+            effectiveIsOccupied: item?.space_effective_is_occupied !== null && item?.space_effective_is_occupied !== undefined
+              ? Boolean(item.space_effective_is_occupied)
+              : null,
+            occupancySource: item?.space_occupancy_source ? String(item.space_occupancy_source) : 'none',
+            occupancySourceSpaceId: item?.space_occupancy_source_space_id !== null && item?.space_occupancy_source_space_id !== undefined
+              ? Number(item.space_occupancy_source_space_id)
+              : null,
+            occupancySourceSpaceNumber: item?.space_occupancy_source_space_number ? String(item.space_occupancy_source_space_number) : null,
             reviewStatus: item?.review_status ? String(item.review_status) : '',
             reviewStatusLabel: item?.review_status_label ? String(item.review_status_label) : '',
             bindingRisk: item?.binding_risk && typeof item.binding_risk === 'object' ? item.binding_risk : null,
@@ -2735,7 +2750,10 @@
           for (const item of items) {
             const rate = Number(item?.space_rent_rate_value);
             const hasSpace = !!item?.market_space_id;
-            const hasTenant = hasSpace && item?.space_tenant_id !== null && item?.space_tenant_id !== undefined;
+            const hasTenant = hasSpace
+              && (item?.space_effective_is_occupied !== null && item?.space_effective_is_occupied !== undefined
+                ? Boolean(item.space_effective_is_occupied)
+                : (item?.space_tenant_id !== null && item?.space_tenant_id !== undefined));
 
             if (!hasTenant || !Number.isFinite(rate) || rate <= 0) continue;
 
@@ -3301,7 +3319,12 @@
                 id: marketSpaceId,
                 number: shape?.space_number || '',
                 code: shape?.space_code || '',
-                tenantName: shape?.space_tenant_name || shape?.tenant_name || null,
+                tenantName: shape?.space_effective_tenant_name || shape?.space_tenant_name || shape?.tenant_name || null,
+                space_effective_tenant_id: shape?.space_effective_tenant_id ?? null,
+                space_effective_is_occupied: shape?.space_effective_is_occupied ?? null,
+                space_occupancy_source: shape?.space_occupancy_source || 'none',
+                space_occupancy_source_space_id: shape?.space_occupancy_source_space_id ?? null,
+                space_occupancy_source_space_number: shape?.space_occupancy_source_space_number ?? null,
                 review_status: shape?.space_review_status || '',
                 review_status_label: shape?.space_review_status_label || '',
               });
@@ -3366,6 +3389,11 @@
               displayName: space?.displayName ?? currentItem.displayName ?? '',
               code: space?.code ?? currentItem.code ?? '',
               tenantName: space?.tenantName ?? currentItem.tenantName ?? null,
+              effectiveTenantId: space?.effectiveTenantId ?? currentItem.effectiveTenantId ?? null,
+              effectiveIsOccupied: space?.effectiveIsOccupied ?? currentItem.effectiveIsOccupied ?? null,
+              occupancySource: space?.occupancySource ?? currentItem.occupancySource ?? 'none',
+              occupancySourceSpaceId: space?.occupancySourceSpaceId ?? currentItem.occupancySourceSpaceId ?? null,
+              occupancySourceSpaceNumber: space?.occupancySourceSpaceNumber ?? currentItem.occupancySourceSpaceNumber ?? null,
               reviewStatus: space?.reviewStatus ?? '',
               reviewStatusLabel: space?.reviewStatusLabel ?? '',
             };
@@ -5485,7 +5513,12 @@
                     id: Number(hit.market_space_id || space.id || 0),
                     number: space.number || hit.space_number || '',
                     code: space.code || hit.space_code || '',
-                    tenantName: tenant?.name || hit.space_tenant_name || null,
+                    tenantName: hit.space_effective_tenant_name || tenant?.name || hit.space_tenant_name || null,
+                    space_effective_tenant_id: hit.space_effective_tenant_id ?? null,
+                    space_effective_is_occupied: hit.space_effective_is_occupied ?? null,
+                    space_occupancy_source: hit.space_occupancy_source || 'none',
+                    space_occupancy_source_space_id: hit.space_occupancy_source_space_id ?? null,
+                    space_occupancy_source_space_number: hit.space_occupancy_source_space_number ?? null,
                     review_status: space.review_status || hit.space_review_status || '',
                     review_status_label: space.review_status_label || hit.space_review_status_label || '',
                   })
@@ -5518,10 +5551,15 @@
                 if (space.area_sqm) {
                   metaParts.push('Площадь: ' + escapeHtml(space.area_sqm) + ' м²');
                 }
-                line1 = metaParts.join(' • ');
 
                 // Проверяем наличие арендатора
-                const hasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+                const hasTenant = hit.space_effective_is_occupied !== null && hit.space_effective_is_occupied !== undefined
+                  ? Boolean(hit.space_effective_is_occupied)
+                  : (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined);
+                const occupancySource = hit.space_occupancy_source ? String(hit.space_occupancy_source) : 'none';
+                const sourceSpaceLabel = hit.space_occupancy_source_space_number
+                  ? String(hit.space_occupancy_source_space_number)
+                  : '';
                 const storefront = space.display_name ? String(space.display_name).trim() : '';
                 const activityType = space.activity_type ? String(space.activity_type).trim() : '';
                 const storefrontLabel = storefront || activityType;
@@ -5530,17 +5568,25 @@
                 const currentAccrualTotal = space.current_accrual_total !== null && space.current_accrual_total !== undefined ? Number(space.current_accrual_total) : null;
                 const currentAccrualPeriod = space.current_accrual_period ? String(space.current_accrual_period) : '';
                 const currentAccrualMode = space.current_accrual_mode ? String(space.current_accrual_mode) : '';
+                if (storefrontLabel) {
+                  metaParts.push('Отдел / вывеска: ' + escapeHtml(storefrontLabel));
+                }
+                line1 = metaParts.join(' • ');
 
                 if (!hasTenant) {
                   line2 = 'Свободно';
-                  line3 = storefrontLabel ? ('Отдел / вывеска: ' + escapeHtml(storefrontLabel)) : '';
+                  line3 = '';
                   line4 = '';
                   if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
                     line5 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
                   }
                 } else {
-                  line2 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : 'Арендатор: —';
-                  line3 = storefrontLabel ? ('Отдел / вывеска: ' + escapeHtml(storefrontLabel)) : '';
+                  if (occupancySource === 'parent' && sourceSpaceLabel) {
+                    line2 = 'Занято через группу: ' + escapeHtml(sourceSpaceLabel);
+                  } else {
+                    line2 = 'Занято';
+                  }
+                  line3 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : (hit.space_effective_tenant_name ? ('Арендатор: ' + escapeHtml(String(hit.space_effective_tenant_name))) : 'Арендатор: —');
 
                   // Информация о задолженности
                   const debtStatus = hit.debt_status || null;
@@ -5640,7 +5686,9 @@
               const shapeId = hit.shape_id ? Number(hit.shape_id) : null;
               const hitSpaceId = hit.market_space_id ? Number(hit.market_space_id) : null;
               const hitTenantId = hit?.tenant?.id ? Number(hit.tenant.id) : (hit?.tenant_id ? Number(hit.tenant_id) : null);
-              const hitHasTenant = hit.space_tenant_id !== null && hit.space_tenant_id !== undefined;
+              const hitHasTenant = hit.space_effective_is_occupied !== null && hit.space_effective_is_occupied !== undefined
+                ? Boolean(hit.space_effective_is_occupied)
+                : (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined);
               const isTenantFallback = (hit.debt_status_scope || 'none') === 'tenant_fallback';
               const hitReviewStatus = String(hit.review_status || hit.space_review_status || hit?.space?.review_status || hit?.space?.map_review_status || '').trim();
               const hitReviewStatusLabel = String(hit.review_status_label || hit.space_review_status_label || hit?.space?.review_status_label || '').trim();
@@ -5828,7 +5876,12 @@
                 id,
                 number: spaceLabel?.number ?? '',
                 code: spaceLabel?.code ?? '',
-                tenantName: hitTenant?.name ?? null,
+                tenantName: lastHit?.space_effective_tenant_name || hitTenant?.name || null,
+                space_effective_tenant_id: lastHit?.space_effective_tenant_id ?? null,
+                space_effective_is_occupied: lastHit?.space_effective_is_occupied ?? null,
+                space_occupancy_source: lastHit?.space_occupancy_source || 'none',
+                space_occupancy_source_space_id: lastHit?.space_occupancy_source_space_id ?? null,
+                space_occupancy_source_space_number: lastHit?.space_occupancy_source_space_number ?? null,
               });
 
               if (next) {
@@ -6006,7 +6059,9 @@
                   const spaceId = Number(item?.id || 0);
                   const number = item?.number ? String(item.number) : '';
                   const code = item?.code ? String(item.code) : '';
-                  const tenantName = item?.tenant?.name ? String(item.tenant.name) : '';
+                  const tenantName = item?.space_effective_tenant_name
+                    ? String(item.space_effective_tenant_name)
+                    : (item?.tenant?.name ? String(item.tenant.name) : '');
                   const label = 'Место №' + (number || code || spaceId) + (tenantName ? (' — ' + escapeHtml(tenantName)) : '');
                   const hasShape = findUsableShapeForSpaceId(spaceId);
                   const disabled = hasShape ? 'disabled' : '';
