@@ -5618,7 +5618,10 @@
                   // Объяснение режима (отдельная строка, не затирается)
                   let scopeExplanation = '';
 
-                  if (debtScope === 'space') {
+                  if (occupancySource === 'parent' && (!debtStatus || debtScope === 'none' || debtStatus === 'gray')) {
+                    line4 = 'Финансовый статус: смотрите по группе';
+                    scopeExplanation = 'Занятость наследуется от группы. Долги и начисления в child-место не копируются.';
+                  } else if (debtScope === 'space') {
                     // Точный статус по месту
                     if (debtStatus === 'green') {
                       line4 = 'Статус по месту: Нет задолженности';
