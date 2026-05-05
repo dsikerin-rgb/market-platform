@@ -694,13 +694,15 @@ class EditMarketSpace extends BaseEditRecord
             $state = 'vacant';
         }
 
-        return match ($state) {
+        $label = match ($state) {
             'vacant' => 'Свободно',
             'occupied' => 'Занято',
             'reserved' => 'Зарезервировано',
             'maintenance' => 'Служебное место',
             default => $state,
         };
+
+        return $label ? 'Прямой статус: ' . $label : null;
     }
 
     private function resolveStatusColor(): string
