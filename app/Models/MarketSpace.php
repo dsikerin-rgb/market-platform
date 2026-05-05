@@ -209,6 +209,78 @@ class MarketSpace extends Model
         $this->space_group_role = $role;
     }
 
+    public function effectiveOccupancySourceSpace(): ?self
+    {
+        if (filled($this->tenant_id)) {
+            return $this;
+        }
+
+        if ($this->space_group_role !== self::SPACE_GROUP_ROLE_CHILD) {
+            return null;
+        }
+
+        $parent = $this->spaceGroupParent;
+        if (! $parent instanceof self) {
+            return null;
+        }
+
+        return filled($parent->tenant_id) ? $parent : null;
+    }
+
+    public function effectiveTenant(): ?Tenant
+    {
+        $sourceSpace = $this->effectiveOccupancySourceSpace();
+
+        return $sourceSpace?->tenant instanceof Tenant ? $sourceSpace->tenant : null;
+    }
+
+    public function effectiveTenantId(): ?int
+    {
+        $tenant = $this->effectiveTenant();
+
+        return $tenant?->getKey() ? (int) $tenant->getKey() : null;
+    }
+
+    public function effectiveTenantName(): ?string
+    {
+        $tenant = $this->effectiveTenant();
+        if (! $tenant instanceof Tenant) {
+            return null;
+        }
+
+        $name = trim((string) ($tenant->display_name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $name = trim((string) ($tenant->short_name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $name = trim((string) ($tenant->name ?? ''));
+
+        return $name !== '' ? $name : null;
+    }
+
+    public function effectiveOccupancySource(): string
+    {
+        if (filled($this->tenant_id)) {
+            return 'direct';
+        }
+
+        if ($this->effectiveOccupancySourceSpace() instanceof self) {
+            return $this->space_group_role === self::SPACE_GROUP_ROLE_CHILD ? 'parent' : 'direct';
+        }
+
+        return 'none';
+    }
+
+    public function isEffectivelyOccupied(): bool
+    {
+        return $this->effectiveOccupancySource() !== 'none';
+    }
+
     public function market(): BelongsTo
     {
         return $this->belongsTo(Market::class);
