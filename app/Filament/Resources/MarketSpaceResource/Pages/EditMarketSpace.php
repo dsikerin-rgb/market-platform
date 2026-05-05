@@ -688,26 +688,57 @@ class EditMarketSpace extends BaseEditRecord
 
     private function resolveStatusLabel(): ?string
     {
-        $state = $this->record?->status;
+        if (! $this->record) {
+            return null;
+        }
+
+        $source = $this->record->effectiveOccupancySource();
+        $sourceSpace = $this->record->effectiveOccupancySourceSpace();
+        $sourceLabel = trim((string) ($sourceSpace?->number ?? ''));
+
+        if ($source === 'parent') {
+            if ($sourceLabel === '') {
+                $sourceLabel = trim((string) ($sourceSpace?->display_name ?? ''));
+            }
+            if ($sourceLabel === '') {
+                $sourceLabel = '#' . (int) ($sourceSpace?->id ?? 0);
+            }
+
+            return 'Занято через группу: ' . $sourceLabel;
+        }
+
+        if ($source === 'direct') {
+            return 'Занято напрямую';
+        }
+
+        $state = $this->record->status;
 
         if ($state === 'free') {
             $state = 'vacant';
         }
 
-        $label = match ($state) {
+        return match ($state) {
             'vacant' => 'Свободно',
             'occupied' => 'Занято',
             'reserved' => 'Зарезервировано',
             'maintenance' => 'Служебное место',
             default => $state,
         };
-
-        return $label ? 'Прямой статус: ' . $label : null;
     }
 
     private function resolveStatusColor(): string
     {
-        $state = $this->record?->status;
+        if (! $this->record) {
+            return 'gray';
+        }
+
+        $source = $this->record->effectiveOccupancySource();
+
+        if ($source === 'parent' || $source === 'direct') {
+            return 'success';
+        }
+
+        $state = $this->record->status;
 
         if ($state === 'free') {
             $state = 'vacant';
