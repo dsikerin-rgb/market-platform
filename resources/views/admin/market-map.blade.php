@@ -2648,16 +2648,29 @@
             effectiveIsOccupied: item?.space_effective_is_occupied !== null && item?.space_effective_is_occupied !== undefined
               ? Boolean(item.space_effective_is_occupied)
               : null,
-            occupancySource: item?.space_occupancy_source ? String(item.space_occupancy_source) : 'none',
-            occupancySourceSpaceId: item?.space_occupancy_source_space_id !== null && item?.space_occupancy_source_space_id !== undefined
-              ? Number(item.space_occupancy_source_space_id)
-              : null,
-            occupancySourceSpaceNumber: item?.space_occupancy_source_space_number ? String(item.space_occupancy_source_space_number) : null,
-            reviewStatus: item?.review_status ? String(item.review_status) : '',
-            reviewStatusLabel: item?.review_status_label ? String(item.review_status_label) : '',
-            bindingRisk: item?.binding_risk && typeof item.binding_risk === 'object' ? item.binding_risk : null,
-          };
-        }
+              occupancySource: item?.space_occupancy_source ? String(item.space_occupancy_source) : 'none',
+              occupancySourceSpaceId: item?.space_occupancy_source_space_id !== null && item?.space_occupancy_source_space_id !== undefined
+                ? Number(item.space_occupancy_source_space_id)
+                : null,
+              occupancySourceSpaceNumber: item?.space_occupancy_source_space_number ? String(item.space_occupancy_source_space_number) : null,
+              effectiveDebtStatus: item?.space_effective_debt_status ? String(item.space_effective_debt_status) : null,
+              effectiveDebtStatusLabel: item?.space_effective_debt_status_label ? String(item.space_effective_debt_status_label) : null,
+              effectiveDebtStatusMode: item?.space_effective_debt_status_mode ? String(item.space_effective_debt_status_mode) : 'auto',
+              effectiveDebtStatusSource: item?.space_effective_debt_status_source ? String(item.space_effective_debt_status_source) : null,
+              effectiveDebtOverdueDays: item?.space_effective_debt_overdue_days !== null && item?.space_effective_debt_overdue_days !== undefined
+                ? Number(item.space_effective_debt_overdue_days)
+                : null,
+              effectiveDebtStatusScope: item?.space_effective_debt_status_scope ? String(item.space_effective_debt_status_scope) : 'none',
+              financialSource: item?.space_financial_source ? String(item.space_financial_source) : 'none',
+              financialSourceSpaceId: item?.space_financial_source_space_id !== null && item?.space_financial_source_space_id !== undefined
+                ? Number(item.space_financial_source_space_id)
+                : null,
+              financialSourceSpaceNumber: item?.space_financial_source_space_number ? String(item.space_financial_source_space_number) : null,
+              reviewStatus: item?.review_status ? String(item.review_status) : '',
+              reviewStatusLabel: item?.review_status_label ? String(item.review_status_label) : '',
+              bindingRisk: item?.binding_risk && typeof item.binding_risk === 'object' ? item.binding_risk : null,
+            };
+          }
 
         function formatSpaceLabel(space) {
           if (!space) return '—';
@@ -3322,15 +3335,24 @@
                 id: marketSpaceId,
                 number: shape?.space_number || '',
                 code: shape?.space_code || '',
-                tenantName: shape?.space_effective_tenant_name || shape?.space_tenant_name || shape?.tenant_name || null,
-                space_effective_tenant_id: shape?.space_effective_tenant_id ?? null,
-                space_effective_is_occupied: shape?.space_effective_is_occupied ?? null,
-                space_occupancy_source: shape?.space_occupancy_source || 'none',
-                space_occupancy_source_space_id: shape?.space_occupancy_source_space_id ?? null,
-                space_occupancy_source_space_number: shape?.space_occupancy_source_space_number ?? null,
-                review_status: shape?.space_review_status || '',
-                review_status_label: shape?.space_review_status_label || '',
-              });
+                  tenantName: shape?.space_effective_tenant_name || shape?.space_tenant_name || shape?.tenant_name || null,
+                  space_effective_tenant_id: shape?.space_effective_tenant_id ?? null,
+                  space_effective_is_occupied: shape?.space_effective_is_occupied ?? null,
+                  space_occupancy_source: shape?.space_occupancy_source || 'none',
+                  space_occupancy_source_space_id: shape?.space_occupancy_source_space_id ?? null,
+                  space_occupancy_source_space_number: shape?.space_occupancy_source_space_number ?? null,
+                  space_effective_debt_status: shape?.space_effective_debt_status ?? null,
+                  space_effective_debt_status_label: shape?.space_effective_debt_status_label ?? null,
+                  space_effective_debt_status_mode: shape?.space_effective_debt_status_mode ?? 'auto',
+                  space_effective_debt_status_source: shape?.space_effective_debt_status_source ?? null,
+                  space_effective_debt_overdue_days: shape?.space_effective_debt_overdue_days ?? null,
+                  space_effective_debt_status_scope: shape?.space_effective_debt_status_scope ?? 'none',
+                  space_financial_source: shape?.space_financial_source ?? 'none',
+                  space_financial_source_space_id: shape?.space_financial_source_space_id ?? null,
+                  space_financial_source_space_number: shape?.space_financial_source_space_number ?? null,
+                  review_status: shape?.space_review_status || '',
+                  review_status_label: shape?.space_review_status_label || '',
+                });
 
               if (!normalized) continue;
 
@@ -3397,6 +3419,15 @@
               occupancySource: space?.occupancySource ?? currentItem.occupancySource ?? 'none',
               occupancySourceSpaceId: space?.occupancySourceSpaceId ?? currentItem.occupancySourceSpaceId ?? null,
               occupancySourceSpaceNumber: space?.occupancySourceSpaceNumber ?? currentItem.occupancySourceSpaceNumber ?? null,
+              effectiveDebtStatus: space?.effectiveDebtStatus ?? currentItem.effectiveDebtStatus ?? null,
+              effectiveDebtStatusLabel: space?.effectiveDebtStatusLabel ?? currentItem.effectiveDebtStatusLabel ?? null,
+              effectiveDebtStatusMode: space?.effectiveDebtStatusMode ?? currentItem.effectiveDebtStatusMode ?? 'auto',
+              effectiveDebtStatusSource: space?.effectiveDebtStatusSource ?? currentItem.effectiveDebtStatusSource ?? null,
+              effectiveDebtOverdueDays: space?.effectiveDebtOverdueDays ?? currentItem.effectiveDebtOverdueDays ?? null,
+              effectiveDebtStatusScope: space?.effectiveDebtStatusScope ?? currentItem.effectiveDebtStatusScope ?? 'none',
+              financialSource: space?.financialSource ?? currentItem.financialSource ?? 'none',
+              financialSourceSpaceId: space?.financialSourceSpaceId ?? currentItem.financialSourceSpaceId ?? null,
+              financialSourceSpaceNumber: space?.financialSourceSpaceNumber ?? currentItem.financialSourceSpaceNumber ?? null,
               reviewStatus: space?.reviewStatus ?? '',
               reviewStatusLabel: space?.reviewStatusLabel ?? '',
             };
@@ -3962,8 +3993,12 @@
                 : (occupancySource === 'parent'
                   || (s.space_effective_tenant_id !== null && s.space_effective_tenant_id !== undefined)
                   || (s.space_tenant_id !== null && s.space_tenant_id !== undefined)));
-              const debtStatus = typeof s.debt_status === 'string' ? s.debt_status : null;
-              const debtScope = typeof s.debt_status_scope === 'string' ? s.debt_status_scope : 'none';
+              const debtStatus = typeof s.space_effective_debt_status === 'string' && s.space_effective_debt_status !== ''
+                ? s.space_effective_debt_status
+                : (typeof s.debt_status === 'string' ? s.debt_status : null);
+              const debtScope = typeof s.space_effective_debt_status_scope === 'string' && s.space_effective_debt_status_scope !== ''
+                ? s.space_effective_debt_status_scope
+                : (typeof s.debt_status_scope === 'string' ? s.debt_status_scope : 'none');
               const reviewStatus = typeof s.space_review_status === 'string' ? s.space_review_status : '';
               const showReviewMarkers = currentScenario === 'review';
               const isConflictReview = showReviewMarkers && hasSpace && isConflictReviewStatus(reviewStatus);
@@ -3998,8 +4033,8 @@
               } else if (currentLayer === 'rent') {
                 rentFill = rentRateColors[rentRateBand] || rentRateColors.none;
                 fillStyle = rentRateBand === 'none' ? 'rent-missing' : 'rent';
-              } else if (debtStatus && debtColors[debtStatus] && !(occupancySource === 'parent' && debtStatus === 'gray')) {
-                // Есть арендатор и debt_status — используем debt цвет
+              } else if (debtStatus && debtColors[debtStatus]) {
+                // Есть арендатор и financial/debt status — используем финансовый цвет
                 if (debtStatus === 'red') {
                   const redPalette = debtColors.red;
                   debtFill = redPalette[debtScope] || redPalette.default;
@@ -5527,15 +5562,24 @@
                     id: Number(hit.market_space_id || space.id || 0),
                     number: space.number || hit.space_number || '',
                     code: space.code || hit.space_code || '',
-                    tenantName: hit.space_effective_tenant_name || tenant?.name || hit.space_tenant_name || null,
-                    space_effective_tenant_id: hit.space_effective_tenant_id ?? null,
-                    space_effective_is_occupied: hit.space_effective_is_occupied ?? null,
-                    space_occupancy_source: hit.space_occupancy_source || 'none',
-                    space_occupancy_source_space_id: hit.space_occupancy_source_space_id ?? null,
-                    space_occupancy_source_space_number: hit.space_occupancy_source_space_number ?? null,
-                    review_status: space.review_status || hit.space_review_status || '',
-                    review_status_label: space.review_status_label || hit.space_review_status_label || '',
-                  })
+                      tenantName: hit.space_effective_tenant_name || tenant?.name || hit.space_tenant_name || null,
+                      space_effective_tenant_id: hit.space_effective_tenant_id ?? null,
+                      space_effective_is_occupied: hit.space_effective_is_occupied ?? null,
+                      space_occupancy_source: hit.space_occupancy_source || 'none',
+                      space_occupancy_source_space_id: hit.space_occupancy_source_space_id ?? null,
+                      space_occupancy_source_space_number: hit.space_occupancy_source_space_number ?? null,
+                      space_effective_debt_status: hit.space_effective_debt_status ?? null,
+                      space_effective_debt_status_label: hit.space_effective_debt_status_label ?? null,
+                      space_effective_debt_status_mode: hit.space_effective_debt_status_mode ?? 'auto',
+                      space_effective_debt_status_source: hit.space_effective_debt_status_source ?? null,
+                      space_effective_debt_overdue_days: hit.space_effective_debt_overdue_days ?? null,
+                      space_effective_debt_status_scope: hit.space_effective_debt_status_scope ?? 'none',
+                      space_financial_source: hit.space_financial_source ?? 'none',
+                      space_financial_source_space_id: hit.space_financial_source_space_id ?? null,
+                      space_financial_source_space_number: hit.space_financial_source_space_number ?? null,
+                      review_status: space.review_status || hit.space_review_status || '',
+                      review_status_label: space.review_status_label || hit.space_review_status_label || '',
+                    })
                 : null;
 
               if (nextChosen) {
@@ -5605,22 +5649,49 @@
                   line3 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : (hit.space_effective_tenant_name ? ('Арендатор: ' + escapeHtml(String(hit.space_effective_tenant_name))) : 'Арендатор: —');
 
                   // Информация о задолженности
-                  const debtStatus = hit.debt_status || null;
-                  const debtLabel = hit.debt_status_label || '';
-                  const debtMode = hit.debt_status_mode || 'auto';
-                  const debtScope = hit.debt_status_scope || 'none';
-                  const overdueDays = hit.debt_overdue_days !== null && hit.debt_overdue_days !== undefined ? Number(hit.debt_overdue_days) : null;
+                  const debtStatus = hit.space_effective_debt_status || hit.debt_status || null;
+                  const debtLabel = hit.space_effective_debt_status_label || hit.debt_status_label || '';
+                  const debtMode = hit.space_effective_debt_status_mode || hit.debt_status_mode || 'auto';
+                  const debtScope = hit.space_effective_debt_status_scope || hit.debt_status_scope || 'none';
+                  const overdueDaysRaw = hit.space_effective_debt_overdue_days !== null && hit.space_effective_debt_overdue_days !== undefined
+                    ? hit.space_effective_debt_overdue_days
+                    : hit.debt_overdue_days;
+                  const overdueDays = overdueDaysRaw !== null && overdueDaysRaw !== undefined ? Number(overdueDaysRaw) : null;
                   const overdueDaysLabel = overdueDays !== null && Number.isFinite(overdueDays)
                     ? String(Math.max(0, Math.round(overdueDays)))
                     : null;
-                  const debtSource = hit.debt_status_source || '';
+                  const debtSource = hit.space_effective_debt_status_source || hit.debt_status_source || '';
+                  const financialSource = hit.space_financial_source ? String(hit.space_financial_source) : 'none';
+                  const financialSourceSpaceLabel = hit.space_financial_source_space_number
+                    ? String(hit.space_financial_source_space_number)
+                    : sourceSpaceLabel;
 
                   // Объяснение режима (отдельная строка, не затирается)
                   let scopeExplanation = '';
 
-                  if (occupancySource === 'parent' && (!debtStatus || debtScope === 'none' || debtStatus === 'gray')) {
-                    line4 = 'Финансовый статус: смотрите по группе';
-                    scopeExplanation = 'Занятость наследуется от группы. Долги и начисления в child-место не копируются.';
+                  if (financialSource === 'parent') {
+                    const groupSourceText = financialSourceSpaceLabel
+                      ? ('Источник: группа ' + escapeHtml(financialSourceSpaceLabel))
+                      : 'Источник: группа';
+
+                    if (debtStatus === 'green') {
+                      line4 = 'Финансовый статус группы: Нет задолженности';
+                      scopeExplanation = groupSourceText;
+                    } else if (debtStatus === 'pending') {
+                      line4 = 'Финансовый статус группы: Срок не нарушен';
+                      scopeExplanation = groupSourceText;
+                    } else if (debtStatus === 'orange' || debtStatus === 'red') {
+                      line4 = debtMode === 'manual'
+                        ? ('Финансовый статус группы: ' + escapeHtml(debtLabel))
+                        : ('Просрочка группы: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
+                      scopeExplanation = groupSourceText;
+                    } else if (debtStatus === 'gray') {
+                      line4 = 'Финансовый статус группы: Нет данных 1С';
+                      scopeExplanation = groupSourceText + '. Долги и начисления в child-место не копируются.';
+                    } else {
+                      line4 = debtLabel ? ('Финансовый статус группы: ' + escapeHtml(debtLabel)) : 'Финансовый статус группы: смотрите по группе';
+                      scopeExplanation = groupSourceText;
+                    }
                   } else if (debtScope === 'space') {
                     // Точный статус по месту
                     if (debtStatus === 'green') {
@@ -5897,13 +5968,22 @@
                 id,
                 number: spaceLabel?.number ?? '',
                 code: spaceLabel?.code ?? '',
-                tenantName: lastHit?.space_effective_tenant_name || hitTenant?.name || null,
-                space_effective_tenant_id: lastHit?.space_effective_tenant_id ?? null,
-                space_effective_is_occupied: lastHit?.space_effective_is_occupied ?? null,
-                space_occupancy_source: lastHit?.space_occupancy_source || 'none',
-                space_occupancy_source_space_id: lastHit?.space_occupancy_source_space_id ?? null,
-                space_occupancy_source_space_number: lastHit?.space_occupancy_source_space_number ?? null,
-              });
+                  tenantName: lastHit?.space_effective_tenant_name || hitTenant?.name || null,
+                  space_effective_tenant_id: lastHit?.space_effective_tenant_id ?? null,
+                  space_effective_is_occupied: lastHit?.space_effective_is_occupied ?? null,
+                  space_occupancy_source: lastHit?.space_occupancy_source || 'none',
+                  space_occupancy_source_space_id: lastHit?.space_occupancy_source_space_id ?? null,
+                  space_occupancy_source_space_number: lastHit?.space_occupancy_source_space_number ?? null,
+                  space_effective_debt_status: lastHit?.space_effective_debt_status ?? null,
+                  space_effective_debt_status_label: lastHit?.space_effective_debt_status_label ?? null,
+                  space_effective_debt_status_mode: lastHit?.space_effective_debt_status_mode ?? 'auto',
+                  space_effective_debt_status_source: lastHit?.space_effective_debt_status_source ?? null,
+                  space_effective_debt_overdue_days: lastHit?.space_effective_debt_overdue_days ?? null,
+                  space_effective_debt_status_scope: lastHit?.space_effective_debt_status_scope ?? 'none',
+                  space_financial_source: lastHit?.space_financial_source ?? 'none',
+                  space_financial_source_space_id: lastHit?.space_financial_source_space_id ?? null,
+                  space_financial_source_space_number: lastHit?.space_financial_source_space_number ?? null,
+                });
 
               if (next) {
                 setChosenSpace(next, { announce: true });
