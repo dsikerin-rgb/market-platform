@@ -162,7 +162,13 @@ class MarketSpaceResource extends BaseResource
         $sourceSpace = $record->effectiveOccupancySourceSpace();
 
         if ($source === 'none' || ! $sourceSpace instanceof MarketSpace) {
-            return new HtmlString('<div style="font-size:13px;opacity:.8;">Свободно</div>');
+            return new HtmlString(
+                '<div style="display:grid;gap:4px;">'
+                . '<div style="font-size:13px;font-weight:700;color:#0f172a;">Свободно</div>'
+                . '<div style="font-size:13px;opacity:.88;">Арендатор: —</div>'
+                . '<div style="font-size:12px;opacity:.7;">Источник: прямое место</div>'
+                . '</div>'
+            );
         }
 
         $sourceLabel = trim((string) ($sourceSpace->number ?? ''));
@@ -179,14 +185,35 @@ class MarketSpaceResource extends BaseResource
         $tenantLabel = $tenantName ?: '—';
         $title = $source === 'parent'
             ? 'Занято через группу: ' . $sourceLabel
-            : 'Занято';
+            : 'Занято напрямую';
+        $sourceLabelText = $source === 'parent'
+            ? 'Источник: группа'
+            : 'Источник: прямое место';
 
         $html = '<div style="display:grid;gap:4px;">'
             . '<div style="font-size:13px;font-weight:700;color:#0f172a;">' . e($title) . '</div>'
             . '<div style="font-size:13px;opacity:.88;">Арендатор: ' . e($tenantLabel) . '</div>'
+            . '<div style="font-size:12px;opacity:.7;">' . e($sourceLabelText) . '</div>'
             . '</div>';
 
         return new HtmlString($html);
+    }
+
+    private static function renderChildInheritanceNotice(?MarketSpace $record): ?HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return null;
+        }
+
+        if ((string) ($record->space_group_role ?? '') !== 'child' || ! filled($record->space_group_parent_id)) {
+            return null;
+        }
+
+        return new HtmlString(
+            '<div style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;font-size:13px;line-height:1.45;color:#334155;">'
+            . 'Это место входит в группу. Прямые поля могут быть пустыми, но фактическая занятость берётся из группы.'
+            . '</div>'
+        );
     }
 
     
@@ -306,7 +333,16 @@ class MarketSpaceResource extends BaseResource
                         ->searchable()
                         ->preload()
                         ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('Текущий арендатор (если место занято). Для “Свободно” арендатора можно не выбирать.')
+                        ->hintIconTooltip('Это прямое поле арендатора карточки. Для child-мест арендатор группы показывается в блоке «Фактическая занятость» и не записывается в это поле.')
+                        ->helperText(function (?MarketSpace $record): ?string {
+                            if ($record instanceof MarketSpace
+                                && (string) ($record->space_group_role ?? '') === 'child'
+                                && filled($record->space_group_parent_id)) {
+                                return 'Для child-мест арендатор группы показывается в блоке «Фактическая занятость» и не записывается в это поле.';
+                            }
+
+                            return null;
+                        })
                         ->disabled(function ($get, ?MarketSpace $record) use ($user) {
                             if ($record) {
                                 return true;
@@ -328,6 +364,11 @@ class MarketSpaceResource extends BaseResource
                                             ->hiddenLabel()
                                             ->content(fn (?MarketSpace $record): HtmlString => static::renderEffectiveOccupancy($record))
                                             ->columnSpanFull(),
+                                        Forms\Components\Placeholder::make('child_group_notice')
+                                            ->hiddenLabel()
+                                            ->content(fn (?MarketSpace $record): HtmlString|string => static::renderChildInheritanceNotice($record) ?? '')
+                                            ->columnSpanFull()
+                                            ->visible(fn (?MarketSpace $record): bool => static::renderChildInheritanceNotice($record) instanceof HtmlString),
                                     ])
                                     ->columnSpanFull()
                                     ->compact(),
@@ -553,7 +594,7 @@ class MarketSpaceResource extends BaseResource
                                     ->hintIconTooltip('Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
 
                                 Forms\Components\Select::make('status')
-                                    ->label('Статус')
+                                    ->label('Прямой статус места')
                                     ->options([
                                         'vacant' => 'Свободно',
                                         'occupied' => 'Занято',
@@ -570,9 +611,8 @@ class MarketSpaceResource extends BaseResource
                                     ->visible(fn (?MarketSpace $record): bool => ! $record)
                                     ->disabled(fn (?MarketSpace $record): bool => (bool) $record)
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip(fn (?MarketSpace $record): string => $record
-                                        ? 'Используется для быстрой визуальной оценки занятости. В таблице помечается цветом. Для существующих мест статус меняется через режим «Карта -> Ревизия».'
-                                        : 'Используется для быстрой визуальной оценки занятости. В таблице помечается цветом.'),
+                                    ->hintIconTooltip('Это прямой статус карточки. Для child-мест фактическая занятость может наследоваться от группы.')
+                                    ->helperText('Это прямой статус карточки. Для child-мест фактическая занятость может наследоваться от группы.'),
 
                             ])
                             ->columns([
@@ -1112,14 +1152,14 @@ class MarketSpaceResource extends BaseResource
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('status')
-                    ->label('Статус')
+                    ->label('Прямой статус места')
                     ->formatStateUsing(fn (?string $state) => static::statusLabel($state))
                     ->badge()
                     ->color(fn (?string $state) => static::statusColor($state))
                     ->sortable()
                     ->tooltip(function (MarketSpace $record) {
                         $label = static::statusLabel($record->status);
-                        return $label ? "Статус: {$label}" : null;
+                        return $label ? "Прямой статус: {$label}" : null;
                     }),
 
                 TextColumn::make('area_sqm')
@@ -1134,7 +1174,7 @@ class MarketSpaceResource extends BaseResource
             ])
             ->filters([
                 SelectFilter::make('status')
-                    ->label('Статус')
+                    ->label('Прямой статус места')
                     ->options([
                         'vacant' => 'Свободно',
                         'occupied' => 'Занято',
