@@ -641,7 +641,26 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ];
     };
 
-    $buildSpaceEffectiveOccupancy = static function (?MarketSpace $space): array {
+    $resolveSpaceDisplayLabel = static function (?MarketSpace $space): ?string {
+        if (! $space) {
+            return null;
+        }
+
+        $label = trim((string) ($space->number ?? ''));
+        if ($label === '') {
+            $label = trim((string) ($space->code ?? ''));
+        }
+        if ($label === '') {
+            $label = trim((string) ($space->display_name ?? ''));
+        }
+        if ($label === '') {
+            $label = (string) ((int) $space->id);
+        }
+
+        return $label !== '' ? $label : null;
+    };
+
+    $buildSpaceEffectiveOccupancy = static function (?MarketSpace $space) use ($resolveSpaceDisplayLabel): array {
         if (! $space) {
             return [
                 'space_effective_tenant_id' => null,
@@ -656,19 +675,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $sourceSpace = $space->effectiveOccupancySourceSpace();
         $tenant = $space->effectiveTenant();
 
-        $sourceSpaceLabel = null;
-        if ($sourceSpace instanceof MarketSpace) {
-            $sourceSpaceLabel = trim((string) ($sourceSpace->number ?? ''));
-            if ($sourceSpaceLabel === '') {
-                $sourceSpaceLabel = trim((string) ($sourceSpace->code ?? ''));
-            }
-            if ($sourceSpaceLabel === '') {
-                $sourceSpaceLabel = trim((string) ($sourceSpace->display_name ?? ''));
-            }
-            if ($sourceSpaceLabel === '') {
-                $sourceSpaceLabel = (string) ((int) $sourceSpace->id);
-            }
-        }
+        $sourceSpaceLabel = $resolveSpaceDisplayLabel($sourceSpace);
 
         return [
             'space_effective_tenant_id' => $tenant?->id ? (int) $tenant->id : null,
@@ -677,6 +684,66 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'space_occupancy_source' => $space->effectiveOccupancySource(),
             'space_occupancy_source_space_id' => $sourceSpace?->id ? (int) $sourceSpace->id : null,
             'space_occupancy_source_space_number' => $sourceSpaceLabel !== '' ? $sourceSpaceLabel : null,
+        ];
+    };
+
+    $buildSpaceEffectiveFinancialStatus = static function (?MarketSpace $space) use ($buildSpaceEffectiveOccupancy, $resolveSpaceDisplayLabel): array {
+        $empty = [
+            'space_effective_debt_status' => null,
+            'space_effective_debt_status_label' => null,
+            'space_effective_debt_status_mode' => 'auto',
+            'space_effective_debt_status_updated_at' => null,
+            'space_effective_debt_status_source' => null,
+            'space_effective_debt_overdue_days' => null,
+            'space_effective_debt_status_scope' => 'none',
+            'space_financial_source' => 'none',
+            'space_financial_source_space_id' => null,
+            'space_financial_source_space_number' => null,
+        ];
+
+        if (! $space) {
+            return $empty;
+        }
+
+        $occupancy = $buildSpaceEffectiveOccupancy($space);
+        $occupancySource = (string) ($occupancy['space_occupancy_source'] ?? 'none');
+
+        $sourceSpace = $space;
+        $financialSource = 'direct';
+
+        if ($occupancySource === 'parent') {
+            $parentSpace = $space->effectiveOccupancySourceSpace();
+            if ($parentSpace instanceof MarketSpace) {
+                $sourceSpace = $parentSpace;
+                $financialSource = 'parent';
+            }
+        }
+
+        $sourceSpaceLabel = $resolveSpaceDisplayLabel($sourceSpace);
+        $sourceTenant = $sourceSpace->tenant instanceof Tenant ? $sourceSpace->tenant : null;
+
+        if (! $sourceTenant) {
+            return array_merge($empty, [
+                'space_financial_source' => $financialSource === 'parent' ? 'parent' : 'none',
+                'space_financial_source_space_id' => $financialSource === 'parent' ? (int) $sourceSpace->id : null,
+                'space_financial_source_space_number' => $financialSource === 'parent' ? $sourceSpaceLabel : null,
+            ]);
+        }
+
+        $resolvedDebt = app(DebtStatusResolver::class)->resolveForMarketSpace((int) $sourceSpace->id, (int) $sourceTenant->market_id);
+        $debtScope = (string) ($resolvedDebt['extra']['scope'] ?? 'none');
+
+        return [
+            'space_effective_debt_status' => $resolvedDebt['status'] ?? null,
+            'space_effective_debt_status_label' => $resolvedDebt['label'] ?? null,
+            'space_effective_debt_status_mode' => $resolvedDebt['mode'] ?? 'auto',
+            'space_effective_debt_status_updated_at' => $resolvedDebt['updated_at'] ?? null,
+            'space_effective_debt_status_source' => $resolvedDebt['source'] ?? null,
+            'space_effective_debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
+            'space_effective_debt_status_scope' => $debtScope,
+            'space_financial_source' => $financialSource,
+            'space_financial_source_space_id' => (int) $sourceSpace->id,
+            'space_financial_source_space_number' => $sourceSpaceLabel,
         ];
     };
 
@@ -1193,7 +1260,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Слой разметки: список полигонов (PDF-координаты) для отрисовки поверх canvas.
      */
-    Route::get('/admin/market-map/shapes', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy) {
+    Route::get('/admin/market-map/shapes', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1312,12 +1379,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $currentRentRatesBySpaceId,
             $latestRentRatesBySpaceId,
             $mapReviewStatusLabel,
-            $buildSpaceEffectiveOccupancy
+            $buildSpaceEffectiveOccupancy,
+            $buildSpaceEffectiveFinancialStatus
         ): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
             $spaceId = $space?->id ? (int) $space->id : null;
             $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
+            $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
 
             // Для каждого shape используем статус по конкретному месту
             $resolver = app(DebtStatusResolver::class);
@@ -1380,6 +1449,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
                 'debt_status_scope' => $debtScope,
+                ...$effectiveFinancial,
 
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
@@ -1413,7 +1483,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * - ?id=123
      * - ?number=П3/2  (по точному совпадению number либо code)
      */
-    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy) {
+    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1493,6 +1563,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'name' => (string) ($tenantName ?? ''),
                     ] : null,
                     ...$buildSpaceEffectiveOccupancy($space),
+                    ...$buildSpaceEffectiveFinancialStatus($space),
                     'binding_risk' => $bindingRisk,
                 ],
             ]);
@@ -1503,7 +1574,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * Поддерживает ?number= и ?q=.
      * Поддерживает ?without_shapes=1 для получения непройденных мест без фигур.
      */
-    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns, $bindingRiskWarnings, $buildBindingRiskForSpace) {
+    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns, $bindingRiskWarnings, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1632,9 +1703,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $activeContractSpaceIdSet = $activeContractSpaceIds->flip();
             $accrualSpaceIdSet = $accrualSpaceIds->flip();
 
-            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $activeContractSpaceIdSet, $accrualSpaceIdSet, $bindingRiskWarnings, $buildSpaceEffectiveOccupancy): array {
+            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $activeContractSpaceIdSet, $accrualSpaceIdSet, $bindingRiskWarnings, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
                 $tenant = $space->tenant;
                 $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
+                $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
 
                 $tenantName = null;
                 if ($tenant) {
@@ -1674,6 +1746,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'name' => (string) ($tenantName ?? ''),
                     ] : null,
                     ...$effectiveOccupancy,
+                    ...$effectiveFinancial,
                     'without_shapes' => true,
                     'binding_risk' => [
                         'has_tenant' => $hasTenant,
@@ -1729,9 +1802,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->limit($limit)
             ->get(['id', 'number', 'code', 'area_sqm', 'status', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
 
-        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy): array {
+        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
             $tenant = $space->tenant;
             $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
+            $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
 
             $tenantName = null;
             if ($tenant) {
@@ -1760,6 +1834,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'name' => (string) ($tenantName ?? ''),
                 ] : null,
                 ...$effectiveOccupancy,
+                ...$effectiveFinancial,
                 'binding_risk' => $bindingRisk,
             ];
         })->values();
@@ -1770,7 +1845,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * HIT-test: клик по карте -> поиск места по bbox + polygon.
      */
-    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy) {
+    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -1939,6 +2014,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
+        $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
 
         $resolver = app(DebtStatusResolver::class);
         $resolvedDebt = $space && $tenant
@@ -2062,6 +2138,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
                 'debt_status_scope' => $resolvedDebt['extra']['scope'] ?? 'none',
+                ...$effectiveFinancial,
 
                 'debt' => null,
                 'color' => null,

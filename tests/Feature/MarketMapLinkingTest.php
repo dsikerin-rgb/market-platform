@@ -10,6 +10,7 @@ use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -249,6 +250,124 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_effective_tenant_id', (int) $parentTenant->id);
         $response->assertJsonPath('item.space_effective_tenant_name', $parentTenant->display_name);
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
+    }
+
+    public function test_market_map_endpoints_expose_inherited_group_financial_status_for_child(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Parent Debt Tenant LLC',
+            'short_name' => 'Parent Debt Tenant',
+            'external_id' => 'parent-debt-tenant-001',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'tenant_id' => $parentTenant->id,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $child->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [[0, 0], [10, 0], [10, 10], [0, 10]],
+            'bbox_x1' => 0,
+            'bbox_y1' => 0,
+            'bbox_x2' => 10,
+            'bbox_y2' => 10,
+            'is_active' => true,
+        ]);
+
+        $contractExternalId = 'parent-contract-001';
+
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $parentTenant->id,
+            'market_space_id' => $parent->id,
+            'external_id' => $contractExternalId,
+            'number' => 'OS7-parent',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $parentTenant->id,
+            'tenant_external_id' => $parentTenant->external_id,
+            'contract_external_id' => $contractExternalId,
+            'period' => '2026-04',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => now()->subDays(35),
+            'created_at' => now()->subDays(35),
+            'hash' => sha1($parentTenant->external_id . '|' . $contractExternalId . '|2026-04|10000|0|10000'),
+        ]);
+
+        $spaceResponse = $this->getJson(route('filament.admin.market-map.space', [
+            'id' => $child->id,
+        ]));
+
+        $spaceResponse->assertOk();
+        $spaceResponse->assertJsonPath('item.space_effective_debt_status', 'red');
+        $spaceResponse->assertJsonPath('item.space_effective_debt_status_scope', 'space');
+        $spaceResponse->assertJsonPath('item.space_financial_source', 'parent');
+        $spaceResponse->assertJsonPath('item.space_financial_source_space_id', (int) $parent->id);
+        $spaceResponse->assertJsonPath('item.space_financial_source_space_number', (string) $parent->number);
+
+        $spacesResponse = $this->getJson(route('filament.admin.market-map.spaces', [
+            'q' => 'OS7 8',
+        ]));
+
+        $spacesResponse->assertOk();
+        $spacesResponse->assertJsonCount(1, 'items');
+        $spacesResponse->assertJsonPath('items.0.space_effective_debt_status', 'red');
+        $spacesResponse->assertJsonPath('items.0.space_financial_source', 'parent');
+        $spacesResponse->assertJsonPath('items.0.space_financial_source_space_number', (string) $parent->number);
+
+        $shapesResponse = $this->getJson(route('filament.admin.market-map.shapes', [
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $shapesResponse->assertOk();
+        $shapesResponse->assertJsonCount(1, 'items');
+        $shapesResponse->assertJsonPath('items.0.space_effective_debt_status', 'red');
+        $shapesResponse->assertJsonPath('items.0.space_effective_debt_status_scope', 'space');
+        $shapesResponse->assertJsonPath('items.0.space_financial_source', 'parent');
+        $shapesResponse->assertJsonPath('items.0.space_financial_source_space_id', (int) $parent->id);
+
+        $hitResponse = $this->getJson(route('filament.admin.market-map.hit', [
+            'page' => 1,
+            'version' => 1,
+            'x' => 5,
+            'y' => 5,
+        ]));
+
+        $hitResponse->assertOk();
+        $hitResponse->assertJsonPath('hit.space_effective_debt_status', 'red');
+        $hitResponse->assertJsonPath('hit.space_effective_debt_status_scope', 'space');
+        $hitResponse->assertJsonPath('hit.space_financial_source', 'parent');
+        $hitResponse->assertJsonPath('hit.space_financial_source_space_number', (string) $parent->number);
     }
 
 }
