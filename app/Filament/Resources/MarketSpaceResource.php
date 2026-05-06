@@ -236,6 +236,13 @@ class MarketSpaceResource extends BaseResource
             && filled($record->space_group_parent_id);
     }
 
+    private static function isExistingChild(?MarketSpace $record): bool
+    {
+        return $record instanceof MarketSpace
+            && filled($record->id)
+            && (string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD;
+    }
+
     private static function renderEffectiveTenantField(?MarketSpace $record): HtmlString
     {
         if (! static::isChildWithParent($record)) {
@@ -258,6 +265,54 @@ class MarketSpaceResource extends BaseResource
             '<div style="display:grid;gap:4px;">'
             . '<div style="font-size:13px;font-weight:600;color:#0f172a;">' . e($tenantName !== '' ? $tenantName : '—') . '</div>'
             . '<div style="font-size:12px;opacity:.7;">Источник: группа ' . e($sourceLabel) . '</div>'
+            . '</div>'
+        );
+    }
+
+    private static function renderCurrentParentGroupField(?MarketSpace $record): HtmlString
+    {
+        if (! static::isExistingChild($record)) {
+            return new HtmlString('—');
+        }
+
+        $parent = $record?->spaceGroupParent;
+        $label = trim((string) ($parent?->number ?? ''));
+
+        if ($label === '') {
+            $label = trim((string) ($parent?->display_name ?? ''));
+        }
+
+        if ($label === '' && $parent instanceof MarketSpace) {
+            $label = '#' . (int) $parent->id;
+        }
+
+        if ($label === '') {
+            $label = '—';
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:4px;">'
+            . '<div style="font-size:14px;font-weight:600;color:#0f172a;">' . e($label) . '</div>'
+            . '<div style="font-size:12px;opacity:.7;">Изменяется через действие «Перенести в группу» в шапке карточки.</div>'
+            . '</div>'
+        );
+    }
+
+    private static function renderCurrentGroupSlotField(?MarketSpace $record): HtmlString
+    {
+        if (! static::isExistingChild($record)) {
+            return new HtmlString('—');
+        }
+
+        $slot = trim((string) ($record?->space_group_slot ?? ''));
+        if ($slot === '') {
+            $slot = '—';
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:4px;">'
+            . '<div style="font-size:14px;font-weight:600;color:#0f172a;">' . e($slot) . '</div>'
+            . '<div style="font-size:12px;opacity:.7;">Изменяется через действие «Перенести в группу» в шапке карточки.</div>'
             . '</div>'
         );
     }
@@ -611,6 +666,16 @@ class MarketSpaceResource extends BaseResource
                                             ->content('Это групповое место. Его номер остаётся как в 1С, например ОС7 6, 7, 8. Дочерние места будут выбирать эту группу из списка.')
                                             ->visible(fn (callable $get): bool => $get('space_group_role') === 'parent'),
 
+                                        Forms\Components\Placeholder::make('current_space_group_parent')
+                                            ->label('Группа')
+                                            ->content(fn (?MarketSpace $record): HtmlString => static::renderCurrentParentGroupField($record))
+                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && static::isExistingChild($record)),
+
+                                        Forms\Components\Placeholder::make('current_space_group_slot')
+                                            ->label('Номер внутри группы')
+                                            ->content(fn (?MarketSpace $record): HtmlString => static::renderCurrentGroupSlotField($record))
+                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && static::isExistingChild($record)),
+
                                         Forms\Components\Select::make('space_group_parent_id')
                                             ->label('Группа')
                                             ->options(function (?MarketSpace $record): array {
@@ -624,15 +689,11 @@ class MarketSpaceResource extends BaseResource
                                                     $record?->id ? (int) $record->id : null,
                                                 );
                                             })
-                                            ->visible(fn (callable $get): bool => $get('space_group_role') === 'child')
+                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && ! static::isExistingChild($record))
                                             ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
                                             ->searchable()
                                             ->preload()
-                                            ->disabled(fn (?MarketSpace $record): bool => $record instanceof MarketSpace && (string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
                                             ->placeholder('Выберите родительскую группу')
-                                            ->helperText(fn (?MarketSpace $record): ?string => $record instanceof MarketSpace && (string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD
-                                                ? 'Для переноса существующего места используйте действие «Перенести в группу» в шапке карточки.'
-                                                : null)
                                             ->hintIcon('heroicon-m-question-mark-circle')
                                             ->hintIconTooltip('Родительская группа — это контейнер для связанных мест (например, остров ОС7). Места в группе выбирают родителя из списка, а не вводят текст вручную.'),
 
@@ -640,12 +701,8 @@ class MarketSpaceResource extends BaseResource
                                             ->label('Номер внутри группы')
                                             ->maxLength(255)
                                             ->placeholder('Например: 6, 7, 8')
-                                            ->visible(fn (callable $get): bool => $get('space_group_role') === 'child')
+                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && ! static::isExistingChild($record))
                                             ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
-                                            ->disabled(fn (?MarketSpace $record): bool => $record instanceof MarketSpace && (string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
-                                            ->helperText(fn (?MarketSpace $record): ?string => $record instanceof MarketSpace && (string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD
-                                                ? 'Для переноса существующего места используйте действие «Перенести в группу» в шапке карточки.'
-                                                : null)
                                             ->hintIcon('heroicon-m-question-mark-circle')
                                             ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции.'),
                                     ])
@@ -1224,6 +1281,15 @@ class MarketSpaceResource extends BaseResource
     public static function table(Table $table): Table
     {
         $table = $table
+            ->modifyQueryUsing(function (Builder $query): Builder {
+                $state = request()->input('tableFilters.activity_scope.value');
+
+                return match ($state) {
+                    'all' => $query,
+                    'inactive' => $query->where('is_active', false),
+                    default => $query->where('is_active', true),
+                };
+            })
             ->columns([
                 TextColumn::make('location.name')
                     ->label('Локация')
@@ -1322,6 +1388,15 @@ class MarketSpaceResource extends BaseResource
                     ->tooltip(fn (MarketSpace $record) => $record->is_active ? 'Активно' : 'Неактивно'),
             ])
             ->filters([
+                SelectFilter::make('activity_scope')
+                    ->label('Показ')
+                    ->default('active')
+                    ->options([
+                        'active' => 'Только активные',
+                        'inactive' => 'Только архивные',
+                        'all' => 'Все записи',
+                    ]),
+
                 SelectFilter::make('effective_occupancy')
                     ->label('Фактическая занятость')
                     ->options([

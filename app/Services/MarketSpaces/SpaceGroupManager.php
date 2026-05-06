@@ -126,6 +126,12 @@ final class SpaceGroupManager
             ]);
         }
 
+        if ((int) ($child->space_group_parent_id ?? 0) === (int) $targetParent->getKey()) {
+            throw ValidationException::withMessages([
+                'target_parent_id' => 'Выберите другую группу. Текущая группа уже указана у этого места.',
+            ]);
+        }
+
         if ($targetParent->space_group_role !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
             throw ValidationException::withMessages([
                 'target_parent_id' => 'Целевая запись должна быть группой мест.',
