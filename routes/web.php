@@ -1784,6 +1784,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'spaceGroupParent.tenant',
             ])
             ->where('market_id', (int) $market->id)
+            ->where('is_active', true)
+            ->where(function ($qq) {
+                $qq->whereNull('space_group_role')
+                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
+            })
             ->where(function ($qq) use ($isNumeric, $q, $qLike) {
                 if ($isNumeric) {
                     $qq->orWhere('id', '=', (int) $q);

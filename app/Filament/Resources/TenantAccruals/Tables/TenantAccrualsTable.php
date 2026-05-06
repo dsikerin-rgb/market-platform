@@ -23,6 +23,7 @@ class TenantAccrualsTable
      * @param array{
      *     marketId?: int|null,
      *     tenantId?: int|null,
+     *     marketSpaceId?: int|null,
      *     hideMarketColumn?: bool,
      *     hideTenantColumn?: bool,
      *     readOnly?: bool
@@ -32,6 +33,7 @@ class TenantAccrualsTable
     {
         $marketId = isset($options['marketId']) ? (int) $options['marketId'] : null;
         $tenantId = isset($options['tenantId']) ? (int) $options['tenantId'] : null;
+        $marketSpaceId = isset($options['marketSpaceId']) ? (int) $options['marketSpaceId'] : null;
         $hideMarketColumn = (bool) ($options['hideMarketColumn'] ?? false);
         $hideTenantColumn = (bool) ($options['hideTenantColumn'] ?? false);
         $readOnly = (bool) ($options['readOnly'] ?? false);
@@ -224,8 +226,8 @@ class TenantAccrualsTable
             ->filters([
                 SelectFilter::make('period')
                     ->label('Период начисления')
-                    ->options(function () use ($marketId, $tenantId): array {
-                        $periods = static::baseScopeQuery($marketId, $tenantId)
+                    ->options(function () use ($marketId, $tenantId, $marketSpaceId): array {
+                        $periods = static::baseScopeQuery($marketId, $tenantId, $marketSpaceId)
                             ->select('period')
                             ->whereNotNull('period')
                             ->distinct()
@@ -295,6 +297,7 @@ class TenantAccrualsTable
                             TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS,
                             $marketId,
                             $tenantId,
+                            $marketSpaceId,
                         )
                     )
                     ->label('Связь с договором')
@@ -405,14 +408,14 @@ class TenantAccrualsTable
         return static::hasContractLinkStatusInScope($status);
     }
 
-    private static function hasContractLinkStatusInScope(string $status, ?int $marketId = null, ?int $tenantId = null): bool
+    private static function hasContractLinkStatusInScope(string $status, ?int $marketId = null, ?int $tenantId = null, ?int $marketSpaceId = null): bool
     {
-        return static::baseScopeQuery($marketId, $tenantId)
+        return static::baseScopeQuery($marketId, $tenantId, $marketSpaceId)
             ->where('contract_link_status', $status)
             ->exists();
     }
 
-    private static function baseScopeQuery(?int $marketId = null, ?int $tenantId = null)
+    private static function baseScopeQuery(?int $marketId = null, ?int $tenantId = null, ?int $marketSpaceId = null)
     {
         $query = DB::table('tenant_accruals');
 
@@ -423,6 +426,10 @@ class TenantAccrualsTable
 
         if ($tenantId) {
             $query->where('tenant_id', $tenantId);
+        }
+
+        if ($marketSpaceId) {
+            $query->where('market_space_id', $marketSpaceId);
         }
 
         return $query;

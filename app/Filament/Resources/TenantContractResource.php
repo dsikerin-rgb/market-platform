@@ -749,6 +749,8 @@ class TenantContractResource extends BaseResource
                 'spaceMappingUpdatedBy:id,name',
             ]);
 
+        $marketSpaceId = static::selectedMarketSpaceIdFromQuery();
+
         $user = Filament::auth()->user();
 
         if (! $user) {
@@ -758,13 +760,21 @@ class TenantContractResource extends BaseResource
         if ($user->isSuperAdmin()) {
             $selectedMarketId = static::selectedMarketIdFromSession();
 
-            return filled($selectedMarketId)
+            $query = filled($selectedMarketId)
                 ? $query->where('market_id', (int) $selectedMarketId)
+                : $query;
+
+            return $marketSpaceId
+                ? $query->where('market_space_id', $marketSpaceId)
                 : $query;
         }
 
         if ($user->hasAnyRole(['market-admin', 'market-manager']) && $user->market_id) {
-            return $query->where('market_id', (int) $user->market_id);
+            $query->where('market_id', (int) $user->market_id);
+
+            return $marketSpaceId
+                ? $query->where('market_space_id', $marketSpaceId)
+                : $query;
         }
 
         return $query->whereRaw('1 = 0');
@@ -811,6 +821,13 @@ class TenantContractResource extends BaseResource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    private static function selectedMarketSpaceIdFromQuery(): ?int
+    {
+        $value = request()->query('marketSpaceId');
+
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }
 
     private static function applyContractDateSort(Builder $query, string $direction): Builder

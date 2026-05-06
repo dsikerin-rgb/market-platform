@@ -243,6 +243,15 @@ class MarketSpaceResource extends BaseResource
             && (string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD;
     }
 
+    private static function canDirectlyFillMissingIdentityField(?MarketSpace $record, string $field): bool
+    {
+        if (! static::isExistingChild($record)) {
+            return false;
+        }
+
+        return blank($record?->{$field});
+    }
+
     private static function renderEffectiveTenantField(?MarketSpace $record): HtmlString
     {
         if (! static::isChildWithParent($record)) {
@@ -585,10 +594,14 @@ class MarketSpaceResource extends BaseResource
                                     ->maxLength(255)
                                     ->reactive()
                                     ->placeholder('Например: П/1 или A-101')
-                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id))
+                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id) && ! static::canDirectlyFillMissingIdentityField($record, 'number'))
                                     ->helperText(function (?MarketSpace $record): HtmlString|string|null {
                                         if (! filled($record?->id)) {
                                             return null;
+                                        }
+
+                                        if (static::canDirectlyFillMissingIdentityField($record, 'number')) {
+                                            return 'Для места в группе номер ещё не заполнен. Его можно безопасно указать здесь один раз без ревизии.';
                                         }
 
                                         $url = route('filament.admin.market-map', [
@@ -608,16 +621,20 @@ class MarketSpaceResource extends BaseResource
                                         }
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Короткий идентификатор места. Используется в поиске, импорте начислений и привязке договоров. После создания номер меняется только через режим "Карта -> Ревизия".'),
+                                    ->hintIconTooltip('Короткий идентификатор места. Используется в поиске, импорте начислений и привязке договоров. Для существующего места меняется только через режим "Карта -> Ревизия", кроме безопасного дозаполнения пустого номера у места в группе.'),
 
                                 Forms\Components\TextInput::make('display_name')
                                     ->label('Название (для отображения)')
                                     ->maxLength(255)
                                     ->placeholder('Например: Аптека 22')
-                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id))
+                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id) && ! static::canDirectlyFillMissingIdentityField($record, 'display_name'))
                                     ->helperText(function (?MarketSpace $record): HtmlString|string|null {
                                         if (! filled($record?->id)) {
                                             return null;
+                                        }
+
+                                        if (static::canDirectlyFillMissingIdentityField($record, 'display_name')) {
+                                            return 'Для места в группе отображаемое имя ещё не заполнено. Его можно безопасно указать здесь один раз без ревизии.';
                                         }
 
                                         $url = route('filament.admin.market-map', [
@@ -631,7 +648,7 @@ class MarketSpaceResource extends BaseResource
                                         );
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Отображаемое имя места. После создания меняется только через режим "Карта -> Ревизия", чтобы не расходиться с ревизией идентичности места.')
+                                    ->hintIconTooltip('Отображаемое имя места. После создания меняется только через режим "Карта -> Ревизия", кроме безопасного дозаполнения пустого имени у места в группе.')
                                     ->nullable(),
 
                                 Forms\Components\Select::make('space_group_role')

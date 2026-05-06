@@ -5,11 +5,18 @@ declare(strict_types=1);
 namespace App\Filament\Resources\TenantContractResource\Pages;
 
 use App\Filament\Resources\TenantContractResource;
+use App\Models\MarketSpace;
 use App\Filament\Widgets\TenantContractsWorkspaceWidget;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Html;
+use Filament\Schemas\Components\RenderHook;
+use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Schema;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 class ListTenantContracts extends ListRecords
 {
@@ -19,9 +26,11 @@ class ListTenantContracts extends ListRecords
 
     protected array $queryString = [
         'activeTab' => ['as' => 'tab', 'except' => 'operational'],
+        'marketSpaceId' => ['except' => null],
     ];
 
     public ?string $activeTab = 'operational';
+    public ?int $marketSpaceId = null;
 
     public function mount(): void
     {
@@ -33,6 +42,9 @@ class ListTenantContracts extends ListRecords
         if (filled($legacyTab) && blank($currentTab)) {
             $this->activeTab = (string) $legacyTab;
         }
+
+        $marketSpaceId = request()->query('marketSpaceId');
+        $this->marketSpaceId = is_numeric($marketSpaceId) && (int) $marketSpaceId > 0 ? (int) $marketSpaceId : null;
     }
 
     public function getBreadcrumb(): string
@@ -55,6 +67,18 @@ class ListTenantContracts extends ListRecords
         return [
             TenantContractsWorkspaceWidget::class,
         ];
+    }
+
+    public function content(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Html::make(fn (): HtmlString => $this->renderMarketSpaceFilterBanner()),
+                $this->getTabsContentComponent(),
+                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
+                EmbeddedTable::make(),
+                RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
+            ]);
     }
 
     public function getHeaderWidgetsColumns(): int|array
@@ -182,5 +206,65 @@ class ListTenantContracts extends ListRecords
             ...parent::getPageClasses(),
             'fi-resource-contracts-list-page',
         ];
+    }
+
+    private function renderMarketSpaceFilterBanner(): HtmlString
+    {
+        $space = $this->resolveMarketSpaceFilterRecord();
+
+        if (! $space) {
+            return new HtmlString('');
+        }
+
+        $params = [];
+        if (filled($this->activeTab)) {
+            $params['tab'] = $this->activeTab;
+        }
+
+        $url = TenantContractResource::getUrl('index', $params);
+        $spaceLabel = trim((string) ($space->number ?: $space->display_name ?: ('#' . (int) $space->id)));
+
+        return new HtmlString(
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid rgba(37,99,235,.22);background:rgba(37,99,235,.08);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;">'
+                . '<div>Показаны договоры места: <strong>' . e($spaceLabel) . '</strong></div>'
+                . '<a href="' . e($url) . '" style="font-weight:600;text-decoration:underline;text-underline-offset:2px;">Показать все договоры</a>'
+                . '</div>'
+        );
+    }
+
+    private function resolveMarketSpaceFilterRecord(): ?MarketSpace
+    {
+        if (! $this->marketSpaceId) {
+            return null;
+        }
+
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return null;
+        }
+
+        $query = MarketSpace::query()->whereKey($this->marketSpaceId);
+
+        if ($user->isSuperAdmin()) {
+            $selectedMarketId = $this->selectedMarketIdFromSession();
+            if (filled($selectedMarketId)) {
+                $query->where('market_id', (int) $selectedMarketId);
+            }
+        } elseif ($user->market_id) {
+            $query->where('market_id', (int) $user->market_id);
+        } else {
+            return null;
+        }
+
+        return $query->first();
+    }
+
+    private function selectedMarketIdFromSession(): ?int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $key = "filament_{$panelId}_market_id";
+        $value = session($key);
+
+        return filled($value) ? (int) $value : null;
     }
 }

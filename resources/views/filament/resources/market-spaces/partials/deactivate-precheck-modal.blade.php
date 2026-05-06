@@ -10,6 +10,10 @@
     $mapUrl = $mapUrl ?? null;
     $historyUrl = $historyUrl ?? null;
     $tenantUrl = $tenantUrl ?? null;
+    $contractsUrl = $contractsUrl ?? null;
+    $contractPreview = $contractPreview ?? [];
+    $accrualsUrl = $accrualsUrl ?? null;
+    $accrualPreview = $accrualPreview ?? [];
 
     $hasShapeRelations = false;
 
@@ -89,6 +93,22 @@
             return [
                 'label' => 'Открыть арендатора',
                 'url' => $tenantUrl,
+                'new_tab' => true,
+            ];
+        }
+
+        if ($label === 'Договоры' && $contractsUrl) {
+            return [
+                'label' => 'Открыть договоры',
+                'url' => $contractsUrl,
+                'new_tab' => true,
+            ];
+        }
+
+        if ($label === 'Начисления' && $accrualsUrl) {
+            return [
+                'label' => 'Открыть начисления',
+                'url' => $accrualsUrl,
                 'new_tab' => true,
             ];
         }
@@ -838,6 +858,108 @@
                 </div>
             </section>
         @endforeach
+
+        @if (count($contractPreview) > 0)
+            <section class="deactivate-precheck__card">
+                <div class="deactivate-precheck__section-head">
+                    <div>
+                        <h4 class="deactivate-precheck__section-title">Последние договоры по месту</h4>
+                        <p class="deactivate-precheck__section-note">Короткий просмотр договоров, которые сейчас блокируют деактивацию места.</p>
+                    </div>
+                    <span class="deactivate-precheck__count">{{ count($contractPreview) }}</span>
+                </div>
+
+                <div class="deactivate-precheck__table-wrap">
+                    <table class="deactivate-precheck__table">
+                        <thead>
+                            <tr>
+                                <th style="width: 12%;">ID</th>
+                                <th style="width: 20%;">Номер</th>
+                                <th style="width: 24%;">Арендатор</th>
+                                <th style="width: 20%;">Статус</th>
+                                <th style="width: 12%;">Активность</th>
+                                <th style="width: 12%;">Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($contractPreview as $item)
+                                <tr>
+                                    <td>#{{ $item['id'] }}</td>
+                                    <td>{{ $item['number'] }}</td>
+                                    <td>{{ $item['tenant_name'] }}</td>
+                                    <td>{{ $item['status'] }}</td>
+                                    <td>{{ $item['is_active'] ? 'Активен' : 'Неактивен' }}</td>
+                                    <td>
+                                        <a
+                                            href="{{ $item['edit_url'] }}"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="deactivate-precheck__action"
+                                        >
+                                            Открыть
+                                        </a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                @if ($contractsUrl)
+                    <div class="deactivate-precheck__footer-link">
+                        <a href="{{ $contractsUrl }}" target="_blank" rel="noopener" class="deactivate-precheck__link deactivate-precheck__link--primary">
+                            Открыть все договоры места
+                        </a>
+                    </div>
+                @endif
+            </section>
+        @endif
+
+        @if (count($accrualPreview) > 0)
+            <section class="deactivate-precheck__card">
+                <div class="deactivate-precheck__section-head">
+                    <div>
+                        <h4 class="deactivate-precheck__section-title">Последние начисления по месту</h4>
+                        <p class="deactivate-precheck__section-note">Короткий просмотр того, что именно блокирует упразднение.</p>
+                    </div>
+                    <span class="deactivate-precheck__count">{{ count($accrualPreview) }}</span>
+                </div>
+
+                <div class="deactivate-precheck__table-wrap">
+                    <table class="deactivate-precheck__table">
+                        <thead>
+                            <tr>
+                                <th style="width: 14%;">ID</th>
+                                <th style="width: 20%;">Период</th>
+                                <th style="width: 28%;">Договор</th>
+                                <th style="width: 24%;">Арендатор</th>
+                                <th style="width: 14%;">Действие</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($accrualPreview as $item)
+                                <tr>
+                                    <td>#{{ $item['id'] }}</td>
+                                    <td>{{ $item['period'] }}</td>
+                                    <td>{{ $item['contract_number'] }}</td>
+                                    <td>{{ $item['tenant_name'] }}</td>
+                                    <td>
+                                        <a
+                                            href="{{ $item['edit_url'] }}"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="deactivate-precheck__action"
+                                        >
+                                            Открыть
+                                        </a>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        @endif
 
         <section class="deactivate-precheck__card">
             <div class="deactivate-precheck__section-head">

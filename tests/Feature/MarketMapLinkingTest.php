@@ -255,6 +255,60 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_effective_tenant_name', $parentTenant->display_name);
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
+
+    public function test_market_map_spaces_search_excludes_parent_groups_and_inactive_places(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        $ordinary = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 20',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $archived = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 99',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => false,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'q' => 'OS7',
+            'limit' => 15,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+
+        $this->assertContains((int) $child->id, $ids);
+        $this->assertContains((int) $ordinary->id, $ids);
+        $this->assertNotContains((int) $parent->id, $ids);
+        $this->assertNotContains((int) $archived->id, $ids);
+    }
+
     public function test_create_market_space_page_creates_space_and_binds_requested_shape(): void
     {
         $this->actingAsSuperAdmin();

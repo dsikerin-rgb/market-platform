@@ -8,6 +8,7 @@ use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\DuplicateSpaceResolutionService;
+use App\Services\MarketSpaces\SpaceGroupManager;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationPayloadValidator;
 use Carbon\CarbonImmutable;
@@ -140,10 +141,21 @@ class Operation extends Model
             ->orderByDesc('id')
             ->first();
 
+        $tenantSwitchDetachedFromGroup = false;
+        $tenantSwitchOldParentId = 0;
+
         if ($latestTenantOp) {
             $payload = is_array($latestTenantOp->payload) ? $latestTenantOp->payload : [];
             $tenantId = (int) ($payload['to_tenant_id'] ?? 0);
             $space->tenant_id = $tenantId > 0 ? $tenantId : null;
+            $tenantSwitchDetachedFromGroup = (bool) ($payload['detach_from_group'] ?? false);
+            $tenantSwitchOldParentId = (int) ($payload['from_group_parent_id'] ?? 0);
+
+            if ($tenantSwitchDetachedFromGroup) {
+                $space->space_group_role = MarketSpace::SPACE_GROUP_ROLE_NONE;
+                $space->space_group_parent_id = null;
+                $space->space_group_slot = null;
+            }
         }
 
         $latestRentRateOp = self::query()
@@ -219,6 +231,17 @@ class Operation extends Model
 
         if ($space->isDirty()) {
             $space->save();
+        }
+
+        if ($tenantSwitchDetachedFromGroup && $tenantSwitchOldParentId > 0) {
+            $oldParent = MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->whereKey($tenantSwitchOldParentId)
+                ->first();
+
+            if ($oldParent instanceof MarketSpace) {
+                app(SpaceGroupManager::class)->syncParentIdentity($oldParent);
+            }
         }
     }
 
