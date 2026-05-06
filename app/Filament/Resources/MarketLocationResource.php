@@ -123,11 +123,28 @@ class MarketLocationResource extends BaseResource
                         ->pluck('name_ru', 'code')
                         ->all();
                 })
+                ->getOptionLabelUsing(function ($value, callable $get): ?string {
+                    if ($value === null || $value === '') {
+                        return null;
+                    }
+
+                    $marketId = $get('market_id');
+                    if (blank($marketId)) {
+                        return $value;
+                    }
+
+                    $type = \App\Models\MarketLocationType::query()
+                        ->where('market_id', (int) $marketId)
+                        ->where('code', $value)
+                        ->first();
+
+                    return $type?->name_ru ?? $value;
+                })
                 ->searchable()
                 ->preload()
                 ->reactive()
                 ->required()
-                ->helperText('Типы берутся из справочника рынка. Добавьте новые в разделе “Типы локаций”.'),
+                ->helperText('Типы берутся из справочника рынка. Добавьте новые в разделе "Типы локаций".'),
 
             Forms\Components\Select::make('parent_id')
                 ->label('Родительская локация')

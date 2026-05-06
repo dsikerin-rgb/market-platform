@@ -46,6 +46,7 @@ class MarketSettings extends Page
 
     public ?string $marketsUrl = null;
     public ?string $locationTypesUrl = null;
+    public ?string $locationsUrl = null;
     public ?string $spaceTypesUrl = null;
     public ?string $staffUrl = null;
     public ?string $tenantUrl = null;
@@ -1128,6 +1129,10 @@ class MarketSettings extends Page
         $this->locationTypesUrl = $this->resourceUrl([
             \App\Filament\Resources\LocationTypeResource::class,
             \App\Filament\Resources\MarketLocationTypeResource::class,
+        ], 'index');
+
+        $this->locationsUrl = $this->resourceUrl([
+            \App\Filament\Resources\MarketLocationResource::class,
         ], 'index');
 
         $this->spaceTypesUrl = $this->resourceUrl([
