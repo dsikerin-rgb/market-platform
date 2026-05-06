@@ -309,6 +309,35 @@ class MarketMapLinkingTest extends TestCase
         $this->assertNotContains((int) $archived->id, $ids);
     }
 
+    public function test_market_map_spaces_search_is_case_insensitive(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Os8 6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'q' => 'os8',
+            'limit' => 15,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+
+        $this->assertContains((int) $space->id, $ids);
+        $this->assertSame((int) $space->id, (int) ($items->first()['id'] ?? 0));
+    }
+
     public function test_create_market_space_page_creates_space_and_binds_requested_shape(): void
     {
         $this->actingAsSuperAdmin();

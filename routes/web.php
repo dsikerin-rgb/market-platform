@@ -1777,6 +1777,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $isNumeric = ctype_digit($q);
         $qEsc = str_replace(['%', '_'], ['\%', '\\_'], $q);
         $qLike = '%' . $qEsc . '%';
+        $searchOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
         $rows = MarketSpace::query()
             ->with([
@@ -1789,19 +1790,19 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 $qq->whereNull('space_group_role')
                     ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
             })
-            ->where(function ($qq) use ($isNumeric, $q, $qLike) {
+            ->where(function ($qq) use ($isNumeric, $q, $qLike, $searchOperator) {
                 if ($isNumeric) {
                     $qq->orWhere('id', '=', (int) $q);
                 }
 
-                $qq->orWhere('number', 'like', $qLike)
-                    ->orWhere('code', 'like', $qLike)
-                    ->orWhereHas('tenant', function ($tq) use ($qLike) {
-                        $tq->where('name', 'like', $qLike)
-                            ->orWhere('display_name', 'like', $qLike);
+                $qq->orWhere('number', $searchOperator, $qLike)
+                    ->orWhere('code', $searchOperator, $qLike)
+                    ->orWhereHas('tenant', function ($tq) use ($qLike, $searchOperator) {
+                        $tq->where('name', $searchOperator, $qLike)
+                            ->orWhere('display_name', $searchOperator, $qLike);
                     });
             })
-            ->orderByRaw('CASE WHEN number = ? THEN 0 ELSE 1 END', [$q])
+            ->orderByRaw('CASE WHEN LOWER(number) = LOWER(?) THEN 0 ELSE 1 END', [$q])
             ->orderBy('number')
             ->orderBy('id')
             ->limit($limit)
