@@ -474,12 +474,13 @@ class EditMarketSpace extends BaseEditRecord
                     ->label('Новая группа')
                     ->options(fn (): array => MarketSpaceResource::parentGroupOptionsForMarket(
                         $this->record?->market_id ? (int) $this->record->market_id : null,
-                        $this->record?->id ? (int) $this->record->id : null,
+                        $this->record?->space_group_parent_id ? (int) $this->record->space_group_parent_id : null,
                     ))
                     ->required()
                     ->searchable()
                     ->preload()
-                    ->default(fn (): ?int => $this->record?->space_group_parent_id ? (int) $this->record->space_group_parent_id : null),
+                    ->placeholder('Выберите новую группу')
+                    ->helperText('Текущая группа не показывается в списке, чтобы избежать псевдо-переноса без изменений.'),
                 \Filament\Forms\Components\TextInput::make('target_slot')
                     ->label('Номер внутри группы')
                     ->required()

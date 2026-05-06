@@ -442,4 +442,31 @@ class SpaceGroupRoleTest extends TestCase
 
         app(SpaceGroupManager::class)->regroupChild($child17, $newParent, '17');
     }
+
+    public function test_regrouping_child_rejects_current_parent_as_target_group(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '8',
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(SpaceGroupManager::class)->regroupChild($child, $parent, '8');
+    }
 }
