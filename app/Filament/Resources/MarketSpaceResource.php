@@ -1395,7 +1395,8 @@ class MarketSpaceResource extends BaseResource
                         'active' => 'Только активные',
                         'inactive' => 'Только архивные',
                         'all' => 'Все записи',
-                    ]),
+                    ])
+                    ->query(fn (Builder $query): Builder => $query),
 
                 SelectFilter::make('effective_occupancy')
                     ->label('Фактическая занятость')
