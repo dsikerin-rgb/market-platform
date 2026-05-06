@@ -4,13 +4,16 @@ namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\Pages\BaseEditRecord;
+use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Services\MarketSpaces\SpaceGroupManager;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Filament\Support\Enums\Width;
 
 class EditMarketSpace extends BaseEditRecord
@@ -447,6 +450,79 @@ class EditMarketSpace extends BaseEditRecord
     }
 
 
+    private function makeRegroupAction(string $actionClass): mixed
+    {
+        return $actionClass::make('regroup_child')
+            ->label('Перенести в группу')
+            ->icon('heroicon-o-arrow-path-rounded-square')
+            ->tooltip('Сменить родительскую группу и автоматически пересчитать названия групп')
+            ->size('lg')
+            ->outlined()
+            ->color('primary')
+            ->visible(fn (): bool => $this->record instanceof MarketSpace && $this->record->space_group_role === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+            ->extraAttributes([
+                'class' => 'market-space-card-action market-space-card-action--primary',
+            ])
+            ->modalHeading('Перенести место в другую группу')
+            ->modalSubmitActionLabel('Перенести')
+            ->modalCancelActionLabel('Отмена')
+            ->form([
+                \Filament\Forms\Components\Placeholder::make('regroup_notice')
+                    ->hiddenLabel()
+                    ->content('Будет изменена только группировка места. Арендатор, договоры, начисления и задолженности не переносятся и не копируются.'),
+                \Filament\Forms\Components\Select::make('target_parent_id')
+                    ->label('Новая группа')
+                    ->options(fn (): array => MarketSpaceResource::parentGroupOptionsForMarket(
+                        $this->record?->market_id ? (int) $this->record->market_id : null,
+                        $this->record?->id ? (int) $this->record->id : null,
+                    ))
+                    ->required()
+                    ->searchable()
+                    ->preload()
+                    ->default(fn (): ?int => $this->record?->space_group_parent_id ? (int) $this->record->space_group_parent_id : null),
+                \Filament\Forms\Components\TextInput::make('target_slot')
+                    ->label('Номер внутри группы')
+                    ->required()
+                    ->maxLength(255)
+                    ->default(fn (): ?string => $this->record?->space_group_slot ? (string) $this->record->space_group_slot : null)
+                    ->helperText('Используется для автоматического пересчёта названия старой и новой группы.'),
+            ])
+            ->action(function (array $data): void {
+                $targetParent = MarketSpace::query()->find((int) ($data['target_parent_id'] ?? 0));
+
+                if (! $targetParent instanceof MarketSpace) {
+                    throw ValidationException::withMessages([
+                        'target_parent_id' => 'Выберите корректную группу.',
+                    ]);
+                }
+
+                $result = app(SpaceGroupManager::class)->regroupChild(
+                    $this->record->fresh(),
+                    $targetParent,
+                    (string) ($data['target_slot'] ?? ''),
+                );
+
+                $this->record->refresh();
+                $this->fillForm();
+
+                $renamedParents = collect($result['renamed_parents'] ?? [])
+                    ->map(function (array $item): string {
+                        return $item['old_number'] . ' → ' . $item['new_number'];
+                    })
+                    ->values();
+
+                $body = $renamedParents->isNotEmpty()
+                    ? 'Переименованы группы: ' . $renamedParents->implode('; ')
+                    : 'Связь с группой обновлена.';
+
+                Notification::make()
+                    ->success()
+                    ->title('Место перенесено в другую группу')
+                    ->body($body)
+                    ->send();
+            });
+    }
+
     protected function getHeaderActions(): array
     {
         $actions = [];
@@ -513,6 +589,8 @@ class EditMarketSpace extends BaseEditRecord
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
 
+            $actions[] = $this->makeRegroupAction(\Filament\Actions\Action::class);
+
             $actions[] = \Filament\Actions\Action::make('deactivate_precheck')
                 ->label('Упразднить место')
                 ->icon('heroicon-o-archive-box')
@@ -578,7 +656,7 @@ class EditMarketSpace extends BaseEditRecord
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
 
-
+            $actions[] = $this->makeRegroupAction(\Filament\Pages\Actions\Action::class);
 
             $actions[] = \Filament\Pages\Actions\Action::make('deactivate_precheck')
                 ->label('Упразднить место')
@@ -704,7 +782,7 @@ class EditMarketSpace extends BaseEditRecord
                 $sourceLabel = '#' . (int) ($sourceSpace?->id ?? 0);
             }
 
-            return 'Занято через группу: ' . $sourceLabel;
+            return 'Входит в группу: ' . $sourceLabel;
         }
 
         if ($source === 'direct') {
