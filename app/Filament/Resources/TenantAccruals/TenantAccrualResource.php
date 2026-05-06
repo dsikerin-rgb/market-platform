@@ -78,6 +78,7 @@ class TenantAccrualResource extends BaseResource
     {
         return TenantAccrualsTable::configure($table, [
             'tenantId' => static::selectedTenantIdFromQuery(),
+            'marketSpaceId' => static::selectedMarketSpaceIdFromQuery(),
         ]);
     }
 
@@ -112,6 +113,7 @@ class TenantAccrualResource extends BaseResource
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
         $tenantId = static::selectedTenantIdFromQuery();
+        $marketSpaceId = static::selectedMarketSpaceIdFromQuery();
 
         if (! $user) {
             return $query->whereRaw('1 = 0');
@@ -131,6 +133,10 @@ class TenantAccrualResource extends BaseResource
 
         if ($tenantId) {
             $query->where('tenant_id', $tenantId);
+        }
+
+        if ($marketSpaceId) {
+            $query->where('market_space_id', $marketSpaceId);
         }
 
         return $query;
@@ -171,6 +177,13 @@ class TenantAccrualResource extends BaseResource
     private static function selectedTenantIdFromQuery(): ?int
     {
         $value = request()->query('tenantId');
+
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
+    }
+
+    private static function selectedMarketSpaceIdFromQuery(): ?int
+    {
+        $value = request()->query('marketSpaceId');
 
         return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }

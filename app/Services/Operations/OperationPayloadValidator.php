@@ -42,6 +42,10 @@ final class OperationPayloadValidator
             'from_tenant_id' => self::intOrNull($payload['from_tenant_id'] ?? null),
             'to_tenant_id' => self::intOrNull($payload['to_tenant_id'] ?? null),
             'reason' => self::stringOrNull($payload['reason'] ?? null),
+            'detach_from_group' => self::boolOrNull($payload['detach_from_group'] ?? null) ?? false,
+            'from_group_parent_id' => self::intOrNull($payload['from_group_parent_id'] ?? null),
+            'from_group_slot' => self::stringOrNull($payload['from_group_slot'] ?? null),
+            'from_group_role' => self::stringOrNull($payload['from_group_role'] ?? null),
         ];
     }
 

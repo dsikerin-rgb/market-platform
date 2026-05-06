@@ -7,9 +7,12 @@ use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Services\MarketSpaces\SpaceGroupManager;
+use App\Services\MarketSpaces\TenantSwitchPlanner;
+use App\Models\Tenant;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -128,6 +131,10 @@ class EditMarketSpace extends BaseEditRecord
                 'transferableRelations' => [],
                 'blockingRelations' => [],
                 'historicalRelations' => [],
+                'contractsUrl' => null,
+                'contractPreview' => [],
+                'accrualsUrl' => null,
+                'accrualPreview' => [],
             ];
         }
 
@@ -165,6 +172,16 @@ class EditMarketSpace extends BaseEditRecord
         $transferableRelations = [];
         $blockingRelations = [];
         $historicalRelations = [];
+        $contractPreview = [];
+        $accrualPreview = [];
+        $contractsUrl = \App\Filament\Resources\TenantContractResource::getUrl('index', [
+            'marketSpaceId' => $recordId,
+            'tab' => 'all',
+        ]);
+        $accrualsUrl = \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
+            'marketSpaceId' => $recordId,
+            'tab' => 'all',
+        ]);
 
         $currentTenantId = filled($this->record->tenant_id) ? (int) $this->record->tenant_id : null;
         $currentTenantName = null;
@@ -253,6 +270,38 @@ class EditMarketSpace extends BaseEditRecord
             $blockingRelations[] = $item;
         }
 
+        if ($contractCount > 0 && Schema::hasTable('tenant_contracts')) {
+            $contractPreview = DB::table('tenant_contracts as tc')
+                ->leftJoin('tenants as t', 't.id', '=', 'tc.tenant_id')
+                ->where('tc.market_space_id', $recordId)
+                ->orderByRaw('CASE WHEN tc.is_active = true THEN 0 ELSE 1 END')
+                ->orderByDesc('tc.starts_at')
+                ->orderByDesc('tc.id')
+                ->limit(5)
+                ->get([
+                    'tc.id',
+                    'tc.number',
+                    'tc.status',
+                    'tc.is_active',
+                    'tc.starts_at',
+                    'tc.ends_at',
+                    't.name as tenant_name',
+                ])
+                ->map(static function ($row): array {
+                    return [
+                        'id' => (int) $row->id,
+                        'number' => $row->number ? (string) $row->number : '—',
+                        'tenant_name' => $row->tenant_name ? (string) $row->tenant_name : '—',
+                        'status' => $row->status ? (string) $row->status : '—',
+                        'is_active' => (bool) ($row->is_active ?? false),
+                        'starts_at' => $row->starts_at ? (string) $row->starts_at : null,
+                        'ends_at' => $row->ends_at ? (string) $row->ends_at : null,
+                        'edit_url' => \App\Filament\Resources\TenantContractResource::getUrl('edit', ['record' => (int) $row->id]),
+                    ];
+                })
+                ->all();
+        }
+
         $accrualCount = $countRows('tenant_accruals', static function ($query) use ($recordId): void {
             $query->where('market_space_id', $recordId);
         });
@@ -266,6 +315,34 @@ class EditMarketSpace extends BaseEditRecord
             );
             $liveRelations[] = $item;
             $blockingRelations[] = $item;
+
+            if (Schema::hasTable('tenant_accruals')) {
+                $accrualPreview = DB::table('tenant_accruals as ta')
+                    ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'ta.tenant_contract_id')
+                    ->leftJoin('tenants as t', 't.id', '=', 'ta.tenant_id')
+                    ->where('ta.market_space_id', $recordId)
+                    ->orderByDesc('ta.period')
+                    ->orderByDesc('ta.id')
+                    ->limit(5)
+                    ->get([
+                        'ta.id',
+                        'ta.period',
+                        'ta.total_with_vat',
+                        'tc.number as contract_number',
+                        't.name as tenant_name',
+                    ])
+                    ->map(static function ($row): array {
+                        return [
+                            'id' => (int) $row->id,
+                            'period' => $row->period ? (string) $row->period : '—',
+                            'contract_number' => $row->contract_number ? (string) $row->contract_number : '—',
+                            'tenant_name' => $row->tenant_name ? (string) $row->tenant_name : '—',
+                            'total_with_vat' => $row->total_with_vat !== null ? (float) $row->total_with_vat : null,
+                            'edit_url' => \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('edit', ['record' => (int) $row->id]),
+                        ];
+                    })
+                    ->all();
+            }
         }
 
         $bindingActiveCount = $countRows('market_space_tenant_bindings', static function ($query) use ($recordId): void {
@@ -446,7 +523,208 @@ class EditMarketSpace extends BaseEditRecord
             'transferableRelations' => $transferableRelations,
             'blockingRelations' => $blockingRelations,
             'historicalRelations' => $historicalRelations,
+            'contractsUrl' => $contractsUrl,
+            'contractPreview' => $contractPreview,
+            'accrualsUrl' => $accrualsUrl,
+            'accrualPreview' => $accrualPreview,
         ];
+    }
+
+    private function buildTenantSwitchImpactHtml(): HtmlString
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return new HtmlString('—');
+        }
+
+        $record = $this->record->fresh(['tenant', 'spaceGroupParent.tenant', 'spaceGroupChildren']);
+        $effectiveTenantName = trim((string) ($record?->effectiveTenantName() ?? ''));
+        $effectiveTenantName = $effectiveTenantName !== '' ? $effectiveTenantName : '—';
+
+        $items = [
+            'Текущее фактическое состояние: ' . e($effectiveTenantName),
+            'Дата начала действия обязательна. До наступления этой даты карточка места не меняется.',
+        ];
+
+        if ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD && filled($record->space_group_parent_id)) {
+            $parentLabel = trim((string) ($record->spaceGroupParent?->number ?? ''));
+            $parentLabel = $parentLabel !== '' ? $parentLabel : ('#' . (int) $record->space_group_parent_id);
+            $items[] = 'Это место входит в группу ' . e($parentLabel) . '. В дату вступления место будет выведено из группы и получит прямого арендатора.';
+        } elseif ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            $childrenCount = $record->spaceGroupChildren()
+                ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                ->count();
+
+            $items[] = 'Это групповое место. После вступления операции child-места продолжат наследовать занятость от группы.';
+            $items[] = 'Связанных мест в группе: ' . $childrenCount . '.';
+        } else {
+            $items[] = 'Это прямое место. В дату вступления операции будет изменён прямой арендатор карточки.';
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:6px;">'
+            . implode('', array_map(static fn (string $item): string => '<div style="font-size:13px;line-height:1.55;color:#334155;">• ' . $item . '</div>', $items))
+            . '</div>'
+        );
+    }
+
+    private function buildTenantSwitchWarningsHtml(): ?HtmlString
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return null;
+        }
+
+        $recordId = (int) $this->record->getKey();
+        if ($recordId <= 0) {
+            return null;
+        }
+
+        $contractCount = Schema::hasTable('tenant_contracts')
+            ? (int) DB::table('tenant_contracts')->where('market_space_id', $recordId)->count()
+            : 0;
+
+        $accrualCount = Schema::hasTable('tenant_accruals')
+            ? (int) DB::table('tenant_accruals')->where('market_space_id', $recordId)->count()
+            : 0;
+
+        $bindingCount = Schema::hasTable('market_space_tenant_bindings')
+            ? (int) DB::table('market_space_tenant_bindings')
+                ->where('market_space_id', $recordId)
+                ->whereNull('ended_at')
+                ->count()
+            : 0;
+
+        if ($contractCount === 0 && $accrualCount === 0 && $bindingCount === 0) {
+            return null;
+        }
+
+        $links = [];
+
+        if ($contractCount > 0) {
+            $links[] = '<a href="' . e(\App\Filament\Resources\TenantContractResource::getUrl('index', [
+                'marketSpaceId' => $recordId,
+                'tab' => 'all',
+            ])) . '" target="_blank" rel="noopener" style="color:#1d4ed8;font-weight:600;text-decoration:none;">Открыть договоры места</a>';
+        }
+
+        if ($accrualCount > 0) {
+            $links[] = '<a href="' . e(\App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
+                'marketSpaceId' => $recordId,
+                'tab' => 'all',
+            ])) . '" target="_blank" rel="noopener" style="color:#1d4ed8;font-weight:600;text-decoration:none;">Открыть начисления места</a>';
+        }
+
+        $rows = [];
+
+        if ($contractCount > 0) {
+            $rows[] = '• Договоры: ' . $contractCount;
+        }
+
+        if ($accrualCount > 0) {
+            $rows[] = '• Начисления: ' . $accrualCount;
+        }
+
+        if ($bindingCount > 0) {
+            $rows[] = '• Активные привязки: ' . $bindingCount;
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">'
+            . '<div style="font-size:13px;font-weight:700;color:#92400e;">Перед сменой арендатора нужен ручной разбор прямых финансовых и договорных связей.</div>'
+            . '<div style="display:grid;gap:4px;font-size:13px;line-height:1.55;color:#78350f;">' . implode('', array_map(static fn (string $row): string => '<div>' . $row . '</div>', $rows)) . '</div>'
+            . ($links !== [] ? '<div style="display:flex;flex-wrap:wrap;gap:12px;">' . implode('', array_map(static fn (string $link): string => '<div>' . $link . '</div>', $links)) . '</div>' : '')
+            . '<div style="font-size:12px;line-height:1.5;color:#92400e;">Операция не переносит автоматически договоры, начисления и другие прямые связи. Она меняет только управленческий snapshot арендатора по дате вступления.</div>'
+            . '</div>'
+        );
+    }
+
+    private function makeTenantSwitchAction(string $actionClass): mixed
+    {
+        return $actionClass::make('switch_tenant')
+            ->label('Сменить арендатора')
+            ->icon('heroicon-o-user-plus')
+            ->tooltip('Создать управленческую операцию смены арендатора с датой вступления в силу')
+            ->size('lg')
+            ->outlined()
+            ->color('warning')
+            ->visible(fn (): bool => $this->record instanceof MarketSpace)
+            ->extraAttributes([
+                'class' => 'market-space-card-action market-space-card-action--secondary',
+            ])
+            ->modalHeading('Сменить арендатора')
+            ->modalSubmitActionLabel('Запланировать смену')
+            ->modalCancelActionLabel('Отмена')
+            ->form([
+                \Filament\Forms\Components\Placeholder::make('tenant_switch_notice')
+                    ->hiddenLabel()
+                    ->content(fn (): HtmlString => $this->buildTenantSwitchImpactHtml()),
+                \Filament\Forms\Components\Placeholder::make('tenant_switch_warnings')
+                    ->hiddenLabel()
+                    ->content(fn (): ?HtmlString => $this->buildTenantSwitchWarningsHtml())
+                    ->visible(fn (): bool => $this->buildTenantSwitchWarningsHtml() instanceof HtmlString),
+                \Filament\Forms\Components\Select::make('target_tenant_id')
+                    ->label('Новый арендатор')
+                    ->options(function (): array {
+                        if (! $this->record instanceof MarketSpace) {
+                            return [];
+                        }
+
+                        return Tenant::query()
+                            ->where('market_id', (int) $this->record->market_id)
+                            ->active()
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->all();
+                    })
+                    ->required()
+                    ->searchable()
+                    ->preload()
+                    ->placeholder('Выберите нового арендатора'),
+                \Filament\Forms\Components\DateTimePicker::make('effective_at')
+                    ->label('Дата начала действия')
+                    ->seconds(false)
+                    ->required()
+                    ->default(fn (): \Illuminate\Support\Carbon => now()),
+                \Filament\Forms\Components\Textarea::make('reason')
+                    ->label('Причина')
+                    ->rows(3)
+                    ->required()
+                    ->maxLength(1000)
+                    ->placeholder('Кратко укажите, почему меняется арендатор и с какой договорённостью это связано.'),
+            ])
+            ->action(function (array $data): void {
+                $targetTenant = Tenant::query()->find((int) ($data['target_tenant_id'] ?? 0));
+
+                if (! $targetTenant instanceof Tenant) {
+                    throw ValidationException::withMessages([
+                        'target_tenant_id' => 'Выберите корректного арендатора.',
+                    ]);
+                }
+
+                $operation = app(TenantSwitchPlanner::class)->plan(
+                    $this->record->fresh(),
+                    $targetTenant,
+                    (string) ($data['effective_at'] ?? ''),
+                    (string) ($data['reason'] ?? ''),
+                    Filament::auth()->id(),
+                );
+
+                $this->record->refresh();
+                $this->fillForm();
+
+                $effectiveAtLabel = $operation->effective_at
+                    ? $operation->effective_at->timezone((string) ($operation->effective_tz ?: config('app.timezone', 'UTC')))->format('d.m.Y H:i')
+                    : '—';
+
+                Notification::make()
+                    ->success()
+                    ->title('Смена арендатора запланирована')
+                    ->body(
+                        ((bool) ($operation->payload['detach_from_group'] ?? false))
+                            ? 'Место будет выведено из группы и перейдёт к новому арендатору с ' . $effectiveAtLabel . '.'
+                            : 'Новый арендатор вступит в силу с ' . $effectiveAtLabel . '.'
+                    )
+                    ->send();
+            });
     }
 
 
@@ -590,6 +868,7 @@ class EditMarketSpace extends BaseEditRecord
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
 
+            $actions[] = $this->makeTenantSwitchAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Actions\Action::class);
 
             $actions[] = \Filament\Actions\Action::make('deactivate_precheck')
@@ -657,6 +936,7 @@ class EditMarketSpace extends BaseEditRecord
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
 
+            $actions[] = $this->makeTenantSwitchAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Pages\Actions\Action::class);
 
             $actions[] = \Filament\Pages\Actions\Action::make('deactivate_precheck')

@@ -31,10 +31,12 @@ class ListTenantAccruals extends ListRecords
     protected array $queryString = [
         'activeTab' => ['as' => 'tab'],
         'tenantId' => ['except' => null],
+        'marketSpaceId' => ['except' => null],
     ];
 
     public ?string $activeTab = null;
     public ?int $tenantId = null;
+    public ?int $marketSpaceId = null;
 
     public function mount(): void
     {
@@ -53,6 +55,9 @@ class ListTenantAccruals extends ListRecords
 
         $tenantId = request()->query('tenantId');
         $this->tenantId = is_numeric($tenantId) && (int) $tenantId > 0 ? (int) $tenantId : null;
+
+        $marketSpaceId = request()->query('marketSpaceId');
+        $this->marketSpaceId = is_numeric($marketSpaceId) && (int) $marketSpaceId > 0 ? (int) $marketSpaceId : null;
 
         if ($this->activeTab === 'ambiguous' && ! $this->hasAmbiguousOneCAccruals()) {
             $this->activeTab = $this->resolveDefaultTab();
@@ -85,7 +90,7 @@ class ListTenantAccruals extends ListRecords
     {
         return $schema
             ->components([
-                Html::make(fn (): HtmlString => $this->renderTenantFilterBanner()),
+                Html::make(fn (): HtmlString => $this->renderScopeFilterBanner()),
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 EmbeddedTable::make(),
@@ -222,8 +227,27 @@ class ListTenantAccruals extends ListRecords
             ->toDateString();
     }
 
-    private function renderTenantFilterBanner(): HtmlString
+    private function renderScopeFilterBanner(): HtmlString
     {
+        $space = $this->resolveMarketSpaceFilterRecord();
+
+        if ($space) {
+            $params = [];
+            if (filled($this->activeTab)) {
+                $params['tab'] = $this->activeTab;
+            }
+
+            $url = TenantAccrualResource::getUrl('index', $params);
+            $spaceLabel = trim((string) ($space->number ?: $space->display_name ?: ('#' . (int) $space->id)));
+
+            return new HtmlString(
+                '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid rgba(37,99,235,.22);background:rgba(37,99,235,.08);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.4;">'
+                    . '<div>Показаны начисления места: <strong>' . e($spaceLabel) . '</strong></div>'
+                    . '<a href="' . e($url) . '" style="font-weight:600;text-decoration:underline;text-underline-offset:2px;">Показать все начисления</a>'
+                    . '</div>'
+            );
+        }
+
         $tenant = $this->resolveTenantFilterRecord();
 
         if (! $tenant) {
@@ -257,6 +281,33 @@ class ListTenantAccruals extends ListRecords
         }
 
         $query = Tenant::query()->whereKey($this->tenantId);
+
+        if ($user->isSuperAdmin()) {
+            $selectedMarketId = $this->selectedMarketIdFromSession();
+            if (filled($selectedMarketId)) {
+                $query->where('market_id', (int) $selectedMarketId);
+            }
+        } elseif ($user->market_id) {
+            $query->where('market_id', (int) $user->market_id);
+        } else {
+            return null;
+        }
+
+        return $query->first();
+    }
+
+    private function resolveMarketSpaceFilterRecord(): ?\App\Models\MarketSpace
+    {
+        if (! $this->marketSpaceId) {
+            return null;
+        }
+
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return null;
+        }
+
+        $query = \App\Models\MarketSpace::query()->whereKey($this->marketSpaceId);
 
         if ($user->isSuperAdmin()) {
             $selectedMarketId = $this->selectedMarketIdFromSession();
