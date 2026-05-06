@@ -6,7 +6,9 @@ namespace Tests\Feature;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Services\MarketSpaces\SpaceGroupManager;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class SpaceGroupRoleTest extends TestCase
@@ -326,5 +328,118 @@ class SpaceGroupRoleTest extends TestCase
         $this->assertNull($child->effectiveTenantId());
         $this->assertNull($child->effectiveTenantName());
         $this->assertNull($child->effectiveOccupancySourceSpace());
+    }
+
+    public function test_regrouping_child_renames_old_and_new_parent_groups(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $oldParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 17, 18',
+            'display_name' => 'ОС7 17, 18',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $newParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 14, 15, 16',
+            'display_name' => 'ОС7 14, 15, 16',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $child17 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 17',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $oldParent->id,
+            'space_group_slot' => '17',
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 18',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $oldParent->id,
+            'space_group_slot' => '18',
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        foreach (['14', '15', '16'] as $slot) {
+            MarketSpace::create([
+                'market_id' => $market->id,
+                'number' => 'ОС7 ' . $slot,
+                'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+                'space_group_parent_id' => $newParent->id,
+                'space_group_slot' => $slot,
+                'space_group_token' => 'ОС7',
+                'is_active' => true,
+            ]);
+        }
+
+        $result = app(SpaceGroupManager::class)->regroupChild($child17, $newParent, '17');
+
+        $child17->refresh();
+        $oldParent->refresh();
+        $newParent->refresh();
+
+        $this->assertSame($newParent->id, $child17->space_group_parent_id);
+        $this->assertSame('17', $child17->space_group_slot);
+        $this->assertSame('ОС7', $child17->space_group_token);
+        $this->assertSame('ОС7 18', $oldParent->number);
+        $this->assertSame('ОС7 14, 15, 16, 17', $newParent->number);
+        $this->assertCount(2, $result['renamed_parents']);
+    }
+
+    public function test_regrouping_child_rejects_duplicate_slot_in_target_group(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $oldParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 17, 18',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $newParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 14, 15, 16',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $child17 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 17',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $oldParent->id,
+            'space_group_slot' => '17',
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС7 14',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $newParent->id,
+            'space_group_slot' => '17',
+            'space_group_token' => 'ОС7',
+            'is_active' => true,
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(SpaceGroupManager::class)->regroupChild($child17, $newParent, '17');
     }
 }
