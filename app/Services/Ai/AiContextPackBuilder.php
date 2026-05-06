@@ -153,6 +153,7 @@ class AiContextPackBuilder
                     'active_current_contracts' => [],
                     'historical_contracts' => [],
                 ],
+                'contract_override'  => null,
                 'other_spaces_total' => 0,
                 'other_spaces'       => [],
             ];
@@ -189,6 +190,7 @@ class AiContextPackBuilder
             $contractRows->all(),
             $space->tenant_id ? (int) $space->tenant_id : null,
         );
+        $contractOverride = $this->resolveContractOverride($contractRows->all(), (int) $space->tenant_id);
 
         $otherSpacesQuery = MarketSpace::query()
             ->where('market_id', $space->market_id)
@@ -274,6 +276,7 @@ class AiContextPackBuilder
             ] : null,
             'contracts'          => $contracts,
             'contract_contour'   => $contractContour,
+            'contract_override'  => $contractOverride,
             'other_spaces_total' => $otherSpacesTotal,
             'other_spaces'       => $otherSpacesPayload,
         ];
@@ -311,6 +314,41 @@ class AiContextPackBuilder
             'latest_total_with_vat' => isset($latest->total_with_vat) ? (float) $latest->total_with_vat : null,
             'latest_source'         => $latest->source ?? null,
         ];
+    }
+
+    /**
+     * @param  list<TenantContract>  $contracts
+     * @return array{id:int,tenant_id:int,tenant_name:string,contract_number:?string,start_date:?string}|null
+     */
+    private function resolveContractOverride(array $contracts, int $currentTenantId): ?array
+    {
+        foreach ($contracts as $contract) {
+            if ((int) $contract->tenant_id === $currentTenantId) {
+                continue;
+            }
+
+            if (! $this->isCurrentActiveContract($contract, null)) {
+                continue;
+            }
+
+            $tenantName = '';
+
+            if ((int) $contract->tenant_id > 0) {
+                $tenantName = (string) Tenant::query()
+                    ->whereKey((int) $contract->tenant_id)
+                    ->value('name');
+            }
+
+            return [
+                'id' => (int) $contract->id,
+                'tenant_id' => (int) $contract->tenant_id,
+                'tenant_name' => $tenantName,
+                'contract_number' => filled($contract->number ?? null) ? (string) $contract->number : null,
+                'start_date' => $contract->starts_at?->toDateString(),
+            ];
+        }
+
+        return null;
     }
 
     // ──────────────────────────────────────────────

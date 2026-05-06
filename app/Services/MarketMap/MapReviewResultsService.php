@@ -10,6 +10,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Operation;
+use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Debt\DebtStatusResolver;
 use Illuminate\Support\Collection;
@@ -307,6 +308,7 @@ class MapReviewResultsService
         }
 
         $currentCounts = $this->relationCountsForSpaces($spaceIds);
+        $contractOverrides = $this->activeContractOverrideForSpaces($spaceIds, $marketId);
 
         $tenantIds = $spaces->pluck('tenant_id')
             ->filter(fn ($id): bool => filled($id))
@@ -336,10 +338,11 @@ class MapReviewResultsService
         $candidateCounts = $this->relationCountsForSpaces($candidateIds);
         $candidatesByTenant = $candidateSpaces->groupBy(fn (MarketSpace $space): int => (int) $space->tenant_id);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant): array {
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
+            $contractOverride = $contractOverrides[$spaceId] ?? null;
 
             $currentScore = $this->relationStrengthScore($counts);
 
@@ -370,8 +373,10 @@ class MapReviewResultsService
                     'relation_counts' => $this->displayRelationCounts($counts),
                     'candidate_spaces' => $candidates,
                     'has_candidates' => $candidates !== [],
-                    'relation_assessment' => $this->relationAssessment($counts, $candidates),
+                    'relation_assessment' => $this->relationAssessment($counts, $candidates, $contractOverride),
                     'has_stronger_candidate' => $hasStrongerCandidate,
+                    'current_place_confirmed_by_contract' => $contractOverride !== null,
+                    'contract_override' => $contractOverride,
                 ],
             ];
         })->all();
@@ -499,8 +504,31 @@ class MapReviewResultsService
      * @param  array<string, int>  $currentCounts
      * @param  list<array<string, mixed>>  $candidates
      */
-    private function relationAssessment(array $currentCounts, array $candidates): string
+    private function relationAssessment(array $currentCounts, array $candidates, ?array $contractOverride = null): string
     {
+        if ($contractOverride !== null) {
+            $tenantName = trim((string) ($contractOverride['tenant_name'] ?? ''));
+            $startDate = trim((string) ($contractOverride['starts_at_label'] ?? ''));
+            $contractNumber = trim((string) ($contractOverride['contract_number'] ?? ''));
+
+            $parts = [];
+            $parts[] = $tenantName !== ''
+                ? 'На текущем месте уже есть активный договор нового арендатора: ' . $tenantName . '.'
+                : 'На текущем месте уже есть активный договор нового арендатора.';
+
+            if ($startDate !== '') {
+                $parts[] = 'Дата начала действия: ' . $startDate . '.';
+            }
+
+            if ($contractNumber !== '') {
+                $parts[] = 'Договор: ' . $contractNumber . '.';
+            }
+
+            $parts[] = 'Старые начисления и долги прежнего арендатора считаются финансовым хвостом и не отменяют смену текущего арендатора места.';
+
+            return implode(' ', $parts);
+        }
+
         if ($candidates === []) {
             return 'Других активных мест этого арендатора не найдено. Каноническое место не определяется автоматически.';
         }
@@ -527,7 +555,114 @@ class MapReviewResultsService
             'relation_counts' => [],
             'candidate_spaces' => [],
             'has_candidates' => false,
+            'has_stronger_candidate' => false,
+            'current_place_confirmed_by_contract' => false,
+            'contract_override' => null,
         ];
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     * @return array<int, array{
+     *   tenant_id:int,
+     *   tenant_name:string,
+     *   contract_id:int,
+     *   contract_number:?string,
+     *   starts_at:?string,
+     *   starts_at_label:?string
+     * }>
+     */
+    private function activeContractOverrideForSpaces(array $spaceIds, int $marketId): array
+    {
+        if ($spaceIds === [] || ! Schema::hasTable('tenant_contracts')) {
+            return [];
+        }
+
+        $query = TenantContract::query()
+            ->from('tenant_contracts as tc')
+            ->join('market_spaces as ms', function ($join): void {
+                $join->on('ms.id', '=', 'tc.market_space_id')
+                    ->on('ms.market_id', '=', 'tc.market_id');
+            })
+            ->leftJoin('tenants as t', function ($join): void {
+                $join->on('t.id', '=', 'tc.tenant_id')
+                    ->on('t.market_id', '=', 'tc.market_id');
+            })
+            ->where('tc.market_id', $marketId)
+            ->whereIn('tc.market_space_id', $spaceIds)
+            ->whereColumn('tc.tenant_id', '<>', 'ms.tenant_id');
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+            $query->where('tc.is_active', true);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $query->whereNotIn('tc.status', ['terminated', 'archived']);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('tc.starts_at')
+                    ->orWhere('tc.starts_at', '<=', now());
+            });
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('tc.ends_at')
+                    ->orWhere('tc.ends_at', '>', now());
+            });
+        }
+
+        $rows = $query
+            ->orderByDesc('tc.starts_at')
+            ->orderByDesc('tc.id')
+            ->get([
+                'tc.id as contract_id',
+                'tc.market_space_id as space_id',
+                'tc.tenant_id',
+                'tc.number as contract_number',
+                'tc.starts_at',
+                't.name as tenant_name',
+            ]);
+
+        $result = [];
+
+        foreach ($rows as $row) {
+            $spaceId = (int) ($row->space_id ?? 0);
+
+            if ($spaceId <= 0 || array_key_exists($spaceId, $result)) {
+                continue;
+            }
+
+            $startsAtRaw = $row->starts_at;
+            $startsAt = null;
+            $startsAtLabel = null;
+
+            if ($startsAtRaw instanceof \DateTimeInterface) {
+                $startsAt = $startsAtRaw->format('Y-m-d');
+                $startsAtLabel = $startsAtRaw->format('d.m.Y');
+            } elseif (filled($startsAtRaw)) {
+                $startsAt = (string) $startsAtRaw;
+
+                try {
+                    $startsAtLabel = (new \DateTimeImmutable($startsAt))->format('d.m.Y');
+                } catch (\Throwable) {
+                    $startsAtLabel = $startsAt;
+                }
+            }
+
+            $result[$spaceId] = [
+                'tenant_id' => (int) ($row->tenant_id ?? 0),
+                'tenant_name' => trim((string) ($row->tenant_name ?? '')),
+                'contract_id' => (int) ($row->contract_id ?? 0),
+                'contract_number' => filled($row->contract_number ?? null) ? (string) $row->contract_number : null,
+                'starts_at' => $startsAt,
+                'starts_at_label' => $startsAtLabel,
+            ];
+        }
+
+        return $result;
     }
 
     private function spaceLabel(MarketSpace $space): string
