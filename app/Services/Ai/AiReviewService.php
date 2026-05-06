@@ -200,7 +200,8 @@ class AiReviewService
             $safety = $this->validateSafety(
                 $parsed,
                 $pack['map_review_status'] ?? null,
-                $pack['debt_context']['debt_scope'] ?? null
+                $pack['debt_context']['debt_scope'] ?? null,
+                (bool) data_get($pack, 'tenant_context.contract_override.tenant_id')
             );
             if (! $safety['ok']) {
                 logger()->info('AI review safety violation', [
@@ -243,6 +244,10 @@ class AiReviewService
         $reviewerNote = trim((string) ($pack['reviewer_note'] ?? ''));
         $otherSpacesTotal = (int) ($pack['tenant_context']['other_spaces_total'] ?? 0);
         $contractContour = $pack['tenant_context']['contract_contour'] ?? [];
+        $contractOverride = $pack['tenant_context']['contract_override'] ?? null;
+        $hasContractOverride = is_array($contractOverride) && (int) ($contractOverride['tenant_id'] ?? 0) > 0;
+        $contractOverrideTenant = trim((string) ($contractOverride['tenant_name'] ?? ''));
+        $contractOverrideDate = trim((string) ($contractOverride['start_date'] ?? ''));
         $currentActiveContracts = (int) ($contractContour['active_current_total'] ?? 0);
         $historicalContracts = (int) ($contractContour['historical_total'] ?? 0);
         $relationContext = $pack['relation_context'] ?? [];
@@ -286,7 +291,17 @@ class AiReviewService
         ];
         $expectedLabel = $expectedLabels[$expected] ?? $expected;
 
-        $safetyRules = $debtScope === 'tenant_fallback'
+        $safetyRules = $hasContractOverride
+            ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (текущее место подтверждено договором):\n"
+              . "1. На текущем месте уже есть активный договор нового арендатора"
+              . ($contractOverrideTenant !== '' ? " {$contractOverrideTenant}" : '')
+              . ($contractOverrideDate !== '' ? " с даты {$contractOverrideDate}" : '')
+              . ".\n"
+              . "2. Старые начисления и долги прежнего арендатора считаются финансовым хвостом и не отменяют смену текущего арендатора места.\n"
+              . "3. recommended_next_step должен советовать сменить арендатора у текущего места по дате договора, а не искать другое каноническое место.\n"
+              . "4. Не предлагай переносить старые начисления и долги автоматически. Разрешено только предупредить о хвосте и необходимости ручной сверки финансов.\n"
+              . "5. risk_score должен быть >= 7, если в карточке места и договоре есть рассинхрон."
+            : ($debtScope === 'tenant_fallback'
             ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (точная связь с местом не подтверждена):\n"
               . "1. На карточке виден статус арендатора, а не подтверждённый статус этого места.\n"
               . "2. ЗАПРЕЩЕНО советовать подтверждать текущее место, менять его статус, уточнять номер/название или перепривязывать фигуру до выбора канонического места.\n"
@@ -307,11 +322,15 @@ class AiReviewService
                   . "5. Если данных недостаточно — добавь «требуется ручной review управляющим рынком»."
                 : "\n\nПРАВИЛА БЕЗОПАСНОСТИ:\n"
                   . "- Не предлагай действия, изменяющие данные, без достаточных данных.\n"
-                  . "- risk_score >= 7, если есть риски потери данных.");
+                  . "- risk_score >= 7, если есть риски потери данных."));
 
-        $recommendedExample = $debtScope === 'tenant_fallback'
-            ? '«Не подтверждать текущее место. Сравнить другие места арендатора в этом рынке, выбрать каноническое место и только после этого передать кейс на ручную проверку.»'
-            : '«Отметить конфликт по занятости и передать на ручную проверку управляющему рынком.»';
+        $recommendedExample = $hasContractOverride
+            ? '«Сменить арендатора у текущего места'
+              . ($contractOverrideDate !== '' ? ' с даты ' . $contractOverrideDate : ' с даты начала действия договора')
+              . '. Старые начисления и долги прежнего арендатора оставить как финансовый хвост и сверить отдельно.»'
+            : ($debtScope === 'tenant_fallback'
+                ? '«Не подтверждать текущее место. Сравнить другие места арендатора в этом рынке, выбрать каноническое место и только после этого передать кейс на ручную проверку.»'
+                : '«Отметить конфликт по занятости и передать на ручную проверку управляющему рынком.»');
         $reviewerNoteRule = $reviewerNote !== ''
             ? "\n- Если reviewer_note заполнен, считай его важным полевым сигналом ревизора: учитывай в summary/why_flagged/recommended_next_step, но не делай из заметки автоматический факт без проверки."
             : '';
@@ -571,7 +590,7 @@ PROMPT;
      *
      * @return array{ok: bool, error: string|null}
      */
-    private function validateSafety(array $parsed, ?string $mapReviewStatus, ?string $debtScope): array
+    private function validateSafety(array $parsed, ?string $mapReviewStatus, ?string $debtScope, bool $hasContractOverride = false): array
     {
         $recommendation = mb_strtolower($parsed['recommended_next_step'], 'UTF-8');
 
@@ -613,6 +632,28 @@ PROMPT;
         $expectedLabel = self::EXPECTED_RECOMMENDATION_LABELS[$expected] ?? null;
 
         // Принимается либо технический код, либо русская пользовательская формулировка
+        if ($hasContractOverride && $mapReviewStatus === 'changed_tenant') {
+            $mentionsTenantSwitch = str_contains($recommendation, 'сменить арендатора')
+                || str_contains($recommendation, 'новый арендатор')
+                || str_contains($recommendation, 'договор');
+
+            if (! $mentionsTenantSwitch) {
+                return [
+                    'ok'    => false,
+                    'error' => "Semantic mismatch: contract override requires tenant switch guidance, got '{$parsed['recommended_next_step']}'",
+                ];
+            }
+
+            if ($parsed['risk_score'] < 7) {
+                return [
+                    'ok'    => false,
+                    'error' => "Risk score too low for disputed status: {$parsed['risk_score']} < 7",
+                ];
+            }
+
+            return ['ok' => true, 'error' => null];
+        }
+
         $matchesExpected = $expected !== null && (
             str_contains($recommendation, $expected)
             || ($expectedLabel !== null && str_contains($recommendation, $expectedLabel))

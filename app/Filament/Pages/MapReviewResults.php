@@ -422,6 +422,14 @@ class MapReviewResults extends Page
      */
     private function buildAssessmentMeta(array $diagnostics): array
     {
+        if ((bool) ($diagnostics['current_place_confirmed_by_contract'] ?? false)) {
+            return [
+                'label' => 'Текущее место подтверждено договором',
+                'tone' => 'success',
+                'rank' => 5,
+            ];
+        }
+
         if ((bool) ($diagnostics['has_stronger_candidate'] ?? false)) {
             return [
                 'label' => 'Есть более сильный кандидат',
@@ -471,6 +479,24 @@ class MapReviewResults extends Page
             $reasonParts[] = 'По последнему решению: ' . $decisionLabel;
         } else {
             $reasonParts[] = 'По текущему состоянию места';
+        }
+
+        if ((bool) data_get($row, 'diagnostics.current_place_confirmed_by_contract', false)) {
+            $priorityScore += 12;
+
+            $contractTenant = trim((string) data_get($row, 'diagnostics.contract_override.tenant_name', ''));
+            $contractDate = trim((string) data_get($row, 'diagnostics.contract_override.starts_at_label', ''));
+            $contractReason = 'Текущее место подтверждено активным договором';
+
+            if ($contractTenant !== '') {
+                $contractReason .= ' для арендатора ' . $contractTenant;
+            }
+
+            if ($contractDate !== '') {
+                $contractReason .= ' с ' . $contractDate;
+            }
+
+            $reasonParts[] = $contractReason . '.';
         }
 
         if ($aiSummary && filled($aiSummary['summary'] ?? null)) {
