@@ -115,6 +115,7 @@ class SpaceReviewFlowTest extends TestCase
             'is_active' => true,
         ]);
         $user = $this->actingAsSuperAdmin((int) $market->id);
+        $user->forceFill(['name' => 'Review Admin'])->save();
 
         $space = $this->createSpace($market, [
             'tenant_id' => $tenant->id,
@@ -753,6 +754,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('data-mrr-attention-filter="space_identity_needs_clarification"', false)
             ->assertSee('data-mrr-attention-filter="tenant_changed_on_site"', false)
             ->assertSee('data-mrr-attention-filter="shape_not_found"', false)
+            ->assertSee('data-mrr-attention-search', false)
             // Проверяем наличие карточки с правильным data-mrr-decision
             ->assertSee('data-mrr-attention-card', false)
             ->assertSee('data-mrr-decision="space_identity_needs_clarification"', false)

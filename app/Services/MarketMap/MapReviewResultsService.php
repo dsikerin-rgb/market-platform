@@ -114,6 +114,8 @@ class MapReviewResultsService
      *   number:?string,
      *   display_name:?string,
      *   location_name:?string,
+     *   created_at:?string,
+     *   created_by_name:?string,
      *   review_status:?string,
      *   review_status_label:?string,
      *   reviewed_at:?string,
@@ -164,27 +166,42 @@ class MapReviewResultsService
         $reviewerIds = $spaces->pluck('map_reviewed_by')
             ->filter(fn ($id) => filled($id))
             ->map(fn ($id): int => (int) $id)
-            ->values()
+            ->values();
+        $creatorIds = $latestOperations->pluck('created_by')
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id): int => (int) $id)
+            ->values();
+        $userIds = $reviewerIds
+            ->merge($creatorIds)
+            ->unique()
             ->all();
 
         $reviewers = User::query()
-            ->whereIn('id', $reviewerIds)
+            ->whereIn('id', $userIds)
             ->pluck('name', 'id');
 
         return $spaces->map(function (MarketSpace $space) use ($latestOperations, $reviewers, $diagnostics): array {
             $operation = $latestOperations->get((int) $space->id);
             $payload = is_array($operation?->payload) ? $operation->payload : [];
             $decision = filled($payload['decision'] ?? null) ? (string) $payload['decision'] : null;
+            $reviewedAt = $space->map_reviewed_at?->format('d.m.Y H:i');
+            $reviewedByName = $space->map_reviewed_by ? (string) ($reviewers[(int) $space->map_reviewed_by] ?? '-') : null;
+            $createdAt = $operation?->created_at?->format('d.m.Y H:i') ?? $reviewedAt;
+            $createdByName = $operation?->created_by
+                ? (string) ($reviewers[(int) $operation->created_by] ?? '-')
+                : $reviewedByName;
 
             return [
                 'space_id' => (int) $space->id,
                 'number' => $space->number,
                 'display_name' => $space->display_name,
                 'location_name' => $space->location?->name,
+                'created_at' => $createdAt,
+                'created_by_name' => $createdByName,
                 'review_status' => $space->map_review_status,
                 'review_status_label' => $this->reviewStatusLabel($space->map_review_status),
-                'reviewed_at' => $space->map_reviewed_at?->format('d.m.Y H:i'),
-                'reviewed_by_name' => $space->map_reviewed_by ? (string) ($reviewers[(int) $space->map_reviewed_by] ?? '—') : null,
+                'reviewed_at' => $reviewedAt,
+                'reviewed_by_name' => $reviewedByName,
                 'decision' => $decision,
                 'decision_label' => $decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null,
                 'reason' => filled($payload['reason'] ?? null) ? trim((string) $payload['reason']) : null,
@@ -199,6 +216,8 @@ class MapReviewResultsService
      *   number:?string,
      *   display_name:?string,
      *   location_name:?string,
+     *   created_at:?string,
+     *   created_by_name:string,
      *   review_status:string,
      *   review_status_label:string,
      *   reviewed_at:null,
@@ -279,6 +298,8 @@ class MapReviewResultsService
                 'number' => $space->number,
                 'display_name' => $space->display_name,
                 'location_name' => $space->location?->name,
+                'created_at' => null,
+                'created_by_name' => 'Система',
                 'review_status' => 'unconfirmed_link',
                 'review_status_label' => $this->reviewStatusLabel('unconfirmed_link') ?? 'Связь с местом не подтверждена',
                 'reviewed_at' => null,
@@ -819,6 +840,8 @@ class MapReviewResultsService
                 'id',
                 'entity_id',
                 'effective_at',
+                'created_at',
+                'created_by',
                 'status',
                 'payload',
             ])

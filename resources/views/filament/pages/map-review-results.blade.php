@@ -304,6 +304,30 @@
                 margin-bottom: 0.9rem;
             }
 
+            .mrr-attention-search {
+                margin-bottom: 0.75rem;
+            }
+
+            .mrr-attention-search__input {
+                width: 100%;
+                border-radius: 0.875rem;
+                border: 1px solid rgba(148, 163, 184, 0.24);
+                background: rgba(255, 255, 255, 0.92);
+                padding: 0.72rem 0.9rem;
+                font-size: 0.88rem;
+                color: #0f172a;
+            }
+
+            .mrr-attention-search__input::placeholder {
+                color: #94a3b8;
+            }
+
+            .dark .mrr-attention-search__input {
+                border-color: rgba(148, 163, 184, 0.2);
+                background: rgba(15, 23, 42, 0.48);
+                color: #f8fafc;
+            }
+
             .mrr-attention-filter {
                 display: inline-flex;
                 align-items: center;
@@ -1764,6 +1788,15 @@
                                     <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="shape_not_found">Фигура не найдена</button>
                                     <span class="mrr-attention-filter-count" aria-live="polite"></span>
                                 </div>
+                                <div class="mrr-attention-search">
+                                    <input
+                                        type="search"
+                                        class="mrr-attention-search__input"
+                                        data-mrr-attention-search
+                                        placeholder="Поиск по месту, названию, локации, причине, автору"
+                                        autocomplete="off"
+                                    >
+                                </div>
                                 <div class="mrr-needs-list">
                                     @foreach ($needsAttention as $row)
                                         @php
@@ -1800,12 +1833,25 @@
                                                 $text = str_replace(array_keys($map), array_values($map), $text);
                                                 return $text;
                                             };
+                                            $searchText = trim(implode(' ', array_filter([
+                                                $row['number'] ?? null,
+                                                $row['display_name'] ?? null,
+                                                $row['location_name'] ?? null,
+                                                $row['review_status_label'] ?? null,
+                                                $row['decision_label'] ?? null,
+                                                $row['reason'] ?? null,
+                                                $row['created_by_name'] ?? null,
+                                                $row['created_at'] ?? null,
+                                                $row['reviewed_by_name'] ?? null,
+                                                $row['reviewed_at'] ?? null,
+                                            ], static fn ($value): bool => filled($value))));
                                         @endphp
 
-                                        <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}"
-                                                 data-mrr-attention-card
-                                                 data-mrr-review-status="{{ $row['review_status'] ?? '' }}"
-                                                 data-mrr-decision="{{ $row['decision'] ?? '' }}">
+                                         <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}"
+                                                  data-mrr-attention-card
+                                                  data-mrr-review-status="{{ $row['review_status'] ?? '' }}"
+                                                 data-mrr-decision="{{ $row['decision'] ?? '' }}"
+                                                 data-mrr-search="{{ \Illuminate\Support\Str::lower($searchText) }}">
                                             <summary>
                                                 <div class="mrr-needs-card__summary-main">
                                                     <div class="mrr-needs-card__summary-top">
@@ -1848,6 +1894,9 @@
                                                                 @if (filled($row['reason']))
                                                                     <div class="mrr-place__decision-reason">{{ $row['reason'] }}</div>
                                                                 @endif
+                                                                <div class="mrr-place__decision-meta">
+                                                                    Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
+                                                                </div>
                                                                 <div class="mrr-place__decision-meta">
                                                                     {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
                                                                 </div>
@@ -2656,8 +2705,12 @@
                 const attentionFilterButtons = Array.from(document.querySelectorAll('[data-mrr-attention-filter]'));
                 const attentionCards = Array.from(document.querySelectorAll('[data-mrr-attention-card]'));
                 const attentionFilterCount = document.querySelector('.mrr-attention-filter-count');
+                const attentionSearchInput = document.querySelector('[data-mrr-attention-search]');
 
                 if (attentionFilterButtons.length > 0 && attentionCards.length > 0) {
+                    let currentFilter = 'all';
+                    let currentSearch = '';
+
                     const updateFilterCount = () => {
                         const visibleCount = attentionCards.filter(card => !card.classList.contains('is-hidden')).length;
                         const totalCount = attentionCards.length;
@@ -2670,12 +2723,15 @@
                         }
                     };
 
-                    const applyFilter = (filterValue) => {
+                    const applyFilter = () => {
                         let visibleCount = 0;
 
                         attentionCards.forEach(card => {
                             const decision = String(card.dataset.mrrDecision || '').trim();
-                            const shouldShow = filterValue === 'all' || decision === filterValue;
+                            const haystack = String(card.dataset.mrrSearch || '').trim();
+                            const matchesFilter = currentFilter === 'all' || decision === currentFilter;
+                            const matchesSearch = currentSearch === '' || haystack.includes(currentSearch);
+                            const shouldShow = matchesFilter && matchesSearch;
 
                             if (shouldShow) {
                                 card.classList.remove('is-hidden');
@@ -2702,20 +2758,27 @@
                     };
 
                     // Инициализация: по умолчанию "all"
-                    applyFilter('all');
+                    applyFilter();
 
                     // Обработчики кликов
                     attentionFilterButtons.forEach(button => {
                         button.addEventListener('click', () => {
-                            const filterValue = String(button.dataset.mrrAttentionFilter || 'all').trim();
+                            currentFilter = String(button.dataset.mrrAttentionFilter || 'all').trim();
 
                             // Обновить активную кнопку
                             attentionFilterButtons.forEach(btn => btn.classList.remove('is-active'));
                             button.classList.add('is-active');
 
-                            applyFilter(filterValue);
+                            applyFilter();
                         });
                     });
+
+                    if (attentionSearchInput instanceof HTMLInputElement) {
+                        attentionSearchInput.addEventListener('input', () => {
+                            currentSearch = String(attentionSearchInput.value || '').trim().toLowerCase();
+                            applyFilter();
+                        });
+                    }
                 }
             })();
         </script>
