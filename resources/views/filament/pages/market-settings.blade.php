@@ -143,6 +143,16 @@
                                     </a>
                                 @endif
 
+                                @if (! empty($locationsUrl))
+                                    <a href="{{ $locationsUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-map-pin" class="h-5 w-5" /></div>
+                                        <div>
+                                            <p class="aw-link-title">Локации рынка</p>
+                                            <p class="aw-link-copy">Павильоны, этажи, сектора и другие физические зоны рынка.</p>
+                                        </div>
+                                    </a>
+                                @endif
+
                                 @if (! empty($tenantUrl))
                                     <a href="{{ $tenantUrl }}" class="aw-link-card">
                                         <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-user-group" class="h-5 w-5" /></div>
