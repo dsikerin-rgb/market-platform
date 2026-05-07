@@ -113,6 +113,7 @@ class MapReviewResultsService
      *   space_id:int,
      *   number:?string,
      *   display_name:?string,
+     *   current_tenant_name:?string,
      *   location_name:?string,
      *   created_at:?string,
      *   created_by_name:?string,
@@ -133,7 +134,7 @@ class MapReviewResultsService
         }
 
         $spaces = MarketSpace::query()
-            ->with(['location:id,name'])
+            ->with(['location:id,name', 'tenant:id,name'])
             ->where('market_id', $marketId)
             ->whereIn('map_review_status', ['changed_tenant', 'conflict', 'not_found'])
             ->when(
@@ -195,6 +196,7 @@ class MapReviewResultsService
                 'space_id' => (int) $space->id,
                 'number' => $space->number,
                 'display_name' => $space->display_name,
+                'current_tenant_name' => $space->tenant?->name,
                 'location_name' => $space->location?->name,
                 'created_at' => $createdAt,
                 'created_by_name' => $createdByName,
@@ -215,6 +217,7 @@ class MapReviewResultsService
      *   space_id:int,
      *   number:?string,
      *   display_name:?string,
+     *   current_tenant_name:?string,
      *   location_name:?string,
      *   created_at:?string,
      *   created_by_name:string,
@@ -249,7 +252,7 @@ class MapReviewResultsService
         }
 
         $spaces = MarketSpace::query()
-            ->with(['location:id,name'])
+            ->with(['location:id,name', 'tenant:id,name'])
             ->where('market_id', $marketId)
             ->whereIn('id', $spaceIds)
             ->whereNotNull('tenant_id')
@@ -297,6 +300,7 @@ class MapReviewResultsService
                 'space_id' => (int) $space->id,
                 'number' => $space->number,
                 'display_name' => $space->display_name,
+                'current_tenant_name' => $space->tenant?->name,
                 'location_name' => $space->location?->name,
                 'created_at' => null,
                 'created_by_name' => 'Система',
