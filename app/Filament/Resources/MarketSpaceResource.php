@@ -637,18 +637,10 @@ class MarketSpaceResource extends BaseResource
                                             return 'Для места в группе отображаемое имя ещё не заполнено. Его можно безопасно указать здесь один раз без ревизии.';
                                         }
 
-                                        $url = route('filament.admin.market-map', [
-                                            'mode' => 'review',
-                                            'market_space_id' => (int) $record->id,
-                                            'return_url' => request()->fullUrl(),
-                                        ]);
-
-                                        return new HtmlString(
-                                            '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:#2563eb;text-decoration:none;">Изменить через Карта → Ревизия</a>'
-                                        );
+                                        return 'Для существующего места используйте кнопку «Переименовать место» в шапке карточки. Меняется только видимое название.';
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Отображаемое имя места. После создания меняется только через режим "Карта -> Ревизия", кроме безопасного дозаполнения пустого имени у места в группе.')
+                                    ->hintIconTooltip('Отображаемое имя места. Для существующего места переименование делается отдельной кнопкой в шапке карточки.')
                                     ->nullable(),
 
                                 Forms\Components\Select::make('space_group_role')

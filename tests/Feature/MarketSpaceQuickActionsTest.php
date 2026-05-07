@@ -9,10 +9,12 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\OperationResource;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -122,6 +124,65 @@ class MarketSpaceQuickActionsTest extends TestCase
         $response->assertDontSee('Блокирующие');
         $response->assertDontSee('Архивные');
         $response->assertDontSee('Следующие шаги');
+    }
+
+    public function test_edit_page_can_rename_display_name_via_action_and_logs_operation(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '286',
+            'display_name' => 'Старое название',
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create();
+        $user->assignRole('super-admin');
+
+        $this->withSession(['filament.admin.selected_market_id' => $market->id]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(\App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->call('renameDisplayName', [
+                'display_name' => 'Новое видимое название',
+            ])
+            ->assertHasNoFormErrors();
+
+        $space->refresh();
+
+        $this->assertSame('Новое видимое название', $space->display_name);
+
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_ATTRS_CHANGE,
+            'status' => 'applied',
+        ]);
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_ATTRS_CHANGE)
+            ->where('status', 'applied')
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('Новое видимое название', data_get($operation?->payload, 'display_name'));
     }
 
 }
