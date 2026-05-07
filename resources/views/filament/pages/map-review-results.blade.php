@@ -1695,7 +1695,7 @@
                         <div>
                             <h1 class="aw-hero-heading">Результаты ревизии</h1>
                             <p class="aw-hero-subheading">
-                                Read-only сводка по карте и ревизионным решениям без захода в сырой журнал операций.
+                                Рабочий список спорных мест: проверьте карточку, примените безопасное исправление или зафиксируйте итог.
                             </p>
                         </div>
                     </div>
@@ -1845,6 +1845,39 @@
                                                 $row['reviewed_by_name'] ?? null,
                                                 $row['reviewed_at'] ?? null,
                                             ], static fn ($value): bool => filled($value))));
+
+                                            $decision = (string) ($row['decision'] ?? '');
+                                            $reviewStatus = (string) ($row['review_status'] ?? '');
+                                            $hasCandidates = $candidateSpaces !== [];
+                                            $isIdentityCase = $decision === 'space_identity_needs_clarification';
+                                            $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
+                                            $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
+                                            $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
+                                            $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
+                                            $showRelationAssessment = $contractOverride || $hasCandidates;
+
+                                            if ($isIdentityCase) {
+                                                $workflowTitle = 'Уточнить номер / название';
+                                                $workflowText = 'Проверьте реквизиты места и примените исправление прямо отсюда.';
+                                            } elseif ($isTenantCase && $contractOverride) {
+                                                $workflowTitle = 'Сменить арендатора по договору';
+                                                $workflowText = 'Договор подтверждает нового арендатора. Откройте место и выполните смену арендатора с даты договора.';
+                                            } elseif ($isTenantCase) {
+                                                $workflowTitle = 'Проверить арендатора';
+                                                $workflowText = 'Сравните фактического арендатора с карточкой места и договорными связями.';
+                                            } elseif ($isShapeCase) {
+                                                $workflowTitle = 'Проверить разметку на карте';
+                                                $workflowText = 'Нужно найти фигуру места на карте или зафиксировать, что разметки нет.';
+                                            } elseif ($hasCandidates) {
+                                                $workflowTitle = 'Разобрать возможный дубль';
+                                                $workflowText = 'Сравните текущее место с найденными местами того же арендатора.';
+                                            } elseif ($isConflictCase) {
+                                                $workflowTitle = 'Разобрать конфликт места';
+                                                $workflowText = 'Откройте место или карту, проверьте занятость и зафиксируйте решение.';
+                                            } else {
+                                                $workflowTitle = 'Проверить карточку';
+                                                $workflowText = 'Откройте место или карту и зафиксируйте итог проверки.';
+                                            }
                                         @endphp
 
                                          <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}"
@@ -1890,29 +1923,38 @@
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--main">
                                                         @if ($attentionTab !== 'unconfirmed_links')
                                                             <div class="mrr-place__decision">
-                                                                <div class="mrr-place__decision-label">{{ $row['decision_label'] ?? '—' }}</div>
-                                                                @if (filled($row['reason']))
-                                                                    <div class="mrr-place__decision-reason">{{ $row['reason'] }}</div>
-                                                                @endif
+                                                                <div class="mrr-place__decision-label">{{ $workflowTitle }}</div>
+                                                                <div class="mrr-place__decision-reason">{{ $workflowText }}</div>
                                                                 <div class="mrr-place__decision-meta">
                                                                     Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
                                                                 </div>
-                                                                <div class="mrr-place__decision-meta">
-                                                                    {{ $row['reviewed_by_name'] ?: '—' }} · {{ $row['reviewed_at'] ?: '—' }}
-                                                                </div>
                                                             </div>
-                                                            <button
-                                                                type="button"
-                                                                class="mrr-quick-launcher"
-                                                                data-mrr-quick-review-launcher
-                                                                data-mrr-space-id="{{ $row['space_id'] }}"
-                                                            >
-                                                                Быстрое решение
-                                                            </button>
                                                         @endif
                                                         <div class="mrr-links">
+                                                            @if ($attentionTab !== 'unconfirmed_links' && $isIdentityCase)
+                                                                <button
+                                                                    type="button"
+                                                                    class="mrr-link mrr-link--button"
+                                                                    data-mrr-identity-fix-open
+                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                    data-mrr-number="{{ $row['number'] ?? '' }}"
+                                                                    data-mrr-display-name="{{ $row['display_name'] ?? '' }}"
+                                                                >
+                                                                    Уточнить номер / название
+                                                                </button>
+                                                            @endif
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
                                                             <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                            @if ($attentionTab !== 'unconfirmed_links')
+                                                                <button
+                                                                    type="button"
+                                                                    class="mrr-link mrr-link--button"
+                                                                    data-mrr-quick-review-launcher
+                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                >
+                                                                    Зафиксировать итог
+                                                                </button>
+                                                            @endif
                                                         </div>
                                                     </div>
 
@@ -1929,7 +1971,7 @@
                                                                 </div>
                                                             </div>
 
-                                                            @if ($relationAssessment !== '')
+                                                            @if ($showRelationAssessment && $relationAssessment !== '')
                                                                 <span class="mrr-assessment mrr-assessment--{{ $row['assessment_tone'] ?? 'neutral' }}">
                                                                     {{ $row['assessment_label'] ?? 'Требует проверки' }}
                                                                 </span>
@@ -1937,11 +1979,11 @@
                                                             @endif
 
                                                             <details class="mrr-diagnostics__details">
-                                                                <summary>Показать подробности связей и кандидатов</summary>
+                                                                <summary>{{ $hasCandidates ? 'Показать связи и возможные дубли' : 'Показать связи места' }}</summary>
                                                                 <div class="mrr-diagnostics__details-body">
                                                                     @if ($candidateSpaces !== [])
                                                                         <div class="mrr-diagnostics__section">
-                                                                            <div class="mrr-diagnostics__section-title">Кандидаты того же арендатора</div>
+                                                                            <div class="mrr-diagnostics__section-title">Возможные дубли / места того же арендатора</div>
                                                                             <div class="mrr-diagnostics__candidates">
                                                                                 @foreach ($candidateSpaces as $candidate)
                                                                                     <div class="mrr-diagnostics__candidate">
@@ -1976,8 +2018,6 @@
                                                                                 @endforeach
                                                                             </div>
                                                                         </div>
-                                                                    @else
-                                                                        <div class="mrr-diagnostics__hint">Других активных мест этого арендатора не найдено.</div>
                                                                     @endif
                                                                 </div>
                                                             </details>
@@ -2199,6 +2239,40 @@
                     </div>
                 </div>
 
+                <div id="mrrIdentityFixModal" class="mrr-clarify-modal mrr-identity-fix-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-identity-fix-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrIdentityFixTitle"
+                        aria-describedby="mrrIdentityFixDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-identity-fix-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Уточнение места</div>
+                        <h3 id="mrrIdentityFixTitle" class="mrr-clarify-modal__title">Уточнить номер / название</h3>
+                        <p id="mrrIdentityFixDescription" class="mrr-clarify-modal__description">
+                            Изменяются только номер и/или видимое название текущего места. Договоры, начисления, арендатор, группа и карта не переносятся.
+                        </p>
+                        <div id="mrrIdentityFixError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrIdentityFixNumber">Номер места</label>
+                            <input id="mrrIdentityFixNumber" class="mrr-clarify-modal__input" type="text" maxlength="255">
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrIdentityFixDisplayName">Название для отображения</label>
+                            <input id="mrrIdentityFixDisplayName" class="mrr-clarify-modal__input" type="text" maxlength="255">
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-identity-fix-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-identity-fix-save>Применить</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="mrrQuickReviewModal" class="mrr-clarify-modal mrr-quick-review-modal" hidden aria-hidden="true">
                     <div class="mrr-clarify-modal__backdrop" data-mrr-quick-review-close></div>
                     <div
@@ -2209,10 +2283,10 @@
                         aria-describedby="mrrQuickReviewDescription"
                     >
                         <button type="button" class="mrr-clarify-modal__close" data-mrr-quick-review-close aria-label="Закрыть">×</button>
-                        <div class="mrr-clarify-modal__eyebrow">Быстрое решение</div>
-                        <h3 id="mrrQuickReviewTitle" class="mrr-clarify-modal__title">Выберите вариант решения</h3>
+                        <div class="mrr-clarify-modal__eyebrow">Итог проверки</div>
+                        <h3 id="mrrQuickReviewTitle" class="mrr-clarify-modal__title">Зафиксировать итог</h3>
                         <p id="mrrQuickReviewDescription" class="mrr-clarify-modal__description">
-                            Выберите ручное решение для истории ревизии. Оно не меняет данные места. Если у места нет фигуры на карте, это отдельный контекст, а не автоматическое решение.
+                            Запишите результат проверки. Часть вариантов только закрывает наблюдение, а подтверждение свободного места меняет статус места.
                         </p>
                         <div id="mrrQuickReviewError" class="mrr-clarify-modal__error" aria-live="polite"></div>
 
@@ -2272,6 +2346,11 @@
                 const quickReviewSave = quickReviewModal?.querySelector('[data-mrr-quick-review-save]');
                 const quickReviewChoiceButtons = Array.from(document.querySelectorAll('[data-mrr-quick-review-choice]'));
                 const quickReviewHintBlocks = Array.from(document.querySelectorAll('[data-mrr-quick-review-hint]'));
+                const identityFixModal = document.getElementById('mrrIdentityFixModal');
+                const identityFixNumber = document.getElementById('mrrIdentityFixNumber');
+                const identityFixDisplayName = document.getElementById('mrrIdentityFixDisplayName');
+                const identityFixError = document.getElementById('mrrIdentityFixError');
+                const identityFixSave = identityFixModal?.querySelector('[data-mrr-identity-fix-save]');
                 const modal = document.getElementById('mrrDuplicatePlanModal');
                 const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
@@ -2288,6 +2367,11 @@
                     label: '',
                     reasonRequired: false,
                     spaceId: 0,
+                };
+                const identityFixState = {
+                    spaceId: 0,
+                    originalNumber: '',
+                    originalDisplayName: '',
                 };
 
                 if (
@@ -2436,8 +2520,8 @@
                     quickReviewState.label = '';
                     quickReviewState.reasonRequired = false;
 
-                    quickReviewTitle.textContent = 'Выберите вариант решения';
-                    quickReviewDescription.textContent = 'Выберите ручное решение для истории ревизии. Некоторые варианты только фиксируют наблюдение, а варианты подтверждения применяют безопасное изменение к месту.';
+                    quickReviewTitle.textContent = 'Зафиксировать итог';
+                    quickReviewDescription.textContent = 'Запишите результат проверки. Часть вариантов только закрывает наблюдение, а подтверждение свободного места меняет статус места.';
                     quickReviewReason.value = '';
                     quickReviewReason.required = false;
                     quickReviewError.textContent = '';
@@ -2564,6 +2648,107 @@
                     window.setTimeout(() => quickReviewReason.focus(), 0);
                 };
 
+                const openIdentityFixModal = (button) => {
+                    if (!identityFixModal || !identityFixNumber || !identityFixDisplayName || !identityFixError || !identityFixSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        return;
+                    }
+
+                    identityFixState.spaceId = spaceId;
+                    identityFixState.originalNumber = String(button.dataset.mrrNumber || '').trim();
+                    identityFixState.originalDisplayName = String(button.dataset.mrrDisplayName || '').trim();
+                    identityFixNumber.value = identityFixState.originalNumber;
+                    identityFixDisplayName.value = identityFixState.originalDisplayName;
+                    identityFixError.textContent = '';
+                    identityFixSave.removeAttribute('disabled');
+                    identityFixSave.textContent = 'Применить';
+
+                    identityFixModal.hidden = false;
+                    identityFixModal.classList.add('is-open');
+                    identityFixModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => identityFixNumber.focus(), 0);
+                };
+
+                const closeIdentityFixModal = () => {
+                    if (!identityFixModal || !identityFixNumber || !identityFixDisplayName || !identityFixError || !identityFixSave) {
+                        return;
+                    }
+
+                    identityFixModal.classList.remove('is-open');
+                    identityFixModal.hidden = true;
+                    identityFixModal.setAttribute('aria-hidden', 'true');
+                    identityFixState.spaceId = 0;
+                    identityFixState.originalNumber = '';
+                    identityFixState.originalDisplayName = '';
+                    identityFixNumber.value = '';
+                    identityFixDisplayName.value = '';
+                    identityFixError.textContent = '';
+                    identityFixSave.removeAttribute('disabled');
+                    identityFixSave.textContent = 'Применить';
+                };
+
+                const sendIdentityFix = async () => {
+                    if (!identityFixModal || !identityFixNumber || !identityFixDisplayName || !identityFixError || !identityFixSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(identityFixState.spaceId || 0);
+                    const number = String(identityFixNumber.value || '').trim();
+                    const displayName = String(identityFixDisplayName.value || '').trim();
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        identityFixError.textContent = 'Не удалось определить место для изменения.';
+                        return;
+                    }
+
+                    if (!number && !displayName) {
+                        identityFixError.textContent = 'Укажите номер или название места.';
+                        identityFixNumber.focus();
+                        return;
+                    }
+
+                    if (number === identityFixState.originalNumber && displayName === identityFixState.originalDisplayName) {
+                        identityFixError.textContent = 'Значения не изменились.';
+                        return;
+                    }
+
+                    identityFixSave.setAttribute('disabled', 'disabled');
+                    identityFixSave.textContent = 'Применяем...';
+                    identityFixError.textContent = '';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision: 'fix_space_identity',
+                            market_space_id: spaceId,
+                            ...(number ? { number } : {}),
+                            ...(displayName ? { display_name: displayName } : {}),
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        identityFixSave.removeAttribute('disabled');
+                        identityFixSave.textContent = 'Применить';
+                        identityFixError.textContent = String(data?.message || 'Не удалось применить изменение.');
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
                 const createDuplicateReviewOperation = async () => {
                     const currentSpaceId = Number(modal.dataset.currentSpaceId || 0);
                     const candidateSpaceId = Number(modal.dataset.candidateSpaceId || 0);
@@ -2643,6 +2828,16 @@
                         ? event.target.closest('[data-mrr-quick-review-launcher]')
                         : null;
 
+                    const identityFixLauncher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-identity-fix-open]')
+                        : null;
+
+                    if (identityFixLauncher && identityFixLauncher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openIdentityFixModal(identityFixLauncher);
+                        return;
+                    }
+
                     if (launcher && launcher instanceof HTMLElement) {
                         event.preventDefault();
                         openQuickReviewModal(launcher);
@@ -2663,12 +2858,16 @@
 
                 window.addEventListener('keydown', (event) => {
                     const quickOpen = quickReviewModal?.classList.contains('is-open');
-                    if (!modal.classList.contains('is-open') && !quickOpen) {
+                    const identityOpen = identityFixModal?.classList.contains('is-open');
+                    if (!modal.classList.contains('is-open') && !quickOpen && !identityOpen) {
                         return;
                     }
 
                     if (event.key === 'Escape') {
                         event.preventDefault();
+                        if (identityOpen) {
+                            closeIdentityFixModal();
+                        }
                         if (quickOpen) {
                             closeQuickReviewModal();
                         }
@@ -2696,6 +2895,31 @@
                                 quickReviewSave.removeAttribute('disabled');
                                 quickReviewSave.textContent = 'Сохранить';
                                 quickReviewError.textContent = String(errorInstance?.message || errorInstance);
+                            });
+                        }
+                    });
+                }
+
+                if (identityFixModal && identityFixSave) {
+                    identityFixModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-identity-fix-close')) {
+                            event.preventDefault();
+                            closeIdentityFixModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-identity-fix-save')) {
+                            event.preventDefault();
+                            sendIdentityFix().catch((errorInstance) => {
+                                identityFixSave.removeAttribute('disabled');
+                                identityFixSave.textContent = 'Применить';
+                                if (identityFixError) {
+                                    identityFixError.textContent = String(errorInstance?.message || errorInstance);
+                                }
                             });
                         }
                     });
