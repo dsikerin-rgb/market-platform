@@ -3102,7 +3102,7 @@
                         return;
                     }
 
-                    await sendContractTenantSwitch();
+                    await sendContractTenantSwitch({ throwOnError: true });
                 };
 
                 const closeContractTenantSwitchModal = () => {
@@ -3127,7 +3127,7 @@
                     contractTenantSwitchSave.textContent = 'Запланировать смену';
                 };
 
-                const sendContractTenantSwitch = async () => {
+                const sendContractTenantSwitch = async (options = {}) => {
                     if (!contractTenantSwitchModal || !contractTenantSwitchTenant || !contractTenantSwitchContract || !contractTenantSwitchEffectiveDate || !contractTenantSwitchReason || !contractTenantSwitchError || !contractTenantSwitchSave) {
                         return;
                     }
@@ -3174,10 +3174,18 @@
                     if (!response.ok || !data?.ok) {
                         contractTenantSwitchSave.removeAttribute('disabled');
                         contractTenantSwitchSave.textContent = 'Запланировать смену';
-                        contractTenantSwitchError.textContent = String(data?.message || 'Не удалось запланировать смену арендатора.');
+                        const message = String(data?.message || 'Не удалось запланировать смену арендатора.');
+                        contractTenantSwitchError.textContent = message;
+
+                        if (options?.throwOnError) {
+                            throw new Error(message);
+                        }
+
                         return;
                     }
 
+                    // Закрываем модалку перед перезагрузкой
+                    closeContractTenantSwitchModal();
                     window.location.reload();
                 };
 

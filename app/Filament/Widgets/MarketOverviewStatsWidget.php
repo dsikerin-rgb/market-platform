@@ -7,6 +7,8 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MarketResource;
 use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\IntegrationExchangeResource;
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
@@ -30,6 +32,15 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
     protected ?string $pollingInterval = null;
 
     protected ?string $heading = 'Показатели рынка';
+
+    protected string $view = 'filament.widgets.market-overview-stats-widget';
+
+    public ?string $formulaModal = null;
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected array $financialContext = [];
 
     protected function getStats(): array
     {
@@ -81,6 +92,21 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $accrued = $financialSummary['accrued'];
         $paid = $financialSummary['paid'];
         $debt = $financialSummary['debt'];
+
+        $this->financialContext = [
+            'marketId' => $marketId,
+            'marketName' => (string) ($market?->name ?? ''),
+            'monthYm' => $monthYm,
+            'monthLabel' => $monthLabel,
+            'monthStart' => $monthStart,
+            'monthEnd' => $monthEnd,
+            'source' => (string) $financialSummary['source'],
+            'rows' => $reportRows,
+            'accrued' => $accrued ?? 0.0,
+            'paid' => $paid ?? 0.0,
+            'debt' => $debt ?? (($accrued ?? 0.0) - ($paid ?? 0.0)),
+            'isExplicitMonth' => (bool) session('dashboard_month_explicit'),
+        ];
 
         $tenantsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
@@ -168,6 +194,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             url: null,
             color: 'primary',
             icon: 'heroicon-o-banknotes',
+            modalKey: 'accrued',
         );
         $stats[] = $this->makeStat(
             label: 'Оплачено за месяц',
@@ -176,6 +203,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             url: null,
             color: 'success',
             icon: 'heroicon-o-arrow-down-circle',
+            modalKey: 'paid',
         );
         $stats[] = $this->makeStat(
             label: 'Долг на конец месяца',
@@ -184,6 +212,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             url: null,
             color: $debtValue > 0 ? 'danger' : 'success',
             icon: 'heroicon-o-scale',
+            modalKey: 'debt',
         );
 
         return $stats;
@@ -212,9 +241,9 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat('Занято мест', 0, $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободно мест', 0, $note, null, 'warning', 'heroicon-o-sparkles');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
-        $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
-        $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
-        $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
+        $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes', 'accrued');
+        $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle', 'paid');
+        $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale', 'debt');
 
         return $stats;
     }
@@ -226,6 +255,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         ?string $url = null,
         string|array|null $color = null,
         ?string $icon = null,
+        ?string $modalKey = null,
     ): Stat {
         $stat = Stat::make($label, is_int($value) ? number_format($value, 0, ',', ' ') : $value);
 
@@ -254,7 +284,125 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             }
         }
 
+        if (filled($modalKey)) {
+            $stat->extraAttributes([
+                'class' => 'cursor-pointer transition hover:shadow-sm hover:bg-gray-50 dark:hover:bg-white/5',
+                'role' => 'button',
+                'tabindex' => '0',
+                'title' => 'Показать формулу расчёта',
+                'wire:click' => "openFormulaModal('{$modalKey}')",
+                'wire:keydown.enter.prevent' => "openFormulaModal('{$modalKey}')",
+                'wire:keydown.space.prevent' => "openFormulaModal('{$modalKey}')",
+            ]);
+        }
+
         return $stat;
+    }
+
+    public function openFormulaModal(string $metric): void
+    {
+        if (! in_array($metric, ['accrued', 'paid', 'debt'], true)) {
+            return;
+        }
+
+        $this->formulaModal = $metric;
+    }
+
+    public function closeFormulaModal(): void
+    {
+        $this->formulaModal = null;
+    }
+
+    /**
+     * @return array{
+     *     title: string,
+     *     intro: string,
+     *     formula: array<int, string>,
+     *     links: array<int, array{label: string, url: string, description: string}>,
+     *     footer: string
+     * }|null
+     */
+    public function getFormulaModalData(): ?array
+    {
+        if (! filled($this->formulaModal) || $this->financialContext === []) {
+            return null;
+        }
+
+        $metric = (string) $this->formulaModal;
+        $context = $this->financialContext;
+
+        $monthYm = (string) ($context['monthYm'] ?? '');
+        $monthLabel = (string) ($context['monthLabel'] ?? $monthYm);
+        $monthStart = $context['monthStart'] ?? null;
+
+        $monthStartDate = $monthStart instanceof CarbonImmutable
+            ? $monthStart->toDateString()
+            : ($monthYm !== '' ? $monthYm . '-01' : '');
+
+        $definitions = [
+            'accrued' => [
+                'title' => 'Начислено за месяц',
+                'intro' => 'Сумма начислений берётся из текущего снимка contract_debts за выбранный месяц.',
+                'formula' => [
+                    'Берём `ContractDebt::currentStateQuery($marketId)`.',
+                    'Фильтруем строки по `period = ' . $monthYm . '`.',
+                    'Суммируем поле `accrued_amount`.',
+                ],
+            ],
+            'paid' => [
+                'title' => 'Оплачено за месяц',
+                'intro' => 'Сумма оплат берётся из того же текущего снимка contract_debts за выбранный месяц.',
+                'formula' => [
+                    'Берём `ContractDebt::currentStateQuery($marketId)`.',
+                    'Фильтруем строки по `period = ' . $monthYm . '`.',
+                    'Суммируем поле `paid_amount`.',
+                ],
+            ],
+            'debt' => [
+                'title' => 'Долг на конец месяца',
+                'intro' => 'Сумма долга берётся из текущего снимка contract_debts за выбранный месяц.',
+                'formula' => [
+                    'Берём `ContractDebt::currentStateQuery($marketId)`.',
+                    'Фильтруем строки по `period = ' . $monthYm . '`.',
+                    'Суммируем поле `debt_amount`.',
+                ],
+            ],
+        ];
+
+        if (! isset($definitions[$metric])) {
+            return null;
+        }
+
+        $links = [
+            [
+                'label' => 'Открыть обмены 1С по долгам',
+                'url' => IntegrationExchangeResource::getUrl('index', [
+                    'tableFilters' => [
+                        'entity_type' => ['value' => 'contract_debts'],
+                        'direction' => ['value' => 'in'],
+                    ],
+                ]),
+                'description' => 'Показывает входящие обмены, из которых обновляются долговые снимки.',
+            ],
+            [
+                'label' => 'Открыть начисления за месяц',
+                'url' => TenantAccrualResource::getUrl('index', [
+                    'tab' => 'one_c',
+                    'tableFilters' => [
+                        'period' => ['value' => $monthStartDate],
+                    ],
+                ]),
+                'description' => 'Показывает начисления 1С за выбранный месяц.',
+            ],
+        ];
+
+        return [
+            'title' => $definitions[$metric]['title'],
+            'intro' => $definitions[$metric]['intro'] . ' Выбранный месяц: ' . $monthLabel . ((bool) ($context['isExplicitMonth'] ?? false) ? ' (вручную)' : ' (авто по последним данным)'),
+            'formula' => $definitions[$metric]['formula'],
+            'links' => $links,
+            'footer' => 'Если начисления из /api/1c/accruals не приходят, карточка всё равно может показывать месяц из contract_debts. Это отдельный источник данных.',
+        ];
     }
 
     private function appendQueryString(string $url, array $query): string

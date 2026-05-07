@@ -2405,6 +2405,23 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $closeReviewOnEffectiveAt = true;
         $applyReviewNow = $effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'));
 
+        if ($applyReviewNow && (int) $space->effectiveTenantId() === (int) $targetTenant->id) {
+            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
+
+            return response()->json([
+                'ok' => true,
+                'mode' => 'tenant_switch_already_current',
+                'operation' => null,
+                'item' => [
+                    'market_space_id' => (int) $space->id,
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                ],
+                'progress' => $buildMapReviewProgress($market),
+            ]);
+        }
+
         try {
             $operation = app(TenantSwitchPlanner::class)->plan(
                 $space,
@@ -2413,6 +2430,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 implode('. ', $reasonParts),
                 Filament::auth()->id(),
                 $closeReviewOnEffectiveAt,
+                true,
             );
         } catch (ValidationException $exception) {
             return response()->json([

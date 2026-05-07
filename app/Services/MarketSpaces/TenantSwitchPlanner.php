@@ -21,6 +21,7 @@ final class TenantSwitchPlanner
         ?string $reason = null,
         ?int $createdBy = null,
         bool $closeReviewOnEffectiveAt = false,
+        bool $allowInactiveTargetTenant = false,
     ): Operation {
         $space = $space->fresh(['tenant', 'spaceGroupParent.tenant']);
 
@@ -30,7 +31,7 @@ final class TenantSwitchPlanner
             ]);
         }
 
-        $this->assertTargetTenant($space, $targetTenant);
+        $this->assertTargetTenant($space, $targetTenant, $allowInactiveTargetTenant);
 
         $effectiveTenantId = $space->effectiveTenantId();
         if ($effectiveTenantId !== null && $effectiveTenantId === (int) $targetTenant->getKey()) {
@@ -75,7 +76,7 @@ final class TenantSwitchPlanner
         ]);
     }
 
-    private function assertTargetTenant(MarketSpace $space, Tenant $targetTenant): void
+    private function assertTargetTenant(MarketSpace $space, Tenant $targetTenant, bool $allowInactiveTargetTenant = false): void
     {
         if (! $targetTenant->exists) {
             throw ValidationException::withMessages([
@@ -89,7 +90,7 @@ final class TenantSwitchPlanner
             ]);
         }
 
-        if (! (bool) $targetTenant->is_active) {
+        if (! $allowInactiveTargetTenant && ! (bool) $targetTenant->is_active) {
             throw ValidationException::withMessages([
                 'target_tenant_id' => 'Нельзя запланировать смену на неактивного арендатора.',
             ]);
