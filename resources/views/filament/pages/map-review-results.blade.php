@@ -114,6 +114,109 @@
                 color: #64748b;
             }
 
+            .mrr-place__decision-swap {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+                gap: 0.5rem;
+                align-items: center;
+                margin-top: 0.45rem;
+                padding: 0.65rem 0.7rem;
+                border-radius: 0.75rem;
+                background: rgba(255, 255, 255, 0.75);
+                border: 1px solid rgba(37, 99, 235, 0.12);
+            }
+
+            .dark .mrr-place__decision-swap {
+                background: rgba(15, 23, 42, 0.45);
+                border-color: rgba(96, 165, 250, 0.22);
+            }
+
+            .mrr-place__decision-side {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 0.18rem;
+            }
+
+            .mrr-place__decision-side-label {
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .dark .mrr-place__decision-side-label {
+                color: #94a3b8;
+            }
+
+            .mrr-place__decision-side-value {
+                font-size: 0.96rem;
+                font-weight: 800;
+                line-height: 1.2;
+                color: #0f172a;
+                word-break: break-word;
+            }
+
+            .dark .mrr-place__decision-side-value {
+                color: #f8fafc;
+            }
+
+            .mrr-place__decision-side-value--target {
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-place__decision-side-value--target {
+                color: #93c5fd;
+            }
+
+            .mrr-place__decision-arrow {
+                font-size: 1.25rem;
+                font-weight: 900;
+                line-height: 1;
+                color: #2563eb;
+            }
+
+            .dark .mrr-place__decision-arrow {
+                color: #93c5fd;
+            }
+
+            .mrr-place__decision-facts {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                margin-top: 0.45rem;
+            }
+
+            .mrr-place__decision-fact {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.2rem;
+                padding: 0.22rem 0.5rem;
+                border-radius: 999px;
+                background: rgba(239, 246, 255, 0.9);
+                border: 1px solid rgba(37, 99, 235, 0.12);
+                font-size: 0.72rem;
+                color: #1e3a8a;
+            }
+
+            .dark .mrr-place__decision-fact {
+                background: rgba(30, 64, 175, 0.18);
+                border-color: rgba(96, 165, 250, 0.24);
+                color: #bfdbfe;
+            }
+
+            .mrr-place__decision-hint {
+                margin-top: 0.4rem;
+                font-size: 0.74rem;
+                line-height: 1.35;
+                color: #475569;
+            }
+
+            .dark .mrr-place__decision-hint {
+                color: #cbd5e1;
+            }
+
             .mrr-table--needs th:nth-child(1) {
                 width: 24%;
             }
@@ -1910,6 +2013,10 @@
                                             $hasCandidates = $candidateSpaces !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
                                             $isContractTenantOverride = $contractOverride !== null;
+                                            $currentTenantName = trim((string) ($row['current_tenant_name'] ?? ''));
+                                            $targetTenantName = trim((string) ($contractOverride['tenant_name'] ?? ''));
+                                            $contractEffectiveDateLabel = trim((string) (($contractOverride['starts_at_label'] ?? null) ?: ($contractOverride['starts_at'] ?? '')));
+                                            $contractNumberLabel = trim((string) ($contractOverride['contract_number'] ?? ''));
                                             $isIdentityCase = $decision === 'space_identity_needs_clarification' && ! $isContractTenantOverride;
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
@@ -1922,8 +2029,8 @@
                                                 $workflowTitle = 'Упразднить и связать с основным местом';
                                                 $workflowText = 'Старое место останется в истории, текущая карта и занятость перейдут к основному месту с указанной даты.';
                                             } elseif ($isContractTenantOverride) {
-                                                $workflowTitle = 'Сменить арендатора по договору';
-                                                $workflowText = 'Договор подтверждает нового арендатора. Откройте место и выполните смену арендатора с даты договора.';
+                                                $workflowTitle = 'Подтвердить смену арендатора';
+                                                $workflowText = 'Новый арендатор уже найден по договору. Нужно только подтвердить смену.';
                                             } elseif ($isIdentityCase) {
                                                 $workflowTitle = 'Уточнить номер / название';
                                                 $workflowText = 'Проверьте реквизиты места и примените исправление прямо отсюда.';
@@ -1990,6 +2097,30 @@
                                                             <div class="mrr-place__decision">
                                                                 <div class="mrr-place__decision-label">{{ $workflowTitle }}</div>
                                                                 <div class="mrr-place__decision-reason">{{ $workflowText }}</div>
+                                                                @if ($isContractTenantOverride)
+                                                                    <div class="mrr-place__decision-swap">
+                                                                        <div class="mrr-place__decision-side">
+                                                                            <div class="mrr-place__decision-side-label">Было</div>
+                                                                            <div class="mrr-place__decision-side-value">{{ $currentTenantName !== '' ? $currentTenantName : 'Арендатор не указан' }}</div>
+                                                                        </div>
+                                                                        <div class="mrr-place__decision-arrow" aria-hidden="true">→</div>
+                                                                        <div class="mrr-place__decision-side">
+                                                                            <div class="mrr-place__decision-side-label">Станет</div>
+                                                                            <div class="mrr-place__decision-side-value mrr-place__decision-side-value--target">{{ $targetTenantName !== '' ? $targetTenantName : 'Новый арендатор найден' }}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="mrr-place__decision-facts">
+                                                                        @if ($contractEffectiveDateLabel !== '')
+                                                                            <span class="mrr-place__decision-fact">С даты: {{ $contractEffectiveDateLabel }}</span>
+                                                                        @endif
+                                                                        @if ($contractNumberLabel !== '')
+                                                                            <span class="mrr-place__decision-fact">Договор: {{ $contractNumberLabel }}</span>
+                                                                        @endif
+                                                                    </div>
+                                                                    <div class="mrr-place__decision-hint">
+                                                                        Смена арендатора уже подтверждена договором. После подтверждения система просто зафиксирует её на месте.
+                                                                    </div>
+                                                                @endif
                                                                 <div class="mrr-place__decision-meta">
                                                                     Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
                                                                 </div>
@@ -2006,6 +2137,7 @@
                             class="mrr-link mrr-link--button mrr-link--primary"
                             data-mrr-contract-tenant-switch-apply
                             data-mrr-space-id="{{ $row['space_id'] }}"
+                            data-mrr-current-tenant-name="{{ $currentTenantName }}"
                             data-mrr-tenant-id="{{ (int) ($contractOverride['tenant_id'] ?? 0) }}"
                             data-mrr-tenant-name="{{ $contractOverride['tenant_name'] ?? '' }}"
                             data-mrr-contract-id="{{ (int) ($contractOverride['contract_id'] ?? 0) }}"
@@ -2013,19 +2145,6 @@
                             data-mrr-effective-date="{{ $contractOverride['starts_at'] ?? '' }}"
                         >
                             Подтвердить смену
-                        </button>
-                        <button
-                            type="button"
-                            class="mrr-link mrr-link--button"
-                            data-mrr-contract-tenant-switch-open
-                            data-mrr-space-id="{{ $row['space_id'] }}"
-                            data-mrr-tenant-id="{{ (int) ($contractOverride['tenant_id'] ?? 0) }}"
-                            data-mrr-tenant-name="{{ $contractOverride['tenant_name'] ?? '' }}"
-                            data-mrr-contract-id="{{ (int) ($contractOverride['contract_id'] ?? 0) }}"
-                            data-mrr-contract-number="{{ $contractOverride['contract_number'] ?? '' }}"
-                            data-mrr-effective-date="{{ $contractOverride['starts_at'] ?? '' }}"
-                        >
-                            Изменить дату
                         </button>
                     @endif
                                                                         @if ($isIdentityCase)
@@ -2448,9 +2567,9 @@
                     >
                         <button type="button" class="mrr-clarify-modal__close" data-mrr-contract-tenant-switch-close aria-label="Закрыть">×</button>
                         <div class="mrr-clarify-modal__eyebrow">Смена арендатора</div>
-                        <h3 id="mrrContractTenantSwitchTitle" class="mrr-clarify-modal__title">Сменить арендатора по договору</h3>
+                        <h3 id="mrrContractTenantSwitchTitle" class="mrr-clarify-modal__title">Подтвердить смену арендатора</h3>
                         <p id="mrrContractTenantSwitchDescription" class="mrr-clarify-modal__description">
-                            Договор уже указывает нового арендатора и дату действия. Система создаст операцию смены арендатора, старые начисления и долги останутся на прежнем арендаторе.
+                            Новый арендатор уже найден по договору. Проверьте дату действия и подтвердите смену. Старые начисления и долги останутся на прежнем арендаторе.
                         </p>
                         <div id="mrrContractTenantSwitchError" class="mrr-clarify-modal__error" aria-live="polite"></div>
 
@@ -2925,6 +3044,7 @@
                     contractTenantSwitchState.spaceId = spaceId;
                     contractTenantSwitchState.tenantId = tenantId;
                     contractTenantSwitchState.contractId = Number.isFinite(contractId) && contractId > 0 ? contractId : 0;
+                    contractTenantSwitchState.currentTenantName = String(button.dataset.mrrCurrentTenantName || '').trim();
                     contractTenantSwitchState.tenantName = String(button.dataset.mrrTenantName || '').trim();
                     contractTenantSwitchState.contractNumber = String(button.dataset.mrrContractNumber || '').trim();
 
@@ -2959,15 +3079,21 @@
                     }
 
                     const effectiveDate = String(contractTenantSwitchEffectiveDate.value || '').trim();
+                    const currentTenantName = contractTenantSwitchState.currentTenantName || 'текущий арендатор';
                     const tenantName = contractTenantSwitchState.tenantName || contractTenantSwitchTenant.value || 'арендатора';
                     const contractNumber = contractTenantSwitchState.contractNumber || contractTenantSwitchContract.value || 'договор';
                     const summaryParts = [
-                        `Подтвердить смену арендатора на ${tenantName}?`,
-                        `Договор: ${contractNumber}.`,
-                        effectiveDate ? `Дата начала: ${effectiveDate}.` : 'Дата начала будет указана в деталях.',
+                        'По данным договора произошла смена арендатора.',
+                        '',
+                        `Было: ${currentTenantName}`,
+                        `Станет: ${tenantName}`,
+                        effectiveDate ? `С даты: ${effectiveDate}` : 'С даты: нужно указать',
+                        `Основание: ${contractNumber}`,
+                        '',
+                        'Подтвердить смену?',
                     ];
 
-                    if (!window.confirm(summaryParts.join(' '))) {
+                    if (!window.confirm(summaryParts.join('\n'))) {
                         return;
                     }
 

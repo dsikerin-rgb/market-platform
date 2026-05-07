@@ -169,11 +169,15 @@ class MapReviewContractOverrideTest extends TestCase
         ]);
 
         Livewire::test(MapReviewResults::class)
-            ->assertSee('Текущее место подтверждено договором', false)
+            ->assertSee('Подтвердить смену арендатора', false)
+            ->assertSee('Было', false)
+            ->assertSee('Станет', false)
+            ->assertSee('Баходурзода Сорбон ИП', false)
+            ->assertSee('НИЁЗОВ РИЗВОНШОХ Баходурович ИП', false)
             ->assertSee('01.05.2026', false)
-            ->assertSee('финансовым хвостом', false)
+            ->assertSee('Ф/К-1 от 01.01.2026', false)
             ->assertSee('Подтвердить смену', false)
-            ->assertSee('Изменить дату', false);
+            ->assertDontSee('Изменить дату', false);
     }
 
     public function test_contract_override_takes_priority_over_identity_clarification_action(): void
@@ -234,7 +238,7 @@ class MapReviewContractOverrideTest extends TestCase
         ]);
 
         Livewire::test(MapReviewResults::class)
-            ->assertSee('Сменить арендатора по договору', false)
+            ->assertSee('Подтвердить смену арендатора', false)
             ->assertSee('Подтвердить смену', false);
     }
 
