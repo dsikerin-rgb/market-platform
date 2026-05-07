@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domain\Operations\OperationType;
+use App\Domain\Operations\SpaceReviewDecision;
 use App\Filament\Pages\MapReviewResults;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
@@ -52,6 +55,13 @@ class MapReviewContractOverrideTest extends TestCase
         $this->actingAs($user, 'filament');
 
         return $user;
+    }
+
+    private function withCsrfToken(): self
+    {
+        return $this->withHeaders([
+            'X-CSRF-TOKEN' => csrf_token(),
+        ]);
     }
 
     public function test_review_results_service_marks_current_place_confirmed_by_direct_contract_with_effective_date(): void
@@ -161,6 +171,218 @@ class MapReviewContractOverrideTest extends TestCase
         Livewire::test(MapReviewResults::class)
             ->assertSee('Текущее место подтверждено договором', false)
             ->assertSee('01.05.2026', false)
-            ->assertSee('финансовым хвостом', false);
+            ->assertSee('финансовым хвостом', false)
+            ->assertSee('Подтвердить смену', false)
+            ->assertSee('Изменить дату', false);
+    }
+
+    public function test_contract_override_takes_priority_over_identity_clarification_action(): void
+    {
+        $market = $this->createMarket();
+        $reviewer = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Старый арендатор',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Новый арендатор',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $oldTenant->id,
+            'number' => 'П/13',
+            'display_name' => 'Фикспрайс',
+            'code' => 'p-13-contract-override',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $reviewer->id,
+        ]);
+
+        TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $newTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'П-13 от 01.04.2026',
+            'status' => 'active',
+            'starts_at' => '2026-04-01',
+            'is_active' => true,
+        ]);
+
+        Operation::query()->create([
+            'type' => OperationType::SPACE_REVIEW,
+            'entity_type' => MarketSpace::class,
+            'entity_id' => $space->id,
+            'market_id' => $market->id,
+            'status' => 'pending',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+                'reason' => 'Нужно уточнить название',
+            ],
+            'created_by' => $reviewer->id,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Сменить арендатора по договору', false)
+            ->assertSee('Подтвердить смену', false);
+    }
+
+    public function test_review_contract_tenant_switch_endpoint_plans_tenant_switch_from_contract_data(): void
+    {
+        $market = $this->createMarket();
+        $reviewer = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Старый арендатор',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Новый арендатор',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $oldTenant->id,
+            'number' => 'П/13',
+            'display_name' => 'Фикспрайс',
+            'code' => 'p-13-switch',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $reviewer->id,
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $newTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'П-13 от 01.04.2026',
+            'status' => 'active',
+            'starts_at' => '2026-04-01',
+            'is_active' => true,
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-contract-tenant-switch', [
+            'market_space_id' => $space->id,
+            'target_tenant_id' => $newTenant->id,
+            'contract_id' => $contract->id,
+            'effective_date' => '2026-04-01',
+            'reason' => 'Смена арендатора по договору',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_switch')
+            ->assertJsonPath('operation.status', 'applied');
+
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'status' => 'applied',
+        ]);
+
+        $this->assertDatabaseHas('market_spaces', [
+            'id' => $space->id,
+            'tenant_id' => $newTenant->id,
+            'map_review_status' => 'matched',
+        ]);
+
+        $operation = Operation::query()->findOrFail((int) $response->json('operation.id'));
+        $this->assertTrue((bool) data_get($operation->payload, 'review_close_on_effective_at'));
+    }
+
+    public function test_review_contract_tenant_switch_endpoint_keeps_review_open_for_future_effective_date(): void
+    {
+        $market = $this->createMarket();
+        $reviewer = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Старый арендатор',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Новый арендатор',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $oldTenant->id,
+            'number' => 'П/14',
+            'display_name' => 'Точка',
+            'code' => 'p-14-switch-future',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $reviewer->id,
+        ]);
+
+        $futureDate = now($market->timezone ?? config('app.timezone', 'UTC'))
+            ->addDay()
+            ->toDateString();
+
+        $contract = TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $newTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'П-14 от ' . $futureDate,
+            'status' => 'active',
+            'starts_at' => $futureDate,
+            'is_active' => true,
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-contract-tenant-switch', [
+            'market_space_id' => $space->id,
+            'target_tenant_id' => $newTenant->id,
+            'contract_id' => $contract->id,
+            'effective_date' => $futureDate,
+            'reason' => 'Запланированная смена арендатора',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_switch');
+
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'status' => 'applied',
+        ]);
+
+        $operation = Operation::query()->latest('id')->firstOrFail();
+        $this->assertTrue((bool) data_get($operation->payload, 'review_close_on_effective_at'));
+
+        $space->refresh();
+        $this->assertSame('conflict', (string) $space->map_review_status);
     }
 }
