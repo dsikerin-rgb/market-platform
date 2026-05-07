@@ -47,6 +47,7 @@ use App\Support\StaffConversationService;
 use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\MarketMap\DuplicateSpaceResolutionService;
+use App\Services\MarketSpaces\TenantSwitchPlanner;
 use App\Services\Marketplace\MarketplaceContextService;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -2309,6 +2310,134 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         return response()->stream($callback, 200, $headers);
     })->name('filament.admin.operations.export');
+
+    Route::post('/admin/market-map/review-contract-tenant-switch', function (Request $request) use (
+        $resolveMarketForMap,
+        $ensureCanEditShapes,
+        $hasMapReviewColumns,
+        $markMarketSpaceReviewed,
+        $buildMapReviewProgress,
+        $mapReviewStatusLabel
+    ) {
+        $ensureCanEditShapes();
+        $market = $resolveMarketForMap();
+
+        if (! $hasMapReviewColumns()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review columns are missing on market_spaces.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'market_space_id' => ['required', 'integer', 'min:1'],
+            'target_tenant_id' => ['required', 'integer', 'min:1'],
+            'contract_id' => ['nullable', 'integer', 'min:1'],
+            'effective_date' => ['required', 'date_format:Y-m-d'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $space = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['market_space_id'])
+            ->first();
+
+        if (! $space) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review space was not found in the current market.',
+            ], 404);
+        }
+
+        $targetTenant = Tenant::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['target_tenant_id'])
+            ->first();
+
+        if (! $targetTenant) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Арендатор из договора не найден в текущем рынке.',
+            ], 404);
+        }
+
+        $contractQuery = TenantContract::query()
+            ->where('market_id', (int) $market->id)
+            ->where('market_space_id', (int) $space->id)
+            ->where('tenant_id', (int) $targetTenant->id);
+
+        if (! empty($validated['contract_id'])) {
+            $contractQuery->whereKey((int) $validated['contract_id']);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+            $contractQuery->where('is_active', true);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $contractQuery->whereNotIn('status', ['terminated', 'archived']);
+        }
+
+        $contract = $contractQuery
+            ->orderByDesc('starts_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $contract) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Активный договор на это место и арендатора не найден.',
+            ], 422);
+        }
+
+        $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
+        $effectiveAt = CarbonImmutable::parse((string) $validated['effective_date'], $marketTz)->startOfDay()->utc();
+        $contractNumber = trim((string) ($contract->number ?? ''));
+        $reason = trim((string) ($validated['reason'] ?? ''));
+        $reasonParts = [
+            'Смена арендатора подтверждена договором' . ($contractNumber !== '' ? ' ' . $contractNumber : ''),
+        ];
+
+        if ($reason !== '') {
+            $reasonParts[] = $reason;
+        }
+
+        try {
+            $operation = app(TenantSwitchPlanner::class)->plan(
+                $space,
+                $targetTenant,
+                $effectiveAt,
+                implode('. ', $reasonParts),
+                Filament::auth()->id(),
+            );
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => collect($exception->errors())->flatten()->first() ?: 'Не удалось запланировать смену арендатора.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        $space->refresh();
+        $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
+
+        return response()->json([
+            'ok' => true,
+            'mode' => 'tenant_switch',
+            'operation' => [
+                'id' => (int) $operation->id,
+                'status' => (string) $operation->status,
+                'effective_at' => optional($operation->effective_at)->toIso8601String(),
+            ],
+            'item' => [
+                'market_space_id' => (int) $space->id,
+                'review_status' => (string) ($space->map_review_status ?? ''),
+                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+            ],
+            'progress' => $buildMapReviewProgress($market),
+        ]);
+    })->name('filament.admin.market-map.review-contract-tenant-switch');
 
     Route::post('/admin/market-map/review-decision', function (Request $request) use (
         $resolveMarketForMap,
