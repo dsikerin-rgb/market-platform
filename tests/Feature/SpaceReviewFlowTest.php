@@ -1320,6 +1320,139 @@ class SpaceReviewFlowTest extends TestCase
             ->count());
     }
 
+    public function test_review_decision_endpoint_retires_merged_space_without_moving_financial_history(): void
+    {
+        $market = $this->createMarket();
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant History',
+            'is_active' => true,
+        ]);
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $retired = $this->createSpace($market, [
+            'number' => 'OLD-1',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+        $canonical = $this->createSpace($market, [
+            'number' => 'MAIN-1',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+        $shape = $this->createShape($market, (int) $retired->id);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $retired->id,
+            'number' => 'C-OLD',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $retired->id,
+            'period' => '2026-04-01',
+            'rent_rate' => 1000,
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $retired->id,
+            'binding_type' => 'space_snapshot',
+            'confidence' => 'medium',
+            'source' => 'test',
+            'started_at' => '2026-04-01 00:00:00',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL,
+            'market_space_id' => $retired->id,
+            'candidate_market_space_id' => $canonical->id,
+            'effective_date' => '2026-05-01',
+            'reason' => 'Merged into main space.',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('operation.decision', SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL);
+
+        $retired->refresh();
+        $shape->refresh();
+
+        $this->assertFalse((bool) $retired->is_active);
+        $this->assertSame('maintenance', $retired->status);
+        $this->assertStringContainsString('MAIN-1', (string) $retired->notes);
+        $this->assertStringContainsString('2026-05-01', (string) $retired->notes);
+        $this->assertNull($shape->market_space_id);
+        $this->assertFalse((bool) $shape->is_active);
+
+        $this->assertDatabaseHas('tenant_contracts', [
+            'id' => $contract->id,
+            'market_space_id' => $retired->id,
+        ]);
+        $this->assertDatabaseHas('tenant_accruals', [
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $retired->id,
+        ]);
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_id' => $market->id,
+            'market_space_id' => $retired->id,
+            'resolution_reason' => 'space_merged_into_canonical',
+        ]);
+    }
+
+    public function test_review_results_page_renders_merge_retirement_action_for_merge_conflict(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $user->forceFill(['name' => 'Review Admin'])->save();
+
+        $space = $this->createSpace($market, [
+            'number' => 'OLD-2',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+
+        Operation::create([
+            'market_id' => (int) $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => (int) $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => (int) $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Удалить место. Прибавлено к соседнему месту.',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $this->withSession(['filament.admin.selected_market_id' => $market->id]);
+
+        $this->get(MapReviewResults::getUrl(['tab' => 'review']))
+            ->assertOk()
+            ->assertSee('Упразднить и связать с основным местом', false)
+            ->assertSee('data-mrr-merge-retire-open', false)
+            ->assertSee('ID основного места', false)
+            ->assertSee('Дата действия', false);
+    }
+
     public function test_review_decision_endpoint_creates_operation_for_matched(): void
     {
         $market = $this->createMarket();

@@ -165,6 +165,12 @@ final class OperationPayloadValidator
             $normalized['candidate_market_space_id'] = self::intOrNull($payload['candidate_market_space_id'] ?? null);
         }
 
+        if (SpaceReviewDecision::requiresEffectiveDate($decision)) {
+            $normalized['effective_date'] = self::dateStringOrNull($payload['effective_date'] ?? null, true);
+        } elseif (array_key_exists('effective_date', $payload)) {
+            $normalized['effective_date'] = self::dateStringOrNull($payload['effective_date'] ?? null);
+        }
+
         if (SpaceReviewDecision::isIdentityFix($decision)) {
             $number = self::stringOrNull($payload['number'] ?? null);
             $displayName = self::stringOrNull($payload['display_name'] ?? null);
@@ -292,6 +298,23 @@ final class OperationPayloadValidator
                 throw ValidationException::withMessages(['payload' => 'Не заполнено обязательное поле.']);
             }
             return null;
+        }
+
+        return $value;
+    }
+
+    private static function dateStringOrNull(mixed $value, bool $required = false): ?string
+    {
+        $value = self::stringOrNull($value, $required);
+
+        if ($value === null) {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+            throw ValidationException::withMessages([
+                'payload.effective_date' => 'Нужна дата в формате YYYY-MM-DD.',
+            ]);
         }
 
         return $value;

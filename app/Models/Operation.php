@@ -8,6 +8,7 @@ use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\DuplicateSpaceResolutionService;
+use App\Services\MarketMap\MergedSpaceRetirementService;
 use App\Services\MarketSpaces\SpaceGroupManager;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationPayloadValidator;
@@ -280,6 +281,24 @@ class Operation extends Model
                     $spaceId,
                     $candidateSpaceId,
                     $operation->created_by ? (int) $operation->created_by : null,
+                );
+            }
+
+            return;
+        }
+
+        if ($operation->status === 'applied' && $decision === SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL) {
+            $canonicalSpaceId = (int) ($payload['candidate_market_space_id'] ?? 0);
+            $effectiveDate = trim((string) ($payload['effective_date'] ?? ''));
+
+            if ($canonicalSpaceId > 0 && $effectiveDate !== '') {
+                app(MergedSpaceRetirementService::class)->retire(
+                    (int) $operation->market_id,
+                    $spaceId,
+                    $canonicalSpaceId,
+                    CarbonImmutable::parse($effectiveDate, (string) ($operation->effective_tz ?: config('app.timezone', 'UTC'))),
+                    $operation->created_by ? (int) $operation->created_by : null,
+                    isset($payload['reason']) ? (string) $payload['reason'] : null,
                 );
             }
 

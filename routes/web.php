@@ -48,6 +48,7 @@ use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\MarketMap\DuplicateSpaceResolutionService;
 use App\Services\Marketplace\MarketplaceContextService;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -2338,6 +2339,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'number' => ['nullable', 'string', 'max:255'],
             'display_name' => ['nullable', 'string', 'max:255'],
             'candidate_market_space_id' => ['nullable', 'integer', 'min:1'],
+            'effective_date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
         $space = MarketSpace::query()
@@ -2355,6 +2357,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $decision = (string) $validated['decision'];
         $userId = Filament::auth()->id();
         $now = now();
+        $operationEffectiveAt = $now;
 
         if ($decision === 'matched') {
             DB::transaction(static fn (): Operation => Operation::query()->create([
@@ -2411,6 +2414,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             if (array_key_exists($field, $validated) && $validated[$field] !== null && $validated[$field] !== '') {
                 $payload[$field] = $validated[$field];
             }
+        }
+
+        if (array_key_exists('effective_date', $validated) && $validated['effective_date'] !== null && $validated['effective_date'] !== '') {
+            $payload['effective_date'] = (string) $validated['effective_date'];
         }
 
         if ($reason !== '') {
@@ -2485,6 +2492,43 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ];
         }
 
+        if ($decision === SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL) {
+            $candidateSpaceId = (int) ($validated['candidate_market_space_id'] ?? 0);
+            $effectiveDate = trim((string) ($validated['effective_date'] ?? ''));
+
+            if ($candidateSpaceId <= 0 || $candidateSpaceId === (int) $space->id) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Выберите основное место, в которое вошло упраздняемое место.',
+                ], 422);
+            }
+
+            if ($effectiveDate === '') {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Укажите дату, с которой место считается объединённым.',
+                ], 422);
+            }
+
+            $candidateSpaceExists = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey($candidateSpaceId)
+                ->where('is_active', true)
+                ->exists();
+
+            if (! $candidateSpaceExists) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Основное место не найдено или уже неактивно.',
+                ], 404);
+            }
+
+            $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
+            $operationEffectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
+            $payload['candidate_market_space_id'] = $candidateSpaceId;
+            $payload['reason'] = $payload['reason'] ?? 'Место упразднено: физически объединено с основным местом.';
+        }
+
         if (isset($payload['shape_id'])) {
             $shape = MarketSpaceMapShape::query()
                 ->where('market_id', (int) $market->id)
@@ -2520,7 +2564,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'entity_type' => 'market_space',
             'entity_id' => (int) $space->id,
             'type' => OperationType::SPACE_REVIEW,
-            'effective_at' => $now,
+            'effective_at' => $operationEffectiveAt,
             'status' => SpaceReviewDecision::defaultOperationStatus($decision),
             'payload' => $payload,
             'comment' => isset($payload['reason']) ? (string) $payload['reason'] : null,
