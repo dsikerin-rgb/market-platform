@@ -39,7 +39,7 @@ class TenantAccrualsTable
         $readOnly = (bool) ($options['readOnly'] ?? false);
 
         $table = $table
-            ->defaultSort('period', 'desc')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('market.name')
                     ->label('Рынок')
