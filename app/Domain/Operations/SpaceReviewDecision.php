@@ -13,6 +13,7 @@ final class SpaceReviewDecision
     public const MARK_SPACE_FREE = 'mark_space_free';
     public const MARK_SPACE_SERVICE = 'mark_space_service';
     public const FIX_SPACE_IDENTITY = 'fix_space_identity';
+    public const MERGE_SPACE_INTO_CANONICAL = 'merge_space_into_canonical';
     public const SPACE_IDENTITY_NEEDS_CLARIFICATION = 'space_identity_needs_clarification';
     public const DUPLICATE_SPACE_NEEDS_RESOLUTION = 'duplicate_space_needs_resolution';
     public const OCCUPANCY_CONFLICT = 'occupancy_conflict';
@@ -25,6 +26,7 @@ final class SpaceReviewDecision
     public static function labels(): array
     {
         return [
+            self::MERGE_SPACE_INTO_CANONICAL => 'Упразднить место и связать с основным',
             self::BIND_SHAPE_TO_SPACE => 'Привязать фигуру к месту',
             self::UNBIND_SHAPE_FROM_SPACE => 'Отвязать фигуру',
             self::MARK_SPACE_FREE => 'Отметить место как свободное',
@@ -57,6 +59,7 @@ final class SpaceReviewDecision
             self::MARK_SPACE_FREE,
             self::MARK_SPACE_SERVICE,
             self::FIX_SPACE_IDENTITY,
+            self::MERGE_SPACE_INTO_CANONICAL,
             self::DUPLICATE_SPACE_NEEDS_RESOLUTION,
         ];
     }
@@ -99,7 +102,15 @@ final class SpaceReviewDecision
 
     public static function requiresCandidateSpaceId(string $decision): bool
     {
-        return $decision === self::DUPLICATE_SPACE_NEEDS_RESOLUTION;
+        return in_array($decision, [
+            self::DUPLICATE_SPACE_NEEDS_RESOLUTION,
+            self::MERGE_SPACE_INTO_CANONICAL,
+        ], true);
+    }
+
+    public static function requiresEffectiveDate(string $decision): bool
+    {
+        return $decision === self::MERGE_SPACE_INTO_CANONICAL;
     }
 
     public static function isIdentityFix(string $decision): bool
@@ -118,6 +129,7 @@ final class SpaceReviewDecision
             'matched' => 'matched',
             self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'conflict',
             self::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'changed',
+            self::MERGE_SPACE_INTO_CANONICAL => 'changed',
             self::OCCUPANCY_CONFLICT => 'conflict',
             self::TENANT_CHANGED_ON_SITE => 'changed_tenant',
             self::SHAPE_NOT_FOUND => 'not_found',

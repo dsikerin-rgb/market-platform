@@ -1853,10 +1853,15 @@
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
+                                            $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
+                                                || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
                                             $showRelationAssessment = $contractOverride || $hasCandidates;
 
-                                            if ($isIdentityCase) {
+                                            if ($isMergeRetirementCase) {
+                                                $workflowTitle = 'Упразднить и связать с основным местом';
+                                                $workflowText = 'Старое место останется в истории, текущая карта и занятость перейдут к основному месту с указанной даты.';
+                                            } elseif ($isIdentityCase) {
                                                 $workflowTitle = 'Уточнить номер / название';
                                                 $workflowText = 'Проверьте реквизиты места и примените исправление прямо отсюда.';
                                             } elseif ($isTenantCase && $contractOverride) {
@@ -1941,6 +1946,17 @@
                                                                     data-mrr-display-name="{{ $row['display_name'] ?? '' }}"
                                                                 >
                                                                     Уточнить номер / название
+                                                                </button>
+                                                            @endif
+                                                            @if ($attentionTab !== 'unconfirmed_links' && $isMergeRetirementCase)
+                                                                <button
+                                                                    type="button"
+                                                                    class="mrr-link mrr-link--button"
+                                                                    data-mrr-merge-retire-open
+                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                    data-mrr-space-label="{{ $currentSpaceLabel }}"
+                                                                >
+                                                                    Упразднить и связать
                                                                 </button>
                                                             @endif
                                                             <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
@@ -2273,6 +2289,45 @@
                     </div>
                 </div>
 
+                <div id="mrrMergeRetireModal" class="mrr-clarify-modal mrr-merge-retire-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-merge-retire-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrMergeRetireTitle"
+                        aria-describedby="mrrMergeRetireDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-merge-retire-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Объединение места</div>
+                        <h3 id="mrrMergeRetireTitle" class="mrr-clarify-modal__title">Упразднить и связать с основным местом</h3>
+                        <p id="mrrMergeRetireDescription" class="mrr-clarify-modal__description">
+                            Старое место станет архивным. Договоры, начисления и долги останутся на нём как история; активная разметка будет снята с карты.
+                        </p>
+                        <div id="mrrMergeRetireError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrMergeRetireCanonicalId">ID основного места</label>
+                            <input id="mrrMergeRetireCanonicalId" class="mrr-clarify-modal__input" type="number" min="1" step="1" inputmode="numeric">
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrMergeRetireEffectiveDate">Дата действия</label>
+                            <input id="mrrMergeRetireEffectiveDate" class="mrr-clarify-modal__input" type="date">
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrMergeRetireReason">Комментарий</label>
+                            <textarea id="mrrMergeRetireReason" class="mrr-clarify-modal__input mrr-quick-review__field" maxlength="2000" placeholder="Например: место физически объединено с соседним местом"></textarea>
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-merge-retire-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-merge-retire-save>Упразднить</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="mrrQuickReviewModal" class="mrr-clarify-modal mrr-quick-review-modal" hidden aria-hidden="true">
                     <div class="mrr-clarify-modal__backdrop" data-mrr-quick-review-close></div>
                     <div
@@ -2351,6 +2406,12 @@
                 const identityFixDisplayName = document.getElementById('mrrIdentityFixDisplayName');
                 const identityFixError = document.getElementById('mrrIdentityFixError');
                 const identityFixSave = identityFixModal?.querySelector('[data-mrr-identity-fix-save]');
+                const mergeRetireModal = document.getElementById('mrrMergeRetireModal');
+                const mergeRetireCanonicalId = document.getElementById('mrrMergeRetireCanonicalId');
+                const mergeRetireEffectiveDate = document.getElementById('mrrMergeRetireEffectiveDate');
+                const mergeRetireReason = document.getElementById('mrrMergeRetireReason');
+                const mergeRetireError = document.getElementById('mrrMergeRetireError');
+                const mergeRetireSave = mergeRetireModal?.querySelector('[data-mrr-merge-retire-save]');
                 const modal = document.getElementById('mrrDuplicatePlanModal');
                 const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
@@ -2372,6 +2433,10 @@
                     spaceId: 0,
                     originalNumber: '',
                     originalDisplayName: '',
+                };
+                const mergeRetireState = {
+                    spaceId: 0,
+                    spaceLabel: '',
                 };
 
                 if (
@@ -2749,6 +2814,112 @@
                     window.location.reload();
                 };
 
+                const openMergeRetireModal = (button) => {
+                    if (!mergeRetireModal || !mergeRetireCanonicalId || !mergeRetireEffectiveDate || !mergeRetireReason || !mergeRetireError || !mergeRetireSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        return;
+                    }
+
+                    mergeRetireState.spaceId = spaceId;
+                    mergeRetireState.spaceLabel = String(button.dataset.mrrSpaceLabel || '').trim();
+                    mergeRetireCanonicalId.value = '';
+                    mergeRetireEffectiveDate.value = new Date().toISOString().slice(0, 10);
+                    mergeRetireReason.value = mergeRetireState.spaceLabel
+                        ? `Место ${mergeRetireState.spaceLabel} физически объединено с основным местом.`
+                        : 'Место физически объединено с основным местом.';
+                    mergeRetireError.textContent = '';
+                    mergeRetireSave.removeAttribute('disabled');
+                    mergeRetireSave.textContent = 'Упразднить';
+
+                    mergeRetireModal.hidden = false;
+                    mergeRetireModal.classList.add('is-open');
+                    mergeRetireModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => mergeRetireCanonicalId.focus(), 0);
+                };
+
+                const closeMergeRetireModal = () => {
+                    if (!mergeRetireModal || !mergeRetireCanonicalId || !mergeRetireEffectiveDate || !mergeRetireReason || !mergeRetireError || !mergeRetireSave) {
+                        return;
+                    }
+
+                    mergeRetireModal.classList.remove('is-open');
+                    mergeRetireModal.hidden = true;
+                    mergeRetireModal.setAttribute('aria-hidden', 'true');
+                    mergeRetireState.spaceId = 0;
+                    mergeRetireState.spaceLabel = '';
+                    mergeRetireCanonicalId.value = '';
+                    mergeRetireEffectiveDate.value = '';
+                    mergeRetireReason.value = '';
+                    mergeRetireError.textContent = '';
+                    mergeRetireSave.removeAttribute('disabled');
+                    mergeRetireSave.textContent = 'Упразднить';
+                };
+
+                const sendMergeRetire = async () => {
+                    if (!mergeRetireModal || !mergeRetireCanonicalId || !mergeRetireEffectiveDate || !mergeRetireReason || !mergeRetireError || !mergeRetireSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(mergeRetireState.spaceId || 0);
+                    const canonicalSpaceId = Number(mergeRetireCanonicalId.value || 0);
+                    const effectiveDate = String(mergeRetireEffectiveDate.value || '').trim();
+                    const reason = String(mergeRetireReason.value || '').trim();
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        mergeRetireError.textContent = 'Не удалось определить упраздняемое место.';
+                        return;
+                    }
+
+                    if (!Number.isFinite(canonicalSpaceId) || canonicalSpaceId <= 0 || canonicalSpaceId === spaceId) {
+                        mergeRetireError.textContent = 'Укажите ID активного основного места.';
+                        mergeRetireCanonicalId.focus();
+                        return;
+                    }
+
+                    if (!effectiveDate) {
+                        mergeRetireError.textContent = 'Укажите дату действия.';
+                        mergeRetireEffectiveDate.focus();
+                        return;
+                    }
+
+                    mergeRetireSave.setAttribute('disabled', 'disabled');
+                    mergeRetireSave.textContent = 'Применяем...';
+                    mergeRetireError.textContent = '';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision: 'merge_space_into_canonical',
+                            market_space_id: spaceId,
+                            candidate_market_space_id: canonicalSpaceId,
+                            effective_date: effectiveDate,
+                            ...(reason ? { reason } : {}),
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        mergeRetireSave.removeAttribute('disabled');
+                        mergeRetireSave.textContent = 'Упразднить';
+                        mergeRetireError.textContent = String(data?.message || 'Не удалось упразднить место.');
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
                 const createDuplicateReviewOperation = async () => {
                     const currentSpaceId = Number(modal.dataset.currentSpaceId || 0);
                     const candidateSpaceId = Number(modal.dataset.candidateSpaceId || 0);
@@ -2832,6 +3003,16 @@
                         ? event.target.closest('[data-mrr-identity-fix-open]')
                         : null;
 
+                    const mergeRetireLauncher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-merge-retire-open]')
+                        : null;
+
+                    if (mergeRetireLauncher && mergeRetireLauncher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openMergeRetireModal(mergeRetireLauncher);
+                        return;
+                    }
+
                     if (identityFixLauncher && identityFixLauncher instanceof HTMLElement) {
                         event.preventDefault();
                         openIdentityFixModal(identityFixLauncher);
@@ -2859,12 +3040,16 @@
                 window.addEventListener('keydown', (event) => {
                     const quickOpen = quickReviewModal?.classList.contains('is-open');
                     const identityOpen = identityFixModal?.classList.contains('is-open');
-                    if (!modal.classList.contains('is-open') && !quickOpen && !identityOpen) {
+                    const mergeRetireOpen = mergeRetireModal?.classList.contains('is-open');
+                    if (!modal.classList.contains('is-open') && !quickOpen && !identityOpen && !mergeRetireOpen) {
                         return;
                     }
 
                     if (event.key === 'Escape') {
                         event.preventDefault();
+                        if (mergeRetireOpen) {
+                            closeMergeRetireModal();
+                        }
                         if (identityOpen) {
                             closeIdentityFixModal();
                         }
@@ -2919,6 +3104,31 @@
                                 identityFixSave.textContent = 'Применить';
                                 if (identityFixError) {
                                     identityFixError.textContent = String(errorInstance?.message || errorInstance);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (mergeRetireModal && mergeRetireSave) {
+                    mergeRetireModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-merge-retire-close')) {
+                            event.preventDefault();
+                            closeMergeRetireModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-merge-retire-save')) {
+                            event.preventDefault();
+                            sendMergeRetire().catch((errorInstance) => {
+                                mergeRetireSave.removeAttribute('disabled');
+                                mergeRetireSave.textContent = 'Упразднить';
+                                if (mergeRetireError) {
+                                    mergeRetireError.textContent = String(errorInstance?.message || errorInstance);
                                 }
                             });
                         }
