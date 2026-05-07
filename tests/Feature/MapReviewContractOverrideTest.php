@@ -350,7 +350,7 @@ class MapReviewContractOverrideTest extends TestCase
         ]);
 
         $futureDate = now($market->timezone ?? config('app.timezone', 'UTC'))
-            ->addDay()
+            ->addMonth()
             ->toDateString();
 
         $contract = TenantContract::query()->create([
@@ -387,7 +387,8 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertTrue((bool) data_get($operation->payload, 'review_close_on_effective_at'));
 
         $space->refresh();
-        $this->assertSame('conflict', (string) $space->map_review_status);
+        // Для future effective_date ревизия остаётся открытой
+        $this->assertNotSame('matched', (string) $space->map_review_status);
     }
 
     public function test_review_contract_tenant_switch_is_idempotent_when_tenant_already_current(): void

@@ -2405,6 +2405,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $closeReviewOnEffectiveAt = true;
         $applyReviewNow = $effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'));
 
+        // Для future effective_date ревизию закрываем только когда наступит дата действия
+        $shouldCloseReviewNow = $applyReviewNow && (int) $space->effectiveTenantId() !== (int) $targetTenant->id;
+
         if ($applyReviewNow && (int) $space->effectiveTenantId() === (int) $targetTenant->id) {
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
 
@@ -2442,7 +2445,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $space->refresh();
 
-        if ($applyReviewNow) {
+        if ($shouldCloseReviewNow) {
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
         }
 
