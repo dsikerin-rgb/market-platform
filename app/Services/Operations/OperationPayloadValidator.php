@@ -46,6 +46,7 @@ final class OperationPayloadValidator
             'from_group_parent_id' => self::intOrNull($payload['from_group_parent_id'] ?? null),
             'from_group_slot' => self::stringOrNull($payload['from_group_slot'] ?? null),
             'from_group_role' => self::stringOrNull($payload['from_group_role'] ?? null),
+            'review_close_on_effective_at' => self::boolOrNull($payload['review_close_on_effective_at'] ?? null) ?? false,
         ];
     }
 

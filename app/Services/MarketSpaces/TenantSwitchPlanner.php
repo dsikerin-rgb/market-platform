@@ -20,6 +20,7 @@ final class TenantSwitchPlanner
         CarbonInterface|string $effectiveAt,
         ?string $reason = null,
         ?int $createdBy = null,
+        bool $closeReviewOnEffectiveAt = false,
     ): Operation {
         $space = $space->fresh(['tenant', 'spaceGroupParent.tenant']);
 
@@ -56,6 +57,7 @@ final class TenantSwitchPlanner
             'from_group_parent_id' => $isChild ? (int) $space->space_group_parent_id : null,
             'from_group_slot' => $isChild ? $this->stringOrNull($space->space_group_slot) : null,
             'from_group_role' => $isChild ? MarketSpace::SPACE_GROUP_ROLE_CHILD : $this->stringOrNull($space->space_group_role),
+            'review_close_on_effective_at' => $closeReviewOnEffectiveAt,
         ];
 
         $comment = $this->buildComment($space, $targetTenant, $isChild, $reason);

@@ -157,6 +157,14 @@ class Operation extends Model
                 $space->space_group_parent_id = null;
                 $space->space_group_slot = null;
             }
+
+            if ((bool) ($payload['review_close_on_effective_at'] ?? false)) {
+                $space->map_review_status = 'matched';
+                $space->map_reviewed_at = $latestTenantOp->effective_at;
+                $space->map_reviewed_by = (int) ($latestTenantOp->created_by ?? 0) > 0
+                    ? (int) $latestTenantOp->created_by
+                    : $space->map_reviewed_by;
+            }
         }
 
         $latestRentRateOp = self::query()

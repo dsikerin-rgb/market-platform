@@ -307,5 +307,82 @@ class MapReviewContractOverrideTest extends TestCase
             'tenant_id' => $newTenant->id,
             'map_review_status' => 'matched',
         ]);
+
+        $operation = Operation::query()->findOrFail((int) $response->json('operation.id'));
+        $this->assertTrue((bool) data_get($operation->payload, 'review_close_on_effective_at'));
+    }
+
+    public function test_review_contract_tenant_switch_endpoint_keeps_review_open_for_future_effective_date(): void
+    {
+        $market = $this->createMarket();
+        $reviewer = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Старый арендатор',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Новый арендатор',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $oldTenant->id,
+            'number' => 'П/14',
+            'display_name' => 'Точка',
+            'code' => 'p-14-switch-future',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $reviewer->id,
+        ]);
+
+        $futureDate = now($market->timezone ?? config('app.timezone', 'UTC'))
+            ->addDay()
+            ->toDateString();
+
+        $contract = TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $newTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'П-14 от ' . $futureDate,
+            'status' => 'active',
+            'starts_at' => $futureDate,
+            'is_active' => true,
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-contract-tenant-switch', [
+            'market_space_id' => $space->id,
+            'target_tenant_id' => $newTenant->id,
+            'contract_id' => $contract->id,
+            'effective_date' => $futureDate,
+            'reason' => 'Запланированная смена арендатора',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_switch');
+
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'status' => 'applied',
+        ]);
+
+        $operation = Operation::query()->latest('id')->firstOrFail();
+        $this->assertTrue((bool) data_get($operation->payload, 'review_close_on_effective_at'));
+
+        $space->refresh();
+        $this->assertSame('conflict', (string) $space->map_review_status);
     }
 }
