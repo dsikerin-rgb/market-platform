@@ -78,6 +78,7 @@ final class OperationPayloadValidator
             'type',
             'status',
             'is_active',
+            'display_name',
         ]);
 
         $normalized = [
@@ -106,6 +107,10 @@ final class OperationPayloadValidator
 
         if (array_key_exists('is_active', $payload)) {
             $normalized['is_active'] = self::boolOrNull($payload['is_active']);
+        }
+
+        if (array_key_exists('display_name', $payload)) {
+            $normalized['display_name'] = self::stringOrNull($payload['display_name']);
         }
 
         return $normalized;

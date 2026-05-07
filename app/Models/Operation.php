@@ -227,6 +227,12 @@ class Operation extends Model
                     $space->is_active = (bool) $payload['is_active'];
                 }
             }
+
+            if (array_key_exists('display_name', $payload)) {
+                $space->display_name = is_string($payload['display_name']) && trim($payload['display_name']) !== ''
+                    ? trim($payload['display_name'])
+                    : null;
+            }
         }
 
         if ($space->isDirty()) {
