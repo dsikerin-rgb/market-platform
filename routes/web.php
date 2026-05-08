@@ -1779,7 +1779,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $isNumeric = ctype_digit($q);
         $qEsc = str_replace(['%', '_'], ['\%', '\\_'], $q);
         $qLike = '%' . $qEsc . '%';
-        $searchOperator = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
         $rows = MarketSpace::query()
             ->with([
@@ -1792,19 +1791,19 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 $qq->whereNull('space_group_role')
                     ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
             })
-            ->where(function ($qq) use ($isNumeric, $q, $qLike, $searchOperator) {
+            ->where(function ($qq) use ($isNumeric, $q, $qLike) {
                 if ($isNumeric) {
                     $qq->orWhere('id', '=', (int) $q);
                 }
 
-                $qq->orWhere('number', $searchOperator, $qLike)
-                    ->orWhere('code', $searchOperator, $qLike)
-                    ->orWhereHas('tenant', function ($tq) use ($qLike, $searchOperator) {
-                        $tq->where('name', $searchOperator, $qLike)
-                            ->orWhere('display_name', $searchOperator, $qLike);
+                $qq->orWhere('number', 'like', $qLike)
+                    ->orWhere('code', 'like', $qLike)
+                    ->orWhereHas('tenant', function ($tq) use ($qLike) {
+                        $tq->where('name', 'like', $qLike)
+                            ->orWhere('display_name', 'like', $qLike);
                     });
             })
-            ->orderByRaw('CASE WHEN LOWER(number) = LOWER(?) THEN 0 ELSE 1 END', [$q])
+            ->orderByRaw('CASE WHEN number = ? THEN 0 ELSE 1 END', [$q])
             ->orderBy('number')
             ->orderBy('id')
             ->limit($limit)
@@ -2406,6 +2405,26 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $closeReviewOnEffectiveAt = true;
         $applyReviewNow = $effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'));
 
+        // Для future effective_date ревизию закрываем только когда наступит дата действия
+        $shouldCloseReviewNow = $applyReviewNow && (int) $space->effectiveTenantId() !== (int) $targetTenant->id;
+
+        if ($applyReviewNow && (int) $space->effectiveTenantId() === (int) $targetTenant->id) {
+            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
+
+            return response()->json([
+                'ok' => true,
+                'mode' => 'tenant_switch_already_current',
+                'operation' => null,
+                'item' => [
+                    'market_space_id' => (int) $space->id,
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                ],
+                'progress' => $buildMapReviewProgress($market),
+            ]);
+        }
+
         try {
             $operation = app(TenantSwitchPlanner::class)->plan(
                 $space,
@@ -2414,6 +2433,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 implode('. ', $reasonParts),
                 Filament::auth()->id(),
                 $closeReviewOnEffectiveAt,
+                true,
             );
         } catch (ValidationException $exception) {
             return response()->json([
@@ -2425,7 +2445,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $space->refresh();
 
-        if ($applyReviewNow) {
+        if ($shouldCloseReviewNow) {
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
         }
 
