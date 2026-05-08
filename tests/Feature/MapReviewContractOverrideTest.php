@@ -121,7 +121,7 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertSame((int) $newTenant->id, (int) data_get($diagnostics, 'contract_override.tenant_id'));
         $this->assertSame('2026-05-01', data_get($diagnostics, 'contract_override.starts_at'));
         $this->assertSame('01.05.2026', data_get($diagnostics, 'contract_override.starts_at_label'));
-        $this->assertStringContainsString('01.05.2026', (string) ($diagnostics['relation_assessment'] ?? ''));
+        $this->assertStringNotContainsString('01.05.2026', (string) ($diagnostics['relation_assessment'] ?? ''));
         $this->assertStringContainsString('финансовым хвостом', (string) ($diagnostics['relation_assessment'] ?? ''));
     }
 
@@ -174,7 +174,7 @@ class MapReviewContractOverrideTest extends TestCase
             ->assertSee('Станет', false)
             ->assertSee('Баходурзода Сорбон ИП', false)
             ->assertSee('НИЁЗОВ РИЗВОНШОХ Баходурович ИП', false)
-            ->assertSee('01.05.2026', false)
+            ->assertDontSee('01.05.2026', false)
             ->assertSee('Ф/К-1 от 01.01.2026', false)
             ->assertSee('Подтвердить смену', false)
             ->assertDontSee('Изменить дату', false);
@@ -786,7 +786,7 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertSame((int) $newTenant->id, (int) $space->tenant_id);
     }
 
-    public function test_review_shows_signed_at_date_for_contract_override(): void
+    public function test_review_contract_override_keeps_dates_out_of_primary_facts(): void
     {
         $market = $this->createMarket();
         $reviewer = $this->actingAsSuperAdmin((int) $market->id);
@@ -847,9 +847,9 @@ class MapReviewContractOverrideTest extends TestCase
             ->assertSee('Подтвердить смену арендатора', false)
             ->assertSee('Старый арендатор', false)
             ->assertSee('Новый арендатор', false)
-            ->assertSee('Дата из 1С starts_at: 01.05.2026', false)
-            ->assertSee('Дата договора: 01.06.2023', false)
             ->assertSee('Договор: Договор с signed_at', false)
+            ->assertDontSee('Дата из 1С starts_at: 01.05.2026', false)
+            ->assertDontSee('Дата договора: 01.06.2023', false)
             ->assertDontSee('С даты: 01.05.2026', false);
     }
 }
