@@ -785,4 +785,71 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertSame('matched', (string) $space->map_review_status);
         $this->assertSame((int) $newTenant->id, (int) $space->tenant_id);
     }
+
+    public function test_review_shows_signed_at_date_for_contract_override(): void
+    {
+        $market = $this->createMarket();
+        $reviewer = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Старый арендатор',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Новый арендатор',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $oldTenant->id,
+            'number' => 'SIGNED-AT-TEST',
+            'display_name' => 'Тест signed_at',
+            'code' => 'signed-at-test',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $reviewer->id,
+        ]);
+
+        TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $newTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'Договор с signed_at',
+            'status' => 'active',
+            'starts_at' => '2026-05-01',
+            'signed_at' => '2023-06-01', // <-- Вот она, дата подписания
+            'is_active' => true,
+        ]);
+
+        // 1. Проверка на уровне сервиса
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $this->assertCount(1, $rows);
+        $diagnostics = $rows[0]['diagnostics'] ?? [];
+        $contractOverride = data_get($diagnostics, 'contract_override');
+
+        $this->assertNotNull($contractOverride);
+        $this->assertSame('2026-05-01', $contractOverride['starts_at']);
+        $this->assertSame('01.05.2026', $contractOverride['starts_at_label']);
+        $this->assertSame('2023-06-01', $contractOverride['signed_at']);
+        $this->assertSame('01.06.2023', $contractOverride['signed_at_label']);
+
+        // 2. Проверка на уровне отображения
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Подтвердить смену арендатора', false)
+            ->assertSee('Старый арендатор', false)
+            ->assertSee('Новый арендатор', false)
+            ->assertSee('Дата из 1С starts_at: 01.05.2026', false)
+            ->assertSee('Дата договора: 01.06.2023', false)
+            ->assertSee('Договор: Договор с signed_at', false)
+            ->assertDontSee('С даты: 01.05.2026', false);
+    }
 }
