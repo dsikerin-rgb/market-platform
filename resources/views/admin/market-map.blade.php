@@ -2680,9 +2680,9 @@
             number: item?.number ? String(item.number) : '',
             displayName: item?.displayName ? String(item.displayName) : (item?.display_name ? String(item.display_name) : ''),
             code: item?.code ? String(item.code) : '',
-            spaceGroupRole: item?.space_group_role ? String(item.space_group_role) : '',
-            isSpaceGroupParent: Boolean(item?.is_space_group_parent || item?.result_type === 'group' || item?.space_group_role === 'parent'),
-            resultType: item?.result_type ? String(item.result_type) : (item?.space_group_role === 'parent' ? 'group' : 'space'),
+            spaceGroupRole: item?.space_group_role ? String(item.space_group_role) : (item?.spaceGroupRole ? String(item.spaceGroupRole) : ''),
+            isSpaceGroupParent: Boolean(item?.is_space_group_parent || item?.isSpaceGroupParent || item?.result_type === 'group' || item?.resultType === 'group' || item?.space_group_role === 'parent' || item?.spaceGroupRole === 'parent'),
+            resultType: item?.result_type ? String(item.result_type) : (item?.resultType ? String(item.resultType) : ((item?.space_group_role === 'parent' || item?.spaceGroupRole === 'parent') ? 'group' : 'space')),
             tenantName: effectiveTenantName || directTenantName || null,
             effectiveTenantId: item?.space_effective_tenant_id !== null && item?.space_effective_tenant_id !== undefined
               ? Number(item.space_effective_tenant_id)
