@@ -541,14 +541,6 @@ class MapReviewResultsService
                 ? 'На текущем месте уже есть активный договор нового арендатора: ' . $tenantName . '.'
                 : 'На текущем месте уже есть активный договор нового арендатора.';
 
-            if (isset($contractOverride['signed_at_label']) && $contractOverride['signed_at_label'] !== '') {
-                $parts[] = 'Дата договора: ' . $contractOverride['signed_at_label'] . '.';
-            }
-
-            if ($startDate !== '') {
-                $parts[] = 'Дата из 1С starts_at: ' . $startDate . '.';
-            }
-
             if ($contractNumber !== '') {
                 $parts[] = 'Договор: ' . $contractNumber . '.';
             }
