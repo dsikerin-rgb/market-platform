@@ -256,6 +256,33 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
 
+    public function test_market_map_space_endpoint_marks_parent_group_result(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12',
+            'display_name' => 'Ф1-12 группа',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.space', [
+            'id' => $parent->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('found', true);
+        $response->assertJsonPath('item.space_group_role', 'parent');
+        $response->assertJsonPath('item.result_type', 'group');
+        $response->assertJsonPath('item.is_space_group_parent', true);
+    }
+
     public function test_market_map_spaces_search_includes_parent_groups_and_excludes_inactive_places(): void
     {
         $this->actingAsSuperAdmin();

@@ -1547,6 +1547,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $bindingRisk = $buildBindingRiskForSpace($market, $space);
+        $spaceGroupRole = (string) ($space->space_group_role ?? '');
 
         return response()->json([
                 'ok' => true,
@@ -1555,8 +1556,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'id' => (int) $space->id,
                     'number' => (string) ($space->number ?? ''),
                 'code' => (string) ($space->code ?? ''),
+                'display_name' => (string) ($space->display_name ?? ''),
                 'area_sqm' => (string) ($space->area_sqm ?? ''),
                 'status' => (string) ($space->status ?? ''),
+                    'space_group_role' => $spaceGroupRole,
+                    'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
+                    'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                    'result_type' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT ? 'group' : 'space',
                     'review_status' => (string) ($space->map_review_status ?? ''),
                     'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                     'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
