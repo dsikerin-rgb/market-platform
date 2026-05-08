@@ -2016,6 +2016,7 @@
                                             $currentTenantName = trim((string) ($row['current_tenant_name'] ?? ''));
                                             $targetTenantName = trim((string) ($contractOverride['tenant_name'] ?? ''));
                                             $contractEffectiveDateLabel = trim((string) (($contractOverride['starts_at_label'] ?? null) ?: ($contractOverride['starts_at'] ?? '')));
+                                            $contractSignedAtLabel = trim((string) ($contractOverride['signed_at_label'] ?? ''));
                                             $contractNumberLabel = trim((string) ($contractOverride['contract_number'] ?? ''));
                                             $hasIdentityClarification = $decision === 'space_identity_needs_clarification';
                                             $isIdentityCase = $hasIdentityClarification && ! $isContractTenantOverride;
@@ -2111,8 +2112,11 @@
                                                                         </div>
                                                                     </div>
                                                                     <div class="mrr-place__decision-facts">
+                                                                        @if ($contractSignedAtLabel !== '')
+                                                                            <span class="mrr-place__decision-fact">Дата договора: {{ $contractSignedAtLabel }}</span>
+                                                                        @endif
                                                                         @if ($contractEffectiveDateLabel !== '')
-                                                                            <span class="mrr-place__decision-fact">С даты: {{ $contractEffectiveDateLabel }}</span>
+                                                                            <span class="mrr-place__decision-fact">Дата из 1С starts_at: {{ $contractEffectiveDateLabel }}</span>
                                                                         @endif
                                                                         @if ($contractNumberLabel !== '')
                                                                             <span class="mrr-place__decision-fact">Договор: {{ $contractNumberLabel }}</span>

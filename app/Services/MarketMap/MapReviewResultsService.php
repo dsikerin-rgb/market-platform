@@ -541,8 +541,12 @@ class MapReviewResultsService
                 ? 'На текущем месте уже есть активный договор нового арендатора: ' . $tenantName . '.'
                 : 'На текущем месте уже есть активный договор нового арендатора.';
 
+            if (isset($contractOverride['signed_at_label']) && $contractOverride['signed_at_label'] !== '') {
+                $parts[] = 'Дата договора: ' . $contractOverride['signed_at_label'] . '.';
+            }
+
             if ($startDate !== '') {
-                $parts[] = 'Дата начала действия: ' . $startDate . '.';
+                $parts[] = 'Дата из 1С starts_at: ' . $startDate . '.';
             }
 
             if ($contractNumber !== '') {
@@ -594,7 +598,9 @@ class MapReviewResultsService
      *   contract_id:int,
      *   contract_number:?string,
      *   starts_at:?string,
-     *   starts_at_label:?string
+     *   starts_at_label:?string,
+     *   signed_at:?string,
+     *   signed_at_label:?string
      * }>
      */
     private function activeContractOverrideForSpaces(array $spaceIds, int $marketId): array
@@ -648,6 +654,7 @@ class MapReviewResultsService
                 'tc.tenant_id',
                 'tc.number as contract_number',
                 'tc.starts_at',
+                'tc.signed_at',
                 't.name as tenant_name',
             ]);
 
@@ -677,6 +684,23 @@ class MapReviewResultsService
                 }
             }
 
+            $signedAtRaw = $row->signed_at;
+            $signedAt = null;
+            $signedAtLabel = null;
+
+            if ($signedAtRaw instanceof \DateTimeInterface) {
+                $signedAt = $signedAtRaw->format('Y-m-d');
+                $signedAtLabel = $signedAtRaw->format('d.m.Y');
+            } elseif (filled($signedAtRaw)) {
+                $signedAt = (string) $signedAtRaw;
+
+                try {
+                    $signedAtLabel = (new \DateTimeImmutable($signedAt))->format('d.m.Y');
+                } catch (\Throwable) {
+                    $signedAtLabel = $signedAt;
+                }
+            }
+
             $result[$spaceId] = [
                 'tenant_id' => (int) ($row->tenant_id ?? 0),
                 'tenant_name' => trim((string) ($row->tenant_name ?? '')),
@@ -684,6 +708,8 @@ class MapReviewResultsService
                 'contract_number' => filled($row->contract_number ?? null) ? (string) $row->contract_number : null,
                 'starts_at' => $startsAt,
                 'starts_at_label' => $startsAtLabel,
+                'signed_at' => $signedAt,
+                'signed_at_label' => $signedAtLabel,
             ];
         }
 
