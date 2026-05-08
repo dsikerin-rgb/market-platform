@@ -3780,6 +3780,46 @@
             return null;
           }
 
+          function mergeBboxes(left, right) {
+            if (!left) return right || null;
+            if (!right) return left || null;
+
+            return {
+              x1: Math.min(left.x1, right.x1),
+              y1: Math.min(left.y1, right.y1),
+              x2: Math.max(left.x2, right.x2),
+              y2: Math.max(left.y2, right.y2),
+            };
+          }
+
+          function resolveGroupBboxForSpace(space) {
+            const parentId = space?.isSpaceGroupParent
+              ? Number(space.id || 0)
+              : Number(space?.spaceGroupParentId || 0);
+
+            if (!Number.isFinite(parentId) || parentId <= 0) {
+              return null;
+            }
+
+            let groupBbox = null;
+
+            for (const shape of Array.isArray(shapes) ? shapes : []) {
+              const shapeGroupParentId = Number(shape?.space_group_parent_id || 0);
+
+              if (!Number.isFinite(shapeGroupParentId) || shapeGroupParentId !== parentId) {
+                continue;
+              }
+
+              const bbox = resolveShapeBbox(shape);
+
+              if (bbox) {
+                groupBbox = mergeBboxes(groupBbox, bbox);
+              }
+            }
+
+            return groupBbox;
+          }
+
           focusChosenSpaceOnMap = async function (space, opts = {}) {
             const normalized = space ? normalizeChosenSpace(space) : null;
             if (!normalized) {
@@ -3789,16 +3829,26 @@
             setChosenSpace(normalized, { announce: !!opts.announce });
             const freshSpace = await refreshChosenSpaceFromServer() || normalized;
             let targetShape = findUsableShapeForSpaceId(freshSpace.id);
+
             if (!targetShape) {
                 await loadShapes();
                 targetShape = findUsableShapeForSpaceId(freshSpace.id);
             }
 
+            const groupBbox = resolveGroupBboxForSpace(freshSpace);
+
             if (!targetShape) {
               if (freshSpace?.isSpaceGroupParent) {
                 setSelectedShape(null);
                 redrawShapes();
-                toast('Это группа мест. У группы нет собственной фигуры; дочерние места группы подсвечены на карте.');
+
+                if (groupBbox) {
+                  await centerOnBbox(groupBbox, { zoomFactor: 1.08, padding: 90 });
+                  toast('Это группа мест. Карта центрирована по дочерним местам группы.');
+                  return;
+                }
+
+                toast('Это группа мест. Дочерние фигуры группы не найдены на текущей странице карты.');
                 return;
               }
 
@@ -3806,7 +3856,7 @@
               return;
             }
 
-            const bbox = resolveShapeBbox(targetShape);
+            const bbox = groupBbox || resolveShapeBbox(targetShape);
             if (!bbox) {
               toast('Не удалось показать место на карте.');
               return;
@@ -3816,7 +3866,10 @@
               setSelectedShape(targetShape.id);
             }
 
-            await centerOnBbox(bbox, { zoomFactor: 1.2 });
+            await centerOnBbox(bbox, {
+              zoomFactor: groupBbox ? 1.08 : 1.2,
+              padding: groupBbox ? 90 : 40,
+            });
           };
 
           function setScaleLabel() {
