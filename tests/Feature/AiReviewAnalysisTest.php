@@ -1,4 +1,5 @@
 <?php
+# tests/Feature/AiReviewAnalysisTest.php
 
 declare(strict_types=1);
 
@@ -141,6 +142,96 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertSame(1, $candidateRelations['relation_counts']['accruals']);
         $this->assertSame(6761.57, $candidateRelations['relation_counts']['debt_total']);
         $this->assertGreaterThan($relations['current_space']['canonical_score'], $candidateRelations['canonical_score']);
+    }
+
+    public function test_context_pack_does_not_choose_accrual_only_space_over_space_with_shape_and_contracts(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::withoutEvents(fn () => Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Барковская Л.С.',
+            'external_id' => 'tenant-barkovskaya',
+            'is_active' => true,
+        ]));
+
+        $currentSpace = MarketSpace::withoutEvents(fn () => MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'ОС11/3',
+            'code' => 'os-11-3',
+            'display_name' => 'ОС11/3',
+            'status' => 'occupied',
+            'map_review_status' => 'conflict',
+            'is_active' => true,
+        ]));
+
+        $accrualOnlySpace = MarketSpace::withoutEvents(fn () => MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'ОС11/3__t114',
+            'code' => 'os-11-3-t114',
+            'display_name' => 'ОС11/3 / Барковская Л.С.',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]));
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $currentSpace->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'is_active' => true,
+        ]);
+
+        TenantContract::withoutEvents(fn () => TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $currentSpace->id,
+            'external_id' => 'contract-os-11-3',
+            'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_AUTO,
+            'number' => 'А ОС 11/3 от 01.06.2023',
+            'status' => 'active',
+            'starts_at' => '2026-05-01',
+            'is_active' => true,
+        ]));
+
+        for ($i = 1; $i <= 13; $i++) {
+            TenantAccrual::create([
+                'market_id' => $market->id,
+                'tenant_id' => $tenant->id,
+                'market_space_id' => $accrualOnlySpace->id,
+                'period' => sprintf('2025-%02d-01', min($i, 12)),
+                'source' => '1c',
+                'total_with_vat' => 1000,
+            ]);
+        }
+
+        $pack = app(AiContextPackBuilder::class)->build((int) $currentSpace->id, (int) $market->id);
+        $relations = $pack['relation_context'];
+
+        $this->assertNull($relations['likely_canonical_candidate_id']);
+        $this->assertStringContainsString('Каноническое место не определяется автоматически', $relations['duplicate_review_hint']);
+
+        $candidateRelations = $relations['same_tenant_candidates'][0];
+
+        $this->assertSame((int) $accrualOnlySpace->id, $candidateRelations['id']);
+        $this->assertSame(13, $candidateRelations['relation_counts']['accruals']);
+        $this->assertSame(0, $candidateRelations['relation_counts']['map_shapes']);
+        $this->assertSame(0, $candidateRelations['relation_counts']['contracts']);
     }
 
     public function test_context_pack_separates_active_contract_contour_from_historical_tail(): void

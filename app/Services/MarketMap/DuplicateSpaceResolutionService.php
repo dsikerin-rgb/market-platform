@@ -1,4 +1,5 @@
 <?php
+# app/Services/MarketMap/DuplicateSpaceResolutionService.php
 
 declare(strict_types=1);
 
@@ -37,6 +38,7 @@ final class DuplicateSpaceResolutionService
     {
         [$duplicate, $canonical] = $this->loadSpaces($marketId, $duplicateSpaceId, $canonicalSpaceId, false);
         $this->validatePair($duplicate, $canonical, $duplicateSpaceId, $canonicalSpaceId);
+        $this->validateCanonicalAnchors($marketId, $duplicateSpaceId, $canonicalSpaceId);
 
         $blockingCounts = $this->blockingCounts($marketId, $duplicateSpaceId);
         $this->throwIfBlocked($blockingCounts);
@@ -57,6 +59,7 @@ final class DuplicateSpaceResolutionService
         return DB::transaction(function () use ($marketId, $duplicateSpaceId, $canonicalSpaceId, $userId): array {
             [$duplicate, $canonical] = $this->loadSpaces($marketId, $duplicateSpaceId, $canonicalSpaceId, true);
             $this->validatePair($duplicate, $canonical, $duplicateSpaceId, $canonicalSpaceId);
+            $this->validateCanonicalAnchors($marketId, $duplicateSpaceId, $canonicalSpaceId);
 
             $blockingCounts = $this->blockingCounts($marketId, $duplicateSpaceId);
             $this->throwIfBlocked($blockingCounts);
@@ -160,6 +163,34 @@ final class DuplicateSpaceResolutionService
                 'candidate_market_space_id' => 'Duplicate and canonical spaces belong to different tenants.',
             ]);
         }
+    }
+
+    private function validateCanonicalAnchors(int $marketId, int $duplicateSpaceId, int $canonicalSpaceId): void
+    {
+        $duplicateAnchors = $this->canonicalAnchorCounts($marketId, $duplicateSpaceId);
+        $canonicalAnchors = $this->canonicalAnchorCounts($marketId, $canonicalSpaceId);
+
+        $duplicateHasHardAnchor = $duplicateAnchors['map_shapes'] > 0 || $duplicateAnchors['contracts'] > 0;
+        $canonicalHasHardAnchor = $canonicalAnchors['map_shapes'] > 0 || $canonicalAnchors['contracts'] > 0;
+
+        if (! $duplicateHasHardAnchor || $canonicalHasHardAnchor) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'candidate_market_space_id' => 'Основное место не может быть выбрано только по финансовым связям: у него нет фигуры на карте и договоров, а у текущего места они есть.',
+        ]);
+    }
+
+    /**
+     * @return array{map_shapes: int, contracts: int}
+     */
+    private function canonicalAnchorCounts(int $marketId, int $spaceId): array
+    {
+        return [
+            'map_shapes' => $this->countRows('market_space_map_shapes', 'market_space_id', $spaceId, $marketId),
+            'contracts' => $this->countRows('tenant_contracts', 'market_space_id', $spaceId, $marketId),
+        ];
     }
 
     /**
