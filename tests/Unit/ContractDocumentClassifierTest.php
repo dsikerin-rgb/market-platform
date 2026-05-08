@@ -161,4 +161,56 @@ class ContractDocumentClassifierTest extends TestCase
             'СК-11-12 -> СКЛАД 11-12' => ['"\u0421\u041a-11-12 \u043e\u0442 01.02.2025"', 'СКЛАД 11-12'],
         ];
     }
+
+    /**
+     * Тест: extractDocumentDateFromNumber извлекает дату из номера договора
+     */
+    public function test_extract_document_date_from_number_with_full_year(): void
+    {
+        $date = ContractDocumentClassifier::extractDocumentDateFromNumber('А ОС 11/3 от 01.06.2023');
+
+        $this->assertSame('2023-06-01', $date);
+    }
+
+    /**
+     * Тест: extractDocumentDateFromNumber с двухзначным годом
+     */
+    public function test_extract_document_date_from_number_with_short_year(): void
+    {
+        $date = ContractDocumentClassifier::extractDocumentDateFromNumber('Договор от 15.12.23');
+
+        $this->assertSame('2023-12-15', $date);
+    }
+
+    /**
+     * Тест: extractDocumentDateFromNumber возвращает null, если даты нет
+     */
+    public function test_extract_document_date_from_number_returns_null_when_no_date(): void
+    {
+        $date = ContractDocumentClassifier::extractDocumentDateFromNumber('Просто номер договора');
+
+        $this->assertNull($date);
+    }
+
+    /**
+     * Тест: extractDocumentDateFromNumber возвращает null для невалидной даты
+     */
+    public function test_extract_document_date_from_number_returns_null_for_invalid_date(): void
+    {
+        $date = ContractDocumentClassifier::extractDocumentDateFromNumber('Договор от 32.13.2023');
+
+        $this->assertNull($date);
+    }
+
+    /**
+     * Тест: extractDocumentDateFromNumber с пробелами и разными регистрами
+     */
+    public function test_extract_document_date_from_number_with_whitespace_and_case(): void
+    {
+        $date1 = ContractDocumentClassifier::extractDocumentDateFromNumber('  договор ОТ 01.06.2023  ');
+        $date2 = ContractDocumentClassifier::extractDocumentDateFromNumber('ДОГОВОР от 15.07.2024');
+
+        $this->assertSame('2023-06-01', $date1);
+        $this->assertSame('2024-07-15', $date2);
+    }
 }

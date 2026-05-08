@@ -416,6 +416,12 @@ class ContractController extends Controller
                     $number = '1C-' . $contractExternalId;
                 }
 
+                // Fallback для signed_at: если 1С не передала дату, извлекаем из contract_number
+                $signedAt = $item['signed_at'] ?? null;
+                if ($signedAt === null || $signedAt === '') {
+                    $signedAt = ContractDocumentClassifier::extractDocumentDateFromNumber($number);
+                }
+
                 $contract = TenantContract::query()->firstOrNew([
                     'market_id' => $marketId,
                     'external_id' => $contractExternalId,
@@ -432,7 +438,7 @@ class ContractController extends Controller
                     'status' => $status,
                     'starts_at' => (string) $item['starts_at'],
                     'ends_at' => $item['ends_at'] ?? null,
-                    'signed_at' => $item['signed_at'] ?? null,
+                    'signed_at' => $signedAt,
                     'monthly_rent' => $item['monthly_rent'] ?? null,
                     'currency' => $currency,
                     'is_active' => $isActive,
