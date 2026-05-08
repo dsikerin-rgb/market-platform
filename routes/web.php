@@ -1624,6 +1624,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 $query->where('is_active', true);
             }
 
+            // Parent-группы не считаются "местами без фигур":
+            // у группы может не быть собственной фигуры, она отображается через дочерние места.
+            $query->where(function ($qq) {
+                $qq->whereNull('space_group_role')
+                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
+            });
+
             // Исключаем места у которых ЕСТЬ usable shape для review navigation
             // (согласовано с buildReviewNavItemsFromShapes() на фронте)
             //
@@ -1736,11 +1743,17 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     $debtStatusLabel,
                 );
 
+                $spaceGroupRole = (string) ($space->space_group_role ?? '');
+
                 return [
                     'id' => (int) $space->id,
                     'number' => (string) ($space->number ?? ''),
                     'code' => (string) ($space->code ?? ''),
                     'display_name' => (string) ($space->display_name ?? ''),
+                    'space_group_role' => $spaceGroupRole,
+                    'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
+                    'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                    'result_type' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT ? 'group' : 'space',
                     'review_status' => '',
                     'review_status_label' => '',
                     'tenant' => $tenant ? [
@@ -1787,10 +1800,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ])
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->where(function ($qq) {
-                $qq->whereNull('space_group_role')
-                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
-            })
             ->where(function ($qq) use ($isNumeric, $q, $qLike) {
                 if ($isNumeric) {
                     $qq->orWhere('id', '=', (int) $q);
@@ -1807,7 +1816,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->orderBy('number')
             ->orderBy('id')
             ->limit($limit)
-            ->get(['id', 'number', 'code', 'area_sqm', 'status', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
+            ->get(['id', 'number', 'code', 'display_name', 'area_sqm', 'status', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
 
         $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
             $tenant = $space->tenant;
@@ -1827,12 +1836,19 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
             $bindingRisk = $buildBindingRiskForSpace($market, $space);
 
+            $spaceGroupRole = (string) ($space->space_group_role ?? '');
+
             return [
                 'id' => (int) $space->id,
                 'number' => (string) ($space->number ?? ''),
                 'code' => (string) ($space->code ?? ''),
+                'display_name' => (string) ($space->display_name ?? ''),
                 'area_sqm' => (string) ($space->area_sqm ?? ''),
                 'status' => (string) ($space->status ?? ''),
+                'space_group_role' => $spaceGroupRole,
+                'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
+                'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                'result_type' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT ? 'group' : 'space',
                 'review_status' => (string) ($space->map_review_status ?? ''),
                 'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                 'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),

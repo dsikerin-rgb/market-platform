@@ -256,7 +256,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
 
-    public function test_market_map_spaces_search_excludes_parent_groups_and_inactive_places(): void
+    public function test_market_map_spaces_search_includes_parent_groups_and_excludes_inactive_places(): void
     {
         $this->actingAsSuperAdmin();
 
@@ -303,10 +303,62 @@ class MarketMapLinkingTest extends TestCase
         $items = collect($response->json('items'));
         $ids = $items->pluck('id')->all();
 
+        $this->assertContains((int) $parent->id, $ids);
         $this->assertContains((int) $child->id, $ids);
         $this->assertContains((int) $ordinary->id, $ids);
-        $this->assertNotContains((int) $parent->id, $ids);
         $this->assertNotContains((int) $archived->id, $ids);
+
+        $parentItem = $items->firstWhere('id', (int) $parent->id);
+
+        $this->assertSame('parent', $parentItem['space_group_role']);
+        $this->assertSame('group', $parentItem['result_type']);
+        $this->assertTrue((bool) $parentItem['is_space_group_parent']);
+    }
+
+    public function test_market_map_without_shapes_excludes_parent_groups(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        $ordinary = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 20',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'q' => 'OS7',
+            'limit' => 15,
+            'without_shapes' => true,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+
+        $this->assertNotContains((int) $parent->id, $ids);
+        $this->assertContains((int) $child->id, $ids);
+        $this->assertContains((int) $ordinary->id, $ids);
     }
 
     public function test_market_map_spaces_search_is_case_insensitive(): void

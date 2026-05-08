@@ -2680,6 +2680,9 @@
             number: item?.number ? String(item.number) : '',
             displayName: item?.displayName ? String(item.displayName) : (item?.display_name ? String(item.display_name) : ''),
             code: item?.code ? String(item.code) : '',
+            spaceGroupRole: item?.space_group_role ? String(item.space_group_role) : '',
+            isSpaceGroupParent: Boolean(item?.is_space_group_parent || item?.result_type === 'group' || item?.space_group_role === 'parent'),
+            resultType: item?.result_type ? String(item.result_type) : (item?.space_group_role === 'parent' ? 'group' : 'space'),
             tenantName: effectiveTenantName || directTenantName || null,
             effectiveTenantId: item?.space_effective_tenant_id !== null && item?.space_effective_tenant_id !== undefined
               ? Number(item.space_effective_tenant_id)
@@ -2724,7 +2727,8 @@
           const codeLabel = String(space.code ?? '').trim();
           const label = numberLabel || codeLabel || '—';
           const tenant = space.tenantName ? space.tenantName : '—';
-          return '№' + label + ' — ' + tenant + ' (ID ' + String(space.id) + ')';
+          const prefix = space?.isSpaceGroupParent ? 'Группа · ' : '';
+          return prefix + '№' + label + ' — ' + tenant + ' (ID ' + String(space.id) + ')';
         }
 
         function formatMoneyRu(value) {
@@ -3106,6 +3110,9 @@
                 number: chosenSpace.number,
                 code: chosenSpace.code,
                 displayName: chosenSpace.displayName,
+                spaceGroupRole: chosenSpace.spaceGroupRole || '',
+                isSpaceGroupParent: !!chosenSpace.isSpaceGroupParent,
+                resultType: chosenSpace.resultType || 'space',
                 tenantName: chosenSpace.tenantName,
                 reviewStatus: chosenSpace.reviewStatus,
                 reviewStatusLabel: chosenSpace.reviewStatusLabel,
@@ -3121,6 +3128,9 @@
             number: space.number || '',
             code: space.code || '',
             displayName: space.displayName || space.display_name || '',
+            spaceGroupRole: space.spaceGroupRole || space.space_group_role || '',
+            isSpaceGroupParent: Boolean(space.isSpaceGroupParent || space.is_space_group_parent || space.resultType === 'group' || space.result_type === 'group'),
+            resultType: space.resultType || space.result_type || ((space.spaceGroupRole || space.space_group_role) === 'parent' ? 'group' : 'space'),
             tenantName: space.tenantName ?? null,
             reviewStatus: space.reviewStatus ?? '',
             reviewStatusLabel: space.reviewStatusLabel ?? '',
@@ -3780,6 +3790,11 @@
             }
 
             if (!targetShape) {
+              if (freshSpace?.isSpaceGroupParent) {
+                toast('Это группа мест. У группы нет собственной фигуры; откройте её карточку или работайте с дочерними местами на карте.');
+                return;
+              }
+
               toast('У этого места ещё нет разметки. Выберите непривязанную фигуру на карте и привяжите её к месту.');
               return;
             }
