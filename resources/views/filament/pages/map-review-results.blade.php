@@ -2017,7 +2017,8 @@
                                             $targetTenantName = trim((string) ($contractOverride['tenant_name'] ?? ''));
                                             $contractEffectiveDateLabel = trim((string) (($contractOverride['starts_at_label'] ?? null) ?: ($contractOverride['starts_at'] ?? '')));
                                             $contractNumberLabel = trim((string) ($contractOverride['contract_number'] ?? ''));
-                                            $isIdentityCase = $decision === 'space_identity_needs_clarification' && ! $isContractTenantOverride;
+                                            $hasIdentityClarification = $decision === 'space_identity_needs_clarification';
+                                            $isIdentityCase = $hasIdentityClarification && ! $isContractTenantOverride;
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
@@ -2117,9 +2118,15 @@
                                                                             <span class="mrr-place__decision-fact">Договор: {{ $contractNumberLabel }}</span>
                                                                         @endif
                                                                     </div>
-                                                                    <div class="mrr-place__decision-hint">
-                                                                        Смена арендатора уже подтверждена договором. После подтверждения система просто зафиксирует её на месте.
-                                                                    </div>
+                                                                    @if ($hasIdentityClarification)
+                                                                        <div class="mrr-place__decision-warning">
+                                                                            Найден договор другого арендатора, но точная связь места требует уточнения. Сначала разберите место/дубли, затем подтверждайте смену.
+                                                                        </div>
+                                                                    @else
+                                                                        <div class="mrr-place__decision-hint">
+                                                                            Смена арендатора уже подтверждена договором. После подтверждения система просто зафиксирует её на месте.
+                                                                        </div>
+                                                                    @endif
                                                                 @endif
                                                                 <div class="mrr-place__decision-meta">
                                                                     Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
@@ -2131,7 +2138,7 @@
                                                                 <div class="mrr-card-actions__group mrr-card-actions__group--primary">
                                                                     <div class="mrr-card-actions__label">Решение</div>
                                                                     <div class="mrr-card-actions__row">
-                    @if ($isContractTenantOverride)
+                    @if ($isContractTenantOverride && ! $hasIdentityClarification)
                         <button
                             type="button"
                             class="mrr-link mrr-link--button mrr-link--primary"
@@ -2146,6 +2153,11 @@
                         >
                             Подтвердить смену
                         </button>
+                    @endif
+                    @if ($hasIdentityClarification && $isContractTenantOverride)
+                        <div class="mrr-card-actions__warning">
+                            <strong>Требуется уточнение места:</strong> сначала разберите дубли / точную связь места, затем подтверждайте смену арендатора.
+                        </div>
                     @endif
                                                                         @if ($isIdentityCase)
                                                                             <button

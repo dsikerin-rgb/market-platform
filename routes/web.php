@@ -2349,6 +2349,22 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ], 404);
         }
 
+        // Guard: проверяем последнюю SPACE_REVIEW по ЭТОМУ месту (без фильтра по decision)
+        $lastSpaceReview = Operation::query()
+            ->where('market_id', (int) $market->id)
+            ->where('entity_type', MarketSpace::class)
+            ->where('entity_id', (int) $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->first();
+
+        if ((string) data_get($lastSpaceReview?->payload, 'decision') === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Найден договор другого арендатора, но точная связь места требует уточнения. Сначала разберите место/дубли, затем подтверждайте смену.',
+            ], 422);
+        }
+
         $targetTenant = Tenant::query()
             ->where('market_id', (int) $market->id)
             ->whereKey((int) $validated['target_tenant_id'])
