@@ -256,6 +256,62 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
 
+    public function test_market_map_shapes_endpoint_exposes_space_group_fields(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12',
+            'display_name' => 'Ф1-12 группа',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'F1-12',
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12-1',
+            'display_name' => 'Ф1-12 место 1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_token' => 'F1-12',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $child->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.shapes', [
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('items.0.market_space_id', (int) $child->id);
+        $response->assertJsonPath('items.0.space_group_role', 'child');
+        $response->assertJsonPath('items.0.space_group_parent_id', (int) $parent->id);
+        $response->assertJsonPath('items.0.space_group_token', 'F1-12');
+    }
+
     public function test_market_map_space_endpoint_marks_parent_group_result(): void
     {
         $this->actingAsSuperAdmin();

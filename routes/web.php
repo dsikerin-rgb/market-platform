@@ -1285,11 +1285,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         try {
             $rows = MarketSpaceMapShape::query()
                 ->with(['marketSpace' => static function ($query) {
-                    $query->select('id', 'tenant_id', 'display_name', 'number', 'code', 'status', 'is_active', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id')
+                    $query->select('id', 'tenant_id', 'display_name', 'number', 'code', 'status', 'is_active', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id', 'space_group_token')
                         ->with([
                             'tenant:id,name,short_name,slug',
                             'spaceGroupParent' => static function ($parentQuery): void {
-                                $parentQuery->select('id', 'tenant_id', 'number', 'code', 'display_name', 'space_group_role', 'space_group_parent_id')
+                                $parentQuery->select('id', 'tenant_id', 'number', 'code', 'display_name', 'space_group_role', 'space_group_parent_id', 'space_group_token')
                                     ->with(['tenant:id,name,short_name,slug']);
                             },
                         ]);
@@ -1337,7 +1337,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
-                ->get(['id', 'tenant_id', 'number', 'code', 'display_name', 'rent_rate_value', 'rent_rate_unit', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id'])
+                ->get(['id', 'tenant_id', 'number', 'code', 'display_name', 'rent_rate_value', 'rent_rate_unit', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id', 'space_group_token'])
                 ->keyBy('id')
             : collect();
 
@@ -1456,6 +1456,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
+                'space_group_role' => $space?->space_group_role ? (string) $space->space_group_role : null,
+                'space_group_parent_id' => $space?->space_group_parent_id ? (int) $space->space_group_parent_id : null,
+                'space_group_token' => $space?->space_group_token ? (string) $space->space_group_token : null,
                 'space_tenant_name' => $tenant?->short_name ?: ($tenant?->name ?: null),
                 'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
                 'space_is_active' => $space?->is_active ?? false,

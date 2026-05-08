@@ -2681,6 +2681,9 @@
             displayName: item?.displayName ? String(item.displayName) : (item?.display_name ? String(item.display_name) : ''),
             code: item?.code ? String(item.code) : '',
             spaceGroupRole: item?.space_group_role ? String(item.space_group_role) : (item?.spaceGroupRole ? String(item.spaceGroupRole) : ''),
+            spaceGroupParentId: item?.space_group_parent_id !== null && item?.space_group_parent_id !== undefined
+              ? Number(item.space_group_parent_id)
+              : (item?.spaceGroupParentId !== null && item?.spaceGroupParentId !== undefined ? Number(item.spaceGroupParentId) : null),
             isSpaceGroupParent: Boolean(item?.is_space_group_parent || item?.isSpaceGroupParent || item?.result_type === 'group' || item?.resultType === 'group' || item?.space_group_role === 'parent' || item?.spaceGroupRole === 'parent'),
             resultType: item?.result_type ? String(item.result_type) : (item?.resultType ? String(item.resultType) : ((item?.space_group_role === 'parent' || item?.spaceGroupRole === 'parent') ? 'group' : 'space')),
             tenantName: effectiveTenantName || directTenantName || null,
@@ -3111,6 +3114,7 @@
                 code: chosenSpace.code,
                 displayName: chosenSpace.displayName,
                 spaceGroupRole: chosenSpace.spaceGroupRole || '',
+                spaceGroupParentId: chosenSpace.spaceGroupParentId ?? null,
                 isSpaceGroupParent: !!chosenSpace.isSpaceGroupParent,
                 resultType: chosenSpace.resultType || 'space',
                 tenantName: chosenSpace.tenantName,
@@ -3129,6 +3133,7 @@
             code: space.code || '',
             displayName: space.displayName || space.display_name || '',
             spaceGroupRole: space.spaceGroupRole || space.space_group_role || '',
+            spaceGroupParentId: space.spaceGroupParentId ?? space.space_group_parent_id ?? null,
             isSpaceGroupParent: Boolean(space.isSpaceGroupParent || space.is_space_group_parent || space.resultType === 'group' || space.result_type === 'group'),
             resultType: space.resultType || space.result_type || ((space.spaceGroupRole || space.space_group_role) === 'parent' ? 'group' : 'space'),
             tenantName: space.tenantName ?? null,
@@ -3791,7 +3796,9 @@
 
             if (!targetShape) {
               if (freshSpace?.isSpaceGroupParent) {
-                toast('Это группа мест. У группы нет собственной фигуры; откройте её карточку или работайте с дочерними местами на карте.');
+                setSelectedShape(null);
+                redrawShapes();
+                toast('Это группа мест. У группы нет собственной фигуры; дочерние места группы подсвечены на карте.');
                 return;
               }
 
@@ -3999,6 +4006,10 @@
             };
 
             const selected = selectedShapeId ? findShapeById(selectedShapeId) : null;
+            const chosenSpaceId = chosenSpace?.id ? Number(chosenSpace.id) : 0;
+            const chosenGroupParentId = chosenSpace?.isSpaceGroupParent
+              ? chosenSpaceId
+              : Number(chosenSpace?.spaceGroupParentId || 0);
 
             for (const s of shapes) {
               const poly = Array.isArray(s.polygon) ? s.polygon : [];
@@ -4149,6 +4160,11 @@
               const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
+              const shapeSpaceId = Number(s?.market_space_id || s?.space_id || 0);
+              const shapeGroupParentId = Number(s?.space_group_parent_id || 0);
+              const isGroupRelated = chosenGroupParentId > 0
+                && shapeGroupParentId === chosenGroupParentId
+                && !(isSel && shapeSpaceId === chosenSpaceId);
 
               const strokeDashAttr = strokeDasharray ? (' stroke-dasharray="' + strokeDasharray + '"') : '';
 
@@ -4192,6 +4208,17 @@
                   '" fill="#7dd3fc" fill-opacity="1"' +
                   '" stroke="#0284c7" stroke-opacity="' + (isSel ? '0.96' : '0.88') +
                   '" stroke-width="' + (isSel ? (sw + 1.0) : 2.0) +
+                  '"></polygon>'
+                );
+              }
+
+              if (isGroupRelated) {
+                parts.push(
+                  '<polygon points="' + pts +
+                  '" fill="none" fill-opacity="0"' +
+                  '" stroke="#2563eb" stroke-opacity="0.98"' +
+                  '" stroke-width="' + (sw + 1.8) +
+                  '" stroke-dasharray="7 4"' +
                   '"></polygon>'
                 );
               }
