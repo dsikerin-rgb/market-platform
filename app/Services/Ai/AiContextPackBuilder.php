@@ -1,4 +1,5 @@
 <?php
+# app/Services/Ai/AiContextPackBuilder.php
 
 declare(strict_types=1);
 
@@ -401,6 +402,12 @@ class AiContextPackBuilder
 
         $bestCandidate = $candidates[0] ?? null;
         $currentScore = $this->canonicalScore($currentCounts);
+        $bestCandidateIsLikelyCanonical = $bestCandidate !== null
+            && $this->candidateHasStrongerCanonicalAnchors(
+                is_array($bestCandidate['relation_counts'] ?? null) ? $bestCandidate['relation_counts'] : [],
+                $currentCounts,
+            )
+            && (int) ($bestCandidate['canonical_score'] ?? 0) > $currentScore;
 
         return [
             'current_space' => [
@@ -413,13 +420,44 @@ class AiContextPackBuilder
                 'canonical_score' => $currentScore,
             ],
             'same_tenant_candidates' => $candidates,
-            'likely_canonical_candidate_id' => $bestCandidate && (int) $bestCandidate['canonical_score'] > $currentScore
+            'likely_canonical_candidate_id' => $bestCandidateIsLikelyCanonical
                 ? (int) $bestCandidate['id']
                 : null,
-            'duplicate_review_hint' => $bestCandidate && (int) $bestCandidate['canonical_score'] > $currentScore
+            'duplicate_review_hint' => $bestCandidateIsLikelyCanonical
                 ? 'У другого места того же арендатора больше подтверждённых связей. Текущее место нельзя подтверждать без выбора канонического места.'
                 : 'Каноническое место не определяется автоматически. Нужна ручная проверка связей.',
         ];
+    }
+
+    /**
+     * @param  array<string, int|float|null>  $candidateCounts
+     * @param  array<string, int|float|null>  $currentCounts
+     */
+    private function candidateHasStrongerCanonicalAnchors(array $candidateCounts, array $currentCounts): bool
+    {
+        $currentHasHardAnchor = (int) ($currentCounts['map_shapes'] ?? 0) > 0
+            || (int) ($currentCounts['contracts'] ?? 0) > 0;
+
+        $candidateHasHardAnchor = (int) ($candidateCounts['map_shapes'] ?? 0) > 0
+            || (int) ($candidateCounts['contracts'] ?? 0) > 0;
+
+        if ($currentHasHardAnchor && ! $candidateHasHardAnchor) {
+            return false;
+        }
+
+        return $this->canonicalAnchorScore($candidateCounts) > $this->canonicalAnchorScore($currentCounts);
+    }
+
+    /**
+     * @param  array<string, int|float|null>  $counts
+     */
+    private function canonicalAnchorScore(array $counts): int
+    {
+        return ((int) ($counts['map_shapes'] ?? 0) * 100)
+            + ((int) ($counts['contracts'] ?? 0) * 50)
+            + ((int) ($counts['tenant_bindings'] ?? 0) * 20)
+            + ((int) ($counts['cabinet_links'] ?? 0) * 10)
+            + ((int) ($counts['products'] ?? 0) > 0 ? 5 : 0);
     }
 
     /**
