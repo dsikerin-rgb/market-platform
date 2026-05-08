@@ -1,4 +1,5 @@
 <?php
+# tests/Feature/OneCContractImportTest.php
 
 declare(strict_types=1);
 
@@ -532,11 +533,20 @@ class OneCContractImportTest extends TestCase
         $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.market_space_id', $space->id);
         $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.place_token', 'П/75');
         $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.document_date', '2025-04-01');
-        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.contract_ids', [1, 2]);
         $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.external_ids', [
             'contract-dup-001',
             'contract-dup-002',
         ]);
+
+        // Получаем реальные ID созданных контрактов для проверки contract_ids
+        $contractIds = TenantContract::query()
+            ->whereIn('external_id', ['contract-dup-001', 'contract-dup-002'])
+            ->orderBy('external_id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $response->assertJsonPath('warnings.suspected_current_duplicate_contracts.samples.0.contract_ids', $contractIds);
     }
 
     public function test_key_normalization_uppercase_trim(): void
@@ -582,5 +592,211 @@ class OneCContractImportTest extends TestCase
 
         $this->assertNotNull($contract);
         $this->assertEquals($space->id, $contract->market_space_id);
+    }
+
+    /**
+     * Тест: signed_at сохраняется из 1С, если передан явно
+     */
+    public function test_signed_at_preserved_when_provided_by_1c(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-signed-001',
+            'name' => 'ООО Тест signed_at',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-signed-001',
+                    'tenant_external_id' => 'tenant-signed-001',
+                    'contract_number' => 'А ОС 11/3 от 01.06.2023',
+                    'signed_at' => '2023-05-15',  // явно переданная дата
+                    'status' => 'active',
+                    'starts_at' => '2023-06-01',
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-signed-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        $this->assertEquals('2023-05-15', $contract->signed_at->format('Y-m-d'));
+        // starts_at не должен влиять на signed_at
+        $this->assertEquals('2023-06-01', $contract->starts_at->format('Y-m-d'));
+    }
+
+    /**
+     * Тест: signed_at заполняется из contract_number через fallback
+     */
+    public function test_signed_at_fallback_from_contract_number(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-fallback-001',
+            'name' => 'ООО Тест fallback',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-fallback-001',
+                    'tenant_external_id' => 'tenant-fallback-001',
+                    'contract_number' => 'А ОС 11/3 от 01.06.2023',
+                    // signed_at не передан
+                    'status' => 'active',
+                    'starts_at' => '2026-04-01',
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-fallback-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        // Дата должна быть извлечена из номера договора
+        $this->assertEquals('2023-06-01', $contract->signed_at->format('Y-m-d'));
+        // starts_at не должен перезаписать signed_at
+        $this->assertEquals('2026-04-01', $contract->starts_at->format('Y-m-d'));
+    }
+
+    /**
+     * Тест: signed_at остаётся null, если contract_number не содержит дату
+     */
+    public function test_signed_at_null_when_no_date_in_contract_number(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-no-date-001',
+            'name' => 'ООО Тест без даты',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-no-date-001',
+                    'tenant_external_id' => 'tenant-no-date-001',
+                    'contract_number' => 'Просто номер договора без даты',
+                    // signed_at не передан
+                    'status' => 'active',
+                    'starts_at' => '2024-01-01',
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-no-date-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        // signed_at должен остаться null
+        $this->assertNull($contract->signed_at);
+    }
+
+    /**
+     * Тест: starts_at не используется как fallback для signed_at
+     */
+    public function test_starts_at_not_used_as_fallback_for_signed_at(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-starts-not-signed-001',
+            'name' => 'ООО Тест starts_at',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-starts-not-signed-001',
+                    'tenant_external_id' => 'tenant-starts-not-signed-001',
+                    'contract_number' => 'Договор ОС 2024',
+                    // signed_at не передан
+                    // starts_at есть, но не должен использоваться как signed_at
+                    'status' => 'active',
+                    'starts_at' => '2024-03-15',
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-starts-not-signed-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        // signed_at должен остаться null, так как даты в contract_number нет
+        $this->assertNull($contract->signed_at);
+        // starts_at должен быть как есть
+        $this->assertEquals('2024-03-15', $contract->starts_at->format('Y-m-d'));
+    }
+
+    /**
+     * Тест: fallback с двухзначным годом (23 -> 2023)
+     */
+    public function test_signed_at_fallback_with_two_digit_year(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'external_id' => 'tenant-short-year-001',
+            'name' => 'ООО Тест короткий год',
+        ]);
+
+        $response = $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => now()->toDateTimeString(),
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-short-year-001',
+                    'tenant_external_id' => 'tenant-short-year-001',
+                    'contract_number' => 'Договор от 15.12.23',
+                    // signed_at не передан
+                    'status' => 'active',
+                    'starts_at' => '2024-01-01',
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ]);
+
+        $response->assertOk();
+
+        $contract = TenantContract::query()
+            ->where('external_id', 'contract-short-year-001')
+            ->first();
+
+        $this->assertNotNull($contract);
+        // Двухзначный год должен быть расширен до 2023
+        $this->assertEquals('2023-12-15', $contract->signed_at->format('Y-m-d'));
     }
 }

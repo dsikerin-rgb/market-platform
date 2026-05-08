@@ -190,6 +190,35 @@ class ContractDocumentClassifier
         return preg_match('/^\x{041E}\x{0422}\s+\d{2}$/u', $token) === 1;
     }
 
+    /**
+     * Извлечь дату договора из номера договора в формате DD.MM.YYYY.
+     * Возвращает дату в формате Y-m-d или null, если дата не найдена/невалидна.
+     */
+    public static function extractDocumentDateFromNumber(string $contractNumber): ?string
+    {
+        $instance = new self();
+        $normalized = $instance->normalizeText($contractNumber);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('/\bОТ\s+(\d{2})\.(\d{2})\.(\d{2}|\d{4})\b/u', $normalized, $matches) !== 1) {
+            return null;
+        }
+
+        $day = (int) $matches[1];
+        $month = (int) $matches[2];
+        $yearRaw = $matches[3];
+        $year = strlen($yearRaw) === 2 ? 2000 + (int) $yearRaw : (int) $yearRaw;
+
+        if (! checkdate($month, $day, $year)) {
+            return null;
+        }
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
+    }
+
     private function extractDocumentDate(string $normalized): ?string
     {
         if ($normalized === '') {
