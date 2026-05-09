@@ -918,6 +918,27 @@ class EditMarketSpace extends BaseEditRecord
                         'bbox_x2' => $shape->bbox_x2 !== null ? (float) $shape->bbox_x2 : null,
                         'bbox_y2' => $shape->bbox_y2 !== null ? (float) $shape->bbox_y2 : null,
                     ];
+                } elseif ((string) ($this->record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+                    $childShape = MarketSpaceMapShape::query()
+                        ->join('market_spaces', 'market_spaces.id', '=', 'market_space_map_shapes.market_space_id')
+                        ->where('market_space_map_shapes.market_id', (int) $this->record->market_id)
+                        ->where('market_spaces.market_id', (int) $this->record->market_id)
+                        ->where('market_spaces.space_group_parent_id', $marketSpaceId)
+                        ->where('market_spaces.space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                        ->where('market_space_map_shapes.is_active', true)
+                        ->orderByDesc('market_space_map_shapes.id')
+                        ->first([
+                            'market_space_map_shapes.page',
+                            'market_space_map_shapes.version',
+                        ]);
+
+                    if ($childShape) {
+                        $isMapLinked = true;
+                        $mapStatus = 'Группа отображается на карте через дочерние места.';
+                        $page = (int) ($childShape->page ?? 1);
+                        $version = (int) ($childShape->version ?? 1);
+                        $bbox = null;
+                    }
                 }
             }
 
@@ -984,7 +1005,7 @@ class EditMarketSpace extends BaseEditRecord
             $openMapAction = \Filament\Actions\Action::make('openMap')
                 ->label('Показать на карте')
                 ->icon('heroicon-o-map')
-                ->tooltip($isMapLinked ? 'Откроет связанную карту объекта' : 'Привязка к карте ещё не настроена')
+                ->tooltip($isMapLinked ? $mapStatus : 'Привязка к карте ещё не настроена')
                 ->disabled(! $isMapLinked)
                 ->size('lg')
                 ->outlined()
@@ -1053,7 +1074,7 @@ class EditMarketSpace extends BaseEditRecord
             $openMapAction = \Filament\Pages\Actions\Action::make('openMap')
                 ->label('Показать на карте')
                 ->icon('heroicon-o-map')
-                ->tooltip($isMapLinked ? 'Откроет связанную карту объекта' : 'Привязка к карте ещё не настроена')
+                ->tooltip($isMapLinked ? $mapStatus : 'Привязка к карте ещё не настроена')
                 ->disabled(! $isMapLinked)
                 ->size('lg')
                 ->outlined()
