@@ -5696,6 +5696,8 @@
                     id: Number(hit.market_space_id || space.id || 0),
                     number: space.number || hit.space_number || '',
                     code: space.code || hit.space_code || '',
+                      space_group_role: space.space_group_role || hit.space_group_role || '',
+                      space_group_parent_id: space.space_group_parent_id ?? hit.space_group_parent_id ?? null,
                       tenantName: hit.space_effective_tenant_name || tenant?.name || hit.space_tenant_name || null,
                       space_effective_tenant_id: hit.space_effective_tenant_id ?? null,
                       space_effective_is_occupied: hit.space_effective_is_occupied ?? null,
@@ -5718,6 +5720,7 @@
 
               if (nextChosen) {
                   setChosenSpace(nextChosen, { announce: false });
+                  redrawShapes();
               }
 
               if (CAN_EDIT && editMode && tool === 'select' && hit.shape_id) {
