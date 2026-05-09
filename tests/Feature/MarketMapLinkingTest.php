@@ -98,6 +98,97 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Торговое место не привязано к объектам карты.');
     }
 
+    public function test_market_map_opens_parent_group_through_child_shapes(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12',
+            'display_name' => 'Ф1-12',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $childA = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        $childB = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12-2',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $childA->id,
+            'page' => 2,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 20],
+                ['x' => 30, 'y' => 20],
+                ['x' => 30, 'y' => 40],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 20,
+            'bbox_x2' => 30,
+            'bbox_y2' => 40,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $childB->id,
+            'page' => 2,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 100, 'y' => 120],
+                ['x' => 140, 'y' => 120],
+                ['x' => 140, 'y' => 160],
+            ],
+            'bbox_x1' => 100,
+            'bbox_y1' => 120,
+            'bbox_x2' => 140,
+            'bbox_y2' => 160,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(route('filament.admin.market-map', [
+            'market_space_id' => $parent->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewIs('admin.market-map');
+        $response->assertViewHas('marketSpaceNotLinked', false);
+        $response->assertViewHas('marketSpaceId', (int) $parent->id);
+        $response->assertViewHas('mapPage', 2);
+        $response->assertViewHas('mapVersion', 1);
+
+        $response->assertViewHas('focusShape', function (?array $focusShape) use ($parent): bool {
+            if (! $focusShape) {
+                return false;
+            }
+
+            $bbox = $focusShape['bbox'] ?? [];
+
+            return ($focusShape['market_space_id'] ?? null) === (int) $parent->id
+                && ($bbox['x1'] ?? null) === 10.0
+                && ($bbox['y1'] ?? null) === 20.0
+                && ($bbox['x2'] ?? null) === 140.0
+                && ($bbox['y2'] ?? null) === 160.0;
+        });
+    }
+
     public function test_market_map_uses_bbox_from_request_when_linked(): void
     {
         $this->actingAsSuperAdmin();

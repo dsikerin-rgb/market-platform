@@ -1,5 +1,4 @@
 <?php
-
 # routes/web.php
 
 declare(strict_types=1);
@@ -2938,7 +2937,110 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     ],
                 ];
             } else {
-                $marketSpaceNotLinked = true;
+                $focusedSpace = MarketSpace::query()
+                    ->where('market_id', (int) $market->id)
+                    ->whereKey($marketSpaceId)
+                    ->first(['id', 'market_id', 'space_group_role']);
+
+                $groupFocusShape = null;
+
+                if ($focusedSpace && (string) ($focusedSpace->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+                    $groupShapeQuery = MarketSpaceMapShape::query()
+                        ->join('market_spaces', 'market_spaces.id', '=', 'market_space_map_shapes.market_space_id')
+                        ->where('market_space_map_shapes.market_id', (int) $market->id)
+                        ->where('market_spaces.market_id', (int) $market->id)
+                        ->where('market_spaces.space_group_parent_id', $marketSpaceId)
+                        ->where('market_spaces.space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                        ->where('market_space_map_shapes.is_active', true);
+
+                    if ($pageRequested) {
+                        $groupShapeQuery->where('market_space_map_shapes.page', $page);
+                    }
+
+                    if ($versionRequested) {
+                        $groupShapeQuery->where('market_space_map_shapes.version', $version);
+                    }
+
+                    $groupFocusShape = $groupShapeQuery
+                        ->orderByDesc('market_space_map_shapes.id')
+                        ->first([
+                            'market_space_map_shapes.id',
+                            'market_space_map_shapes.market_space_id',
+                            'market_space_map_shapes.page',
+                            'market_space_map_shapes.version',
+                            'market_space_map_shapes.bbox_x1',
+                            'market_space_map_shapes.bbox_y1',
+                            'market_space_map_shapes.bbox_x2',
+                            'market_space_map_shapes.bbox_y2',
+                        ]);
+
+                    if (! $groupFocusShape && (! $pageRequested || ! $versionRequested)) {
+                        $groupFocusShape = MarketSpaceMapShape::query()
+                            ->join('market_spaces', 'market_spaces.id', '=', 'market_space_map_shapes.market_space_id')
+                            ->where('market_space_map_shapes.market_id', (int) $market->id)
+                            ->where('market_spaces.market_id', (int) $market->id)
+                            ->where('market_spaces.space_group_parent_id', $marketSpaceId)
+                            ->where('market_spaces.space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                            ->where('market_space_map_shapes.is_active', true)
+                            ->orderByDesc('market_space_map_shapes.id')
+                            ->first([
+                                'market_space_map_shapes.id',
+                                'market_space_map_shapes.market_space_id',
+                                'market_space_map_shapes.page',
+                                'market_space_map_shapes.version',
+                                'market_space_map_shapes.bbox_x1',
+                                'market_space_map_shapes.bbox_y1',
+                                'market_space_map_shapes.bbox_x2',
+                                'market_space_map_shapes.bbox_y2',
+                            ]);
+                    }
+                }
+
+                if ($groupFocusShape) {
+                    if (! $pageRequested) {
+                        $page = (int) ($groupFocusShape->page ?? 1);
+                    }
+
+                    if (! $versionRequested) {
+                        $version = (int) ($groupFocusShape->version ?? 1);
+                    }
+
+                    $groupBbox = MarketSpaceMapShape::query()
+                        ->join('market_spaces', 'market_spaces.id', '=', 'market_space_map_shapes.market_space_id')
+                        ->where('market_space_map_shapes.market_id', (int) $market->id)
+                        ->where('market_spaces.market_id', (int) $market->id)
+                        ->where('market_spaces.space_group_parent_id', $marketSpaceId)
+                        ->where('market_spaces.space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                        ->where('market_space_map_shapes.is_active', true)
+                        ->where('market_space_map_shapes.page', $page)
+                        ->where('market_space_map_shapes.version', $version)
+                        ->whereNotNull('market_space_map_shapes.bbox_x1')
+                        ->whereNotNull('market_space_map_shapes.bbox_y1')
+                        ->whereNotNull('market_space_map_shapes.bbox_x2')
+                        ->whereNotNull('market_space_map_shapes.bbox_y2')
+                        ->selectRaw('
+                            MIN(market_space_map_shapes.bbox_x1) as bbox_x1,
+                            MIN(market_space_map_shapes.bbox_y1) as bbox_y1,
+                            MAX(market_space_map_shapes.bbox_x2) as bbox_x2,
+                            MAX(market_space_map_shapes.bbox_y2) as bbox_y2
+                        ')
+                        ->first();
+
+                    $focusShape = [
+                        'id' => (int) $groupFocusShape->id,
+                        'market_space_id' => $marketSpaceId,
+                        'page' => $page,
+                        'version' => $version,
+                        'bbox' => [
+                            'x1' => $bboxFromRequest['x1'] ?? ($groupBbox?->bbox_x1 !== null ? (float) $groupBbox->bbox_x1 : ($groupFocusShape->bbox_x1 !== null ? (float) $groupFocusShape->bbox_x1 : null)),
+                            'y1' => $bboxFromRequest['y1'] ?? ($groupBbox?->bbox_y1 !== null ? (float) $groupBbox->bbox_y1 : ($groupFocusShape->bbox_y1 !== null ? (float) $groupFocusShape->bbox_y1 : null)),
+                            'x2' => $bboxFromRequest['x2'] ?? ($groupBbox?->bbox_x2 !== null ? (float) $groupBbox->bbox_x2 : ($groupFocusShape->bbox_x2 !== null ? (float) $groupFocusShape->bbox_x2 : null)),
+                            'y2' => $bboxFromRequest['y2'] ?? ($groupBbox?->bbox_y2 !== null ? (float) $groupBbox->bbox_y2 : ($groupFocusShape->bbox_y2 !== null ? (float) $groupFocusShape->bbox_y2 : null)),
+                        ],
+                    ];
+                } else {
+                    $marketSpaceNotLinked = true;
+                }
             }
         } elseif ($marketSpaceId) {
             $marketSpaceNotLinked = true;
