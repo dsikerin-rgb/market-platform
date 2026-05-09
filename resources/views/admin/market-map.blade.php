@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ru">
 <head>
   @php
@@ -1067,7 +1067,7 @@
       color: rgba(15, 23, 42, 0.72);
       font-size: 10px;
     }
-    
+
     /* Легенда карты */
     .legend {
       padding: 0;
@@ -1736,6 +1736,193 @@
       color: #334155;
     }
 
+    /* Modal for group membership management */
+    .group-membership-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10020;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .group-membership-modal.show {
+      display: flex;
+    }
+    .group-membership-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.46);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+    }
+    .group-membership-modal__dialog {
+      position: relative;
+      width: min(520px, 100%);
+      max-height: calc(100vh - 64px);
+      overflow-y: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .group-membership-modal__eyebrow {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+    .group-membership-modal__title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      color: #0f172a;
+    }
+    .group-membership-modal__description {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: #475569;
+    }
+    .group-membership-modal__warning {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #b45309;
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .group-membership-modal__section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .group-membership-modal__label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .group-membership-modal__input {
+      width: 100%;
+      box-sizing: border-box;
+      height: 40px;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      border-radius: 12px;
+      padding: 0 12px;
+      background: #fff;
+      color: #0f172a;
+      font-size: 14px;
+      outline: none;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .group-membership-modal__input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    }
+    .group-membership-modal__input:disabled {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    .group-membership-modal__select {
+      width: 100%;
+      box-sizing: border-box;
+      height: 40px;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      border-radius: 12px;
+      padding: 0 12px;
+      background: #fff;
+      color: #0f172a;
+      font-size: 14px;
+      outline: none;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .group-membership-modal__select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+    }
+    .group-membership-modal__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .group-membership-modal__actions button {
+      min-width: 104px;
+    }
+    .group-membership-modal__cancel {
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .group-membership-modal__submit {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+    }
+    .group-membership-modal__submit:hover {
+      background: #1e40af;
+    }
+    .group-membership-modal__submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .group-membership-modal__close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(148, 163, 184, 0.12);
+      color: #334155;
+    }
+    .group-membership-modal__info {
+      font-size: 12px;
+      color: #64748b;
+      padding: 8px 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+    .group-membership-modal__dropdown {
+      position: relative;
+      z-index: 10021;
+      max-height: 240px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid rgba(148, 163, 184, 0.55);
+      border-radius: 12px;
+      margin-top: 4px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    }
+    .group-membership-modal__dropdown-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #0f172a;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .group-membership-modal__dropdown-item:last-child {
+      border-bottom: none;
+    }
+    .group-membership-modal__dropdown-item:hover {
+      background: #f8fafc;
+    }
+    .group-membership-modal__dropdown-item--empty {
+      padding: 14px 12px;
+      color: #94a3b8;
+      text-align: center;
+    }
+
     .toast {
       position: fixed;
       right: 14px;
@@ -2205,6 +2392,75 @@
         </div>
       </div>
 
+      <div id="groupMembershipModal" class="group-membership-modal" hidden aria-hidden="true">
+        <div class="group-membership-modal__backdrop" data-action="close"></div>
+        <div
+          class="group-membership-modal__dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="groupMembershipTitle"
+          aria-describedby="groupMembershipDescription"
+        >
+          <button id="groupMembershipClose" class="group-membership-modal__close" type="button" data-action="close" aria-label="Закрыть">×</button>
+          <div class="group-membership-modal__eyebrow">Управление группой</div>
+          <h2 id="groupMembershipTitle" class="group-membership-modal__title">Изменить состав группы</h2>
+          <p id="groupMembershipDescription" class="group-membership-modal__description">
+            Меняется только состав группы. Арендатор, договоры, начисления, задолженности и 1С-связи не переносятся.
+          </p>
+          <div class="group-membership-modal__warning">
+            ⚠️ Изменение группы не влияет на арендатора, договоры, начисления, задолженность и связи с 1С.
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="groupAction">Действие</label>
+            <select id="groupAction" class="group-membership-modal__select">
+              <option value="add_to_group">Добавить в группу</option>
+              <option value="move_to_group">Перенести в другую группу</option>
+              <option value="remove_from_group">Убрать из группы</option>
+            </select>
+          </div>
+          <div class="group-membership-modal__section" id="groupCurrentParentSection" style="display:none;">
+            <label class="group-membership-modal__label">Текущая группа</label>
+            <div id="groupCurrentParentInfo" class="group-membership-modal__info">—</div>
+          </div>
+          <div class="group-membership-modal__section" id="groupTargetParentSection">
+            <label class="group-membership-modal__label" for="groupTargetParentSearch">Поиск группы</label>
+            <input
+              id="groupTargetParentSearch"
+              class="group-membership-modal__input"
+              type="text"
+              autocomplete="off"
+              placeholder="Начните вводить название группы"
+            >
+            <div id="groupTargetParentDropdown" class="group-membership-modal__dropdown" style="display:none;"></div>
+            <input type="hidden" id="groupTargetParent" name="groupTargetParent">
+          </div>
+          <div class="group-membership-modal__section" id="groupSlotSection">
+            <label class="group-membership-modal__label" for="groupSlot">Номер внутри группы</label>
+            <input
+              id="groupSlot"
+              class="group-membership-modal__input"
+              type="text"
+              autocomplete="off"
+              placeholder="например 6 или A1"
+            >
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="groupComment">Комментарий (необязательно)</label>
+            <input
+              id="groupComment"
+              class="group-membership-modal__input"
+              type="text"
+              autocomplete="off"
+              placeholder="Заметка о причине изменения"
+            >
+          </div>
+          <div class="group-membership-modal__actions">
+            <button type="button" id="groupMembershipCancel" class="group-membership-modal__cancel" data-action="close">Отмена</button>
+            <button type="button" id="groupMembershipSubmit" class="group-membership-modal__submit">Применить</button>
+          </div>
+        </div>
+      </div>
+
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <script type="module">
@@ -2285,6 +2541,19 @@
         const identityFixModal = document.getElementById('identityFixModal');
         const identityFixInput = document.getElementById('identityFixInput');
         const identityFixClose = document.getElementById('identityFixClose');
+        const groupMembershipModal = document.getElementById('groupMembershipModal');
+        const groupAction = document.getElementById('groupAction');
+        const groupTargetParentSearch = document.getElementById('groupTargetParentSearch');
+        const groupTargetParentDropdown = document.getElementById('groupTargetParentDropdown');
+        const groupTargetParent = document.getElementById('groupTargetParent');
+        const groupSlot = document.getElementById('groupSlot');
+        const groupComment = document.getElementById('groupComment');
+        const groupCurrentParentSection = document.getElementById('groupCurrentParentSection');
+        const groupCurrentParentInfo = document.getElementById('groupCurrentParentInfo');
+        const groupTargetParentSection = document.getElementById('groupTargetParentSection');
+        const groupSlotSection = document.getElementById('groupSlotSection');
+        const groupMembershipCancel = document.getElementById('groupMembershipCancel');
+        const groupMembershipSubmit = document.getElementById('groupMembershipSubmit');
         const utilityGroup = document.querySelector('.toolbar-row--controls .toolbar-group--utility') || null;
 
         const editHint = document.getElementById('editHint');
@@ -2300,6 +2569,7 @@
         let reviewProgressState = INITIAL_REVIEW_PROGRESS || {};
         let currentLayer = 'debt';
         let redrawShapesRef = null;
+        let loadShapesRef = null;
         let reviewNavItems = [];
         let isProgrammaticNavigation = false;
         let updateReviewNavUi = () => {};
@@ -2312,6 +2582,10 @@
         let mapLoadProgressHideTimer = null;
         let mapLoadProgressState = 'idle';
         let identityFixContext = null;
+        let groupMembershipContext = null;
+        let groupSearchTimer = null;
+        let groupSearchController = null;
+        let groupSearchResults = [];
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -2547,6 +2821,277 @@
           });
         }
 
+        // Group membership modal functions
+        function closeGroupMembershipModal() {
+          if (!groupMembershipModal) return;
+
+          groupMembershipModal.classList.remove('show');
+          groupMembershipModal.hidden = true;
+          groupMembershipModal.setAttribute('aria-hidden', 'true');
+          groupMembershipContext = null;
+
+          // Reset form
+          if (groupAction) groupAction.value = 'add_to_group';
+          if (groupTargetParentSearch) groupTargetParentSearch.value = '';
+          if (groupTargetParentDropdown) {
+            groupTargetParentDropdown.style.display = 'none';
+            groupTargetParentDropdown.innerHTML = '';
+          }
+          if (groupTargetParent) groupTargetParent.value = '';
+          if (groupSlot) groupSlot.value = '';
+          if (groupComment) groupComment.value = '';
+
+          // Reset group search
+          groupSearchResults = [];
+          if (groupSearchTimer) clearTimeout(groupSearchTimer);
+          if (groupSearchController) groupSearchController.abort();
+        }
+
+        function openGroupMembershipModal(space) {
+          if (!groupMembershipModal || !groupAction || !groupTargetParentSearch) return;
+
+          groupMembershipContext = {
+            spaceId: space?.id ?? null,
+            spaceNumber: space?.number ?? '',
+            spaceGroupRole: space?.spaceGroupRole ?? '',
+            spaceGroupParentId: space?.spaceGroupParentId ?? null,
+            spaceGroupSlot: space?.spaceGroupSlot ?? '',
+          };
+
+          // Set action based on current role
+          const currentRole = space?.spaceGroupRole ?? 'none';
+          if (currentRole === 'parent') {
+            toast('Состав группы меняется через обычные/дочерние места');
+            return;
+          }
+
+          groupAction.value = currentRole === 'child' ? 'move_to_group' : 'add_to_group';
+
+          // Update UI based on action
+          onGroupActionChange();
+
+          // Pre-fill slot if moving
+          if (currentRole === 'child' && space?.spaceGroupSlot) {
+            groupSlot.value = space.spaceGroupSlot;
+          }
+
+          groupMembershipModal.hidden = false;
+          groupMembershipModal.classList.add('show');
+          groupMembershipModal.setAttribute('aria-hidden', 'false');
+
+          requestAnimationFrame(() => {
+            groupTargetParentSearch.focus();
+          });
+        }
+
+        function onGroupActionChange() {
+          if (!groupAction || !groupTargetParentSection || !groupCurrentParentSection || !groupSlotSection) return;
+
+          const action = groupAction.value;
+          const currentRole = groupMembershipContext?.spaceGroupRole ?? 'none';
+
+          // Show/hide target parent section
+          if (action === 'remove_from_group') {
+            groupTargetParentSection.style.display = 'none';
+          } else {
+            groupTargetParentSection.style.display = 'flex';
+          }
+
+          // Show current parent info if child
+          if (currentRole === 'child' && groupMembershipContext?.spaceGroupParentId) {
+            groupCurrentParentSection.style.display = 'flex';
+            if (groupCurrentParentInfo) {
+              groupCurrentParentInfo.textContent = 'Группа №' + (groupMembershipContext.spaceNumber || '—');
+            }
+          } else {
+            groupCurrentParentSection.style.display = 'none';
+          }
+
+          // Slot is required for add/move
+          if (groupSlot) {
+            groupSlot.required = action !== 'remove_from_group';
+          }
+        }
+
+        function closeGroupSearchDropdown() {
+          if (!groupTargetParentDropdown) return;
+          groupTargetParentDropdown.style.display = 'none';
+          groupTargetParentDropdown.innerHTML = '';
+          groupSearchResults = [];
+        }
+
+        function scheduleGroupSearch() {
+          if (groupSearchTimer) clearTimeout(groupSearchTimer);
+          groupSearchTimer = setTimeout(() => runGroupSearch(), 300);
+        }
+
+        async function runGroupSearch() {
+          if (!groupTargetParentSearch || !SPACES_URL) return;
+          const value = String(groupTargetParentSearch.value || '').trim();
+
+          if (!value || value.length < 1) {
+            closeGroupSearchDropdown();
+            return;
+          }
+
+          if (groupSearchController) groupSearchController.abort();
+          groupSearchController = new AbortController();
+
+          try {
+            const url = new URL(SPACES_URL, window.location.origin);
+            url.searchParams.set('q', value);
+            url.searchParams.set('limit', '50');
+
+            const res = await apiFetch(url.toString(), {
+              headers: { 'Accept': 'application/json' },
+              signal: groupSearchController.signal,
+            });
+            const json = await res.json();
+
+            if (!res.ok || !json || json.ok !== true) {
+              closeGroupSearchDropdown();
+              return;
+            }
+
+            const items = Array.isArray(json.items) ? json.items : [];
+            const parentGroups = items.filter((item) => {
+              return item?.space_group_role === 'parent' || item?.is_space_group_parent || item?.result_type === 'group';
+            });
+
+            groupSearchResults = parentGroups;
+            renderGroupSearchDropdown(parentGroups);
+          } catch (e) {
+            if (e?.name === 'AbortError') return;
+            console.error(e);
+            closeGroupSearchDropdown();
+          }
+        }
+
+        function renderGroupSearchDropdown(items) {
+          if (!groupTargetParentDropdown) return;
+
+          groupTargetParentDropdown.innerHTML = '';
+
+          if (!items.length) {
+            groupTargetParentDropdown.innerHTML = '<div class="group-membership-modal__dropdown-item--empty">Группы не найдены</div>';
+            groupTargetParentDropdown.style.display = 'block';
+            return;
+          }
+
+          items.forEach((group, idx) => {
+            const item = document.createElement('div');
+            item.className = 'group-membership-modal__dropdown-item';
+            item.textContent = formatSpaceDropdownLabel(group);
+            item.addEventListener('click', () => {
+              selectGroupForTarget(group);
+            });
+            groupTargetParentDropdown.appendChild(item);
+          });
+
+          groupTargetParentDropdown.style.display = 'block';
+        }
+
+        function selectGroupForTarget(group) {
+          if (!groupTargetParentSearch || !groupTargetParent || !groupTargetParentDropdown) return;
+
+          groupTargetParentSearch.value = formatSpaceDropdownLabel(group);
+          groupTargetParent.value = String(group.id);
+          closeGroupSearchDropdown();
+        }
+
+        async function submitGroupMembership() {
+          if (!groupAction || !groupMembershipSubmit) return;
+
+          // Guard от двойной отправки
+          if (groupMembershipSubmit.disabled) {
+            return;
+          }
+
+          const action = groupAction.value;
+          const spaceId = groupMembershipContext?.spaceId;
+
+          if (!spaceId || !Number.isFinite(spaceId) || spaceId <= 0) {
+            toast('Ошибка: не выбрано место');
+            return;
+          }
+
+          const payload = {
+            action,
+            target_parent_id: action === 'remove_from_group' ? null : (groupTargetParent?.value ? Number(groupTargetParent.value) : null),
+            target_slot: action === 'remove_from_group' ? null : (groupSlot?.value ? String(groupSlot.value).trim() : null),
+            comment: groupComment?.value ? String(groupComment.value).trim() : null,
+          };
+
+          // Validate
+          if (action !== 'remove_from_group' && !payload.target_parent_id) {
+            toast('Выберите целевую группу');
+            groupTargetParentSearch?.focus();
+            return;
+          }
+
+          if (action !== 'remove_from_group' && !payload.target_slot) {
+            toast('Введите номер внутри группы');
+            groupSlot?.focus();
+            return;
+          }
+
+          // Disable submit button
+          groupMembershipSubmit.disabled = true;
+          const originalText = groupMembershipSubmit.textContent;
+          groupMembershipSubmit.textContent = 'Применяю…';
+
+          try {
+            const url = `/admin/market-map/spaces/${spaceId}/group-membership`;
+
+            const res = await apiFetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload),
+            });
+
+            const json = await res.json();
+
+            if (!res.ok || !json || json.ok !== true) {
+              // Handle 422 validation errors
+              let message = 'Ошибка при изменении состава группы';
+              if (json?.errors) {
+                const firstErrorKey = Object.keys(json.errors)[0];
+                if (firstErrorKey && Array.isArray(json.errors[firstErrorKey])) {
+                  message = json.errors[firstErrorKey][0];
+                }
+              } else if (json?.message) {
+                message = json.message;
+              }
+              throw new Error(message);
+            }
+
+            // Success - reload shapes from server
+            if (typeof loadShapesRef === 'function') {
+              await loadShapesRef();
+            }
+            if (typeof redrawShapesRef === 'function') {
+              redrawShapesRef();
+            }
+            if (typeof refreshChosenSpaceFromServer === 'function') {
+              await refreshChosenSpaceFromServer();
+            }
+
+            toast('Группа обновлена');
+            closeGroupMembershipModal();
+            hidePopover();
+          } catch (err) {
+            console.error(err);
+            toast(err?.message || 'Ошибка при изменении состава группы');
+          } finally {
+            if (groupMembershipSubmit) {
+              groupMembershipSubmit.disabled = false;
+              groupMembershipSubmit.textContent = originalText;
+            }
+          }
+        }
+
         function showPopoverAt(clientX, clientY, html, isUnboundShape = false) {
           if (!popover || !popoverBody) return;
 
@@ -2609,11 +3154,56 @@
           });
         });
         identityFixClose?.addEventListener('click', closeIdentityFixModal);
+
+        // Group membership modal handlers
+        groupMembershipModal?.addEventListener('click', (e) => {
+          const t = e.target;
+          if (!(t instanceof HTMLElement)) return;
+
+          const action = t.getAttribute('data-action');
+          if (action === 'close') {
+            e.preventDefault();
+            closeGroupMembershipModal();
+            return;
+          }
+        });
+        groupMembershipCancel?.addEventListener('click', closeGroupMembershipModal);
+        groupMembershipSubmit?.addEventListener('click', (e) => {
+          e.preventDefault();
+          submitGroupMembership().catch((err) => {
+            console.error(err);
+            toast(String(err?.message || err));
+          });
+        });
+        groupAction?.addEventListener('change', onGroupActionChange);
+        groupTargetParentSearch?.addEventListener('input', () => {
+          scheduleGroupSearch();
+        });
+        groupTargetParentSearch?.addEventListener('focus', () => {
+          const value = String(groupTargetParentSearch?.value || '').trim();
+          if (value && groupSearchResults.length > 0) {
+            renderGroupSearchDropdown(groupSearchResults);
+          }
+        });
+        document.addEventListener('click', (e) => {
+          if (groupMembershipModal?.classList.contains('show')) {
+            if (groupTargetParentDropdown && !groupTargetParentDropdown.contains(e.target) && e.target !== groupTargetParentSearch) {
+              closeGroupSearchDropdown();
+            }
+          }
+        });
         window.addEventListener('keydown', (e) => {
           if (identityFixModal?.classList.contains('show')) {
             if (e.key === 'Escape') {
               e.preventDefault();
               closeIdentityFixModal();
+            }
+            return;
+          }
+          if (groupMembershipModal?.classList.contains('show')) {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeGroupMembershipModal();
             }
             return;
           }
@@ -2684,6 +3274,7 @@
             spaceGroupParentId: item?.space_group_parent_id !== null && item?.space_group_parent_id !== undefined
               ? Number(item.space_group_parent_id)
               : (item?.spaceGroupParentId !== null && item?.spaceGroupParentId !== undefined ? Number(item.spaceGroupParentId) : null),
+            spaceGroupSlot: item?.space_group_slot ? String(item.space_group_slot) : (item?.spaceGroupSlot ? String(item.spaceGroupSlot) : ''),
             isSpaceGroupParent: Boolean(item?.is_space_group_parent || item?.isSpaceGroupParent || item?.result_type === 'group' || item?.resultType === 'group' || item?.space_group_role === 'parent' || item?.spaceGroupRole === 'parent'),
             resultType: item?.result_type ? String(item.result_type) : (item?.resultType ? String(item.resultType) : ((item?.space_group_role === 'parent' || item?.spaceGroupRole === 'parent') ? 'group' : 'space')),
             tenantName: effectiveTenantName || directTenantName || null,
@@ -3115,6 +3706,7 @@
                 displayName: chosenSpace.displayName,
                 spaceGroupRole: chosenSpace.spaceGroupRole || '',
                 spaceGroupParentId: chosenSpace.spaceGroupParentId ?? null,
+                spaceGroupSlot: chosenSpace.spaceGroupSlot ?? '',
                 isSpaceGroupParent: !!chosenSpace.isSpaceGroupParent,
                 resultType: chosenSpace.resultType || 'space',
                 tenantName: chosenSpace.tenantName,
@@ -3134,6 +3726,7 @@
             displayName: space.displayName || space.display_name || '',
             spaceGroupRole: space.spaceGroupRole || space.space_group_role || '',
             spaceGroupParentId: space.spaceGroupParentId ?? space.space_group_parent_id ?? null,
+            spaceGroupSlot: space.spaceGroupSlot ?? space.space_group_slot ?? '',
             isSpaceGroupParent: Boolean(space.isSpaceGroupParent || space.is_space_group_parent || space.resultType === 'group' || space.result_type === 'group'),
             resultType: space.resultType || space.result_type || ((space.spaceGroupRole || space.space_group_role) === 'parent' ? 'group' : 'space'),
             tenantName: space.tenantName ?? null,
@@ -4027,6 +4620,8 @@
             }
           }
 
+          loadShapesRef = loadShapes;
+
           function redrawShapes() {
             if (!shapesSvg || !currentViewport) return;
 
@@ -4123,7 +4718,7 @@
               const isTenantFallbackScope = showReviewMarkers && hasSpace && debtScope === 'tenant_fallback';
               const isCombinedReviewMarker = isConflictReview && isTenantFallbackScope;
               const rentRateBand = getRentRateBand(s.space_rent_rate_value, rentLayerStats);
-              
+
               // Цвета для debt status
               const debtColors = {
                 green: '#22c55e',
@@ -4141,7 +4736,7 @@
               let fillStyle = 'normal'; // normal, debt, rent, rent-missing, vacant, unlinked
               let debtFill = null;
               let rentFill = null;
-              
+
               if (!hasSpace) {
                 // Shape без market_space_id — разметка без привязки
                 fillStyle = 'unlinked';
@@ -4164,13 +4759,13 @@
                 // Место с арендатором, но нет debt_status — normal
                 fillStyle = 'normal';
               }
-              
+
               // Применяем стили
               let fill = null;
               let stroke = BORDER_COLOR;
               let strokeDasharray = null;
               let fo = 0.12;
-              
+
               if (fillStyle === 'unlinked') {
                 // Разметка без привязки: штриховка 45 градусов и нейтральная обводка
                 fill = 'url(#unlinkedHatch)';
@@ -4209,7 +4804,7 @@
                 stroke = '#94a3b8';
                 fo = 1;
               }
-              
+
               const sw = BORDER_WIDTH_BASE;
 
               const isSel = selected && Number(selected.id) === Number(s.id);
@@ -6005,6 +6600,24 @@
 
                 btns.push('<button type="button" data-action="delete-shape" data-shape-id="' + String(shapeId) + '">Удалить разметку</button>');
               }
+
+              // Group membership button
+              const spaceGroupRole = hit?.space?.space_group_role ?? hit?.space_group_role ?? '';
+              const spaceGroupParentId = hit?.space?.space_group_parent_id ?? hit?.space_group_parent_id ?? null;
+              const spaceGroupSlot = hit?.space?.space_group_slot ?? hit?.space_group_slot ?? '';
+              const hitSpaceId = hit?.market_space_id ?? hit?.id ?? null;
+              const hasSpaceId = Number.isFinite(hitSpaceId) && hitSpaceId > 0;
+
+              if (CAN_EDIT && hasSpaceId) {
+                if (spaceGroupRole === 'parent') {
+                  btns.push('<button type="button" disabled title="Состав группы меняется через обычные/дочерние места">Группа (через места)</button>');
+                } else if (spaceGroupRole === 'child') {
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(hitSpaceId) + '">Управление группой</button>');
+                } else {
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(hitSpaceId) + '">Добавить в группу</button>');
+                }
+              }
+
               if (btns.length) {
                 actions = '<div class="act">' + btns.join('') + '</div>';
               }
@@ -6128,6 +6741,43 @@
               if (next) {
                 setChosenSpace(next, { announce: true });
                 hidePopover();
+              }
+              return;
+            }
+
+            if (action === 'open-group-membership') {
+              const id = Number(t.getAttribute('data-space-id') || 0);
+              if (!Number.isFinite(id) || id <= 0) return;
+
+              const spaceLabel = lastHit?.space || null;
+              const hitTenant = lastHit?.tenant || null;
+              const spaceForGroup = normalizeChosenSpace({
+                id,
+                number: spaceLabel?.number ?? '',
+                code: spaceLabel?.code ?? '',
+                space_group_role: lastHit?.space?.space_group_role ?? lastHit?.space_group_role ?? '',
+                space_group_parent_id: lastHit?.space?.space_group_parent_id ?? lastHit?.space_group_parent_id ?? null,
+                space_group_slot: lastHit?.space?.space_group_slot ?? lastHit?.space_group_slot ?? '',
+                tenantName: lastHit?.space_effective_tenant_name || hitTenant?.name || null,
+                space_effective_tenant_id: lastHit?.space_effective_tenant_id ?? null,
+                space_effective_is_occupied: lastHit?.space_effective_is_occupied ?? null,
+                space_occupancy_source: lastHit?.space_occupancy_source || 'none',
+                space_occupancy_source_space_id: lastHit?.space_occupancy_source_space_id ?? null,
+                space_occupancy_source_space_number: lastHit?.space_occupancy_source_space_number ?? null,
+                space_effective_debt_status: lastHit?.space_effective_debt_status ?? null,
+                space_effective_debt_status_label: lastHit?.space_effective_debt_status_label ?? null,
+                space_effective_debt_status_mode: lastHit?.space_effective_debt_status_mode ?? 'auto',
+                space_effective_debt_status_source: lastHit?.space_effective_debt_status_source ?? null,
+                space_effective_debt_overdue_days: lastHit?.space_effective_debt_overdue_days ?? null,
+                space_effective_debt_status_scope: lastHit?.space_effective_debt_status_scope ?? 'none',
+                space_financial_source: lastHit?.space_financial_source ?? 'none',
+                space_financial_source_space_id: lastHit?.space_financial_source_space_id ?? null,
+                space_financial_source_space_number: lastHit?.space_financial_source_space_number ?? null,
+              });
+
+              if (spaceForGroup) {
+                hidePopover();
+                openGroupMembershipModal(spaceForGroup);
               }
               return;
             }
