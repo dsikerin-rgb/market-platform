@@ -17,6 +17,88 @@ final class SpaceGroupManager
     }
 
     /**
+     * Добавить обычное место в группу.
+     *
+     * @return array{
+     *   child_id: int,
+     *   old_parent_id: null,
+     *   new_parent_id: int,
+     *   slot: string,
+     *   renamed_parents: list<array{id:int, old_number:string, new_number:string}>
+     * }
+     */
+    public function addToGroup(MarketSpace $space, MarketSpace $targetParent, string $slot): array
+    {
+        $slot = $this->normalizeRequiredSlot($slot);
+        $this->assertCanAddToGroup($space, $targetParent, $slot);
+
+        return DB::transaction(function () use ($space, $targetParent, $slot): array {
+            $targetToken = $this->resolveParentToken($targetParent);
+
+            $space->forceFill([
+                'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+                'space_group_parent_id' => (int) $targetParent->getKey(),
+                'space_group_slot' => $slot,
+                'space_group_token' => $targetToken,
+            ])->save();
+
+            $renamed = $this->syncParentIdentity($targetParent->fresh());
+            $renamedParents = $renamed !== null ? [$renamed] : [];
+
+            return [
+                'child_id' => (int) $space->getKey(),
+                'old_parent_id' => null,
+                'new_parent_id' => (int) $targetParent->getKey(),
+                'slot' => $slot,
+                'renamed_parents' => $renamedParents,
+            ];
+        });
+    }
+
+    /**
+     * Убрать child-место из группы.
+     *
+     * @return array{
+     *   child_id: int,
+     *   old_parent_id: int,
+     *   new_parent_id: null,
+     *   renamed_parents: list<array{id:int, old_number:string, new_number:string}>
+     * }
+     */
+    public function removeFromGroup(MarketSpace $child): array
+    {
+        $this->assertCanRemoveFromGroup($child);
+
+        return DB::transaction(function () use ($child): array {
+            $oldParent = $child->spaceGroupParent;
+            $oldParentId = $oldParent?->getKey() ? (int) $oldParent->getKey() : null;
+
+            $child->forceFill([
+                'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+                'space_group_parent_id' => null,
+                'space_group_slot' => null,
+                'space_group_token' => null,
+            ])->save();
+
+            $renamedParents = [];
+
+            if ($oldParent instanceof MarketSpace) {
+                $renamed = $this->syncParentIdentity($oldParent->fresh());
+                if ($renamed !== null) {
+                    $renamedParents[] = $renamed;
+                }
+            }
+
+            return [
+                'child_id' => (int) $child->getKey(),
+                'old_parent_id' => $oldParentId,
+                'new_parent_id' => null,
+                'renamed_parents' => $renamedParents,
+            ];
+        });
+    }
+
+    /**
      * @return array{
      *   child_id: int,
      *   old_parent_id: ?int,
@@ -120,6 +202,12 @@ final class SpaceGroupManager
 
     private function assertCanRegroup(MarketSpace $child, MarketSpace $targetParent, string $slot): void
     {
+        if (! (bool) $child->is_active) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Нельзя переносить неактивное место.',
+            ]);
+        }
+
         if ($child->space_group_role !== MarketSpace::SPACE_GROUP_ROLE_CHILD) {
             throw ValidationException::withMessages([
                 'target_parent_id' => 'Переносить в другую группу можно только место с ролью "Место в группе".',
@@ -243,5 +331,76 @@ final class SpaceGroupManager
         }
 
         return $slot;
+    }
+
+    private function assertCanAddToGroup(MarketSpace $space, MarketSpace $targetParent, string $slot): void
+    {
+        if (! (bool) $space->is_active) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Нельзя добавить в группу неактивное место.',
+            ]);
+        }
+
+        if ($space->space_group_role !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
+            throw ValidationException::withMessages([
+                'target_parent_id' => 'Добавить в группу можно только обычное место (без группы).',
+            ]);
+        }
+
+        if ($targetParent->space_group_role !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            throw ValidationException::withMessages([
+                'target_parent_id' => 'Целевая запись должна быть группой мест.',
+            ]);
+        }
+
+        if ((int) $space->market_id !== (int) $targetParent->market_id) {
+            throw ValidationException::withMessages([
+                'target_parent_id' => 'Нельзя добавить место в группу другого рынка.',
+            ]);
+        }
+
+        if (! (bool) $targetParent->is_active) {
+            throw ValidationException::withMessages([
+                'target_parent_id' => 'Нельзя добавить место в неактивную группу.',
+            ]);
+        }
+
+        if ((int) $space->getKey() === (int) $targetParent->getKey()) {
+            throw ValidationException::withMessages([
+                'target_parent_id' => 'Место не может быть собственной группой.',
+            ]);
+        }
+
+        $duplicateSlotExists = $targetParent->spaceGroupChildren()
+            ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+            ->where('space_group_slot', $slot)
+            ->exists();
+
+        if ($duplicateSlotExists) {
+            throw ValidationException::withMessages([
+                'target_slot' => 'В выбранной группе уже есть место с таким номером внутри группы.',
+            ]);
+        }
+    }
+
+    private function assertCanRemoveFromGroup(MarketSpace $child): void
+    {
+        if (! (bool) $child->is_active) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Нельзя убрать из группы неактивное место.',
+            ]);
+        }
+
+        if ($child->space_group_role !== MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Убрать из группы можно только место с ролью "Место в группе".',
+            ]);
+        }
+
+        if (! filled($child->space_group_parent_id)) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Это место не входит ни в одну группу.',
+            ]);
+        }
     }
 }
