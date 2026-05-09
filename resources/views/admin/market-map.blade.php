@@ -2543,6 +2543,7 @@
         const identityFixClose = document.getElementById('identityFixClose');
         const groupMembershipModal = document.getElementById('groupMembershipModal');
         const groupAction = document.getElementById('groupAction');
+        const groupActionSection = groupAction?.closest('.group-membership-modal__section') || null;
         const groupTargetParentSearch = document.getElementById('groupTargetParentSearch');
         const groupTargetParentDropdown = document.getElementById('groupTargetParentDropdown');
         const groupTargetParent = document.getElementById('groupTargetParent');
@@ -2889,6 +2890,10 @@
 
           const action = groupAction.value;
           const currentRole = groupMembershipContext?.spaceGroupRole ?? 'none';
+
+          if (groupActionSection) {
+            groupActionSection.style.display = currentRole === 'child' ? 'flex' : 'none';
+          }
 
           // Show/hide target parent section
           if (action === 'remove_from_group') {
