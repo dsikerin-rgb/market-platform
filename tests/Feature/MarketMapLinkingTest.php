@@ -193,6 +193,57 @@ class MarketMapLinkingTest extends TestCase
         $response->assertDontSee('>Применить уточнение</button>', false);
     }
 
+    public function test_parent_space_edit_page_opens_map_through_child_shapes(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12',
+            'display_name' => 'Ф1-12',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'F1-12',
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12-1',
+            'display_name' => 'Ф1-12 место 1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_token' => 'F1-12',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $child->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $parent]));
+
+        $response->assertOk();
+        $response->assertSee('Показать на карте', false);
+        $response->assertDontSee('Нет карты', false);
+        $response->assertSee('market_space_id=' . (int) $parent->id, false);
+    }
+
     public function test_market_space_edit_status_view_shows_linked_state(): void
     {
         $linkedView = view('admin.market-space-edit', [
