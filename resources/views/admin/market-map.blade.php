@@ -6603,18 +6603,16 @@
 
               // Group membership button
               const spaceGroupRole = hit?.space?.space_group_role ?? hit?.space_group_role ?? '';
-              const spaceGroupParentId = hit?.space?.space_group_parent_id ?? hit?.space_group_parent_id ?? null;
-              const spaceGroupSlot = hit?.space?.space_group_slot ?? hit?.space_group_slot ?? '';
-              const hitSpaceId = hit?.market_space_id ?? hit?.id ?? null;
-              const hasSpaceId = Number.isFinite(hitSpaceId) && hitSpaceId > 0;
+              const groupMembershipSpaceId = Number(hit?.market_space_id ?? hit?.space?.id ?? 0);
+              const hasGroupMembershipSpace = Number.isFinite(groupMembershipSpaceId) && groupMembershipSpaceId > 0;
 
-              if (CAN_EDIT && hasSpaceId) {
+              if (CAN_EDIT && hasGroupMembershipSpace) {
                 if (spaceGroupRole === 'parent') {
                   btns.push('<button type="button" disabled title="Состав группы меняется через обычные/дочерние места">Группа (через места)</button>');
                 } else if (spaceGroupRole === 'child') {
-                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(hitSpaceId) + '">Управление группой</button>');
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Управление группой</button>');
                 } else {
-                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(hitSpaceId) + '">Добавить в группу</button>');
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Добавить в группу</button>');
                 }
               }
 
