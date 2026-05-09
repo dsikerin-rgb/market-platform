@@ -2181,6 +2181,149 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     })->name('filament.admin.market-map.hit');
 
     /**
+     * Изменение группировки места (добавить/перенести/убрать из группы).
+     */
+    Route::post('/admin/market-map/spaces/{marketSpace}/group-membership', function (Request $request, MarketSpace $marketSpace) use (
+        $resolveMarketForMap,
+        $ensureCanEditShapes,
+    ) {
+        $ensureCanEditShapes();
+        $market = $resolveMarketForMap();
+
+        abort_unless((int) $marketSpace->market_id === (int) $market->id, 403, 'Место не принадлежит этому рынку.');
+
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'in:add_to_group,move_to_group,remove_from_group'],
+            'target_parent_id' => ['nullable', 'integer', 'exists:market_spaces,id'],
+            'target_slot' => ['nullable', 'string', 'max:255'],
+            'comment' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $action = $validated['action'];
+        $targetSlot = $validated['target_slot'] ?? null;
+        $comment = $validated['comment'] ?? null;
+
+        $spaceManager = app(\App\Services\MarketSpaces\SpaceGroupManager::class);
+
+        if ($action === 'add_to_group') {
+            $targetParentId = $validated['target_parent_id'] ?? null;
+
+            if (!$targetParentId) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Укажите target_parent_id.',
+                    'errors' => ['target_parent_id' => ['Укажите целевую группу.']],
+                ], 422);
+            }
+
+            $targetParent = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey((int) $targetParentId)
+                ->first();
+
+            if (!$targetParent) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Целевая группа не найдена.',
+                    'errors' => ['target_parent_id' => ['Целевая группа не найдена в этом рынке.']],
+                ], 422);
+            }
+
+            if ($targetSlot === null || $targetSlot === '') {
+                throw ValidationException::withMessages([
+                    'target_slot' => 'Укажите номер внутри группы.',
+                ]);
+            }
+
+            try {
+                $result = $spaceManager->addToGroup($marketSpace->fresh(), $targetParent, $targetSlot);
+            } catch (ValidationException $e) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                    'errors' => $e->errors(),
+                ], 422);
+            }
+        } elseif ($action === 'move_to_group') {
+            $targetParentId = $validated['target_parent_id'] ?? null;
+
+            if (!$targetParentId) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Укажите target_parent_id.',
+                    'errors' => ['target_parent_id' => ['Укажите целевую группу.']],
+                ], 422);
+            }
+
+            $targetParent = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey((int) $targetParentId)
+                ->first();
+
+            if (!$targetParent) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Целевая группа не найдена.',
+                    'errors' => ['target_parent_id' => ['Целевая группа не найдена в этом рынке.']],
+                ], 422);
+            }
+
+            $slot = $targetSlot !== null && $targetSlot !== ''
+                ? $targetSlot
+                : $marketSpace->space_group_slot;
+
+            if ($slot === null || $slot === '') {
+                throw ValidationException::withMessages([
+                    'target_slot' => 'Укажите номер внутри группы.',
+                ]);
+            }
+
+            try {
+                $result = $spaceManager->regroupChild($marketSpace->fresh(), $targetParent, $slot);
+            } catch (ValidationException $e) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                    'errors' => $e->errors(),
+                ], 422);
+            }
+        } elseif ($action === 'remove_from_group') {
+            try {
+                $result = $spaceManager->removeFromGroup($marketSpace->fresh());
+            } catch (ValidationException $e) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                    'errors' => $e->errors(),
+                ], 422);
+            }
+        } else {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Неизвестное действие.',
+                'errors' => ['action' => ['Недопустимое значение.']],
+            ], 422);
+        }
+
+        $space = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $result['child_id'])
+            ->first();
+
+        return response()->json([
+            'ok' => true,
+            'action' => $action,
+            'market_space_id' => (int) $result['child_id'],
+            'old_parent_id' => $result['old_parent_id'],
+            'new_parent_id' => $result['new_parent_id'],
+            'space_group_role' => (string) ($space?->space_group_role ?? ''),
+            'space_group_slot' => $space?->space_group_slot ?? null,
+            'renamed_parents' => $result['renamed_parents'] ?? [],
+            'comment' => $comment,
+        ]);
+    })->name('filament.admin.market-map.spaces.group-membership');
+
+    /**
      * Экспорт реестра по операциям и начислениям (CSV).
      */
     Route::get('/admin/operations/export', function (Request $request) use ($resolveMarketForMap) {
