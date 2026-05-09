@@ -2143,6 +2143,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'review_status' => (string) ($space->map_review_status ?? ''),
                     'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                     'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                    'space_group_role' => (string) ($space->space_group_role ?? ''),
+                    'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
                     'location_name' => $locationName,
                     'rent_rate_value' => $rentRateValue,
                     'rent_rate_unit' => $rentRateUnit,

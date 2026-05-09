@@ -357,6 +357,60 @@ class MarketMapLinkingTest extends TestCase
             $unlinkedView->render()
         );
     }
+    public function test_market_map_hit_endpoint_exposes_child_group_fields(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф1-12',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ф7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $child->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 40, 'y' => 10],
+                ['x' => 40, 'y' => 40],
+                ['x' => 10, 'y' => 40],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 40,
+            'bbox_y2' => 40,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.hit', [
+            'x' => 20,
+            'y' => 20,
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('hit.market_space_id', (int) $child->id);
+        $response->assertJsonPath('hit.space.space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD);
+        $response->assertJsonPath('hit.space.space_group_parent_id', (int) $parent->id);
+    }
+
     public function test_market_map_space_endpoint_exposes_effective_occupancy_from_parent_group(): void
     {
         $this->actingAsSuperAdmin();
