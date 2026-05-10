@@ -852,7 +852,7 @@ class MarketMapGroupMembershipTest extends TestCase
 
         $operation = Operation::query()
             ->where('market_id', $market->id)
-            ->where('entity_type', MarketSpace::class)
+            ->where('entity_type', 'market_space')
             ->where('entity_id', $space->id)
             ->where('type', OperationType::GROUP_MEMBERSHIP)
             ->latest('id')
@@ -917,7 +917,7 @@ class MarketMapGroupMembershipTest extends TestCase
 
         $operation = Operation::query()
             ->where('market_id', $market->id)
-            ->where('entity_type', MarketSpace::class)
+            ->where('entity_type', 'market_space')
             ->where('entity_id', $child->id)
             ->where('type', OperationType::GROUP_MEMBERSHIP)
             ->latest('id')
@@ -966,7 +966,7 @@ class MarketMapGroupMembershipTest extends TestCase
 
         $operation = Operation::query()
             ->where('market_id', $market->id)
-            ->where('entity_type', MarketSpace::class)
+            ->where('entity_type', 'market_space')
             ->where('entity_id', $child->id)
             ->where('type', OperationType::GROUP_MEMBERSHIP)
             ->latest('id')
@@ -1026,5 +1026,68 @@ class MarketMapGroupMembershipTest extends TestCase
         $space->refresh();
 
         $this->assertSame($originalTenantId, $space->tenant_id, 'tenant_id не должен изменяться');
+    }
+
+    public function test_group_membership_operation_shows_human_readable_summary_in_history(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        // Создаём операцию напрямую с entity_type = MarketSpace::class (для обратной совместимости)
+        $operation = Operation::query()->create([
+            'market_id' => (int) $market->id,
+            'entity_type' => \App\Models\MarketSpace::class,
+            'entity_id' => (int) $space->id,
+            'type' => \App\Domain\Operations\OperationType::GROUP_MEMBERSHIP,
+            'effective_at' => now(),
+            'status' => 'completed',
+            'payload' => [
+                'action' => 'add_to_group',
+                'market_space_id' => (int) $space->id,
+                'old_space_group_role' => 'none',
+                'old_space_group_parent_id' => null,
+                'old_space_group_slot' => null,
+                'new_space_group_role' => 'child',
+                'new_space_group_parent_id' => (int) $parent->id,
+                'new_space_group_slot' => '6',
+                'target_parent_id' => (int) $parent->id,
+                'target_slot' => '6',
+                'source' => 'market_map_group_membership',
+                'user_comment' => 'Тестовый комментарий',
+            ],
+            'comment' => 'Тестовый комментарий',
+            'created_by' => $user->id,
+        ]);
+
+        // Вызываем реальный рендер истории через ReflectionMethod
+        $resource = \App\Filament\Resources\MarketSpaceResource::class;
+        $method = new \ReflectionMethod($resource, 'renderOperations');
+        $method->setAccessible(true);
+
+        $html = $method->invoke(null, $space);
+
+        $this->assertStringContainsString('Добавлено в группу', $html->toHtml());
+        $this->assertStringContainsString('в группу #' . $parent->id, $html->toHtml());
+        $this->assertStringContainsString('слот 6', $html->toHtml());
+        $this->assertStringContainsString('Комментарий: Тестовый комментарий', $html->toHtml());
+
+        // Проверяем, что HTML НЕ содержит сырой JSON
+        $this->assertStringNotContainsString('{"action"', $html->toHtml());
+        $this->assertStringNotContainsString('"action":"add_to_group"', $html->toHtml());
     }
 }

@@ -1127,7 +1127,7 @@ class MarketSpaceResource extends BaseResource
 
         $rows = DB::table('operations')
             ->where('market_id', (int) $record->market_id)
-            ->where('entity_type', 'market_space')
+            ->whereIn('entity_type', ['market_space', MarketSpace::class])
             ->where('entity_id', (int) $record->id)
             ->orderByDesc('effective_at')
             ->limit(50)
@@ -1164,6 +1164,8 @@ class MarketSpaceResource extends BaseResource
                 ? (\App\Domain\Operations\SpaceReviewDecision::labels()[$reviewDecision] ?? $reviewDecision)
                 : null;
 
+            $summary = static::buildOperationSummary($type, $payload);
+
             $item = [
                 'effective_at' => $row->effective_at ? (string) \Carbon\Carbon::parse($row->effective_at)->format('d.m.Y H:i') : '—',
                 'type' => $labels[$type] ?? $type,
@@ -1173,9 +1175,7 @@ class MarketSpaceResource extends BaseResource
                 'review_decision_label' => $reviewDecisionLabel,
                 'review_reason' => $isReview ? static::resolveReviewReason($payload, $row->comment ?? null) : null,
                 'review_observed_tenant_name' => $isReview ? static::stringOrNull($payload['observed_tenant_name'] ?? null) : null,
-                'summary' => $isReview
-                    ? static::buildReviewSummary($reviewDecision, $payload)
-                    : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'summary' => $summary,
             ];
 
             return $item;
@@ -1261,6 +1261,73 @@ class MarketSpaceResource extends BaseResource
         }
 
         return 'Выполнен разбор дубля: основное место #' . $candidateSpaceId . '.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildOperationSummary(string $type, array $payload): string
+    {
+        if ($type === \App\Domain\Operations\OperationType::SPACE_REVIEW) {
+            $decision = trim((string) ($payload['decision'] ?? ''));
+            return static::buildReviewSummary($decision, $payload);
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::GROUP_MEMBERSHIP) {
+            return static::buildGroupMembershipSummary($payload);
+        }
+
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildGroupMembershipSummary(array $payload): string
+    {
+        $action = $payload['action'] ?? '';
+        $parts = [];
+
+        $label = match ($action) {
+            'add_to_group' => 'Добавлено в группу',
+            'move_to_group' => 'Перенесено в другую группу',
+            'remove_from_group' => 'Убрано из группы',
+            default => 'Изменение состава группы',
+        };
+
+        $parts[] = $label;
+
+        if ($action === 'add_to_group' || $action === 'move_to_group') {
+            $newParentId = $payload['new_space_group_parent_id'] ?? null;
+            $newSlot = $payload['new_space_group_slot'] ?? null;
+
+            if ($newParentId !== null && $newSlot !== null) {
+                $parts[] = 'в группу #' . (int) $newParentId . ', слот ' . (string) $newSlot;
+            } elseif ($newSlot !== null) {
+                $parts[] = 'слот ' . (string) $newSlot;
+            }
+        }
+
+        if ($action === 'move_to_group') {
+            $oldParentId = $payload['old_space_group_parent_id'] ?? null;
+            if ($oldParentId !== null) {
+                $parts[] = 'из группы #' . (int) $oldParentId;
+            }
+        }
+
+        if ($action === 'remove_from_group') {
+            $oldParentId = $payload['old_space_group_parent_id'] ?? null;
+            if ($oldParentId !== null) {
+                $parts[] = 'из группы #' . (int) $oldParentId;
+            }
+        }
+
+        $userComment = $payload['user_comment'] ?? null;
+        if ($userComment !== null && $userComment !== '') {
+            $parts[] = 'Комментарий: ' . (string) $userComment;
+        }
+
+        return implode('; ', $parts);
     }
 
     /**

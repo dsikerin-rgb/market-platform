@@ -2411,7 +2411,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         Operation::query()->create([
             'market_id' => (int) $market->id,
-            'entity_type' => MarketSpace::class,
+            'entity_type' => 'market_space',
             'entity_id' => (int) $result['child_id'],
             'type' => OperationType::GROUP_MEMBERSHIP,
             'effective_at' => $now,
