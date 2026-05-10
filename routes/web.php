@@ -1592,6 +1592,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'number' => ['nullable', 'string', 'max:64'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
             'without_shapes' => ['nullable', 'boolean'],
+            'group_parents_only' => ['nullable', 'boolean'],
         ]);
 
         $withoutShapes = (bool) ($validated['without_shapes'] ?? false);
@@ -1791,6 +1792,77 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $raw = str_replace(["\n", "\r", "\t"], ' ', $raw);
         $q = trim(str_replace(['№', '#'], '', $raw));
 
+        $groupParentsOnly = (bool) ($validated['group_parents_only'] ?? false);
+        if ($groupParentsOnly) {
+            $limit = (int) ($validated['limit'] ?? 50);
+
+            $query = MarketSpace::query()
+                ->with(['tenant', 'spaceGroupParent.tenant'])
+                ->where('market_id', (int) $market->id)
+                ->where('is_active', true)
+                ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_PARENT);
+
+            if ($q !== '') {
+                $isNumeric = ctype_digit($q);
+                $qEsc = str_replace(['%', '_'], ['\%', '\\_'], $q);
+                $qLike = '%' . $qEsc . '%';
+
+                $query->where(function ($qq) use ($isNumeric, $q, $qLike) {
+                    if ($isNumeric) {
+                        $qq->orWhere('id', '=', (int) $q);
+                    }
+                    $qq->orWhere('number', 'like', $qLike)
+                        ->orWhere('code', 'like', $qLike)
+                        ->orWhere('display_name', 'like', $qLike)
+                        ->orWhereHas('tenant', function ($tq) use ($qLike) {
+                            $tq->where('name', 'like', $qLike)
+                                ->orWhere('display_name', 'like', $qLike);
+                        });
+                });
+            }
+
+            $rows = $query->orderBy('number')->orderBy('id')->limit($limit)->get();
+
+            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
+                $tenant = $space->tenant;
+                $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
+                $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+
+                $tenantName = null;
+                if ($tenant) {
+                    $tenantName = (string) ($tenant->display_name ?? '');
+                    if ($tenantName === '') $tenantName = (string) ($tenant->short_name ?? '');
+                    if ($tenantName === '') $tenantName = (string) ($tenant->name ?? '');
+                }
+
+                $bindingRisk = $buildBindingRiskForSpace($market, $space);
+                $spaceGroupRole = (string) ($space->space_group_role ?? '');
+
+                return [
+                    'id' => (int) $space->id,
+                    'number' => (string) ($space->number ?? ''),
+                    'code' => (string) ($space->code ?? ''),
+                    'display_name' => (string) ($space->display_name ?? ''),
+                    'area_sqm' => (string) ($space->area_sqm ?? ''),
+                    'status' => (string) ($space->status ?? ''),
+                    'space_group_role' => $spaceGroupRole,
+                    'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
+                    'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                    'result_type' => 'group',
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                    'tenant' => $tenant ? ['id' => (int) ($tenant->id ?? 0), 'name' => (string) ($tenantName ?? '')] : null,
+                    ...$effectiveOccupancy,
+                    ...$effectiveFinancial,
+                    'binding_risk' => $bindingRisk,
+                ];
+            })->values();
+
+            return response()->json(['ok' => true, 'items' => $items]);
+        }
+
+        // Обычный режим поиска
         $limit = (int) ($validated['limit'] ?? 15);
 
         if ($q === '') {
