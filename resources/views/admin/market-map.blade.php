@@ -1893,6 +1893,16 @@
       border-radius: 8px;
       border: 1px solid #e2e8f0;
     }
+    .group-membership-modal__error {
+      font-size: 13px;
+      line-height: 1.4;
+      color: #dc2626;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin: 0;
+    }
     .group-membership-modal__dropdown {
       position: relative;
       z-index: 10021;
@@ -2454,6 +2464,7 @@
               placeholder="Заметка о причине изменения"
             >
           </div>
+          <div id="groupMembershipError" class="group-membership-modal__error" style="display:none;"></div>
           <div class="group-membership-modal__actions">
             <button type="button" id="groupMembershipCancel" class="group-membership-modal__cancel" data-action="close">Отмена</button>
             <button type="button" id="groupMembershipSubmit" class="group-membership-modal__submit">Применить</button>
@@ -2843,6 +2854,9 @@
           if (groupSlot) groupSlot.value = '';
           if (groupComment) groupComment.value = '';
 
+          // Clear error
+          clearGroupMembershipError();
+
           // Reset group search
           groupSearchResults = [];
           groupSelectedParentLabel = '';
@@ -2850,8 +2864,27 @@
           if (groupSearchController) groupSearchController.abort();
         }
 
+        function clearGroupMembershipError() {
+          const errorEl = document.getElementById('groupMembershipError');
+          if (errorEl) {
+            errorEl.style.display = 'none';
+            errorEl.textContent = '';
+          }
+        }
+
+        function showGroupMembershipError(message) {
+          const errorEl = document.getElementById('groupMembershipError');
+          if (!errorEl) return;
+
+          errorEl.textContent = message;
+          errorEl.style.display = 'block';
+        }
+
         function openGroupMembershipModal(space) {
           if (!groupMembershipModal || !groupAction || !groupTargetParentSearch) return;
+
+          // Clear error on open
+          clearGroupMembershipError();
 
           groupMembershipContext = {
             spaceId: space?.id ?? null,
@@ -3020,11 +3053,16 @@
             return;
           }
 
+          // Clear error before submit
+          clearGroupMembershipError();
+
           const action = groupAction.value;
           const spaceId = groupMembershipContext?.spaceId;
 
           if (!spaceId || !Number.isFinite(spaceId) || spaceId <= 0) {
-            toast('Ошибка: не выбрано место');
+            const message = 'Ошибка: не выбрано место';
+            showGroupMembershipError(message);
+            toast(message);
             return;
           }
 
@@ -3037,13 +3075,17 @@
 
           // Validate
           if (action !== 'remove_from_group' && !payload.target_parent_id) {
-            toast('Выберите целевую группу');
+            const message = 'Выберите целевую группу';
+            showGroupMembershipError(message);
+            toast(message);
             groupTargetParentSearch?.focus();
             return;
           }
 
           if (action !== 'remove_from_group' && !payload.target_slot) {
-            toast('Введите номер внутри группы');
+            const message = 'Введите номер внутри группы';
+            showGroupMembershipError(message);
+            toast(message);
             groupSlot?.focus();
             return;
           }
@@ -3096,7 +3138,9 @@
             hidePopover();
           } catch (err) {
             console.error(err);
-            toast(err?.message || 'Ошибка при изменении состава группы');
+            const message = err?.message || 'Ошибка при изменении состава группы';
+            showGroupMembershipError(message);
+            toast(message);
           } finally {
             if (groupMembershipSubmit) {
               groupMembershipSubmit.disabled = false;
@@ -3188,8 +3232,12 @@
             toast(String(err?.message || err));
           });
         });
-        groupAction?.addEventListener('change', onGroupActionChange);
+        groupAction?.addEventListener('change', () => {
+          clearGroupMembershipError();
+          onGroupActionChange();
+        });
         groupTargetParentSearch?.addEventListener('input', () => {
+          clearGroupMembershipError();
           const currentValue = String(groupTargetParentSearch?.value || '').trim();
           if (currentValue !== groupSelectedParentLabel) {
             groupTargetParent.value = '';
@@ -3207,6 +3255,8 @@
             }
           }
         });
+        groupSlot?.addEventListener('input', clearGroupMembershipError);
+        groupComment?.addEventListener('input', clearGroupMembershipError);
         window.addEventListener('keydown', (e) => {
           if (identityFixModal?.classList.contains('show')) {
             if (e.key === 'Escape') {
