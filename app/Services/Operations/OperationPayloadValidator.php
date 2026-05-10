@@ -25,6 +25,7 @@ final class OperationPayloadValidator
             OperationType::ELECTRICITY_INPUT => self::normalizeElectricityInput($payload),
             OperationType::ACCRUAL_ADJUSTMENT => self::normalizeAccrualAdjustment($payload),
             OperationType::PERIOD_CLOSE => self::normalizePeriodClose($payload),
+            OperationType::GROUP_MEMBERSHIP => self::normalizeGroupMembership($payload),
             default => throw ValidationException::withMessages([
                 'type' => 'Неизвестный тип операции.',
             ]),
@@ -255,6 +256,28 @@ final class OperationPayloadValidator
         return [
             'period' => $period,
             'closed' => (bool) ($payload['closed'] ?? true),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function normalizeGroupMembership(array $payload): array
+    {
+        return [
+            'action' => self::stringOrNull($payload['action'] ?? null, true),
+            'market_space_id' => self::intOrNull($payload['market_space_id'] ?? null, true),
+            'old_space_group_role' => self::stringOrNull($payload['old_space_group_role'] ?? null),
+            'old_space_group_parent_id' => self::intOrNull($payload['old_space_group_parent_id'] ?? null),
+            'old_space_group_slot' => self::stringOrNull($payload['old_space_group_slot'] ?? null),
+            'new_space_group_role' => self::stringOrNull($payload['new_space_group_role'] ?? null),
+            'new_space_group_parent_id' => self::intOrNull($payload['new_space_group_parent_id'] ?? null),
+            'new_space_group_slot' => self::stringOrNull($payload['new_space_group_slot'] ?? null),
+            'target_parent_id' => self::intOrNull($payload['target_parent_id'] ?? null),
+            'target_slot' => self::stringOrNull($payload['target_slot'] ?? null),
+            'source' => self::stringOrNull($payload['source'] ?? null),
+            'user_comment' => self::stringOrNull($payload['user_comment'] ?? null),
         ];
     }
 

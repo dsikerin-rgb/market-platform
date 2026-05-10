@@ -2277,6 +2277,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $spaceManager = app(\App\Services\MarketSpaces\SpaceGroupManager::class);
 
+        // Сохраняем старые значения до изменения
+        $oldRole = (string) ($marketSpace->space_group_role ?: MarketSpace::SPACE_GROUP_ROLE_NONE);
+        $oldParentId = $marketSpace->space_group_parent_id ? (int) $marketSpace->space_group_parent_id : null;
+        $oldSlot = $marketSpace->space_group_slot;
+
         if ($action === 'add_to_group') {
             $targetParentId = $validated['target_parent_id'] ?? null;
 
@@ -2381,6 +2386,40 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->where('market_id', (int) $market->id)
             ->whereKey((int) $result['child_id'])
             ->first();
+
+        // Запись в журнал операций (Operation)
+        $userId = Filament::auth()->id();
+        $now = now();
+
+        $auditPayload = [
+            'action' => $action,
+            'market_space_id' => (int) $result['child_id'],
+            'old_space_group_role' => $oldRole,
+            'old_space_group_parent_id' => $oldParentId,
+            'old_space_group_slot' => $oldSlot,
+            'new_space_group_role' => (string) ($space?->space_group_role ?? ''),
+            'new_space_group_parent_id' => $result['new_parent_id'],
+            'new_space_group_slot' => $space?->space_group_slot ?? null,
+            'target_parent_id' => $validated['target_parent_id'] ?? null,
+            'target_slot' => $targetSlot,
+            'source' => 'market_map_group_membership',
+        ];
+
+        if ($comment !== null && $comment !== '') {
+            $auditPayload['user_comment'] = $comment;
+        }
+
+        Operation::query()->create([
+            'market_id' => (int) $market->id,
+            'entity_type' => MarketSpace::class,
+            'entity_id' => (int) $result['child_id'],
+            'type' => OperationType::GROUP_MEMBERSHIP,
+            'effective_at' => $now,
+            'status' => 'completed',
+            'payload' => $auditPayload,
+            'comment' => $auditPayload['user_comment'] ?? null,
+            'created_by' => $userId,
+        ]);
 
         return response()->json([
             'ok' => true,
