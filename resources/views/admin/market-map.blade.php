@@ -2423,13 +2423,13 @@
             <div id="groupCurrentParentInfo" class="group-membership-modal__info">—</div>
           </div>
           <div class="group-membership-modal__section" id="groupTargetParentSection">
-            <label class="group-membership-modal__label" for="groupTargetParentSearch">Поиск группы</label>
+            <label class="group-membership-modal__label" for="groupTargetParentSearch">Группа</label>
             <input
               id="groupTargetParentSearch"
               class="group-membership-modal__input"
               type="text"
               autocomplete="off"
-              placeholder="Начните вводить название группы"
+              placeholder="Выберите группу из списка или начните вводить название"
             >
             <div id="groupTargetParentDropdown" class="group-membership-modal__dropdown" style="display:none;"></div>
             <input type="hidden" id="groupTargetParent" name="groupTargetParent">
@@ -2587,6 +2587,7 @@
         let groupSearchTimer = null;
         let groupSearchController = null;
         let groupSearchResults = [];
+        let groupSelectedParentLabel = '';
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -2844,6 +2845,7 @@
 
           // Reset group search
           groupSearchResults = [];
+          groupSelectedParentLabel = '';
           if (groupSearchTimer) clearTimeout(groupSearchTimer);
           if (groupSearchController) groupSearchController.abort();
         }
@@ -2930,11 +2932,12 @@
           groupSearchTimer = setTimeout(() => runGroupSearch(), 300);
         }
 
-        async function runGroupSearch() {
+        async function runGroupSearch(options = {}) {
           if (!groupTargetParentSearch || !SPACES_URL) return;
+          const includeAll = !!options.includeAll;
           const value = String(groupTargetParentSearch.value || '').trim();
 
-          if (!value || value.length < 1) {
+          if (!includeAll && (!value || value.length < 1)) {
             closeGroupSearchDropdown();
             return;
           }
@@ -2944,8 +2947,12 @@
 
           try {
             const url = new URL(SPACES_URL, window.location.origin);
-            url.searchParams.set('q', value);
+            url.searchParams.set('group_parents_only', '1');
             url.searchParams.set('limit', '50');
+
+            if (value && value.length >= 1) {
+              url.searchParams.set('q', value);
+            }
 
             const res = await apiFetch(url.toString(), {
               headers: { 'Accept': 'application/json' },
@@ -2999,7 +3006,8 @@
         function selectGroupForTarget(group) {
           if (!groupTargetParentSearch || !groupTargetParent || !groupTargetParentDropdown) return;
 
-          groupTargetParentSearch.value = formatSpaceDropdownLabel(group);
+          groupSelectedParentLabel = formatSpaceDropdownLabel(group);
+          groupTargetParentSearch.value = groupSelectedParentLabel;
           groupTargetParent.value = String(group.id);
           closeGroupSearchDropdown();
         }
@@ -3182,13 +3190,15 @@
         });
         groupAction?.addEventListener('change', onGroupActionChange);
         groupTargetParentSearch?.addEventListener('input', () => {
+          const currentValue = String(groupTargetParentSearch?.value || '').trim();
+          if (currentValue !== groupSelectedParentLabel) {
+            groupTargetParent.value = '';
+            groupSelectedParentLabel = '';
+          }
           scheduleGroupSearch();
         });
         groupTargetParentSearch?.addEventListener('focus', () => {
-          const value = String(groupTargetParentSearch?.value || '').trim();
-          if (value && groupSearchResults.length > 0) {
-            renderGroupSearchDropdown(groupSearchResults);
-          }
+          runGroupSearch({ includeAll: true });
         });
         document.addEventListener('click', (e) => {
           if (groupMembershipModal?.classList.contains('show')) {
