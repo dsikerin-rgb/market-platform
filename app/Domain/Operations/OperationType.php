@@ -13,6 +13,7 @@ final class OperationType
     public const ELECTRICITY_INPUT = 'electricity_input';
     public const ACCRUAL_ADJUSTMENT = 'accrual_adjustment';
     public const PERIOD_CLOSE = 'period_close';
+    public const GROUP_MEMBERSHIP = 'group_membership';
 
     /**
      * @return array<string, string>
@@ -27,6 +28,7 @@ final class OperationType
             self::ELECTRICITY_INPUT => 'Ввод электроэнергии',
             self::ACCRUAL_ADJUSTMENT => 'Корректировка начислений',
             self::PERIOD_CLOSE => 'Закрытие месяца',
+            self::GROUP_MEMBERSHIP => 'Изменение состава группы',
         ];
     }
 

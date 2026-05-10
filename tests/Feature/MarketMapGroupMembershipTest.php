@@ -8,7 +8,9 @@ namespace Tests\Feature;
 
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\Operation;
 use App\Models\User;
+use App\Domain\Operations\OperationType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
@@ -815,5 +817,214 @@ class MarketMapGroupMembershipTest extends TestCase
 
         $response->assertUnprocessable();
         $response->assertJsonValidationErrors(['market_space_id']);
+    }
+
+    public function test_add_ordinary_to_group_writes_audit_event(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.group-membership', [
+            'marketSpace' => $space->id,
+        ]), [
+            'action' => 'add_to_group',
+            'target_parent_id' => $parent->id,
+            'target_slot' => '6',
+            'comment' => 'Тестовый комментарий',
+        ]);
+
+        $response->assertOk();
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', MarketSpace::class)
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::GROUP_MEMBERSHIP)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('completed', $operation->status);
+        $this->assertSame('market_map_group_membership', $operation->payload['source']);
+        $this->assertSame('add_to_group', $operation->payload['action']);
+        $this->assertSame($space->id, $operation->payload['market_space_id']);
+        $this->assertSame('none', $operation->payload['old_space_group_role']);
+        $this->assertNull($operation->payload['old_space_group_parent_id']);
+        $this->assertNull($operation->payload['old_space_group_slot']);
+        $this->assertSame('child', $operation->payload['new_space_group_role']);
+        $this->assertSame($parent->id, $operation->payload['new_space_group_parent_id']);
+        $this->assertSame('6', $operation->payload['new_space_group_slot']);
+        $this->assertSame($parent->id, $operation->payload['target_parent_id']);
+        $this->assertSame('6', $operation->payload['target_slot']);
+        $this->assertSame('Тестовый комментарий', $operation->payload['user_comment']);
+        $this->assertSame('Тестовый комментарий', $operation->comment);
+        $this->assertSame($user->id, $operation->created_by);
+    }
+
+    public function test_move_child_to_another_group_writes_old_new_parent_and_slot(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $oldParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $newParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $oldParent->id,
+            'space_group_slot' => '6',
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.group-membership', [
+            'marketSpace' => $child->id,
+        ]), [
+            'action' => 'move_to_group',
+            'target_parent_id' => $newParent->id,
+            'target_slot' => '8',
+        ]);
+
+        $response->assertOk();
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', MarketSpace::class)
+            ->where('entity_id', $child->id)
+            ->where('type', OperationType::GROUP_MEMBERSHIP)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('move_to_group', $operation->payload['action']);
+        $this->assertSame('child', $operation->payload['old_space_group_role']);
+        $this->assertSame($oldParent->id, $operation->payload['old_space_group_parent_id']);
+        $this->assertSame('6', $operation->payload['old_space_group_slot']);
+        $this->assertSame('child', $operation->payload['new_space_group_role']);
+        $this->assertSame($newParent->id, $operation->payload['new_space_group_parent_id']);
+        $this->assertSame('8', $operation->payload['new_space_group_slot']);
+    }
+
+    public function test_remove_child_from_group_writes_old_group_and_new_none(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '6',
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.group-membership', [
+            'marketSpace' => $child->id,
+        ]), [
+            'action' => 'remove_from_group',
+            'comment' => 'Убираю из группы',
+        ]);
+
+        $response->assertOk();
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', MarketSpace::class)
+            ->where('entity_id', $child->id)
+            ->where('type', OperationType::GROUP_MEMBERSHIP)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($operation);
+        $this->assertSame('remove_from_group', $operation->payload['action']);
+        $this->assertSame('child', $operation->payload['old_space_group_role']);
+        $this->assertSame($parent->id, $operation->payload['old_space_group_parent_id']);
+        $this->assertSame('6', $operation->payload['old_space_group_slot']);
+        $this->assertSame('none', $operation->payload['new_space_group_role']);
+        $this->assertNull($operation->payload['new_space_group_parent_id']);
+        $this->assertNull($operation->payload['new_space_group_slot']);
+        $this->assertSame('Убираю из группы', $operation->payload['user_comment']);
+    }
+
+    public function test_group_membership_does_not_change_tenant_id(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $tenant = \App\Models\Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Test Tenant',
+            'short_name' => 'Test',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7-6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'tenant_id' => $tenant->id,
+            'is_active' => true,
+        ]);
+
+        $originalTenantId = $space->tenant_id;
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.group-membership', [
+            'marketSpace' => $space->id,
+        ]), [
+            'action' => 'add_to_group',
+            'target_parent_id' => $parent->id,
+            'target_slot' => '6',
+        ]);
+
+        $response->assertOk();
+
+        $space->refresh();
+
+        $this->assertSame($originalTenantId, $space->tenant_id, 'tenant_id не должен изменяться');
     }
 }
