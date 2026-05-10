@@ -941,4 +941,82 @@ class MarketMapLinkingTest extends TestCase
         $hitResponse->assertJsonPath('hit.space_financial_source', 'parent');
         $hitResponse->assertJsonPath('hit.space_financial_source_space_number', (string) $parent->number);
     }
+
+    public function test_market_map_spaces_search_with_group_parents_only_returns_only_active_parent_groups(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $activeParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Parent-Active',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $inactiveParent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Parent-Inactive',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => false,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Child-Space',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $activeParent->id,
+            'is_active' => true,
+        ]);
+
+        $ordinary = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Ordinary-Space',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        // Test with group_parents_only=1
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'group_parents_only' => 1,
+            'limit' => 50,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+
+        $this->assertCount(1, $ids);
+        $this->assertContains($activeParent->id, $ids);
+        $this->assertNotContains($inactiveParent->id, $ids);
+        $this->assertNotContains($child->id, $ids);
+        $this->assertNotContains($ordinary->id, $ids);
+
+        $activeParentItem = $items->firstWhere('id', $activeParent->id);
+        $this->assertNotNull($activeParentItem);
+        $this->assertSame('group', $activeParentItem['result_type']);
+        $this->assertSame('parent', $activeParentItem['space_group_role']);
+        $this->assertTrue($activeParentItem['is_space_group_parent']);
+
+        // Additional assertions for active parent structure
+        $this->assertArrayHasKey('review_status', $activeParentItem);
+        $this->assertArrayHasKey('tenant', $activeParentItem);
+        $this->assertArrayHasKey('binding_risk', $activeParentItem);
+        $this->assertArrayHasKey('space_effective_debt_status', $activeParentItem);
+
+        // Test that regular search is not broken
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'q' => 'Parent',
+        ]));
+        $response->assertOk();
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+
+        $this->assertContains($activeParent->id, $ids);
+        $this->assertNotContains($inactiveParent->id, $ids);
+    }
 }
