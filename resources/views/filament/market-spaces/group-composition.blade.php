@@ -131,7 +131,7 @@
                         <th class="group-composition__th group-composition__number">Номер</th>
                         <th class="group-composition__th group-composition__name">Название</th>
                         <th class="group-composition__th group-composition__tenant">Арендатор</th>
-                        <th class="group-composition__th group-composition__status">Статус</th>
+                        <th class="group-composition__th group-composition__status">Занятость</th>
                         <th class="group-composition__th group-composition__action">Действие</th>
                     </tr>
                 </thead>

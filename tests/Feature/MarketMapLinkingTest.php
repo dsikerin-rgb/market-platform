@@ -1101,7 +1101,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Группа-А-Z', false);
         $response->assertSee('Место А-Z (без слота)', false);
         $response->assertSee('Tenant A', false);
-        $response->assertSee('Занято', false);
+        $response->assertSee('Занято напрямую', false);
         $response->assertSee('Свободно', false);
         $response->assertSee('Зарезервировано', false);
         $response->assertSee('Открыть', false);
@@ -1197,5 +1197,56 @@ class MarketMapLinkingTest extends TestCase
         $response->assertOk();
         $response->assertSee('Состав группы', false);
         $response->assertSee('В группе пока нет дочерних мест', false);
+    }
+
+    public function test_parent_group_with_tenant_shows_children_as_occupied_through_group(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        // Создаем арендатора
+        $parentTenant = \App\Models\Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Тестовый арендатор группы',
+            'email' => 'parent-tenant@example.com',
+            'inn' => '1234567890',
+        ]);
+
+        // Создаем parent-группу с арендатором
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'display_name' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'tenant_id' => $parentTenant->id,
+            'is_active' => true,
+        ]);
+
+        // Создаем child-место БЕЗ прямого арендатора и со статусом vacant/free
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 8',
+            'display_name' => 'OS7 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '8',
+            'tenant_id' => null,
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $parent]));
+
+        $response->assertOk();
+        $response->assertSee('Состав группы', false);
+        $response->assertSee('OS7 8', false);
+        // Проверяем, что показывается арендатор parent-группы
+        $response->assertSee('Тестовый арендатор группы', false);
+        // Проверяем статус "Занято через группу"
+        $response->assertSee('Занято через группу', false);
+        // Проверяем, что не показывается "Свободно" для этого child
+        $response->assertDontSee('Свободно', false);
     }
 }

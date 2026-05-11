@@ -1786,6 +1786,25 @@ class MarketSpaceResource extends BaseResource
             return new HtmlString('');
         }
 
+        // Получаем арендатора parent-группы (short_name > name)
+        $parentTenantId = $record->tenant_id;
+        $parentTenantName = null;
+        if ($parentTenantId) {
+            $parentTenantData = DB::table('tenants')
+                ->where('id', (int) $parentTenantId)
+                ->select('name', 'short_name')
+                ->first();
+
+            if ($parentTenantData) {
+                // Приоритет: short_name > name
+                $parentTenantName = trim((string) ($parentTenantData->short_name ?? ''));
+                if ($parentTenantName === '') {
+                    $parentTenantName = trim((string) ($parentTenantData->name ?? ''));
+                }
+                $parentTenantName = $parentTenantName !== '' ? $parentTenantName : null;
+            }
+        }
+
         $children = DB::table('market_spaces as ms')
             ->leftJoin('tenants as t', 't.id', '=', 'ms.tenant_id')
             ->where('ms.market_id', (int) $record->market_id)
@@ -1801,6 +1820,7 @@ class MarketSpaceResource extends BaseResource
                 'ms.status',
                 'ms.tenant_id',
                 't.name as tenant_name',
+                't.short_name as tenant_short_name',
             ])
             ->map(function ($child): array {
                 $status = $child->status ?? 'vacant';
@@ -1808,12 +1828,26 @@ class MarketSpaceResource extends BaseResource
 
                 $editUrl = static::getUrl('edit', ['record' => (int) $child->id]);
 
+                // Вычисляем человекочитаемое имя child tenant (short_name > name)
+                $childTenantName = null;
+                if ($child->tenant_id) {
+                    $shortName = trim((string) ($child->tenant_short_name ?? ''));
+                    $name = trim((string) ($child->tenant_name ?? ''));
+
+                    if ($shortName !== '') {
+                        $childTenantName = $shortName;
+                    } elseif ($name !== '') {
+                        $childTenantName = $name;
+                    }
+                }
+
                 return [
                     'id' => (int) $child->id,
                     'slot' => $child->space_group_slot ? trim((string) $child->space_group_slot) : '',
                     'number' => $child->number ? trim((string) $child->number) : '—',
                     'display_name' => $child->display_name ? trim((string) $child->display_name) : '—',
-                    'tenant_name' => $child->tenant_name ? trim((string) $child->tenant_name) : 'Не указан',
+                    'child_tenant_name' => $childTenantName,
+                    'child_tenant_id' => $child->tenant_id ? (int) $child->tenant_id : null,
                     'status' => $status,
                     'edit_url' => $editUrl,
                 ];
@@ -1838,32 +1872,59 @@ class MarketSpaceResource extends BaseResource
                 return [0, $numericSlot, $slot, $numericNumber, $id];
             })
             ->values()
-            ->map(function ($child): array {
-                $status = $child['status'];
+            ->map(function ($child) use ($parentTenantId, $parentTenantName): array {
+                // Сохраняем сырой статус
+                $rawStatus = $child['status'] ?? 'vacant';
 
-                $statusLabels = [
-                    'vacant' => 'Свободно',
-                    'occupied' => 'Занято',
-                    'reserved' => 'Зарезервировано',
-                    'maintenance' => 'На обслуживании',
-                ];
+                // Вычисляем effective occupancy
+                $hasChildTenant = (bool) $child['child_tenant_id'];
+                $hasParentTenant = (bool) $parentTenantId;
 
-                $statusColors = [
-                    'vacant' => 'danger',
-                    'occupied' => 'success',
-                    'reserved' => 'warning',
-                    'maintenance' => 'gray',
-                ];
+                // Приоритет вычисления занятости:
+                // 1. child tenant есть -> Занято напрямую
+                // 2. parent tenant есть -> Занято через группу
+                // 3. rawStatus === reserved -> Зарезервировано
+                // 4. rawStatus === maintenance -> На обслуживании
+                // 5. иначе -> Свободно
+
+                if ($hasChildTenant) {
+                    // child tenant есть
+                    $tenantName = $child['child_tenant_name'] ?? 'Не указан';
+                    $statusLabel = 'Занято напрямую';
+                    $statusColor = 'success';
+                    $occupancyStatus = 'occupied_direct';
+                } elseif ($hasParentTenant) {
+                    // child tenant нет, parent tenant есть
+                    $tenantName = $parentTenantName ?? 'Не указан';
+                    $statusLabel = 'Занято через группу';
+                    $statusColor = 'success';
+                    $occupancyStatus = 'occupied_via_group';
+                } elseif ($rawStatus === 'reserved') {
+                    $tenantName = 'Не указан';
+                    $statusLabel = 'Зарезервировано';
+                    $statusColor = 'warning';
+                    $occupancyStatus = 'reserved';
+                } elseif ($rawStatus === 'maintenance') {
+                    $tenantName = 'Не указан';
+                    $statusLabel = 'На обслуживании';
+                    $statusColor = 'gray';
+                    $occupancyStatus = 'maintenance';
+                } else {
+                    $tenantName = 'Не указан';
+                    $statusLabel = 'Свободно';
+                    $statusColor = 'danger';
+                    $occupancyStatus = 'vacant';
+                }
 
                 return [
                     'id' => $child['id'],
                     'slot' => $child['slot'] !== '' ? $child['slot'] : '—',
                     'number' => $child['number'],
                     'display_name' => $child['display_name'],
-                    'tenant_name' => $child['tenant_name'],
-                    'status' => $status,
-                    'status_label' => $statusLabels[$status] ?? $status,
-                    'status_color' => $statusColors[$status] ?? 'gray',
+                    'tenant_name' => $tenantName,
+                    'status_label' => $statusLabel,
+                    'status_color' => $statusColor,
+                    'occupancy_status' => $occupancyStatus,
                     'edit_url' => $child['edit_url'],
                 ];
             })
