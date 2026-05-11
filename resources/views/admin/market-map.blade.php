@@ -4497,9 +4497,8 @@
 
             if (!targetShape) {
               if (freshSpace?.isSpaceGroupParent) {
-                setSelectedShape(null);
-                redrawShapes();
-
+                // Для parent-группы не сбрасываем selectedShape, только устанавливаем chosenSpace
+                // Подсветка child-фигур включится через isGroupRelated в redrawShapes()
                 if (groupBbox) {
                   await centerOnBbox(groupBbox, { zoomFactor: 1.08, padding: 90 });
                   toast('Это группа мест. Карта центрирована по дочерним местам группы.');
@@ -5108,6 +5107,20 @@
 
             if (!bbox) {
               toast('Не удалось найти место на карте');
+              return;
+            }
+
+            // Если это parent-группа — устанавливаем chosenSpace для подсветки child
+            if (FOCUS_SHAPE?.is_group && FOCUS_SHAPE?.group_parent_id) {
+              chosenSpace = {
+                id: FOCUS_SPACE_ID,
+                isSpaceGroupParent: true,
+                spaceGroupParentId: FOCUS_SHAPE.group_parent_id,
+              };
+              // Не выделяем конкретный полигон, только подсветку группы
+              await centerOnBbox(bbox, { zoomFactor: 1.08, padding: 90 });
+              redrawShapes();
+              toast('Это группа мест. Карта центрирована по дочерним местам группы.');
               return;
             }
 
