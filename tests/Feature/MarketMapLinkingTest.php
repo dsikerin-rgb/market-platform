@@ -1021,4 +1021,181 @@ class MarketMapLinkingTest extends TestCase
         $this->assertContains($activeParent->id, $ids);
         $this->assertNotContains($inactiveParent->id, $ids);
     }
+
+    public function test_parent_group_edit_page_shows_group_composition_children(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Группа-А',
+            'display_name' => 'Группа мест А',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $childA = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Группа-А-1',
+            'display_name' => 'Место А-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '1',
+            'status' => 'occupied',
+            'tenant_id' => Tenant::create([
+                'market_id' => $market->id,
+                'name' => 'Tenant A',
+                'short_name' => 'Tenant A',
+                'is_active' => true,
+            ])->id,
+            'is_active' => true,
+        ]);
+
+        $childB = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Группа-А-2',
+            'display_name' => 'Место А-2',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '2',
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $childC = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Группа-А-10',
+            'display_name' => 'Место А-10',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '10',
+            'status' => 'reserved',
+            'is_active' => true,
+        ]);
+
+        $childD = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Группа-А-Z',
+            'display_name' => 'Место А-Z (без слота)',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '',
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $parent]));
+
+        $response->assertOk();
+        $response->assertSee('Состав группы', false);
+        $response->assertSee('Группа мест А', false);
+        $response->assertSee('Группа-А-1', false);
+        $response->assertSee('Место А-1', false);
+        $response->assertSee('Группа-А-2', false);
+        $response->assertSee('Место А-2', false);
+        $response->assertSee('Группа-А-10', false);
+        $response->assertSee('Место А-10', false);
+        $response->assertSee('Группа-А-Z', false);
+        $response->assertSee('Место А-Z (без слота)', false);
+        $response->assertSee('Tenant A', false);
+        $response->assertSee('Занято', false);
+        $response->assertSee('Свободно', false);
+        $response->assertSee('Зарезервировано', false);
+        $response->assertSee('Открыть', false);
+
+        // Проверяем порядок: 1 -> 2 -> 10 -> Z (пустой слот в конце)
+        $content = $response->getOriginalContent();
+
+        if ($content instanceof \Illuminate\View\View) {
+            $content = $content->render();
+        }
+
+        // Ищем номера мест в порядке появления
+        $posChildA = strpos($content, 'Группа-А-1');
+        $posChildB = strpos($content, 'Группа-А-2');
+        $posChildC = strpos($content, 'Группа-А-10');
+        $posChildD = strpos($content, 'Группа-А-Z');
+
+        // Убедимся, что все найдены и в правильном порядке
+        $this->assertNotFalse($posChildA, 'Дочернее место А-1 должно быть найдено');
+        $this->assertNotFalse($posChildB, 'Дочернее место А-2 должно быть найдено');
+        $this->assertNotFalse($posChildC, 'Дочернее место А-10 должно быть найдено');
+        $this->assertNotFalse($posChildD, 'Дочернее место А-Z должно быть найдено');
+        $this->assertGreaterThan($posChildA, $posChildB, 'Место А-1 должно быть перед А-2');
+        $this->assertGreaterThan($posChildB, $posChildC, 'Место А-2 должно быть перед А-10');
+        $this->assertGreaterThan($posChildC, $posChildD, 'Место А-10 должно быть перед А-Z (пустой слот в конце)');
+    }
+
+    public function test_ordinary_space_edit_page_does_not_show_group_composition_block(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ORD-100',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+
+        $response->assertOk();
+        $response->assertDontSee('Состав группы', false);
+    }
+
+    public function test_child_space_edit_page_does_not_show_group_composition_block(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Parent-XYZ',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Child-XYZ-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $child]));
+
+        $response->assertOk();
+        $response->assertDontSee('Состав группы', false);
+    }
+
+    public function test_parent_group_with_no_children_shows_empty_message(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Empty-Group',
+            'display_name' => 'Пустая группа',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $parent]));
+
+        $response->assertOk();
+        $response->assertSee('Состав группы', false);
+        $response->assertSee('В группе пока нет дочерних мест', false);
+    }
 }

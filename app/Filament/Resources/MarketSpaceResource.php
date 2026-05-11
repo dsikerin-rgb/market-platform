@@ -863,6 +863,17 @@ class MarketSpaceResource extends BaseResource
                             ])
                             ->collapsible()
                             ->collapsed(),
+
+                        Section::make('Состав группы')
+                            ->visible(fn (?MarketSpace $record): bool => (string) ($record?->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT)
+                            ->schema([
+                                Forms\Components\Placeholder::make('group_composition')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderGroupComposition($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->collapsible(),
                     ]),
                 Tab::make('История')
                     ->schema([
@@ -1763,6 +1774,105 @@ class MarketSpaceResource extends BaseResource
         }
 
         return ! static::hasDeleteDependencies($record);
+    }
+
+    private static function renderGroupComposition(?MarketSpace $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">Состав группы появится после сохранения торгового места.</div>');
+        }
+
+        if ((string) ($record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            return new HtmlString('');
+        }
+
+        $children = DB::table('market_spaces as ms')
+            ->leftJoin('tenants as t', 't.id', '=', 'ms.tenant_id')
+            ->where('ms.market_id', (int) $record->market_id)
+            ->where('ms.space_group_parent_id', (int) $record->id)
+            ->where('ms.space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+            ->where('ms.is_active', true)
+            ->orderBy('ms.id')
+            ->get([
+                'ms.id',
+                'ms.number',
+                'ms.display_name',
+                'ms.space_group_slot',
+                'ms.status',
+                'ms.tenant_id',
+                't.name as tenant_name',
+            ])
+            ->map(function ($child): array {
+                $status = $child->status ?? 'vacant';
+                $status = $status === 'free' ? 'vacant' : $status;
+
+                $editUrl = static::getUrl('edit', ['record' => (int) $child->id]);
+
+                return [
+                    'id' => (int) $child->id,
+                    'slot' => $child->space_group_slot ? trim((string) $child->space_group_slot) : '',
+                    'number' => $child->number ? trim((string) $child->number) : '—',
+                    'display_name' => $child->display_name ? trim((string) $child->display_name) : '—',
+                    'tenant_name' => $child->tenant_name ? trim((string) $child->tenant_name) : 'Не указан',
+                    'status' => $status,
+                    'edit_url' => $editUrl,
+                ];
+            })
+            ->sortBy(function ($child) {
+                $slot = $child['slot'];
+                $number = $child['number'];
+                $id = $child['id'];
+
+                // Пустой слот — в конец (очень большое число)
+                if ($slot === '') {
+                    return [1, PHP_INT_MAX, '', PHP_INT_MAX, PHP_INT_MAX];
+                }
+
+                // Numeric slot для сортировки
+                $numericSlot = (int) $slot;
+
+                // Number для fallback-сортировки
+                $numericNumber = (int) $number;
+
+                // Сортировка: empty -> numeric slot -> slot как строка -> number -> id
+                return [0, $numericSlot, $slot, $numericNumber, $id];
+            })
+            ->values()
+            ->map(function ($child): array {
+                $status = $child['status'];
+
+                $statusLabels = [
+                    'vacant' => 'Свободно',
+                    'occupied' => 'Занято',
+                    'reserved' => 'Зарезервировано',
+                    'maintenance' => 'На обслуживании',
+                ];
+
+                $statusColors = [
+                    'vacant' => 'danger',
+                    'occupied' => 'success',
+                    'reserved' => 'warning',
+                    'maintenance' => 'gray',
+                ];
+
+                return [
+                    'id' => $child['id'],
+                    'slot' => $child['slot'] !== '' ? $child['slot'] : '—',
+                    'number' => $child['number'],
+                    'display_name' => $child['display_name'],
+                    'tenant_name' => $child['tenant_name'],
+                    'status' => $status,
+                    'status_label' => $statusLabels[$status] ?? $status,
+                    'status_color' => $statusColors[$status] ?? 'gray',
+                    'edit_url' => $child['edit_url'],
+                ];
+            })
+            ->all();
+
+        return new HtmlString(view('filament.market-spaces.group-composition', [
+            'children' => $children,
+            'hasChildren' => count($children) > 0,
+        ])->render());
     }
 
     private static function hasDeleteDependencies(MarketSpace $record): bool
