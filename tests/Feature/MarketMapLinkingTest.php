@@ -182,6 +182,8 @@ class MarketMapLinkingTest extends TestCase
             $bbox = $focusShape['bbox'] ?? [];
 
             return ($focusShape['market_space_id'] ?? null) === (int) $parent->id
+                && ($focusShape['is_group'] ?? false) === true
+                && ($focusShape['group_parent_id'] ?? null) === (int) $parent->id
                 && ($bbox['x1'] ?? null) === 10.0
                 && ($bbox['y1'] ?? null) === 20.0
                 && ($bbox['x2'] ?? null) === 140.0

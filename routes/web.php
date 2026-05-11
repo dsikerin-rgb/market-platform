@@ -3285,6 +3285,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     $focusShape = [
                         'id' => (int) $groupFocusShape->id,
                         'market_space_id' => $marketSpaceId,
+                        'is_group' => true,
+                        'group_parent_id' => $marketSpaceId,
                         'page' => $page,
                         'version' => $version,
                         'bbox' => [
