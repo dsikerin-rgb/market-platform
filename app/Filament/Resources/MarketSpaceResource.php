@@ -1,4 +1,5 @@
-<?php# app/Filament/Resources/MarketSpaceResource.php
+<?php
+# app/Filament/Resources/MarketSpaceResource.php
 
 namespace App\Filament\Resources;
 
