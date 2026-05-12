@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-05-12 — 1C current handoff snapshot
+
+**Что зафиксировали**
+
+* Для живой финансовой оси источником правды остаётся `prod`, не `staging`.
+* Cutover по начислениям подтверждён на `prod`; `1C = primary source`, `CSV/Excel = reference-only`.
+* Подтверждённый reconcile за `2026-01`:
+  * `policy = 1c_primary_csv_reference`
+  * `ready_for_1c_primary = true`
+  * `accepted_bucket_count = 79`
+  * `reference_only_bucket_count = 28`
+  * `manual_review_bucket_count = 52`
+  * `blocker_bucket_count = 0`
+* Закрытые области: импорт долгов, импорт договоров, импорт начислений, карта долга и cutover view в reconcile.
+* `manual_review` остаётся управляемым хвостом, а не блокером cutover.
+* `contract_amount_mismatch` не имеет одного общего автоматического паттерна, поэтому массовый auto-fix не планируем.
+* Рабочее правило по служебным договорам остаётся прежним: служебный документ не должен участвовать в привязке к месту.
+* Полная синхронизация со старым CSV больше не является продуктовым критерием.
+
+**Связанный контекст**
+
+* Стратегическая модель привязки уже зафиксирована в `docs/ops.md` в разделе `0.4`.
+
 ## 2026-03 — Переход на PostgreSQL для staging/prod
 
 **DB-контур staging/prod:**

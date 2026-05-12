@@ -24,8 +24,9 @@
 * **Осталось:** InviteStaffAction в StaffResource, письмо/маршрут приёма, создание пользователя по токену.
 
 ## 7. 1С импорт/экспорт
-* **Прогресс:** добавлена таблица `integration_exchanges` и модель `IntegrationExchange` для хранения истории обменов.
-* **Осталось:** ресурс IntegrationExchangeResource, jobs `ExportTo1CJob`/`ImportFrom1CJob`, загрузка/выгрузка файлов и запуск из UI.
+* **Прогресс:** добавлена таблица `integration_exchanges` и модель `IntegrationExchange` для хранения истории обменов; daily exchanges восстановлены, импорт долгов/договоров/начислений работает на prod.
+* **Текущий статус:** 1C уже подтверждён как primary source на prod; `CSV/Excel` остаются reference-only.
+* **Осталось:** ресурс `IntegrationExchangeResource`, jobs `ExportTo1CJob`/`ImportFrom1CJob`, загрузка/выгрузка файлов и запуск из UI; отдельный хвост `manual_review` по reconcile ещё разбирается.
 
 ## 8. "Задачи" (CRM-подобно) + автозаявки
 * **Прогресс:** созданы таблицы `tasks`, `task_watchers`, `task_comments` и модели `Task`/`TaskWatcher`/`TaskComment`.
