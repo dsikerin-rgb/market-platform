@@ -14,7 +14,7 @@
 
         .group-composition__table {
             width: 100%;
-            min-width: 800px;
+            min-width: 680px;
             border-collapse: collapse;
         }
 
@@ -74,12 +74,8 @@
             min-width: 180px;
         }
 
-        .group-composition__tenant {
-            min-width: 140px;
-        }
-
         .group-composition__status {
-            width: 120px;
+            width: 180px;
             white-space: nowrap;
         }
 
@@ -130,7 +126,6 @@
                         <th class="group-composition__th group-composition__slot">Слот</th>
                         <th class="group-composition__th group-composition__number">Номер</th>
                         <th class="group-composition__th group-composition__name">Название</th>
-                        <th class="group-composition__th group-composition__tenant">Арендатор</th>
                         <th class="group-composition__th group-composition__status">Занятость</th>
                         <th class="group-composition__th group-composition__action">Действие</th>
                     </tr>
@@ -141,7 +136,6 @@
                             <td class="group-composition__td group-composition__slot">{{ $child['slot'] }}</td>
                             <td class="group-composition__td group-composition__number">{{ $child['number'] }}</td>
                             <td class="group-composition__td group-composition__name">{{ $child['display_name'] }}</td>
-                            <td class="group-composition__td group-composition__tenant">{{ $child['tenant_name'] }}</td>
                             <td class="group-composition__td group-composition__status">
                                 <x-filament::badge :color="$child['status_color']">
                                     {{ $child['status_label'] }}
