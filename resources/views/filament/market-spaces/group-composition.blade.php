@@ -14,7 +14,7 @@
 
         .group-composition__table {
             width: 100%;
-            min-width: 680px;
+            min-width: 540px;
             border-collapse: collapse;
         }
 
@@ -74,11 +74,6 @@
             min-width: 180px;
         }
 
-        .group-composition__status {
-            width: 180px;
-            white-space: nowrap;
-        }
-
         .group-composition__action {
             width: 90px;
             text-align: right;
@@ -126,7 +121,6 @@
                         <th class="group-composition__th group-composition__slot">Слот</th>
                         <th class="group-composition__th group-composition__number">Номер</th>
                         <th class="group-composition__th group-composition__name">Название</th>
-                        <th class="group-composition__th group-composition__status">Занятость</th>
                         <th class="group-composition__th group-composition__action">Действие</th>
                     </tr>
                 </thead>
@@ -136,11 +130,6 @@
                             <td class="group-composition__td group-composition__slot">{{ $child['slot'] }}</td>
                             <td class="group-composition__td group-composition__number">{{ $child['number'] }}</td>
                             <td class="group-composition__td group-composition__name">{{ $child['display_name'] }}</td>
-                            <td class="group-composition__td group-composition__status">
-                                <x-filament::badge :color="$child['status_color']">
-                                    {{ $child['status_label'] }}
-                                </x-filament::badge>
-                            </td>
                             <td class="group-composition__td group-composition__action">
                                 <a
                                     href="{{ $child['edit_url'] }}"
