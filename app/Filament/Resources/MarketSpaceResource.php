@@ -1,5 +1,4 @@
-<?php
-# app/Filament/Resources/MarketSpaceResource.php
+<?php# app/Filament/Resources/MarketSpaceResource.php
 
 namespace App\Filament\Resources;
 
@@ -666,60 +665,6 @@ class MarketSpaceResource extends BaseResource
                                             // space_group_slot не трогаем — вводится пользователем
                                         }
                                     }),
-
-                                Section::make('Группировка')
-                                    ->visible(fn (callable $get): bool => in_array($get('space_group_role'), ['parent', 'child'], true))
-                                    ->schema([
-                                        Forms\Components\Placeholder::make('parent_info')
-                                            ->label('Групповое место')
-                                            ->content('Это групповое место. Его номер остаётся как в 1С, например ОС7 6, 7, 8. Дочерние места будут выбирать эту группу из списка.')
-                                            ->visible(fn (callable $get): bool => $get('space_group_role') === 'parent'),
-
-                                        Forms\Components\Placeholder::make('current_space_group_parent')
-                                            ->label('Группа')
-                                            ->content(fn (?MarketSpace $record): HtmlString => static::renderCurrentParentGroupField($record))
-                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && static::isExistingChild($record)),
-
-                                        Forms\Components\Placeholder::make('current_space_group_slot')
-                                            ->label('Номер внутри группы')
-                                            ->content(fn (?MarketSpace $record): HtmlString => static::renderCurrentGroupSlotField($record))
-                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && static::isExistingChild($record)),
-
-                                        Forms\Components\Select::make('space_group_parent_id')
-                                            ->label('Группа')
-                                            ->options(function (?MarketSpace $record): array {
-                                                $user = Filament::auth()->user();
-                                                $marketId = $user?->isSuperAdmin()
-                                                    ? (static::selectedMarketIdFromSession() ?? $record?->market_id)
-                                                    : $user?->market_id;
-
-                                                return static::parentGroupOptionsForMarket(
-                                                    filled($marketId) ? (int) $marketId : null,
-                                                    $record?->id ? (int) $record->id : null,
-                                                );
-                                            })
-                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && ! static::isExistingChild($record))
-                                            ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
-                                            ->searchable()
-                                            ->preload()
-                                            ->placeholder('Выберите родительскую группу')
-                                            ->hintIcon('heroicon-m-question-mark-circle')
-                                            ->hintIconTooltip('Родительская группа — это контейнер для связанных мест (например, остров ОС7). Места в группе выбирают родителя из списка, а не вводят текст вручную.'),
-
-                                        Forms\Components\TextInput::make('space_group_slot')
-                                            ->label('Номер внутри группы')
-                                            ->maxLength(255)
-                                            ->placeholder('Например: 6, 7, 8')
-                                            ->visible(fn (callable $get, ?MarketSpace $record): bool => $get('space_group_role') === 'child' && ! static::isExistingChild($record))
-                                            ->required(fn (callable $get): bool => $get('space_group_role') === 'child')
-                                            ->hintIcon('heroicon-m-question-mark-circle')
-                                            ->hintIconTooltip('Позиция места внутри группы. Обычно это номер стола, витрины или секции.'),
-                                    ])
-                                    ->columns([
-                                        'default' => 1,
-                                        'md' => 2,
-                                    ])
-                                    ->compact(),
 
                                 Forms\Components\TextInput::make('activity_type')
                                     ->label('Вид деятельности')
