@@ -121,27 +121,27 @@ class EditMarketSpace extends BaseEditRecord
 
 
 
-    public function renameDisplayName(array $data): void
+    public function changeNumber(array $data): void
     {
         if (! $this->record instanceof MarketSpace) {
             throw ValidationException::withMessages([
-                'display_name' => 'Торговое место не найдено.',
+                'number' => 'Торговое место не найдено.',
             ]);
         }
 
-        $displayName = trim((string) ($data['display_name'] ?? ''));
+        $number = trim((string) ($data['number'] ?? ''));
 
-        if ($displayName === '') {
+        if ($number === '') {
             throw ValidationException::withMessages([
-                'display_name' => 'Введите новое название.',
+                'number' => 'Введите новый номер.',
             ]);
         }
 
-        $currentDisplayName = trim((string) ($this->record->display_name ?? ''));
-        if ($currentDisplayName === $displayName) {
+        $currentNumber = trim((string) ($this->record->number ?? ''));
+        if ($currentNumber === $number) {
             Notification::make()
                 ->info()
-                ->title('Название не изменилось')
+                ->title('Номер не изменился')
                 ->send();
 
             return;
@@ -153,10 +153,10 @@ class EditMarketSpace extends BaseEditRecord
             'entity_id' => (int) $this->record->id,
             'type' => OperationType::SPACE_ATTRS_CHANGE,
             'status' => 'applied',
-            'comment' => 'Переименование через карточку места',
+            'comment' => 'Изменение номера через карточку места',
             'payload' => [
                 'market_space_id' => (int) $this->record->id,
-                'display_name' => $displayName,
+                'number' => $number,
             ],
         ]);
 
@@ -165,8 +165,8 @@ class EditMarketSpace extends BaseEditRecord
 
         Notification::make()
             ->success()
-            ->title('Название места обновлено')
-            ->body('Изменено только видимое имя. Номер места, договоры, начисления и привязка к карте не изменились.')
+            ->title('Номер места обновлён')
+            ->body('Номер изменён через отдельное действие. Карта и остальные связи не менялись.')
             ->send();
     }
 
@@ -688,37 +688,6 @@ class EditMarketSpace extends BaseEditRecord
         );
     }
 
-    private function makeRenameDisplayNameAction(string $actionClass): mixed
-    {
-        return $actionClass::make('rename_display_name')
-            ->label('Переименовать место')
-            ->icon('heroicon-o-pencil-square')
-            ->tooltip('Изменить только видимое имя места')
-            ->size('lg')
-            ->outlined()
-            ->color('info')
-            ->visible(fn (): bool => $this->record instanceof MarketSpace)
-            ->extraAttributes([
-                'class' => 'market-space-card-action market-space-card-action--secondary',
-            ])
-            ->modalHeading('Переименовать место')
-            ->modalSubmitActionLabel('Сохранить')
-            ->modalCancelActionLabel('Отмена')
-            ->form([
-                \Filament\Forms\Components\Placeholder::make('rename_notice')
-                    ->hiddenLabel()
-                    ->content('Меняется только видимое название. Номер места, договоры, начисления и привязка к карте не изменяются.'),
-                \Filament\Forms\Components\TextInput::make('display_name')
-                    ->label('Новое название')
-                    ->required()
-                    ->maxLength(255)
-                    ->default(fn (): string => trim((string) ($this->record?->display_name ?: $this->record?->number ?: '')))
-                    ->placeholder('Например: Кафе')
-                    ->helperText('Укажите понятное видимое название места.'),
-            ])
-            ->action(fn (array $data) => $this->renameDisplayName($data));
-    }
-
     private function makeTenantSwitchAction(string $actionClass): mixed
     {
         return $actionClass::make('switch_tenant')
@@ -970,8 +939,6 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
-
-            $actions[] = $this->makeRenameDisplayNameAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Actions\Action::class);
 
@@ -1039,8 +1006,6 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
-
-            $actions[] = $this->makeRenameDisplayNameAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Pages\Actions\Action::class);
 

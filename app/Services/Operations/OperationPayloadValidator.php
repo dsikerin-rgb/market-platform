@@ -80,6 +80,7 @@ final class OperationPayloadValidator
             'type',
             'status',
             'is_active',
+            'number',
             'display_name',
         ]);
 
@@ -109,6 +110,10 @@ final class OperationPayloadValidator
 
         if (array_key_exists('is_active', $payload)) {
             $normalized['is_active'] = self::boolOrNull($payload['is_active']);
+        }
+
+        if (array_key_exists('number', $payload)) {
+            $normalized['number'] = self::stringOrNull($payload['number']);
         }
 
         if (array_key_exists('display_name', $payload)) {

@@ -87,6 +87,8 @@ class OperationSnapshotSyncTest extends TestCase
                 'market_space_id' => $space->id,
                 'area_sqm' => 42.5,
                 'activity_type' => 'Vegetables',
+                'number' => 'A-2',
+                'display_name' => 'Shop A-2',
                 'status' => 'maintenance',
                 'is_active' => true,
             ],
@@ -95,6 +97,8 @@ class OperationSnapshotSyncTest extends TestCase
         $space->refresh();
         $this->assertSame('42.50', (string) $space->area_sqm);
         $this->assertSame('Vegetables', $space->activity_type);
+        $this->assertSame('A-2', $space->number);
+        $this->assertSame('Shop A-2', $space->display_name);
         $this->assertSame('maintenance', $space->status);
         $this->assertTrue((bool) $space->is_active);
     }

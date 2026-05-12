@@ -88,6 +88,9 @@ class MarketSpaceQuickActionsTest extends TestCase
         ]);
 
         $response->assertSee('A-1');
+        $response->assertSee('Название (для отображения)', false);
+        $response->assertSee('Изменить номер места', false);
+        $response->assertDontSee('Переименовать место', false);
         $response->assertSee('title="Не заменяет сценарий &quot;Упразднить место&quot;"', false);
     }
 
@@ -126,7 +129,7 @@ class MarketSpaceQuickActionsTest extends TestCase
         $response->assertDontSee('Следующие шаги');
     }
 
-    public function test_edit_page_can_rename_display_name_via_action_and_logs_operation(): void
+    public function test_edit_page_allows_inline_display_name_edit(): void
     {
         $market = Market::create([
             'name' => 'Тестовый рынок',
@@ -155,14 +158,55 @@ class MarketSpaceQuickActionsTest extends TestCase
             ->test(\App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace::class, [
                 'record' => (string) $space->getRouteKey(),
             ])
-            ->call('renameDisplayName', [
+            ->fillForm([
                 'display_name' => 'Новое видимое название',
             ])
+            ->call('save')
             ->assertHasNoFormErrors();
 
         $space->refresh();
 
         $this->assertSame('Новое видимое название', $space->display_name);
+        $this->assertDatabaseCount('operations', 0);
+    }
+
+    public function test_edit_page_can_change_number_via_action_and_logs_operation(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => '286',
+            'display_name' => 'Старое название',
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create();
+        $user->assignRole('super-admin');
+
+        $this->withSession(['filament.admin.selected_market_id' => $market->id]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(\App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->call('changeNumber', [
+                'number' => '286-A',
+            ])
+            ->assertHasNoFormErrors();
+
+        $space->refresh();
+
+        $this->assertSame('286-A', $space->number);
 
         $this->assertDatabaseHas('operations', [
             'market_id' => $market->id,
@@ -182,7 +226,6 @@ class MarketSpaceQuickActionsTest extends TestCase
             ->first();
 
         $this->assertNotNull($operation);
-        $this->assertSame('Новое видимое название', data_get($operation?->payload, 'display_name'));
+        $this->assertSame('286-A', data_get($operation?->payload, 'number'));
     }
-
 }
