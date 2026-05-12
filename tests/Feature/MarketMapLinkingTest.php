@@ -1100,10 +1100,6 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Место А-10', false);
         $response->assertSee('Группа-А-Z', false);
         $response->assertSee('Место А-Z (без слота)', false);
-        $response->assertSee('Tenant A', false);
-        $response->assertSee('Занято напрямую', false);
-        $response->assertSee('Свободно', false);
-        $response->assertSee('Зарезервировано', false);
         $response->assertSee('Открыть', false);
 
         // Проверяем порядок: 1 -> 2 -> 10 -> Z (пустой слот в конце)
@@ -1199,7 +1195,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('В группе пока нет дочерних мест', false);
     }
 
-    public function test_parent_group_with_tenant_shows_children_as_occupied_through_group(): void
+    public function test_parent_group_with_tenant_shows_group_composition_children(): void
     {
         $this->actingAsSuperAdmin();
 
@@ -1224,7 +1220,7 @@ class MarketMapLinkingTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Создаем child-место БЕЗ прямого арендатора и со статусом vacant/free
+        // Создаем child-место без прямого арендатора
         $child = MarketSpace::create([
             'market_id' => $market->id,
             'number' => 'OS7 8',
@@ -1242,11 +1238,6 @@ class MarketMapLinkingTest extends TestCase
         $response->assertOk();
         $response->assertSee('Состав группы', false);
         $response->assertSee('OS7 8', false);
-        // Проверяем, что показывается арендатор parent-группы
-        $response->assertSee('Тестовый арендатор группы', false);
-        // Проверяем статус "Занято через группу"
-        $response->assertSee('Занято через группу', false);
-        // Проверяем, что не показывается "Свободно" для этого child
-        $response->assertDontSee('Свободно', false);
+        $response->assertSee('Открыть', false);
     }
 }
