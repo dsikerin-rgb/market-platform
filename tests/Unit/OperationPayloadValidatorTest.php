@@ -43,10 +43,14 @@ class OperationPayloadValidatorTest extends TestCase
     {
         $payload = OperationPayloadValidator::normalize(OperationType::SPACE_ATTRS_CHANGE, [
             'market_space_id' => 7,
+            'number' => 'A-7',
+            'display_name' => 'Shop A-7',
             'status' => 'maintenance',
         ]);
 
         $this->assertSame(7, $payload['market_space_id']);
+        $this->assertSame('A-7', $payload['number']);
+        $this->assertSame('Shop A-7', $payload['display_name']);
         $this->assertSame('maintenance', $payload['status']);
     }
 

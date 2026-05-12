@@ -604,16 +604,36 @@ class MarketSpaceResource extends BaseResource
                                             return 'Для места в группе номер ещё не заполнен. Его можно безопасно указать здесь один раз без ревизии.';
                                         }
 
-                                        $url = route('filament.admin.market-map', [
-                                            'mode' => 'review',
-                                            'market_space_id' => (int) $record->id,
-                                            'return_url' => request()->fullUrl(),
-                                        ]);
-
-                                        return new HtmlString(
-                                            '<a href="' . e($url) . '" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:#2563eb;text-decoration:none;">Изменить через Карта → Ревизия</a>'
-                                        );
+                                        return 'Номер меняется кнопкой справа. Он используется на карте, в поиске и истории.';
                                     })
+                                    ->suffixAction(
+                                        \Filament\Actions\Action::make('change_number')
+                                            ->label('Изменить номер места')
+                                            ->tooltip('Изменить номер места')
+                                            ->icon('heroicon-o-pencil-square')
+                                            ->color('gray')
+                                            ->iconButton()
+                                            ->visible(fn (?MarketSpace $record): bool => filled($record?->id) && ! static::canDirectlyFillMissingIdentityField($record, 'number'))
+                                            ->modalHeading('Изменить номер места')
+                                            ->modalSubmitActionLabel('Сохранить')
+                                            ->modalCancelActionLabel('Отмена')
+                                            ->form([
+                                                \Filament\Forms\Components\Placeholder::make('change_number_notice')
+                                                    ->hiddenLabel()
+                                                    ->content('Номер используется на карте, в поиске и истории. Изменяйте его только если это исправление номера места.'),
+                                                \Filament\Forms\Components\TextInput::make('number')
+                                                    ->label('Новый номер')
+                                                    ->required()
+                                                    ->maxLength(255)
+                                                    ->default(fn (?MarketSpace $record): string => trim((string) ($record?->number ?? '')))
+                                                    ->placeholder('Например: П/1 или A-101')
+                                                    ->helperText('Введите исправленный номер места.'),
+                                            ])
+                                            ->action(function (array $data, \App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace $livewire): void {
+                                                $livewire->changeNumber($data);
+                                            }),
+                                        isInline: true,
+                                    )
                                     ->afterStateUpdated(function ($state, callable $set, callable $get) {
                                         // Для создания: если display_name пуст — подставляем "Место {number}"
                                         if (blank($get('display_name')) && filled($state)) {
@@ -621,26 +641,15 @@ class MarketSpaceResource extends BaseResource
                                         }
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Короткий идентификатор места. Используется в поиске, импорте начислений и привязке договоров. Для существующего места меняется только через режим "Карта -> Ревизия", кроме безопасного дозаполнения пустого номера у места в группе.'),
+                                    ->hintIconTooltip('Короткий идентификатор места. Используется в поиске, импорте начислений и привязке договоров. Для существующего места меняется кнопкой справа, кроме безопасного дозаполнения пустого номера у места в группе.'),
 
                                 Forms\Components\TextInput::make('display_name')
                                     ->label('Название (для отображения)')
                                     ->maxLength(255)
                                     ->placeholder('Например: Аптека 22')
-                                    ->disabled(fn (?MarketSpace $record): bool => filled($record?->id) && ! static::canDirectlyFillMissingIdentityField($record, 'display_name'))
-                                    ->helperText(function (?MarketSpace $record): HtmlString|string|null {
-                                        if (! filled($record?->id)) {
-                                            return null;
-                                        }
-
-                                        if (static::canDirectlyFillMissingIdentityField($record, 'display_name')) {
-                                            return 'Для места в группе отображаемое имя ещё не заполнено. Его можно безопасно указать здесь один раз без ревизии.';
-                                        }
-
-                                        return 'Для существующего места используйте кнопку «Переименовать место» в шапке карточки. Меняется только видимое название.';
-                                    })
+                                    ->helperText('Отображаемое название места в карточках, списках и поиске.')
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Отображаемое имя места. Для существующего места переименование делается отдельной кнопкой в шапке карточки.')
+                                    ->hintIconTooltip('Отображаемое название места в карточках, списках и поиске.')
                                     ->nullable(),
 
                                 Forms\Components\Select::make('space_group_role')
@@ -666,6 +675,37 @@ class MarketSpaceResource extends BaseResource
                                             // space_group_slot не трогаем — вводится пользователем
                                         }
                                     }),
+
+                                Forms\Components\Select::make('space_group_parent_id')
+                                    ->label('Родительская группа')
+                                    ->options(function ($get, ?MarketSpace $record): array {
+                                        $marketId = $get('market_id') ?? $record?->market_id;
+
+                                        return static::parentGroupOptionsForMarket(
+                                            filled($marketId) ? (int) $marketId : null,
+                                            filled($record?->id) ? (int) $record->id : null,
+                                        );
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->required(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->dehydrated(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Выбирается только для места в группе. Родитель определяет, к какой группе относится child-место.')
+                                    ->placeholder('Выберите родительскую группу')
+                                    ->nullable(),
+
+                                Forms\Components\TextInput::make('space_group_slot')
+                                    ->label('Номер в группе')
+                                    ->maxLength(255)
+                                    ->required(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->dehydrated(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->placeholder('Например: 6')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Внутренний номер child-места внутри родительской группы.')
+                                    ->nullable(),
 
                                 Forms\Components\TextInput::make('activity_type')
                                     ->label('Вид деятельности')

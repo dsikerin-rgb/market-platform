@@ -242,6 +242,12 @@ class Operation extends Model
                     ? trim($payload['display_name'])
                     : null;
             }
+
+            if (array_key_exists('number', $payload)) {
+                $space->number = is_string($payload['number']) && trim($payload['number']) !== ''
+                    ? trim($payload['number'])
+                    : null;
+            }
         }
 
         if ($space->isDirty()) {
