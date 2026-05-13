@@ -64,6 +64,8 @@ class EditMarketSpace extends BaseEditRecord
             'actionsAlignment' => $this->getHeaderActionsAlignment(),
             'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
             'heading' => $this->getHeading(),
+            'titleLine' => trim((string) ($this->record?->number ?? '')),
+            'subtitleLine' => trim((string) ($this->record?->display_name ?? '')),
             'statusLabel' => $this->resolveStatusLabel(),
             'statusColor' => $this->resolveStatusColor(),
         ]);
@@ -699,7 +701,7 @@ class EditMarketSpace extends BaseEditRecord
             ->color('warning')
             ->visible(fn (): bool => $this->record instanceof MarketSpace)
             ->extraAttributes([
-                'class' => 'market-space-card-action market-space-card-action--secondary',
+                'class' => 'market-space-card-action market-space-card-action--secondary market-space-card-action--tenant-switch-hidden',
             ])
             ->modalHeading('Сменить арендатора')
             ->modalSubmitActionLabel('Запланировать смену')
@@ -1100,7 +1102,7 @@ class EditMarketSpace extends BaseEditRecord
         return $actions;
     }
 
-    private function resolveSpaceHeading(): string
+    private function resolveSpaceHeading(): string|Htmlable
     {
         $displayName = trim((string) ($this->record?->display_name ?? ''));
         if ($displayName !== '') {

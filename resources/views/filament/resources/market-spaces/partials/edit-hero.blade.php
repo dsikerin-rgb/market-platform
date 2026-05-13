@@ -9,7 +9,16 @@
         <div class="market-space-edit-hero__main">
             <div class="market-space-edit-hero__heading-row">
                 @if (filled($heading))
-                    <h1 class="market-space-edit-hero__heading">{{ $heading }}</h1>
+                    <h1 class="market-space-edit-hero__heading">
+                        @if (filled($titleLine) || filled($subtitleLine))
+                            <span class="market-space-edit-hero__title-line">{{ filled($titleLine) ? $titleLine : $heading }}</span>
+                            @if (filled($subtitleLine))
+                                <span class="market-space-edit-hero__subtitle-line">{{ $subtitleLine }}</span>
+                            @endif
+                        @else
+                            {{ $heading }}
+                        @endif
+                    </h1>
                 @endif
 
                 @if (filled($statusLabel))
