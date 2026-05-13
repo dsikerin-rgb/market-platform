@@ -6408,6 +6408,9 @@
               let line5 = '';
               let line6 = '';
               let line7 = '';
+              let groupParentId = 0;
+              let isChildInGroup = false;
+              let needsGroupTenantAssignment = false;
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
@@ -6433,6 +6436,14 @@
                 const storefront = space.display_name ? String(space.display_name).trim() : '';
                 const activityType = space.activity_type ? String(space.activity_type).trim() : '';
                 const storefrontLabel = storefront || activityType;
+                const groupParent = hit?.space?.group_parent || null;
+                groupParentId = Number(groupParent?.id ?? hit?.space?.space_group_parent_id ?? hit?.space_group_parent_id ?? 0);
+                const groupParentNumber = groupParent?.number ? String(groupParent.number).trim() : '';
+                const groupParentDisplayName = groupParent?.display_name ? String(groupParent.display_name).trim() : '';
+                const groupParentLabel = groupParentNumber || groupParentDisplayName || (groupParentId > 0 ? ('#' + String(groupParentId)) : '');
+                const groupParentTenantName = groupParent?.tenant_name ? String(groupParent.tenant_name).trim() : '';
+                isChildInGroup = (space.space_group_role ? String(space.space_group_role) : '') === 'child' && groupParentId > 0;
+                needsGroupTenantAssignment = isChildInGroup && !groupParentTenantName;
                 const rentRateValue = space.rent_rate_value !== null && space.rent_rate_value !== undefined ? Number(space.rent_rate_value) : null;
                 const rentRateUnit = rentRateUnitLabel(space.rent_rate_unit || '');
                 const currentAccrualTotal = space.current_accrual_total !== null && space.current_accrual_total !== undefined ? Number(space.current_accrual_total) : null;
@@ -6445,10 +6456,17 @@
 
                 if (!hasTenant) {
                   line2 = 'Свободно';
-                  line3 = '';
-                  line4 = '';
+                  line3 = isChildInGroup && groupParentLabel ? ('Группа: ' + escapeHtml(groupParentLabel)) : '';
+                  line4 = isChildInGroup
+                    ? (groupParentTenantName
+                      ? ('Арендатор группы: ' + escapeHtml(groupParentTenantName))
+                      : 'Арендатор группы не назначен')
+                    : '';
+                  line5 = isChildInGroup && groupParentId > 0
+                    ? 'Назначьте арендатора в карточке группы.'
+                    : '';
                   if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
-                    line5 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
+                    line6 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
                   }
                 } else {
                   if (occupancySource === 'parent' && sourceSpaceLabel) {
@@ -6683,12 +6701,23 @@
               const spaceGroupRole = hit?.space?.space_group_role ?? hit?.space_group_role ?? '';
               const groupMembershipSpaceId = Number(hit?.market_space_id ?? hit?.space?.id ?? 0);
               const hasGroupMembershipSpace = Number.isFinite(groupMembershipSpaceId) && groupMembershipSpaceId > 0;
+              const groupOpenSpaceId = isChildInGroup ? groupParentId : 0;
+
+              if (groupOpenSpaceId > 0) {
+                const groupOpenTitle = needsGroupTenantAssignment
+                  ? 'Открыть карточку группы, чтобы назначить арендатора'
+                  : 'Открыть карточку группы в новой вкладке';
+                const groupOpenLabel = needsGroupTenantAssignment
+                  ? 'Назначить арендатора группе'
+                  : 'Открыть группу';
+                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
+              }
 
               if (CAN_EDIT && hasGroupMembershipSpace) {
                 if (spaceGroupRole === 'parent') {
-                  btns.push('<button type="button" disabled title="Состав группы меняется через обычные/дочерние места">Группа (через места)</button>');
+                  btns.push('<button type="button" disabled title="Состав группы меняется через обычные или дочерние места">Состав группы</button>');
                 } else if (spaceGroupRole === 'child') {
-                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Управление группой</button>');
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Состав группы</button>');
                 } else {
                   btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Добавить в группу</button>');
                 }
@@ -6765,6 +6794,13 @@
             }
 
             if (action === 'open-space') {
+              const id = Number(t.getAttribute('data-space-id') || 0);
+              if (!Number.isFinite(id) || id <= 0) return;
+              window.open('/admin/market-spaces/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
+              return;
+            }
+
+            if (action === 'open-group') {
               const id = Number(t.getAttribute('data-space-id') || 0);
               if (!Number.isFinite(id) || id <= 0) return;
               window.open('/admin/market-spaces/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
