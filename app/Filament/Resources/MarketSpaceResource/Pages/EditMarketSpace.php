@@ -601,30 +601,27 @@ class EditMarketSpace extends BaseEditRecord
         $record = $this->record->fresh(['tenant', 'spaceGroupParent.tenant', 'spaceGroupChildren']);
         $effectiveTenantName = trim((string) ($record?->effectiveTenantName() ?? ''));
         $effectiveTenantName = $effectiveTenantName !== '' ? $effectiveTenantName : '—';
-
-        $items = [
-            'Текущее фактическое состояние: ' . e($effectiveTenantName),
-            'Дата начала действия обязательна. До наступления этой даты карточка места не меняется.',
-        ];
+        $stateLabel = 'Прямое место';
+        $stateHint = 'Смена затронет карточку места с указанной даты.';
 
         if ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD && filled($record->space_group_parent_id)) {
             $parentLabel = trim((string) ($record->spaceGroupParent?->number ?? ''));
             $parentLabel = $parentLabel !== '' ? $parentLabel : ('#' . (int) $record->space_group_parent_id);
-            $items[] = 'Это место входит в группу ' . e($parentLabel) . '. В дату вступления место будет выведено из группы и получит прямого арендатора.';
+            $stateLabel = 'Место в группе ' . e($parentLabel);
+            $stateHint = 'В дату вступления место выйдет из группы и получит прямого арендатора.';
         } elseif ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
             $childrenCount = $record->spaceGroupChildren()
                 ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
                 ->count();
-
-            $items[] = 'Это групповое место. После вступления операции child-места продолжат наследовать занятость от группы.';
-            $items[] = 'Связанных мест в группе: ' . $childrenCount . '.';
-        } else {
-            $items[] = 'Это прямое место. В дату вступления операции будет изменён прямой арендатор карточки.';
+            $stateLabel = 'Группа мест';
+            $stateHint = 'Child-места продолжат наследовать арендатора группы. Связанных мест: ' . $childrenCount . '.';
         }
 
         return new HtmlString(
-            '<div style="display:grid;gap:6px;">'
-            . implode('', array_map(static fn (string $item): string => '<div style="font-size:13px;line-height:1.55;color:#334155;">• ' . $item . '</div>', $items))
+            '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #d7e3f4;border-radius:12px;background:#f8fbff;">'
+            . '<div style="font-size:13px;line-height:1.45;color:#334155;"><strong>Текущий арендатор:</strong> ' . e($effectiveTenantName) . '</div>'
+            . '<div style="font-size:13px;line-height:1.45;color:#334155;"><strong>Сценарий:</strong> ' . $stateLabel . '</div>'
+            . '<div style="font-size:12px;line-height:1.5;color:#475569;">' . $stateHint . ' До этой даты карточка места не меняется.</div>'
             . '</div>'
         );
     }
@@ -665,36 +662,36 @@ class EditMarketSpace extends BaseEditRecord
             $links[] = '<a href="' . e(\App\Filament\Resources\TenantContractResource::getUrl('index', [
                 'marketSpaceId' => $recordId,
                 'tab' => 'all',
-            ])) . '" target="_blank" rel="noopener" style="color:#1d4ed8;font-weight:600;text-decoration:none;">Открыть договоры места</a>';
+            ])) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;">Договоры</a>';
         }
 
         if ($accrualCount > 0) {
             $links[] = '<a href="' . e(\App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
                 'marketSpaceId' => $recordId,
                 'tab' => 'all',
-            ])) . '" target="_blank" rel="noopener" style="color:#1d4ed8;font-weight:600;text-decoration:none;">Открыть начисления места</a>';
+            ])) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;">Начисления</a>';
         }
 
         $rows = [];
 
         if ($contractCount > 0) {
-            $rows[] = '• Договоры: ' . $contractCount;
+            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Договоры: ' . $contractCount . '</span>';
         }
 
         if ($accrualCount > 0) {
-            $rows[] = '• Начисления: ' . $accrualCount;
+            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Начисления: ' . $accrualCount . '</span>';
         }
 
         if ($bindingCount > 0) {
-            $rows[] = '• Активные привязки: ' . $bindingCount;
+            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Привязки: ' . $bindingCount . '</span>';
         }
 
         return new HtmlString(
             '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">'
-            . '<div style="font-size:13px;font-weight:700;color:#92400e;">Перед сменой арендатора нужен ручной разбор прямых финансовых и договорных связей.</div>'
-            . '<div style="display:grid;gap:4px;font-size:13px;line-height:1.55;color:#78350f;">' . implode('', array_map(static fn (string $row): string => '<div>' . $row . '</div>', $rows)) . '</div>'
-            . ($links !== [] ? '<div style="display:flex;flex-wrap:wrap;gap:12px;">' . implode('', array_map(static fn (string $link): string => '<div>' . $link . '</div>', $links)) . '</div>' : '')
-            . '<div style="font-size:12px;line-height:1.5;color:#92400e;">Операция не переносит автоматически договоры, начисления и другие прямые связи. Она меняет только управленческий snapshot арендатора по дате вступления.</div>'
+            . '<div style="font-size:13px;font-weight:700;color:#92400e;">Найдены прямые связи. Их нужно проверить перед сменой арендатора.</div>'
+            . '<div style="display:flex;flex-wrap:wrap;gap:8px;">' . implode('', $rows) . '</div>'
+            . ($links !== [] ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">' . implode('', $links) . '</div>' : '')
+            . '<div style="font-size:12px;line-height:1.45;color:#92400e;">Смена арендатора не переносит договоры и начисления автоматически, а меняет только управленческий snapshot по дате вступления.</div>'
             . '</div>'
         );
     }
@@ -740,7 +737,7 @@ class EditMarketSpace extends BaseEditRecord
                     ->required()
                     ->searchable()
                     ->preload()
-                    ->placeholder('Выберите нового арендатора'),
+                    ->placeholder('Выберите арендатора'),
                 \Filament\Forms\Components\DateTimePicker::make('effective_at')
                     ->label('Дата начала действия')
                     ->seconds(false)
@@ -748,10 +745,10 @@ class EditMarketSpace extends BaseEditRecord
                     ->default(fn (): \Illuminate\Support\Carbon => now()),
                 \Filament\Forms\Components\Textarea::make('reason')
                     ->label('Причина')
-                    ->rows(3)
+                    ->rows(2)
                     ->required()
                     ->maxLength(1000)
-                    ->placeholder('Кратко укажите, почему меняется арендатор и с какой договорённостью это связано.'),
+                    ->placeholder('Кратко укажите причину смены арендатора.'),
             ])
             ->action(function (array $data): void {
                 $targetTenant = Tenant::query()->find((int) ($data['target_tenant_id'] ?? 0));
