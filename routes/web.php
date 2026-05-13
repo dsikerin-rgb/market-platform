@@ -2197,6 +2197,44 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
+        $groupParentPayload = null;
+
+        if ($space && (string) ($space->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD && $space->spaceGroupParent) {
+            $groupParent = $space->spaceGroupParent;
+            $groupParentTenant = $groupParent->tenant;
+            $groupParentTenantName = '';
+
+            if ($groupParentTenant) {
+                $shortName = trim((string) ($groupParentTenant->short_name ?? ''));
+                $displayName = trim((string) ($groupParentTenant->display_name ?? ''));
+                $name = trim((string) ($groupParentTenant->name ?? ''));
+                $contactPerson = trim((string) ($groupParentTenant->contact_person ?? ''));
+                $oneCTenantName = trim((string) data_get($groupParentTenant->one_c_data ?? [], 'tenant_name', ''));
+
+                $groupParentTenantName = $shortName !== '' ? $shortName : $displayName;
+                if ($groupParentTenantName === '' && $contactPerson !== '' && ! $isTechnicalTenantName($contactPerson)) {
+                    $groupParentTenantName = $contactPerson;
+                }
+                if ($groupParentTenantName === '' && $oneCTenantName !== '' && ! $isTechnicalTenantName($oneCTenantName)) {
+                    $groupParentTenantName = $oneCTenantName;
+                }
+                if ($groupParentTenantName === '' && $name !== '' && ! $isTechnicalTenantName($name)) {
+                    $groupParentTenantName = $name;
+                }
+                if ($groupParentTenantName === '') {
+                    $groupParentTenantName = $shortName !== '' ? $shortName : ($displayName !== '' ? $displayName : $name);
+                }
+            }
+
+            $groupParentPayload = [
+                'id' => (int) $groupParent->id,
+                'number' => (string) ($groupParent->number ?? ''),
+                'display_name' => (string) ($groupParent->display_name ?? ''),
+                'tenant_id' => $groupParent->tenant_id ? (int) $groupParent->tenant_id : null,
+                'tenant_name' => $groupParentTenantName !== '' ? $groupParentTenantName : null,
+            ];
+        }
+
         return response()->json([
             'ok' => true,
             'hit' => [
@@ -2217,6 +2255,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
                     'space_group_role' => (string) ($space->space_group_role ?? ''),
                     'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
+                    'group_parent' => $groupParentPayload,
                     'location_name' => $locationName,
                     'rent_rate_value' => $rentRateValue,
                     'rent_rate_unit' => $rentRateUnit,
