@@ -1002,14 +1002,14 @@
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
-        flex: 0 1 27.2rem;
-        width: min(100%, 27.2rem);
-        min-width: 27.2rem;
+        flex: 0 1 36rem;
+        width: min(100%, 36rem);
+        min-width: 36rem;
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac{
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: .48rem;
         width: 100%;
         align-items: stretch;
@@ -1297,6 +1297,16 @@
     }
 
     @media (max-width: 1279px) {
+        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
+            flex-basis: 27.2rem;
+            width: min(100%, 27.2rem);
+            min-width: 27.2rem;
+        }
+
+        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac{
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
         html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-priority-summary{
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
