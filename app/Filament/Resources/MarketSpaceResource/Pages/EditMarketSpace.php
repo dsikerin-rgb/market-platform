@@ -65,10 +65,19 @@ class EditMarketSpace extends BaseEditRecord
             'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
             'heading' => $this->getHeading(),
             'titleLine' => trim((string) ($this->record?->number ?? '')),
-            'subtitleLine' => trim((string) ($this->record?->display_name ?? '')),
+            'subtitleLine' => $this->resolveSubtitleLine(),
             'statusLabel' => $this->resolveStatusLabel(),
             'statusColor' => $this->resolveStatusColor(),
         ]);
+    }
+
+    protected function resolveSubtitleLine(): string
+    {
+        if (($this->record?->space_group_role ?? null) === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            return 'Группа мест';
+        }
+
+        return trim((string) ($this->record?->display_name ?? ''));
     }
 
     protected function mutateFormDataBeforeSave(array $data): array

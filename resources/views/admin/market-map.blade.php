@@ -2453,6 +2453,9 @@
               autocomplete="off"
               placeholder="например 6 или A1"
             >
+            <div class="group-membership-modal__hint">
+              Можно изменить вручную. По умолчанию подставляется номер места или следующий свободный номер в группе.
+            </div>
           </div>
           <div class="group-membership-modal__section">
             <label class="group-membership-modal__label" for="groupComment">Комментарий (необязательно)</label>
@@ -2906,9 +2909,11 @@
           // Update UI based on action
           onGroupActionChange();
 
-          // Pre-fill slot if moving
+          // Pre-fill slot from current slot or infer it from the space number.
           if (currentRole === 'child' && space?.spaceGroupSlot) {
             groupSlot.value = space.spaceGroupSlot;
+          } else if (groupSlot) {
+            groupSlot.value = inferGroupSlotFromSpace(space);
           }
 
           groupMembershipModal.hidden = false;
@@ -2918,6 +2923,73 @@
           requestAnimationFrame(() => {
             groupTargetParentSearch.focus();
           });
+        }
+
+        function inferGroupSlotFromSpace(space) {
+          const directSlot = String(space?.spaceGroupSlot || '').trim();
+          if (directSlot !== '') {
+            return directSlot;
+          }
+
+          const candidates = [
+            space?.number,
+            space?.displayName,
+            space?.display_name,
+            space?.code,
+          ];
+
+          for (const candidate of candidates) {
+            const value = String(candidate || '').trim();
+            if (!value) continue;
+
+            const exactTailMatch = value.match(/(\d+[A-Za-zА-Яа-я-]*)\s*$/u);
+            if (exactTailMatch?.[1]) {
+              return exactTailMatch[1];
+            }
+
+            const commaParts = value.split(',').map((part) => String(part || '').trim()).filter(Boolean);
+            const lastPart = commaParts.length ? commaParts[commaParts.length - 1] : '';
+            if (/^\d+[A-Za-zА-Яа-я-]*$/u.test(lastPart)) {
+              return lastPart;
+            }
+          }
+
+          return '';
+        }
+
+        function suggestNextFreeGroupSlot(group) {
+          const candidates = [
+            group?.number,
+            group?.displayName,
+            group?.display_name,
+          ];
+
+          const usedNumericSlots = new Set();
+
+          for (const candidate of candidates) {
+            const value = String(candidate || '').trim();
+            if (!value) continue;
+
+            const afterWhitespace = value.replace(/^[^\s]+\s+/u, '');
+            const parts = afterWhitespace.split(',').map((part) => String(part || '').trim()).filter(Boolean);
+
+            for (const part of parts) {
+              if (/^\d+$/u.test(part)) {
+                usedNumericSlots.add(Number(part));
+              }
+            }
+          }
+
+          if (!usedNumericSlots.size) {
+            return '';
+          }
+
+          let nextSlot = 1;
+          while (usedNumericSlots.has(nextSlot)) {
+            nextSlot += 1;
+          }
+
+          return String(nextSlot);
         }
 
         function onGroupActionChange() {
@@ -3042,6 +3114,11 @@
           groupSelectedParentLabel = formatSpaceDropdownLabel(group);
           groupTargetParentSearch.value = groupSelectedParentLabel;
           groupTargetParent.value = String(group.id);
+
+          if (groupSlot && String(groupSlot.value || '').trim() === '') {
+            groupSlot.value = suggestNextFreeGroupSlot(group);
+          }
+
           closeGroupSearchDropdown();
         }
 
@@ -6710,7 +6787,8 @@
                 const groupOpenLabel = needsGroupTenantAssignment
                   ? 'Назначить арендатора группе'
                   : 'Открыть группу';
-                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
+                const groupDefaultAction = needsGroupTenantAssignment ? 'switch_tenant' : '';
+                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" data-default-action="' + escapeHtml(groupDefaultAction) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
               }
 
               if (CAN_EDIT && hasGroupMembershipSpace) {
@@ -6802,8 +6880,13 @@
 
             if (action === 'open-group') {
               const id = Number(t.getAttribute('data-space-id') || 0);
+              const defaultAction = String(t.getAttribute('data-default-action') || '').trim();
               if (!Number.isFinite(id) || id <= 0) return;
-              window.open('/admin/market-spaces/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
+              const url = new URL('/admin/market-spaces/' + String(Math.trunc(id)) + '/edit', window.location.origin);
+              if (defaultAction) {
+                url.searchParams.set('action', defaultAction);
+              }
+              window.open(url.toString(), '_blank', 'noopener');
               return;
             }
 

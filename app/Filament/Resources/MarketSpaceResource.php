@@ -722,8 +722,8 @@ class MarketSpaceResource extends BaseResource
                 $label = trim((string) ($space->number ?? ''));
                 $displayName = trim((string) ($space->display_name ?? ''));
 
-                if ($displayName !== '' && $displayName !== $label) {
-                    $label = $label !== '' ? ($label . ' — ' . $displayName) : $displayName;
+                if ($label === '' && $displayName !== '') {
+                    $label = $displayName;
                 }
 
                 if ($label === '') {
@@ -815,8 +815,39 @@ class MarketSpaceResource extends BaseResource
                                     })
                                     ->searchable()
                                     ->preload()
+                                    ->afterStateHydrated(function (Forms\Components\Select $component, ?MarketSpace $record, $state): void {
+                                        if (filled($state) || ! $record instanceof MarketSpace) {
+                                            return;
+                                        }
+
+                                        if (($record->space_group_role ?? null) !== MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+                                            return;
+                                        }
+
+                                        $parentLocationId = $record->spaceGroupParent?->location_id;
+                                        if (filled($parentLocationId)) {
+                                            $component->state((int) $parentLocationId);
+                                        }
+                                    })
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Физическая зона рынка: павильоны, острова, уличная торговля и т.д.')
+                                    ->helperText(function (?MarketSpace $record): ?string {
+                                        if (! $record instanceof MarketSpace) {
+                                            return null;
+                                        }
+
+                                        if (($record->space_group_role ?? null) !== MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+                                            return null;
+                                        }
+
+                                        $parentLocationName = trim((string) ($record->spaceGroupParent?->location?->name ?? ''));
+
+                                        if ($parentLocationName === '') {
+                                            return null;
+                                        }
+
+                                        return 'Если поле было пустым, подставлена локация родительской группы: ' . $parentLocationName . '. Значение можно изменить вручную.';
+                                    })
                                     ->disabled(function ($get, ?MarketSpace $record) use ($user) {
                                         if (! ((bool) $user && $user->isSuperAdmin())) {
                                             return false;
