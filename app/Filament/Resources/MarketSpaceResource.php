@@ -165,8 +165,8 @@ class MarketSpaceResource extends BaseResource
             return new HtmlString(
                 '<div style="display:grid;gap:4px;">'
                 . '<div style="font-size:13px;font-weight:700;color:#0f172a;">Свободно</div>'
-                . '<div style="font-size:13px;opacity:.88;">Арендатор: —</div>'
-                . '<div style="font-size:12px;opacity:.7;">Источник: прямое место</div>'
+                . '<div style="font-size:13px;opacity:.88;">Арендатор не назначен</div>'
+                . '<div style="font-size:12px;opacity:.7;">Место пока не занято</div>'
                 . '</div>'
             );
         }
@@ -183,19 +183,16 @@ class MarketSpaceResource extends BaseResource
         }
 
         $tenantLabel = $tenantName ?: '—';
-        $title = $source === 'parent'
-            ? 'Входит в группу: ' . $sourceLabel
-            : 'Занято напрямую';
+        $title = 'Занято';
         $sourceLabelText = $source === 'parent'
-            ? 'Источник: группа'
-            : 'Источник: прямое место';
+            ? 'Арендатор наследуется от группы.'
+            : 'Арендатор указан у этого места.';
 
         $html = '<div style="display:grid;gap:4px;">'
             . '<div style="font-size:13px;font-weight:700;color:#0f172a;">' . e($title) . '</div>'
             . '<div style="font-size:13px;opacity:.88;">Арендатор: ' . e($tenantLabel) . '</div>'
             . '<div style="font-size:12px;opacity:.7;">' . e($sourceLabelText) . '</div>'
             . '</div>';
-
         return new HtmlString($html);
     }
 
@@ -273,7 +270,7 @@ class MarketSpaceResource extends BaseResource
         return new HtmlString(
             '<div style="display:grid;gap:4px;">'
             . '<div style="font-size:13px;font-weight:600;color:#0f172a;">' . e($tenantName !== '' ? $tenantName : '—') . '</div>'
-            . '<div style="font-size:12px;opacity:.7;">Источник: группа ' . e($sourceLabel) . '</div>'
+            . '<div style="font-size:12px;opacity:.7;">Наследуется от группы ' . e($sourceLabel) . '</div>'
             . '</div>'
         );
     }
@@ -324,6 +321,307 @@ class MarketSpaceResource extends BaseResource
             . '<div style="font-size:12px;opacity:.7;">Изменяется через действие «Перенести в группу» в шапке карточки.</div>'
             . '</div>'
         );
+    }
+
+    private static function renderPriorityCard(string $label, string $value, ?string $note = null, string $tone = 'default'): HtmlString
+    {
+        $noteHtml = filled($note)
+            ? '<div class="market-space-priority-card__note">' . e($note) . '</div>'
+            : '';
+
+        return new HtmlString(
+            '<div class="market-space-priority-card market-space-priority-card--' . e($tone) . '">'
+            . '<div class="market-space-priority-card__label">' . e($label) . '</div>'
+            . '<div class="market-space-priority-card__value">' . e($value) . '</div>'
+            . $noteHtml
+            . '</div>'
+        );
+    }
+
+    private static function renderPriorityNumberCard(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return static::renderPriorityCard('Номер', 'Появится после сохранения');
+        }
+
+        $number = trim((string) ($record->number ?? ''));
+        $displayName = trim((string) ($record->display_name ?? ''));
+
+        return static::renderPriorityCard(
+            'Номер',
+            $number !== '' ? $number : 'Не указан',
+            $displayName !== '' ? $displayName : 'Основной идентификатор места'
+        );
+    }
+
+    private static function renderPriorityGroupCard(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return static::renderPriorityCard('Группа', 'Пока не определена');
+        }
+
+        if (static::isChildWithParent($record)) {
+            $parent = $record->spaceGroupParent;
+            $parentLabel = trim((string) ($parent?->number ?? ''));
+
+            if ($parentLabel === '') {
+                $parentLabel = trim((string) ($parent?->display_name ?? ''));
+            }
+
+            if ($parentLabel === '') {
+                $parentLabel = '#' . (int) ($record->space_group_parent_id ?? 0);
+            }
+
+            $slot = trim((string) ($record->space_group_slot ?? ''));
+            $note = $slot !== ''
+                ? 'Место внутри группы, позиция ' . $slot
+                : 'Место входит в группу';
+
+            return static::renderPriorityCard('Группа', $parentLabel, $note);
+        }
+
+        if ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            $childrenCount = $record->spaceGroupChildren()
+                ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                ->count();
+
+            $note = $childrenCount > 0
+                ? 'Группа объединяет ' . $childrenCount . ' мест'
+                : 'Группа создана, но места пока не добавлены';
+
+            return static::renderPriorityCard('Группа', 'Группа мест', $note);
+        }
+
+        return static::renderPriorityCard('Группа', 'Отдельное место', 'Не входит в группу');
+    }
+
+    private static function renderPriorityTenantCard(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return static::renderPriorityCard('Арендатор', 'Появится после сохранения');
+        }
+
+        $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
+
+        if ($tenantName === '') {
+            return static::renderPriorityCard('Арендатор', 'Не назначен', 'Сейчас место свободно', 'vacant');
+        }
+
+        $source = $record->effectiveOccupancySource();
+        $note = 'Указан на этом месте';
+
+        if ($source === 'parent') {
+            $sourceSpace = $record->effectiveOccupancySourceSpace();
+            $sourceLabel = trim((string) ($sourceSpace?->number ?? ''));
+
+            if ($sourceLabel === '') {
+                $sourceLabel = trim((string) ($sourceSpace?->display_name ?? ''));
+            }
+
+            if ($sourceLabel === '') {
+                $sourceLabel = '#' . (int) ($sourceSpace?->id ?? 0);
+            }
+
+            $note = 'Наследуется от группы ' . $sourceLabel;
+        }
+
+        return static::renderPriorityCard('Арендатор', $tenantName, $note, 'occupied');
+    }
+
+    private static function renderPriorityAvailabilityCard(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return static::renderPriorityCard('Свободно / занято', 'Появится после сохранения');
+        }
+
+        $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
+
+        if ($tenantName === '') {
+            return static::renderPriorityCard('Свободно / занято', 'Свободно', 'Арендатор не назначен', 'vacant');
+        }
+
+        return static::renderPriorityCard('Свободно / занято', 'Занято', 'Сейчас место используется арендатором', 'occupied');
+    }
+
+    private static function renderPriorityAreaCard(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace || $record->area_sqm === null) {
+            return static::renderPriorityCard('Площадь', 'Не указана', 'Нужна для расчётов и отчётов');
+        }
+
+        $formatted = number_format((float) $record->area_sqm, 2, ',', ' ');
+        $formatted = rtrim(rtrim($formatted, '0'), ',');
+
+        return static::renderPriorityCard('Площадь', $formatted . ' м²', 'Используется в ставке и аналитике');
+    }
+
+    private static function renderPriorityRentCard(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return static::renderPriorityCard('Ставка', 'Появится после сохранения');
+        }
+
+        $unitLabel = filled($record->rent_rate_unit)
+            ? static::rentRateUnitLabel((string) $record->rent_rate_unit)
+            : null;
+
+        $currentRate = $record->rent_rate_value !== null
+            ? number_format((float) $record->rent_rate_value, 2, ',', ' ') . ' ₽'
+            : null;
+
+        $factRate = null;
+        $period = static::resolveOperationPeriod($record);
+        $resolvedFactRate = static::resolveRentRateFact($record, $period);
+
+        if ($resolvedFactRate !== null) {
+            $factRate = number_format($resolvedFactRate, 2, ',', ' ') . ' ₽';
+        }
+
+        $value = $currentRate ?? $factRate ?? 'Не задана';
+        $noteParts = [];
+
+        if ($unitLabel) {
+            $noteParts[] = $unitLabel;
+        }
+
+        if ($factRate !== null && $currentRate !== null && $factRate !== $currentRate) {
+            $noteParts[] = 'Факт за период: ' . $factRate;
+        } elseif ($factRate !== null && $currentRate === null) {
+            $noteParts[] = 'Факт за период';
+        }
+
+        if ($currentRate === null && $factRate === null) {
+            $noteParts[] = 'Ставка ещё не заполнена';
+        }
+
+        return static::renderPriorityCard('Ставка', $value, implode(' • ', $noteParts));
+    }
+
+    private static function renderPrioritySummaryItem(string $label, string $value, ?string $meta = null, string $tone = 'default', ?string $actionHtml = null): string
+    {
+        $metaHtml = filled($meta)
+            ? '<div class="market-space-priority-summary__meta">' . e($meta) . '</div>'
+            : '';
+
+        return '<div class="market-space-priority-summary__item market-space-priority-summary__item--' . e($tone) . '">'
+            . ($actionHtml ?? '')
+            . '<div class="market-space-priority-summary__label">' . e($label) . '</div>'
+            . '<div class="market-space-priority-summary__value">' . e($value) . '</div>'
+            . $metaHtml
+            . '</div>';
+    }
+
+    private static function renderPrioritySummary(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return new HtmlString(
+                '<div class="market-space-priority-summary">'
+                . static::renderPrioritySummaryItem('Номер', 'Появится после сохранения')
+                . '</div>'
+            );
+        }
+
+        $number = trim((string) ($record->number ?? ''));
+        $displayName = trim((string) ($record->display_name ?? ''));
+
+        $groupValue = 'Отдельное место';
+        $groupMeta = 'Не входит в группу';
+
+        if (static::isChildWithParent($record)) {
+            $parent = $record->spaceGroupParent;
+            $parentLabel = trim((string) ($parent?->number ?? ''));
+
+            if ($parentLabel === '') {
+                $parentLabel = trim((string) ($parent?->display_name ?? ''));
+            }
+
+            if ($parentLabel === '') {
+                $parentLabel = '#' . (int) ($record->space_group_parent_id ?? 0);
+            }
+
+            $groupValue = $parentLabel;
+            $slot = trim((string) ($record->space_group_slot ?? ''));
+            $groupMeta = $slot !== '' ? 'Место внутри группы, позиция ' . $slot : 'Место входит в группу';
+        } elseif ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            $childrenCount = $record->spaceGroupChildren()
+                ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                ->count();
+            $groupValue = 'Группа мест';
+            $groupMeta = $childrenCount > 0 ? 'Объединяет ' . $childrenCount . ' мест' : 'Группа пока пустая';
+        }
+
+        $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
+        $tenantValue = $tenantName !== '' ? $tenantName : 'Не назначен';
+        $tenantMeta = $tenantName === '' ? 'Сейчас место свободно' : 'Указан на этом месте';
+        $tenantTone = $tenantName === '' ? 'vacant' : 'occupied';
+
+        if ($tenantName !== '' && $record->effectiveOccupancySource() === 'parent') {
+            $sourceSpace = $record->effectiveOccupancySourceSpace();
+            $sourceLabel = trim((string) ($sourceSpace?->number ?? ''));
+
+            if ($sourceLabel === '') {
+                $sourceLabel = trim((string) ($sourceSpace?->display_name ?? ''));
+            }
+
+            if ($sourceLabel === '') {
+                $sourceLabel = '#' . (int) ($sourceSpace?->id ?? 0);
+            }
+
+            $tenantMeta = 'Наследуется от группы ' . $sourceLabel;
+        }
+
+        $tenantActionHtml = '<button type="button" class="market-space-priority-summary__action" wire:click="mountAction(\'switch_tenant\')" title="Сменить арендатора" aria-label="Сменить арендатора">'
+            . '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-8.9 8.9a2 2 0 0 1-.878.513l-2.5.714a.75.75 0 0 1-.927-.927l.714-2.5a2 2 0 0 1 .513-.878l8.9-8.9ZM12.525 5.707 5.533 12.7a.5.5 0 0 0-.128.22l-.425 1.49 1.49-.425a.5.5 0 0 0 .22-.128l6.992-6.992-1.157-1.157Z"/></svg>'
+            . '</button>';
+
+        $availabilityValue = $tenantName === '' ? 'Свободно' : 'Занято';
+        $availabilityMeta = $tenantName === '' ? 'Арендатор не назначен' : 'Сейчас место используется';
+        $availabilityTone = $tenantName === '' ? 'vacant' : 'occupied';
+
+        $areaValue = 'Не указана';
+        $areaMeta = 'Нужна для расчётов и отчётов';
+        if ($record->area_sqm !== null) {
+            $formattedArea = number_format((float) $record->area_sqm, 2, ',', ' ');
+            $formattedArea = rtrim(rtrim($formattedArea, '0'), ',');
+            $areaValue = $formattedArea . ' м²';
+            $areaMeta = 'Используется в ставке и аналитике';
+        }
+
+        $unitLabel = filled($record->rent_rate_unit)
+            ? static::rentRateUnitLabel((string) $record->rent_rate_unit)
+            : null;
+        $currentRate = $record->rent_rate_value !== null
+            ? number_format((float) $record->rent_rate_value, 2, ',', ' ') . ' ₽'
+            : null;
+        $factRate = null;
+        $period = static::resolveOperationPeriod($record);
+        $resolvedFactRate = static::resolveRentRateFact($record, $period);
+        if ($resolvedFactRate !== null) {
+            $factRate = number_format($resolvedFactRate, 2, ',', ' ') . ' ₽';
+        }
+
+        $rentValue = $currentRate ?? $factRate ?? 'Не задана';
+        $rentMetaParts = [];
+        if ($unitLabel) {
+            $rentMetaParts[] = $unitLabel;
+        }
+        if ($factRate !== null && $currentRate !== null && $factRate !== $currentRate) {
+            $rentMetaParts[] = 'Факт: ' . $factRate;
+        } elseif ($factRate !== null && $currentRate === null) {
+            $rentMetaParts[] = 'Факт за период';
+        } elseif ($currentRate === null && $factRate === null) {
+            $rentMetaParts[] = 'Ставка ещё не заполнена';
+        }
+
+        $items = [
+            static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta),
+            static::renderPrioritySummaryItem('Арендатор', $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
+            static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone),
+            static::renderPrioritySummaryItem('Площадь', $areaValue, $areaMeta),
+            static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts)),
+        ];
+
+        return new HtmlString('<div class="market-space-priority-summary">' . implode('', $items) . '</div>');
     }
 
     private static function tableEffectiveTenantName(MarketSpace $record): ?string
@@ -484,7 +782,17 @@ class MarketSpaceResource extends BaseResource
             $tabs->tabs([
                 Tab::make('Основное')
                     ->schema([
-                        Section::make()
+                        Section::make('Ключевая информация')
+                            ->description('Главное по месту без технических полей и служебных расшифровок.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('priority_summary')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderPrioritySummary($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1),
+                        Section::make('Редактируемые данные')
                             ->schema([
                                 Forms\Components\Select::make('location_id')
                                     ->label('Локация')
@@ -566,27 +874,23 @@ class MarketSpaceResource extends BaseResource
 
                                         return blank($marketId);
                                     })
+                                    ->visible(fn (?MarketSpace $record): bool => ! filled($record?->id) && ! static::isChildWithParent($record))
                                     ->nullable(),
-
                                 Forms\Components\Placeholder::make('effective_tenant_display')
-                                    ->label('Арендатор группы')
+                                    ->label('Фактический арендатор')
                                     ->content(fn (?MarketSpace $record): HtmlString => static::renderEffectiveTenantField($record))
-                                    ->visible(fn (?MarketSpace $record): bool => static::isChildWithParent($record))
+                                    ->visible(fn (): bool => false)
                                     ->columnSpanFull(),
 
-                                Section::make('Фактическая занятость')
+                                Section::make('Статус места')
                                     ->schema([
                                         Forms\Components\Placeholder::make('effective_occupancy')
                                             ->hiddenLabel()
                                             ->content(fn (?MarketSpace $record): HtmlString => static::renderEffectiveOccupancy($record))
                                             ->columnSpanFull(),
-                                        Forms\Components\Placeholder::make('child_group_notice')
-                                            ->hiddenLabel()
-                                            ->content(fn (?MarketSpace $record): HtmlString|string => static::renderChildInheritanceNotice($record) ?? '')
-                                            ->columnSpanFull()
-                                            ->visible(fn (?MarketSpace $record): bool => static::renderChildInheritanceNotice($record) instanceof HtmlString),
                                     ])
                                     ->columnSpanFull()
+                                    ->visible(fn (): bool => false)
                                     ->compact(),
 
                                 Forms\Components\TextInput::make('number')
