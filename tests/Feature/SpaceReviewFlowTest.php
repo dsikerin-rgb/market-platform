@@ -764,6 +764,48 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('FILTER-TEST', false);
     }
 
+    public function test_map_review_results_shows_tenant_change_card_with_review_hint(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'CHANGE-TEST',
+            'display_name' => 'Change Test Space',
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => now(),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'observed_tenant_name' => 'Бакиева',
+                'reason' => 'с 01.05.26 г',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $html = Livewire::test(MapReviewResults::class)->html();
+
+        $this->assertStringContainsString('CHANGE-TEST', $html);
+        $this->assertStringContainsString('Сменился арендатор', $html);
+        $this->assertStringContainsString('Фактический арендатор', $html);
+        $this->assertStringContainsString('Бакиева', $html);
+        $this->assertStringContainsString('Подсказка ревизора', $html);
+        $this->assertStringContainsString('с 01.05.26 г', $html);
+        $this->assertStringNotContainsString('Автор', $html);
+        $this->assertStringNotContainsString('Дата фиксации', $html);
+    }
+
     public function test_map_review_results_shows_ai_only_for_first_batch_with_clear_limit_message(): void
     {
         $market = $this->createMarket();
@@ -1958,11 +2000,11 @@ class SpaceReviewFlowTest extends TestCase
         Livewire::test(MapReviewResults::class)
             ->assertSee('Фактический арендатор', false)
             ->assertSee('Бакиева', false)
-            ->assertSee('Комментарий ревизии', false)
+            ->assertSee('Подсказка ревизора', false)
             ->assertSee('с 01.05.26 г', false)
-            ->assertSee('Автор', false)
+            ->assertDontSee('Автор', false)
             ->assertSee('Super Admin', false)
-            ->assertSee('Дата фиксации', false);
+            ->assertDontSee('Дата фиксации', false);
     }
 
     public function test_map_review_results_hides_empty_observed_tenant_line_for_legacy_tenant_change_operation(): void
@@ -2007,10 +2049,10 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::test(MapReviewResults::class)
             ->assertDontSee('Фактический арендатор', false)
-            ->assertSee('Комментарий ревизии', false)
+            ->assertSee('Подсказка ревизора', false)
             ->assertSee('Комментарий без арендатора в payload', false)
-            ->assertSee('Автор', false)
-            ->assertSee('Дата фиксации', false);
+            ->assertDontSee('Автор', false)
+            ->assertDontSee('Дата фиксации', false);
     }
 
     public function test_market_map_review_navigation_uses_fresh_snapshot_and_explicitly_handles_no_pending_places(): void

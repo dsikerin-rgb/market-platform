@@ -2328,9 +2328,7 @@
                                             $tenantChangeRecordedAt = trim((string) ($tenantChangeDetails['recorded_at'] ?? ''));
                                             $hasTenantChangeDetails = $isTenantCase
                                                 && ($observedTenantName !== ''
-                                                    || $tenantChangeComment !== ''
-                                                    || $tenantChangeAuthor !== ''
-                                                    || $tenantChangeRecordedAt !== '');
+                                                    || $tenantChangeComment !== '');
                                             $createdByLabel = trim((string) ($row['created_by_name'] ?? ''));
                                             $createdAtLabel = trim((string) ($row['created_at'] ?? ''));
                                             if ($isContractTenantOverride) {
@@ -2478,29 +2476,17 @@
                                                                                 <div class="mrr-place__decision-detail-value">{{ $observedTenantName }}</div>
                                                                             </div>
                                                                         @endif
-                                                                        @if ($tenantChangeComment !== '')
-                                                                            <div class="mrr-place__decision-detail">
-                                                                                <div class="mrr-place__decision-detail-label">Комментарий ревизии</div>
-                                                                                <div class="mrr-place__decision-detail-value">{{ $tenantChangeComment }}</div>
-                                                                            </div>
-                                                                        @endif
-                                                                        @if ($tenantChangeAuthor !== '')
-                                                                            <div class="mrr-place__decision-detail">
-                                                                                <div class="mrr-place__decision-detail-label">Автор</div>
-                                                                                <div class="mrr-place__decision-detail-value">{{ $tenantChangeAuthor }}</div>
-                                                                            </div>
-                                                                        @endif
-                                                                        @if ($tenantChangeRecordedAt !== '')
-                                                                            <div class="mrr-place__decision-detail">
-                                                                                <div class="mrr-place__decision-detail-label">Дата фиксации</div>
-                                                                                <div class="mrr-place__decision-detail-value">{{ $tenantChangeRecordedAt }}</div>
-                                                                            </div>
-                                                                        @endif
                                                                     </div>
+                                                                    @if ($tenantChangeComment !== '')
+                                                                        <div class="mrr-conflict-brief__hint">
+                                                                            <div class="mrr-conflict-brief__hint-label">Подсказка ревизора</div>
+                                                                            <div class="mrr-conflict-brief__hint-text">{{ $tenantChangeComment }}</div>
+                                                                        </div>
+                                                                    @endif
                                                                 @else
                                                                     <div class="mrr-place__decision-meta">
-                                                                    Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
-                                                                </div>
+                                                                        Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
+                                                                    </div>
                                                                 @endif
                                                             </div>
                                                         @endif
