@@ -173,9 +173,10 @@ final class SpaceGroupManager
 
         $updates = [];
 
-        if ($oldNumber !== $newNumber) {
-            $updates['number'] = $newNumber;
-        }
+        // Number should not be updated automatically on group membership changes
+        // if ($oldNumber !== $newNumber) {
+        //     $updates['number'] = $newNumber;
+        // }
 
         if ($oldDisplayName === '' || $oldDisplayName === $oldNumber) {
             if ($oldDisplayName !== $newNumber) {
@@ -193,11 +194,8 @@ final class SpaceGroupManager
 
         $parent->forceFill($updates)->save();
 
-        return [
-            'id' => (int) $parent->getKey(),
-            'old_number' => $oldNumber,
-            'new_number' => $newNumber,
-        ];
+        // Since number is not updated, return null to indicate no renaming occurred
+        return null;
     }
 
     private function assertCanRegroup(MarketSpace $child, MarketSpace $targetParent, string $slot): void

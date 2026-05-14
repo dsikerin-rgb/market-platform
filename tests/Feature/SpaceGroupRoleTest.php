@@ -330,56 +330,56 @@ class SpaceGroupRoleTest extends TestCase
         $this->assertNull($child->effectiveOccupancySourceSpace());
     }
 
-    public function test_regrouping_child_renames_old_and_new_parent_groups(): void
+    public function test_regrouping_child_does_not_rename_parent_numbers(): void
     {
         $market = Market::create(['name' => 'Test Market']);
 
         $oldParent = MarketSpace::create([
             'market_id' => $market->id,
-            'number' => 'ОС7 17, 18',
-            'display_name' => 'ОС7 17, 18',
+            'number' => 'ОС20/1 рыба',
+            'display_name' => 'ОС20/1 рыба',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
-            'space_group_token' => 'ОС7',
+            'space_group_token' => 'ОС20',
             'is_active' => true,
         ]);
 
         $newParent = MarketSpace::create([
             'market_id' => $market->id,
-            'number' => 'ОС7 14, 15, 16',
-            'display_name' => 'ОС7 14, 15, 16',
+            'number' => 'ОС20/3 ск',
+            'display_name' => 'ОС20/3 ск',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
-            'space_group_token' => 'ОС7',
+            'space_group_token' => 'ОС20',
             'is_active' => true,
         ]);
 
         $child17 = MarketSpace::create([
             'market_id' => $market->id,
-            'number' => 'ОС7 17',
+            'number' => 'ОС20 17',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
             'space_group_parent_id' => $oldParent->id,
             'space_group_slot' => '17',
-            'space_group_token' => 'ОС7',
+            'space_group_token' => 'ОС20',
             'is_active' => true,
         ]);
 
         MarketSpace::create([
             'market_id' => $market->id,
-            'number' => 'ОС7 18',
+            'number' => 'ОС20 18',
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
             'space_group_parent_id' => $oldParent->id,
             'space_group_slot' => '18',
-            'space_group_token' => 'ОС7',
+            'space_group_token' => 'ОС20',
             'is_active' => true,
         ]);
 
         foreach (['14', '15', '16'] as $slot) {
             MarketSpace::create([
                 'market_id' => $market->id,
-                'number' => 'ОС7 ' . $slot,
+                'number' => 'ОС20 ' . $slot,
                 'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
                 'space_group_parent_id' => $newParent->id,
                 'space_group_slot' => $slot,
-                'space_group_token' => 'ОС7',
+                'space_group_token' => 'ОС20',
                 'is_active' => true,
             ]);
         }
@@ -392,10 +392,15 @@ class SpaceGroupRoleTest extends TestCase
 
         $this->assertSame($newParent->id, $child17->space_group_parent_id);
         $this->assertSame('17', $child17->space_group_slot);
-        $this->assertSame('ОС7', $child17->space_group_token);
-        $this->assertSame('ОС7 18', $oldParent->number);
-        $this->assertSame('ОС7 14, 15, 16, 17', $newParent->number);
-        $this->assertCount(2, $result['renamed_parents']);
+        $this->assertSame('ОС20', $child17->space_group_token);
+        // Parent numbers should remain unchanged
+        $this->assertSame('ОС20/1 рыба', $oldParent->number);
+        $this->assertSame('ОС20/3 ск', $newParent->number);
+        // Display names may be updated automatically
+        $this->assertSame('ОС20 18', $oldParent->display_name);
+        $this->assertSame('ОС20 14, 15, 16, 17', $newParent->display_name);
+        // No renamed parents since numbers are not changed
+        $this->assertCount(0, $result['renamed_parents']);
     }
 
     public function test_regrouping_child_rejects_duplicate_slot_in_target_group(): void
@@ -441,6 +446,42 @@ class SpaceGroupRoleTest extends TestCase
         $this->expectException(ValidationException::class);
 
         app(SpaceGroupManager::class)->regroupChild($child17, $newParent, '17');
+    }
+
+    public function test_adding_child_to_group_preserves_parent_number(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС20/1 рыба',
+            'display_name' => 'ОС20/1 рыба',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'ОС20',
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ОС20 227',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $result = app(SpaceGroupManager::class)->addToGroup($child, $parent, '227');
+
+        $child->refresh();
+        $parent->refresh();
+
+        $this->assertSame($parent->id, $child->space_group_parent_id);
+        $this->assertSame('227', $child->space_group_slot);
+        $this->assertSame('ОС20', $child->space_group_token);
+        // Parent number should remain unchanged
+        $this->assertSame('ОС20/1 рыба', $parent->number);
+        // Display name may be updated automatically
+        $this->assertSame('ОС20 227', $parent->display_name);
+        // No renamed parents since number is not changed
+        $this->assertCount(0, $result['renamed_parents']);
     }
 
     public function test_regrouping_child_rejects_current_parent_as_target_group(): void
