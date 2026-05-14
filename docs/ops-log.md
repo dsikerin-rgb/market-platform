@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-05-14 — Cloud.ru VM health check
+
+Checked current Cloud.ru VM state and OS resource usage.
+
+VM:
+- Provider: Cloud.ru Evolution
+- VM name: my_projects
+- Console hostname: otelpro-prod-1
+- Status: running
+- Public IP: 176.108.244.218
+- Zone: ru.AZ-3
+- Image: Ubuntu 22.04-old
+- vCPU/RAM: 2 vCPU / 4 GB RAM
+- Boot disk: 30 GB / ssd_free_tier
+
+Health check:
+- Uptime: 36 days, 4:54
+- Load average: 0.02, 0.01, 0.00
+- Disk /dev/vda2: 30G total, 15G used, 14G available, 51% used
+- RAM: 3.8Gi total, 1.5Gi used, 1.8Gi available
+- Swap: 0B
+- /var/www/market/current/storage: 120M
+- /var/www/market-staging/current/storage: 312M
+- /var/www total: 2.9G
+- /var/log total: 3.1G
+- /var/log/journal: 3.0G
+
+Assessment:
+- No immediate technical incident found.
+- Disk, CPU load, and RAM are currently safe.
+- Swap is not configured.
+- systemd journal size should be limited later.
+- Boot disk size is small but current usage is safe.
+
+---
+
 ## 2026-05-12 — 1C current handoff snapshot
 
 **Что зафиксировали**

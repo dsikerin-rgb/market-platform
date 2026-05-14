@@ -524,3 +524,36 @@ php artisan market:system-agent:init --all --execute
 php artisan market:calendar:generate-tasks --dry-run
 php artisan market:calendar:generate-tasks
 ```
+
+---
+
+## Cloud.ru VM health snapshot
+
+Cloud.ru Evolution / current prototype VM:
+- VM name: my_projects
+- Console hostname: otelpro-prod-1
+- Status: running
+- Public IP: 176.108.244.218
+- Zone: ru.AZ-3
+- Image: Ubuntu 22.04-old
+- Flavor: free-tier-2-4 / Free tier
+- vCPU: 2
+- RAM: 4 GB
+- Guaranteed CPU share: 10%
+- Boot disk: 30 GB / ssd_free_tier
+- VM created: 2025-08-20 23:31
+- VM id: 63ba1122-c7e3-4ee2-85aa-d29dfb026b73
+
+Current Market paths:
+- Production: /var/www/market/current
+- Staging: /var/www/market-staging/current
+
+Latest health assessment:
+- VM is healthy.
+- CPU/load is very low.
+- RAM is acceptable.
+- Disk usage is acceptable.
+- No immediate technical incident found.
+- Watch item: swap is not configured.
+- Watch item: systemd journal uses about 3.0G; consider setting journal retention/size limit later.
+- Watch item: boot disk is only 30G, but current usage is safe.
