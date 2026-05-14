@@ -1,4 +1,5 @@
 <?php
+# app/Services/MarketMap/MapReviewResultsService.php
 
 declare(strict_types=1);
 
@@ -124,6 +125,12 @@ class MapReviewResultsService
      *   decision:?string,
      *   decision_label:?string,
      *   reason:?string,
+     *   tenant_change_details:?array{
+     *     observed_tenant_name:?string,
+     *     review_comment:?string,
+     *     author_name:?string,
+     *     recorded_at:?string
+     *   },
      *   diagnostics:array<string,mixed>
      * }>
      */
@@ -191,6 +198,7 @@ class MapReviewResultsService
             $createdByName = $operation?->created_by
                 ? (string) ($reviewers[(int) $operation->created_by] ?? '-')
                 : $reviewedByName;
+            $reason = filled($payload['reason'] ?? null) ? trim((string) $payload['reason']) : null;
 
             return [
                 'space_id' => (int) $space->id,
@@ -206,7 +214,8 @@ class MapReviewResultsService
                 'reviewed_by_name' => $reviewedByName,
                 'decision' => $decision,
                 'decision_label' => $decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null,
-                'reason' => filled($payload['reason'] ?? null) ? trim((string) $payload['reason']) : null,
+                'reason' => $reason,
+                'tenant_change_details' => $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason),
                 'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
             ];
         })->all();
@@ -396,6 +405,7 @@ class MapReviewResultsService
             return [
                 $spaceId => [
                     'relation_counts' => $this->displayRelationCounts($counts),
+                    'relation_details' => $this->buildRelationDetails($counts),
                     'candidate_spaces' => $candidates,
                     'has_candidates' => $candidates !== [],
                     'relation_assessment' => $this->relationAssessment($counts, $candidates, $contractOverride),
@@ -510,6 +520,79 @@ class MapReviewResultsService
             ->map(fn (array $item): string => $item['label'] . ': ' . (int) $item['count'])
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<string, int>  $counts
+     * @return list<array{key:string,label:string,count:int,description:string}>
+     */
+    private function buildRelationDetails(array $counts): array
+    {
+        $definitions = [
+            'contracts' => [
+                'label' => 'Договоры',
+                'description' => 'По месту есть договорные связи. Это сильная бизнес-привязка.',
+            ],
+            'accruals' => [
+                'label' => 'Начисления',
+                'description' => 'По месту есть финансовый хвост в начислениях.',
+            ],
+            'map_shapes' => [
+                'label' => 'Карта',
+                'description' => 'У места есть фигуры и привязки на карте.',
+            ],
+            'cabinet_users' => [
+                'label' => 'Кабинет',
+                'description' => 'Есть пользовательские привязки в кабинете арендатора.',
+            ],
+            'tenant_bindings' => [
+                'label' => 'Связи',
+                'description' => 'Есть tenant bindings и исторические привязки места.',
+            ],
+            'requests' => [
+                'label' => 'Заявки',
+                'description' => 'По месту заведены заявки, которые могут зависеть от него.',
+            ],
+            'tickets' => [
+                'label' => 'Тикеты',
+                'description' => 'По месту есть тикеты или обращения.',
+            ],
+            'reviews' => [
+                'label' => 'Отзывы',
+                'description' => 'По месту привязаны отзывы арендаторов.',
+            ],
+            'showcases' => [
+                'label' => 'Витрина',
+                'description' => 'Есть публикации или витрины, связанные с местом.',
+            ],
+            'products' => [
+                'label' => 'Товары',
+                'description' => 'Есть товары маркетплейса, опубликованные с этого места.',
+            ],
+            'chats' => [
+                'label' => 'Чаты',
+                'description' => 'Есть чаты маркетплейса, связанные с местом.',
+            ],
+        ];
+
+        $items = [];
+
+        foreach ($definitions as $key => $meta) {
+            $count = (int) ($counts[$key] ?? 0);
+
+            if ($count <= 0) {
+                continue;
+            }
+
+            $items[] = [
+                'key' => $key,
+                'label' => $meta['label'],
+                'count' => $count,
+                'description' => $meta['description'],
+            ];
+        }
+
+        return $items;
     }
 
     /**
@@ -718,6 +801,44 @@ class MapReviewResultsService
         }
 
         return $number !== '' ? $number : ($name !== '' ? $name : ('#' . (int) $space->id));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{
+     *   observed_tenant_name:?string,
+     *   review_comment:?string,
+     *   author_name:?string,
+     *   recorded_at:?string
+     * }|null
+     */
+    private function tenantChangeDetails(
+        ?string $decision,
+        array $payload,
+        ?string $createdByName,
+        ?string $createdAt,
+        ?string $reason
+    ): ?array {
+        if ($decision !== SpaceReviewDecision::TENANT_CHANGED_ON_SITE) {
+            return null;
+        }
+
+        $observedTenantName = filled($payload['observed_tenant_name'] ?? null)
+            ? trim((string) $payload['observed_tenant_name'])
+            : null;
+        $authorName = filled($createdByName) ? trim((string) $createdByName) : null;
+        $recordedAt = filled($createdAt) ? trim((string) $createdAt) : null;
+
+        if ($observedTenantName === null && $reason === null && $authorName === null && $recordedAt === null) {
+            return null;
+        }
+
+        return [
+            'observed_tenant_name' => $observedTenantName,
+            'review_comment' => $reason,
+            'author_name' => $authorName,
+            'recorded_at' => $recordedAt,
+        ];
     }
 
     /**
