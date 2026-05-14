@@ -397,6 +397,28 @@ class EditMarketSpace extends BaseEditRecord
             $blockingRelations[] = $item;
         }
 
+        // Проверка inherited occupancy через родительскую группу
+        $effectiveTenantId = $this->record->effectiveTenantId();
+        $effectiveTenantName = $this->record->effectiveTenantName();
+        $effectiveOccupancySource = $this->record->effectiveOccupancySource();
+
+        if ($effectiveTenantId && $effectiveOccupancySource === 'parent') {
+            $parentLabel = trim((string) ($this->record->spaceGroupParent?->number ?? ''));
+            $parentLabel = $parentLabel !== '' ? $parentLabel : ('#' . (int) ($this->record->space_group_parent_id ?? 0));
+
+            $item = $makeItem(
+                'Наследуемый арендатор (через группу)',
+                1,
+                'Блокирует',
+                filled($effectiveTenantName)
+                    ? 'Арендатор группы ' . e($parentLabel) . ': ' . $effectiveTenantName
+                    : 'Место занято через родительскую группу ' . e($parentLabel)
+            );
+
+            $liveRelations[] = $item;
+            $blockingRelations[] = $item;
+        }
+
         $shapeCount = $countRows('market_space_map_shapes', static function ($query) use ($recordId): void {
             $query->where('market_space_id', $recordId);
 
