@@ -86,7 +86,7 @@
         $secondaryNextSteps[] = 'Сверьте историю места перед следующим действием.';
     }
 
-    $resolveAction = static function (array $item) use ($tenantUrl, $mapUrl, $historyUrl): array {
+    $resolveAction = static function (array $item) use ($tenantUrl, $mapUrl, $historyUrl, $contractsUrl, $accrualsUrl): array {
         $label = (string) ($item['label'] ?? '');
 
         if ($label === 'Текущий арендатор' && $tenantUrl) {
