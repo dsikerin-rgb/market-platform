@@ -55,6 +55,9 @@
     $transferableCount = count($transferableRelations);
     $blockingCount = count($blockingRelations);
     $historicalCount = count($historicalRelations);
+    $transferableTotal = array_sum(array_map(static fn (array $item): int => (int) ($item['count'] ?? 0), $transferableRelations));
+    $blockingTotal = array_sum(array_map(static fn (array $item): int => (int) ($item['count'] ?? 0), $blockingRelations));
+    $historicalTotal = array_sum(array_map(static fn (array $item): int => (int) ($item['count'] ?? 0), $historicalRelations));
     $isSimpleDeactivateCase = $liveCount === 0 && $transferableCount === 0 && $blockingCount === 0;
 
     $verdictLabel = 'Нужен разбор связей перед упразднением';
@@ -102,8 +105,50 @@
 
     }
 
+    $actionSteps = [];
+
+    if ($blockingCount > 0 && $tenantUrl) {
+        $actionSteps[] = [
+            'label' => 'Открыть арендатора',
+            'url' => $tenantUrl,
+            'new_tab' => true,
+        ];
+    }
+
+    if ($blockingCount > 0 && $contractsUrl) {
+        $actionSteps[] = [
+            'label' => 'Открыть договоры',
+            'url' => $contractsUrl,
+            'new_tab' => true,
+        ];
+    }
+
+    if ($blockingCount > 0 && $accrualsUrl) {
+        $actionSteps[] = [
+            'label' => 'Открыть начисления',
+            'url' => $accrualsUrl,
+            'new_tab' => true,
+        ];
+    }
+
+    if ($hasTransferableRelations && $mapUrl) {
+        $actionSteps[] = [
+            'label' => 'Проверить карту',
+            'url' => $mapUrl,
+            'new_tab' => true,
+        ];
+    }
+
+    if ($historyUrl) {
+        $actionSteps[] = [
+            'label' => 'Открыть историю',
+            'url' => $historyUrl,
+            'new_tab' => false,
+        ];
+    }
+
     $showSummaryStatusBlock = false;
-    $showStatsBlock = false;
+    $showStatsBlock = ! $isSimpleDeactivateCase;
     $showOverviewTable = false;
 
     $resolveAction = static function (array $item) use ($tenantUrl, $mapUrl, $historyUrl, $contractsUrl, $accrualsUrl): array {
@@ -174,21 +219,21 @@
 
     $sections = [
         [
-            'title' => 'Блокирующие',
+            'title' => 'Мешают упразднению',
             'items' => $blockingRelations,
-            'note' => 'Эти связи требуют ручного разбора и не должны переноситься автоматически.',
+            'note' => 'Эти связи нужно разобрать вручную, прежде чем возвращаться к упразднению.',
             'empty' => 'Блокирующих связей не найдено.',
         ],
         [
-            'title' => 'Переносимые',
+            'title' => 'Потребуют отдельного переноса',
             'items' => $transferableRelations,
-            'note' => 'Эти связи можно подготовить к переносу после разбора.',
+            'note' => 'Эти связи не блокируют навсегда, но их нужно сначала перенести в отдельном сценарии.',
             'empty' => 'Переносимых связей не найдено.',
         ],
         [
-            'title' => 'Архивные',
+            'title' => 'Останется в истории',
             'items' => $historicalRelations,
-            'note' => 'Эти данные можно оставить как исторический след.',
+            'note' => 'Эти данные не мешают упразднению и остаются как аудит.',
             'empty' => 'Архивных связей не найдено.',
         ],
 ];
@@ -712,7 +757,7 @@ if (! $isSimpleDeactivateCase) {
                     <div>
                         <h3 class="deactivate-precheck__title">{{ $spaceLabel }}</h3>
                         <p class="deactivate-precheck__text">
-                            Активных связей не найдено. Место можно упразднить после короткой ручной проверки.
+                            Проверьте карту и историю, затем можно упразднять место.
                         </p>
                     </div>
 
@@ -736,7 +781,7 @@ if (! $isSimpleDeactivateCase) {
                 <p class="deactivate-precheck__status-title">Итог проверки</p>
                 <div class="deactivate-precheck__status-copy">Место можно упразднить</div>
                 <div class="deactivate-precheck__status-note">
-                    Живых, переносимых и блокирующих связей не найдено. История операций останется как аудит.
+                    Связей, мешающих упразднению, не найдено. История операций останется как аудит.
                 </div>
             </section>
 
@@ -744,19 +789,15 @@ if (! $isSimpleDeactivateCase) {
                 <section class="deactivate-precheck__card">
                     <div class="deactivate-precheck__section-head">
                         <div>
-                            <h4 class="deactivate-precheck__section-title">Что останется в истории</h4>
+                            <h4 class="deactivate-precheck__section-title">Останется в истории</h4>
                             <p class="deactivate-precheck__section-note">Архивные записи не удаляются и остаются как след изменений.</p>
                         </div>
-                        <span class="deactivate-precheck__count">{{ $historicalCount }}</span>
+                        <span class="deactivate-precheck__count">{{ $historicalTotal }}</span>
                     </div>
 
-                    @if ($historyUrl)
-                        <div class="deactivate-precheck__actions">
-                            <a href="{{ $historyUrl }}" class="deactivate-precheck__link">
-                                Открыть историю
-                            </a>
-                        </div>
-                    @endif
+                    <p class="deactivate-precheck__text" style="margin-top: 0;">
+                        История арендаторов, ставок и привязок останется доступна в журнале изменений.
+                    </p>
                 </section>
             @endif
         @else
@@ -801,28 +842,28 @@ if (! $isSimpleDeactivateCase) {
 
         @if ($showStatsBlock)
         <section class="deactivate-precheck__stats">
-            <article class="deactivate-precheck__stat">
-                <div class="deactivate-precheck__stat-label">Живые связи</div>
-                <div class="deactivate-precheck__stat-value">{{ $liveCount }}</div>
-                <div class="deactivate-precheck__stat-note">Всего найдено активных зависимостей</div>
-            </article>
-
-            <article class="deactivate-precheck__stat deactivate-precheck__stat--info">
-                <div class="deactivate-precheck__stat-label">Переносимые</div>
-                <div class="deactivate-precheck__stat-value">{{ $transferableCount }}</div>
-                <div class="deactivate-precheck__stat-note">Можно подготовить к переносу</div>
+            <article class="deactivate-precheck__stat deactivate-precheck__stat--warning">
+                <div class="deactivate-precheck__stat-label">Мешают сейчас</div>
+                <div class="deactivate-precheck__stat-value">{{ $blockingTotal }}</div>
+                <div class="deactivate-precheck__stat-note">Связей нужно разобрать вручную</div>
             </article>
 
             <article class="deactivate-precheck__stat deactivate-precheck__stat--warning">
-                <div class="deactivate-precheck__stat-label">Блокирующие</div>
+                <div class="deactivate-precheck__stat-label">Типов блокеров</div>
                 <div class="deactivate-precheck__stat-value">{{ $blockingCount }}</div>
-                <div class="deactivate-precheck__stat-note">Требуют ручного разбора</div>
+                <div class="deactivate-precheck__stat-note">Отдельных категорий, которые нужно открыть</div>
+            </article>
+
+            <article class="deactivate-precheck__stat deactivate-precheck__stat--info">
+                <div class="deactivate-precheck__stat-label">Потребуют переноса</div>
+                <div class="deactivate-precheck__stat-value">{{ $transferableTotal }}</div>
+                <div class="deactivate-precheck__stat-note">Связей нужно перенести в отдельном сценарии</div>
             </article>
 
             <article class="deactivate-precheck__stat">
-                <div class="deactivate-precheck__stat-label">Архивные</div>
-                <div class="deactivate-precheck__stat-value">{{ $historicalCount }}</div>
-                <div class="deactivate-precheck__stat-note">Останутся как история</div>
+                <div class="deactivate-precheck__stat-label">Останется в истории</div>
+                <div class="deactivate-precheck__stat-value">{{ $historicalTotal }}</div>
+                <div class="deactivate-precheck__stat-note">Эти записи не мешают упразднению</div>
             </article>
         </section>
         @endif
@@ -888,13 +929,14 @@ if (! $isSimpleDeactivateCase) {
         @endif
 
         @foreach ($sections as $section)
+            @continue(count($section['items']) === 0)
             <section class="deactivate-precheck__card">
                 <div class="deactivate-precheck__section-head">
                     <div>
                         <h4 class="deactivate-precheck__section-title">{{ $section['title'] }}</h4>
                         <p class="deactivate-precheck__section-note">{{ $section['note'] }}</p>
                     </div>
-                    <span class="deactivate-precheck__count">{{ count($section['items']) }}</span>
+                    <span class="deactivate-precheck__count">{{ array_sum(array_map(static fn (array $item): int => (int) ($item['count'] ?? 0), $section['items'])) }}</span>
                 </div>
 
                 <div class="deactivate-precheck__table-wrap">
@@ -908,7 +950,7 @@ if (! $isSimpleDeactivateCase) {
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($section['items'] as $item)
+                        @foreach ($section['items'] as $item)
                             @php $action = $resolveAction($item); @endphp
                             <tr>
                                 <td>{{ $item['label'] }}</td>
@@ -930,11 +972,7 @@ if (! $isSimpleDeactivateCase) {
                                     @endif
                                 </td>
                             </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="deactivate-precheck__empty">{{ $section['empty'] }}</td>
-                            </tr>
-                        @endforelse
+                        @endforeach
                     </tbody>
                     </table>
                 </div>
@@ -1050,8 +1088,8 @@ if (! $isSimpleDeactivateCase) {
         <section class="deactivate-precheck__card">
             <div class="deactivate-precheck__section-head">
                 <div>
-                    <h4 class="deactivate-precheck__section-title">Что делать дальше</h4>
-                    <p class="deactivate-precheck__section-note">Разберите связи и затем вернитесь к упразднению.</p>
+                    <h4 class="deactivate-precheck__section-title">Что сделать сейчас</h4>
+                    <p class="deactivate-precheck__section-note">Разберите найденные связи и затем вернитесь к упразднению.</p>
                 </div>
             </div>
 
@@ -1064,6 +1102,25 @@ if (! $isSimpleDeactivateCase) {
                     </div>
                 @endif
             </div>
+
+            @if ($actionSteps !== [])
+                <ul class="deactivate-precheck__steps">
+                    @foreach ($actionSteps as $index => $step)
+                        <li>
+                            <span class="deactivate-precheck__step-index">{{ $index + 1 }}</span>
+                            <div>
+                                <a
+                                    href="{{ $step['url'] }}"
+                                    @if($step['new_tab']) target="_blank" rel="noopener" @endif
+                                    class="deactivate-precheck__action"
+                                >
+                                    {{ $step['label'] }}
+                                </a>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
         </section>
         @endif
     </div>

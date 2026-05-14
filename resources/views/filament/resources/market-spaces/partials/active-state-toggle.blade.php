@@ -31,8 +31,8 @@
             {{ $isActive ? 'Активно' : 'Неактивно' }}
         </span>
 
-        <span class="market-space-hero-state-subtitle" x-text="active ? 'Место участвует в текущей работе' : 'Место выключено из активного контура'">
-            {{ $isActive ? 'Место участвует в текущей работе' : 'Место выключено из активного контура' }}
+        <span class="market-space-hero-state-subtitle" x-text="active ? 'В работе' : 'Выключено'">
+            {{ $isActive ? 'В работе' : 'Выключено' }}
         </span>
     </span>
 

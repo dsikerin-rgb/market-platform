@@ -14,6 +14,7 @@ use App\Services\Operations\OperationsStateService;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
@@ -103,7 +104,7 @@ class MarketSpaceResource extends BaseResource
             ->all();
 
         if (filled($currentTypeCode) && ! isset($options[$currentTypeCode])) {
-            $options[$currentTypeCode] = 'Текущий код: ' . $currentTypeCode . ' (нет в справочнике)';
+            $options[$currentTypeCode] = 'Старое значение (код ' . $currentTypeCode . ')';
         }
 
         return $options;
@@ -783,7 +784,6 @@ class MarketSpaceResource extends BaseResource
                 Tab::make('Основное')
                     ->schema([
                         Section::make('Ключевая информация')
-                            ->description('Главное по месту без технических полей и служебных расшифровок.')
                             ->schema([
                                 Forms\Components\Placeholder::make('priority_summary')
                                     ->hiddenLabel()
@@ -925,7 +925,7 @@ class MarketSpaceResource extends BaseResource
                                     ->compact(),
 
                                 Forms\Components\TextInput::make('number')
-                                    ->label('Номер места')
+                                    ->label('Обозначение места')
                                     ->maxLength(255)
                                     ->reactive()
                                     ->placeholder('Например: П/1 или A-101')
@@ -936,33 +936,33 @@ class MarketSpaceResource extends BaseResource
                                         }
 
                                         if (static::canDirectlyFillMissingIdentityField($record, 'number')) {
-                                            return 'Для места в группе номер ещё не заполнен. Его можно безопасно указать здесь один раз без ревизии.';
+                                            return 'Для места в группе обозначение ещё не заполнено. Его можно безопасно указать здесь один раз без ревизии.';
                                         }
 
-                                        return 'Номер меняется кнопкой справа. Он используется на карте, в поиске и истории.';
+                                        return 'Обозначение меняется кнопкой справа. Оно используется на карте, в поиске и истории.';
                                     })
                                     ->suffixAction(
                                         \Filament\Actions\Action::make('change_number')
-                                            ->label('Изменить номер места')
-                                            ->tooltip('Изменить номер места')
+                                            ->label('Изменить обозначение места')
+                                            ->tooltip('Изменить обозначение места')
                                             ->icon('heroicon-o-pencil-square')
                                             ->color('gray')
                                             ->iconButton()
                                             ->visible(fn (?MarketSpace $record): bool => filled($record?->id) && ! static::canDirectlyFillMissingIdentityField($record, 'number'))
-                                            ->modalHeading('Изменить номер места')
+                                            ->modalHeading('Изменить обозначение места')
                                             ->modalSubmitActionLabel('Сохранить')
                                             ->modalCancelActionLabel('Отмена')
                                             ->form([
                                                 \Filament\Forms\Components\Placeholder::make('change_number_notice')
                                                     ->hiddenLabel()
-                                                    ->content('Номер используется на карте, в поиске и истории. Изменяйте его только если это исправление номера места.'),
+                                                    ->content('Обозначение используется на карте, в поиске и истории. Изменяйте его только если это исправление текущего обозначения места.'),
                                                 \Filament\Forms\Components\TextInput::make('number')
-                                                    ->label('Новый номер')
+                                                    ->label('Новое обозначение')
                                                     ->required()
                                                     ->maxLength(255)
                                                     ->default(fn (?MarketSpace $record): string => trim((string) ($record?->number ?? '')))
                                                     ->placeholder('Например: П/1 или A-101')
-                                                    ->helperText('Введите исправленный номер места.'),
+                                                    ->helperText('Введите исправленное обозначение места.'),
                                             ])
                                             ->action(function (array $data, \App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace $livewire): void {
                                                 $livewire->changeNumber($data);
@@ -1069,6 +1069,34 @@ class MarketSpaceResource extends BaseResource
                                     ->reactive()
                                     ->nullable()
                                     ->placeholder('—')
+                                    ->helperText(function ($get, ?MarketSpace $record) use ($user): ?string {
+                                        $marketId = $get('market_id') ?? $record?->market_id;
+
+                                        if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                            $marketId = $user->market_id;
+                                        }
+
+                                        if (blank($marketId)) {
+                                            return null;
+                                        }
+
+                                        $currentType = trim((string) ($get('type') ?? $record?->type ?? ''));
+                                        if ($currentType === '') {
+                                            return null;
+                                        }
+
+                                        $hasCurrentActiveType = MarketSpaceType::query()
+                                            ->where('market_id', (int) $marketId)
+                                            ->where('is_active', true)
+                                            ->where('code', $currentType)
+                                            ->exists();
+
+                                        if ($hasCurrentActiveType) {
+                                            return null;
+                                        }
+
+                                        return 'Сейчас сохранено старое значение с кодом ' . $currentType . '. Его нет в текущем справочнике типов мест.';
+                                    })
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip(function ($get, ?MarketSpace $record) use ($user): string {
                                         $parts = ['Категория места для отчётности. Берётся из справочника “Типы мест”.'];
@@ -1145,30 +1173,34 @@ class MarketSpaceResource extends BaseResource
                                 ->label('Фактическая ставка за период')
                                 ->hintIcon('heroicon-m-question-mark-circle')
                                 ->hintIconTooltip('Ставка, которую система фактически видит для выбранного периода. Берётся из операций и начислений, поэтому может отличаться от текущей ставки в карточке.')
-                                ->content(fn (?MarketSpace $record): HtmlString => static::rentRateFactHtml($record)),
+                                ->content(fn (?MarketSpace $record): HtmlString => static::rentRateFactHtml($record))
+                                ->columnSpanFull(),
 
-                            Forms\Components\TextInput::make('rent_rate_value')
-                                ->label('Текущая ставка')
-                                ->numeric()
-                                ->inputMode('decimal')
-                                ->placeholder('Например: 1500')
-                                ->hintIcon('heroicon-m-question-mark-circle')
-                                ->hintIconTooltip('Текущее значение ставки в карточке места. Используется в интерфейсах и операциях как актуальный снапшот ставки.')
-                                ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
-
-                            Forms\Components\Select::make('rent_rate_unit')
-                                ->label('Единица ставки')
-                                ->options(static::rentRateUnitOptions())
-                                ->placeholder('Не указано')
-                                ->hintIcon('heroicon-m-question-mark-circle')
-                                ->hintIconTooltip('Показывает, как интерпретировать текущую ставку: за м² в месяц или за всё место в месяц.')
-                                ->nullable()
-                                ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
-
-                            ])
-                            ->columns([
+                            Grid::make([
                                 'default' => 1,
                                 'md' => 2,
+                            ])
+                                ->schema([
+                                    Forms\Components\TextInput::make('rent_rate_value')
+                                        ->label('Текущая ставка')
+                                        ->numeric()
+                                        ->inputMode('decimal')
+                                        ->placeholder('Например: 1500')
+                                        ->hintIcon('heroicon-m-question-mark-circle')
+                                        ->hintIconTooltip('Текущее значение ставки в карточке места. Используется в интерфейсах и операциях как актуальный снапшот ставки.')
+                                        ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
+
+                                    Forms\Components\Select::make('rent_rate_unit')
+                                        ->label('Единица ставки')
+                                        ->options(static::rentRateUnitOptions())
+                                        ->placeholder('Не указано')
+                                        ->hintIcon('heroicon-m-question-mark-circle')
+                                        ->hintIconTooltip('Показывает, как интерпретировать текущую ставку: за м² в месяц или за всё место в месяц.')
+                                        ->nullable()
+                                        ->disabled(fn (?MarketSpace $record): bool => (bool) $record),
+                                ])
+                                ->columnSpanFull(),
+
                             ])
                             ->collapsible(),
 

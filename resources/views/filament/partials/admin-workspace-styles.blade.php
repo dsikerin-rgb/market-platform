@@ -1002,17 +1002,26 @@
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
-        flex: 0 1 36rem;
-        width: min(100%, 36rem);
-        min-width: 36rem;
+        flex: 0 1 34rem;
+        width: min(100%, 34rem);
+        min-width: 34rem;
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac{
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        display: flex;
+        flex-wrap: nowrap;
         gap: .48rem;
         width: 100%;
         align-items: stretch;
+    }
+
+    html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac > *{
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac > *:first-child{
+        flex: 1.18 1.18 0;
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .market-space-card-action.fi-btn{
@@ -1022,6 +1031,7 @@
         gap: .4rem;
         width: 100%;
         min-width: 0;
+        flex: 1 1 0;
         min-height: 3.5rem;
         border-radius: .92rem;
         border: 1px solid #d8e3f1 !important;
@@ -1296,17 +1306,7 @@
         font-size: 0.92rem;
     }
 
-    @media (max-width: 1279px) {
-        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
-            flex-basis: 27.2rem;
-            width: min(100%, 27.2rem);
-            min-width: 27.2rem;
-        }
-
-        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac{
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-
+    @media (max-width: 1439px) {
         html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-priority-summary{
             grid-template-columns: repeat(3, minmax(0, 1fr));
         }
@@ -1324,10 +1324,6 @@
         html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
             width: 100%;
             min-width: 0;
-        }
-
-        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac{
-            grid-template-columns: minmax(0, 1fr);
         }
     }
 
