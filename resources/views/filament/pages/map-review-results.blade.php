@@ -1,4 +1,5 @@
 <x-filament-panels::page>
+    <div>
     @include('filament.partials.admin-workspace-styles')
 
     @once
@@ -103,6 +104,49 @@
 
             .dark .mrr-place__decision-reason {
                 color: #94a3b8;
+            }
+
+            .mrr-place__decision-details {
+                display: grid;
+                gap: 0.4rem;
+                margin-top: 0.55rem;
+                padding-top: 0.55rem;
+                border-top: 1px solid rgba(148, 163, 184, 0.14);
+            }
+
+            .dark .mrr-place__decision-details {
+                border-top-color: rgba(148, 163, 184, 0.16);
+            }
+
+            .mrr-place__decision-detail {
+                display: grid;
+                grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+                gap: 0.5rem;
+                align-items: start;
+            }
+
+            .mrr-place__decision-detail-label {
+                font-size: 0.72rem;
+                font-weight: 800;
+                letter-spacing: 0.03em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .dark .mrr-place__decision-detail-label {
+                color: #94a3b8;
+            }
+
+            .mrr-place__decision-detail-value {
+                min-width: 0;
+                font-size: 0.78rem;
+                line-height: 1.4;
+                color: #0f172a;
+                word-break: break-word;
+            }
+
+            .dark .mrr-place__decision-detail-value {
+                color: #e2e8f0;
             }
 
             .mrr-place__decision-meta {
@@ -547,7 +591,40 @@
                 display: flex;
                 flex-wrap: wrap;
                 align-items: center;
+                justify-content: space-between;
                 gap: 0.35rem;
+            }
+
+            .mrr-needs-card__summary-top-main {
+                min-width: 0;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.35rem;
+            }
+
+            .mrr-needs-card__summary-meta {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.08rem;
+                text-align: right;
+            }
+
+            .mrr-needs-card__summary-meta-label,
+            .mrr-needs-card__summary-meta-value {
+                font-size: 0.72rem;
+                line-height: 1.25;
+                color: #64748b;
+            }
+
+            .mrr-needs-card__summary-meta-label {
+                font-weight: 700;
+            }
+
+            .dark .mrr-needs-card__summary-meta-label,
+            .dark .mrr-needs-card__summary-meta-value {
+                color: #94a3b8;
             }
 
             .mrr-needs-card__summary-grid {
@@ -654,9 +731,139 @@
                 gap: 0.6rem;
             }
 
+            .mrr-needs-card--conflict-layout .mrr-needs-card__body-grid {
+                grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+                gap: 0.95rem;
+            }
+
+            .mrr-needs-card--conflict-layout .mrr-needs-card__column--ai {
+                grid-column: 1 / -1;
+            }
+
+            .mrr-conflict-brief {
+                border-radius: 1rem;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.9) 100%);
+                padding: 0.85rem 0.9rem;
+                display: flex;
+                flex-direction: column;
+                gap: 0.55rem;
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+            }
+
+            .dark .mrr-conflict-brief {
+                border-color: rgba(148, 163, 184, 0.14);
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.82) 0%, rgba(30, 41, 59, 0.72) 100%);
+                box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            }
+
+            .mrr-conflict-brief__eyebrow {
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .dark .mrr-conflict-brief__eyebrow {
+                color: #94a3b8;
+            }
+
+            .mrr-conflict-brief__headline {
+                font-size: 1rem;
+                font-weight: 800;
+                line-height: 1.25;
+                color: #0f172a;
+            }
+
+            .dark .mrr-conflict-brief__headline {
+                color: #f8fafc;
+            }
+
+            .mrr-conflict-brief__copy {
+                font-size: 0.84rem;
+                line-height: 1.45;
+                color: #475569;
+            }
+
+            .dark .mrr-conflict-brief__copy {
+                color: #cbd5e1;
+            }
+
+            .mrr-conflict-brief__hint {
+                display: flex;
+                flex-direction: column;
+                gap: 0.18rem;
+                border-radius: 0.85rem;
+                border: 1px solid rgba(37, 99, 235, 0.16);
+                background: rgba(37, 99, 235, 0.06);
+                padding: 0.58rem 0.68rem;
+            }
+
+            .dark .mrr-conflict-brief__hint {
+                border-color: rgba(96, 165, 250, 0.22);
+                background: rgba(30, 64, 175, 0.18);
+            }
+
+            .mrr-conflict-brief__hint-label {
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-conflict-brief__hint-label {
+                color: #bfdbfe;
+            }
+
+            .mrr-conflict-brief__hint-text {
+                font-size: 0.84rem;
+                line-height: 1.45;
+                color: #1e293b;
+            }
+
+            .dark .mrr-conflict-brief__hint-text {
+                color: #e2e8f0;
+            }
+
+            .mrr-conflict-brief__facts {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+            }
+
+            .mrr-conflict-brief__fact {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.2rem;
+                border-radius: 999px;
+                border: 1px solid rgba(15, 23, 42, 0.08);
+                background: rgba(255, 255, 255, 0.88);
+                padding: 0.26rem 0.56rem;
+                font-size: 0.74rem;
+                font-weight: 700;
+                color: #334155;
+            }
+
+            .dark .mrr-conflict-brief__fact {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.78);
+                color: #cbd5e1;
+            }
+
             @media (max-width: 1140px) {
                 .mrr-needs-card__body-grid {
                     grid-template-columns: 1fr;
+                }
+
+                .mrr-needs-card__summary-top {
+                    align-items: flex-start;
+                }
+
+                .mrr-needs-card__summary-meta {
+                    align-items: flex-start;
+                    text-align: left;
                 }
             }
 
@@ -756,6 +963,47 @@
                 display: flex;
                 flex-direction: column;
                 gap: 0.42rem;
+            }
+
+            .mrr-diagnostics__actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                margin-bottom: 0.65rem;
+            }
+
+            .mrr-diagnostics__actions .mrr-link {
+                border-color: rgba(37, 99, 235, 0.2);
+                background: rgba(37, 99, 235, 0.08);
+                color: #1d4ed8;
+            }
+
+            .mrr-diagnostics__actions .mrr-link:hover {
+                border-color: rgba(37, 99, 235, 0.32);
+                background: rgba(37, 99, 235, 0.14);
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-diagnostics__actions .mrr-link {
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(30, 64, 175, 0.22);
+                color: #dbeafe;
+            }
+
+            .dark .mrr-diagnostics__actions .mrr-link:hover {
+                border-color: rgba(147, 197, 253, 0.34);
+                background: rgba(37, 99, 235, 0.3);
+                color: #eff6ff;
+            }
+
+            .mrr-diagnostics__intro {
+                font-size: 0.8rem;
+                line-height: 1.4;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__intro {
+                color: #94a3b8;
             }
 
             .mrr-diagnostics__summary {
@@ -933,6 +1181,47 @@
                 flex-direction: column;
                 gap: 0.5rem;
                 margin-top: 0.45rem;
+            }
+
+            .mrr-diagnostics__detail-list {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .mrr-diagnostics__detail-item {
+                display: flex;
+                flex-direction: column;
+                gap: 0.16rem;
+                border-radius: 0.85rem;
+                border: 1px solid rgba(148, 163, 184, 0.14);
+                background: rgba(255, 255, 255, 0.72);
+                padding: 0.55rem 0.65rem;
+            }
+
+            .dark .mrr-diagnostics__detail-item {
+                border-color: rgba(148, 163, 184, 0.14);
+                background: rgba(15, 23, 42, 0.36);
+            }
+
+            .mrr-diagnostics__detail-title {
+                font-size: 0.76rem;
+                font-weight: 800;
+                color: #334155;
+            }
+
+            .dark .mrr-diagnostics__detail-title {
+                color: #e2e8f0;
+            }
+
+            .mrr-diagnostics__detail-copy {
+                font-size: 0.76rem;
+                line-height: 1.45;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__detail-copy {
+                color: #94a3b8;
             }
 
             .mrr-duplicate-plan__grid {
@@ -1596,6 +1885,11 @@
                 color: #94a3b8;
             }
 
+            .mrr-ai.is-loading {
+                opacity: 0.72;
+                pointer-events: none;
+            }
+
             .mrr-ai__placeholder {
                 color: #94a3b8;
             }
@@ -1965,6 +2259,7 @@
                                             $ai = $aiSummaries[$row['space_id']] ?? null;
                                             $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
                                             $relationCounts = is_array($diagnostics['relation_counts'] ?? null) ? $diagnostics['relation_counts'] : [];
+                                            $relationDetails = is_array($diagnostics['relation_details'] ?? null) ? $diagnostics['relation_details'] : [];
                                             $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
                                             $relationAssessment = trim((string) ($diagnostics['relation_assessment'] ?? ''));
                                             $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
@@ -2001,6 +2296,7 @@
                                                 $row['location_name'] ?? null,
                                                 $row['review_status_label'] ?? null,
                                                 $row['decision_label'] ?? null,
+                                                data_get($row, 'tenant_change_details.observed_tenant_name'),
                                                 $row['reason'] ?? null,
                                                 $row['created_by_name'] ?? null,
                                                 $row['created_at'] ?? null,
@@ -2011,6 +2307,7 @@
                                             $decision = (string) ($row['decision'] ?? '');
                                             $reviewStatus = (string) ($row['review_status'] ?? '');
                                             $hasCandidates = $candidateSpaces !== [];
+                                            $hasRelationDetails = $relationDetails !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
                                             $isContractTenantOverride = $contractOverride !== null;
                                             $currentTenantName = trim((string) ($row['current_tenant_name'] ?? ''));
@@ -2024,6 +2321,29 @@
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $showRelationAssessment = $contractOverride || $hasCandidates;
+                                            $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null) ? $row['tenant_change_details'] : [];
+                                            $observedTenantName = trim((string) ($tenantChangeDetails['observed_tenant_name'] ?? ''));
+                                            $tenantChangeComment = trim((string) ($tenantChangeDetails['review_comment'] ?? ''));
+                                            $tenantChangeAuthor = trim((string) ($tenantChangeDetails['author_name'] ?? ''));
+                                            $tenantChangeRecordedAt = trim((string) ($tenantChangeDetails['recorded_at'] ?? ''));
+                                            $hasTenantChangeDetails = $isTenantCase
+                                                && ($observedTenantName !== ''
+                                                    || $tenantChangeComment !== ''
+                                                    || $tenantChangeAuthor !== ''
+                                                    || $tenantChangeRecordedAt !== '');
+                                            $createdByLabel = trim((string) ($row['created_by_name'] ?? ''));
+                                            $createdAtLabel = trim((string) ($row['created_at'] ?? ''));
+                                            if ($isContractTenantOverride) {
+                                                $conflictHeadline = 'На месте уже найден новый арендатор по договору';
+                                            } elseif ($hasCandidates) {
+                                                $conflictHeadline = 'Похоже на дубль или спорную привязку места';
+                                            } elseif (preg_match('/(свобод|съех|не стоит|нет арендатора)/iu', (string) ($row['reason'] ?? '')) === 1) {
+                                                $conflictHeadline = 'Похоже, место уже свободно';
+                                            } elseif (preg_match('/(арендатор|стоит|смен)/iu', (string) ($row['reason'] ?? '')) === 1) {
+                                                $conflictHeadline = 'Фактическое состояние не совпадает с карточкой места';
+                                            } else {
+                                                $conflictHeadline = 'Фактическое состояние места требует проверки';
+                                            }
 
                                             if ($isMergeRetirementCase) {
                                                 $workflowTitle = 'Упразднить и связать с основным местом';
@@ -2045,14 +2365,14 @@
                                                 $workflowText = 'Сравните текущее место с найденными местами того же арендатора.';
                                             } elseif ($isConflictCase) {
                                                 $workflowTitle = 'Разобрать конфликт места';
-                                                $workflowText = 'Откройте место или карту, проверьте занятость и зафиксируйте решение.';
+                                                $workflowText = 'Конфликт требует ручной проверки занятости и итогового решения.';
                                             } else {
                                                 $workflowTitle = 'Проверить карточку';
-                                                $workflowText = 'Откройте место или карту и зафиксируйте итог проверки.';
+                                                $workflowText = 'Карточка требует ручной проверки и итогового решения.';
                                             }
                                         @endphp
 
-                                         <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }}"
+                                         <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }} {{ $isConflictCase ? 'mrr-needs-card--conflict-layout' : '' }}"
                                                   data-mrr-attention-card
                                                   data-mrr-review-status="{{ $row['review_status'] ?? '' }}"
                                                  data-mrr-decision="{{ $row['decision'] ?? '' }}"
@@ -2060,12 +2380,24 @@
                                             <summary>
                                                 <div class="mrr-needs-card__summary-main">
                                                     <div class="mrr-needs-card__summary-top">
+                                                        <div class="mrr-needs-card__summary-top-main">
                                                         <div class="mrr-place__title">
                                                             {{ $row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id'])) }}
                                                         </div>
                                                         <span class="mrr-badge mrr-badge--{{ $row['review_status'] }}">
                                                             {{ $row['review_status_label'] ?? '—' }}
                                                         </span>
+                                                        </div>
+                                                        @if ($createdByLabel !== '' || $createdAtLabel !== '')
+                                                            <div class="mrr-needs-card__summary-meta">
+                                                                @if ($createdByLabel !== '')
+                                                                    <div class="mrr-needs-card__summary-meta-label">{{ $createdByLabel }}</div>
+                                                                @endif
+                                                                @if ($createdAtLabel !== '')
+                                                                    <div class="mrr-needs-card__summary-meta-value">{{ $createdAtLabel }}</div>
+                                                                @endif
+                                                            </div>
+                                                        @endif
                                                     </div>
                                                     <div class="mrr-needs-card__summary-grid">
                                                         <div class="mrr-needs-card__summary-place">
@@ -2093,6 +2425,20 @@
                                             <div class="mrr-needs-card__body">
                                                 <div class="mrr-needs-card__body-grid">
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--main">
+                                                        @if ($isConflictCase)
+                                                            <div class="mrr-conflict-brief">
+                                                                <div class="mrr-conflict-brief__eyebrow">Что видно по месту</div>
+                                                                <div class="mrr-conflict-brief__headline">{{ $conflictHeadline }}</div>
+                                                                @if (filled($row['reason']))
+                                                                    <div class="mrr-conflict-brief__hint">
+                                                                        <div class="mrr-conflict-brief__hint-label">Подсказка ревизора</div>
+                                                                        <div class="mrr-conflict-brief__hint-text">{{ $row['reason'] }}</div>
+                                                                    </div>
+                                                                @else
+                                                                    <div class="mrr-conflict-brief__copy">{{ $workflowText }}</div>
+                                                                @endif
+                                                            </div>
+                                                        @endif
                                                         @if ($attentionTab !== 'unconfirmed_links')
                                                             <div class="mrr-place__decision">
                                                                 <div class="mrr-place__decision-label">{{ $workflowTitle }}</div>
@@ -2124,9 +2470,38 @@
                                                                         </div>
                                                                     @endif
                                                                 @endif
-                                                                <div class="mrr-place__decision-meta">
+                                                                @if ($hasTenantChangeDetails)
+                                                                    <div class="mrr-place__decision-details">
+                                                                        @if ($observedTenantName !== '')
+                                                                            <div class="mrr-place__decision-detail">
+                                                                                <div class="mrr-place__decision-detail-label">Фактический арендатор</div>
+                                                                                <div class="mrr-place__decision-detail-value">{{ $observedTenantName }}</div>
+                                                                            </div>
+                                                                        @endif
+                                                                        @if ($tenantChangeComment !== '')
+                                                                            <div class="mrr-place__decision-detail">
+                                                                                <div class="mrr-place__decision-detail-label">Комментарий ревизии</div>
+                                                                                <div class="mrr-place__decision-detail-value">{{ $tenantChangeComment }}</div>
+                                                                            </div>
+                                                                        @endif
+                                                                        @if ($tenantChangeAuthor !== '')
+                                                                            <div class="mrr-place__decision-detail">
+                                                                                <div class="mrr-place__decision-detail-label">Автор</div>
+                                                                                <div class="mrr-place__decision-detail-value">{{ $tenantChangeAuthor }}</div>
+                                                                            </div>
+                                                                        @endif
+                                                                        @if ($tenantChangeRecordedAt !== '')
+                                                                            <div class="mrr-place__decision-detail">
+                                                                                <div class="mrr-place__decision-detail-label">Дата фиксации</div>
+                                                                                <div class="mrr-place__decision-detail-value">{{ $tenantChangeRecordedAt }}</div>
+                                                                            </div>
+                                                                        @endif
+                                                                    </div>
+                                                                @else
+                                                                    <div class="mrr-place__decision-meta">
                                                                     Создано: {{ $row['created_by_name'] ?: '—' }} · {{ $row['created_at'] ?: '—' }}
                                                                 </div>
+                                                                @endif
                                                             </div>
                                                         @endif
                                                         <div class="mrr-card-actions">
@@ -2182,16 +2557,6 @@
                                                                 </div>
                                                             @endif
 
-                                                            <div class="mrr-card-actions__group">
-                                                                @if ($attentionTab !== 'unconfirmed_links')
-                                                                    <div class="mrr-card-actions__label">Переходы</div>
-                                                                @endif
-                                                                <div class="mrr-card-actions__row">
-                                                                    <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                    <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                                </div>
-                                                            </div>
-
                                                             @if ($attentionTab !== 'unconfirmed_links')
                                                                 <div class="mrr-card-actions__group">
                                                                     <div class="mrr-card-actions__label">Проверка</div>
@@ -2210,17 +2575,26 @@
                                                         </div>
                                                     </div>
 
-                                                    <div class="mrr-needs-card__column">
+                                                    <div class="mrr-needs-card__column mrr-needs-card__column--diagnostics">
                                                         <div class="mrr-diagnostics">
                                                             <div class="mrr-diagnostics__section">
+                                                                <div class="mrr-diagnostics__actions">
+                                                                    <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                    <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                </div>
                                                                 <div class="mrr-diagnostics__section-title">Связи текущего места</div>
                                                                 <div class="mrr-diagnostics__summary">
-                                                                    @foreach ($relationCounts as $item)
-                                                                        <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
-                                                                            {{ $item['label'] }}: {{ $item['count'] }}
-                                                                        </span>
-                                                                    @endforeach
+                                                                @foreach ($relationCounts as $item)
+                                                                    <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
+                                                                        {{ $item['label'] }}: {{ $item['count'] }}
+                                                                    </span>
+                                                                @endforeach
                                                                 </div>
+                                                                @if ($isConflictCase)
+                                                                    <div class="mrr-diagnostics__intro">
+                                                                        Здесь видно, где у места остаются хвосты по договору, начислениям и карте.
+                                                                    </div>
+                                                                @endif
                                                             </div>
 
                                                             @if ($showRelationAssessment && $relationAssessment !== '')
@@ -2230,56 +2604,73 @@
                                                                 <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
                                                             @endif
 
-                                                            <details class="mrr-diagnostics__details">
-                                                                <summary>{{ $hasCandidates ? 'Показать связи и возможные дубли' : 'Показать связи места' }}</summary>
-                                                                <div class="mrr-diagnostics__details-body">
-                                                                    @if ($candidateSpaces !== [])
-                                                                        <div class="mrr-diagnostics__section">
-                                                                            <div class="mrr-diagnostics__section-title">Возможные дубли / места того же арендатора</div>
-                                                                            <div class="mrr-diagnostics__candidates">
-                                                                                @foreach ($candidateSpaces as $candidate)
-                                                                                    <div class="mrr-diagnostics__candidate">
-                                                                                        <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
-                                                                                            #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
-                                                                                        </a>
-                                                                                        <div class="mrr-diagnostics__candidate-meta">
-                                                                                            {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
-                                                                                        </div>
-                                                                                        <div class="mrr-diagnostics__candidate-actions">
-                                                                                            <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                                            <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                class="mrr-diagnostics__candidate-action"
-                                                                                                data-mrr-duplicate-plan="open"
-                                                                                                data-current-space-id="{{ $row['space_id'] }}"
-                                                                                                data-current-label="{{ $currentSpaceLabel }}"
-                                                                                                data-current-space-url="{{ $row['space_url'] }}"
-                                                                                                data-current-map-url="{{ $row['map_url'] }}"
-                                                                                                data-current-counts='@json($relationCounts)'
-                                                                                                data-candidate-space-id="{{ $candidate['space_id'] }}"
-                                                                                                data-candidate-label="{{ $candidate['label'] }}"
-                                                                                                data-candidate-space-url="{{ $candidate['space_url'] }}"
-                                                                                                data-candidate-map-url="{{ $candidate['map_url'] }}"
-                                                                                                data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
-                                                                                            >
-                                                                                                {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
-                                                                                            </button>
-                                                                                        </div>
+                                                            @if ($hasCandidates || $hasRelationDetails)
+                                                                <details class="mrr-diagnostics__details">
+                                                                    <summary>{{ $hasCandidates ? 'Показать связи и возможные дубли' : 'Показать связи места' }}</summary>
+                                                                    <div class="mrr-diagnostics__details-body">
+                                                                        @if ($hasRelationDetails)
+                                                                            <div class="mrr-diagnostics__detail-list">
+                                                                                @foreach ($relationDetails as $item)
+                                                                                    <div class="mrr-diagnostics__detail-item">
+                                                                                        <div class="mrr-diagnostics__detail-title">{{ $item['label'] }}: {{ $item['count'] }}</div>
+                                                                                        <div class="mrr-diagnostics__detail-copy">{{ $item['description'] }}</div>
                                                                                     </div>
                                                                                 @endforeach
                                                                             </div>
-                                                                        </div>
-                                                                    @endif
+                                                                        @endif
+
+                                                                        @if ($hasCandidates)
+                                                                            <div class="mrr-diagnostics__section">
+                                                                                <div class="mrr-diagnostics__section-title">Возможные дубли / места того же арендатора</div>
+                                                                                <div class="mrr-diagnostics__candidates">
+                                                                                    @foreach ($candidateSpaces as $candidate)
+                                                                                        <div class="mrr-diagnostics__candidate">
+                                                                                            <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
+                                                                                                #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
+                                                                                            </a>
+                                                                                            <div class="mrr-diagnostics__candidate-meta">
+                                                                                                {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
+                                                                                            </div>
+                                                                                            <div class="mrr-diagnostics__candidate-actions">
+                                                                                                <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                                                <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    class="mrr-diagnostics__candidate-action"
+                                                                                                    data-mrr-duplicate-plan="open"
+                                                                                                    data-current-space-id="{{ $row['space_id'] }}"
+                                                                                                    data-current-label="{{ $currentSpaceLabel }}"
+                                                                                                    data-current-space-url="{{ $row['space_url'] }}"
+                                                                                                    data-current-map-url="{{ $row['map_url'] }}"
+                                                                                                    data-current-counts='@json($relationCounts)'
+                                                                                                    data-candidate-space-id="{{ $candidate['space_id'] }}"
+                                                                                                    data-candidate-label="{{ $candidate['label'] }}"
+                                                                                                    data-candidate-space-url="{{ $candidate['space_url'] }}"
+                                                                                                    data-candidate-map-url="{{ $candidate['map_url'] }}"
+                                                                                                    data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
+                                                                                                >
+                                                                                                    {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    @endforeach
+                                                                                </div>
+                                                                            </div>
+                                                                        @endif
+                                                                    </div>
+                                                                </details>
+                                                            @elseif (! $isConflictCase)
+                                                                <div class="mrr-diagnostics__intro">
+                                                                    Дополнительных связей для раскрытия нет.
                                                                 </div>
-                                                            </details>
+                                                            @endif
                                                         </div>
                                                     </div>
 
-                                                    <div class="mrr-needs-card__column">
+                                                    <div class="mrr-needs-card__column mrr-needs-card__column--ai">
                                                         <div class="mrr-ai-panel">
                                                             <div class="mrr-ai-panel__title">ИИ-разбор</div>
-                                                            <div class="mrr-ai">
+                                                            <div class="mrr-ai" data-mrr-ai-panel data-mrr-space-id="{{ $row['space_id'] }}">
                                                                 @if ($ai && filled($ai['summary']))
                                                                     <div class="mrr-ai__summary">
                                                                         <strong>Ситуация:</strong> {{ $humanize($ai['summary']) }}
@@ -2312,12 +2703,14 @@
                                                                     </div>
                                                                 @elseif (count($needsAttention) > $aiLimit)
                                                                     <div class="mrr-ai mrr-ai--skipped">
-                                                                        <a
+                                                                        <button
+                                                                            type="button"
                                                                             class="mrr-link mrr-link--button"
-                                                                            href="{{ request()->fullUrlWithQuery(['ai_load_space_id' => $row['space_id']]) }}"
+                                                                            data-mrr-ai-load
+                                                                            data-mrr-space-id="{{ $row['space_id'] }}"
                                                                         >
                                                                             Загрузить ИИ-разбор
-                                                                        </a>
+                                                                        </button>
                                                                     </div>
                                                                 @else
                                                                     <div class="mrr-ai mrr-ai--empty">
@@ -2673,6 +3066,7 @@
             (() => {
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
                 const reviewContractTenantSwitchUrl = @json(route('filament.admin.market-map.review-contract-tenant-switch'));
+                const aiReviewUrl = @json(route('filament.admin.map-review-results.ai-review'));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
                 const quickReviewModal = document.getElementById('mrrQuickReviewModal');
                 const quickReviewTitle = document.getElementById('mrrQuickReviewTitle');
@@ -2798,6 +3192,160 @@
 
                         target.appendChild(badge);
                     });
+                };
+
+                const escapeHtml = (value) => String(value ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+
+                const humanizeAiText = (value) => {
+                    const text = String(value ?? '')
+                        .replaceAll('_', ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+
+                    if (!text) {
+                        return '';
+                    }
+
+                    return text.charAt(0).toUpperCase() + text.slice(1);
+                };
+
+                const renderAiPlaceholder = (panel, message, modifier = 'empty') => {
+                    panel.replaceChildren();
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = `mrr-ai--${modifier}`;
+
+                    const placeholder = document.createElement('span');
+                    placeholder.className = 'mrr-ai__placeholder';
+                    placeholder.textContent = String(message || '');
+
+                    wrapper.appendChild(placeholder);
+                    panel.appendChild(wrapper);
+                };
+
+                const createAiSection = (className, label, value) => {
+                    const section = document.createElement('div');
+                    section.className = className;
+
+                    const strong = document.createElement('strong');
+                    strong.textContent = label;
+                    section.appendChild(strong);
+                    section.append(` ${value}`);
+
+                    return section;
+                };
+
+                const renderAiReview = (panel, payload = {}) => {
+                    const review = payload && typeof payload.review === 'object' && payload.review !== null
+                        ? payload.review
+                        : null;
+                    const errorType = String(payload?.error_type || '').trim();
+                    const summary = humanizeAiText(review?.summary);
+                    const whyFlagged = humanizeAiText(review?.why_flagged);
+                    const nextStep = humanizeAiText(review?.recommended_next_step);
+
+                    if (summary || whyFlagged || nextStep) {
+                        const sections = [];
+
+                        if (summary) {
+                            sections.push(`
+                                \u003Cdiv class="mrr-ai__summary">
+                                    <strong>Ситуация:</strong> ${escapeHtml(summary)}
+                                \u003C/div>
+                            `);
+                        }
+
+                        if (whyFlagged) {
+                            sections.push(`
+                                \u003Cdiv class="mrr-ai__reason">
+                                    <strong>Почему:</strong> ${escapeHtml(whyFlagged)}
+                                \u003C/div>
+                            `);
+                        }
+
+                        if (nextStep) {
+                            sections.push(`
+                                \u003Cdiv class="mrr-ai__step">
+                                    <strong>Что сделать:</strong> ${escapeHtml(nextStep)}
+                                \u003C/div>
+                            `);
+                        }
+
+                        panel.innerHTML = sections.join('');
+                        return;
+                    }
+
+                    if (errorType === 'policy') {
+                        renderAiPlaceholder(panel, 'ИИ-анализ отклонён проверкой качества ответа');
+                        return;
+                    }
+
+                    if (errorType === 'disabled') {
+                        renderAiPlaceholder(panel, 'ИИ-разбор отключён в этом окружении');
+                        return;
+                    }
+
+                    if (errorType === 'connectivity') {
+                        renderAiPlaceholder(panel, 'ИИ-анализ временно недоступен из-за ошибки соединения');
+                        return;
+                    }
+
+                    renderAiPlaceholder(panel, 'ИИ-анализ недоступен');
+                };
+
+                const loadAiReview = async (spaceId, button = null) => {
+                    const normalizedSpaceId = Number(spaceId || 0);
+                    const panel = Number.isFinite(normalizedSpaceId) && normalizedSpaceId > 0
+                        ? document.querySelector(`[data-mrr-ai-panel][data-mrr-space-id="${normalizedSpaceId}"]`)
+                        : null;
+
+                    if (!(panel instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    panel.classList.add('is-loading');
+
+                    if (button instanceof HTMLElement) {
+                        button.setAttribute('disabled', 'disabled');
+                        button.textContent = 'Загружаем ИИ-разбор...';
+                    }
+
+                    try {
+                        const url = new URL(aiReviewUrl, window.location.origin);
+                        url.searchParams.set('space_id', String(normalizedSpaceId));
+
+                        const response = await fetch(url.toString(), {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || !data?.ok) {
+                            throw new Error(String(data?.message || 'Не удалось загрузить ИИ-разбор.'));
+                        }
+
+                        renderAiReview(panel, data);
+                    } catch (errorInstance) {
+                        renderAiReview(panel, {
+                            review: null,
+                            error_type: 'connectivity',
+                        });
+                    } finally {
+                        panel.classList.remove('is-loading');
+
+                        if (button instanceof HTMLElement) {
+                            button.removeAttribute('disabled');
+                        }
+                    }
                 };
 
                 const setLink = (link, href) => {
@@ -3455,6 +4003,9 @@
                     const launcher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-quick-review-launcher]')
                         : null;
+                    const aiReviewButton = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-ai-load]')
+                        : null;
 
                     const contractTenantSwitchApply = event.target instanceof Element
                         ? event.target.closest('[data-mrr-contract-tenant-switch-apply]')
@@ -3471,6 +4022,12 @@
                     const mergeRetireLauncher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-merge-retire-open]')
                         : null;
+
+                    if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
+                        event.preventDefault();
+                        loadAiReview(aiReviewButton.dataset.mrrSpaceId, aiReviewButton).catch(() => {});
+                        return;
+                    }
 
                     if (contractTenantSwitchApply && contractTenantSwitchApply instanceof HTMLElement) {
                         event.preventDefault();
@@ -3732,4 +4289,5 @@
             })();
         </script>
     </div>
+</div>
 </x-filament-panels::page>

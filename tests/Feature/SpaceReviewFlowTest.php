@@ -1925,6 +1925,94 @@ class SpaceReviewFlowTest extends TestCase
         ]);
     }
 
+    public function test_map_review_results_shows_tenant_change_operation_details_on_card(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $user->forceFill(['name' => 'Super Admin'])->save();
+
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'ОС20/3',
+            'display_name' => 'Остров 20 (рыба)',
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'observed_tenant_name' => 'Бакиева',
+                'reason' => 'с 01.05.26 г',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Фактический арендатор', false)
+            ->assertSee('Бакиева', false)
+            ->assertSee('Комментарий ревизии', false)
+            ->assertSee('с 01.05.26 г', false)
+            ->assertSee('Автор', false)
+            ->assertSee('Super Admin', false)
+            ->assertSee('Дата фиксации', false);
+    }
+
+    public function test_map_review_results_hides_empty_observed_tenant_line_for_legacy_tenant_change_operation(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $user->forceFill(['name' => 'Super Admin'])->save();
+
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'ОС20/4',
+            'display_name' => 'Остров 20 (мясо)',
+        ]);
+
+        $operation = Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'observed_tenant_name' => 'Временный арендатор',
+                'reason' => 'Комментарий без арендатора в payload',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        DB::table('operations')
+            ->where('id', $operation->id)
+            ->update([
+                'payload' => json_encode([
+                    'market_space_id' => $space->id,
+                    'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                    'reason' => 'Комментарий без арендатора в payload',
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertDontSee('Фактический арендатор', false)
+            ->assertSee('Комментарий ревизии', false)
+            ->assertSee('Комментарий без арендатора в payload', false)
+            ->assertSee('Автор', false)
+            ->assertSee('Дата фиксации', false);
+    }
+
     public function test_market_map_review_navigation_uses_fresh_snapshot_and_explicitly_handles_no_pending_places(): void
     {
         $market = $this->createMarket();

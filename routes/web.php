@@ -3083,6 +3083,63 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ]);
     })->name('filament.admin.market-map.review-decision');
 
+    Route::get('/admin/map-review-results/ai-review', function (Request $request) use (
+        $resolveMarketForMap,
+        $canEditShapes
+    ) {
+        abort_unless($canEditShapes(), 403);
+
+        $market = $resolveMarketForMap();
+        $validated = $request->validate([
+            'space_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $spaceId = (int) $validated['space_id'];
+        $spaceExists = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey($spaceId)
+            ->exists();
+
+        if (! $spaceExists) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review space was not found in the current market.',
+            ], 404);
+        }
+
+        $reviewService = app(AiReviewService::class);
+
+        if (! $reviewService->isAvailable()) {
+            return response()->json([
+                'ok' => true,
+                'review' => null,
+                'error_type' => 'disabled',
+            ]);
+        }
+
+        try {
+            $fetchResult = $reviewService->getReviewForSpace($spaceId, (int) $market->id);
+
+            return response()->json([
+                'ok' => true,
+                'review' => $fetchResult['review'] ?? null,
+                'error_type' => $fetchResult['error_type'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            logger()->warning('AI review on-demand endpoint fallback', [
+                'space_id' => $spaceId,
+                'market_id' => (int) $market->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'review' => null,
+                'error_type' => 'connectivity',
+            ]);
+        }
+    })->name('filament.admin.map-review-results.ai-review');
+
     /**
      * Viewer карты рынка (рендер через Blade).
      */
