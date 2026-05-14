@@ -55,6 +55,7 @@
     $transferableCount = count($transferableRelations);
     $blockingCount = count($blockingRelations);
     $historicalCount = count($historicalRelations);
+    $isSimpleDeactivateCase = $liveCount === 0 && $transferableCount === 0 && $blockingCount === 0;
 
     $verdictLabel = 'Нужен разбор связей перед упразднением';
     $verdictNote = 'Есть зависимости, которые нужно проверить и разнести по правильным точкам входа, прежде чем двигаться дальше.';
@@ -64,17 +65,17 @@
         $verdictNote = 'Обнаружены блокирующие связи. Простое выключение места сейчас создаст риск рассинхрона.';
     } elseif ($transferableCount > 0) {
         $verdictLabel = 'Нужен разбор связей перед упразднением';
-        $verdictNote = 'Есть переносимые связи. Их нужно подготовить к следующему шагу, но реального переноса здесь пока нет.';
+        $verdictNote = 'Есть связи, которые нужно подготовить к переносу, прежде чем упразднять место.';
     } elseif ($liveCount === 0) {
         $verdictLabel = 'Можно готовить следующее действие';
-        $verdictNote = 'Явных живых связей не найдено. После ручной проверки можно переходить к следующей итерации.';
+        $verdictNote = 'Явных живых связей не найдено. После ручной проверки можно продолжать.';
     }
 
     $primaryNextStep = $hasBlockingRelations
         ? 'Сначала разберите блокирующие связи вручную.'
         : ($hasTransferableRelations
             ? 'Сначала подготовьте переносимые связи и определите целевое место.'
-            : 'Проверьте историю и карту, затем можно готовить следующую итерацию.');
+            : 'Проверьте историю и карту, затем можно продолжать.');
 
     $secondaryNextSteps = [];
 
@@ -85,6 +86,25 @@
     if ($historyUrl) {
         $secondaryNextSteps[] = 'Сверьте историю места перед следующим действием.';
     }
+
+    if (! $isSimpleDeactivateCase) {
+        if ($blockingCount > 0) {
+            $verdictLabel = 'Упразднение пока недоступно';
+            $verdictNote = 'Сначала нужно разобрать блокирующие связи. Простое выключение места сейчас небезопасно.';
+        } elseif ($transferableCount > 0) {
+            $verdictLabel = 'Сначала подготовьте переносимые связи';
+            $verdictNote = 'Часть связей нужно подготовить к переносу, и только потом возвращаться к упразднению.';
+        }
+
+        $primaryNextStep = $hasBlockingRelations
+            ? 'Сначала откройте и разберите блокирующие связи.'
+            : 'Сначала подготовьте переносимые связи, затем возвращайтесь к упразднению.';
+
+    }
+
+    $showSummaryStatusBlock = false;
+    $showStatsBlock = false;
+    $showOverviewTable = false;
 
     $resolveAction = static function (array $item) use ($tenantUrl, $mapUrl, $historyUrl, $contractsUrl, $accrualsUrl): array {
         $label = (string) ($item['label'] ?? '');
@@ -154,16 +174,16 @@
 
     $sections = [
         [
-            'title' => 'Переносимые',
-            'items' => $transferableRelations,
-            'note' => 'Эти связи можно подготовить к переносу в следующей итерации.',
-            'empty' => 'Переносимых связей не найдено.',
-        ],
-        [
             'title' => 'Блокирующие',
             'items' => $blockingRelations,
             'note' => 'Эти связи требуют ручного разбора и не должны переноситься автоматически.',
             'empty' => 'Блокирующих связей не найдено.',
+        ],
+        [
+            'title' => 'Переносимые',
+            'items' => $transferableRelations,
+            'note' => 'Эти связи можно подготовить к переносу после разбора.',
+            'empty' => 'Переносимых связей не найдено.',
         ],
         [
             'title' => 'Архивные',
@@ -171,7 +191,11 @@
             'note' => 'Эти данные можно оставить как исторический след.',
             'empty' => 'Архивных связей не найдено.',
         ],
-    ];
+];
+
+if (! $isSimpleDeactivateCase) {
+    $sections = array_slice($sections, 0, 2);
+}
 @endphp
 
 <style>
@@ -682,14 +706,66 @@
 
 <div class="deactivate-precheck">
     <div class="deactivate-precheck__stack">
+        @if ($isSimpleDeactivateCase)
+            <section class="deactivate-precheck__card">
+                <div class="deactivate-precheck__top">
+                    <div>
+                        <h3 class="deactivate-precheck__title">{{ $spaceLabel }}</h3>
+                        <p class="deactivate-precheck__text">
+                            Активных связей не найдено. Место можно упразднить после короткой ручной проверки.
+                        </p>
+                    </div>
+
+                    <div class="deactivate-precheck__actions">
+                        @if ($historyUrl)
+                            <a href="{{ $historyUrl }}" class="deactivate-precheck__link">
+                                Открыть историю
+                            </a>
+                        @endif
+
+                        @if ($mapUrl)
+                            <a href="{{ $mapUrl }}" target="_blank" rel="noopener" class="deactivate-precheck__link deactivate-precheck__link--primary">
+                                Открыть карту
+                            </a>
+                        @endif
+                    </div>
+                </div>
+            </section>
+
+            <section class="deactivate-precheck__status deactivate-precheck__status--success">
+                <p class="deactivate-precheck__status-title">Итог проверки</p>
+                <div class="deactivate-precheck__status-copy">Место можно упразднить</div>
+                <div class="deactivate-precheck__status-note">
+                    Живых, переносимых и блокирующих связей не найдено. История операций останется как аудит.
+                </div>
+            </section>
+
+            @if ($historicalCount > 0)
+                <section class="deactivate-precheck__card">
+                    <div class="deactivate-precheck__section-head">
+                        <div>
+                            <h4 class="deactivate-precheck__section-title">Что останется в истории</h4>
+                            <p class="deactivate-precheck__section-note">Архивные записи не удаляются и остаются как след изменений.</p>
+                        </div>
+                        <span class="deactivate-precheck__count">{{ $historicalCount }}</span>
+                    </div>
+
+                    @if ($historyUrl)
+                        <div class="deactivate-precheck__actions">
+                            <a href="{{ $historyUrl }}" class="deactivate-precheck__link">
+                                Открыть историю
+                            </a>
+                        </div>
+                    @endif
+                </section>
+            @endif
+        @else
         <section class="deactivate-precheck__card">
             <div class="deactivate-precheck__top">
                 <div>
-                    <p class="deactivate-precheck__eyebrow">Проверка перед упразднением</p>
                     <h3 class="deactivate-precheck__title">{{ $spaceLabel }}</h3>
                     <p class="deactivate-precheck__text">
-                        Переключатель «Активно» меняет только статус участия места в работе. Упразднение — отдельный сценарий
-                        проверки связей, а не просто перевод места в состояние «Неактивно».
+                        Упразднение — это отдельная проверка связей, а не просто перевод места в состояние «Неактивно».
                     </p>
                 </div>
 
@@ -709,11 +785,13 @@
             </div>
         </section>
 
+        @if ($showSummaryStatusBlock)
         <section class="deactivate-precheck__status {{ $statusClass }}">
             <p class="deactivate-precheck__status-title">Итог проверки</p>
             <div class="deactivate-precheck__status-copy">{{ $statusLabel }}</div>
             <div class="deactivate-precheck__status-note">{{ $introText }}</div>
         </section>
+        @endif
 
         <section class="deactivate-precheck__verdict">
             <p class="deactivate-precheck__verdict-title">Итог проверки</p>
@@ -721,6 +799,7 @@
             <div class="deactivate-precheck__verdict-note">{{ $verdictNote }}</div>
         </section>
 
+        @if ($showStatsBlock)
         <section class="deactivate-precheck__stats">
             <article class="deactivate-precheck__stat">
                 <div class="deactivate-precheck__stat-label">Живые связи</div>
@@ -746,7 +825,9 @@
                 <div class="deactivate-precheck__stat-note">Останутся как история</div>
             </article>
         </section>
+        @endif
 
+        @if ($showOverviewTable)
         <section class="deactivate-precheck__card">
             <div class="deactivate-precheck__section-head">
                 <div>
@@ -804,6 +885,7 @@
                 </table>
             </div>
         </section>
+        @endif
 
         @foreach ($sections as $section)
             <section class="deactivate-precheck__card">
@@ -861,103 +943,107 @@
 
         @if (count($contractPreview) > 0)
             <section class="deactivate-precheck__card">
-                <div class="deactivate-precheck__section-head">
-                    <div>
-                        <h4 class="deactivate-precheck__section-title">Последние договоры по месту</h4>
-                        <p class="deactivate-precheck__section-note">Короткий просмотр договоров, которые сейчас блокируют деактивацию места.</p>
-                    </div>
-                    <span class="deactivate-precheck__count">{{ count($contractPreview) }}</span>
-                </div>
+                <details class="deactivate-precheck__details">
+                    <summary class="deactivate-precheck__details-summary">
+                        <span>
+                            <strong>Последние договоры по месту</strong>
+                            <span class="deactivate-precheck__details-note">Показать, что именно сейчас блокирует упразднение.</span>
+                        </span>
+                        <span class="deactivate-precheck__count">{{ count($contractPreview) }}</span>
+                    </summary>
 
-                <div class="deactivate-precheck__table-wrap">
-                    <table class="deactivate-precheck__table">
-                        <thead>
-                            <tr>
-                                <th style="width: 12%;">ID</th>
-                                <th style="width: 20%;">Номер</th>
-                                <th style="width: 24%;">Арендатор</th>
-                                <th style="width: 20%;">Статус</th>
-                                <th style="width: 12%;">Активность</th>
-                                <th style="width: 12%;">Действие</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($contractPreview as $item)
+                    <div class="deactivate-precheck__table-wrap">
+                        <table class="deactivate-precheck__table">
+                            <thead>
                                 <tr>
-                                    <td>#{{ $item['id'] }}</td>
-                                    <td>{{ $item['number'] }}</td>
-                                    <td>{{ $item['tenant_name'] }}</td>
-                                    <td>{{ $item['status'] }}</td>
-                                    <td>{{ $item['is_active'] ? 'Активен' : 'Неактивен' }}</td>
-                                    <td>
-                                        <a
-                                            href="{{ $item['edit_url'] }}"
-                                            target="_blank"
-                                            rel="noopener"
-                                            class="deactivate-precheck__action"
-                                        >
-                                            Открыть
-                                        </a>
-                                    </td>
+                                    <th style="width: 12%;">ID</th>
+                                    <th style="width: 20%;">Номер</th>
+                                    <th style="width: 24%;">Арендатор</th>
+                                    <th style="width: 20%;">Статус</th>
+                                    <th style="width: 12%;">Активность</th>
+                                    <th style="width: 12%;">Действие</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-
-                @if ($contractsUrl)
-                    <div class="deactivate-precheck__footer-link">
-                        <a href="{{ $contractsUrl }}" target="_blank" rel="noopener" class="deactivate-precheck__link deactivate-precheck__link--primary">
-                            Открыть все договоры места
-                        </a>
+                            </thead>
+                            <tbody>
+                                @foreach ($contractPreview as $item)
+                                    <tr>
+                                        <td>#{{ $item['id'] }}</td>
+                                        <td>{{ $item['number'] }}</td>
+                                        <td>{{ $item['tenant_name'] }}</td>
+                                        <td>{{ $item['status'] }}</td>
+                                        <td>{{ $item['is_active'] ? 'Активен' : 'Неактивен' }}</td>
+                                        <td>
+                                            <a
+                                                href="{{ $item['edit_url'] }}"
+                                                target="_blank"
+                                                rel="noopener"
+                                                class="deactivate-precheck__action"
+                                            >
+                                                Открыть
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
-                @endif
+
+                    @if ($contractsUrl)
+                        <div class="deactivate-precheck__footer-link">
+                            <a href="{{ $contractsUrl }}" target="_blank" rel="noopener" class="deactivate-precheck__link deactivate-precheck__link--primary">
+                                Открыть все договоры места
+                            </a>
+                        </div>
+                    @endif
+                </details>
             </section>
         @endif
 
         @if (count($accrualPreview) > 0)
             <section class="deactivate-precheck__card">
-                <div class="deactivate-precheck__section-head">
-                    <div>
-                        <h4 class="deactivate-precheck__section-title">Последние начисления по месту</h4>
-                        <p class="deactivate-precheck__section-note">Короткий просмотр того, что именно блокирует упразднение.</p>
-                    </div>
-                    <span class="deactivate-precheck__count">{{ count($accrualPreview) }}</span>
-                </div>
+                <details class="deactivate-precheck__details">
+                    <summary class="deactivate-precheck__details-summary">
+                        <span>
+                            <strong>Последние начисления по месту</strong>
+                            <span class="deactivate-precheck__details-note">Показать, что именно сейчас блокирует упразднение.</span>
+                        </span>
+                        <span class="deactivate-precheck__count">{{ count($accrualPreview) }}</span>
+                    </summary>
 
-                <div class="deactivate-precheck__table-wrap">
-                    <table class="deactivate-precheck__table">
-                        <thead>
-                            <tr>
-                                <th style="width: 14%;">ID</th>
-                                <th style="width: 20%;">Период</th>
-                                <th style="width: 28%;">Договор</th>
-                                <th style="width: 24%;">Арендатор</th>
-                                <th style="width: 14%;">Действие</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($accrualPreview as $item)
+                    <div class="deactivate-precheck__table-wrap">
+                        <table class="deactivate-precheck__table">
+                            <thead>
                                 <tr>
-                                    <td>#{{ $item['id'] }}</td>
-                                    <td>{{ $item['period'] }}</td>
-                                    <td>{{ $item['contract_number'] }}</td>
-                                    <td>{{ $item['tenant_name'] }}</td>
-                                    <td>
-                                        <a
-                                            href="{{ $item['edit_url'] }}"
-                                            target="_blank"
-                                            rel="noopener"
-                                            class="deactivate-precheck__action"
-                                        >
-                                            Открыть
-                                        </a>
-                                    </td>
+                                    <th style="width: 14%;">ID</th>
+                                    <th style="width: 20%;">Период</th>
+                                    <th style="width: 28%;">Договор</th>
+                                    <th style="width: 24%;">Арендатор</th>
+                                    <th style="width: 14%;">Действие</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach ($accrualPreview as $item)
+                                    <tr>
+                                        <td>#{{ $item['id'] }}</td>
+                                        <td>{{ $item['period'] }}</td>
+                                        <td>{{ $item['contract_number'] }}</td>
+                                        <td>{{ $item['tenant_name'] }}</td>
+                                        <td>
+                                            <a
+                                                href="{{ $item['edit_url'] }}"
+                                                target="_blank"
+                                                rel="noopener"
+                                                class="deactivate-precheck__action"
+                                            >
+                                                Открыть
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
             </section>
         @endif
 
@@ -965,7 +1051,7 @@
             <div class="deactivate-precheck__section-head">
                 <div>
                     <h4 class="deactivate-precheck__section-title">Что делать дальше</h4>
-                    <p class="deactivate-precheck__section-note">Один главный следующий шаг перед следующей итерацией.</p>
+                    <p class="deactivate-precheck__section-note">Разберите связи и затем вернитесь к упразднению.</p>
                 </div>
             </div>
 
@@ -979,5 +1065,6 @@
                 @endif
             </div>
         </section>
+        @endif
     </div>
 </div>

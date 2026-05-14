@@ -255,6 +255,60 @@ class EditMarketSpace extends BaseEditRecord
         );
     }
 
+    protected function canDeactivateAfterPrecheck(): bool
+    {
+        return (bool) ($this->buildDeactivatePrecheckViewData()['canDeactivate'] ?? false);
+    }
+
+    public function deactivateMarketSpaceAfterPrecheck(): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        if (! $this->canDeactivateAfterPrecheck()) {
+            Notification::make()
+                ->warning()
+                ->title('Упразднение пока недоступно')
+                ->body('Сначала разберите связи, которые ещё мешают безопасно упразднить место.')
+                ->send();
+
+            return;
+        }
+
+        if (! (bool) $this->record->is_active) {
+            Notification::make()
+                ->info()
+                ->title('Место уже упразднено')
+                ->body('Карточка уже выведена из активной работы.')
+                ->send();
+
+            return;
+        }
+
+        Operation::create([
+            'market_id' => (int) $this->record->market_id,
+            'entity_type' => 'market_space',
+            'entity_id' => (int) $this->record->id,
+            'type' => OperationType::SPACE_ATTRS_CHANGE,
+            'status' => 'applied',
+            'comment' => 'Упразднение места после проверки связей',
+            'payload' => [
+                'market_space_id' => (int) $this->record->id,
+                'is_active' => false,
+            ],
+        ]);
+
+        $this->record->refresh();
+        $this->fillForm();
+
+        Notification::make()
+            ->success()
+            ->title('Место упразднено')
+            ->body('Место выведено из активной работы после успешной проверки связей.')
+            ->send();
+    }
+
     protected function buildDeactivatePrecheckViewData(): array
     {
         if (! $this->record) {
@@ -271,6 +325,7 @@ class EditMarketSpace extends BaseEditRecord
                 'contractPreview' => [],
                 'accrualsUrl' => null,
                 'accrualPreview' => [],
+                'canDeactivate' => false,
             ];
         }
 
@@ -663,6 +718,7 @@ class EditMarketSpace extends BaseEditRecord
             'contractPreview' => $contractPreview,
             'accrualsUrl' => $accrualsUrl,
             'accrualPreview' => $accrualPreview,
+            'canDeactivate' => $liveTotal === 0 && $transferableTotal === 0 && $blockingTotal === 0 && (bool) ($this->record->is_active ?? false),
         ];
     }
 
@@ -1028,6 +1084,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->label('Упразднить место')
                 ->icon('heroicon-o-archive-box')
                 ->tooltip('Проверка связей перед деактивацией')
+                ->action(fn () => $this->deactivateMarketSpaceAfterPrecheck())
                 ->size('lg')
                 ->outlined()
                 ->color('gray')
@@ -1035,7 +1092,11 @@ class EditMarketSpace extends BaseEditRecord
                     'class' => 'market-space-card-action market-space-card-action--secondary',
                 ])
                 ->modalHeading('Упразднить место')
-                ->modalSubmitAction(false)
+                ->modalSubmitAction(fn ($action) => $this->canDeactivateAfterPrecheck()
+                    ? $action
+                        ->label('Упразднить место')
+                        ->color('danger')
+                    : false)
                 ->modalCancelActionLabel('Закрыть')
                 ->stickyModalHeader()
                 ->stickyModalFooter()
@@ -1095,6 +1156,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->label('Упразднить место')
                 ->icon('heroicon-o-archive-box')
                 ->tooltip('Проверка связей перед деактивацией')
+                ->action(fn () => $this->deactivateMarketSpaceAfterPrecheck())
                 ->size('lg')
                 ->outlined()
                 ->color('gray')
@@ -1102,7 +1164,11 @@ class EditMarketSpace extends BaseEditRecord
                     'class' => 'market-space-card-action market-space-card-action--secondary',
                 ])
                 ->modalHeading('Упразднить место')
-                ->modalSubmitAction(false)
+                ->modalSubmitAction(fn ($action) => $this->canDeactivateAfterPrecheck()
+                    ? $action
+                        ->label('Упразднить место')
+                        ->color('danger')
+                    : false)
                 ->modalCancelActionLabel('Закрыть')
                 ->stickyModalHeader()
                 ->stickyModalFooter()
