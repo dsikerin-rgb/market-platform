@@ -61,7 +61,7 @@ class EditMarketSpace extends BaseEditRecord
     public function getHeader(): ?View
     {
         return view('filament.resources.market-spaces.partials.edit-hero', [
-            'actions' => $this->getCachedHeaderActions(),
+            'actions' => $this->getHeroActions(),
             'actionsAlignment' => $this->getHeaderActionsAlignment(),
             'breadcrumbs' => filament()->hasBreadcrumbs() ? $this->getBreadcrumbs() : [],
             'heading' => $this->getHeading(),
@@ -69,6 +69,21 @@ class EditMarketSpace extends BaseEditRecord
             'subtitleLine' => $this->resolveSubtitleLine(),
             'statusLabel' => $this->resolveStatusLabel(),
             'statusColor' => $this->resolveStatusColor(),
+        ]);
+    }
+
+    public function getFooter(): ?View
+    {
+        $dangerActions = $this->getDangerZoneActions();
+
+        if ($dangerActions === []) {
+            return null;
+        }
+
+        return view('filament.resources.market-spaces.partials.edit-danger-zone', [
+            'actions' => $dangerActions,
+            'isCascadeDelete' => ! MarketSpaceResource::canDelete($this->record)
+                && MarketSpaceResource::canDeleteWithMapShapeCascade($this->record),
         ]);
     }
 
@@ -247,6 +262,48 @@ class EditMarketSpace extends BaseEditRecord
             ->send();
 
         $returnUrl = request()->query('return_url');
+
+        $this->redirect(
+            is_string($returnUrl) && $returnUrl !== ''
+                ? $returnUrl
+                : MarketSpaceResource::getUrl('index')
+        );
+    }
+
+    public function deleteMarketSpacePermanently(array $data): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $confirmed = (bool) ($data['confirm_delete_place'] ?? false);
+
+        if (! $confirmed) {
+            throw ValidationException::withMessages([
+                'confirm_delete_place' => 'Подтвердите полное удаление места.',
+            ]);
+        }
+
+        if (! MarketSpaceResource::canDelete($this->record)) {
+            Notification::make()
+                ->danger()
+                ->title('Удаление недоступно')
+                ->body('У места есть связи или у вас недостаточно прав для полного удаления.')
+                ->send();
+
+            return;
+        }
+
+        $recordId = (int) $this->record->id;
+        $returnUrl = request()->query('return_url');
+
+        MarketSpace::query()->whereKey($recordId)->delete();
+
+        Notification::make()
+            ->success()
+            ->title('Место удалено')
+            ->body('Карточка места удалена из системы полностью.')
+            ->send();
 
         $this->redirect(
             is_string($returnUrl) && $returnUrl !== ''
@@ -1134,25 +1191,19 @@ class EditMarketSpace extends BaseEditRecord
                     ]),
                 ));
 
-            $openMapAction = \Filament\Actions\Action::make('openMap')
-                ->label('Показать на карте')
-                ->icon('heroicon-o-map')
-                ->tooltip($isMapLinked ? $mapStatus : 'Привязка к карте ещё не настроена')
-                ->disabled(! $isMapLinked)
-                ->size('lg')
-                ->outlined()
-                ->color('primary')
-                ->extraAttributes([
-                    'class' => 'market-space-card-action market-space-card-action--primary',
-                ]);
-
-            if ($mapUrl) {
-                $openMapAction->url($mapUrl, shouldOpenInNewTab: true);
-            }
-
-            $actions[] = $openMapAction;
-
-            if (! $isMapLinked) {
+            if ($isMapLinked) {
+                $actions[] = \Filament\Actions\Action::make('openMap')
+                    ->label('Показать на карте')
+                    ->icon('heroicon-o-map')
+                    ->tooltip($mapStatus)
+                    ->size('lg')
+                    ->outlined()
+                    ->color('primary')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--primary',
+                    ])
+                    ->url($mapUrl, shouldOpenInNewTab: true);
+            } else {
                 $actions[] = \Filament\Actions\Action::make('mapStatus')
                     ->label('Нет карты')
                     ->icon('heroicon-o-link-slash')
@@ -1206,25 +1257,19 @@ class EditMarketSpace extends BaseEditRecord
                     ]),
                 ));
 
-            $openMapAction = \Filament\Pages\Actions\Action::make('openMap')
-                ->label('Показать на карте')
-                ->icon('heroicon-o-map')
-                ->tooltip($isMapLinked ? $mapStatus : 'Привязка к карте ещё не настроена')
-                ->disabled(! $isMapLinked)
-                ->size('lg')
-                ->outlined()
-                ->color('primary')
-                ->extraAttributes([
-                    'class' => 'market-space-card-action market-space-card-action--primary',
-                ]);
-
-            if ($mapUrl) {
-                $openMapAction->url($mapUrl, shouldOpenInNewTab: true);
-            }
-
-            $actions[] = $openMapAction;
-
-            if (! $isMapLinked) {
+            if ($isMapLinked) {
+                $actions[] = \Filament\Pages\Actions\Action::make('openMap')
+                    ->label('Показать на карте')
+                    ->icon('heroicon-o-map')
+                    ->tooltip($mapStatus)
+                    ->size('lg')
+                    ->outlined()
+                    ->color('primary')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--primary',
+                    ])
+                    ->url($mapUrl, shouldOpenInNewTab: true);
+            } else {
                 $actions[] = \Filament\Pages\Actions\Action::make('mapStatus')
                     ->label('Нет карты')
                     ->icon('heroicon-o-link-slash')
@@ -1239,64 +1284,99 @@ class EditMarketSpace extends BaseEditRecord
             }
         }
 
+        return $actions;
+    }
+
+    protected function getHeroActions(): array
+    {
+        return array_values(array_filter(
+            $this->getCachedHeaderActions(),
+            static fn ($action): bool => ! method_exists($action, 'getName')
+                || ! in_array($action->getName(), ['delete', 'delete_with_shapes'], true),
+        ));
+    }
+
+    protected function getDangerZoneActions(): array
+    {
+        $user = Filament::auth()->user();
+
+        if (! $this->record || ! $user || ! $user->isSuperAdmin()) {
+            return [];
+        }
+
         $canDelete = MarketSpaceResource::canDelete($this->record);
 
         if ($canDelete) {
-            if (class_exists(\Filament\Actions\DeleteAction::class)) {
-                $actions[] = \Filament\Actions\DeleteAction::make()
-                    ->label('Удалить')
-                    ->icon('heroicon-o-trash')
-                    ->tooltip('Безвозвратно удалить карточку места')
-                    ->size('lg')
-                    ->outlined()
-                    ->color('danger')
-                    ->extraAttributes([
-                        'class' => 'market-space-card-action market-space-card-action--danger',
-                    ]);
-            } elseif (class_exists(\Filament\Pages\Actions\DeleteAction::class)) {
-                $actions[] = \Filament\Pages\Actions\DeleteAction::make()
-                    ->label('Удалить')
-                    ->icon('heroicon-o-trash')
-                    ->tooltip('Безвозвратно удалить карточку места')
-                    ->size('lg')
-                    ->outlined()
-                    ->color('danger')
-                    ->extraAttributes([
-                        'class' => 'market-space-card-action market-space-card-action--danger',
-                    ]);
-            }
-        } elseif (MarketSpaceResource::canDeleteWithMapShapeCascade($this->record)) {
-            $actionClass = class_exists(\Filament\Actions\Action::class)
-                ? \Filament\Actions\Action::class
-                : \Filament\Pages\Actions\Action::class;
-
-            $actions[] = $actionClass::make('delete_with_shapes')
-                ->label('Удалить место и фигуру')
-                ->icon('heroicon-o-trash')
-                ->tooltip('Удалить пустое место вместе с фигурой на карте')
-                ->size('lg')
-                ->outlined()
-                ->color('danger')
-                ->extraAttributes([
-                    'class' => 'market-space-card-action market-space-card-action--danger',
-                ])
-                ->modalHeading('Удалить место и фигуру')
-                ->modalSubmitActionLabel('Удалить место и фигуру')
-                ->modalCancelActionLabel('Отмена')
-                ->modalWidth(Width::TwoExtraLarge)
-                ->modalDescription('Место будет удалено вместе с привязанной фигурой на карте. История операций останется как аудит.')
-                ->form([
-                    Checkbox::make('confirm_delete_with_shape')
-                        ->label('Подтверждаю удаление места и фигуры на карте')
-                        ->accepted()
-                        ->required(),
-                ])
-                ->action(function (array $data): void {
-                    $this->deleteMarketSpaceWithShapes($data);
-                });
+            return [$this->makeDangerDeleteAction()];
         }
 
-        return $actions;
+        if (MarketSpaceResource::canDeleteWithMapShapeCascade($this->record)) {
+            return [$this->makeDangerDeleteWithShapesAction()];
+        }
+
+        return [];
+    }
+
+    protected function makeDangerDeleteAction(): mixed
+    {
+        $actionClass = class_exists(\Filament\Actions\Action::class)
+            ? \Filament\Actions\Action::class
+            : \Filament\Pages\Actions\Action::class;
+
+        return $actionClass::make('delete_place')
+            ->label('Удалить место')
+            ->icon('heroicon-o-trash')
+            ->tooltip('Безвозвратно удалить карточку места')
+            ->size('lg')
+            ->color('danger')
+            ->modalHeading('Удалить место')
+            ->modalSubmitActionLabel('Удалить место')
+            ->modalCancelActionLabel('Отмена')
+            ->modalWidth(Width::TwoExtraLarge)
+            ->modalDescription('Это необратимое действие. Карточка места будет удалена из системы полностью. Используйте этот сценарий только если место нужно убрать окончательно, а не просто упразднить.')
+            ->form([
+                Checkbox::make('confirm_delete_place')
+                    ->label('Подтверждаю полное удаление места без возможности восстановления')
+                    ->accepted()
+                    ->required(),
+            ])
+            ->action(function (array $data): void {
+                $this->deleteMarketSpacePermanently($data);
+            })
+            ->extraAttributes([
+                'class' => 'market-space-danger-action',
+            ]);
+    }
+
+    protected function makeDangerDeleteWithShapesAction(): mixed
+    {
+        $actionClass = class_exists(\Filament\Actions\Action::class)
+            ? \Filament\Actions\Action::class
+            : \Filament\Pages\Actions\Action::class;
+
+        return $actionClass::make('delete_with_shapes')
+            ->label('Удалить место')
+            ->icon('heroicon-o-trash')
+            ->tooltip('Удалить пустое место вместе с фигурой на карте')
+            ->size('lg')
+            ->color('danger')
+            ->extraAttributes([
+                'class' => 'market-space-danger-action',
+            ])
+            ->modalHeading('Удалить место и фигуру')
+            ->modalSubmitActionLabel('Удалить место')
+            ->modalCancelActionLabel('Отмена')
+            ->modalWidth(Width::TwoExtraLarge)
+            ->modalDescription('Это необратимое действие. Место будет удалено вместе с привязанной фигурой на карте. История операций останется как аудит.')
+            ->form([
+                Checkbox::make('confirm_delete_with_shape')
+                    ->label('Подтверждаю удаление места и фигуры на карте')
+                    ->accepted()
+                    ->required(),
+            ])
+            ->action(function (array $data): void {
+                $this->deleteMarketSpaceWithShapes($data);
+            });
     }
 
     private function resolveSpaceHeading(): string|Htmlable
