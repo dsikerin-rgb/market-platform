@@ -12,6 +12,7 @@ use App\Services\MarketSpaces\TenantSwitchPlanner;
 use App\Models\Tenant;
 use App\Domain\Operations\OperationType;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Checkbox;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
@@ -179,6 +180,79 @@ class EditMarketSpace extends BaseEditRecord
             ->title('Номер места обновлён')
             ->body('Номер изменён через отдельное действие. Карта и остальные связи не менялись.')
             ->send();
+    }
+
+    public function deleteMarketSpaceWithShapes(array $data): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $confirmed = (bool) ($data['confirm_delete_with_shape'] ?? false);
+
+        if (! $confirmed) {
+            throw ValidationException::withMessages([
+                'confirm_delete_with_shape' => 'Подтвердите удаление места и фигуры на карте.',
+            ]);
+        }
+
+        if (! MarketSpaceResource::canDeleteWithMapShapeCascade($this->record)) {
+            Notification::make()
+                ->danger()
+                ->title('Удаление недоступно')
+                ->body('У места есть дополнительные связи. Для него нужен другой сценарий разбора.')
+                ->send();
+
+            return;
+        }
+
+        $recordId = (int) $this->record->id;
+        $marketId = (int) $this->record->market_id;
+        $number = trim((string) ($this->record->number ?? ''));
+        $displayName = trim((string) ($this->record->display_name ?? ''));
+        $shapeCount = (int) MarketSpaceMapShape::query()
+            ->where('market_space_id', $recordId)
+            ->count();
+
+        DB::transaction(function () use ($recordId, $marketId, $number, $displayName, $shapeCount): void {
+            MarketSpaceMapShape::query()
+                ->where('market_space_id', $recordId)
+                ->delete();
+
+            MarketSpace::query()
+                ->whereKey($recordId)
+                ->delete();
+
+            Operation::create([
+                'market_id' => $marketId,
+                'entity_type' => 'market_space',
+                'entity_id' => $recordId,
+                'type' => OperationType::SPACE_ATTRS_CHANGE,
+                'status' => 'applied',
+                'comment' => 'Удаление пустого места вместе с фигурой карты',
+                'payload' => [
+                    'market_space_id' => $recordId,
+                    'deleted_with_map_shapes' => true,
+                    'deleted_shapes_count' => $shapeCount,
+                    'number' => $number !== '' ? $number : null,
+                    'display_name' => $displayName !== '' ? $displayName : null,
+                ],
+            ]);
+        });
+
+        Notification::make()
+            ->success()
+            ->title('Место и фигура удалены')
+            ->body('Карточка места удалена вместе с привязанной фигурой карты. История операций сохранена.')
+            ->send();
+
+        $returnUrl = request()->query('return_url');
+
+        $this->redirect(
+            is_string($returnUrl) && $returnUrl !== ''
+                ? $returnUrl
+                : MarketSpaceResource::getUrl('index')
+        );
     }
 
     protected function buildDeactivatePrecheckViewData(): array
@@ -1103,6 +1177,35 @@ class EditMarketSpace extends BaseEditRecord
                         'class' => 'market-space-card-action market-space-card-action--danger',
                     ]);
             }
+        } elseif (MarketSpaceResource::canDeleteWithMapShapeCascade($this->record)) {
+            $actionClass = class_exists(\Filament\Actions\Action::class)
+                ? \Filament\Actions\Action::class
+                : \Filament\Pages\Actions\Action::class;
+
+            $actions[] = $actionClass::make('delete_with_shapes')
+                ->label('Удалить место и фигуру')
+                ->icon('heroicon-o-trash')
+                ->tooltip('Удалить пустое место вместе с фигурой на карте')
+                ->size('lg')
+                ->outlined()
+                ->color('danger')
+                ->extraAttributes([
+                    'class' => 'market-space-card-action market-space-card-action--danger',
+                ])
+                ->modalHeading('Удалить место и фигуру')
+                ->modalSubmitActionLabel('Удалить место и фигуру')
+                ->modalCancelActionLabel('Отмена')
+                ->modalWidth(Width::TwoExtraLarge)
+                ->modalDescription('Место будет удалено вместе с привязанной фигурой на карте. История операций останется как аудит.')
+                ->form([
+                    Checkbox::make('confirm_delete_with_shape')
+                        ->label('Подтверждаю удаление места и фигуры на карте')
+                        ->accepted()
+                        ->required(),
+                ])
+                ->action(function (array $data): void {
+                    $this->deleteMarketSpaceWithShapes($data);
+                });
         }
 
         return $actions;

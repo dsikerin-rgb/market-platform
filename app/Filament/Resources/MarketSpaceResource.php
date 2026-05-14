@@ -2094,7 +2094,7 @@ class MarketSpaceResource extends BaseResource
             return false;
         }
 
-        return ! static::hasDeleteDependencies($record);
+        return static::deleteDependencyCounts($record) === [];
     }
 
     private static function renderGroupComposition(?MarketSpace $record): HtmlString
@@ -2257,19 +2257,88 @@ class MarketSpaceResource extends BaseResource
         ])->render());
     }
 
-    private static function hasDeleteDependencies(MarketSpace $record): bool
+    /**
+     * @return array<string, int>
+     */
+    public static function deleteDependencyCounts(MarketSpace $record): array
     {
+        $counts = [];
+
         if (filled($record->tenant_id)) {
-            return true;
+            $counts['tenant_id'] = 1;
         }
 
         $recordId = (int) $record->getKey();
 
         if ($recordId <= 0) {
-            return true;
+            $counts['invalid_record'] = 1;
+
+            return $counts;
         }
 
-        $tableChecks = [
+        foreach (static::deleteDependencyChecks() as [$table, $column]) {
+            if (! SchemaFacade::hasTable($table) || ! SchemaFacade::hasColumn($table, $column)) {
+                continue;
+            }
+
+            $count = (int) DB::table($table)->where($column, $recordId)->count();
+
+            if ($count > 0) {
+                $counts[$table] = $count;
+            }
+        }
+
+        if (
+            SchemaFacade::hasTable('operations')
+            && SchemaFacade::hasColumn('operations', 'entity_type')
+            && SchemaFacade::hasColumn('operations', 'entity_id')
+        ) {
+            $count = (int) DB::table('operations')
+                ->where('entity_type', 'market_space')
+                ->where('entity_id', $recordId)
+                ->count();
+
+            if ($count > 0) {
+                $counts['operations'] = $count;
+            }
+        }
+
+        return $counts;
+    }
+
+    public static function canDeleteWithMapShapeCascade($record): bool
+    {
+        if (! $record instanceof MarketSpace) {
+            return false;
+        }
+
+        $user = Filament::auth()->user();
+
+        if (! $user || ! $user->isSuperAdmin()) {
+            return false;
+        }
+
+        $counts = static::deleteDependencyCounts($record);
+
+        if (! isset($counts['market_space_map_shapes'])) {
+            return false;
+        }
+
+        foreach (array_keys($counts) as $key) {
+            if (! in_array($key, ['market_space_map_shapes', 'operations'], true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @return list<array{0:string,1:string}>
+     */
+    private static function deleteDependencyChecks(): array
+    {
+        return [
             ['tenant_contracts', 'market_space_id'],
             ['tenant_requests', 'market_space_id'],
             ['tenant_accruals', 'market_space_id'],
@@ -2284,29 +2353,10 @@ class MarketSpaceResource extends BaseResource
             ['tickets', 'market_space_id'],
             ['tenant_reviews', 'market_space_id'],
         ];
+    }
 
-        foreach ($tableChecks as [$table, $column]) {
-            if (! SchemaFacade::hasTable($table) || ! SchemaFacade::hasColumn($table, $column)) {
-                continue;
-            }
-
-            if (DB::table($table)->where($column, $recordId)->exists()) {
-                return true;
-            }
-        }
-
-        if (
-            SchemaFacade::hasTable('operations')
-            && SchemaFacade::hasColumn('operations', 'entity_type')
-            && SchemaFacade::hasColumn('operations', 'entity_id')
-            && DB::table('operations')
-                ->where('entity_type', 'market_space')
-                ->where('entity_id', $recordId)
-                ->exists()
-        ) {
-            return true;
-        }
-
-        return false;
+    private static function hasDeleteDependencies(MarketSpace $record): bool
+    {
+        return static::deleteDependencyCounts($record) !== [];
     }
 }
