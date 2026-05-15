@@ -911,6 +911,40 @@
                 color: #fff;
             }
 
+            .mrr-link--success {
+                border-color: rgba(22, 163, 74, 0.24);
+                background: #16a34a;
+                color: #fff;
+                box-shadow: 0 8px 18px rgba(22, 163, 74, 0.14);
+            }
+
+            .mrr-link--success:hover {
+                background: #15803d;
+                color: #fff;
+            }
+
+            .dark .mrr-link--success {
+                border-color: rgba(74, 222, 128, 0.28);
+                background: #22c55e;
+                color: #052e16;
+            }
+
+            .mrr-link--disabled,
+            .mrr-link--disabled:hover {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(148, 163, 184, 0.1);
+                color: #94a3b8;
+                cursor: not-allowed;
+                pointer-events: none;
+            }
+
+            .dark .mrr-link--disabled,
+            .dark .mrr-link--disabled:hover {
+                border-color: rgba(148, 163, 184, 0.22);
+                background: rgba(71, 85, 105, 0.28);
+                color: #94a3b8;
+            }
+
             .mrr-card-actions {
                 display: grid;
                 grid-template-columns: 1fr;
@@ -943,6 +977,16 @@
             }
 
             .dark .mrr-card-actions__label {
+                color: #94a3b8;
+            }
+
+            .mrr-card-actions__hint {
+                font-size: 0.78rem;
+                line-height: 1.45;
+                color: #64748b;
+            }
+
+            .dark .mrr-card-actions__hint {
                 color: #94a3b8;
             }
 
@@ -1147,6 +1191,22 @@
                 color: #bfdbfe;
             }
 
+            .mrr-diagnostics__candidate-action--disabled,
+            .mrr-diagnostics__candidate-action--disabled:hover {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(148, 163, 184, 0.1);
+                color: #94a3b8;
+                cursor: not-allowed;
+                pointer-events: none;
+            }
+
+            .dark .mrr-diagnostics__candidate-action--disabled,
+            .dark .mrr-diagnostics__candidate-action--disabled:hover {
+                border-color: rgba(148, 163, 184, 0.22);
+                background: rgba(71, 85, 105, 0.28);
+                color: #94a3b8;
+            }
+
             .mrr-diagnostics__details {
                 border-radius: 0.8rem;
                 border: 1px solid rgba(148, 163, 184, 0.12);
@@ -1162,18 +1222,42 @@
             .mrr-diagnostics__details > summary {
                 cursor: pointer;
                 list-style: none;
-                font-size: 0.72rem;
-                font-weight: 700;
-                color: #475569;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 2.5rem;
+                width: 100%;
+                border-radius: 0.95rem;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                background: rgba(37, 99, 235, 0.08);
+                padding: 0.5rem 0.8rem;
+                font-size: 0.82rem;
+                font-weight: 800;
+                color: #1d4ed8;
                 outline: none;
+                text-align: center;
+                transition: border-color .18s ease, background-color .18s ease, color .18s ease;
             }
 
             .mrr-diagnostics__details > summary::-webkit-details-marker {
                 display: none;
             }
 
+            .mrr-diagnostics__details > summary:hover {
+                border-color: rgba(37, 99, 235, 0.3);
+                background: rgba(37, 99, 235, 0.14);
+            }
+
             .dark .mrr-diagnostics__details > summary {
-                color: #cbd5e1;
+                border-color: rgba(96, 165, 250, 0.28);
+                background: rgba(30, 64, 175, 0.22);
+                color: #dbeafe;
+            }
+
+            .dark .mrr-diagnostics__details > summary:hover {
+                border-color: rgba(147, 197, 253, 0.34);
+                background: rgba(37, 99, 235, 0.3);
+                color: #eff6ff;
             }
 
             .mrr-diagnostics__details-body {
@@ -1181,6 +1265,48 @@
                 flex-direction: column;
                 gap: 0.5rem;
                 margin-top: 0.45rem;
+            }
+
+            .mrr-diagnostics__compare {
+                display: grid;
+                gap: 0.55rem;
+                border-radius: 1rem;
+                border: 1px solid rgba(37, 99, 235, 0.14);
+                background: rgba(37, 99, 235, 0.06);
+                padding: 0.7rem;
+            }
+
+            .dark .mrr-diagnostics__compare {
+                border-color: rgba(96, 165, 250, 0.2);
+                background: rgba(30, 64, 175, 0.16);
+            }
+
+            .mrr-diagnostics__compare-title {
+                font-size: 0.74rem;
+                font-weight: 800;
+                letter-spacing: 0.04em;
+                text-transform: uppercase;
+                color: #475569;
+            }
+
+            .dark .mrr-diagnostics__compare-title {
+                color: #cbd5e1;
+            }
+
+            .mrr-diagnostics__compare-copy {
+                font-size: 0.8rem;
+                line-height: 1.45;
+                color: #64748b;
+            }
+
+            .dark .mrr-diagnostics__compare-copy {
+                color: #94a3b8;
+            }
+
+            .mrr-diagnostics__compare-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.45rem;
             }
 
             .mrr-diagnostics__detail-list {
@@ -1321,12 +1447,66 @@
                 background: rgba(15, 23, 42, 0.56);
             }
 
+            .mrr-duplicate-plan__card.is-selected {
+                border-color: rgba(37, 99, 235, 0.26);
+                background: rgba(239, 246, 255, 0.98);
+                box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+            }
+
+            .dark .mrr-duplicate-plan__card.is-selected {
+                border-color: rgba(96, 165, 250, 0.34);
+                background: rgba(15, 23, 42, 0.8);
+                box-shadow: 0 12px 28px rgba(15, 23, 42, 0.3);
+            }
+
             .mrr-duplicate-plan__card-title {
                 font-size: 0.75rem;
                 font-weight: 800;
                 letter-spacing: 0.04em;
                 text-transform: uppercase;
                 color: #64748b;
+            }
+
+            .mrr-duplicate-plan__picker {
+                margin-top: 0.75rem;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.45rem;
+            }
+
+            .mrr-duplicate-plan__picker-button {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                background: #fff;
+                padding: 0.38rem 0.75rem;
+                font-size: 0.8rem;
+                font-weight: 700;
+                color: #1d4ed8;
+                cursor: pointer;
+                font-family: inherit;
+                line-height: inherit;
+            }
+
+            .mrr-duplicate-plan__picker-button.is-selected {
+                border-color: rgba(37, 99, 235, 0.24);
+                background: #2563eb;
+                color: #fff;
+                box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+            }
+
+            .dark .mrr-duplicate-plan__picker-button {
+                border-color: rgba(96, 165, 250, 0.3);
+                background: rgba(15, 23, 42, 0.32);
+                color: #bfdbfe;
+            }
+
+            .dark .mrr-duplicate-plan__picker-button.is-selected {
+                border-color: rgba(96, 165, 250, 0.34);
+                background: #3b82f6;
+                color: #fff;
             }
 
             .mrr-duplicate-plan__space {
@@ -1369,6 +1549,57 @@
             .dark .mrr-duplicate-plan__link {
                 border-color: rgba(96, 165, 250, 0.3);
                 color: #bfdbfe;
+            }
+
+            .mrr-duplicate-plan__link.is-disabled,
+            .mrr-duplicate-plan__link.is-disabled:hover {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(148, 163, 184, 0.1);
+                color: #94a3b8;
+                cursor: not-allowed;
+                pointer-events: none;
+                text-decoration: none;
+            }
+
+            .dark .mrr-duplicate-plan__link.is-disabled,
+            .dark .mrr-duplicate-plan__link.is-disabled:hover {
+                border-color: rgba(148, 163, 184, 0.22);
+                background: rgba(71, 85, 105, 0.28);
+                color: #94a3b8;
+            }
+
+            .mrr-duplicate-plan__selection {
+                margin-top: 0.8rem;
+                border-radius: 1rem;
+                border: 1px solid rgba(37, 99, 235, 0.16);
+                background: rgba(239, 246, 255, 0.94);
+                padding: 0.8rem 0.9rem;
+            }
+
+            .dark .mrr-duplicate-plan__selection {
+                border-color: rgba(96, 165, 250, 0.22);
+                background: rgba(15, 23, 42, 0.56);
+            }
+
+            .mrr-duplicate-plan__selection-title {
+                font-size: 0.86rem;
+                font-weight: 800;
+                color: #0f172a;
+            }
+
+            .dark .mrr-duplicate-plan__selection-title {
+                color: #f8fafc;
+            }
+
+            .mrr-duplicate-plan__selection-copy {
+                margin-top: 0.3rem;
+                font-size: 0.82rem;
+                line-height: 1.45;
+                color: #475569;
+            }
+
+            .dark .mrr-duplicate-plan__selection-copy {
+                color: #cbd5e1;
             }
 
             .mrr-duplicate-plan__section {
@@ -2262,6 +2493,8 @@
                                             $relationDetails = is_array($diagnostics['relation_details'] ?? null) ? $diagnostics['relation_details'] : [];
                                             $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
                                             $relationAssessment = trim((string) ($diagnostics['relation_assessment'] ?? ''));
+                                            $hasMapLink = collect($relationCounts)
+                                                ->contains(fn (array $item): bool => ($item['key'] ?? null) === 'map_shapes' && (int) ($item['count'] ?? 0) > 0);
                                             $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
 
                                             if (filled($row['number']) && filled($row['display_name']) && $row['number'] !== $row['display_name']) {
@@ -2307,6 +2540,8 @@
                                             $decision = (string) ($row['decision'] ?? '');
                                             $reviewStatus = (string) ($row['review_status'] ?? '');
                                             $hasCandidates = $candidateSpaces !== [];
+                                            $primaryCandidate = $hasCandidates && is_array($candidateSpaces[0] ?? null) ? $candidateSpaces[0] : null;
+                                            $hasDuplicateResolutionAction = $attentionTab !== 'unconfirmed_links' && $primaryCandidate !== null;
                                             $hasRelationDetails = $relationDetails !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
                                             $isContractTenantOverride = $contractOverride !== null;
@@ -2318,8 +2553,13 @@
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
+                                            $looksFreeCase = $isConflictCase
+                                                && preg_match('/(свобод|съех|не стоит|нет арендатора|пуст)/iu', (string) ($row['reason'] ?? '')) === 1;
+                                            $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $looksFreeCase && ! $hasCandidates;
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
+                                            $hasPrimaryResolutionAction = $attentionTab !== 'unconfirmed_links'
+                                                && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride || $hasDuplicateResolutionAction || $canConfirmFree);
                                             $showRelationAssessment = $contractOverride || $hasCandidates;
                                             $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null) ? $row['tenant_change_details'] : [];
                                             $observedTenantName = trim((string) ($tenantChangeDetails['observed_tenant_name'] ?? ''));
@@ -2335,7 +2575,7 @@
                                                 $conflictHeadline = 'На месте уже найден новый арендатор по договору';
                                             } elseif ($hasCandidates) {
                                                 $conflictHeadline = 'Похоже на дубль или спорную привязку места';
-                                            } elseif (preg_match('/(свобод|съех|не стоит|нет арендатора)/iu', (string) ($row['reason'] ?? '')) === 1) {
+                                            } elseif ($looksFreeCase) {
                                                 $conflictHeadline = 'Похоже, место уже свободно';
                                             } elseif (preg_match('/(арендатор|стоит|смен)/iu', (string) ($row['reason'] ?? '')) === 1) {
                                                 $conflictHeadline = 'Фактическое состояние не совпадает с карточкой места';
@@ -2491,7 +2731,7 @@
                                                             </div>
                                                         @endif
                                                         <div class="mrr-card-actions">
-                                                            @if ($attentionTab !== 'unconfirmed_links' && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride))
+                                                            @if ($hasPrimaryResolutionAction)
                                                                 <div class="mrr-card-actions__group mrr-card-actions__group--primary">
                                                                     <div class="mrr-card-actions__label">Решение</div>
                                                                     <div class="mrr-card-actions__row">
@@ -2539,13 +2779,44 @@
                                                                                 Упразднить и связать
                                                                             </button>
                                                                         @endif
+                                                                        @if ($hasDuplicateResolutionAction && $primaryCandidate)
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button mrr-link--primary"
+                                                                                data-mrr-duplicate-plan="open"
+                                                                                data-current-space-id="{{ $row['space_id'] }}"
+                                                                                data-current-label="{{ $currentSpaceLabel }}"
+                                                                                data-current-space-url="{{ $row['space_url'] }}"
+                                                                                data-current-map-url="{{ $row['map_url'] }}"
+                                                                                data-current-counts='@json($relationCounts)'
+                                                                                data-candidate-space-id="{{ $primaryCandidate['space_id'] }}"
+                                                                                data-candidate-label="{{ $primaryCandidate['label'] }}"
+                                                                                data-candidate-space-url="{{ $primaryCandidate['space_url'] }}"
+                                                                                data-candidate-map-url="{{ $primaryCandidate['map_url'] }}"
+                                                                                data-candidate-counts='@json($primaryCandidate['relation_counts'] ?? [])'
+                                                                            >
+                                                                                Разобрать дубль
+                                                                            </button>
+                                                                        @endif
+                                                                        @if ($canConfirmFree)
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button mrr-link--success"
+                                                                                data-mrr-confirm-free-open
+                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                                data-mrr-space-label="{{ $currentSpaceLabel }}"
+                                                                            >
+                                                                                Подтвердить свободно
+                                                                            </button>
+                                                                        @endif
                                                                     </div>
                                                                 </div>
                                                             @endif
 
                                                             @if ($attentionTab !== 'unconfirmed_links')
                                                                 <div class="mrr-card-actions__group">
-                                                                    <div class="mrr-card-actions__label">Проверка</div>
+                                                                    <div class="mrr-card-actions__label">Закрытие</div>
+                                                                    <div class="mrr-card-actions__hint">Только если после проверки данные места менять не нужно.</div>
                                                                     <div class="mrr-card-actions__row">
                                                                         <button
                                                                             type="button"
@@ -2553,7 +2824,7 @@
                                                                             data-mrr-quick-review-launcher
                                                                             data-mrr-space-id="{{ $row['space_id'] }}"
                                                                         >
-                                                                            Зафиксировать итог
+                                                                            Закрыть без изменений
                                                                         </button>
                                                                     </div>
                                                                 </div>
@@ -2563,10 +2834,14 @@
 
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--diagnostics">
                                                         <div class="mrr-diagnostics">
-                                                            <div class="mrr-diagnostics__section">
-                                                                <div class="mrr-diagnostics__actions">
+                                                                <div class="mrr-diagnostics__section">
+                                                                    <div class="mrr-diagnostics__actions">
                                                                     <a class="mrr-link" href="{{ $row['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                    <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                    @if ($hasMapLink)
+                                                                        <a class="mrr-link" href="{{ $row['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                    @else
+                                                                        <span class="mrr-link mrr-link--disabled" aria-disabled="true">Открыть карту</span>
+                                                                    @endif
                                                                 </div>
                                                                 <div class="mrr-diagnostics__section-title">Связи текущего места</div>
                                                                 <div class="mrr-diagnostics__summary">
@@ -2590,59 +2865,46 @@
                                                                 <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
                                                             @endif
 
-                                                            @if ($hasCandidates || $hasRelationDetails)
+                                                            @if ($hasCandidates)
+                                                                <div class="mrr-diagnostics__compare">
+                                                                    <div class="mrr-diagnostics__compare-title">Возможные дубли</div>
+                                                                    <div class="mrr-diagnostics__compare-copy">
+                                                                        Найдено {{ count($candidateSpaces) }} {{ count($candidateSpaces) === 1 ? 'место' : 'места' }} того же арендатора. Сравните карточки и выберите, какая останется основной.
+                                                                    </div>
+                                                                    <div class="mrr-diagnostics__compare-actions">
+                                                                        @foreach ($candidateSpaces as $candidate)
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button"
+                                                                                data-mrr-duplicate-plan="open"
+                                                                                data-current-space-id="{{ $row['space_id'] }}"
+                                                                                data-current-label="{{ $currentSpaceLabel }}"
+                                                                                data-current-space-url="{{ $row['space_url'] }}"
+                                                                                data-current-map-url="{{ $row['map_url'] }}"
+                                                                                data-current-counts='@json($relationCounts)'
+                                                                                data-candidate-space-id="{{ $candidate['space_id'] }}"
+                                                                                data-candidate-label="{{ $candidate['label'] }}"
+                                                                                data-candidate-space-url="{{ $candidate['space_url'] }}"
+                                                                                data-candidate-map-url="{{ $candidate['map_url'] }}"
+                                                                                data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
+                                                                            >
+                                                                                Сравнить #{{ $candidate['space_id'] }}
+                                                                            </button>
+                                                                        @endforeach
+                                                                    </div>
+                                                                </div>
+                                                            @elseif ($hasRelationDetails)
                                                                 <details class="mrr-diagnostics__details">
-                                                                    <summary>{{ $hasCandidates ? 'Показать связи и возможные дубли' : 'Показать связи места' }}</summary>
+                                                                    <summary>Проверить связи места</summary>
                                                                     <div class="mrr-diagnostics__details-body">
-                                                                        @if ($hasRelationDetails)
-                                                                            <div class="mrr-diagnostics__detail-list">
-                                                                                @foreach ($relationDetails as $item)
-                                                                                    <div class="mrr-diagnostics__detail-item">
-                                                                                        <div class="mrr-diagnostics__detail-title">{{ $item['label'] }}: {{ $item['count'] }}</div>
-                                                                                        <div class="mrr-diagnostics__detail-copy">{{ $item['description'] }}</div>
-                                                                                    </div>
-                                                                                @endforeach
-                                                                            </div>
-                                                                        @endif
-
-                                                                        @if ($hasCandidates)
-                                                                            <div class="mrr-diagnostics__section">
-                                                                                <div class="mrr-diagnostics__section-title">Возможные дубли / места того же арендатора</div>
-                                                                                <div class="mrr-diagnostics__candidates">
-                                                                                    @foreach ($candidateSpaces as $candidate)
-                                                                                        <div class="mrr-diagnostics__candidate">
-                                                                                            <a class="mrr-diagnostics__candidate-main" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">
-                                                                                                #{{ $candidate['space_id'] }} · {{ $candidate['label'] }}
-                                                                                            </a>
-                                                                                            <div class="mrr-diagnostics__candidate-meta">
-                                                                                                {{ implode(' · ', $candidate['relation_counts'] ?? []) }}
-                                                                                            </div>
-                                                                                            <div class="mrr-diagnostics__candidate-actions">
-                                                                                                <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                                                <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    class="mrr-diagnostics__candidate-action"
-                                                                                                    data-mrr-duplicate-plan="open"
-                                                                                                    data-current-space-id="{{ $row['space_id'] }}"
-                                                                                                    data-current-label="{{ $currentSpaceLabel }}"
-                                                                                                    data-current-space-url="{{ $row['space_url'] }}"
-                                                                                                    data-current-map-url="{{ $row['map_url'] }}"
-                                                                                                    data-current-counts='@json($relationCounts)'
-                                                                                                    data-candidate-space-id="{{ $candidate['space_id'] }}"
-                                                                                                    data-candidate-label="{{ $candidate['label'] }}"
-                                                                                                    data-candidate-space-url="{{ $candidate['space_url'] }}"
-                                                                                                    data-candidate-map-url="{{ $candidate['map_url'] }}"
-                                                                                                    data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
-                                                                                                >
-                                                                                                    {{ ! empty($candidate['is_stronger_than_current']) ? 'Проверить как основное' : 'Сравнить места' }}
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    @endforeach
+                                                                        <div class="mrr-diagnostics__detail-list">
+                                                                            @foreach ($relationDetails as $item)
+                                                                                <div class="mrr-diagnostics__detail-item">
+                                                                                    <div class="mrr-diagnostics__detail-title">{{ $item['label'] }}: {{ $item['count'] }}</div>
+                                                                                    <div class="mrr-diagnostics__detail-copy">{{ $item['description'] }}</div>
                                                                                 </div>
-                                                                            </div>
-                                                                        @endif
+                                                                            @endforeach
+                                                                        </div>
                                                                     </div>
                                                                 </details>
                                                             @elseif (! $isConflictCase)
@@ -2828,25 +3090,31 @@
                         <div class="mrr-clarify-modal__eyebrow">Разбор дубля</div>
                         <h3 id="mrrDuplicatePlanTitle" class="mrr-clarify-modal__title">План безопасного разбора</h3>
                         <p id="mrrDuplicatePlanDescription" class="mrr-clarify-modal__description">
-                            Выберите основное место. Система перенесёт карту, кабинет и товары на него, а текущий дубль выведет из рабочего контура. Договоры, начисления и долги не переносятся.
+                            Выберите, какое место должно остаться основным. Система перенесёт карту, кабинет и товары на выбранную карточку, а вторую выведет из рабочего контура. Договоры, начисления и долги не переносятся.
                         </p>
                         <div id="mrrDuplicatePlanError" class="mrr-clarify-modal__error" aria-live="polite"></div>
 
                         <div class="mrr-duplicate-plan__grid">
-                            <div class="mrr-duplicate-plan__card">
-                                <div class="mrr-duplicate-plan__card-title">Текущее место из ревизии</div>
+                            <div id="mrrDuplicatePlanCurrentCard" class="mrr-duplicate-plan__card">
+                                <div class="mrr-duplicate-plan__card-title">Место из ревизии</div>
                                 <div id="mrrDuplicatePlanCurrentTitle" class="mrr-duplicate-plan__space">—</div>
                                 <div id="mrrDuplicatePlanCurrentCounts" class="mrr-duplicate-plan__counts"></div>
+                                <div class="mrr-duplicate-plan__picker">
+                                    <button type="button" id="mrrDuplicatePlanCurrentPick" class="mrr-duplicate-plan__picker-button" data-mrr-duplicate-plan-select="current">Оставить основным</button>
+                                </div>
                                 <div class="mrr-duplicate-plan__links">
                                     <a id="mrrDuplicatePlanCurrentSpaceLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть место</a>
                                     <a id="mrrDuplicatePlanCurrentMapLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть карту</a>
                                 </div>
                             </div>
 
-                            <div class="mrr-duplicate-plan__card">
-                                <div class="mrr-duplicate-plan__card-title">Возможное каноническое место</div>
+                            <div id="mrrDuplicatePlanCandidateCard" class="mrr-duplicate-plan__card">
+                                <div class="mrr-duplicate-plan__card-title">Второе место того же арендатора</div>
                                 <div id="mrrDuplicatePlanCandidateTitle" class="mrr-duplicate-plan__space">—</div>
                                 <div id="mrrDuplicatePlanCandidateCounts" class="mrr-duplicate-plan__counts"></div>
+                                <div class="mrr-duplicate-plan__picker">
+                                    <button type="button" id="mrrDuplicatePlanCandidatePick" class="mrr-duplicate-plan__picker-button" data-mrr-duplicate-plan-select="candidate">Оставить основным</button>
+                                </div>
                                 <div class="mrr-duplicate-plan__links">
                                     <a id="mrrDuplicatePlanCandidateSpaceLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть место</a>
                                     <a id="mrrDuplicatePlanCandidateMapLink" class="mrr-duplicate-plan__link" href="#" target="_blank" rel="noopener">Открыть карту</a>
@@ -2854,18 +3122,23 @@
                             </div>
                         </div>
 
+                        <div class="mrr-duplicate-plan__selection">
+                            <div id="mrrDuplicatePlanSelectionTitle" class="mrr-duplicate-plan__selection-title">—</div>
+                            <div id="mrrDuplicatePlanSelectionCopy" class="mrr-duplicate-plan__selection-copy">—</div>
+                        </div>
+
                         <div class="mrr-duplicate-plan__section">
                             <h4>Что произойдёт после выбора</h4>
                             <ul class="mrr-duplicate-plan__list">
-                                <li>Кандидат станет основным местом для карты, кабинета и товаров.</li>
-                                <li>Текущее место будет выведено из рабочего контура через is_active = false.</li>
-                                <li>Договоры, начисления и долги не меняются. Если они есть на текущем дубле, действие будет заблокировано.</li>
+                                <li>Выбранное место останется основным для карты, кабинета и товаров.</li>
+                                <li>Вторая карточка будет выведена из рабочего контура через is_active = false.</li>
+                                <li>Договоры, начисления и долги не меняются. Если выбор нарушает защитные правила, система заблокирует действие.</li>
                             </ul>
                         </div>
 
                         <div class="mrr-clarify-modal__actions">
                             <button type="button" class="mrr-clarify-modal__button" data-mrr-duplicate-plan-close>Отмена</button>
-                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-duplicate-plan-create>Выбрать кандидата основным</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-duplicate-plan-create>Применить разбор дубля</button>
                         </div>
                     </div>
                 </div>
@@ -2997,52 +3270,70 @@
                         aria-describedby="mrrQuickReviewDescription"
                     >
                         <button type="button" class="mrr-clarify-modal__close" data-mrr-quick-review-close aria-label="Закрыть">×</button>
-                        <div class="mrr-clarify-modal__eyebrow">Итог проверки</div>
-                        <h3 id="mrrQuickReviewTitle" class="mrr-clarify-modal__title">Зафиксировать итог</h3>
+                        <div class="mrr-clarify-modal__eyebrow">Закрытие карточки</div>
+                        <h3 id="mrrQuickReviewTitle" class="mrr-clarify-modal__title">Закрыть без изменений</h3>
                         <p id="mrrQuickReviewDescription" class="mrr-clarify-modal__description">
-                            Запишите результат проверки. Часть вариантов только закрывает наблюдение, а подтверждение свободного места меняет статус места.
+                            Используйте это действие только если карточку проверили и менять данные места не нужно. Карточка будет закрыта как проверенная, без изменения статуса, арендатора, карты и связей.
                         </p>
                         <div id="mrrQuickReviewError" class="mrr-clarify-modal__error" aria-live="polite"></div>
 
                         <div class="mrr-clarify-modal__field">
-                            <div class="mrr-quick-review__choices" role="group" aria-label="Выбор варианта решения">
-                                <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="matched" data-mrr-quick-reason-required="0">Совпало</button>
-                                <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--success" data-mrr-quick-review-choice="mark_space_free" data-mrr-quick-reason-required="0">Подтвердить свободно</button>
-                                <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="occupancy_conflict" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Конфликт по занятости">Конфликт по занятости</button>
-                                <button type="button" class="mrr-quick-review__choice mrr-quick-review__choice--danger" data-mrr-quick-review-choice="shape_not_found" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Фигура не найдена на карте">Фигура не найдена на карте</button>
-                                <button type="button" class="mrr-quick-review__choice" data-mrr-quick-review-choice="space_identity_needs_clarification" data-mrr-quick-reason-required="1" data-mrr-quick-reason-title="Требует уточнения">Уточнить</button>
-                            </div>
-                        </div>
-
-                        <div class="mrr-quick-review__clarify mrr-quick-review__clarify--success" data-mrr-quick-review-hint="mark_space_free" hidden>
-                            <div class="mrr-quick-review__clarify-title">Что значит «Подтвердить свободно»</div>
-                            <div class="mrr-quick-review__clarify-text">
-                                Место будет окончательно зафиксировано как свободное. Статус места изменится на свободное, локальная текущая привязка будет закрыта, а договорные и финансовые хвосты не будут изменены автоматически.
-                            </div>
-                        </div>
-
-                        <div class="mrr-quick-review__clarify" data-mrr-quick-review-hint="space_identity_needs_clarification" hidden>
-                            <div class="mrr-quick-review__clarify-title">Что значит «Уточнить»</div>
-                            <div class="mrr-quick-review__clarify-text">
-                                Это ручное решение для случаев, когда номер, название или другая идентичность места требуют дополнительной проверки. Данные места не меняются, а в истории ревизии фиксируется сам факт, что нужен отдельный разбор.
-                            </div>
-                        </div>
-
-                        <div class="mrr-clarify-modal__field">
-                            <label class="mrr-clarify-modal__label" for="mrrQuickReviewReason">Комментарий к решению</label>
+                            <label class="mrr-clarify-modal__label" for="mrrQuickReviewReason">Комментарий к закрытию</label>
                             <textarea
                                 id="mrrQuickReviewReason"
                                 class="mrr-clarify-modal__input mrr-quick-review__field"
                                 rows="4"
-                                placeholder="Коротко опишите, что увидели"
+                                placeholder="Коротко напишите, почему данные менять не нужно"
                             ></textarea>
-                            <div class="mrr-quick-review__hint">Нужен для спорных решений. Сам по себе не меняет данные места.</div>
+                            <div class="mrr-quick-review__hint">Комментарий сохранится в истории ревизии. Само действие не меняет данные места.</div>
                         </div>
 
                         <div class="mrr-clarify-modal__actions">
                             <button type="button" class="mrr-clarify-modal__button" data-mrr-quick-review-close>Отмена</button>
-                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-quick-review-save>Сохранить</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-quick-review-save>Закрыть карточку</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mrrConfirmFreeModal" class="mrr-clarify-modal" hidden aria-hidden="true">
+                <div class="mrr-clarify-modal__backdrop" data-mrr-confirm-free-close></div>
+                <div
+                    class="mrr-clarify-modal__dialog"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="mrrConfirmFreeTitle"
+                    aria-describedby="mrrConfirmFreeDescription"
+                >
+                    <button type="button" class="mrr-clarify-modal__close" data-mrr-confirm-free-close aria-label="Закрыть">×</button>
+                    <div class="mrr-clarify-modal__eyebrow">Изменение места</div>
+                    <h3 id="mrrConfirmFreeTitle" class="mrr-clarify-modal__title">Подтвердить свободно</h3>
+                    <p id="mrrConfirmFreeDescription" class="mrr-clarify-modal__description">
+                        Статус места изменится на свободное. Локальная текущая привязка будет закрыта, а договоры, начисления и долги не будут изменены автоматически.
+                    </p>
+                    <div id="mrrConfirmFreeError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                    <div class="mrr-quick-review__clarify mrr-quick-review__clarify--success">
+                        <div class="mrr-quick-review__clarify-title">Что произойдёт</div>
+                        <div id="mrrConfirmFreeSummary" class="mrr-quick-review__clarify-text">
+                            Место будет зафиксировано как свободное после ручной проверки.
+                        </div>
+                    </div>
+
+                    <div class="mrr-clarify-modal__field">
+                        <label class="mrr-clarify-modal__label" for="mrrConfirmFreeReason">Комментарий к изменению</label>
+                        <textarea
+                            id="mrrConfirmFreeReason"
+                            class="mrr-clarify-modal__input mrr-quick-review__field"
+                            rows="4"
+                            placeholder="Например: на месте нет арендатора, проверено по карте и карточке"
+                        ></textarea>
+                        <div class="mrr-quick-review__hint">Комментарий сохранится в истории ревизии вместе с изменением статуса места.</div>
+                    </div>
+
+                    <div class="mrr-clarify-modal__actions">
+                        <button type="button" class="mrr-clarify-modal__button" data-mrr-confirm-free-close>Отмена</button>
+                        <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-confirm-free-save>Подтвердить свободно</button>
                     </div>
                 </div>
             </div>
@@ -3062,6 +3353,11 @@
                 const quickReviewSave = quickReviewModal?.querySelector('[data-mrr-quick-review-save]');
                 const quickReviewChoiceButtons = Array.from(document.querySelectorAll('[data-mrr-quick-review-choice]'));
                 const quickReviewHintBlocks = Array.from(document.querySelectorAll('[data-mrr-quick-review-hint]'));
+                const confirmFreeModal = document.getElementById('mrrConfirmFreeModal');
+                const confirmFreeReason = document.getElementById('mrrConfirmFreeReason');
+                const confirmFreeError = document.getElementById('mrrConfirmFreeError');
+                const confirmFreeSummary = document.getElementById('mrrConfirmFreeSummary');
+                const confirmFreeSave = confirmFreeModal?.querySelector('[data-mrr-confirm-free-save]');
                 const identityFixModal = document.getElementById('mrrIdentityFixModal');
                 const identityFixNumber = document.getElementById('mrrIdentityFixNumber');
                 const identityFixDisplayName = document.getElementById('mrrIdentityFixDisplayName');
@@ -3081,14 +3377,20 @@
                 const contractTenantSwitchError = document.getElementById('mrrContractTenantSwitchError');
                 const contractTenantSwitchSave = contractTenantSwitchModal?.querySelector('[data-mrr-contract-tenant-switch-save]');
                 const modal = document.getElementById('mrrDuplicatePlanModal');
+                const currentCard = document.getElementById('mrrDuplicatePlanCurrentCard');
+                const candidateCard = document.getElementById('mrrDuplicatePlanCandidateCard');
                 const currentTitle = document.getElementById('mrrDuplicatePlanCurrentTitle');
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
                 const currentCounts = document.getElementById('mrrDuplicatePlanCurrentCounts');
                 const candidateCounts = document.getElementById('mrrDuplicatePlanCandidateCounts');
+                const currentPick = document.getElementById('mrrDuplicatePlanCurrentPick');
+                const candidatePick = document.getElementById('mrrDuplicatePlanCandidatePick');
                 const currentSpaceLink = document.getElementById('mrrDuplicatePlanCurrentSpaceLink');
                 const currentMapLink = document.getElementById('mrrDuplicatePlanCurrentMapLink');
                 const candidateSpaceLink = document.getElementById('mrrDuplicatePlanCandidateSpaceLink');
                 const candidateMapLink = document.getElementById('mrrDuplicatePlanCandidateMapLink');
+                const selectionTitle = document.getElementById('mrrDuplicatePlanSelectionTitle');
+                const selectionCopy = document.getElementById('mrrDuplicatePlanSelectionCopy');
                 const createButton = modal?.querySelector('[data-mrr-duplicate-plan-create]');
                 const error = document.getElementById('mrrDuplicatePlanError');
                 const quickReviewState = {
@@ -3096,6 +3398,10 @@
                     label: '',
                     reasonRequired: false,
                     spaceId: 0,
+                };
+                const confirmFreeState = {
+                    spaceId: 0,
+                    spaceLabel: '',
                 };
                 const identityFixState = {
                     spaceId: 0,
@@ -3113,20 +3419,36 @@
                     spaceId: 0,
                     spaceLabel: '',
                 };
+                const duplicatePlanState = {
+                    selectedPrimary: 'candidate',
+                    currentCounts: [],
+                    candidateCounts: [],
+                    currentSpaceId: 0,
+                    candidateSpaceId: 0,
+                    currentLabel: '',
+                    candidateLabel: '',
+                };
 
                 if (
                     (!modal
+                    || !currentCard
+                    || !candidateCard
                     || !currentTitle
                     || !candidateTitle
                     || !currentCounts
                     || !candidateCounts
+                    || !currentPick
+                    || !candidatePick
                     || !currentSpaceLink
                     || !currentMapLink
                     || !candidateSpaceLink
                     || !candidateMapLink
+                    || !selectionTitle
+                    || !selectionCopy
                     || !createButton
                     || !error)
                     && !quickReviewModal
+                    && !confirmFreeModal
                     && !contractTenantSwitchModal
                 ) {
                     return;
@@ -3340,11 +3662,55 @@
                     if (!url) {
                         link.removeAttribute('href');
                         link.setAttribute('aria-disabled', 'true');
+                        link.classList.add('is-disabled');
                         return;
                     }
 
                     link.href = url;
                     link.removeAttribute('aria-disabled');
+                    link.classList.remove('is-disabled');
+                };
+
+                const countByLabel = (counts, label) => {
+                    const normalizedLabel = String(label || '').trim().toLowerCase();
+                    const items = Array.isArray(counts) ? counts : [];
+
+                    for (const item of items) {
+                        if (typeof item === 'string') {
+                            const match = item.match(/^(.+?):\s*(-?\d+)$/);
+
+                            if (match && String(match[1] || '').trim().toLowerCase() === normalizedLabel) {
+                                return Number(match[2] || 0);
+                            }
+                        } else if (item && String(item.label || '').trim().toLowerCase() === normalizedLabel) {
+                            return Number(item.count || 0);
+                        }
+                    }
+
+                    return 0;
+                };
+
+                const updateDuplicatePlanSelection = (selectedPrimary) => {
+                    duplicatePlanState.selectedPrimary = selectedPrimary === 'current' ? 'current' : 'candidate';
+
+                    const keepCurrent = duplicatePlanState.selectedPrimary === 'current';
+                    const primaryLabel = keepCurrent ? duplicatePlanState.currentLabel : duplicatePlanState.candidateLabel;
+                    const secondaryLabel = keepCurrent ? duplicatePlanState.candidateLabel : duplicatePlanState.currentLabel;
+                    const transferSourceCounts = keepCurrent ? duplicatePlanState.candidateCounts : duplicatePlanState.currentCounts;
+                    const mapCount = countByLabel(transferSourceCounts, 'Карта');
+                    const cabinetCount = countByLabel(transferSourceCounts, 'Кабинет');
+                    const productCount = countByLabel(transferSourceCounts, 'Товары');
+
+                    currentCard.classList.toggle('is-selected', keepCurrent);
+                    candidateCard.classList.toggle('is-selected', !keepCurrent);
+                    currentPick.classList.toggle('is-selected', keepCurrent);
+                    candidatePick.classList.toggle('is-selected', !keepCurrent);
+
+                    selectionTitle.textContent = keepCurrent
+                        ? 'Основным останется место из ревизии'
+                        : 'Основным станет второе место того же арендатора';
+                    selectionCopy.textContent = `${primaryLabel || 'Выбранное место'} останется основным. Система перенесёт с ${secondaryLabel || 'второй карточки'} карту: ${mapCount}, кабинет: ${cabinetCount}, товары: ${productCount}, а вторую карточку выведет из рабочего контура. Договоры, начисления и долги не переносятся.`;
+                    createButton.textContent = 'Применить разбор дубля';
                 };
 
                 const openModal = (button) => {
@@ -3352,6 +3718,8 @@
                     const candidateLabel = String(button.dataset.candidateLabel || '').trim();
                     const currentSpaceId = String(button.dataset.currentSpaceId || '').trim();
                     const candidateSpaceId = String(button.dataset.candidateSpaceId || '').trim();
+                    const parsedCurrentCounts = parseJson(button.dataset.currentCounts, []);
+                    const parsedCandidateCounts = parseJson(button.dataset.candidateCounts, []);
 
                     currentTitle.textContent = currentLabel
                         ? `#${currentSpaceId} · ${currentLabel}`
@@ -3360,15 +3728,22 @@
                         ? `#${candidateSpaceId} · ${candidateLabel}`
                         : `#${candidateSpaceId}`;
 
-                    renderCounts(currentCounts, parseJson(button.dataset.currentCounts, []));
-                    renderCounts(candidateCounts, parseJson(button.dataset.candidateCounts, []));
+                    renderCounts(currentCounts, parsedCurrentCounts);
+                    renderCounts(candidateCounts, parsedCandidateCounts);
                     setLink(currentSpaceLink, button.dataset.currentSpaceUrl);
-                    setLink(currentMapLink, button.dataset.currentMapUrl);
+                    setLink(currentMapLink, countByLabel(parsedCurrentCounts, 'Карта') > 0 ? button.dataset.currentMapUrl : '');
                     setLink(candidateSpaceLink, button.dataset.candidateSpaceUrl);
-                    setLink(candidateMapLink, button.dataset.candidateMapUrl);
+                    setLink(candidateMapLink, countByLabel(parsedCandidateCounts, 'Карта') > 0 ? button.dataset.candidateMapUrl : '');
                     error.textContent = '';
                     modal.dataset.currentSpaceId = currentSpaceId;
                     modal.dataset.candidateSpaceId = candidateSpaceId;
+                    duplicatePlanState.currentCounts = parsedCurrentCounts;
+                    duplicatePlanState.candidateCounts = parsedCandidateCounts;
+                    duplicatePlanState.currentSpaceId = Number(currentSpaceId || 0);
+                    duplicatePlanState.candidateSpaceId = Number(candidateSpaceId || 0);
+                    duplicatePlanState.currentLabel = currentLabel ? `#${currentSpaceId} · ${currentLabel}` : `#${currentSpaceId}`;
+                    duplicatePlanState.candidateLabel = candidateLabel ? `#${candidateSpaceId} · ${candidateLabel}` : `#${candidateSpaceId}`;
+                    updateDuplicatePlanSelection('candidate');
 
                     modal.hidden = false;
                     modal.classList.add('is-open');
@@ -3383,7 +3758,8 @@
                     delete modal.dataset.candidateSpaceId;
                     error.textContent = '';
                     createButton.removeAttribute('disabled');
-                    createButton.textContent = 'Выбрать кандидата основным';
+                    duplicatePlanState.selectedPrimary = 'candidate';
+                    createButton.textContent = 'Применить разбор дубля';
                 };
 
                 const syncQuickReviewChoiceState = () => {
@@ -3411,17 +3787,17 @@
                     }
 
                     quickReviewState.spaceId = currentSpaceId;
-                    quickReviewState.decision = '';
-                    quickReviewState.label = '';
-                    quickReviewState.reasonRequired = false;
+                    quickReviewState.decision = 'matched';
+                    quickReviewState.label = 'Закрыть без изменений';
+                    quickReviewState.reasonRequired = true;
 
-                    quickReviewTitle.textContent = 'Зафиксировать итог';
-                    quickReviewDescription.textContent = 'Запишите результат проверки. Часть вариантов только закрывает наблюдение, а подтверждение свободного места меняет статус места.';
+                    quickReviewTitle.textContent = 'Закрыть без изменений';
+                    quickReviewDescription.textContent = 'Карточка будет закрыта как проверенная. Данные места, арендатор, карта и связи не изменятся.';
                     quickReviewReason.value = '';
-                    quickReviewReason.required = false;
+                    quickReviewReason.required = true;
                     quickReviewError.textContent = '';
                     quickReviewSave.removeAttribute('disabled');
-                    quickReviewSave.textContent = 'Сохранить';
+                    quickReviewSave.textContent = 'Закрыть карточку';
                     syncQuickReviewChoiceState();
                     syncQuickReviewHintState('');
 
@@ -3448,7 +3824,7 @@
                     quickReviewReason.required = false;
                     quickReviewError.textContent = '';
                     quickReviewSave.removeAttribute('disabled');
-                    quickReviewSave.textContent = 'Сохранить';
+                    quickReviewSave.textContent = 'Закрыть карточку';
                     syncQuickReviewChoiceState();
                     syncQuickReviewHintState('');
                 };
@@ -3462,19 +3838,19 @@
                     const decision = String(quickReviewState.decision || '').trim();
 
                     if (!Number.isFinite(spaceId) || spaceId <= 0 || !decision) {
-                        quickReviewError.textContent = 'Не удалось определить решение или место для сохранения.';
+                        quickReviewError.textContent = 'Не удалось определить карточку для закрытия.';
                         return;
                     }
 
                     const reason = String(quickReviewReason.value || '').trim();
                     if (quickReviewState.reasonRequired && !reason) {
-                        quickReviewError.textContent = 'Для этого решения нужен комментарий / reason.';
+                        quickReviewError.textContent = 'Напишите короткий комментарий, почему карточку можно закрыть без изменений.';
                         quickReviewReason.focus();
                         return;
                     }
 
                     quickReviewSave.setAttribute('disabled', 'disabled');
-                    quickReviewSave.textContent = 'Сохраняем...';
+                    quickReviewSave.textContent = 'Закрываем...';
                     quickReviewError.textContent = '';
 
                     const response = await fetch(reviewDecisionUrl, {
@@ -3495,8 +3871,104 @@
 
                     if (!response.ok || !data?.ok) {
                         quickReviewSave.removeAttribute('disabled');
-                        quickReviewSave.textContent = 'Сохранить';
-                        quickReviewError.textContent = String(data?.message || 'Не удалось сохранить решение.');
+                        quickReviewSave.textContent = 'Закрыть карточку';
+                        quickReviewError.textContent = String(data?.message || 'Не удалось закрыть карточку.');
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
+                const openConfirmFreeModal = (button) => {
+                    if (!confirmFreeModal || !confirmFreeReason || !confirmFreeError || !confirmFreeSummary || !confirmFreeSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(button.dataset.mrrSpaceId || button.closest('[data-mrr-space-id]')?.dataset.mrrSpaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        return;
+                    }
+
+                    confirmFreeState.spaceId = spaceId;
+                    confirmFreeState.spaceLabel = String(button.dataset.mrrSpaceLabel || '').trim();
+                    confirmFreeSummary.textContent = confirmFreeState.spaceLabel
+                        ? `Место «${confirmFreeState.spaceLabel}» будет переведено в свободные. Договоры, начисления и долги останутся в истории без автоматического переноса.`
+                        : 'Место будет переведено в свободные. Договоры, начисления и долги останутся в истории без автоматического переноса.';
+                    confirmFreeReason.value = '';
+                    confirmFreeReason.required = true;
+                    confirmFreeError.textContent = '';
+                    confirmFreeSave.removeAttribute('disabled');
+                    confirmFreeSave.textContent = 'Подтвердить свободно';
+
+                    confirmFreeModal.hidden = false;
+                    confirmFreeModal.classList.add('is-open');
+                    confirmFreeModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => confirmFreeReason.focus(), 0);
+                };
+
+                const closeConfirmFreeModal = () => {
+                    if (!confirmFreeModal || !confirmFreeReason || !confirmFreeError || !confirmFreeSave) {
+                        return;
+                    }
+
+                    confirmFreeModal.classList.remove('is-open');
+                    confirmFreeModal.hidden = true;
+                    confirmFreeModal.setAttribute('aria-hidden', 'true');
+                    confirmFreeState.spaceId = 0;
+                    confirmFreeState.spaceLabel = '';
+                    confirmFreeReason.value = '';
+                    confirmFreeReason.required = false;
+                    confirmFreeError.textContent = '';
+                    confirmFreeSave.removeAttribute('disabled');
+                    confirmFreeSave.textContent = 'Подтвердить свободно';
+                };
+
+                const sendConfirmFree = async () => {
+                    if (!confirmFreeModal || !confirmFreeReason || !confirmFreeError || !confirmFreeSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(confirmFreeState.spaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        confirmFreeError.textContent = 'Не удалось определить место для изменения.';
+                        return;
+                    }
+
+                    const reason = String(confirmFreeReason.value || '').trim();
+
+                    if (!reason) {
+                        confirmFreeError.textContent = 'Напишите короткий комментарий, почему место можно подтвердить свободным.';
+                        confirmFreeReason.focus();
+                        return;
+                    }
+
+                    confirmFreeSave.setAttribute('disabled', 'disabled');
+                    confirmFreeSave.textContent = 'Сохраняем...';
+                    confirmFreeError.textContent = '';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision: 'mark_space_free',
+                            market_space_id: spaceId,
+                            reason,
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        confirmFreeSave.removeAttribute('disabled');
+                        confirmFreeSave.textContent = 'Подтвердить свободно';
+                        confirmFreeError.textContent = String(data?.message || 'Не удалось подтвердить свободное место.');
                         return;
                     }
 
@@ -3920,8 +4392,12 @@
                         return;
                     }
 
+                    const keepCurrent = duplicatePlanState.selectedPrimary === 'current';
+                    const duplicateSpaceId = keepCurrent ? candidateSpaceId : currentSpaceId;
+                    const canonicalSpaceId = keepCurrent ? currentSpaceId : candidateSpaceId;
+
                     createButton.setAttribute('disabled', 'disabled');
-                    createButton.textContent = 'Переносим связи...';
+                    createButton.textContent = 'Применяем разбор...';
                     error.textContent = '';
 
                     const response = await fetch(reviewDecisionUrl, {
@@ -3933,9 +4409,11 @@
                         },
                         body: JSON.stringify({
                             decision: 'duplicate_space_needs_resolution',
-                            market_space_id: currentSpaceId,
-                            candidate_market_space_id: candidateSpaceId,
-                            reason: 'Выбрано основное место дубля; перенести безопасные связи.',
+                            market_space_id: duplicateSpaceId,
+                            candidate_market_space_id: canonicalSpaceId,
+                            reason: keepCurrent
+                                ? 'Основным оставлено место из ревизии; безопасные связи перенести со второй карточки.'
+                                : 'Основным выбрано второе место того же арендатора; безопасные связи перенести с карточки из ревизии.',
                         }),
                     });
 
@@ -3943,7 +4421,7 @@
 
                     if (!response.ok || !data?.ok) {
                         createButton.removeAttribute('disabled');
-                        createButton.textContent = 'Выбрать кандидата основным';
+                        createButton.textContent = 'Применить разбор дубля';
                         error.textContent = String(data?.message || 'Не удалось перенести безопасные связи.');
                         return;
                     }
@@ -3975,11 +4453,19 @@
                         return;
                     }
 
+                    const picker = event.target.closest('[data-mrr-duplicate-plan-select]');
+
+                    if (picker instanceof HTMLElement) {
+                        event.preventDefault();
+                        updateDuplicatePlanSelection(String(picker.dataset.mrrDuplicatePlanSelect || 'candidate'));
+                        return;
+                    }
+
                     if (event.target.hasAttribute('data-mrr-duplicate-plan-create')) {
                         event.preventDefault();
                         createDuplicateReviewOperation().catch((errorInstance) => {
                             createButton.removeAttribute('disabled');
-                            createButton.textContent = 'Выбрать кандидата основным';
+                            createButton.textContent = 'Применить разбор дубля';
                             error.textContent = String(errorInstance?.message || errorInstance);
                         });
                     }
@@ -4009,6 +4495,10 @@
                         ? event.target.closest('[data-mrr-merge-retire-open]')
                         : null;
 
+                    const confirmFreeLauncher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-confirm-free-open]')
+                        : null;
+
                     if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
                         event.preventDefault();
                         loadAiReview(aiReviewButton.dataset.mrrSpaceId, aiReviewButton).catch(() => {});
@@ -4033,6 +4523,12 @@
                     if (mergeRetireLauncher && mergeRetireLauncher instanceof HTMLElement) {
                         event.preventDefault();
                         openMergeRetireModal(mergeRetireLauncher);
+                        return;
+                    }
+
+                    if (confirmFreeLauncher && confirmFreeLauncher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openConfirmFreeModal(confirmFreeLauncher);
                         return;
                     }
 
@@ -4068,10 +4564,11 @@
 
                 window.addEventListener('keydown', (event) => {
                     const quickOpen = quickReviewModal?.classList.contains('is-open');
+                    const confirmFreeOpen = confirmFreeModal?.classList.contains('is-open');
                     const contractTenantSwitchOpen = contractTenantSwitchModal?.classList.contains('is-open');
                     const identityOpen = identityFixModal?.classList.contains('is-open');
                     const mergeRetireOpen = mergeRetireModal?.classList.contains('is-open');
-                    if (!modal.classList.contains('is-open') && !quickOpen && !contractTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
+                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !contractTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
                         return;
                     }
 
@@ -4088,6 +4585,9 @@
                         }
                         if (quickOpen) {
                             closeQuickReviewModal();
+                        }
+                        if (confirmFreeOpen) {
+                            closeConfirmFreeModal();
                         }
                         if (modal.classList.contains('is-open')) {
                             closeModal();
@@ -4113,6 +4613,31 @@
                                 quickReviewSave.removeAttribute('disabled');
                                 quickReviewSave.textContent = 'Сохранить';
                                 quickReviewError.textContent = String(errorInstance?.message || errorInstance);
+                            });
+                        }
+                    });
+                }
+
+                if (confirmFreeModal && confirmFreeSave && confirmFreeReason) {
+                    confirmFreeModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-confirm-free-close')) {
+                            event.preventDefault();
+                            closeConfirmFreeModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-confirm-free-save')) {
+                            event.preventDefault();
+                            sendConfirmFree().catch((errorInstance) => {
+                                confirmFreeSave.removeAttribute('disabled');
+                                confirmFreeSave.textContent = 'Подтвердить свободно';
+                                if (confirmFreeError) {
+                                    confirmFreeError.textContent = String(errorInstance?.message || errorInstance);
+                                }
                             });
                         }
                     });
