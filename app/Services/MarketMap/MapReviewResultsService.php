@@ -359,8 +359,8 @@ class MapReviewResultsService
                     Schema::hasColumn('market_spaces', 'is_active'),
                     fn ($query) => $query->where('is_active', true)
                 )
-                ->orderByRaw('COALESCE(number, display_name, code) asc')
-                ->get(['id', 'tenant_id', 'number', 'display_name', 'code'])
+            ->orderByRaw('COALESCE(number, display_name, code) asc')
+            ->get(['id', 'tenant_id', 'number', 'display_name', 'code'])
             : collect();
 
         $candidateIds = $candidateSpaces->pluck('id')
@@ -372,7 +372,12 @@ class MapReviewResultsService
         $candidateCounts = $this->relationCountsForSpaces($candidateIds);
         $candidatesByTenant = $candidateSpaces->groupBy(fn (MarketSpace $space): int => (int) $space->tenant_id);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides): array {
+        $allDiagnosticSpaceIds = array_unique(array_merge($spaceIds, $candidateIds));
+
+        $contractDetails = $this->contractDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
+        $accrualDetails = $this->accrualDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
+
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides, $contractDetails, $accrualDetails): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
@@ -384,7 +389,7 @@ class MapReviewResultsService
                 ? $candidatesByTenant->get($tenantId, collect())
                     ->reject(fn (MarketSpace $candidate): bool => (int) $candidate->id === $spaceId)
                     ->take(5)
-                    ->map(function (MarketSpace $candidate) use ($candidateCounts, $currentScore): array {
+                    ->map(function (MarketSpace $candidate) use ($candidateCounts, $currentScore, $contractDetails, $accrualDetails): array {
                         $candidateId = (int) $candidate->id;
                         $counts = $candidateCounts[$candidateId] ?? [];
                         $candidateScore = $this->relationStrengthScore($counts);
@@ -396,6 +401,8 @@ class MapReviewResultsService
                             'has_map' => (int) ($counts['map_shapes'] ?? 0) > 0,
                             'relation_score' => $candidateScore,
                             'is_stronger_than_current' => $candidateScore > $currentScore,
+                            'contract_details' => $contractDetails[$candidateId] ?? [],
+                            'accrual_details' => $accrualDetails[$candidateId] ?? [],
                         ];
                     })->values()->all()
                 : [];
@@ -413,6 +420,8 @@ class MapReviewResultsService
                     'has_stronger_candidate' => $hasStrongerCandidate,
                     'current_place_confirmed_by_contract' => $contractOverride !== null,
                     'contract_override' => $contractOverride,
+                    'contract_details' => $contractDetails[$spaceId] ?? [],
+                    'accrual_details' => $accrualDetails[$spaceId] ?? [],
                 ],
             ];
         })->all();
@@ -663,6 +672,8 @@ class MapReviewResultsService
             'has_stronger_candidate' => false,
             'current_place_confirmed_by_contract' => false,
             'contract_override' => null,
+            'contract_details' => [],
+            'accrual_details' => [],
         ];
     }
 
@@ -1076,5 +1087,126 @@ class MapReviewResultsService
         }
 
         return $parts !== [] ? implode(' · ', $parts) : 'Уточнены номер и/или название';
+    }
+
+    /**
+     * @param  array<int> $spaceIds
+     * @param  int $marketId
+     * @return array<int, array<array<string, mixed>>>
+     */
+    private function contractDetailsForSpaces(array $spaceIds, int $marketId): array
+    {
+        if (empty($spaceIds) || !Schema::hasTable('tenant_contracts') || !Schema::hasColumn('tenant_contracts', 'market_space_id')) {
+            return [];
+        }
+
+        $query = DB::table('tenant_contracts as tc')
+            ->select([
+                'tc.id',
+                'tc.number',
+                't.name as tenant_name',
+                'tc.status',
+                'tc.starts_at',
+                'tc.ends_at',
+                'tc.market_space_id',
+            ])
+            ->leftJoin('tenants as t', function ($join) use ($marketId) {
+                $join->on('t.id', '=', 'tc.tenant_id')
+                    ->on('t.market_id', '=', DB::raw($marketId));
+            })
+            ->where('tc.market_id', $marketId)
+            ->whereIn('tc.market_space_id', $spaceIds)
+            ->orderBy('tc.market_space_id')
+            ->orderByDesc('tc.starts_at')
+            ->orderByDesc('tc.id')
+            ->limit(100);
+
+        $results = $query->get();
+
+        $contractsBySpace = [];
+        foreach ($results as $row) {
+            $spaceId = $row->market_space_id;
+            if (!isset($contractsBySpace[$spaceId])) {
+                $contractsBySpace[$spaceId] = [];
+            }
+            if (count($contractsBySpace[$spaceId]) < 10) {
+                $contractsBySpace[$spaceId][] = [
+                    'id' => $row->id,
+                    'number' => $row->number,
+                    'tenant_name' => $row->tenant_name,
+                    'status' => $row->status,
+                    'starts_at' => $row->starts_at ? (new \DateTime($row->starts_at))->format('d.m.Y') : null,
+                    'ends_at' => $row->ends_at ? (new \DateTime($row->ends_at))->format('d.m.Y') : null,
+                ];
+            }
+        }
+
+        return $contractsBySpace;
+    }
+
+    /**
+     * @param  array<int> $spaceIds
+     * @param  int $marketId
+     * @return array<int, array<array<string, mixed>>>
+     */
+    private function accrualDetailsForSpaces(array $spaceIds, int $marketId): array
+    {
+        if (empty($spaceIds) || !Schema::hasTable('tenant_accruals') || !Schema::hasColumn('tenant_accruals', 'market_space_id')) {
+            return [];
+        }
+
+        $query = DB::table('tenant_accruals as ta')
+            ->select([
+                'ta.id',
+                'ta.period',
+                't.name as tenant_name',
+                'ta.total_with_vat',
+                'ta.cash_amount',
+                'ta.source_row_hash',
+                'ta.tenant_contract_id',
+                'tc.number as contract_number',
+                'tc.market_space_id as contract_market_space_id',
+                'ta.market_space_id',
+            ])
+            ->leftJoin('tenants as t', function ($join) use ($marketId) {
+                $join->on('t.id', '=', 'ta.tenant_id')
+                    ->on('t.market_id', '=', DB::raw($marketId));
+            })
+            ->leftJoin('tenant_contracts as tc', function ($join) use ($marketId) {
+                $join->on('tc.id', '=', 'ta.tenant_contract_id')
+                    ->on('tc.market_id', '=', DB::raw($marketId));
+            })
+            ->where('ta.market_id', $marketId)
+            ->whereIn('ta.market_space_id', $spaceIds)
+            ->orderBy('ta.market_space_id')
+            ->orderByDesc('ta.period')
+            ->orderByDesc('ta.id')
+            ->limit(100);
+
+        $results = $query->get();
+
+        $accrualsBySpace = [];
+        foreach ($results as $row) {
+            $spaceId = $row->market_space_id;
+            if (!isset($accrualsBySpace[$spaceId])) {
+                $accrualsBySpace[$spaceId] = [];
+            }
+            if (count($accrualsBySpace[$spaceId]) < 10) {
+                $accrualsBySpace[$spaceId][] = [
+                    'id' => $row->id,
+                    'period' => $row->period ? (new \DateTime($row->period))->format('m.Y') : null,
+                    'tenant_name' => $row->tenant_name,
+                    'total_with_vat' => $row->total_with_vat,
+                    'cash_amount' => $row->cash_amount,
+                    'source' => $row->source_row_hash ? 'Импорт' : 'Ручной',
+                    'tenant_contract_id' => $row->tenant_contract_id,
+                    'contract_number' => $row->contract_number,
+                    'contract_market_space_id' => $row->contract_market_space_id,
+                    'contract_space_mismatch' => $row->market_space_id != $row->contract_market_space_id,
+                ];
+            }
+        }
+
+        return $accrualsBySpace;
     }
 }

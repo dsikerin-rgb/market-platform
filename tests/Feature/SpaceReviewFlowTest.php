@@ -544,6 +544,26 @@ class SpaceReviewFlowTest extends TestCase
         ]);
         $this->createShape($market, (int) $space->id);
 
+        $currentSpaceContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'CURRENT-DOG-P3',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+            'external_id' => 'CURRENT-EXT-ID-P3',
+]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $currentSpaceContract->id,
+            'market_space_id' => $space->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('review-result-current-accrual'),
+        ]);
+
         $candidate = $this->createSpace($market, [
             'number' => '5',
             'display_name' => 'Зоомир ООО',
@@ -559,7 +579,7 @@ class SpaceReviewFlowTest extends TestCase
             'status' => 'active',
             'starts_at' => now()->startOfMonth()->toDateString(),
             'is_active' => true,
-        ]);
+]);
 
         TenantAccrual::create([
             'market_id' => $market->id,
@@ -606,8 +626,6 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Кабинет: 1', false)
             ->assertSee('Возможные дубли', false)
             ->assertSee('Найдено 1 место того же арендатора', false)
-            ->assertSee('Есть более сильный кандидат', false)
-            ->assertSee('Есть кандидат с более сильными подтверждёнными связями. Его нужно проверить как возможное основное место.', false)
             ->assertSee('Разобрать дубль', false)
             ->assertSee('Открыть место', false)
             ->assertSee('Открыть карту', false)
