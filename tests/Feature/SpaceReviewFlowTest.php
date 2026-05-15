@@ -608,7 +608,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Найдено 1 место того же арендатора', false)
             ->assertSee('Есть более сильный кандидат', false)
             ->assertSee('Есть кандидат с более сильными подтверждёнными связями. Его нужно проверить как возможное основное место.', false)
-            ->assertSee('Сравнить #' . $candidate->id, false)
+            ->assertSee('Разобрать дубль', false)
             ->assertSee('Открыть место', false)
             ->assertSee('Открыть карту', false)
             ->assertSee('data-mrr-duplicate-plan="open"', false)
@@ -690,7 +690,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Текущее место не слабее', false)
             ->assertSee('Текущее место не слабее кандидатов по подтверждённым связям. Не выбирайте кандидата основным без дополнительной проверки.', false)
             ->assertSee('Возможные дубли', false)
-            ->assertSee('Сравнить #' . $candidate->id, false)
+            ->assertSee('Разобрать дубль', false)
             ->assertSee('Начисления: 2', false);
     }
 

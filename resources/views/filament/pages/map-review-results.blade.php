@@ -2869,28 +2869,7 @@
                                                                 <div class="mrr-diagnostics__compare">
                                                                     <div class="mrr-diagnostics__compare-title">Возможные дубли</div>
                                                                     <div class="mrr-diagnostics__compare-copy">
-                                                                        Найдено {{ count($candidateSpaces) }} {{ count($candidateSpaces) === 1 ? 'место' : 'места' }} того же арендатора. Сравните карточки и выберите, какая останется основной.
-                                                                    </div>
-                                                                    <div class="mrr-diagnostics__compare-actions">
-                                                                        @foreach ($candidateSpaces as $candidate)
-                                                                            <button
-                                                                                type="button"
-                                                                                class="mrr-link mrr-link--button"
-                                                                                data-mrr-duplicate-plan="open"
-                                                                                data-current-space-id="{{ $row['space_id'] }}"
-                                                                                data-current-label="{{ $currentSpaceLabel }}"
-                                                                                data-current-space-url="{{ $row['space_url'] }}"
-                                                                                data-current-map-url="{{ $row['map_url'] }}"
-                                                                                data-current-counts='@json($relationCounts)'
-                                                                                data-candidate-space-id="{{ $candidate['space_id'] }}"
-                                                                                data-candidate-label="{{ $candidate['label'] }}"
-                                                                                data-candidate-space-url="{{ $candidate['space_url'] }}"
-                                                                                data-candidate-map-url="{{ $candidate['map_url'] }}"
-                                                                                data-candidate-counts='@json($candidate['relation_counts'] ?? [])'
-                                                                            >
-                                                                                Сравнить #{{ $candidate['space_id'] }}
-                                                                            </button>
-                                                                        @endforeach
+                                                                        Найдено {{ count($candidateSpaces) }} {{ count($candidateSpaces) === 1 ? 'место' : 'места' }} того же арендатора. Для выбора основного места используйте действие «Разобрать дубль» в блоке исправлений.
                                                                     </div>
                                                                 </div>
                                                             @elseif ($hasRelationDetails)
