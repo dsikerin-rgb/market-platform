@@ -393,6 +393,7 @@ class MapReviewResultsService
                             'space_id' => $candidateId,
                             'label' => $this->spaceLabel($candidate),
                             'relation_counts' => $this->compactRelationCounts($counts),
+                            'has_map' => (int) ($counts['map_shapes'] ?? 0) > 0,
                             'relation_score' => $candidateScore,
                             'is_stronger_than_current' => $candidateScore > $currentScore,
                         ];

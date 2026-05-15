@@ -350,18 +350,43 @@ class SpaceReviewFlowTest extends TestCase
 
         $this->get(MapReviewResults::getUrl(['tab' => 'review']))
             ->assertOk()
-            ->assertSee('Зафиксировать итог', false)
+            ->assertSee('Закрыть без изменений', false)
+            ->assertSee('Комментарий к закрытию', false)
+            ->assertSee('Карточка будет закрыта как проверенная, без изменения статуса, арендатора, карты и связей.', false)
+            ->assertDontSee('Зафиксировать итог', false)
+            ->assertDontSee('data-mrr-quick-review-choice="mark_space_free"', false);
+    }
+
+    public function test_review_results_page_shows_confirm_free_as_separate_action_for_free_conflicts(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'FREE-101',
+            'display_name' => 'Free review candidate',
+            'status' => 'occupied',
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+            'market_space_id' => $space->id,
+            'reason' => 'Место свободно после проверки',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('item.review_status', 'conflict');
+
+        $this->get(MapReviewResults::getUrl(['tab' => 'review']))
+            ->assertOk()
+            ->assertSee('data-mrr-confirm-free-open', false)
             ->assertSee('Подтвердить свободно', false)
-            ->assertSee('data-mrr-quick-review-choice="mark_space_free"', false)
-            ->assertSee('Запишите результат проверки. Часть вариантов только закрывает наблюдение, а подтверждение свободного места меняет статус места.', false)
-            ->assertSee('Что значит «Подтвердить свободно»', false)
-            ->assertSee('Место будет окончательно зафиксировано как свободное. Статус места изменится на свободное, локальная текущая привязка будет закрыта, а договорные и финансовые хвосты не будут изменены автоматически.', false)
-            ->assertSee('Совпало', false)
-            ->assertSee('Конфликт по занятости', false)
-            ->assertSee('Фигура не найдена на карте', false)
-            ->assertSee('Уточнить', false)
-            ->assertSee('Что значит «Уточнить»', false)
-            ->assertSee('Это ручное решение для случаев, когда номер, название или другая идентичность места требуют дополнительной проверки. Данные места не меняются, а в истории ревизии фиксируется сам факт, что нужен отдельный разбор.', false);
+            ->assertSee('Статус места изменится на свободное.', false)
+            ->assertDontSee('data-mrr-quick-review-choice="mark_space_free"', false);
     }
 
     public function test_review_decision_endpoint_supports_quick_observed_reasoned_decisions(): void
@@ -579,19 +604,18 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Связи текущего места', false)
             ->assertSee('Карта: 1', false)
             ->assertSee('Кабинет: 1', false)
-            ->assertSee('Возможные дубли / места того же арендатора', false)
+            ->assertSee('Возможные дубли', false)
+            ->assertSee('Найдено 1 место того же арендатора', false)
             ->assertSee('Есть более сильный кандидат', false)
             ->assertSee('Есть кандидат с более сильными подтверждёнными связями. Его нужно проверить как возможное основное место.', false)
-            ->assertSee('#' . $candidate->id . ' · 5 / Зоомир ООО', false)
-            ->assertSee('Договоры: 1', false)
-            ->assertSee('Начисления: 1', false)
+            ->assertSee('Сравнить #' . $candidate->id, false)
             ->assertSee('Открыть место', false)
             ->assertSee('Открыть карту', false)
-            ->assertSee('Проверить как основное', false)
+            ->assertSee('data-mrr-duplicate-plan="open"', false)
             ->assertSee('data-mrr-duplicate-plan-create', false)
             ->assertSee('mrrDuplicatePlanModal', false)
             ->assertSee('План безопасного разбора', false)
-            ->assertSee('Выбрать кандидата основным', false)
+            ->assertSee('Оставить основным', false)
             ->assertSee('Договоры, начисления и долги не переносятся', false);
     }
 
@@ -665,9 +689,9 @@ class SpaceReviewFlowTest extends TestCase
         Livewire::test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Текущее место не слабее', false)
             ->assertSee('Текущее место не слабее кандидатов по подтверждённым связям. Не выбирайте кандидата основным без дополнительной проверки.', false)
-            ->assertSee('#' . $candidate->id . ' · П3/2/склад / Электрооборудование', false)
-            ->assertSee('Начисления: 2', false)
-            ->assertSee('Начисления: 1', false);
+            ->assertSee('Возможные дубли', false)
+            ->assertSee('Сравнить #' . $candidate->id, false)
+            ->assertSee('Начисления: 2', false);
     }
 
     public function test_map_review_results_has_separate_tab_for_unconfirmed_space_links(): void
@@ -1508,6 +1532,7 @@ class SpaceReviewFlowTest extends TestCase
         $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
             'decision' => 'matched',
             'market_space_id' => $space->id,
+            'reason' => 'Checked manually, no data change needed',
         ]);
 
         $response->assertOk()
@@ -1533,6 +1558,8 @@ class SpaceReviewFlowTest extends TestCase
 
         $this->assertNotNull($operation);
         $this->assertSame('matched', $operation->payload['decision'] ?? null);
+        $this->assertSame('Checked manually, no data change needed', $operation->payload['reason'] ?? null);
+        $this->assertSame('Checked manually, no data change needed', $operation->comment);
     }
 
     public function test_review_decision_endpoint_applies_mark_space_free_and_shows_it_in_applied_changes(): void

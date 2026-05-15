@@ -2851,6 +2851,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $operationEffectiveAt = $now;
 
         if ($decision === 'matched') {
+            $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
+            $payload = [
+                'market_space_id' => (int) $space->id,
+                'decision' => 'matched',
+            ];
+
+            if ($reason !== '') {
+                $payload['reason'] = $reason;
+            }
+
             DB::transaction(static fn (): Operation => Operation::query()->create([
                 'market_id' => (int) $market->id,
                 'entity_type' => 'market_space',
@@ -2858,10 +2868,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'type' => OperationType::SPACE_REVIEW,
                 'effective_at' => $now,
                 'status' => 'observed',
-                'payload' => [
-                    'market_space_id' => (int) $space->id,
-                    'decision' => 'matched',
-                ],
+                'payload' => $payload,
+                'comment' => $reason !== '' ? $reason : null,
                 'created_by' => $userId,
             ]));
             $space->refresh();
