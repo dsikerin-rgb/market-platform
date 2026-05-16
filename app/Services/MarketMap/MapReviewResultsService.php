@@ -1096,26 +1096,41 @@ class MapReviewResultsService
      */
     private function contractDetailsForSpaces(array $spaceIds, int $marketId): array
     {
-        if (empty($spaceIds) || !Schema::hasTable('tenant_contracts') || !Schema::hasColumn('tenant_contracts', 'market_space_id')) {
+        if (empty($spaceIds) || ! Schema::hasTable('tenant_contracts') || ! Schema::hasColumn('tenant_contracts', 'market_space_id')) {
             return [];
         }
 
+        // Build select list dynamically to avoid selecting missing columns on different schemas.
+        $select = ['tc.id as id', 'tc.market_space_id as market_space_id'];
+
+        if (Schema::hasColumn('tenant_contracts', 'number')) {
+            $select[] = 'tc.number as number';
+        }
+
+        if (Schema::hasTable('tenants') && Schema::hasColumn('tenants', 'name')) {
+            $select[] = 't.name as tenant_name';
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $select[] = 'tc.status as status';
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
+            $select[] = 'tc.starts_at as starts_at';
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+            $select[] = 'tc.ends_at as ends_at';
+        }
+
         $query = DB::table('tenant_contracts as tc')
-            ->select([
-                'tc.id',
-                'tc.number',
-                't.name as tenant_name',
-                'tc.status',
-                'tc.starts_at',
-                'tc.ends_at',
-                'tc.market_space_id',
-            ])
-            ->leftJoin('tenants as t', function ($join) {
+            ->select($select)
+            ->leftJoin('tenants as t', function ($join): void {
                 $join->on('t.id', '=', 'tc.tenant_id');
             })
             ->whereIn('tc.market_space_id', $spaceIds)
             ->orderBy('tc.market_space_id')
-            ->orderByDesc('tc.starts_at')
+            ->orderByDesc(Schema::hasColumn('tenant_contracts', 'starts_at') ? 'tc.starts_at' : 'tc.id')
             ->orderByDesc('tc.id')
             ->limit(100);
 
@@ -1123,20 +1138,45 @@ class MapReviewResultsService
 
         $contractsBySpace = [];
         foreach ($results as $row) {
-            $spaceId = $row->market_space_id;
-            if (!isset($contractsBySpace[$spaceId])) {
+            $spaceId = (int) ($row->market_space_id ?? 0);
+            if ($spaceId <= 0) {
+                continue;
+            }
+
+            if (! isset($contractsBySpace[$spaceId])) {
                 $contractsBySpace[$spaceId] = [];
             }
-            if (count($contractsBySpace[$spaceId]) < 10) {
-                $contractsBySpace[$spaceId][] = [
-                    'id' => $row->id,
-                    'number' => $row->number,
-                    'tenant_name' => $row->tenant_name,
-                    'status' => $row->status,
-                    'starts_at' => $row->starts_at ? (new \DateTime($row->starts_at))->format('d.m.Y') : null,
-                    'ends_at' => $row->ends_at ? (new \DateTime($row->ends_at))->format('d.m.Y') : null,
-                ];
+
+            if (count($contractsBySpace[$spaceId]) >= 10) {
+                continue;
             }
+
+            $startsAt = null;
+            if (isset($row->starts_at) && $row->starts_at) {
+                try {
+                    $startsAt = (new \DateTime((string) $row->starts_at))->format('d.m.Y');
+                } catch (\Throwable) {
+                    $startsAt = (string) $row->starts_at;
+                }
+            }
+
+            $endsAt = null;
+            if (isset($row->ends_at) && $row->ends_at) {
+                try {
+                    $endsAt = (new \DateTime((string) $row->ends_at))->format('d.m.Y');
+                } catch (\Throwable) {
+                    $endsAt = (string) $row->ends_at;
+                }
+            }
+
+            $contractsBySpace[$spaceId][] = [
+                'id' => isset($row->id) ? (int) $row->id : null,
+                'number' => isset($row->number) ? (string) $row->number : null,
+                'tenant_name' => isset($row->tenant_name) ? (string) $row->tenant_name : null,
+                'status' => isset($row->status) ? (string) $row->status : null,
+                'starts_at' => $startsAt,
+                'ends_at' => $endsAt,
+            ];
         }
 
         return $contractsBySpace;
@@ -1149,32 +1189,60 @@ class MapReviewResultsService
      */
     private function accrualDetailsForSpaces(array $spaceIds, int $marketId): array
     {
-        if (empty($spaceIds) || !Schema::hasTable('tenant_accruals') || !Schema::hasColumn('tenant_accruals', 'market_space_id')) {
+        if (empty($spaceIds) || ! Schema::hasTable('tenant_accruals') || ! Schema::hasColumn('tenant_accruals', 'market_space_id')) {
             return [];
         }
 
+        $select = ['ta.id as id', 'ta.market_space_id as market_space_id'];
+
+        if (Schema::hasColumn('tenant_accruals', 'period')) {
+            $select[] = 'ta.period as period';
+        }
+
+        if (Schema::hasTable('tenants') && Schema::hasColumn('tenants', 'name')) {
+            $select[] = 't.name as tenant_name';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'total_with_vat')) {
+            $select[] = 'ta.total_with_vat as total_with_vat';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'cash_amount')) {
+            $select[] = 'ta.cash_amount as cash_amount';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'source_row_hash')) {
+            $select[] = 'ta.source_row_hash as source_row_hash';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'tenant_contract_id')) {
+            $select[] = 'ta.tenant_contract_id as tenant_contract_id';
+        }
+
+        // Include contract fields if tenant_contracts exists
+        if (Schema::hasTable('tenant_contracts') && Schema::hasColumn('tenant_contracts', 'number')) {
+            $select[] = 'tc.number as contract_number';
+        }
+
+        if (Schema::hasTable('tenant_contracts') && Schema::hasColumn('tenant_contracts', 'market_space_id')) {
+            $select[] = 'tc.market_space_id as contract_market_space_id';
+        }
+
         $query = DB::table('tenant_accruals as ta')
-            ->select([
-                'ta.id',
-                'ta.period',
-                't.name as tenant_name',
-                'ta.total_with_vat',
-                'ta.cash_amount',
-                'ta.source_row_hash',
-                'ta.tenant_contract_id',
-                'tc.number as contract_number',
-                'tc.market_space_id as contract_market_space_id',
-                'ta.market_space_id',
-            ])
-            ->leftJoin('tenants as t', function ($join) {
+            ->select($select)
+            ->leftJoin('tenants as t', function ($join): void {
                 $join->on('t.id', '=', 'ta.tenant_id');
-            })
-            ->leftJoin('tenant_contracts as tc', function ($join) {
+            });
+
+        if (Schema::hasTable('tenant_contracts')) {
+            $query->leftJoin('tenant_contracts as tc', function ($join): void {
                 $join->on('tc.id', '=', 'ta.tenant_contract_id');
-            })
-            ->whereIn('ta.market_space_id', $spaceIds)
+            });
+        }
+
+        $query->whereIn('ta.market_space_id', $spaceIds)
             ->orderBy('ta.market_space_id')
-            ->orderByDesc('ta.period')
+            ->orderByDesc(Schema::hasColumn('tenant_accruals', 'period') ? 'ta.period' : 'ta.id')
             ->orderByDesc('ta.id')
             ->limit(100);
 
@@ -1182,24 +1250,49 @@ class MapReviewResultsService
 
         $accrualsBySpace = [];
         foreach ($results as $row) {
-            $spaceId = $row->market_space_id;
-            if (!isset($accrualsBySpace[$spaceId])) {
+            $spaceId = (int) ($row->market_space_id ?? 0);
+            if ($spaceId <= 0) {
+                continue;
+            }
+
+            if (! isset($accrualsBySpace[$spaceId])) {
                 $accrualsBySpace[$spaceId] = [];
             }
-            if (count($accrualsBySpace[$spaceId]) < 10) {
-                $accrualsBySpace[$spaceId][] = [
-                    'id' => $row->id,
-                    'period' => $row->period ? (new \DateTime($row->period))->format('m.Y') : null,
-                    'tenant_name' => $row->tenant_name,
-                    'total_with_vat' => $row->total_with_vat,
-                    'cash_amount' => $row->cash_amount,
-                    'source' => $row->source_row_hash ? 'Импорт' : 'Ручной',
-                    'tenant_contract_id' => $row->tenant_contract_id,
-                    'contract_number' => $row->contract_number,
-                    'contract_market_space_id' => $row->contract_market_space_id,
-                    'contract_space_mismatch' => $row->market_space_id != $row->contract_market_space_id,
-                ];
+
+            if (count($accrualsBySpace[$spaceId]) >= 10) {
+                continue;
             }
+
+            $period = null;
+            if (isset($row->period) && $row->period) {
+                try {
+                    $period = (new \DateTime((string) $row->period))->format('m.Y');
+                } catch (\Throwable) {
+                    $period = (string) $row->period;
+                }
+            }
+
+            $source = null;
+            if (isset($row->source_row_hash) && $row->source_row_hash) {
+                $source = 'Импорт';
+            } elseif (isset($row->source_row_hash)) {
+                $source = 'Ручной';
+            }
+
+            $contractMarketSpaceId = isset($row->contract_market_space_id) ? $row->contract_market_space_id : null;
+
+            $accrualsBySpace[$spaceId][] = [
+                'id' => isset($row->id) ? (int) $row->id : null,
+                'period' => $period,
+                'tenant_name' => isset($row->tenant_name) ? (string) $row->tenant_name : null,
+                'total_with_vat' => isset($row->total_with_vat) ? $row->total_with_vat : null,
+                'cash_amount' => isset($row->cash_amount) ? $row->cash_amount : null,
+                'source' => $source,
+                'tenant_contract_id' => isset($row->tenant_contract_id) ? (int) $row->tenant_contract_id : null,
+                'contract_number' => isset($row->contract_number) ? (string) $row->contract_number : null,
+                'contract_market_space_id' => $contractMarketSpaceId,
+                'contract_space_mismatch' => isset($row->market_space_id, $contractMarketSpaceId) ? ($row->market_space_id != $contractMarketSpaceId) : null,
+            ];
         }
 
         return $accrualsBySpace;

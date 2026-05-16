@@ -634,7 +634,10 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('mrrDuplicatePlanModal', false)
             ->assertSee('План безопасного разбора', false)
             ->assertSee('Оставить основным', false)
-            ->assertSee('Договоры, начисления и долги не переносятся', false);
+            ->assertSee('Договоры, начисления и долги не переносятся', false)
+            ->assertSee('CURRENT-DOG-P3', false)
+            ->assertSee('DOG-5', false)
+            ->assertSee(now()->startOfMonth()->format('m.Y'), false);
     }
 
     public function test_map_review_results_warns_when_current_space_is_not_weaker_than_candidate(): void
