@@ -1110,11 +1110,9 @@ class MapReviewResultsService
                 'tc.ends_at',
                 'tc.market_space_id',
             ])
-            ->leftJoin('tenants as t', function ($join) use ($marketId) {
-                $join->on('t.id', '=', 'tc.tenant_id')
-                    ->on('t.market_id', '=', DB::raw($marketId));
+            ->leftJoin('tenants as t', function ($join) {
+                $join->on('t.id', '=', 'tc.tenant_id');
             })
-            ->where('tc.market_id', $marketId)
             ->whereIn('tc.market_space_id', $spaceIds)
             ->orderBy('tc.market_space_id')
             ->orderByDesc('tc.starts_at')
@@ -1168,15 +1166,12 @@ class MapReviewResultsService
                 'tc.market_space_id as contract_market_space_id',
                 'ta.market_space_id',
             ])
-            ->leftJoin('tenants as t', function ($join) use ($marketId) {
-                $join->on('t.id', '=', 'ta.tenant_id')
-                    ->on('t.market_id', '=', DB::raw($marketId));
+            ->leftJoin('tenants as t', function ($join) {
+                $join->on('t.id', '=', 'ta.tenant_id');
             })
-            ->leftJoin('tenant_contracts as tc', function ($join) use ($marketId) {
-                $join->on('tc.id', '=', 'ta.tenant_contract_id')
-                    ->on('tc.market_id', '=', DB::raw($marketId));
+            ->leftJoin('tenant_contracts as tc', function ($join) {
+                $join->on('tc.id', '=', 'ta.tenant_contract_id');
             })
-            ->where('ta.market_id', $marketId)
             ->whereIn('ta.market_space_id', $spaceIds)
             ->orderBy('ta.market_space_id')
             ->orderByDesc('ta.period')
