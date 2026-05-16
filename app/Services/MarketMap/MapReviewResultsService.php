@@ -1131,8 +1131,7 @@ class MapReviewResultsService
             ->whereIn('tc.market_space_id', $spaceIds)
             ->orderBy('tc.market_space_id')
             ->orderByDesc(Schema::hasColumn('tenant_contracts', 'starts_at') ? 'tc.starts_at' : 'tc.id')
-            ->orderByDesc('tc.id')
-            ->limit(100);
+            ->orderByDesc('tc.id');
 
         $results = $query->get();
 
@@ -1243,8 +1242,7 @@ class MapReviewResultsService
         $query->whereIn('ta.market_space_id', $spaceIds)
             ->orderBy('ta.market_space_id')
             ->orderByDesc(Schema::hasColumn('tenant_accruals', 'period') ? 'ta.period' : 'ta.id')
-            ->orderByDesc('ta.id')
-            ->limit(100);
+            ->orderByDesc('ta.id');
 
         $results = $query->get();
 
