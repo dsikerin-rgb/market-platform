@@ -1527,6 +1527,94 @@
                 margin-top: 0.65rem;
             }
 
+            .mrr-duplicate-plan__details {
+                margin-top: 0.65rem;
+                border-radius: 0.8rem;
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                background: rgba(255, 255, 255, 0.72);
+                overflow: hidden;
+            }
+
+            .dark .mrr-duplicate-plan__details {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.38);
+            }
+
+            .mrr-duplicate-plan__details-summary {
+                cursor: pointer;
+                padding: 0.5rem 0.65rem;
+                font-size: 0.78rem;
+                font-weight: 800;
+                color: #1d4ed8;
+                list-style: none;
+            }
+
+            .mrr-duplicate-plan__details-summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .dark .mrr-duplicate-plan__details-summary {
+                color: #bfdbfe;
+            }
+
+            .mrr-duplicate-plan__details-content {
+                display: flex;
+                flex-direction: column;
+                gap: 0.45rem;
+                padding: 0 0.65rem 0.65rem;
+            }
+
+            .mrr-duplicate-plan__details-empty,
+            .mrr-duplicate-plan__details-meta {
+                font-size: 0.76rem;
+                line-height: 1.4;
+                color: #64748b;
+            }
+
+            .dark .mrr-duplicate-plan__details-empty,
+            .dark .mrr-duplicate-plan__details-meta {
+                color: #94a3b8;
+            }
+
+            .mrr-duplicate-plan__details-item {
+                border-radius: 0.65rem;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                background: rgba(248, 250, 252, 0.82);
+                padding: 0.5rem 0.55rem;
+            }
+
+            .dark .mrr-duplicate-plan__details-item {
+                border-color: rgba(148, 163, 184, 0.14);
+                background: rgba(15, 23, 42, 0.5);
+            }
+
+            .mrr-duplicate-plan__details-title {
+                font-size: 0.78rem;
+                font-weight: 800;
+                color: #0f172a;
+            }
+
+            .dark .mrr-duplicate-plan__details-title {
+                color: #f8fafc;
+            }
+
+            .mrr-duplicate-plan__details-warning {
+                margin-top: 0.38rem;
+                border-radius: 0.55rem;
+                border: 1px solid rgba(245, 158, 11, 0.28);
+                background: rgba(245, 158, 11, 0.1);
+                padding: 0.38rem 0.45rem;
+                font-size: 0.74rem;
+                line-height: 1.35;
+                color: #92400e;
+            }
+
+            .dark .mrr-duplicate-plan__details-warning {
+                border-color: rgba(251, 191, 36, 0.28);
+                background: rgba(245, 158, 11, 0.14);
+                color: #fde68a;
+            }
+
             .mrr-duplicate-plan__links {
                 display: flex;
                 flex-wrap: wrap;
@@ -2541,6 +2629,10 @@
                                             $reviewStatus = (string) ($row['review_status'] ?? '');
                                             $hasCandidates = $candidateSpaces !== [];
                                             $primaryCandidate = $hasCandidates && is_array($candidateSpaces[0] ?? null) ? $candidateSpaces[0] : null;
+                                            $currentContractDetails = is_array($diagnostics['contract_details'] ?? null) ? $diagnostics['contract_details'] : [];
+                                            $currentAccrualDetails = is_array($diagnostics['accrual_details'] ?? null) ? $diagnostics['accrual_details'] : [];
+                                            $candidateContractDetails = is_array($primaryCandidate['contract_details'] ?? null) ? $primaryCandidate['contract_details'] : [];
+                                            $candidateAccrualDetails = is_array($primaryCandidate['accrual_details'] ?? null) ? $primaryCandidate['accrual_details'] : [];
                                             $hasDuplicateResolutionAction = $attentionTab !== 'unconfirmed_links' && $primaryCandidate !== null;
                                             $hasRelationDetails = $relationDetails !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
@@ -2794,6 +2886,10 @@
                                                                                 data-candidate-space-url="{{ $primaryCandidate['space_url'] }}"
                                                                                 data-candidate-map-url="{{ $primaryCandidate['map_url'] }}"
                                                                                 data-candidate-counts='@json($primaryCandidate['relation_counts'] ?? [])'
+                                                                                data-current-contracts='@json($currentContractDetails)'
+                                                                                data-current-accruals='@json($currentAccrualDetails)'
+                                                                                data-candidate-contracts='@json($candidateContractDetails)'
+                                                                                data-candidate-accruals='@json($candidateAccrualDetails)'
                                                                             >
                                                                                 Разобрать дубль
                                                                             </button>
@@ -3078,6 +3174,14 @@
                                 <div class="mrr-duplicate-plan__card-title">Место из ревизии</div>
                                 <div id="mrrDuplicatePlanCurrentTitle" class="mrr-duplicate-plan__space">—</div>
                                 <div id="mrrDuplicatePlanCurrentCounts" class="mrr-duplicate-plan__counts"></div>
+                                <details class="mrr-duplicate-plan__details">
+                                    <summary class="mrr-duplicate-plan__details-summary">Договоры</summary>
+                                    <div id="mrrDuplicatePlanCurrentContracts" class="mrr-duplicate-plan__details-content"></div>
+                                </details>
+                                <details class="mrr-duplicate-plan__details">
+                                    <summary class="mrr-duplicate-plan__details-summary">Начисления</summary>
+                                    <div id="mrrDuplicatePlanCurrentAccruals" class="mrr-duplicate-plan__details-content"></div>
+                                </details>
                                 <div class="mrr-duplicate-plan__picker">
                                     <button type="button" id="mrrDuplicatePlanCurrentPick" class="mrr-duplicate-plan__picker-button" data-mrr-duplicate-plan-select="current">Оставить основным</button>
                                 </div>
@@ -3091,6 +3195,14 @@
                                 <div class="mrr-duplicate-plan__card-title">Второе место того же арендатора</div>
                                 <div id="mrrDuplicatePlanCandidateTitle" class="mrr-duplicate-plan__space">—</div>
                                 <div id="mrrDuplicatePlanCandidateCounts" class="mrr-duplicate-plan__counts"></div>
+                                <details class="mrr-duplicate-plan__details">
+                                    <summary class="mrr-duplicate-plan__details-summary">Договоры</summary>
+                                    <div id="mrrDuplicatePlanCandidateContracts" class="mrr-duplicate-plan__details-content"></div>
+                                </details>
+                                <details class="mrr-duplicate-plan__details">
+                                    <summary class="mrr-duplicate-plan__details-summary">Начисления</summary>
+                                    <div id="mrrDuplicatePlanCandidateAccruals" class="mrr-duplicate-plan__details-content"></div>
+                                </details>
                                 <div class="mrr-duplicate-plan__picker">
                                     <button type="button" id="mrrDuplicatePlanCandidatePick" class="mrr-duplicate-plan__picker-button" data-mrr-duplicate-plan-select="candidate">Оставить основным</button>
                                 </div>
@@ -3362,6 +3474,10 @@
                 const candidateTitle = document.getElementById('mrrDuplicatePlanCandidateTitle');
                 const currentCounts = document.getElementById('mrrDuplicatePlanCurrentCounts');
                 const candidateCounts = document.getElementById('mrrDuplicatePlanCandidateCounts');
+                const currentContractsTarget = document.getElementById('mrrDuplicatePlanCurrentContracts');
+                const currentAccrualsTarget = document.getElementById('mrrDuplicatePlanCurrentAccruals');
+                const candidateContractsTarget = document.getElementById('mrrDuplicatePlanCandidateContracts');
+                const candidateAccrualsTarget = document.getElementById('mrrDuplicatePlanCandidateAccruals');
                 const currentPick = document.getElementById('mrrDuplicatePlanCurrentPick');
                 const candidatePick = document.getElementById('mrrDuplicatePlanCandidatePick');
                 const currentSpaceLink = document.getElementById('mrrDuplicatePlanCurrentSpaceLink');
@@ -3416,6 +3532,10 @@
                     || !candidateTitle
                     || !currentCounts
                     || !candidateCounts
+                    || !currentContractsTarget
+                    || !currentAccrualsTarget
+                    || !candidateContractsTarget
+                    || !candidateAccrualsTarget
                     || !currentPick
                     || !candidatePick
                     || !currentSpaceLink
@@ -3487,6 +3607,81 @@
                     .replaceAll('>', '&gt;')
                     .replaceAll('"', '&quot;')
                     .replaceAll("'", '&#039;');
+
+                const appendDetailLine = (target, value) => {
+                    const normalized = String(value ?? '').trim();
+
+                    if (!normalized) {
+                        return;
+                    }
+
+                    const line = document.createElement('div');
+                    line.className = 'mrr-duplicate-plan__details-meta';
+                    line.textContent = normalized;
+                    target.appendChild(line);
+                };
+
+                const renderDuplicatePlanDetailList = (target, items, type) => {
+                    target.replaceChildren();
+
+                    const rows = Array.isArray(items) ? items : [];
+
+                    if (rows.length === 0) {
+                        const empty = document.createElement('div');
+                        empty.className = 'mrr-duplicate-plan__details-empty';
+                        empty.textContent = 'Нет данных';
+                        target.appendChild(empty);
+                        return;
+                    }
+
+                    rows.forEach((item) => {
+                        const card = document.createElement('div');
+                        card.className = 'mrr-duplicate-plan__details-item';
+
+                        const title = document.createElement('div');
+                        title.className = 'mrr-duplicate-plan__details-title';
+
+                        if (type === 'contract') {
+                            title.textContent = item?.number
+                                ? `Договор ${item.number}`
+                                : `Договор #${item?.id || '—'}`;
+
+                            card.appendChild(title);
+                            appendDetailLine(card, item?.tenant_name ? `Арендатор: ${item.tenant_name}` : '');
+                            appendDetailLine(card, item?.status ? `Статус: ${item.status}` : '');
+                            appendDetailLine(card, item?.starts_at || item?.ends_at
+                                ? `Период: ${item?.starts_at || '—'} — ${item?.ends_at || '—'}`
+                                : '');
+                        } else {
+                            title.textContent = item?.period
+                                ? `Начисление за ${item.period}`
+                                : `Начисление #${item?.id || '—'}`;
+
+                            card.appendChild(title);
+                            appendDetailLine(card, item?.tenant_name ? `Арендатор: ${item.tenant_name}` : '');
+                            appendDetailLine(card, item?.total_with_vat !== null && item?.total_with_vat !== undefined ? `С НДС: ${item.total_with_vat}` : '');
+                            appendDetailLine(card, item?.cash_amount !== null && item?.cash_amount !== undefined ? `Наличные / без НДС: ${item.cash_amount}` : '');
+                            appendDetailLine(card, item?.source ? `Источник: ${item.source}` : '');
+                            appendDetailLine(card, item?.contract_number ? `Договор: ${item.contract_number}` : '');
+
+                            if (item?.contract_space_mismatch) {
+                                const warning = document.createElement('div');
+                                warning.className = 'mrr-duplicate-plan__details-warning';
+                                warning.textContent = 'Начисление связано с договором другого места. Перед разбором дубля проверьте, где должна остаться финансовая история.';
+                                card.appendChild(warning);
+                            }
+                        }
+
+                        target.appendChild(card);
+                    });
+                };
+
+                const renderDuplicatePlanDetails = (currentContracts, currentAccruals, candidateContracts, candidateAccruals) => {
+                    renderDuplicatePlanDetailList(currentContractsTarget, currentContracts, 'contract');
+                    renderDuplicatePlanDetailList(currentAccrualsTarget, currentAccruals, 'accrual');
+                    renderDuplicatePlanDetailList(candidateContractsTarget, candidateContracts, 'contract');
+                    renderDuplicatePlanDetailList(candidateAccrualsTarget, candidateAccruals, 'accrual');
+                };
 
                 const humanizeAiText = (value) => {
                     const text = String(value ?? '')
@@ -3699,6 +3894,10 @@
                     const candidateSpaceId = String(button.dataset.candidateSpaceId || '').trim();
                     const parsedCurrentCounts = parseJson(button.dataset.currentCounts, []);
                     const parsedCandidateCounts = parseJson(button.dataset.candidateCounts, []);
+                    const parsedCurrentContracts = parseJson(button.dataset.currentContracts, []);
+                    const parsedCurrentAccruals = parseJson(button.dataset.currentAccruals, []);
+                    const parsedCandidateContracts = parseJson(button.dataset.candidateContracts, []);
+                    const parsedCandidateAccruals = parseJson(button.dataset.candidateAccruals, []);
 
                     currentTitle.textContent = currentLabel
                         ? `#${currentSpaceId} · ${currentLabel}`
@@ -3723,6 +3922,12 @@
                     duplicatePlanState.currentLabel = currentLabel ? `#${currentSpaceId} · ${currentLabel}` : `#${currentSpaceId}`;
                     duplicatePlanState.candidateLabel = candidateLabel ? `#${candidateSpaceId} · ${candidateLabel}` : `#${candidateSpaceId}`;
                     updateDuplicatePlanSelection('candidate');
+                    renderDuplicatePlanDetails(
+                        parsedCurrentContracts,
+                        parsedCurrentAccruals,
+                        parsedCandidateContracts,
+                        parsedCandidateAccruals,
+                    );
 
                     modal.hidden = false;
                     modal.classList.add('is-open');
