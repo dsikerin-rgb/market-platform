@@ -2988,6 +2988,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'candidate_market_space_id' => $candidateSpaceId,
                 'transfer_counts' => $duplicateResolutionPreview['transfer_counts'] ?? [],
                 'blocking_counts' => $duplicateResolutionPreview['blocking_counts'] ?? [],
+                'classification' => $duplicateResolutionPreview['classification'] ?? null,
+                'accrual_classification' => $duplicateResolutionPreview['accrual_classification'] ?? null,
+                'retained_financial_tail' => $duplicateResolutionPreview['retained_financial_tail'] ?? null,
             ];
         }
 

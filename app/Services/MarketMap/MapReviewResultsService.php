@@ -1038,10 +1038,93 @@ class MapReviewResultsService
     {
         $transferCounts = data_get($payload, 'duplicate_resolution.transfer_counts', []);
         $blockingCounts = data_get($payload, 'duplicate_resolution.blocking_counts', []);
+        $classification = data_get($payload, 'duplicate_resolution.classification', null);
+        $retainedFinancialTail = data_get($payload, 'duplicate_resolution.retained_financial_tail', null);
         $candidateId = (int) ($payload['candidate_market_space_id']
             ?? data_get($payload, 'duplicate_resolution.candidate_market_space_id')
             ?? 0);
 
+        // Verdict для classification
+        if ($classification === 'duplicate_with_historical_financial_tail') {
+            $parts = [];
+
+            if ($candidateId > 0) {
+                $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#' . $candidateId);
+                $parts[] = 'Рекомендация: оставить #' . $candidateId . ' основным (' . $candidateLabel . ')';
+            }
+
+            if ($space) {
+                $parts[] = 'Дубль #'.(int) $space->id.' содержит исторический финансовый хвост';
+            }
+
+            if (is_array($retainedFinancialTail) && ($retainedFinancialTail['accruals_count'] ?? 0) > 0) {
+                $accrualsCount = (int) $retainedFinancialTail['accruals_count'];
+                $latestPeriod = $retainedFinancialTail['latest_period'] ?? null;
+                $periodText = $latestPeriod
+                    ? ' (последний период: ' . \Carbon\Carbon::parse($latestPeriod)->format('m.Y') . ')'
+                    : '';
+                $parts[] = $accrualsCount . ' несопоставленных начисл. останутся на дубле' . $periodText;
+            } else {
+                $parts[] = 'Начисления останутся на дубле как история';
+            }
+
+            if (is_array($transferCounts) && array_sum($transferCounts) > 0) {
+                $parts[] = 'Переносимые связи: карта ' . (int) ($transferCounts['map_shapes'] ?? 0)
+                    . ', кабинет ' . (int) ($transferCounts['cabinet_links'] ?? 0)
+                    . ', товары ' . (int) ($transferCounts['marketplace_products'] ?? 0);
+            } else {
+                $parts[] = 'Безопасные связи перенесены согласно плану разбора';
+            }
+
+            $parts[] = 'Договоры, начисления и долги не переносились';
+
+            return implode(' · ', $parts);
+        }
+
+        if ($classification === 'safe_duplicate_no_financials') {
+            $parts = [];
+
+            if ($candidateId > 0) {
+                $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#' . $candidateId);
+                $parts[] = 'Основное: #' . $candidateId . ' · ' . $candidateLabel;
+            }
+
+            if ($space) {
+                $parts[] = 'Дубль выведен из контура: #' . (int) $space->id . ' · ' . $this->spaceLabel($space);
+            }
+
+            if (is_array($transferCounts)) {
+                $parts[] = 'Перенесено: карта ' . (int) ($transferCounts['map_shapes'] ?? 0)
+                    . ', кабинет ' . (int) ($transferCounts['cabinet_links'] ?? 0)
+                    . ', товары ' . (int) ($transferCounts['marketplace_products'] ?? 0);
+            }
+
+            if (is_array($blockingCounts)) {
+                $parts[] = 'Блокирующие связи на дубле: договоры ' . (int) ($blockingCounts['contracts'] ?? 0)
+                    . ', начисления ' . (int) ($blockingCounts['accruals'] ?? 0);
+            }
+
+            $parts[] = 'Финансовых связей на дубле не найдено';
+            $parts[] = 'Безопасные связи перенесены';
+            $parts[] = 'Договоры, начисления и долги не переносились';
+
+            return implode(' · ', $parts);
+        }
+
+        // Blocking / ambiguous classifications
+        if ($classification === 'ambiguous_canonical_candidate') {
+            return 'Авторазбор невозможен: требуется ручная проверка (нет безопасных связей для переноса)';
+        }
+
+        if ($classification === 'duplicate_with_blocking_contracts') {
+            return 'Разбор заблокирован: дубль имеет активные договоры';
+        }
+
+        if ($classification === 'duplicate_with_blocking_accruals' || $classification === 'duplicate_fresh_accruals_conflict') {
+            return 'Разбор заблокирован: дубль имеет блокирующие начисления';
+        }
+
+        // Дефолтный текст (без classification или неизвестный)
         $parts = [];
 
         if ($candidateId > 0) {
