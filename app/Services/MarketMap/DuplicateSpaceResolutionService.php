@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 # app/Services/MarketMap/DuplicateSpaceResolutionService.php
 
 declare(strict_types=1);
@@ -13,17 +13,20 @@ use Illuminate\Validation\ValidationException;
 final class DuplicateSpaceResolutionService
 {
     /**
-     * @var list<array{table: string, column: string, label: string}>
+     * @var list<array{table: string, column: string, label: string, blocking: bool}>
      */
-    private const BLOCKING_LINKS = [
-        ['table' => 'tenant_contracts', 'column' => 'market_space_id', 'label' => 'contracts'],
-        ['table' => 'tenant_accruals', 'column' => 'market_space_id', 'label' => 'accruals'],
-        ['table' => 'market_space_tenant_bindings', 'column' => 'market_space_id', 'label' => 'tenant_bindings'],
-        ['table' => 'tenant_requests', 'column' => 'market_space_id', 'label' => 'requests'],
-        ['table' => 'tickets', 'column' => 'market_space_id', 'label' => 'tickets'],
-        ['table' => 'tenant_reviews', 'column' => 'market_space_id', 'label' => 'reviews'],
-        ['table' => 'tenant_space_showcases', 'column' => 'market_space_id', 'label' => 'showcases'],
-        ['table' => 'marketplace_chats', 'column' => 'market_space_id', 'label' => 'marketplace_chats'],
+    private const LINK_DEFINITIONS = [
+        // Р‘Р»РѕРєРёСЂСѓСЋС‰РёРµ СЃРІСЏР·Рё вЂ” С‚СЂРµР±СѓСЋС‚ СЂСѓС‡РЅРѕРіРѕ СЂР°Р·СЂРµС€РµРЅРёСЏ
+        ['table' => 'tenant_contracts', 'column' => 'market_space_id', 'label' => 'contracts', 'blocking' => true],
+        ['table' => 'market_space_tenant_bindings', 'column' => 'market_space_id', 'label' => 'tenant_bindings', 'blocking' => true],
+        ['table' => 'tenant_requests', 'column' => 'market_space_id', 'label' => 'requests', 'blocking' => true],
+        ['table' => 'tickets', 'column' => 'market_space_id', 'label' => 'tickets', 'blocking' => true],
+        ['table' => 'tenant_reviews', 'column' => 'market_space_id', 'label' => 'reviews', 'blocking' => true],
+        ['table' => 'tenant_space_showcases', 'column' => 'market_space_id', 'label' => 'showcases', 'blocking' => true],
+        ['table' => 'marketplace_chats', 'column' => 'market_space_id', 'label' => 'marketplace_chats', 'blocking' => true],
+
+        // РќР°С‡РёСЃР»РµРЅРёСЏ вЂ” С‚СЂРµР±СѓСЋС‚ РєР»Р°СЃСЃРёС„РёРєР°С†РёРё (blocking vs historical tail)
+        ['table' => 'tenant_accruals', 'column' => 'market_space_id', 'label' => 'accruals', 'blocking' => false],
     ];
 
     /**
@@ -31,7 +34,21 @@ final class DuplicateSpaceResolutionService
      *     duplicate_market_space_id: int,
      *     canonical_market_space_id: int,
      *     transfer_counts: array<string, int>,
-     *     blocking_counts: array<string, int>
+     *     blocking_counts: array<string, int>,
+     *     classification: string,
+     *     accrual_classification: array{
+     *         blocking_accruals: int,
+     *         historical_tail_accruals: int,
+     *         duplicate_latest_accrual_period: ?string,
+     *         canonical_latest_accrual_period: ?string,
+     *         has_linked_contract_accruals: bool
+     *     },
+     *     retained_financial_tail?: array{
+     *         accruals_count: int,
+     *         earliest_period: ?string,
+     *         latest_period: ?string,
+     *         unmatched_only: bool
+     *     }
      * }
      */
     public function preview(int $marketId, int $duplicateSpaceId, int $canonicalSpaceId): array
@@ -40,15 +57,27 @@ final class DuplicateSpaceResolutionService
         $this->validatePair($duplicate, $canonical, $duplicateSpaceId, $canonicalSpaceId);
         $this->validateCanonicalAnchors($marketId, $duplicateSpaceId, $canonicalSpaceId);
 
-        $blockingCounts = $this->blockingCounts($marketId, $duplicateSpaceId);
-        $this->throwIfBlocked($blockingCounts);
+        $linkClassification = $this->classifyLinks($marketId, $duplicateSpaceId, $canonicalSpaceId);
+        $this->throwIfClassifiedAsBlocked($linkClassification);
 
-        return [
+        $classification = $this->classifyDuplicateCase($linkClassification);
+        $this->throwIfClassificationIsAmbiguous($classification);
+
+        $result = [
             'duplicate_market_space_id' => $duplicateSpaceId,
             'canonical_market_space_id' => $canonicalSpaceId,
             'transfer_counts' => $this->transferPreviewCounts($marketId, $duplicateSpaceId),
-            'blocking_counts' => $blockingCounts,
+            'blocking_counts' => $linkClassification['blocking_counts'],
+            'classification' => $classification,
+            'accrual_classification' => $linkClassification['accrual_classification'],
         ];
+
+        // Р”РѕР±Р°РІР»СЏРµРј retained_financial_tail РґР»СЏ historical tail case
+        if ($classification === 'duplicate_with_historical_financial_tail') {
+            $result['retained_financial_tail'] = $this->buildRetainedFinancialTailSummary($linkClassification);
+        }
+
+        return $result;
     }
 
     /**
@@ -61,8 +90,11 @@ final class DuplicateSpaceResolutionService
             $this->validatePair($duplicate, $canonical, $duplicateSpaceId, $canonicalSpaceId);
             $this->validateCanonicalAnchors($marketId, $duplicateSpaceId, $canonicalSpaceId);
 
-            $blockingCounts = $this->blockingCounts($marketId, $duplicateSpaceId);
-            $this->throwIfBlocked($blockingCounts);
+            $linkClassification = $this->classifyLinks($marketId, $duplicateSpaceId, $canonicalSpaceId);
+            $this->throwIfClassifiedAsBlocked($linkClassification);
+
+            $classification = $this->classifyDuplicateCase($linkClassification);
+            $this->throwIfClassificationIsAmbiguous($classification);
 
             $now = now();
             $shapeSummary = $this->transferMapShapes($marketId, $duplicateSpaceId, $canonicalSpaceId, $now);
@@ -91,7 +123,9 @@ final class DuplicateSpaceResolutionService
                 ->where('id', $duplicateSpaceId)
                 ->update($spaceUpdate);
 
-            return [
+            $classification = $this->classifyDuplicateCase($linkClassification);
+
+            $result = [
                 'duplicate_market_space_id' => $duplicateSpaceId,
                 'canonical_market_space_id' => $canonicalSpaceId,
                 'transferred' => [
@@ -101,8 +135,17 @@ final class DuplicateSpaceResolutionService
                     'merged_cabinet_links' => $cabinetSummary['merged'],
                     'marketplace_products' => $productsMoved,
                 ],
-                'blocking_counts' => $blockingCounts,
+                'blocking_counts' => $linkClassification['blocking_counts'],
+                'classification' => $classification,
+                'accrual_classification' => $linkClassification['accrual_classification'],
             ];
+
+            // Р”РѕР±Р°РІР»СЏРµРј retained_financial_tail РґР»СЏ historical tail case
+            if ($classification === 'duplicate_with_historical_financial_tail') {
+                $result['retained_financial_tail'] = $this->buildRetainedFinancialTailSummary($linkClassification);
+            }
+
+            return $result;
         });
     }
 
@@ -178,7 +221,7 @@ final class DuplicateSpaceResolutionService
         }
 
         throw ValidationException::withMessages([
-            'candidate_market_space_id' => 'Основное место не может быть выбрано только по финансовым связям: у него нет фигуры на карте и договоров, а у текущего места они есть.',
+            'candidate_market_space_id' => 'РћСЃРЅРѕРІРЅРѕРµ РјРµСЃС‚Рѕ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РІС‹Р±СЂР°РЅРѕ С‚РѕР»СЊРєРѕ РїРѕ С„РёРЅР°РЅСЃРѕРІС‹Рј СЃРІСЏР·СЏРј: Сѓ РЅРµРіРѕ РЅРµС‚ С„РёРіСѓСЂС‹ РЅР° РєР°СЂС‚Рµ Рё РґРѕРіРѕРІРѕСЂРѕРІ, Р° Сѓ С‚РµРєСѓС‰РµРіРѕ РјРµСЃС‚Р° РѕРЅРё РµСЃС‚СЊ.',
         ]);
     }
 
@@ -194,33 +237,302 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * @return array<string, int>
+     * РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµС‚ СЃРІСЏР·Рё РЅР° РґСѓР±Р»Рµ: Р±Р»РѕРєРёСЂСѓСЋС‰РёРµ vs Р±РµР·РѕРїР°СЃРЅС‹Рµ vs historical tail
+     *
+     * @return array{
+     *     blocking_counts: array<string, int>,
+     *     transfer_counts: array<string, int>,
+     *     accrual_classification: array{
+     *         blocking_accruals: int,
+     *         historical_tail_accruals: int,
+     *         duplicate_latest_accrual_period: ?string,
+     *         canonical_latest_accrual_period: ?string,
+     *         has_linked_contract_accruals: bool
+     *     }
+     * }
      */
-    private function blockingCounts(int $marketId, int $duplicateSpaceId): array
+    private function classifyLinks(int $marketId, int $duplicateSpaceId, int $canonicalSpaceId): array
     {
-        $counts = [];
+        $blockingCounts = [];
 
-        foreach (self::BLOCKING_LINKS as $link) {
-            $counts[$link['label']] = $this->countRows($link['table'], $link['column'], $duplicateSpaceId, $marketId);
+        foreach (self::LINK_DEFINITIONS as $link) {
+            $count = $this->countRows($link['table'], $link['column'], $duplicateSpaceId, $marketId);
+
+            if ($link['blocking']) {
+                $blockingCounts[$link['label']] = $count;
+            }
         }
 
-        return $counts;
+        // РЎС‡РёС‚Р°РµРј Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРІСЏР·Рё РґР»СЏ РїРµСЂРµРЅРѕСЃР°
+        $transferCounts = $this->transferPreviewCounts($marketId, $duplicateSpaceId);
+
+        // РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµРј РЅР°С‡РёСЃР»РµРЅРёСЏ
+        $accrualClassification = $this->classifyAccruals($marketId, $duplicateSpaceId, $canonicalSpaceId);
+
+        return [
+            'blocking_counts' => $blockingCounts,
+            'transfer_counts' => $transferCounts,
+            'accrual_classification' => $accrualClassification,
+        ];
     }
 
     /**
-     * @param  array<string, int>  $blockingCounts
+     * РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµС‚ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° РґСѓР±Р»Рµ: blocking vs historical tail
+     *
+     * @return array{
+     *     blocking_accruals: int,
+     *     historical_tail_accruals: int,
+     *     duplicate_latest_accrual_period: ?string,
+     *     canonical_latest_accrual_period: ?string,
+     *     has_linked_contract_accruals: bool
+     * }
      */
-    private function throwIfBlocked(array $blockingCounts): void
+    private function classifyAccruals(int $marketId, int $duplicateSpaceId, int $canonicalSpaceId): array
     {
-        $nonZero = array_filter($blockingCounts, static fn (int $count): bool => $count > 0);
-
-        if ($nonZero === []) {
-            return;
+        if (! Schema::hasTable('tenant_accruals') || ! Schema::hasColumn('tenant_accruals', 'market_space_id')) {
+            return [
+                'blocking_accruals' => 0,
+                'historical_tail_accruals' => 0,
+                'duplicate_latest_accrual_period' => null,
+                'canonical_latest_accrual_period' => null,
+                'has_linked_contract_accruals' => false,
+            ];
         }
 
-        throw ValidationException::withMessages([
-            'market_space_id' => 'Duplicate space still has business links: ' . implode(', ', array_keys($nonZero)) . '.',
-        ]);
+        // РџРѕР»СѓС‡Р°РµРј latest accrual period canonical-РєР°СЂС‚РѕС‡РєРё
+        $canonicalLatestPeriod = $this->getLatestAccrualPeriod($marketId, $canonicalSpaceId);
+
+        // РџРѕР»СѓС‡Р°РµРј РІСЃРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РґСѓР±Р»СЏ СЃ РёС… contract_id
+        $duplicateAccrualsQuery = DB::table('tenant_accruals')
+            ->select('period', 'tenant_contract_id')
+            ->where('market_space_id', $duplicateSpaceId)
+            ->where('market_id', $marketId);
+
+        if (Schema::hasColumn('tenant_accruals', 'is_active')) {
+            $duplicateAccrualsQuery->where('is_active', true);
+        }
+
+        $duplicateAccruals = $duplicateAccrualsQuery->get();
+
+        if ($duplicateAccruals->isEmpty()) {
+            return [
+                'blocking_accruals' => 0,
+                'historical_tail_accruals' => 0,
+                'duplicate_latest_accrual_period' => null,
+                'canonical_latest_accrual_period' => $canonicalLatestPeriod,
+                'has_linked_contract_accruals' => false,
+            ];
+        }
+
+        // Р‘Р»РѕРєРёСЂСѓРµРј СЃР»СѓС‡Р°Р№: duplicate РёРјРµРµС‚ accruals, РЅРѕ canonicalLatestPeriod === null
+        // РўР°РєРёРµ accruals РЅРµ РјРѕРіСѓС‚ Р±С‹С‚СЊ historical tail
+        if ($canonicalLatestPeriod === null) {
+            return [
+                'blocking_accruals' => $duplicateAccruals->count(),
+                'historical_tail_accruals' => 0,
+                'duplicate_latest_accrual_period' => $this->calculateLatestPeriod($duplicateAccruals),
+                'canonical_latest_accrual_period' => null,
+                'has_linked_contract_accruals' => $duplicateAccruals->some(fn($accrual) => (int) ($accrual->tenant_contract_id ?? 0) > 0),
+            ];
+        }
+
+        $blockingCount = 0;
+        $historicalTailCount = 0;
+        $hasLinkedContract = false;
+        $duplicateLatestPeriod = null;
+
+        foreach ($duplicateAccruals as $accrual) {
+            $accrualPeriod = $accrual->period;
+
+            // РћР±РЅРѕРІР»СЏРµРј latest period
+            if ($accrualPeriod !== null) {
+                if ($duplicateLatestPeriod === null || $accrualPeriod > $duplicateLatestPeriod) {
+                    $duplicateLatestPeriod = $accrualPeriod;
+                }
+            }
+
+            // РџСЂРѕРІРµСЂРєР° РЅР° linked contract
+            if ((int) ($accrual->tenant_contract_id ?? 0) > 0) {
+                $hasLinkedContract = true;
+                $blockingCount++;
+                continue;
+            }
+
+            // РџСЂРѕРІРµСЂРєР° РЅР° fresh accrual (period >= canonical latest)
+            if ($accrualPeriod !== null && $accrualPeriod >= $canonicalLatestPeriod) {
+                $blockingCount++;
+                continue;
+            }
+
+            // РСЃС‚РѕСЂРёС‡РµСЃРєРёР№ С…РІРѕСЃС‚: unmatched + СЃС‚Р°СЂРµРµ canonical latest
+            $historicalTailCount++;
+        }
+
+        return [
+            'blocking_accruals' => $blockingCount,
+            'historical_tail_accruals' => $historicalTailCount,
+            'duplicate_latest_accrual_period' => $duplicateLatestPeriod,
+            'canonical_latest_accrual_period' => $canonicalLatestPeriod,
+            'has_linked_contract_accruals' => $hasLinkedContract,
+        ];
+    }
+
+    /**
+     * Р’С‹С‡РёСЃР»СЏРµС‚ latest period РёР· РєРѕР»Р»РµРєС†РёРё accruals
+     *
+     * @param  \Illuminate\Support\Collection  $accruals
+     */
+    private function calculateLatestPeriod($accruals): ?string
+    {
+        $latest = null;
+        foreach ($accruals as $accrual) {
+            $period = $accrual->period;
+            if ($period !== null) {
+                if ($latest === null || $period > $latest) {
+                    $latest = $period;
+                }
+            }
+        }
+        return $latest;
+    }
+
+    /**
+     * РџРѕР»СѓС‡Р°РµС‚ latest accrual period РґР»СЏ РјРµСЃС‚Р°
+     */
+    private function getLatestAccrualPeriod(int $marketId, int $spaceId): ?string
+    {
+        if (! Schema::hasTable('tenant_accruals') || ! Schema::hasColumn('tenant_accruals', 'market_space_id')) {
+            return null;
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->select('period')
+            ->where('market_space_id', $spaceId)
+            ->where('market_id', $marketId);
+
+        if (Schema::hasColumn('tenant_accruals', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        $latest = $query->orderByDesc('period')->first();
+
+        return $latest?->period ?? null;
+    }
+
+    /**
+     * РћРїСЂРµРґРµР»СЏРµС‚ classification СЃР»СѓС‡Р°СЏ РґСѓР±Р»РёРєР°С‚Р°
+     *
+     * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, historical_tail_accruals: int, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string, has_linked_contract_accruals: bool}, transfer_counts: array<string, int>}  $linkClassification
+     */
+    private function classifyDuplicateCase(array $linkClassification): string
+    {
+        $blockingCounts = $linkClassification['blocking_counts'];
+        $accrualClassification = $linkClassification['accrual_classification'];
+        $transferCounts = $linkClassification['transfer_counts'];
+
+        // РџСЂРѕРІРµСЂСЏРµРј Р±Р»РѕРєРёСЂСѓСЋС‰РёРµ СЃРІСЏР·Рё (РєСЂРѕРјРµ accruals)
+        $blockingExceptAccruals = $blockingCounts;
+        unset($blockingExceptAccruals['accruals']);
+        $hasBlockingLinks = array_sum($blockingExceptAccruals) > 0;
+
+        if ($hasBlockingLinks) {
+            if (($blockingCounts['contracts'] ?? 0) > 0) {
+                return 'duplicate_with_blocking_contracts';
+            }
+            return 'duplicate_with_blocking_contracts'; // Р”СЂСѓРіРёРµ blocking СЃРІСЏР·Рё С‚РѕР¶Рµ СЃС‡РёС‚Р°РµРј РєР°Рє contracts РґР»СЏ РїСЂРѕСЃС‚РѕС‚С‹
+        }
+
+        // РџСЂРѕРІРµСЂСЏРµРј blocking accruals
+        if ($accrualClassification['blocking_accruals'] > 0) {
+            if ($accrualClassification['has_linked_contract_accruals']) {
+                return 'duplicate_with_blocking_accruals';
+            }
+            return 'duplicate_fresh_accruals_conflict';
+        }
+
+        // РџСЂРѕРІРµСЂСЏРµРј historical tail
+        if ($accrualClassification['historical_tail_accruals'] > 0) {
+            // Historical tail СЂР°Р·СЂРµС€С‘РЅ С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРІСЏР·Рё РґР»СЏ РїРµСЂРµРЅРѕСЃР°
+            $hasSafeLinks = array_sum($transferCounts) > 0;
+            if ($hasSafeLinks) {
+                return 'duplicate_with_historical_financial_tail';
+            }
+            // РќРµС‚ Р±РµР·РѕРїР°СЃРЅС‹С… СЃРІСЏР·РµР№ вЂ” ambiguous case
+            return 'ambiguous_canonical_candidate';
+        }
+
+        // РќРµС‚ С„РёРЅР°РЅСЃРѕРІ РІРѕРѕР±С‰Рµ
+        return 'safe_duplicate_no_financials';
+    }
+
+    /**
+     * РЎС‚СЂРѕРёС‚ summary РґР»СЏ retained financial tail
+     *
+     * @param  array{accrual_classification: array{historical_tail_accruals: int, duplicate_latest_accrual_period: ?string}}  $linkClassification
+     */
+    private function buildRetainedFinancialTailSummary(array $linkClassification): array
+    {
+        $accrualClassification = $linkClassification['accrual_classification'];
+
+        return [
+            'accruals_count' => $accrualClassification['historical_tail_accruals'],
+            'earliest_period' => null, // РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РµСЃР»Рё РЅСѓР¶РЅРѕ
+            'latest_period' => $accrualClassification['duplicate_latest_accrual_period'],
+            'unmatched_only' => true,
+        ];
+    }
+
+    /**
+     * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, has_linked_contract_accruals: bool, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string}}  $linkClassification
+     */
+    private function throwIfClassifiedAsBlocked(array $linkClassification): void
+    {
+        $blockingCounts = $linkClassification['blocking_counts'];
+        $accrualClassification = $linkClassification['accrual_classification'];
+
+        // РџСЂРѕРІРµСЂСЏРµРј blocking contracts
+        if (($blockingCounts['contracts'] ?? 0) > 0) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Duplicate space has active contracts: ' . ($blockingCounts['contracts']) . '.',
+            ]);
+        }
+
+        // РџСЂРѕРІРµСЂСЏРµРј РґСЂСѓРіРёРµ blocking СЃРІСЏР·Рё
+        $blockingExceptAccruals = $blockingCounts;
+        unset($blockingExceptAccruals['accruals']);
+        $nonZeroBlocking = array_filter($blockingExceptAccruals, static fn (int $count): bool => $count > 0);
+
+        if ($nonZeroBlocking !== []) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Duplicate space has blocking business links: ' . implode(', ', array_keys($nonZeroBlocking)) . '.',
+            ]);
+        }
+
+        // РџСЂРѕРІРµСЂСЏРµРј blocking accruals
+        if ($accrualClassification['blocking_accruals'] > 0) {
+            if ($accrualClassification['has_linked_contract_accruals']) {
+                throw ValidationException::withMessages([
+                    'market_space_id' => 'Duplicate space has accruals linked to contracts: ' . ($accrualClassification['blocking_accruals']) . '.',
+                ]);
+            }
+
+            // Fresh accruals conflict
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Duplicate space has fresh accruals that conflict with canonical: duplicate latest=' . ($accrualClassification['duplicate_latest_accrual_period'] ?? 'null') . ', canonical latest=' . ($accrualClassification['canonical_latest_accrual_period'] ?? 'null') . '.',
+            ]);
+        }
+    }
+
+    /**
+     * Р‘Р»РѕРєРёСЂСѓРµС‚ ambiguous classification (РЅРµС‚ Р±РµР·РѕРїР°СЃРЅС‹С… СЃРІСЏР·РµР№ РґР»СЏ РїРµСЂРµРЅРѕСЃР°)
+     */
+    private function throwIfClassificationIsAmbiguous(string $classification): void
+    {
+        if ($classification === 'ambiguous_canonical_candidate') {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Cannot resolve duplicate: no safe transfer links found. The duplicate has historical financial tail but no map_shapes or other safe links to justify the merge.',
+            ]);
+        }
     }
 
     /**
