@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 # app/Services/MarketMap/DuplicateSpaceResolutionService.php
 
 declare(strict_types=1);
@@ -16,7 +16,7 @@ final class DuplicateSpaceResolutionService
      * @var list<array{table: string, column: string, label: string, blocking: bool}>
      */
     private const LINK_DEFINITIONS = [
-        // Р‘Р»РѕРєРёСЂСѓСЋС‰РёРµ СЃРІСЏР·Рё вЂ” С‚СЂРµР±СѓСЋС‚ СЂСѓС‡РЅРѕРіРѕ СЂР°Р·СЂРµС€РµРЅРёСЏ
+        // Blocking links require explicit manual resolution.
         ['table' => 'tenant_contracts', 'column' => 'market_space_id', 'label' => 'contracts', 'blocking' => true],
         ['table' => 'market_space_tenant_bindings', 'column' => 'market_space_id', 'label' => 'tenant_bindings', 'blocking' => true],
         ['table' => 'tenant_requests', 'column' => 'market_space_id', 'label' => 'requests', 'blocking' => true],
@@ -25,7 +25,7 @@ final class DuplicateSpaceResolutionService
         ['table' => 'tenant_space_showcases', 'column' => 'market_space_id', 'label' => 'showcases', 'blocking' => true],
         ['table' => 'marketplace_chats', 'column' => 'market_space_id', 'label' => 'marketplace_chats', 'blocking' => true],
 
-        // РќР°С‡РёСЃР»РµРЅРёСЏ вЂ” С‚СЂРµР±СѓСЋС‚ РєР»Р°СЃСЃРёС„РёРєР°С†РёРё (blocking vs historical tail)
+        // Accruals require classification: blocking vs historical tail.
         ['table' => 'tenant_accruals', 'column' => 'market_space_id', 'label' => 'accruals', 'blocking' => false],
     ];
 
@@ -72,7 +72,7 @@ final class DuplicateSpaceResolutionService
             'accrual_classification' => $linkClassification['accrual_classification'],
         ];
 
-        // Р”РѕР±Р°РІР»СЏРµРј retained_financial_tail РґР»СЏ historical tail case
+        // Include retained_financial_tail for the historical tail case.
         if ($classification === 'duplicate_with_historical_financial_tail') {
             $result['retained_financial_tail'] = $this->buildRetainedFinancialTailSummary($linkClassification);
         }
@@ -140,7 +140,7 @@ final class DuplicateSpaceResolutionService
                 'accrual_classification' => $linkClassification['accrual_classification'],
             ];
 
-            // Р”РѕР±Р°РІР»СЏРµРј retained_financial_tail РґР»СЏ historical tail case
+            // Include retained_financial_tail for the historical tail case.
             if ($classification === 'duplicate_with_historical_financial_tail') {
                 $result['retained_financial_tail'] = $this->buildRetainedFinancialTailSummary($linkClassification);
             }
@@ -221,7 +221,7 @@ final class DuplicateSpaceResolutionService
         }
 
         throw ValidationException::withMessages([
-            'candidate_market_space_id' => 'РћСЃРЅРѕРІРЅРѕРµ РјРµСЃС‚Рѕ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РІС‹Р±СЂР°РЅРѕ С‚РѕР»СЊРєРѕ РїРѕ С„РёРЅР°РЅСЃРѕРІС‹Рј СЃРІСЏР·СЏРј: Сѓ РЅРµРіРѕ РЅРµС‚ С„РёРіСѓСЂС‹ РЅР° РєР°СЂС‚Рµ Рё РґРѕРіРѕРІРѕСЂРѕРІ, Р° Сѓ С‚РµРєСѓС‰РµРіРѕ РјРµСЃС‚Р° РѕРЅРё РµСЃС‚СЊ.',
+                'candidate_market_space_id' => 'Canonical space cannot be selected based only on financial links: it has no map shape or contracts, while the current space does.',
         ]);
     }
 
@@ -237,7 +237,7 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµС‚ СЃРІСЏР·Рё РЅР° РґСѓР±Р»Рµ: Р±Р»РѕРєРёСЂСѓСЋС‰РёРµ vs Р±РµР·РѕРїР°СЃРЅС‹Рµ vs historical tail
+     * Classify duplicate-space links as blocking, safe-to-transfer, or historical tail.
      *
      * @return array{
      *     blocking_counts: array<string, int>,
@@ -263,10 +263,10 @@ final class DuplicateSpaceResolutionService
             }
         }
 
-        // РЎС‡РёС‚Р°РµРј Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРІСЏР·Рё РґР»СЏ РїРµСЂРµРЅРѕСЃР°
+        // Count safe links that can be transferred.
         $transferCounts = $this->transferPreviewCounts($marketId, $duplicateSpaceId);
 
-        // РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµРј РЅР°С‡РёСЃР»РµРЅРёСЏ
+        // Classify accrual links separately.
         $accrualClassification = $this->classifyAccruals($marketId, $duplicateSpaceId, $canonicalSpaceId);
 
         return [
@@ -277,7 +277,7 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµС‚ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° РґСѓР±Р»Рµ: blocking vs historical tail
+     * Classify duplicate-space accruals as blocking or historical tail.
      *
      * @return array{
      *     blocking_accruals: int,
@@ -299,10 +299,10 @@ final class DuplicateSpaceResolutionService
             ];
         }
 
-        // РџРѕР»СѓС‡Р°РµРј latest accrual period canonical-РєР°СЂС‚РѕС‡РєРё
+        // Read the latest accrual period from the canonical space.
         $canonicalLatestPeriod = $this->getLatestAccrualPeriod($marketId, $canonicalSpaceId);
 
-        // РџРѕР»СѓС‡Р°РµРј РІСЃРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РґСѓР±Р»СЏ СЃ РёС… contract_id
+        // Load duplicate-space accruals together with their contract links.
         $duplicateAccrualsQuery = DB::table('tenant_accruals')
             ->select('period', 'tenant_contract_id')
             ->where('market_space_id', $duplicateSpaceId)
@@ -324,8 +324,8 @@ final class DuplicateSpaceResolutionService
             ];
         }
 
-        // Р‘Р»РѕРєРёСЂСѓРµРј СЃР»СѓС‡Р°Р№: duplicate РёРјРµРµС‚ accruals, РЅРѕ canonicalLatestPeriod === null
-        // РўР°РєРёРµ accruals РЅРµ РјРѕРіСѓС‚ Р±С‹С‚СЊ historical tail
+        // Duplicate accruals cannot be historical tail when canonical has no latest period.
+        // Such accruals are blocking by definition.
         if ($canonicalLatestPeriod === null) {
             return [
                 'blocking_accruals' => $duplicateAccruals->count(),
@@ -344,27 +344,27 @@ final class DuplicateSpaceResolutionService
         foreach ($duplicateAccruals as $accrual) {
             $accrualPeriod = $accrual->period;
 
-            // РћР±РЅРѕРІР»СЏРµРј latest period
+            // Track the latest duplicate accrual period.
             if ($accrualPeriod !== null) {
                 if ($duplicateLatestPeriod === null || $accrualPeriod > $duplicateLatestPeriod) {
                     $duplicateLatestPeriod = $accrualPeriod;
                 }
             }
 
-            // РџСЂРѕРІРµСЂРєР° РЅР° linked contract
+            // Contract-linked accruals are always blocking.
             if ((int) ($accrual->tenant_contract_id ?? 0) > 0) {
                 $hasLinkedContract = true;
                 $blockingCount++;
                 continue;
             }
 
-            // РџСЂРѕРІРµСЂРєР° РЅР° fresh accrual (period >= canonical latest)
+            // Fresh accruals conflict with the canonical latest period.
             if ($accrualPeriod !== null && $accrualPeriod >= $canonicalLatestPeriod) {
                 $blockingCount++;
                 continue;
             }
 
-            // РСЃС‚РѕСЂРёС‡РµСЃРєРёР№ С…РІРѕСЃС‚: unmatched + СЃС‚Р°СЂРµРµ canonical latest
+            // Older unmatched accruals remain as historical tail.
             $historicalTailCount++;
         }
 
@@ -378,7 +378,7 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * Р’С‹С‡РёСЃР»СЏРµС‚ latest period РёР· РєРѕР»Р»РµРєС†РёРё accruals
+     * Calculate the latest period from an accrual collection.
      *
      * @param  \Illuminate\Support\Collection  $accruals
      */
@@ -397,7 +397,7 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * РџРѕР»СѓС‡Р°РµС‚ latest accrual period РґР»СЏ РјРµСЃС‚Р°
+     * Read the latest accrual period for a space.
      */
     private function getLatestAccrualPeriod(int $marketId, int $spaceId): ?string
     {
@@ -420,7 +420,7 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * РћРїСЂРµРґРµР»СЏРµС‚ classification СЃР»СѓС‡Р°СЏ РґСѓР±Р»РёРєР°С‚Р°
+     * Determine the duplicate-resolution classification.
      *
      * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, historical_tail_accruals: int, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string, has_linked_contract_accruals: bool}, transfer_counts: array<string, int>}  $linkClassification
      */
@@ -430,7 +430,7 @@ final class DuplicateSpaceResolutionService
         $accrualClassification = $linkClassification['accrual_classification'];
         $transferCounts = $linkClassification['transfer_counts'];
 
-        // РџСЂРѕРІРµСЂСЏРµРј Р±Р»РѕРєРёСЂСѓСЋС‰РёРµ СЃРІСЏР·Рё (РєСЂРѕРјРµ accruals)
+        // Check blocking links other than accruals first.
         $blockingExceptAccruals = $blockingCounts;
         unset($blockingExceptAccruals['accruals']);
         $hasBlockingLinks = array_sum($blockingExceptAccruals) > 0;
@@ -439,10 +439,10 @@ final class DuplicateSpaceResolutionService
             if (($blockingCounts['contracts'] ?? 0) > 0) {
                 return 'duplicate_with_blocking_contracts';
             }
-            return 'duplicate_with_blocking_contracts'; // Р”СЂСѓРіРёРµ blocking СЃРІСЏР·Рё С‚РѕР¶Рµ СЃС‡РёС‚Р°РµРј РєР°Рє contracts РґР»СЏ РїСЂРѕСЃС‚РѕС‚С‹
+            return 'duplicate_with_blocking_contracts'; // Treat other blocking links the same as contracts.
         }
 
-        // РџСЂРѕРІРµСЂСЏРµРј blocking accruals
+        // Blocking accruals override all non-blocking cases.
         if ($accrualClassification['blocking_accruals'] > 0) {
             if ($accrualClassification['has_linked_contract_accruals']) {
                 return 'duplicate_with_blocking_accruals';
@@ -450,23 +450,23 @@ final class DuplicateSpaceResolutionService
             return 'duplicate_fresh_accruals_conflict';
         }
 
-        // РџСЂРѕРІРµСЂСЏРµРј historical tail
+        // Historical tail is allowed only when safe transfer links exist.
         if ($accrualClassification['historical_tail_accruals'] > 0) {
-            // Historical tail СЂР°Р·СЂРµС€С‘РЅ С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРІСЏР·Рё РґР»СЏ РїРµСЂРµРЅРѕСЃР°
+            // Safe links justify keeping the historical tail on the duplicate.
             $hasSafeLinks = array_sum($transferCounts) > 0;
             if ($hasSafeLinks) {
                 return 'duplicate_with_historical_financial_tail';
             }
-            // РќРµС‚ Р±РµР·РѕРїР°СЃРЅС‹С… СЃРІСЏР·РµР№ вЂ” ambiguous case
+            // No safe links means the candidate is ambiguous.
             return 'ambiguous_canonical_candidate';
         }
 
-        // РќРµС‚ С„РёРЅР°РЅСЃРѕРІ РІРѕРѕР±С‰Рµ
+        // No financial links means the duplicate is safe.
         return 'safe_duplicate_no_financials';
     }
 
     /**
-     * РЎС‚СЂРѕРёС‚ summary РґР»СЏ retained financial tail
+     * Build a summary for the retained financial tail.
      *
      * @param  array{accrual_classification: array{historical_tail_accruals: int, duplicate_latest_accrual_period: ?string}}  $linkClassification
      */
@@ -476,7 +476,7 @@ final class DuplicateSpaceResolutionService
 
         return [
             'accruals_count' => $accrualClassification['historical_tail_accruals'],
-            'earliest_period' => null, // РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РµСЃР»Рё РЅСѓР¶РЅРѕ
+            'earliest_period' => null, // Can be added later if needed.
             'latest_period' => $accrualClassification['duplicate_latest_accrual_period'],
             'unmatched_only' => true,
         ];
@@ -490,14 +490,14 @@ final class DuplicateSpaceResolutionService
         $blockingCounts = $linkClassification['blocking_counts'];
         $accrualClassification = $linkClassification['accrual_classification'];
 
-        // РџСЂРѕРІРµСЂСЏРµРј blocking contracts
+        // Active contracts are always blocking.
         if (($blockingCounts['contracts'] ?? 0) > 0) {
             throw ValidationException::withMessages([
                 'market_space_id' => 'Duplicate space has active contracts: ' . ($blockingCounts['contracts']) . '.',
             ]);
         }
 
-        // РџСЂРѕРІРµСЂСЏРµРј РґСЂСѓРіРёРµ blocking СЃРІСЏР·Рё
+        // Any other business links also block automatic resolution.
         $blockingExceptAccruals = $blockingCounts;
         unset($blockingExceptAccruals['accruals']);
         $nonZeroBlocking = array_filter($blockingExceptAccruals, static fn (int $count): bool => $count > 0);
@@ -508,7 +508,7 @@ final class DuplicateSpaceResolutionService
             ]);
         }
 
-        // РџСЂРѕРІРµСЂСЏРµРј blocking accruals
+        // Blocking accruals fail validation with a dedicated message.
         if ($accrualClassification['blocking_accruals'] > 0) {
             if ($accrualClassification['has_linked_contract_accruals']) {
                 throw ValidationException::withMessages([
@@ -524,7 +524,7 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * Р‘Р»РѕРєРёСЂСѓРµС‚ ambiguous classification (РЅРµС‚ Р±РµР·РѕРїР°СЃРЅС‹С… СЃРІСЏР·РµР№ РґР»СЏ РїРµСЂРµРЅРѕСЃР°)
+     * Reject ambiguous classifications with no safe links to transfer.
      */
     private function throwIfClassificationIsAmbiguous(string $classification): void
     {
