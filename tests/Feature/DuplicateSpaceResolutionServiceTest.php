@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 # tests/Feature/DuplicateSpaceResolutionServiceTest.php
 
 declare(strict_types=1);
@@ -23,23 +23,23 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_rejects_accrual_only_canonical_when_duplicate_has_shape_and_contracts(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::withoutEvents(fn () => Tenant::create([
             'market_id' => $market->id,
-            'name' => 'Р‘Р°СЂРєРѕРІСЃРєР°СЏ Р›.РЎ.',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]));
 
         $duplicate = MarketSpace::withoutEvents(fn () => MarketSpace::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
-            'number' => 'РћРЎ11/3',
+            'number' => 'OS11/3',
             'code' => 'os-11-3',
-            'display_name' => 'РћРЎ11/3',
+            'display_name' => 'OS11/3',
             'status' => 'occupied',
             'is_active' => true,
         ]));
@@ -47,9 +47,9 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
         $candidate = MarketSpace::withoutEvents(fn () => MarketSpace::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
-            'number' => 'РћРЎ11/3__t114',
+            'number' => 'OS11/3__t114',
             'code' => 'os-11-3-t114',
-            'display_name' => 'РћРЎ11/3 / Р‘Р°СЂРєРѕРІСЃРєР°СЏ Р›.РЎ.',
+            'display_name' => 'OS11/3 / Test Tenant',
             'status' => 'occupied',
             'is_active' => true,
         ]));
@@ -77,7 +77,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'market_space_id' => $duplicate->id,
             'external_id' => 'contract-os-11-3',
             'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_AUTO,
-            'number' => 'Рђ РћРЎ 11/3 РѕС‚ 01.06.2023',
+            'number' => 'A OS 11/3 dated 2023-06-01',
             'status' => 'active',
             'starts_at' => '2026-05-01',
             'is_active' => true,
@@ -93,7 +93,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
         ]);
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('РћСЃРЅРѕРІРЅРѕРµ РјРµСЃС‚Рѕ РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РІС‹Р±СЂР°РЅРѕ С‚РѕР»СЊРєРѕ РїРѕ С„РёРЅР°РЅСЃРѕРІС‹Рј СЃРІСЏР·СЏРј');
+        $this->expectExceptionMessage('Canonical space cannot be selected based only on financial links');
 
         app(DuplicateSpaceResolutionService::class)->preview(
             (int) $market->id,
@@ -105,14 +105,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_allows_safe_duplicate_without_any_financial_links(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -134,7 +134,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРІСЏР·Рё РЅР° РґСѓР±Р»Рµ
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $duplicate->id,
@@ -145,7 +145,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -170,14 +170,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_allows_duplicate_with_historical_financial_tail(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -199,7 +199,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј Р±РµР·РѕРїР°СЃРЅС‹Рµ СЃРІСЏР·Рё РЅР° РґСѓР±Р»Рµ (map_shapes)
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $duplicate->id,
@@ -210,7 +210,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂС‹ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -221,7 +221,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј СЃРІРµР¶РёРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° canonical (2026-01)
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -231,7 +231,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'total_with_vat' => 50000,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј unmatched РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° РґСѓР±Р»Рµ (2025-01..2025-04) - historical tail
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -291,14 +291,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_blocks_duplicate_with_active_contract(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -320,7 +320,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј map_shapes РЅР° РґСѓР±Р»Рµ, С‡С‚РѕР±С‹ РїСЂРѕР№С‚Рё validateCanonicalAnchors
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $duplicate->id,
@@ -331,7 +331,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј map_shapes РЅР° canonical, С‡С‚РѕР±С‹ РѕРЅ Р±С‹Р» РІР°Р»РёРґРЅС‹Рј
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $canonical->id,
@@ -342,7 +342,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј Р°РєС‚РёРІРЅС‹Р№ РґРѕРіРѕРІРѕСЂ РЅР° РґСѓР±Р»Рµ
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -366,14 +366,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_blocks_duplicate_with_linked_accruals(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -395,7 +395,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -406,7 +406,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј map_shapes РЅР° РґСѓР±Р»Рµ, С‡С‚РѕР±С‹ РїСЂРѕР№С‚Рё validateCanonicalAnchors
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $duplicate->id,
@@ -417,7 +417,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РЅР°С‡РёСЃР»РµРЅРёРµ СЃ tenant_contract_id РЅР° РґСѓР±Р»Рµ
+        // Fixture setup.
         $contract = TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -438,8 +438,8 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'tenant_contract_id' => $contract->id,
         ]);
 
-        // Р‘Р»РѕРєРёСЂРѕРІРєР° СЃСЂР°Р±РѕС‚Р°РµС‚ РєР°Рє contracts, С‚Р°Рє РєР°Рє contract СЃРѕР·РґР°РЅ
-        // Р­С‚Рѕ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС†РµРЅР°СЂРёР№ - linked accruals Р±Р»РѕРєРёСЂСѓСЋС‚СЃСЏ С‡РµСЂРµР· contracts
+        // Fixture setup.
+        // Fixture setup.
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Duplicate space has active contracts');
 
@@ -453,14 +453,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_blocks_duplicate_with_fresh_accruals(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -482,7 +482,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -493,7 +493,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј СЃРІРµР¶РёРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° canonical (2025-06)
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -503,7 +503,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'total_with_vat' => 50000,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј Р±РѕР»РµРµ СЃРІРµР¶РёРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° РґСѓР±Р»Рµ (2025-08) - unmatched
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -527,14 +527,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_blocks_duplicate_when_canonical_has_no_accruals_but_duplicate_has_any(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -556,7 +556,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -567,7 +567,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° РґСѓР±Р»Рµ (РЅРѕ canonical РЅРµ РёРјРµРµС‚ РЅР°С‡РёСЃР»РµРЅРёР№)
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -578,8 +578,8 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'tenant_contract_id' => null,
         ]);
 
-        // Р•СЃР»Рё canonicalLatestPeriod === null, С‚Рѕ РІСЃРµ accruals РЅР° РґСѓР±Р»Рµ СЃС‡РёС‚Р°СЋС‚СЃСЏ blocking
-        // РўР°Рє РєР°Рє historical tail РЅРµ РјРѕР¶РµС‚ СЃСѓС‰РµСЃС‚РІРѕРІР°С‚СЊ Р±РµР· canonical latest
+        // Fixture setup.
+        // Fixture setup.
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Duplicate space has fresh accruals that conflict');
 
@@ -592,19 +592,19 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
 
     public function test_preview_allows_116_218_like_scenario(): void
     {
-        // РЎС†РµРЅР°СЂРёР№ #116/#218:
+        // Scenario #116/#218.
         // canonical (#116): tenant_id=406, contracts=2 active, latest accrual 2026-01, map_shapes=0
         // duplicate (#218): tenant_id=406, contracts=0, unmatched accruals 2025-01..2025-04, map_shapes=1
 
         $market = Market::create([
-            'name' => 'РЎС‚Р°СЂС‹Р№ Р±Р°Р·Р°СЂ',
+            'name' => 'Old Bazaar',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РЈРњРќР«Р™ Р РРўР•Р™Р› РћРћРћ',
+            'name' => 'SMART RETAIL LLC',
             'is_active' => true,
         ]);
 
@@ -613,7 +613,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
             'number' => '116',
-            'display_name' => '116 / РЎР°РјРѕРєР°С‚',
+            'display_name' => '116 / Samokat',
             'status' => 'occupied',
             'is_active' => true,
         ]);
@@ -623,12 +623,12 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
             'number' => '218',
-            'display_name' => '218 / РЎРў/СЃРєР»Р°Рґ/11/1',
+            'display_name' => '218 / ST/sklad/11/1',
             'status' => 'occupied',
             'is_active' => true,
         ]);
 
-        // 2 Р°РєС‚РёРІРЅС‹С… РґРѕРіРѕРІРѕСЂР° РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -649,7 +649,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Latest accrual 2026-01 РЅР° canonical
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -659,7 +659,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'total_with_vat' => 100000,
         ]);
 
-        // map_shapes=1 РЅР° duplicate
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $duplicate->id,
@@ -670,7 +670,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // unmatched accruals 2025-01..2025-04 РЅР° duplicate (tenant_contract_id=null)
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -731,14 +731,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_preview_blocks_historical_tail_when_duplicate_has_no_safe_transfer_links(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -760,7 +760,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -771,7 +771,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј СЃРІРµР¶РёРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° canonical (2026-01)
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -781,8 +781,8 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'total_with_vat' => 50000,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј unmatched РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° РґСѓР±Р»Рµ (2025-01..2025-04) - historical tail
-        // РќРћ: РЅРµС‚ map_shapes РёР»Рё РґСЂСѓРіРёС… safe links РЅР° РґСѓР±Р»Рµ
+        // Fixture setup.
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -806,14 +806,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_resolve_blocks_historical_tail_when_duplicate_has_no_safe_transfer_links(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -835,7 +835,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -846,7 +846,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј СЃРІРµР¶РёРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° canonical
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -856,7 +856,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'total_with_vat' => 50000,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј historical tail РЅР° РґСѓР±Р»Рµ Р±РµР· safe links
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -870,7 +870,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('no safe transfer links found');
 
-        // РЎРѕС…СЂР°РЅСЏРµРј РёР·РЅР°С‡Р°Р»СЊРЅС‹Р№ is_active РґСѓР±Р»СЏ
+        // Preserve the original duplicate active flag for verification.
         $originalIsActive = $duplicate->is_active;
 
         try {
@@ -880,7 +880,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
                 (int) $canonical->id,
             );
         } catch (ValidationException $e) {
-            // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РґСѓР±Р»СЊ РќР• Р±С‹Р» РґРµР°РєС‚РёРІРёСЂРѕРІР°РЅ
+            // Verify the duplicate remains active.
             $duplicate->refresh();
             $this->assertSame($originalIsActive, $duplicate->is_active, 'Duplicate should not be deactivated when ambiguous');
             throw $e;
@@ -890,14 +890,14 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
     public function test_resolve_returns_retained_financial_tail_for_allowed_historical_tail_case(): void
     {
         $market = Market::create([
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ СЂС‹РЅРѕРє',
+            'name' => 'Test Market',
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
         ]);
 
         $tenant = Tenant::create([
             'market_id' => $market->id,
-            'name' => 'РўРµСЃС‚РѕРІС‹Р№ Р°СЂРµРЅРґР°С‚РѕСЂ',
+            'name' => 'Test Tenant',
             'is_active' => true,
         ]);
 
@@ -919,7 +919,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј map_shapes РЅР° РґСѓР±Р»Рµ (safe link)
+        // Fixture setup.
         MarketSpaceMapShape::create([
             'market_id' => $market->id,
             'market_space_id' => $duplicate->id,
@@ -930,7 +930,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј РґРѕРіРѕРІРѕСЂ РЅР° canonical
+        // Fixture setup.
         TenantContract::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -941,7 +941,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј СЃРІРµР¶РёРµ РЅР°С‡РёСЃР»РµРЅРёСЏ РЅР° canonical
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
@@ -951,7 +951,7 @@ class DuplicateSpaceResolutionServiceTest extends TestCase
             'total_with_vat' => 50000,
         ]);
 
-        // Р”РѕР±Р°РІР»СЏРµРј historical tail РЅР° РґСѓР±Р»Рµ
+        // Fixture setup.
         TenantAccrual::create([
             'market_id' => $market->id,
             'tenant_id' => $tenant->id,
