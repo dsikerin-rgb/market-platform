@@ -134,6 +134,34 @@ final class DuplicateSpaceResolutionService
                 ->where('id', $duplicateSpaceId)
                 ->update($spaceUpdate);
 
+            $canonicalUpdate = [
+                'updated_at' => $now,
+            ];
+
+            $hasCanonicalReviewUpdate = false;
+
+            if (Schema::hasColumn('market_spaces', 'map_review_status')) {
+                $canonicalUpdate['map_review_status'] = 'matched';
+                $hasCanonicalReviewUpdate = true;
+            }
+
+            if (Schema::hasColumn('market_spaces', 'map_reviewed_at')) {
+                $canonicalUpdate['map_reviewed_at'] = $now;
+                $hasCanonicalReviewUpdate = true;
+            }
+
+            if ($userId !== null && Schema::hasColumn('market_spaces', 'map_reviewed_by')) {
+                $canonicalUpdate['map_reviewed_by'] = $userId;
+                $hasCanonicalReviewUpdate = true;
+            }
+
+            if ($hasCanonicalReviewUpdate) {
+                DB::table('market_spaces')
+                    ->where('market_id', $marketId)
+                    ->where('id', $canonicalSpaceId)
+                    ->update($canonicalUpdate);
+            }
+
             $classification = $this->classifyDuplicateCase($linkClassification);
 
             $result = [
