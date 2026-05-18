@@ -880,13 +880,14 @@ class MapReviewResultsService
             ->where('entity_type', 'market_space')
             ->where('type', OperationType::SPACE_REVIEW)
             ->where('status', 'applied')
-            ->orderByDesc('effective_at')
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit($limit)
             ->get([
                 'id',
                 'entity_id',
                 'effective_at',
+                'created_at',
                 'created_by',
                 'payload',
             ]);
@@ -942,6 +943,7 @@ class MapReviewResultsService
             /** @var MarketSpace|null $space */
             $space = $spaces->get($spaceId);
             $decision = (string) ($payload['decision'] ?? '');
+            $sourceReviewStatus = trim((string) ($payload['source_review_status'] ?? ''));
 
             $isAutoClosed = (bool) ($payload['auto_closed_by_reconciliation'] ?? false);
             $autoCloseAt = $payload['auto_close_at'] ?? null;
@@ -967,8 +969,8 @@ class MapReviewResultsService
                 ),
                 'effective_at' => $operation->effective_at?->format('d.m.Y H:i'),
                 'created_by_name' => $operation->created_by ? (string) ($creators[(int) $operation->created_by] ?? '—') : null,
-                'review_status' => $space?->map_review_status,
-                'review_status_label' => $this->reviewStatusLabel($space?->map_review_status),
+                'review_status' => $sourceReviewStatus !== '' ? $sourceReviewStatus : $space?->map_review_status,
+                'review_status_label' => $this->reviewStatusLabel($sourceReviewStatus !== '' ? $sourceReviewStatus : $space?->map_review_status),
                 'is_auto_closed' => $isAutoClosed,
                 'auto_close_at' => $autoCloseAt ? (new \DateTime($autoCloseAt))->format('d.m.Y H:i') : null,
                 'auto_close_binding_id' => $autoCloseBindingId ? (int) $autoCloseBindingId : null,

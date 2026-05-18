@@ -840,12 +840,18 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         MarketSpace $space,
         ?int $userId = null,
         $effectiveAt = null,
-        ?string $reason = null
+        ?string $reason = null,
+        ?string $sourceReviewStatus = null
     ): Operation {
         $payload = [
             'market_space_id' => (int) $space->id,
             'decision' => 'matched',
         ];
+
+        $normalizedSourceReviewStatus = is_string($sourceReviewStatus) ? trim($sourceReviewStatus) : '';
+        if ($normalizedSourceReviewStatus !== '') {
+            $payload['source_review_status'] = $normalizedSourceReviewStatus;
+        }
 
         $normalizedReason = is_string($reason) ? trim($reason) : '';
         if ($normalizedReason !== '') {
@@ -2856,6 +2862,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $space->refresh();
 
         if ($shouldCloseReviewNow) {
+            $sourceReviewStatus = (string) ($space->map_review_status ?? '');
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
             $recordAppliedMatchedReview(
                 $market,
@@ -2863,6 +2870,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 Filament::auth()->id(),
                 $operation->effective_at ?? now(),
                 implode('. ', $reasonParts),
+                $sourceReviewStatus,
             );
         }
 
@@ -3027,6 +3035,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $space->refresh();
 
         if ($effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'))) {
+            $sourceReviewStatus = (string) ($space->map_review_status ?? '');
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
             $space->refresh();
             $recordAppliedMatchedReview(
@@ -3035,6 +3044,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 Filament::auth()->id(),
                 $operation->effective_at ?? now(),
                 $reason !== '' ? $reason : 'Смена арендатора подтверждена на карточке ревизии.',
+                $sourceReviewStatus,
             );
         }
 
