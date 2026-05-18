@@ -244,6 +244,16 @@ class MapReviewResultsService
                 ? trim((string) $payload['reason'])
                 : ($isFinancialOnly ? $this->financialSignalReason($space, $financialSignal) : null);
 
+            $suggestedTargetTenantId = 0;
+            $suggestedTargetTenantName = '';
+
+            if (is_array($financialSignal)
+                && (int) ($financialSignal['tenant_id'] ?? 0) > 0
+            ) {
+                $suggestedTargetTenantId = (int) $financialSignal['tenant_id'];
+                $suggestedTargetTenantName = trim((string) ($financialSignal['tenant_name'] ?? ''));
+            }
+
             return [
                 'space_id' => (int) $space->id,
                 'number' => $space->number,
@@ -265,6 +275,8 @@ class MapReviewResultsService
                     ? $this->financialTenantChangeDetails($financialSignal, $createdAt)
                     : $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason),
                 'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
+                'suggested_target_tenant_id' => $suggestedTargetTenantId,
+                'suggested_target_tenant_name' => $suggestedTargetTenantName,
             ];
         })
             ->sortByDesc(fn (array $row): int => (int) data_get($row, 'diagnostics.financial_signal.priority', 0))
@@ -463,6 +475,8 @@ class MapReviewResultsService
             $hasStrongerCandidate = collect($candidates)
                 ->contains(fn (array $candidate): bool => (bool) ($candidate['is_stronger_than_current'] ?? false));
 
+            $resolvedFinancialSignal = $financialSignals[$spaceId] ?? null;
+
             return [
                 $spaceId => [
                     'relation_counts' => $this->displayRelationCounts($counts),
@@ -475,7 +489,7 @@ class MapReviewResultsService
                     'contract_override' => $contractOverride,
                     'contract_details' => $contractDetails[$spaceId] ?? [],
                     'accrual_details' => $accrualDetails[$spaceId] ?? [],
-                    'financial_signal' => $financialSignals[$spaceId] ?? null,
+                    'financial_signal' => $resolvedFinancialSignal,
                 ],
             ];
         })->all();

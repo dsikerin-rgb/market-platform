@@ -457,6 +457,84 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertSame((int) $matchedTenant->id, (int) $accrual->tenant_id);
     }
 
+    public function test_review_resolve_financial_tenant_endpoint_activates_existing_tenant_and_shows_manual_switch(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $inactiveTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => '1c-inactive-detyateva',
+            'name' => 'Detyateva O.S. IP',
+            'inn' => '5400000010',
+            'is_active' => false,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/6',
+            'display_name' => 'Odex',
+            'code' => 'p56-6-resolution',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $inactiveTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_row_hash' => sha1('financial-signal-activate-existing-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => '1c-inactive-detyateva',
+                'tenant_name' => 'Detyateva O.S. IP',
+                'inn' => '5400000010',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-resolve-financial-tenant', [
+            'market_space_id' => $space->id,
+            'accrual_id' => $accrual->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_activated_existing')
+            ->assertJsonPath('tenant.id', (int) $inactiveTenant->id);
+
+        $inactiveTenant->refresh();
+        $this->assertTrue((bool) $inactiveTenant->is_active);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = array_values($rows)[0] ?? [];
+
+        $this->assertCount(1, $rows);
+        $this->assertFalse((bool) data_get($row, 'diagnostics.financial_signal.requires_tenant_resolution'));
+        $this->assertSame((int) $inactiveTenant->id, (int) ($row['suggested_target_tenant_id'] ?? 0));
+        $this->assertSame('Detyateva O.S. IP', $row['suggested_target_tenant_name'] ?? '');
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee(' data-mrr-manual-tenant-switch-open', false)
+            ->assertSee('data-mrr-suggested-tenant-id="' . $inactiveTenant->id . '"', false)
+            ->assertSee('data-mrr-suggested-tenant-name="Detyateva O.S. IP"', false)
+            ->assertSee('Сменить арендатора', false)
+            ->assertDontSee(' data-mrr-financial-tenant-resolve-open', false)
+            ->assertDontSee('Активировать арендатора', false);
+    }
+
     public function test_review_resolve_financial_tenant_endpoint_creates_new_tenant_and_then_allows_manual_switch(): void
     {
         $market = $this->createMarket();
