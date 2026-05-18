@@ -23,6 +23,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
@@ -122,6 +123,36 @@ class TenantContractResource extends BaseResource
             'marketSpace.number',
             'marketSpace.display_name',
         ];
+    }
+
+    public static function getGlobalSearchResultTitle(Model $record): string
+    {
+        /** @var TenantContract $record */
+        $spaceLabel = trim((string) ($record->marketSpace?->number ?? ''));
+        $spaceName = trim((string) ($record->marketSpace?->display_name ?? ''));
+
+        return static::compactGlobalSearchTitle(
+            trim((string) ($record->number ?? '')),
+            $spaceLabel !== '' ? $spaceLabel : $spaceName,
+            'Договор'
+        );
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        /** @var TenantContract $record */
+        $spaceLabel = trim((string) ($record->marketSpace?->number ?? ''));
+
+        if ($spaceLabel === '') {
+            $spaceLabel = trim((string) ($record->marketSpace?->display_name ?? ''));
+        }
+
+        return static::compactGlobalSearchDetails([
+            'Арендатор' => static::tenantLabel($record),
+            'Место' => $spaceLabel,
+            'Статус' => static::contractStatusLabel($record->status),
+            'Начало' => $record->starts_at instanceof Carbon ? $record->starts_at->format('d.m.Y') : '',
+        ]);
     }
 
     public static function form(Schema $schema): Schema

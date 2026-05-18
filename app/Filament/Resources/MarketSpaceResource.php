@@ -24,6 +24,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
@@ -225,6 +226,27 @@ class MarketSpaceResource extends BaseResource
             'location.name',
             'tenant.name',
         ];
+    }
+
+    public static function getGlobalSearchResultTitle(Model $record): string
+    {
+        /** @var MarketSpace $record */
+        return static::compactGlobalSearchTitle(
+            trim((string) ($record->number ?? '')),
+            trim((string) ($record->display_name ?? '')),
+            'Торговое место'
+        );
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        /** @var MarketSpace $record */
+        return static::compactGlobalSearchDetails([
+            'Локация' => trim((string) ($record->location?->name ?? '')),
+            'Арендатор' => trim((string) ($record->tenant?->name ?? '')),
+            'Статус' => static::statusLabel($record->status),
+            'Тип деятельности' => trim((string) ($record->activity_type ?? '')),
+        ]);
     }
 
     private static function isChildWithParent(?MarketSpace $record): bool

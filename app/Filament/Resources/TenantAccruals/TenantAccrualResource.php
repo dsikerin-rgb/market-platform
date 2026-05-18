@@ -12,7 +12,9 @@ use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\Carbon;
 use Throwable;
 
 class TenantAccrualResource extends BaseResource
@@ -67,6 +69,25 @@ class TenantAccrualResource extends BaseResource
             'period',
             'source_file',
         ];
+    }
+
+    public static function getGlobalSearchResultTitle(Model $record): string
+    {
+        /** @var TenantAccrual $record */
+        $spaceNumber = trim((string) ($record->marketSpace?->number ?? ''));
+        $spaceName = trim((string) (($record->marketSpace?->display_name ?? null) ?: ($record->source_place_name ?? '')));
+
+        return static::compactGlobalSearchTitle($spaceNumber, $spaceName, $spaceName !== '' ? $spaceName : 'Начисление');
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        /** @var TenantAccrual $record */
+        return static::compactGlobalSearchDetails([
+            'Арендатор' => trim((string) ($record->tenant?->name ?? '')),
+            'Период' => $record->period instanceof Carbon ? $record->period->format('m.Y') : '',
+            'Файл' => trim((string) ($record->source_file ?? '')),
+        ]);
     }
 
     public static function form(Schema $schema): Schema

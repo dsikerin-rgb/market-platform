@@ -96,6 +96,12 @@
                                                 x-on:click="close()"
                                                 class="fi-global-search-result-link"
                                             >
+                                                <div class="mb-1">
+                                                    <span class="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300">
+                                                        {{ $group }}
+                                                    </span>
+                                                </div>
+
                                                 <h4
                                                     class="fi-global-search-result-heading"
                                                 >
@@ -104,15 +110,15 @@
 
                                                 @if ($result->details)
                                                     <dl
-                                                        class="fi-global-search-result-details"
+                                                        class="fi-global-search-result-details mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300"
                                                     >
                                                         @foreach ($result->details as $label => $value)
                                                             <div
-                                                                class="fi-global-search-result-detail"
+                                                                class="fi-global-search-result-detail flex items-baseline gap-1"
                                                             >
                                                                 @if ($isAssoc ??= \Illuminate\Support\Arr::isAssoc($result->details))
                                                                     <dt
-                                                                        class="fi-global-search-result-detail-label"
+                                                                        class="fi-global-search-result-detail-label whitespace-nowrap font-medium text-gray-500 dark:text-gray-400"
                                                                     >
                                                                         {{ $label }}:
                                                                     </dt>

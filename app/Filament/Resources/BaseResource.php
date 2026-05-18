@@ -89,4 +89,63 @@ abstract class BaseResource extends Resource
             });
         }
     }
+
+    /**
+     * @param  array<string, mixed>  $details
+     * @return array<string, string>
+     */
+    protected static function compactGlobalSearchDetails(array $details, int $limit = 4): array
+    {
+        $result = [];
+
+        foreach ($details as $label => $value) {
+            if (! is_string($label) || trim($label) === '') {
+                continue;
+            }
+
+            $stringValue = trim((string) $value);
+
+            if ($stringValue === '') {
+                continue;
+            }
+
+            $result[$label] = $stringValue;
+
+            if (count($result) >= $limit) {
+                break;
+            }
+        }
+
+        return $result;
+    }
+
+    protected static function compactGlobalSearchTitle(
+        ?string $primary,
+        ?string $secondary = null,
+        ?string $fallback = null,
+    ): string {
+        $parts = [];
+
+        foreach ([$primary, $secondary] as $value) {
+            $value = trim((string) $value);
+
+            if ($value === '' || in_array($value, $parts, true)) {
+                continue;
+            }
+
+            $parts[] = $value;
+        }
+
+        if ($parts !== []) {
+            return implode(' · ', $parts);
+        }
+
+        $fallback = trim((string) $fallback);
+
+        if ($fallback !== '') {
+            return $fallback;
+        }
+
+        return 'Запись';
+    }
 }
