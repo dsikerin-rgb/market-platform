@@ -584,6 +584,78 @@ class MapReviewContractOverrideTest extends TestCase
             ->assertJsonPath('mode', 'tenant_resolve_failed');
     }
 
+    public function test_financial_signal_for_excel_inactive_existing_tenant_activates_without_trusting_test_external_id(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $inactiveTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'TEST_33',
+            'name' => 'Detyateva O.S. IP',
+            'is_active' => false,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P 56/2',
+            'display_name' => 'Odex',
+            'code' => 'p56-2-excel-existing-tenant',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $inactiveTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'source_file' => '2026-01__import.csv',
+            'source_row_hash' => sha1('financial-signal-excel-inactive-existing-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_name' => 'Detyateva O.S. IP',
+                'space_number' => 'P 56/2',
+                'space_name' => 'Odex',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        $this->assertTrue((bool) data_get($rows[0], 'diagnostics.financial_signal.requires_tenant_resolution'));
+        $this->assertSame('activate_existing_tenant', data_get($rows[0], 'diagnostics.financial_signal.resolution_action'));
+        $this->assertNull(data_get($rows[0], 'diagnostics.financial_signal.tenant_external_id'));
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-resolve-financial-tenant', [
+            'market_space_id' => $space->id,
+            'accrual_id' => $accrual->id,
+            'tenant_external_id' => '',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_activated_existing')
+            ->assertJsonPath('tenant.id', (int) $inactiveTenant->id)
+            ->assertJsonPath('accruals_updated', 0);
+
+        $inactiveTenant->refresh();
+
+        $this->assertTrue((bool) $inactiveTenant->is_active);
+        $this->assertSame((int) $inactiveTenant->id, (int) $accrual->refresh()->tenant_id);
+    }
+
     public function test_map_review_page_shows_contract_confirmation_and_effective_date(): void
     {
         $market = $this->createMarket();

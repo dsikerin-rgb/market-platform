@@ -3116,6 +3116,30 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $payload = is_array($decoded) ? $decoded : [];
         }
 
+        $existingAccrualTenantId = (int) ($accrual->tenant_id ?? 0);
+        if ($existingAccrualTenantId > 0 && \Illuminate\Support\Facades\Schema::hasColumn('tenants', 'is_active')) {
+            $existingAccrualTenant = \App\Models\Tenant::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey($existingAccrualTenantId)
+                ->first();
+
+            if ($existingAccrualTenant && ! (bool) $existingAccrualTenant->is_active) {
+                $existingAccrualTenant->is_active = true;
+                $existingAccrualTenant->save();
+
+                return response()->json([
+                    'ok' => true,
+                    'mode' => 'tenant_activated_existing',
+                    'tenant' => [
+                        'id' => (int) $existingAccrualTenant->id,
+                        'name' => (string) $existingAccrualTenant->name,
+                    ],
+                    'accruals_updated' => 0,
+                    'progress' => $buildMapReviewProgress($market),
+                ]);
+            }
+        }
+
         $resolverPayload = [
             'tenant_name' => trim((string) ($validated['tenant_name'] ?? '')) ?: trim((string) ($payload['tenant_name'] ?? '')),
             'inn' => trim((string) ($validated['inn'] ?? '')) ?: trim((string) ($payload['inn'] ?? '')),

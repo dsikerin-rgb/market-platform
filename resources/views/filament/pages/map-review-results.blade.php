@@ -2691,6 +2691,10 @@
                                             $financialTenantKpp = trim((string) ($financialSignal['tenant_kpp'] ?? ''));
                                             $financialAccrualId = (int) ($financialSignal['accrual_id'] ?? 0);
                                             $financialRequiresTenantResolution = (bool) ($financialSignal['requires_tenant_resolution'] ?? false);
+                                            $financialResolutionAction = trim((string) ($financialSignal['resolution_action'] ?? ''));
+                                            $financialResolveButtonLabel = $financialResolutionAction === 'activate_existing_tenant'
+                                                ? 'Активировать арендатора'
+                                                : 'Создать/сопоставить арендатора';
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
@@ -3772,6 +3776,8 @@
                     tenantExternalId: '',
                     tenantInn: '',
                     tenantKpp: '',
+                    resolutionAction: '',
+                    resolutionLabel: 'Создать/сопоставить',
                 };
                 const manualTenantSwitchState = {
                     spaceId: 0,
@@ -4600,6 +4606,8 @@
                     financialTenantResolveState.tenantExternalId = '';
                     financialTenantResolveState.tenantInn = '';
                     financialTenantResolveState.tenantKpp = '';
+                    financialTenantResolveState.resolutionAction = '';
+                    financialTenantResolveState.resolutionLabel = 'Создать/сопоставить';
                     financialTenantResolveName.value = '';
                     financialTenantResolveExternalId.value = '';
                     financialTenantResolveInn.value = '';
