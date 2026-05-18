@@ -140,7 +140,10 @@ class MapReviewResultsService
             return [];
         }
 
-        $spaces = MarketSpace::query()
+        $financialSignals = $this->financialTenantSignals($marketId, $limit);
+        $financialSignalSpaceIds = array_keys($financialSignals);
+
+        $reviewSpaces = MarketSpace::query()
             ->with(['location:id,name', 'tenant:id,name'])
             ->where('market_id', $marketId)
             ->whereIn('map_review_status', ['changed_tenant', 'conflict', 'not_found'])
@@ -162,6 +165,33 @@ class MapReviewResultsService
                 'map_reviewed_at',
                 'map_reviewed_by',
             ]);
+
+        $reviewSpaceIds = $reviewSpaces->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $missingFinancialSpaceIds = array_values(array_diff($financialSignalSpaceIds, $reviewSpaceIds));
+        $financialSpaces = $missingFinancialSpaceIds !== []
+            ? MarketSpace::query()
+                ->with(['location:id,name', 'tenant:id,name'])
+                ->where('market_id', $marketId)
+                ->whereIn('id', $missingFinancialSpaceIds)
+                ->when(
+                    Schema::hasColumn('market_spaces', 'is_active'),
+                    fn ($query) => $query->where('is_active', true)
+                )
+                ->orderByRaw('COALESCE(number, display_name, code) asc')
+                ->get([
+                    'id',
+                    'location_id',
+                    'tenant_id',
+                    'number',
+                    'display_name',
+                    'code',
+                    'map_review_status',
+                    'map_reviewed_at',
+                    'map_reviewed_by',
+                ])
+            : collect();
+
+        $spaces = $reviewSpaces->merge($financialSpaces)->unique('id')->values();
 
         if ($spaces->isEmpty()) {
             return [];
@@ -191,14 +221,28 @@ class MapReviewResultsService
         return $spaces->map(function (MarketSpace $space) use ($latestOperations, $reviewers, $diagnostics): array {
             $operation = $latestOperations->get((int) $space->id);
             $payload = is_array($operation?->payload) ? $operation->payload : [];
-            $decision = filled($payload['decision'] ?? null) ? (string) $payload['decision'] : null;
+            $financialSignal = is_array($diagnostics[(int) $space->id]['financial_signal'] ?? null)
+                ? $diagnostics[(int) $space->id]['financial_signal']
+                : null;
+            $hasOperationDecision = filled($payload['decision'] ?? null);
+            $isFinancialOnly = ! $hasOperationDecision
+                && $financialSignal !== null
+                && ! in_array((string) ($space->map_review_status ?? ''), ['changed_tenant', 'conflict', 'not_found'], true);
+            $decision = $hasOperationDecision
+                ? (string) $payload['decision']
+                : ($isFinancialOnly ? SpaceReviewDecision::TENANT_CHANGED_ON_SITE : null);
             $reviewedAt = $space->map_reviewed_at?->format('d.m.Y H:i');
             $reviewedByName = $space->map_reviewed_by ? (string) ($reviewers[(int) $space->map_reviewed_by] ?? '-') : null;
-            $createdAt = $operation?->created_at?->format('d.m.Y H:i') ?? $reviewedAt;
+            $financialRecordedAt = trim((string) ($financialSignal['latest_imported_at_label'] ?? ''));
+            $createdAt = $operation?->created_at?->format('d.m.Y H:i')
+                ?? $reviewedAt
+                ?? ($financialRecordedAt !== '' ? $financialRecordedAt : null);
             $createdByName = $operation?->created_by
                 ? (string) ($reviewers[(int) $operation->created_by] ?? '-')
-                : $reviewedByName;
-            $reason = filled($payload['reason'] ?? null) ? trim((string) $payload['reason']) : null;
+                : ($reviewedByName ?? ($isFinancialOnly ? 'Система' : null));
+            $reason = filled($payload['reason'] ?? null)
+                ? trim((string) $payload['reason'])
+                : ($isFinancialOnly ? $this->financialSignalReason($space, $financialSignal) : null);
 
             return [
                 'space_id' => (int) $space->id,
@@ -208,17 +252,25 @@ class MapReviewResultsService
                 'location_name' => $space->location?->name,
                 'created_at' => $createdAt,
                 'created_by_name' => $createdByName,
-                'review_status' => $space->map_review_status,
-                'review_status_label' => $this->reviewStatusLabel($space->map_review_status),
+                'review_status' => $isFinancialOnly ? 'conflict' : $space->map_review_status,
+                'review_status_label' => $this->reviewStatusLabel($isFinancialOnly ? 'conflict' : $space->map_review_status),
                 'reviewed_at' => $reviewedAt,
-                'reviewed_by_name' => $reviewedByName,
+                'reviewed_by_name' => $reviewedByName ?? ($isFinancialOnly ? 'Система' : null),
                 'decision' => $decision,
-                'decision_label' => $decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null,
+                'decision_label' => $isFinancialOnly
+                    ? 'Финконтур сообщает нового арендатора'
+                    : ($decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null),
                 'reason' => $reason,
-                'tenant_change_details' => $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason),
+                'tenant_change_details' => $financialSignal !== null
+                    ? $this->financialTenantChangeDetails($financialSignal, $createdAt)
+                    : $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason),
                 'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
             ];
-        })->all();
+        })
+            ->sortByDesc(fn (array $row): int => (int) data_get($row, 'diagnostics.financial_signal.priority', 0))
+            ->values()
+            ->take($limit)
+            ->all();
     }
 
     /**
@@ -343,6 +395,7 @@ class MapReviewResultsService
 
         $currentCounts = $this->relationCountsForSpaces($spaceIds);
         $contractOverrides = $this->activeContractOverrideForSpaces($spaceIds, $marketId);
+        $financialSignals = $this->financialTenantSignals($marketId, max(count($spaceIds), 50));
 
         $tenantIds = $spaces->pluck('tenant_id')
             ->filter(fn ($id): bool => filled($id))
@@ -377,7 +430,7 @@ class MapReviewResultsService
         $contractDetails = $this->contractDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
         $accrualDetails = $this->accrualDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides, $contractDetails, $accrualDetails): array {
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
@@ -422,6 +475,7 @@ class MapReviewResultsService
                     'contract_override' => $contractOverride,
                     'contract_details' => $contractDetails[$spaceId] ?? [],
                     'accrual_details' => $accrualDetails[$spaceId] ?? [],
+                    'financial_signal' => $financialSignals[$spaceId] ?? null,
                 ],
             ];
         })->all();
@@ -674,6 +728,180 @@ class MapReviewResultsService
             'contract_override' => null,
             'contract_details' => [],
             'accrual_details' => [],
+            'financial_signal' => null,
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function financialTenantSignals(int $marketId, int $limit = 50): array
+    {
+        if ($marketId <= 0
+            || ! Schema::hasTable('tenant_accruals')
+            || ! Schema::hasColumn('tenant_accruals', 'tenant_id')
+            || ! Schema::hasColumn('tenant_accruals', 'market_space_id')
+            || ! Schema::hasColumn('tenant_accruals', 'tenant_contract_id')
+            || ! Schema::hasTable('market_spaces')
+            || ! Schema::hasTable('tenants')) {
+            return [];
+        }
+
+        $select = [
+            'ta.id as accrual_id',
+            'ta.market_space_id as space_id',
+            'ta.tenant_id as accrual_tenant_id',
+            'ms.tenant_id as current_tenant_id',
+            'at.name as accrual_tenant_name',
+            'ct.name as current_tenant_name',
+        ];
+
+        if (Schema::hasColumn('tenant_accruals', 'period')) {
+            $select[] = 'ta.period as period';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'contract_link_status')) {
+            $select[] = 'ta.contract_link_status as contract_link_status';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'contract_link_note')) {
+            $select[] = 'ta.contract_link_note as contract_link_note';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'source_file')) {
+            $select[] = 'ta.source_file as source_file';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'imported_at')) {
+            $select[] = 'ta.imported_at as imported_at';
+        }
+
+        $rows = DB::table('tenant_accruals as ta')
+            ->select($select)
+            ->join('market_spaces as ms', function ($join): void {
+                $join->on('ms.id', '=', 'ta.market_space_id')
+                    ->on('ms.market_id', '=', 'ta.market_id');
+            })
+            ->leftJoin('tenants as at', function ($join): void {
+                $join->on('at.id', '=', 'ta.tenant_id')
+                    ->on('at.market_id', '=', 'ta.market_id');
+            })
+            ->leftJoin('tenants as ct', function ($join): void {
+                $join->on('ct.id', '=', 'ms.tenant_id')
+                    ->on('ct.market_id', '=', 'ms.market_id');
+            })
+            ->where('ta.market_id', $marketId)
+            ->whereNull('ta.tenant_contract_id')
+            ->whereNotNull('ta.market_space_id')
+            ->whereNotNull('ta.tenant_id')
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('ms.tenant_id')
+                    ->orWhereColumn('ms.tenant_id', '<>', 'ta.tenant_id');
+            })
+            ->when(
+                Schema::hasColumn('market_spaces', 'is_active'),
+                fn ($query) => $query->where('ms.is_active', true)
+            )
+            ->orderByDesc(Schema::hasColumn('tenant_accruals', 'period') ? 'ta.period' : 'ta.id')
+            ->orderByDesc('ta.id')
+            ->limit(max($limit * 10, 100))
+            ->get();
+
+        $signals = [];
+
+        foreach ($rows as $row) {
+            $spaceId = (int) ($row->space_id ?? 0);
+
+            if ($spaceId <= 0 || isset($signals[$spaceId])) {
+                continue;
+            }
+
+            $period = null;
+            if (isset($row->period) && $row->period) {
+                try {
+                    $period = (new \DateTime((string) $row->period))->format('m.Y');
+                } catch (\Throwable) {
+                    $period = (string) $row->period;
+                }
+            }
+
+            $importedAtLabel = null;
+            if (isset($row->imported_at) && $row->imported_at) {
+                try {
+                    $importedAtLabel = (new \DateTime((string) $row->imported_at))->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $importedAtLabel = (string) $row->imported_at;
+                }
+            }
+
+            $signals[$spaceId] = [
+                'priority' => 100,
+                'source' => 'tenant_accruals',
+                'label' => 'Финконтур сообщает нового арендатора',
+                'accrual_id' => (int) ($row->accrual_id ?? 0),
+                'tenant_id' => (int) ($row->accrual_tenant_id ?? 0),
+                'tenant_name' => trim((string) ($row->accrual_tenant_name ?? '')),
+                'current_tenant_id' => (int) ($row->current_tenant_id ?? 0),
+                'current_tenant_name' => trim((string) ($row->current_tenant_name ?? '')),
+                'latest_period_label' => $period,
+                'latest_imported_at_label' => $importedAtLabel,
+                'contract_link_status' => isset($row->contract_link_status) ? (string) $row->contract_link_status : null,
+                'contract_link_note' => isset($row->contract_link_note) ? (string) $row->contract_link_note : null,
+                'source_file' => isset($row->source_file) ? (string) $row->source_file : null,
+            ];
+
+            if (count($signals) >= $limit) {
+                break;
+            }
+        }
+
+        return $signals;
+    }
+
+    private function financialSignalReason(MarketSpace $space, ?array $financialSignal): string
+    {
+        $tenantName = trim((string) ($financialSignal['tenant_name'] ?? ''));
+        $currentTenantName = trim((string) ($financialSignal['current_tenant_name'] ?? ''));
+        $spaceLabel = $this->spaceLabel($space);
+        $period = trim((string) ($financialSignal['latest_period_label'] ?? ''));
+
+        $reason = 'Финконтур сообщает нового арендатора';
+
+        if ($tenantName !== '') {
+            $reason .= ': ' . $tenantName;
+        }
+
+        $reason .= ' по месту ' . $spaceLabel;
+
+        if ($period !== '') {
+            $reason .= ' за ' . $period;
+        }
+
+        $reason .= '. Договор не найден';
+
+        if ($currentTenantName !== '') {
+            $reason .= ', карточка места связана с ' . $currentTenantName;
+        }
+
+        return $reason . '.';
+    }
+
+    /**
+     * @return array{
+     *   observed_tenant_name:?string,
+     *   review_comment:?string,
+     *   author_name:string,
+     *   recorded_at:?string
+     * }
+     */
+    private function financialTenantChangeDetails(array $financialSignal, ?string $createdAt): array
+    {
+        return [
+            'observed_tenant_name' => trim((string) ($financialSignal['tenant_name'] ?? '')) ?: null,
+            'review_comment' => 'Основание: начисление из финансового контура без найденного договора.',
+            'author_name' => 'Система',
+            'recorded_at' => $createdAt,
         ];
     }
 

@@ -125,6 +125,153 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertStringContainsString('финансовым хвостом', (string) ($diagnostics['relation_assessment'] ?? ''));
     }
 
+    public function test_review_results_service_adds_financial_signal_when_accrual_has_different_tenant_without_contract(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Samkolbas LLC',
+            'is_active' => true,
+        ]);
+
+        $financialTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => '1c-detyateva',
+            'name' => 'Detyateva O.S. IP',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/2',
+            'display_name' => 'Odex',
+            'code' => 'p56-2',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $financialTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_file' => 'accruals-1c.csv',
+            'source_row_hash' => sha1('financial-signal-different-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'contract_link_note' => 'No imported contract matched this accrual.',
+            'imported_at' => '2026-05-18 10:00:00',
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        $this->assertCount(1, $rows);
+        $this->assertSame((int) $space->id, (int) $rows[0]['space_id']);
+        $this->assertSame('conflict', $rows[0]['review_status']);
+        $this->assertSame(SpaceReviewDecision::TENANT_CHANGED_ON_SITE, $rows[0]['decision']);
+        $this->assertSame('Detyateva O.S. IP', data_get($rows[0], 'diagnostics.financial_signal.tenant_name'));
+        $this->assertSame('Samkolbas LLC', data_get($rows[0], 'diagnostics.financial_signal.current_tenant_name'));
+        $this->assertSame('05.2026', data_get($rows[0], 'diagnostics.financial_signal.latest_period_label'));
+        $this->assertSame(TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED, data_get($rows[0], 'diagnostics.financial_signal.contract_link_status'));
+        $this->assertSame('Detyateva O.S. IP', data_get($rows[0], 'tenant_change_details.observed_tenant_name'));
+        $this->assertStringContainsString('Detyateva O.S. IP', (string) $rows[0]['reason']);
+        $this->assertStringContainsString('Samkolbas LLC', (string) $rows[0]['reason']);
+    }
+
+    public function test_review_results_service_does_not_add_financial_signal_when_accrual_tenant_matches_space(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Detyateva O.S. IP',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'P56/2',
+            'display_name' => 'Odex',
+            'code' => 'p56-2-current',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source_row_hash' => sha1('financial-signal-same-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        $this->assertSame([], $rows);
+    }
+
+    public function test_map_review_page_shows_financial_signal_card(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Samkolbas LLC',
+            'is_active' => true,
+        ]);
+
+        $financialTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => '1c-detyateva-page',
+            'name' => 'Detyateva O.S. IP',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/2',
+            'display_name' => 'Odex',
+            'code' => 'p56-2-page',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $financialTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_file' => 'accruals-1c.csv',
+            'source_row_hash' => sha1('financial-signal-page'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'imported_at' => '2026-05-18 10:00:00',
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('P56/2', false)
+            ->assertSee('Odex', false)
+            ->assertSee('Detyateva O.S. IP', false)
+            ->assertSee('Samkolbas LLC', false)
+            ->assertSee('05.2026', false)
+            ->assertSee('unmatched', false)
+            ->assertSee('accruals-1c.csv', false);
+    }
+
     public function test_map_review_page_shows_contract_confirmation_and_effective_date(): void
     {
         $market = $this->createMarket();
