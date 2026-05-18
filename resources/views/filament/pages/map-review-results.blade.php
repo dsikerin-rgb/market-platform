@@ -2653,6 +2653,8 @@
                                                 $row['review_status_label'] ?? null,
                                                 $row['decision_label'] ?? null,
                                                 data_get($row, 'tenant_change_details.observed_tenant_name'),
+                                                data_get($row, 'diagnostics.financial_signal.tenant_name'),
+                                                data_get($row, 'diagnostics.financial_signal.latest_period_label'),
                                                 $row['reason'] ?? null,
                                                 $row['created_by_name'] ?? null,
                                                 $row['created_at'] ?? null,
@@ -2677,6 +2679,13 @@
                                             $contractNumberLabel = trim((string) ($contractOverride['contract_number'] ?? ''));
                                             $hasIdentityClarification = $decision === 'space_identity_needs_clarification';
                                             $isIdentityCase = $hasIdentityClarification && ! $isContractTenantOverride;
+                                            $financialSignal = is_array($diagnostics['financial_signal'] ?? null) ? $diagnostics['financial_signal'] : null;
+                                            $isFinancialSignalCase = $financialSignal !== null;
+                                            $financialTenantName = trim((string) ($financialSignal['tenant_name'] ?? ''));
+                                            $financialCurrentTenantName = trim((string) ($financialSignal['current_tenant_name'] ?? ''));
+                                            $financialPeriodLabel = trim((string) ($financialSignal['latest_period_label'] ?? ''));
+                                            $financialSourceFile = trim((string) ($financialSignal['source_file'] ?? ''));
+                                            $financialContractStatus = trim((string) ($financialSignal['contract_link_status'] ?? ''));
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
@@ -2703,7 +2712,9 @@
                                                     || $tenantChangeComment !== '');
                                             $createdByLabel = trim((string) ($row['created_by_name'] ?? ''));
                                             $createdAtLabel = trim((string) ($row['created_at'] ?? ''));
-                                            if ($isContractTenantOverride) {
+                                            if ($isFinancialSignalCase) {
+                                                $conflictHeadline = 'Финконтур сообщает нового арендатора';
+                                            } elseif ($isContractTenantOverride) {
                                                 $conflictHeadline = 'На месте уже найден новый арендатор по договору';
                                             } elseif ($hasCandidates) {
                                                 $conflictHeadline = 'Похоже на дубль или спорную привязку места';
@@ -2718,6 +2729,9 @@
                                             if ($isMergeRetirementCase) {
                                                 $workflowTitle = 'Упразднить и связать с основным местом';
                                                 $workflowText = 'Старое место останется в истории, текущая карта и занятость перейдут к основному месту с указанной даты.';
+                                            } elseif ($isFinancialSignalCase) {
+                                                $workflowTitle = 'Разобрать финансовый сигнал';
+                                                $workflowText = 'По месту есть начисление на другого арендатора без найденного договора. Нужно подтвердить смену арендатора и отдельно разобрать договор.';
                                             } elseif ($isContractTenantOverride) {
                                                 $workflowTitle = 'Подтвердить смену арендатора';
                                                 $workflowText = 'Новый арендатор уже найден по договору. Нужно только подтвердить смену.';
@@ -2849,6 +2863,32 @@
                                                                             </div>
                                                                         @endif
                                                                     </div>
+                                                                    @if ($isFinancialSignalCase)
+                                                                        <div class="mrr-place__decision-details">
+                                                                            @if ($financialCurrentTenantName !== '')
+                                                                                <div class="mrr-place__decision-detail">
+                                                                                    <div class="mrr-place__decision-detail-label">В карточке места</div>
+                                                                                    <div class="mrr-place__decision-detail-value">{{ $financialCurrentTenantName }}</div>
+                                                                                </div>
+                                                                            @endif
+                                                                            @if ($financialPeriodLabel !== '')
+                                                                                <div class="mrr-place__decision-detail">
+                                                                                    <div class="mrr-place__decision-detail-label">Период начисления</div>
+                                                                                    <div class="mrr-place__decision-detail-value">{{ $financialPeriodLabel }}</div>
+                                                                                </div>
+                                                                            @endif
+                                                                            <div class="mrr-place__decision-detail">
+                                                                                <div class="mrr-place__decision-detail-label">Договор</div>
+                                                                                <div class="mrr-place__decision-detail-value">Не найден{{ $financialContractStatus !== '' ? ' · ' . $financialContractStatus : '' }}</div>
+                                                                            </div>
+                                                                            @if ($financialSourceFile !== '')
+                                                                                <div class="mrr-place__decision-detail">
+                                                                                    <div class="mrr-place__decision-detail-label">Источник</div>
+                                                                                    <div class="mrr-place__decision-detail-value">{{ $financialSourceFile }}</div>
+                                                                                </div>
+                                                                            @endif
+                                                                        </div>
+                                                                    @endif
                                                                     @if ($tenantChangeComment !== '')
                                                                         <div class="mrr-conflict-brief__hint">
                                                                             <div class="mrr-conflict-brief__hint-label">Подсказка ревизора</div>
