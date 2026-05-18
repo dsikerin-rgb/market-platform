@@ -18,6 +18,7 @@ use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Ai\AiReviewService;
+use App\Services\MarketMap\MapReviewResultsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1343,6 +1344,129 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Перенесено: карта 1, кабинет 1, товары 1', false)
             ->assertSee('Блокирующие связи на дубле: договоры 0, начисления 0', false)
             ->assertSee('Договоры, начисления и долги не переносились', false);
+    }
+
+    public function test_review_decision_endpoint_resolves_duplicate_with_snapshot_binding_and_closes_canonical_review(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Snapshot',
+            'is_active' => true,
+        ]);
+
+        $duplicate = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => '218',
+            'display_name' => 'СТ/склад/11/1',
+            'status' => 'occupied',
+        ]);
+
+        $canonical = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'number' => '116',
+            'display_name' => '116 / Samokat',
+            'status' => 'occupied',
+        ]);
+
+        $duplicateShape = $this->createShape($market, (int) $duplicate->id);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $duplicate->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => now()->subDay(),
+            'ended_at' => null,
+            'binding_type' => 'space_snapshot',
+            'confidence' => 'medium',
+            'source' => 'market_space_snapshot',
+            'created_by_user_id' => $user->id,
+            'resolution_reason' => 'space_snapshot_changed',
+            'meta' => json_encode([
+                'status' => 'occupied',
+                'is_active' => true,
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $canonicalContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $canonical->id,
+            'number' => 'DOG-116',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $canonicalContract->id,
+            'market_space_id' => $canonical->id,
+            'period' => '2026-01-01',
+            'source_row_hash' => sha1('canonical-latest-accrual'),
+        ]);
+
+        foreach (['2025-01-01', '2025-02-01', '2025-03-01', '2025-04-01'] as $period) {
+            TenantAccrual::create([
+                'market_id' => $market->id,
+                'tenant_id' => $tenant->id,
+                'market_space_id' => $duplicate->id,
+                'period' => $period,
+                'source' => '1c',
+                'total_with_vat' => 30000,
+                'tenant_contract_id' => null,
+            ]);
+        }
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-decision', [
+            'decision' => SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION,
+            'market_space_id' => $duplicate->id,
+            'candidate_market_space_id' => $canonical->id,
+            'reason' => 'Snapshot binding duplicate resolution',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'operation')
+            ->assertJsonPath('operation.status', 'applied')
+            ->assertJsonPath('operation.decision', SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION)
+            ->assertJsonPath('item.review_status', 'changed');
+
+        $operation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_id', $duplicate->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('applied', $operation->status);
+        $this->assertSame($canonical->id, $operation->payload['candidate_market_space_id'] ?? null);
+        $this->assertSame('Snapshot binding duplicate resolution', $operation->payload['reason'] ?? null);
+
+        $duplicate->refresh();
+        $duplicateShape->refresh();
+        $canonical->refresh();
+
+        $this->assertFalse((bool) $duplicate->is_active);
+        $this->assertSame('changed', $duplicate->map_review_status);
+        $this->assertSame('matched', $canonical->map_review_status);
+        $this->assertSame($canonical->id, $duplicateShape->market_space_id);
+        $this->assertSame(0, DB::table('market_space_map_shapes')->where('market_space_id', $duplicate->id)->count());
+
+        $attentionRows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 50);
+        $attentionSpaceIds = collect($attentionRows)->pluck('space_id')->all();
+
+        $this->assertNotContains($canonical->id, $attentionSpaceIds);
+        $this->assertNotContains($duplicate->id, $attentionSpaceIds);
     }
 
     public function test_review_decision_endpoint_blocks_duplicate_resolution_when_duplicate_has_business_links(): void
