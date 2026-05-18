@@ -365,8 +365,35 @@ class MapReviewContractOverrideTest extends TestCase
             'map_review_status' => 'matched',
         ]);
 
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'status' => 'applied',
+        ]);
+
         $operation = Operation::query()->findOrFail((int) $response->json('operation.id'));
         $this->assertTrue((bool) data_get($operation->payload, 'review_close_on_effective_at'));
+
+        $reviewOperation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->where('status', 'applied')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('matched', data_get($reviewOperation->payload, 'decision'));
+
+        $changes = app(MapReviewResultsService::class)->appliedChanges((int) $market->id, 20);
+        $appliedReview = collect($changes)
+            ->first(fn (array $change): bool => (int) ($change['operation_id'] ?? 0) === (int) $reviewOperation->id);
+
+        $this->assertNotNull($appliedReview);
+        $this->assertSame('matched', $appliedReview['decision'] ?? null);
+        $this->assertSame('Подтверждено', $appliedReview['decision_label'] ?? null);
     }
 
     public function test_review_contract_tenant_switch_endpoint_can_terminate_previous_contract(): void
@@ -437,6 +464,35 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertSame('terminated', $oldContract->status);
         $this->assertFalse((bool) $oldContract->is_active);
         $this->assertSame('2026-04-01', optional($oldContract->ends_at)->format('Y-m-d'));
+
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'status' => 'applied',
+        ]);
+
+        $reviewOperation = Operation::query()
+            ->where('market_id', $market->id)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $space->id)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->where('status', 'applied')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('matched', data_get($reviewOperation->payload, 'decision'));
+        $this->assertSame('Смена арендатора подтверждена договором NEW-21', data_get($reviewOperation->payload, 'reason'));
+
+        $changes = app(MapReviewResultsService::class)->appliedChanges((int) $market->id, 20);
+        $appliedReview = collect($changes)
+            ->first(fn (array $change): bool => (int) ($change['operation_id'] ?? 0) === (int) $reviewOperation->id);
+
+        $this->assertNotNull($appliedReview);
+        $this->assertSame('matched', $appliedReview['decision'] ?? null);
+        $this->assertNotSame('matched', (string) ($appliedReview['decision_label'] ?? ''));
+        $this->assertSame('Смена арендатора подтверждена договором NEW-21', $appliedReview['summary'] ?? null);
     }
 
     public function test_review_tenant_switch_endpoint_plans_manual_switch_and_can_terminate_previous_contract(): void
