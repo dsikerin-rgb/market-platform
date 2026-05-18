@@ -18,7 +18,6 @@ final class DuplicateSpaceResolutionService
     private const LINK_DEFINITIONS = [
         // Blocking links require explicit manual resolution.
         ['table' => 'tenant_contracts', 'column' => 'market_space_id', 'label' => 'contracts', 'blocking' => true],
-        ['table' => 'market_space_tenant_bindings', 'column' => 'market_space_id', 'label' => 'tenant_bindings', 'blocking' => true],
         ['table' => 'tenant_requests', 'column' => 'market_space_id', 'label' => 'requests', 'blocking' => true],
         ['table' => 'tickets', 'column' => 'market_space_id', 'label' => 'tickets', 'blocking' => true],
         ['table' => 'tenant_reviews', 'column' => 'market_space_id', 'label' => 'reviews', 'blocking' => true],
@@ -29,12 +28,22 @@ final class DuplicateSpaceResolutionService
         ['table' => 'tenant_accruals', 'column' => 'market_space_id', 'label' => 'accruals', 'blocking' => false],
     ];
 
+    private const SNAPSHOT_BINDING_TYPE = 'space_snapshot';
+
+    private const SNAPSHOT_BINDING_SOURCE = 'market_space_snapshot';
+
+    private const SAFE_BINDING_RESOLUTION_REASON = 'duplicate_space_retired';
+
     /**
      * @return array{
      *     duplicate_market_space_id: int,
      *     canonical_market_space_id: int,
      *     transfer_counts: array<string, int>,
      *     blocking_counts: array<string, int>,
+     *     tenant_binding_classification: array{
+     *         blocking_tenant_bindings: int,
+     *         safe_snapshot_tenant_bindings: int
+     *     },
      *     classification: string,
      *     accrual_classification: array{
      *         blocking_accruals: int,
@@ -55,9 +64,9 @@ final class DuplicateSpaceResolutionService
     {
         [$duplicate, $canonical] = $this->loadSpaces($marketId, $duplicateSpaceId, $canonicalSpaceId, false);
         $this->validatePair($duplicate, $canonical, $duplicateSpaceId, $canonicalSpaceId);
-        $this->validateCanonicalAnchors($marketId, $duplicateSpaceId, $canonicalSpaceId);
+        $this->validateCanonicalAnchors($marketId, $duplicate, $canonical);
 
-        $linkClassification = $this->classifyLinks($marketId, $duplicateSpaceId, $canonicalSpaceId);
+        $linkClassification = $this->classifyLinks($marketId, $duplicate, $canonical);
         $this->throwIfClassifiedAsBlocked($linkClassification);
 
         $classification = $this->classifyDuplicateCase($linkClassification);
@@ -68,6 +77,7 @@ final class DuplicateSpaceResolutionService
             'canonical_market_space_id' => $canonicalSpaceId,
             'transfer_counts' => $this->transferPreviewCounts($marketId, $duplicateSpaceId),
             'blocking_counts' => $linkClassification['blocking_counts'],
+            'tenant_binding_classification' => $linkClassification['tenant_binding_classification'],
             'classification' => $classification,
             'accrual_classification' => $linkClassification['accrual_classification'],
         ];
@@ -88,9 +98,9 @@ final class DuplicateSpaceResolutionService
         return DB::transaction(function () use ($marketId, $duplicateSpaceId, $canonicalSpaceId, $userId): array {
             [$duplicate, $canonical] = $this->loadSpaces($marketId, $duplicateSpaceId, $canonicalSpaceId, true);
             $this->validatePair($duplicate, $canonical, $duplicateSpaceId, $canonicalSpaceId);
-            $this->validateCanonicalAnchors($marketId, $duplicateSpaceId, $canonicalSpaceId);
+            $this->validateCanonicalAnchors($marketId, $duplicate, $canonical);
 
-            $linkClassification = $this->classifyLinks($marketId, $duplicateSpaceId, $canonicalSpaceId);
+            $linkClassification = $this->classifyLinks($marketId, $duplicate, $canonical);
             $this->throwIfClassifiedAsBlocked($linkClassification);
 
             $classification = $this->classifyDuplicateCase($linkClassification);
@@ -100,6 +110,7 @@ final class DuplicateSpaceResolutionService
             $shapeSummary = $this->transferMapShapes($marketId, $duplicateSpaceId, $canonicalSpaceId, $now);
             $cabinetSummary = $this->transferCabinetLinks($duplicateSpaceId, $canonicalSpaceId, $now);
             $productsMoved = $this->transferMarketplaceProducts($marketId, $duplicateSpaceId, $canonicalSpaceId, $now);
+            $closedTenantBindings = $this->closeSafeSnapshotTenantBindings($marketId, $duplicate, $canonical, $now);
 
             $spaceUpdate = [
                 'is_active' => false,
@@ -136,8 +147,10 @@ final class DuplicateSpaceResolutionService
                     'marketplace_products' => $productsMoved,
                 ],
                 'blocking_counts' => $linkClassification['blocking_counts'],
+                'tenant_binding_classification' => $linkClassification['tenant_binding_classification'],
                 'classification' => $classification,
                 'accrual_classification' => $linkClassification['accrual_classification'],
+                'closed_tenant_bindings' => $closedTenantBindings,
             ];
 
             // Include retained_financial_tail for the historical tail case.
@@ -208,13 +221,17 @@ final class DuplicateSpaceResolutionService
         }
     }
 
-    private function validateCanonicalAnchors(int $marketId, int $duplicateSpaceId, int $canonicalSpaceId): void
+    private function validateCanonicalAnchors(int $marketId, MarketSpace $duplicate, MarketSpace $canonical): void
     {
-        $duplicateAnchors = $this->canonicalAnchorCounts($marketId, $duplicateSpaceId);
-        $canonicalAnchors = $this->canonicalAnchorCounts($marketId, $canonicalSpaceId);
+        $duplicateAnchors = $this->canonicalAnchorCounts($marketId, (int) $duplicate->id);
+        $canonicalAnchors = $this->canonicalAnchorCounts($marketId, (int) $canonical->id);
+        $duplicateBindingClassification = $this->classifyTenantBindings($marketId, $duplicate, $canonical);
 
-        $duplicateHasHardAnchor = $duplicateAnchors['map_shapes'] > 0 || $duplicateAnchors['contracts'] > 0;
-        $canonicalHasHardAnchor = $canonicalAnchors['map_shapes'] > 0 || $canonicalAnchors['contracts'] > 0;
+        $duplicateHasHardAnchor = $duplicateAnchors['map_shapes'] > 0
+            || $duplicateAnchors['contracts'] > 0
+            || ($duplicateBindingClassification['safe_snapshot_tenant_bindings'] ?? 0) > 0
+            || ($duplicateBindingClassification['blocking_tenant_bindings'] ?? 0) > 0;
+        $canonicalHasHardAnchor = $canonicalAnchors['map_shapes'] > 0 || $this->hasActiveContractSupport($marketId, (int) $canonical->id);
 
         if (! $duplicateHasHardAnchor || $canonicalHasHardAnchor) {
             return;
@@ -237,11 +254,204 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
+     * @return array{
+     *     blocking_tenant_bindings: int,
+     *     safe_snapshot_tenant_bindings: int
+     * }
+     */
+    private function classifyTenantBindings(int $marketId, MarketSpace $duplicate, MarketSpace $canonical): array
+    {
+        if (! Schema::hasTable('market_space_tenant_bindings') || ! Schema::hasColumn('market_space_tenant_bindings', 'market_space_id')) {
+            return [
+                'blocking_tenant_bindings' => 0,
+                'safe_snapshot_tenant_bindings' => 0,
+            ];
+        }
+
+        $activeBindingsQuery = $this->activeTenantBindingsQuery($marketId, (int) $duplicate->id);
+        $activeBindingsCount = (int) (clone $activeBindingsQuery)->count();
+
+        if ($activeBindingsCount === 0) {
+            return [
+                'blocking_tenant_bindings' => 0,
+                'safe_snapshot_tenant_bindings' => 0,
+            ];
+        }
+
+        if (! $this->canSafelyClassifyTenantBindings($marketId, $duplicate, $canonical)) {
+            return [
+                'blocking_tenant_bindings' => $activeBindingsCount,
+                'safe_snapshot_tenant_bindings' => 0,
+            ];
+        }
+
+        $safeSnapshotCount = (int) $this->safeSnapshotTenantBindingsQuery($marketId, $duplicate, $canonical)->count();
+
+        return [
+            'blocking_tenant_bindings' => max(0, $activeBindingsCount - $safeSnapshotCount),
+            'safe_snapshot_tenant_bindings' => $safeSnapshotCount,
+        ];
+    }
+
+    private function activeTenantBindingsQuery(int $marketId, int $spaceId)
+    {
+        $query = DB::table('market_space_tenant_bindings')
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId);
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'ended_at')) {
+            $query->whereNull('ended_at');
+        }
+
+        return $query;
+    }
+
+    private function activeTenantContractsQuery(int $marketId, int $spaceId)
+    {
+        $query = DB::table('tenant_contracts')
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId);
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $query->whereNotIn('status', ['terminated', 'archived']);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'space_mapping_mode')) {
+            $query->where(function ($subQuery): void {
+                $subQuery->whereNull('space_mapping_mode')
+                    ->orWhere('space_mapping_mode', '!=', 'excluded');
+            });
+        }
+
+        return $query;
+    }
+
+    private function activeContractBindingsQuery(int $marketId, int $spaceId)
+    {
+        $query = DB::table('market_space_tenant_bindings')
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId);
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'ended_at')) {
+            $query->whereNull('ended_at');
+        }
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')) {
+            $query->whereNotNull('tenant_contract_id');
+        }
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'binding_type')) {
+            $query->whereIn('binding_type', ['exact', 'manual']);
+        }
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'confidence')) {
+            $query->where('confidence', 'high');
+        }
+
+        return $query;
+    }
+
+    private function hasActiveContractSupport(int $marketId, int $spaceId): bool
+    {
+        if (! Schema::hasTable('tenant_contracts')) {
+            return false;
+        }
+
+        return $this->activeTenantContractsQuery($marketId, $spaceId)->exists()
+            || $this->activeContractBindingsQuery($marketId, $spaceId)->exists();
+    }
+
+    private function canSafelyClassifyTenantBindings(int $marketId, MarketSpace $duplicate, MarketSpace $canonical): bool
+    {
+        if (! Schema::hasTable('market_space_tenant_bindings') || ! Schema::hasColumn('market_space_tenant_bindings', 'market_space_id')) {
+            return false;
+        }
+
+        if ($this->activeTenantContractsQuery($marketId, (int) $duplicate->id)->exists()) {
+            return false;
+        }
+
+        if ($this->activeContractBindingsQuery($marketId, (int) $duplicate->id)->exists()) {
+            return false;
+        }
+
+        if (! $this->hasActiveContractSupport($marketId, (int) $canonical->id)) {
+            return false;
+        }
+
+        $duplicateTenantId = (int) ($duplicate->tenant_id ?? 0);
+        $canonicalTenantId = (int) ($canonical->tenant_id ?? 0);
+
+        if ($duplicateTenantId > 0 && $canonicalTenantId > 0 && $duplicateTenantId !== $canonicalTenantId) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function safeSnapshotTenantBindingsQuery(int $marketId, MarketSpace $duplicate, MarketSpace $canonical)
+    {
+        $query = $this->activeTenantBindingsQuery($marketId, (int) $duplicate->id)
+            ->whereNull('tenant_contract_id');
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'binding_type')) {
+            $query->where('binding_type', self::SNAPSHOT_BINDING_TYPE);
+        }
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'source')) {
+            $query->where('source', self::SNAPSHOT_BINDING_SOURCE);
+        }
+
+        $duplicateTenantId = (int) ($duplicate->tenant_id ?? 0);
+        $canonicalTenantId = (int) ($canonical->tenant_id ?? 0);
+
+        if ($duplicateTenantId > 0) {
+            $query->where('tenant_id', $duplicateTenantId);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
+        if ($duplicateTenantId > 0 && $canonicalTenantId > 0 && $duplicateTenantId !== $canonicalTenantId) {
+            $query->whereRaw('1 = 0');
+        }
+
+        return $query;
+    }
+
+    private function closeSafeSnapshotTenantBindings(int $marketId, MarketSpace $duplicate, MarketSpace $canonical, mixed $now): int
+    {
+        if (! Schema::hasTable('market_space_tenant_bindings')) {
+            return 0;
+        }
+
+        $query = $this->safeSnapshotTenantBindingsQuery($marketId, $duplicate, $canonical);
+        $update = ['updated_at' => $now];
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'ended_at')) {
+            $update['ended_at'] = $now;
+        }
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'resolution_reason')) {
+            $update['resolution_reason'] = self::SAFE_BINDING_RESOLUTION_REASON;
+        }
+
+        return $query->update($update);
+    }
+
+    /**
      * Classify duplicate-space links as blocking, safe-to-transfer, or historical tail.
      *
      * @return array{
      *     blocking_counts: array<string, int>,
      *     transfer_counts: array<string, int>,
+     *     tenant_binding_classification: array{
+     *         blocking_tenant_bindings: int,
+     *         safe_snapshot_tenant_bindings: int
+     *     },
      *     accrual_classification: array{
      *         blocking_accruals: int,
      *         historical_tail_accruals: int,
@@ -251,27 +461,31 @@ final class DuplicateSpaceResolutionService
      *     }
      * }
      */
-    private function classifyLinks(int $marketId, int $duplicateSpaceId, int $canonicalSpaceId): array
+    private function classifyLinks(int $marketId, MarketSpace $duplicate, MarketSpace $canonical): array
     {
         $blockingCounts = [];
 
         foreach (self::LINK_DEFINITIONS as $link) {
-            $count = $this->countRows($link['table'], $link['column'], $duplicateSpaceId, $marketId);
+            $count = $this->countRows($link['table'], $link['column'], (int) $duplicate->id, $marketId);
 
             if ($link['blocking']) {
                 $blockingCounts[$link['label']] = $count;
             }
         }
 
+        $tenantBindingClassification = $this->classifyTenantBindings($marketId, $duplicate, $canonical);
+        $blockingCounts['tenant_bindings'] = $tenantBindingClassification['blocking_tenant_bindings'];
+
         // Count safe links that can be transferred.
-        $transferCounts = $this->transferPreviewCounts($marketId, $duplicateSpaceId);
+        $transferCounts = $this->transferPreviewCounts($marketId, (int) $duplicate->id);
 
         // Classify accrual links separately.
-        $accrualClassification = $this->classifyAccruals($marketId, $duplicateSpaceId, $canonicalSpaceId);
+        $accrualClassification = $this->classifyAccruals($marketId, (int) $duplicate->id, (int) $canonical->id);
 
         return [
             'blocking_counts' => $blockingCounts,
             'transfer_counts' => $transferCounts,
+            'tenant_binding_classification' => $tenantBindingClassification,
             'accrual_classification' => $accrualClassification,
         ];
     }
@@ -422,17 +636,18 @@ final class DuplicateSpaceResolutionService
     /**
      * Determine the duplicate-resolution classification.
      *
-     * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, historical_tail_accruals: int, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string, has_linked_contract_accruals: bool}, transfer_counts: array<string, int>}  $linkClassification
+     * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, historical_tail_accruals: int, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string, has_linked_contract_accruals: bool}, transfer_counts: array<string, int>, tenant_binding_classification: array{blocking_tenant_bindings: int, safe_snapshot_tenant_bindings: int}}  $linkClassification
      */
     private function classifyDuplicateCase(array $linkClassification): string
     {
         $blockingCounts = $linkClassification['blocking_counts'];
         $accrualClassification = $linkClassification['accrual_classification'];
         $transferCounts = $linkClassification['transfer_counts'];
+        $tenantBindingClassification = $linkClassification['tenant_binding_classification'];
 
         // Check blocking links other than accruals first.
         $blockingExceptAccruals = $blockingCounts;
-        unset($blockingExceptAccruals['accruals']);
+        unset($blockingExceptAccruals['accruals'], $blockingExceptAccruals['tenant_bindings']);
         $hasBlockingLinks = array_sum($blockingExceptAccruals) > 0;
 
         if ($hasBlockingLinks) {
@@ -483,11 +698,12 @@ final class DuplicateSpaceResolutionService
     }
 
     /**
-     * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, has_linked_contract_accruals: bool, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string}}  $linkClassification
+     * @param  array{blocking_counts: array<string, int>, accrual_classification: array{blocking_accruals: int, has_linked_contract_accruals: bool, duplicate_latest_accrual_period: ?string, canonical_latest_accrual_period: ?string}, tenant_binding_classification: array{blocking_tenant_bindings: int, safe_snapshot_tenant_bindings: int}}  $linkClassification
      */
     private function throwIfClassifiedAsBlocked(array $linkClassification): void
     {
         $blockingCounts = $linkClassification['blocking_counts'];
+        $tenantBindingClassification = $linkClassification['tenant_binding_classification'];
         $accrualClassification = $linkClassification['accrual_classification'];
 
         // Active contracts are always blocking.
@@ -497,9 +713,15 @@ final class DuplicateSpaceResolutionService
             ]);
         }
 
+        if (($tenantBindingClassification['blocking_tenant_bindings'] ?? 0) > 0) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Duplicate space has blocking tenant bindings: ' . ($tenantBindingClassification['blocking_tenant_bindings']) . '.',
+            ]);
+        }
+
         // Any other business links also block automatic resolution.
         $blockingExceptAccruals = $blockingCounts;
-        unset($blockingExceptAccruals['accruals']);
+        unset($blockingExceptAccruals['accruals'], $blockingExceptAccruals['tenant_bindings']);
         $nonZeroBlocking = array_filter($blockingExceptAccruals, static fn (int $count): bool => $count > 0);
 
         if ($nonZeroBlocking !== []) {
