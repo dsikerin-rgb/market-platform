@@ -104,7 +104,7 @@ class MapReviewContractOverrideTest extends TestCase
             'is_active' => true,
         ]);
 
-        TenantAccrual::query()->create([
+        $accrual = TenantAccrual::query()->create([
             'market_id' => $market->id,
             'tenant_id' => $oldTenant->id,
             'market_space_id' => $space->id,
@@ -153,7 +153,7 @@ class MapReviewContractOverrideTest extends TestCase
             'is_active' => true,
         ]);
 
-        TenantAccrual::query()->create([
+        $accrual = TenantAccrual::query()->create([
             'market_id' => $market->id,
             'tenant_id' => $financialTenant->id,
             'market_space_id' => $space->id,
@@ -270,6 +270,318 @@ class MapReviewContractOverrideTest extends TestCase
             ->assertSee('05.2026', false)
             ->assertSee('unmatched', false)
             ->assertSee('accruals-1c.csv', false);
+    }
+
+    public function test_review_results_service_marks_financial_signal_for_tenant_resolution_when_accrual_tenant_is_inactive(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Samkolbas LLC',
+            'is_active' => true,
+        ]);
+
+        $inactiveTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => '1c-inactive-detyateva',
+            'name' => 'Detyateva O.S. IP',
+            'inn' => '5400000001',
+            'is_active' => false,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/2',
+            'display_name' => 'Odex',
+            'code' => 'p56-2-resolution',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $inactiveTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_file' => 'accruals-1c.csv',
+            'source_row_hash' => sha1('financial-signal-inactive-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => '1c-inactive-detyateva',
+                'tenant_name' => 'Detyateva O.S. IP',
+                'inn' => '5400000001',
+                'kpp' => '540001001',
+            ], JSON_UNESCAPED_UNICODE),
+            'imported_at' => '2026-05-18 10:00:00',
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        $this->assertTrue((bool) data_get($rows[0], 'diagnostics.financial_signal.requires_tenant_resolution'));
+        $this->assertSame('1c-inactive-detyateva', data_get($rows[0], 'diagnostics.financial_signal.tenant_external_id'));
+        $this->assertSame('5400000001', data_get($rows[0], 'diagnostics.financial_signal.tenant_inn'));
+        $this->assertSame('540001001', data_get($rows[0], 'diagnostics.financial_signal.tenant_kpp'));
+    }
+
+    public function test_map_review_page_shows_financial_tenant_resolution_action(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Samkolbas LLC',
+            'is_active' => true,
+        ]);
+
+        $inactiveTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => '1c-review-only',
+            'name' => 'Detyateva O.S. IP',
+            'inn' => '5400000002',
+            'is_active' => false,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/3',
+            'display_name' => 'Odex',
+            'code' => 'p56-3-resolution',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $inactiveTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_file' => 'accruals-1c.csv',
+            'source_row_hash' => sha1('financial-signal-resolution-page'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => '1c-review-only',
+                'tenant_name' => 'Detyateva O.S. IP',
+                'inn' => '5400000002',
+            ], JSON_UNESCAPED_UNICODE),
+            'imported_at' => '2026-05-18 10:00:00',
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('data-mrr-accrual-id="' . $accrual->id . '"', false);
+    }
+
+    public function test_review_resolve_financial_tenant_endpoint_matches_existing_tenant_by_inn_and_activates_it(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $matchedTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Detyateva O.S. IP',
+            'inn' => '5400000010',
+            'is_active' => false,
+        ]);
+
+        $placeholderTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'placeholder-detyateva',
+            'name' => 'Imported placeholder',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/4',
+            'display_name' => 'Odex',
+            'code' => 'p56-4-resolution',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $placeholderTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_row_hash' => sha1('financial-signal-match-by-inn'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => '550e8400-e29b-41d4-a716-446655440000',
+                'tenant_name' => 'Detyateva O.S. IP',
+                'inn' => '5400000010',
+                'kpp' => '540001010',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-resolve-financial-tenant', [
+            'market_space_id' => $space->id,
+            'accrual_id' => $accrual->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_resolved_existing')
+            ->assertJsonPath('tenant.id', (int) $matchedTenant->id);
+
+        $matchedTenant->refresh();
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $matchedTenant->external_id);
+        $this->assertSame('550e8400-e29b-41d4-a716-446655440000', $matchedTenant->one_c_uid);
+        $this->assertTrue((bool) $matchedTenant->is_active);
+        $this->assertSame('540001010', $matchedTenant->kpp);
+
+        $accrual->refresh();
+        $this->assertSame((int) $matchedTenant->id, (int) $accrual->tenant_id);
+    }
+
+    public function test_review_resolve_financial_tenant_endpoint_creates_new_tenant_and_then_allows_manual_switch(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $placeholderTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'placeholder-financial-create',
+            'name' => 'Placeholder tenant',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/5',
+            'display_name' => 'Odex',
+            'code' => 'p56-5-resolution',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $placeholderTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_row_hash' => sha1('financial-signal-create-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => '1c-created-detyateva',
+                'tenant_name' => 'Detyateva O.S. IP',
+                'inn' => '5400000020',
+                'kpp' => '540001020',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-resolve-financial-tenant', [
+            'market_space_id' => $space->id,
+            'accrual_id' => $accrual->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_created');
+
+        $createdTenant = Tenant::query()
+            ->where('market_id', $market->id)
+            ->where('external_id', '1c-created-detyateva')
+            ->firstOrFail();
+
+        $this->assertTrue((bool) $createdTenant->is_active);
+        $this->assertSame('Detyateva O.S. IP', $createdTenant->name);
+
+        $accrual->refresh();
+        $this->assertSame((int) $createdTenant->id, (int) $accrual->tenant_id);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('data-mrr-suggested-tenant-id="' . $createdTenant->id . '"', false);
+    }
+
+    public function test_review_resolve_financial_tenant_endpoint_returns_controlled_failure_without_identifiers(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $placeholderTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'placeholder-financial-fail',
+            'name' => 'Placeholder tenant',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'P56/6',
+            'display_name' => 'Odex',
+            'code' => 'p56-6-resolution',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $placeholderTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => '1c',
+            'source_row_hash' => sha1('financial-signal-fail-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_name' => 'Detyateva O.S. IP',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-resolve-financial-tenant', [
+            'market_space_id' => $space->id,
+            'accrual_id' => $accrual->id,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('ok', false)
+            ->assertJsonPath('mode', 'tenant_resolve_failed');
     }
 
     public function test_map_review_page_shows_contract_confirmation_and_effective_date(): void

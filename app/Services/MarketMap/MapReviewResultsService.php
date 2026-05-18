@@ -756,6 +756,22 @@ class MapReviewResultsService
             'ct.name as current_tenant_name',
         ];
 
+        if (Schema::hasColumn('tenants', 'external_id')) {
+            $select[] = 'at.external_id as accrual_tenant_external_id';
+        }
+
+        if (Schema::hasColumn('tenants', 'inn')) {
+            $select[] = 'at.inn as accrual_tenant_inn';
+        }
+
+        if (Schema::hasColumn('tenants', 'kpp')) {
+            $select[] = 'at.kpp as accrual_tenant_kpp';
+        }
+
+        if (Schema::hasColumn('tenants', 'is_active')) {
+            $select[] = 'at.is_active as accrual_tenant_is_active';
+        }
+
         if (Schema::hasColumn('tenant_accruals', 'period')) {
             $select[] = 'ta.period as period';
         }
@@ -774,6 +790,14 @@ class MapReviewResultsService
 
         if (Schema::hasColumn('tenant_accruals', 'imported_at')) {
             $select[] = 'ta.imported_at as imported_at';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'source')) {
+            $select[] = 'ta.source as source';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'payload')) {
+            $select[] = 'ta.payload as payload';
         }
 
         $rows = DB::table('tenant_accruals as ta')
@@ -835,13 +859,31 @@ class MapReviewResultsService
                 }
             }
 
+            $payload = $this->decodeJsonArray($row->payload ?? null);
+            $tenantExternalId = trim((string) ($payload['tenant_external_id'] ?? ($row->accrual_tenant_external_id ?? '')));
+            $tenantInn = trim((string) ($payload['inn'] ?? ($row->accrual_tenant_inn ?? '')));
+            $tenantKpp = trim((string) ($payload['kpp'] ?? ($row->accrual_tenant_kpp ?? '')));
+            $tenantName = trim((string) ($row->accrual_tenant_name ?? ''));
+
+            if ($tenantName === '') {
+                $tenantName = trim((string) ($payload['tenant_name'] ?? ''));
+            }
+
+            $tenantIsActive = isset($row->accrual_tenant_is_active)
+                ? (bool) $row->accrual_tenant_is_active
+                : (int) ($row->accrual_tenant_id ?? 0) > 0;
+
             $signals[$spaceId] = [
                 'priority' => 100,
-                'source' => 'tenant_accruals',
+                'source' => isset($row->source) ? (string) $row->source : 'tenant_accruals',
                 'label' => 'Финконтур сообщает о новом арендаторе',
                 'accrual_id' => (int) ($row->accrual_id ?? 0),
                 'tenant_id' => (int) ($row->accrual_tenant_id ?? 0),
-                'tenant_name' => trim((string) ($row->accrual_tenant_name ?? '')),
+                'tenant_name' => $tenantName,
+                'tenant_external_id' => $tenantExternalId !== '' ? $tenantExternalId : null,
+                'tenant_inn' => $tenantInn !== '' ? $tenantInn : null,
+                'tenant_kpp' => $tenantKpp !== '' ? $tenantKpp : null,
+                'requires_tenant_resolution' => ((int) ($row->accrual_tenant_id ?? 0) <= 0) || ! $tenantIsActive,
                 'current_tenant_id' => (int) ($row->current_tenant_id ?? 0),
                 'current_tenant_name' => trim((string) ($row->current_tenant_name ?? '')),
                 'latest_period_label' => $period,
@@ -899,10 +941,34 @@ class MapReviewResultsService
     {
         return [
             'observed_tenant_name' => trim((string) ($financialSignal['tenant_name'] ?? '')) ?: null,
+            'observed_tenant_id' => (int) ($financialSignal['tenant_id'] ?? 0) ?: null,
+            'observed_tenant_external_id' => trim((string) ($financialSignal['tenant_external_id'] ?? '')) ?: null,
+            'observed_tenant_inn' => trim((string) ($financialSignal['tenant_inn'] ?? '')) ?: null,
+            'observed_tenant_kpp' => trim((string) ($financialSignal['tenant_kpp'] ?? '')) ?: null,
+            'requires_tenant_resolution' => (bool) ($financialSignal['requires_tenant_resolution'] ?? false),
+            'accrual_id' => (int) ($financialSignal['accrual_id'] ?? 0) ?: null,
             'review_comment' => 'Основание: начисление из финансового контура без найденного договора.',
             'author_name' => 'Система',
             'recorded_at' => $createdAt,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeJsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
     }
 
     /**

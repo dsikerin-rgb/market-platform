@@ -2686,6 +2686,11 @@
                                             $financialPeriodLabel = trim((string) ($financialSignal['latest_period_label'] ?? ''));
                                             $financialSourceFile = trim((string) ($financialSignal['source_file'] ?? ''));
                                             $financialContractStatus = trim((string) ($financialSignal['contract_link_status'] ?? ''));
+                                            $financialTenantExternalId = trim((string) ($financialSignal['tenant_external_id'] ?? ''));
+                                            $financialTenantInn = trim((string) ($financialSignal['tenant_inn'] ?? ''));
+                                            $financialTenantKpp = trim((string) ($financialSignal['tenant_kpp'] ?? ''));
+                                            $financialAccrualId = (int) ($financialSignal['accrual_id'] ?? 0);
+                                            $financialRequiresTenantResolution = (bool) ($financialSignal['requires_tenant_resolution'] ?? false);
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
@@ -2696,9 +2701,13 @@
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $canManualTenantSwitch = $attentionTab !== 'unconfirmed_links'
                                                 && ! $isContractTenantOverride
+                                                && ! $financialRequiresTenantResolution
                                                 && ($isTenantCase || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1);
+                                            $canResolveFinancialTenant = $attentionTab !== 'unconfirmed_links'
+                                                && $isFinancialSignalCase
+                                                && $financialRequiresTenantResolution;
                                             $hasPrimaryResolutionAction = $attentionTab !== 'unconfirmed_links'
-                                                && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride || $hasDuplicateResolutionAction || $canConfirmFree || $canManualTenantSwitch);
+                                                && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride || $hasDuplicateResolutionAction || $canConfirmFree || $canManualTenantSwitch || $canResolveFinancialTenant);
                                             $showRelationAssessment = $contractOverride || $hasCandidates;
                                             $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null) ? $row['tenant_change_details'] : [];
                                             $observedTenantName = trim((string) ($tenantChangeDetails['observed_tenant_name'] ?? ''));
@@ -2921,6 +2930,21 @@
                             data-mrr-effective-date="{{ $contractOverride['starts_at'] ?? '' }}"
                         >
                             Подтвердить смену
+                        </button>
+                    @endif
+                    @if ($canResolveFinancialTenant)
+                        <button
+                            type="button"
+                            class="mrr-link mrr-link--button mrr-link--primary"
+                            data-mrr-financial-tenant-resolve-open
+                            data-mrr-space-id="{{ $row['space_id'] }}"
+                            data-mrr-accrual-id="{{ $financialAccrualId }}"
+                            data-mrr-tenant-name="{{ $financialTenantName }}"
+                            data-mrr-tenant-external-id="{{ $financialTenantExternalId }}"
+                            data-mrr-tenant-inn="{{ $financialTenantInn }}"
+                            data-mrr-tenant-kpp="{{ $financialTenantKpp }}"
+                        >
+                            Создать/сопоставить арендатора
                         </button>
                     @endif
                     @if ($canManualTenantSwitch)
@@ -3453,6 +3477,50 @@
                     </div>
                 </div>
 
+                <div id="mrrFinancialTenantResolveModal" class="mrr-clarify-modal mrr-contract-tenant-switch-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-financial-tenant-resolve-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrFinancialTenantResolveTitle"
+                        aria-describedby="mrrFinancialTenantResolveDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-financial-tenant-resolve-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Справочник арендаторов</div>
+                        <h3 id="mrrFinancialTenantResolveTitle" class="mrr-clarify-modal__title">Создать/сопоставить арендатора</h3>
+                        <p id="mrrFinancialTenantResolveDescription" class="mrr-clarify-modal__description">
+                            Финансовый сигнал указывает на арендатора, которого пока нельзя выбрать в смене арендатора. Сначала восстановите его карточку в локальной базе, затем выполните обычную смену арендатора.
+                        </p>
+                        <div id="mrrFinancialTenantResolveError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveName">Арендатор из сигнала</label>
+                            <input id="mrrFinancialTenantResolveName" class="mrr-clarify-modal__input" type="text" readonly>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveExternalId">1С external_id</label>
+                            <input id="mrrFinancialTenantResolveExternalId" class="mrr-clarify-modal__input" type="text" readonly>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveInn">ИНН</label>
+                            <input id="mrrFinancialTenantResolveInn" class="mrr-clarify-modal__input" type="text" readonly>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveKpp">КПП</label>
+                            <input id="mrrFinancialTenantResolveKpp" class="mrr-clarify-modal__input" type="text" readonly>
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-financial-tenant-resolve-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-financial-tenant-resolve-save>Создать/сопоставить</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="mrrManualTenantSwitchModal" class="mrr-clarify-modal mrr-contract-tenant-switch-modal" hidden aria-hidden="true">
                     <div class="mrr-clarify-modal__backdrop" data-mrr-manual-tenant-switch-close></div>
                     <div
@@ -3598,6 +3666,7 @@
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
                 const reviewContractTenantSwitchUrl = @json(route('filament.admin.market-map.review-contract-tenant-switch'));
                 const reviewTenantSwitchUrl = @json(route('filament.admin.market-map.review-tenant-switch'));
+                const reviewResolveFinancialTenantUrl = @json(route('filament.admin.market-map.review-resolve-financial-tenant'));
                 const aiReviewUrl = @json(route('filament.admin.map-review-results.ai-review'));
                 const tenantSwitchOptions = @json(array_values($tenantSwitchOptions ?? []));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -3633,6 +3702,13 @@
                 const contractTenantSwitchCloseContract = document.getElementById('mrrContractTenantSwitchCloseContract');
                 const contractTenantSwitchError = document.getElementById('mrrContractTenantSwitchError');
                 const contractTenantSwitchSave = contractTenantSwitchModal?.querySelector('[data-mrr-contract-tenant-switch-save]');
+                const financialTenantResolveModal = document.getElementById('mrrFinancialTenantResolveModal');
+                const financialTenantResolveName = document.getElementById('mrrFinancialTenantResolveName');
+                const financialTenantResolveExternalId = document.getElementById('mrrFinancialTenantResolveExternalId');
+                const financialTenantResolveInn = document.getElementById('mrrFinancialTenantResolveInn');
+                const financialTenantResolveKpp = document.getElementById('mrrFinancialTenantResolveKpp');
+                const financialTenantResolveError = document.getElementById('mrrFinancialTenantResolveError');
+                const financialTenantResolveSave = financialTenantResolveModal?.querySelector('[data-mrr-financial-tenant-resolve-save]');
                 const manualTenantSwitchModal = document.getElementById('mrrManualTenantSwitchModal');
                 const manualTenantSwitchCurrentTenant = document.getElementById('mrrManualTenantSwitchCurrentTenant');
                 const manualTenantSwitchTenant = document.getElementById('mrrManualTenantSwitchTenant');
@@ -3688,6 +3764,14 @@
                     tenantName: '',
                     contractNumber: '',
                     closePreviousContract: false,
+                };
+                const financialTenantResolveState = {
+                    spaceId: 0,
+                    accrualId: 0,
+                    tenantName: '',
+                    tenantExternalId: '',
+                    tenantInn: '',
+                    tenantKpp: '',
                 };
                 const manualTenantSwitchState = {
                     spaceId: 0,
@@ -3753,6 +3837,7 @@
                     && !quickReviewModal
                     && !confirmFreeModal
                     && !contractTenantSwitchModal
+                    && !financialTenantResolveModal
                     && !manualTenantSwitchModal
                 ) {
                     return;
@@ -4467,6 +4552,110 @@
                     return true;
                 };
 
+                const openFinancialTenantResolveModal = (button) => {
+                    if (!financialTenantResolveModal || !financialTenantResolveName || !financialTenantResolveExternalId || !financialTenantResolveInn || !financialTenantResolveKpp || !financialTenantResolveError || !financialTenantResolveSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+                    const accrualId = Number(button.dataset.mrrAccrualId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(accrualId) || accrualId <= 0) {
+                        return;
+                    }
+
+                    financialTenantResolveState.spaceId = spaceId;
+                    financialTenantResolveState.accrualId = accrualId;
+                    financialTenantResolveState.tenantName = String(button.dataset.mrrTenantName || '').trim();
+                    financialTenantResolveState.tenantExternalId = String(button.dataset.mrrTenantExternalId || '').trim();
+                    financialTenantResolveState.tenantInn = String(button.dataset.mrrTenantInn || '').trim();
+                    financialTenantResolveState.tenantKpp = String(button.dataset.mrrTenantKpp || '').trim();
+
+                    financialTenantResolveName.value = financialTenantResolveState.tenantName || '—';
+                    financialTenantResolveExternalId.value = financialTenantResolveState.tenantExternalId || '—';
+                    financialTenantResolveInn.value = financialTenantResolveState.tenantInn || '—';
+                    financialTenantResolveKpp.value = financialTenantResolveState.tenantKpp || '—';
+                    financialTenantResolveError.textContent = '';
+                    financialTenantResolveSave.removeAttribute('disabled');
+                    financialTenantResolveSave.textContent = 'Создать/сопоставить';
+
+                    financialTenantResolveModal.hidden = false;
+                    financialTenantResolveModal.classList.add('is-open');
+                    financialTenantResolveModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => financialTenantResolveSave.focus(), 0);
+                };
+
+                const closeFinancialTenantResolveModal = () => {
+                    if (!financialTenantResolveModal || !financialTenantResolveName || !financialTenantResolveExternalId || !financialTenantResolveInn || !financialTenantResolveKpp || !financialTenantResolveError || !financialTenantResolveSave) {
+                        return;
+                    }
+
+                    financialTenantResolveModal.classList.remove('is-open');
+                    financialTenantResolveModal.hidden = true;
+                    financialTenantResolveModal.setAttribute('aria-hidden', 'true');
+                    financialTenantResolveState.spaceId = 0;
+                    financialTenantResolveState.accrualId = 0;
+                    financialTenantResolveState.tenantName = '';
+                    financialTenantResolveState.tenantExternalId = '';
+                    financialTenantResolveState.tenantInn = '';
+                    financialTenantResolveState.tenantKpp = '';
+                    financialTenantResolveName.value = '';
+                    financialTenantResolveExternalId.value = '';
+                    financialTenantResolveInn.value = '';
+                    financialTenantResolveKpp.value = '';
+                    financialTenantResolveError.textContent = '';
+                    financialTenantResolveSave.removeAttribute('disabled');
+                    financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                };
+
+                const sendFinancialTenantResolve = async () => {
+                    if (!financialTenantResolveModal || !financialTenantResolveError || !financialTenantResolveSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(financialTenantResolveState.spaceId || 0);
+                    const accrualId = Number(financialTenantResolveState.accrualId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(accrualId) || accrualId <= 0) {
+                        financialTenantResolveError.textContent = 'Не удалось определить финансовый сигнал для восстановления арендатора.';
+                        return;
+                    }
+
+                    financialTenantResolveSave.setAttribute('disabled', 'disabled');
+                    financialTenantResolveSave.textContent = 'Сопоставляем...';
+                    financialTenantResolveError.textContent = '';
+
+                    const response = await fetch(reviewResolveFinancialTenantUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            market_space_id: spaceId,
+                            accrual_id: accrualId,
+                            tenant_external_id: financialTenantResolveState.tenantExternalId,
+                            tenant_name: financialTenantResolveState.tenantName,
+                            inn: financialTenantResolveState.tenantInn,
+                            kpp: financialTenantResolveState.tenantKpp,
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        financialTenantResolveSave.removeAttribute('disabled');
+                        financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                        financialTenantResolveError.textContent = String(data?.message || 'Не удалось создать или сопоставить арендатора.');
+                        return;
+                    }
+
+                    closeFinancialTenantResolveModal();
+                    window.location.reload();
+                };
+
                 const openManualTenantSwitchModal = (button) => {
                     if (!manualTenantSwitchModal || !manualTenantSwitchCurrentTenant || !manualTenantSwitchTenant || !manualTenantSwitchTenantSearch || !manualTenantSwitchTenantHint || !manualTenantSwitchTenantSuggestions || !manualTenantSwitchEffectiveDate || !manualTenantSwitchReason || !manualTenantSwitchCloseContract || !manualTenantSwitchError || !manualTenantSwitchSave) {
                         return;
@@ -5101,6 +5290,9 @@
                     const contractTenantSwitchLauncher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-contract-tenant-switch-open]')
                         : null;
+                    const financialTenantResolveLauncher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-financial-tenant-resolve-open]')
+                        : null;
                     const manualTenantSwitchLauncher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-manual-tenant-switch-open]')
                         : null;
@@ -5156,6 +5348,12 @@
                         return;
                     }
 
+                    if (financialTenantResolveLauncher && financialTenantResolveLauncher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openFinancialTenantResolveModal(financialTenantResolveLauncher);
+                        return;
+                    }
+
                     if (manualTenantSwitchLauncher && manualTenantSwitchLauncher instanceof HTMLElement) {
                         event.preventDefault();
                         openManualTenantSwitchModal(manualTenantSwitchLauncher);
@@ -5190,10 +5388,11 @@
                     const quickOpen = quickReviewModal?.classList.contains('is-open');
                     const confirmFreeOpen = confirmFreeModal?.classList.contains('is-open');
                     const contractTenantSwitchOpen = contractTenantSwitchModal?.classList.contains('is-open');
+                    const financialTenantResolveOpen = financialTenantResolveModal?.classList.contains('is-open');
                     const manualTenantSwitchOpen = manualTenantSwitchModal?.classList.contains('is-open');
                     const identityOpen = identityFixModal?.classList.contains('is-open');
                     const mergeRetireOpen = mergeRetireModal?.classList.contains('is-open');
-                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !contractTenantSwitchOpen && !manualTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
+                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !contractTenantSwitchOpen && !financialTenantResolveOpen && !manualTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
                         return;
                     }
 
@@ -5201,6 +5400,9 @@
                         event.preventDefault();
                         if (contractTenantSwitchOpen) {
                             closeContractTenantSwitchModal();
+                        }
+                        if (financialTenantResolveOpen) {
+                            closeFinancialTenantResolveModal();
                         }
                         if (manualTenantSwitchOpen) {
                             closeManualTenantSwitchModal();
@@ -5315,6 +5517,31 @@
                                 contractTenantSwitchSave.textContent = 'Запланировать смену';
                                 if (contractTenantSwitchError) {
                                     contractTenantSwitchError.textContent = String(errorInstance?.message || errorInstance);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (financialTenantResolveModal && financialTenantResolveSave) {
+                    financialTenantResolveModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-financial-tenant-resolve-close')) {
+                            event.preventDefault();
+                            closeFinancialTenantResolveModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-financial-tenant-resolve-save')) {
+                            event.preventDefault();
+                            sendFinancialTenantResolve().catch((errorInstance) => {
+                                financialTenantResolveSave.removeAttribute('disabled');
+                                financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                                if (financialTenantResolveError) {
+                                    financialTenantResolveError.textContent = String(errorInstance?.message || errorInstance);
                                 }
                             });
                         }

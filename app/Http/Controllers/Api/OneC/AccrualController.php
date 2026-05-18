@@ -12,6 +12,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
+use App\Services\Tenants\OneCTenantResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class AccrualController extends Controller
     private const ENDPOINT = '/api/1c/accruals';
     private const ENTITY_TYPE = 'accruals';
 
-    public function store(Request $request, TenantAccrualContractResolver $contractResolver): JsonResponse
+    public function store(Request $request, TenantAccrualContractResolver $contractResolver, OneCTenantResolver $tenantResolver): JsonResponse
     {
         $startedAt = now();
         $exchange = null;
@@ -210,14 +211,20 @@ class AccrualController extends Controller
                     continue;
                 }
 
-                $tenant = $this->resolveTenant(
+                $tenantResolution = $tenantResolver->resolve(
                     $marketId,
                     $tenantExternalId,
                     $item,
+                    'accruals',
                     $now,
-                    $tenantsCreated,
-                    $tenantsUpdatedByInn,
                 );
+                $tenant = $tenantResolution['tenant'] ?? null;
+
+                if (($tenantResolution['mode'] ?? 'failed') === 'created') {
+                    $tenantsCreated++;
+                } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
+                    $tenantsUpdatedByInn++;
+                }
 
                 if (! $tenant) {
                     $notFoundTenants[] = $tenantExternalId;
@@ -477,107 +484,6 @@ class AccrualController extends Controller
         }
 
         return trim(substr($header, 7));
-    }
-
-    private function resolveTenant(
-        int $marketId,
-        string $tenantExternalId,
-        array $item,
-        $now,
-        int &$tenantsCreated,
-        int &$tenantsUpdatedByInn,
-    ): ?Tenant {
-        $tenant = Tenant::query()
-            ->where('market_id', $marketId)
-            ->where('external_id', $tenantExternalId)
-            ->first();
-
-        if ($tenant) {
-            return $tenant;
-        }
-
-        $inn = trim((string) ($item['inn'] ?? ''));
-        $kpp = trim((string) ($item['kpp'] ?? ''));
-        $tenantName = trim((string) ($item['tenant_name'] ?? ''));
-
-        if ($inn !== '') {
-            $tenantByInn = Tenant::query()
-                ->where('market_id', $marketId)
-                ->where('inn', $inn)
-                ->first();
-
-            if ($tenantByInn) {
-                $tenantByInn->external_id = $tenantExternalId;
-
-                if (preg_match('/^[0-9a-fA-F-]{36}$/', $tenantExternalId)) {
-                    $tenantByInn->one_c_uid = $tenantExternalId;
-                }
-
-                if (($tenantByInn->kpp === null || $tenantByInn->kpp === '') && $kpp !== '') {
-                    $tenantByInn->kpp = $kpp;
-                }
-
-                if ($tenantName !== '' && ($tenantByInn->name === null || $tenantByInn->name === '')) {
-                    $tenantByInn->name = $tenantName;
-                }
-
-                $existing = $this->decodeOneCData($tenantByInn->one_c_data);
-                $existing = array_merge($existing, [
-                    'last_seen' => $now->toDateTimeString(),
-                    'inn' => $inn,
-                    'kpp' => $kpp,
-                    'tenant_name' => $tenantName,
-                ]);
-
-                $tenantByInn->one_c_data = $this->safeJsonEncode($existing);
-                $tenantByInn->save();
-
-                $tenantsUpdatedByInn++;
-
-                return $tenantByInn;
-            }
-        }
-
-        $newTenant = new Tenant();
-        $newTenant->market_id = $marketId;
-        $newTenant->inn = $inn !== '' ? $inn : null;
-        $newTenant->kpp = $kpp !== '' ? $kpp : null;
-        $newTenant->name = $tenantName !== '' ? $tenantName : ('1C tenant ' . $tenantExternalId);
-        $newTenant->external_id = $tenantExternalId;
-        $newTenant->is_active = true;
-
-        if (preg_match('/^[0-9a-fA-F-]{36}$/', $tenantExternalId)) {
-            $newTenant->one_c_uid = $tenantExternalId;
-        }
-
-        $newTenant->one_c_data = $this->safeJsonEncode([
-            'created_from' => 'accruals',
-            'first_seen' => $now->toDateTimeString(),
-            'last_seen' => $now->toDateTimeString(),
-            'inn' => $inn,
-            'kpp' => $kpp,
-            'tenant_name' => $tenantName,
-        ]);
-
-        $newTenant->save();
-        $tenantsCreated++;
-
-        return $newTenant;
-    }
-
-    private function decodeOneCData(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-
-            return is_array($decoded) ? $decoded : [];
-        }
-
-        return [];
     }
 
     private function normalizeMoney(mixed $value): ?float
