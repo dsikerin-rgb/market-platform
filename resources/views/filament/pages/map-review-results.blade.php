@@ -2947,8 +2947,10 @@
                             data-mrr-tenant-external-id="{{ $financialTenantExternalId }}"
                             data-mrr-tenant-inn="{{ $financialTenantInn }}"
                             data-mrr-tenant-kpp="{{ $financialTenantKpp }}"
+                            data-mrr-resolution-action="{{ $financialResolutionAction }}"
+                            data-mrr-resolution-label="{{ $financialResolveButtonLabel }}"
                         >
-                            Создать/сопоставить арендатора
+                            {{ $financialResolveButtonLabel }}
                         </button>
                     @endif
                     @if ($canManualTenantSwitch)
@@ -3492,7 +3494,7 @@
                     >
                         <button type="button" class="mrr-clarify-modal__close" data-mrr-financial-tenant-resolve-close aria-label="Закрыть">×</button>
                         <div class="mrr-clarify-modal__eyebrow">Справочник арендаторов</div>
-                        <h3 id="mrrFinancialTenantResolveTitle" class="mrr-clarify-modal__title">Создать/сопоставить арендатора</h3>
+                        <h3 id="mrrFinancialTenantResolveTitle" class="mrr-clarify-modal__title">&#x0412;&#x043E;&#x0441;&#x0441;&#x0442;&#x0430;&#x043D;&#x043E;&#x0432;&#x0438;&#x0442;&#x044C; &#x0430;&#x0440;&#x0435;&#x043D;&#x0434;&#x0430;&#x0442;&#x043E;&#x0440;&#x0430;</h3>
                         <p id="mrrFinancialTenantResolveDescription" class="mrr-clarify-modal__description">
                             Финансовый сигнал указывает на арендатора, которого пока нельзя выбрать в смене арендатора. Сначала восстановите его карточку в локальной базе, затем выполните обычную смену арендатора.
                         </p>
@@ -3504,7 +3506,7 @@
                         </div>
 
                         <div class="mrr-clarify-modal__field">
-                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveExternalId">1С external_id</label>
+                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveExternalId">External ID source</label>
                             <input id="mrrFinancialTenantResolveExternalId" class="mrr-clarify-modal__input" type="text" readonly>
                         </div>
 
@@ -3707,6 +3709,7 @@
                 const contractTenantSwitchError = document.getElementById('mrrContractTenantSwitchError');
                 const contractTenantSwitchSave = contractTenantSwitchModal?.querySelector('[data-mrr-contract-tenant-switch-save]');
                 const financialTenantResolveModal = document.getElementById('mrrFinancialTenantResolveModal');
+                const financialTenantResolveTitle = document.getElementById('mrrFinancialTenantResolveTitle');
                 const financialTenantResolveName = document.getElementById('mrrFinancialTenantResolveName');
                 const financialTenantResolveExternalId = document.getElementById('mrrFinancialTenantResolveExternalId');
                 const financialTenantResolveInn = document.getElementById('mrrFinancialTenantResolveInn');
@@ -4576,6 +4579,8 @@
                     financialTenantResolveState.tenantExternalId = String(button.dataset.mrrTenantExternalId || '').trim();
                     financialTenantResolveState.tenantInn = String(button.dataset.mrrTenantInn || '').trim();
                     financialTenantResolveState.tenantKpp = String(button.dataset.mrrTenantKpp || '').trim();
+                    financialTenantResolveState.resolutionAction = String(button.dataset.mrrResolutionAction || '').trim();
+                    financialTenantResolveState.resolutionLabel = String(button.dataset.mrrResolutionLabel || '').trim();
 
                     financialTenantResolveName.value = financialTenantResolveState.tenantName || '—';
                     financialTenantResolveExternalId.value = financialTenantResolveState.tenantExternalId || '—';
