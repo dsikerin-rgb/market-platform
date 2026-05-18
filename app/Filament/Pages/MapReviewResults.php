@@ -454,13 +454,30 @@ class MapReviewResults extends Page
             $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null)
                 ? $row['tenant_change_details']
                 : [];
-            $suggestedTenant = $this->resolveSuggestedTenantSwitchTarget(
-                [
-                    (string) ($tenantChangeDetails['observed_tenant_name'] ?? ''),
-                    (string) ($row['reason'] ?? ''),
-                ],
-                $normalizedTenants
-            );
+            $financialSignalTenantId = (int) data_get($row, 'diagnostics.financial_signal.tenant_id', 0);
+            $suggestedTenant = null;
+
+            if ($financialSignalTenantId > 0) {
+                foreach ($normalizedTenants as $tenant) {
+                    if ((int) ($tenant['id'] ?? 0) === $financialSignalTenantId) {
+                        $suggestedTenant = [
+                            'id' => (int) $tenant['id'],
+                            'name' => (string) $tenant['name'],
+                        ];
+                        break;
+                    }
+                }
+            }
+
+            if ($suggestedTenant === null) {
+                $suggestedTenant = $this->resolveSuggestedTenantSwitchTarget(
+                    [
+                        (string) ($tenantChangeDetails['observed_tenant_name'] ?? ''),
+                        (string) ($row['reason'] ?? ''),
+                    ],
+                    $normalizedTenants
+                );
+            }
 
             $row['suggested_target_tenant_id'] = (int) ($suggestedTenant['id'] ?? 0);
             $row['suggested_target_tenant_name'] = (string) ($suggestedTenant['name'] ?? '');

@@ -3066,6 +3066,110 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ]);
     })->name('filament.admin.market-map.review-tenant-switch');
 
+    Route::post('/admin/market-map/review-resolve-financial-tenant', function (Request $request) use (
+        $resolveMarketForMap,
+        $ensureCanEditShapes,
+        $buildMapReviewProgress
+    ) {
+        $ensureCanEditShapes();
+        $market = $resolveMarketForMap();
+
+        $validated = $request->validate([
+            'market_space_id' => ['required', 'integer', 'min:1'],
+            'accrual_id' => ['required', 'integer', 'min:1'],
+            'tenant_external_id' => ['nullable', 'string', 'max:255'],
+            'tenant_name' => ['nullable', 'string', 'max:255'],
+            'inn' => ['nullable', 'string', 'max:32'],
+            'kpp' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        $space = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['market_space_id'])
+            ->first();
+
+        if (! $space) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review space was not found in the current market.',
+            ], 404);
+        }
+
+        $accrual = \App\Models\TenantAccrual::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['accrual_id'])
+            ->where('market_space_id', (int) $space->id)
+            ->first();
+
+        if (! $accrual) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Financial signal accrual was not found in the current market.',
+            ], 404);
+        }
+
+        $payload = [];
+        if (is_array($accrual->payload)) {
+            $payload = $accrual->payload;
+        } elseif (is_string($accrual->payload) && $accrual->payload !== '') {
+            $decoded = json_decode($accrual->payload, true);
+            $payload = is_array($decoded) ? $decoded : [];
+        }
+
+        $resolverPayload = [
+            'tenant_name' => trim((string) ($validated['tenant_name'] ?? '')) ?: trim((string) ($payload['tenant_name'] ?? '')),
+            'inn' => trim((string) ($validated['inn'] ?? '')) ?: trim((string) ($payload['inn'] ?? '')),
+            'kpp' => trim((string) ($validated['kpp'] ?? '')) ?: trim((string) ($payload['kpp'] ?? '')),
+        ];
+        $tenantExternalId = trim((string) ($validated['tenant_external_id'] ?? '')) ?: trim((string) ($payload['tenant_external_id'] ?? ''));
+
+        $resolution = app(\App\Services\Tenants\OneCTenantResolver::class)->resolve(
+            (int) $market->id,
+            $tenantExternalId,
+            $resolverPayload,
+            'map_review_financial_signal',
+            now(),
+            ['activate_resolved_tenant' => true],
+        );
+
+        /** @var \App\Models\Tenant|null $resolvedTenant */
+        $resolvedTenant = $resolution['tenant'] ?? null;
+
+        if (! $resolvedTenant) {
+            return response()->json([
+                'ok' => false,
+                'mode' => 'tenant_resolve_failed',
+                'message' => 'Не удалось безопасно создать или сопоставить арендатора. Нужен external_id из 1С или существующий ИНН.',
+                'progress' => $buildMapReviewProgress($market),
+            ], 422);
+        }
+
+        $updatedAccruals = 0;
+        $originalTenantId = (int) ($accrual->tenant_id ?? 0);
+
+        if ($originalTenantId > 0 && $originalTenantId !== (int) $resolvedTenant->id) {
+            $updatedAccruals = \App\Models\TenantAccrual::query()
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $space->id)
+                ->where('tenant_id', $originalTenantId)
+                ->update([
+                    'tenant_id' => (int) $resolvedTenant->id,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'mode' => ($resolution['mode'] ?? 'failed') === 'created' ? 'tenant_created' : 'tenant_resolved_existing',
+            'tenant' => [
+                'id' => (int) $resolvedTenant->id,
+                'name' => (string) $resolvedTenant->name,
+            ],
+            'accruals_updated' => $updatedAccruals,
+            'progress' => $buildMapReviewProgress($market),
+        ]);
+    })->name('filament.admin.market-map.review-resolve-financial-tenant');
+
     Route::post('/admin/market-map/review-decision', function (Request $request) use (
         $resolveMarketForMap,
         $ensureCanEditShapes,

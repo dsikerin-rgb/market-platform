@@ -11,6 +11,7 @@ use App\Models\MarketSpace;
 use App\Models\MarketIntegration;
 use App\Models\Tenant;
 use App\Models\TenantContract;
+use App\Services\Tenants\OneCTenantResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class ContractDebtController extends Controller
      * Важно: идемпотентность обеспечиваем по СТАБИЛЬНЫМ данным строки долга
      * (без calculated_at и без "временных" метаданных).
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, OneCTenantResolver $tenantResolver): JsonResponse
     {
         $startedAt = now();
 
@@ -203,121 +204,19 @@ class ContractDebtController extends Controller
                 $paidAmount = $this->normalizeMoney($item['paid_amount']);
                 $debtAmount = $this->normalizeMoney($item['debt_amount']);
 
-                // 1) основной путь — по external_id
-                $tenant = Tenant::query()
-                    ->where('market_id', $marketId)
-                    ->where('external_id', $tenantExternalId)
-                    ->first();
+                $tenantResolution = $tenantResolver->resolve(
+                    $marketId,
+                    $tenantExternalId,
+                    $item,
+                    'contract_debts',
+                    $now,
+                );
+                $tenant = $tenantResolution['tenant'] ?? null;
 
-                // 2) fallback — по ИНН (и привязать external_id), либо создать арендатора
-                if (! $tenant) {
-                    $inn = trim((string) ($item['inn'] ?? ''));
-                    $kpp = trim((string) ($item['kpp'] ?? ''));
-                    $tenantName = trim((string) ($item['tenant_name'] ?? ''));
-
-                    if ($inn !== '') {
-                        $tenantByInn = Tenant::query()
-                            ->where('market_id', $marketId)
-                            ->where('inn', $inn)
-                            ->first();
-
-                        if ($tenantByInn) {
-                            $tenantByInn->external_id = $tenantExternalId;
-
-                            if (preg_match('/^[0-9a-fA-F-]{36}$/', $tenantExternalId)) {
-                                $tenantByInn->one_c_uid = $tenantExternalId;
-                            }
-
-                            if (($tenantByInn->inn === null || $tenantByInn->inn === '') && $inn !== '') {
-                                $tenantByInn->inn = $inn;
-                            }
-
-                            if (($tenantByInn->kpp === null || $tenantByInn->kpp === '') && $kpp !== '') {
-                                $tenantByInn->kpp = $kpp;
-                            }
-
-                            if ($tenantName !== '' && ($tenantByInn->name === null || $tenantByInn->name === '')) {
-                                $tenantByInn->name = $tenantName;
-                            }
-
-                            $existing = $this->decodeOneCData($tenantByInn->one_c_data);
-
-                            $existing = array_merge($existing, [
-                                'last_seen' => $now->toDateTimeString(),
-                                'inn' => $inn,
-                                'kpp' => $kpp,
-                                'tenant_name' => $tenantName,
-                            ]);
-
-                            // КРИТИЧНО: one_c_data пишем как JSON-строку (и устойчиво к не-UTF8)
-                            $tenantByInn->one_c_data = $this->safeJsonEncode($existing);
-
-                            $tenantByInn->save();
-                            $tenant = $tenantByInn;
-
-                            $tenantsUpdatedByInn++;
-                        } else {
-                            $newTenant = new Tenant();
-                            $newTenant->market_id = $marketId;
-                            $newTenant->inn = $inn;
-                            $newTenant->kpp = $kpp !== '' ? $kpp : null;
-                            $newTenant->name = $tenantName !== '' ? $tenantName : ('1C tenant ' . $inn);
-                            $newTenant->external_id = $tenantExternalId;
-
-                            if (preg_match('/^[0-9a-fA-F-]{36}$/', $tenantExternalId)) {
-                                $newTenant->one_c_uid = $tenantExternalId;
-                            }
-
-                            // чтобы был видимым в админке
-                            $newTenant->is_active = true;
-
-                            $newTenant->one_c_data = $this->safeJsonEncode([
-                                'created_from' => 'contract_debts',
-                                'first_seen' => $now->toDateTimeString(),
-                                'last_seen' => $now->toDateTimeString(),
-                                'inn' => $inn,
-                                'kpp' => $kpp,
-                                'tenant_name' => $tenantName,
-                            ]);
-
-                            $newTenant->save();
-                            $tenant = $newTenant;
-
-                            $tenantsCreated++;
-                        }
-                    } else {
-                        // ИНН отсутствует — всё равно создаём арендатора (требование: автосоздание)
-                        $kpp = trim((string) ($item['kpp'] ?? ''));
-                        $tenantName = trim((string) ($item['tenant_name'] ?? ''));
-
-                        $newTenant = new Tenant();
-                        $newTenant->market_id = $marketId;
-                        $newTenant->inn = null;
-                        $newTenant->kpp = $kpp !== '' ? $kpp : null;
-
-                        $newTenant->name = $tenantName !== '' ? $tenantName : ('1C tenant ' . $tenantExternalId);
-                        $newTenant->external_id = $tenantExternalId;
-
-                        if (preg_match('/^[0-9a-fA-F-]{36}$/', $tenantExternalId)) {
-                            $newTenant->one_c_uid = $tenantExternalId;
-                        }
-
-                        $newTenant->is_active = true;
-
-                        $newTenant->one_c_data = $this->safeJsonEncode([
-                            'created_from' => 'contract_debts',
-                            'first_seen' => $now->toDateTimeString(),
-                            'last_seen' => $now->toDateTimeString(),
-                            'inn' => null,
-                            'kpp' => $kpp,
-                            'tenant_name' => $tenantName,
-                        ]);
-
-                        $newTenant->save();
-                        $tenant = $newTenant;
-
-                        $tenantsCreated++;
-                    }
+                if (($tenantResolution['mode'] ?? 'failed') === 'created') {
+                    $tenantsCreated++;
+                } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
+                    $tenantsUpdatedByInn++;
                 }
 
                 if (! $tenant) {
@@ -503,25 +402,6 @@ class ContractDebtController extends Controller
         }
 
         return trim(substr($header, 7));
-    }
-
-    /**
-     * one_c_data может быть: null | array (если где-то есть cast) | JSON string.
-     * Нормализуем в array.
-     */
-    private function decodeOneCData(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-
-            return is_array($decoded) ? $decoded : [];
-        }
-
-        return [];
     }
 
     /**
