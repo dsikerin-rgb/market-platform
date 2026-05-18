@@ -2650,14 +2650,19 @@
                                             $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $looksFreeCase && ! $hasCandidates;
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
+                                            $canManualTenantSwitch = $attentionTab !== 'unconfirmed_links'
+                                                && ! $isContractTenantOverride
+                                                && ($isTenantCase || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $hasPrimaryResolutionAction = $attentionTab !== 'unconfirmed_links'
-                                                && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride || $hasDuplicateResolutionAction || $canConfirmFree);
+                                                && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride || $hasDuplicateResolutionAction || $canConfirmFree || $canManualTenantSwitch);
                                             $showRelationAssessment = $contractOverride || $hasCandidates;
                                             $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null) ? $row['tenant_change_details'] : [];
                                             $observedTenantName = trim((string) ($tenantChangeDetails['observed_tenant_name'] ?? ''));
                                             $tenantChangeComment = trim((string) ($tenantChangeDetails['review_comment'] ?? ''));
                                             $tenantChangeAuthor = trim((string) ($tenantChangeDetails['author_name'] ?? ''));
                                             $tenantChangeRecordedAt = trim((string) ($tenantChangeDetails['recorded_at'] ?? ''));
+                                            $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
+                                            $suggestedTargetTenantName = trim((string) ($row['suggested_target_tenant_name'] ?? ''));
                                             $hasTenantChangeDetails = $isTenantCase
                                                 && ($observedTenantName !== ''
                                                     || $tenantChangeComment !== '');
@@ -2841,6 +2846,21 @@
                             data-mrr-effective-date="{{ $contractOverride['starts_at'] ?? '' }}"
                         >
                             Подтвердить смену
+                        </button>
+                    @endif
+                    @if ($canManualTenantSwitch)
+                        <button
+                            type="button"
+                            class="mrr-link mrr-link--button mrr-link--primary"
+                            data-mrr-manual-tenant-switch-open
+                            data-mrr-space-id="{{ $row['space_id'] }}"
+                            data-mrr-current-tenant-name="{{ $currentTenantName }}"
+                            data-mrr-suggested-tenant-id="{{ $suggestedTargetTenantId }}"
+                            data-mrr-suggested-tenant-name="{{ $suggestedTargetTenantName }}"
+                            data-mrr-effective-date="{{ now()->format('Y-m-d') }}"
+                            data-mrr-reason="{{ $tenantChangeComment !== '' ? $tenantChangeComment : ($row['reason'] ?? '') }}"
+                        >
+                            Сменить арендатора
                         </button>
                     @endif
                     @if ($hasIdentityClarification && $isContractTenantOverride)
@@ -3344,9 +3364,72 @@
                             <textarea id="mrrContractTenantSwitchReason" class="mrr-clarify-modal__input mrr-quick-review__field" maxlength="2000" placeholder="Необязательно: что проверили перед подтверждением"></textarea>
                         </div>
 
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-quick-review__choice" style="justify-content:flex-start;gap:0.5rem;padding:0.75rem 0.9rem;border-radius:0.875rem;">
+                                <input id="mrrContractTenantSwitchCloseContract" type="checkbox" style="margin:0;">
+                                <span>Завершить прежний договор датой начала нового договора</span>
+                            </label>
+                        </div>
+
                         <div class="mrr-clarify-modal__actions">
                             <button type="button" class="mrr-clarify-modal__button" data-mrr-contract-tenant-switch-close>Отмена</button>
                             <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-contract-tenant-switch-save>Запланировать смену</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mrrManualTenantSwitchModal" class="mrr-clarify-modal mrr-contract-tenant-switch-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-manual-tenant-switch-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrManualTenantSwitchTitle"
+                        aria-describedby="mrrManualTenantSwitchDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-manual-tenant-switch-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Смена арендатора</div>
+                        <h3 id="mrrManualTenantSwitchTitle" class="mrr-clarify-modal__title">Сменить арендатора на карточке ревизии</h3>
+                        <p id="mrrManualTenantSwitchDescription" class="mrr-clarify-modal__description">
+                            Подтвердите нового арендатора для места, укажите дату начала действия и при необходимости завершите прежний договор этой же датой.
+                        </p>
+                        <div id="mrrManualTenantSwitchError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrManualTenantSwitchCurrentTenant">Текущий арендатор</label>
+                            <input id="mrrManualTenantSwitchCurrentTenant" class="mrr-clarify-modal__input" type="text" readonly>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrManualTenantSwitchTenant">Новый арендатор</label>
+                            <select id="mrrManualTenantSwitchTenant" class="mrr-clarify-modal__input">
+                                <option value="">Выберите арендатора</option>
+                                @foreach (($tenantSwitchOptions ?? []) as $tenantOption)
+                                    <option value="{{ (int) ($tenantOption['id'] ?? 0) }}">{{ $tenantOption['name'] ?? '' }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrManualTenantSwitchEffectiveDate">Дата начала действия</label>
+                            <input id="mrrManualTenantSwitchEffectiveDate" class="mrr-clarify-modal__input" type="date">
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrManualTenantSwitchReason">Комментарий</label>
+                            <textarea id="mrrManualTenantSwitchReason" class="mrr-clarify-modal__input mrr-quick-review__field" maxlength="2000" placeholder="Что проверили перед сменой арендатора"></textarea>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-quick-review__choice" style="justify-content:flex-start;gap:0.5rem;padding:0.75rem 0.9rem;border-radius:0.875rem;">
+                                <input id="mrrManualTenantSwitchCloseContract" type="checkbox" style="margin:0;">
+                                <span>Завершить прежний договор датой начала нового договора</span>
+                            </label>
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-manual-tenant-switch-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-manual-tenant-switch-save>Запланировать смену</button>
                         </div>
                     </div>
                 </div>
@@ -3434,6 +3517,7 @@
             (() => {
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
                 const reviewContractTenantSwitchUrl = @json(route('filament.admin.market-map.review-contract-tenant-switch'));
+                const reviewTenantSwitchUrl = @json(route('filament.admin.market-map.review-tenant-switch'));
                 const aiReviewUrl = @json(route('filament.admin.map-review-results.ai-review'));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
                 const quickReviewModal = document.getElementById('mrrQuickReviewModal');
@@ -3465,8 +3549,17 @@
                 const contractTenantSwitchContract = document.getElementById('mrrContractTenantSwitchContract');
                 const contractTenantSwitchEffectiveDate = document.getElementById('mrrContractTenantSwitchEffectiveDate');
                 const contractTenantSwitchReason = document.getElementById('mrrContractTenantSwitchReason');
+                const contractTenantSwitchCloseContract = document.getElementById('mrrContractTenantSwitchCloseContract');
                 const contractTenantSwitchError = document.getElementById('mrrContractTenantSwitchError');
                 const contractTenantSwitchSave = contractTenantSwitchModal?.querySelector('[data-mrr-contract-tenant-switch-save]');
+                const manualTenantSwitchModal = document.getElementById('mrrManualTenantSwitchModal');
+                const manualTenantSwitchCurrentTenant = document.getElementById('mrrManualTenantSwitchCurrentTenant');
+                const manualTenantSwitchTenant = document.getElementById('mrrManualTenantSwitchTenant');
+                const manualTenantSwitchEffectiveDate = document.getElementById('mrrManualTenantSwitchEffectiveDate');
+                const manualTenantSwitchReason = document.getElementById('mrrManualTenantSwitchReason');
+                const manualTenantSwitchCloseContract = document.getElementById('mrrManualTenantSwitchCloseContract');
+                const manualTenantSwitchError = document.getElementById('mrrManualTenantSwitchError');
+                const manualTenantSwitchSave = manualTenantSwitchModal?.querySelector('[data-mrr-manual-tenant-switch-save]');
                 const modal = document.getElementById('mrrDuplicatePlanModal');
                 const currentCard = document.getElementById('mrrDuplicatePlanCurrentCard');
                 const candidateCard = document.getElementById('mrrDuplicatePlanCandidateCard');
@@ -3507,8 +3600,17 @@
                     spaceId: 0,
                     tenantId: 0,
                     contractId: 0,
+                    currentTenantName: '',
                     tenantName: '',
                     contractNumber: '',
+                    closePreviousContract: false,
+                };
+                const manualTenantSwitchState = {
+                    spaceId: 0,
+                    currentTenantName: '',
+                    suggestedTenantId: 0,
+                    suggestedTenantName: '',
+                    closePreviousContract: false,
                 };
                 const mergeRetireState = {
                     spaceId: 0,
@@ -3549,6 +3651,7 @@
                     && !quickReviewModal
                     && !confirmFreeModal
                     && !contractTenantSwitchModal
+                    && !manualTenantSwitchModal
                 ) {
                     return;
                 }
@@ -4252,11 +4355,46 @@
                     contractTenantSwitchReason.value = contractTenantSwitchState.contractNumber
                         ? `Подтвердить смену арендатора по договору ${contractTenantSwitchState.contractNumber}.`
                         : 'Подтвердить смену арендатора по договору.';
+                    if (contractTenantSwitchCloseContract) {
+                        contractTenantSwitchCloseContract.checked = false;
+                    }
                     contractTenantSwitchError.textContent = '';
                     contractTenantSwitchSave.removeAttribute('disabled');
                     contractTenantSwitchSave.textContent = 'Запланировать смену';
 
                     return true;
+                };
+
+                const openManualTenantSwitchModal = (button) => {
+                    if (!manualTenantSwitchModal || !manualTenantSwitchCurrentTenant || !manualTenantSwitchTenant || !manualTenantSwitchEffectiveDate || !manualTenantSwitchReason || !manualTenantSwitchCloseContract || !manualTenantSwitchError || !manualTenantSwitchSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        return;
+                    }
+
+                    manualTenantSwitchState.spaceId = spaceId;
+                    manualTenantSwitchState.currentTenantName = String(button.dataset.mrrCurrentTenantName || '').trim();
+                    manualTenantSwitchState.suggestedTenantId = Number(button.dataset.mrrSuggestedTenantId || 0);
+                    manualTenantSwitchState.suggestedTenantName = String(button.dataset.mrrSuggestedTenantName || '').trim();
+
+                    manualTenantSwitchCurrentTenant.value = manualTenantSwitchState.currentTenantName || '—';
+                    manualTenantSwitchTenant.value = manualTenantSwitchState.suggestedTenantId > 0 ? String(manualTenantSwitchState.suggestedTenantId) : '';
+                    manualTenantSwitchEffectiveDate.value = String(button.dataset.mrrEffectiveDate || '').trim();
+                    manualTenantSwitchReason.value = String(button.dataset.mrrReason || '').trim();
+                    manualTenantSwitchCloseContract.checked = false;
+                    manualTenantSwitchError.textContent = '';
+                    manualTenantSwitchSave.removeAttribute('disabled');
+                    manualTenantSwitchSave.textContent = 'Запланировать смену';
+
+                    manualTenantSwitchModal.hidden = false;
+                    manualTenantSwitchModal.classList.add('is-open');
+                    manualTenantSwitchModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => manualTenantSwitchTenant.focus(), 0);
                 };
 
                 const openContractTenantSwitchModal = (button) => {
@@ -4304,7 +4442,7 @@
                 };
 
                 const closeContractTenantSwitchModal = () => {
-                    if (!contractTenantSwitchModal || !contractTenantSwitchTenant || !contractTenantSwitchContract || !contractTenantSwitchEffectiveDate || !contractTenantSwitchReason || !contractTenantSwitchError || !contractTenantSwitchSave) {
+                    if (!contractTenantSwitchModal || !contractTenantSwitchTenant || !contractTenantSwitchContract || !contractTenantSwitchEffectiveDate || !contractTenantSwitchReason || !contractTenantSwitchError || !contractTenantSwitchSave || !contractTenantSwitchCloseContract) {
                         return;
                     }
 
@@ -4314,19 +4452,21 @@
                     contractTenantSwitchState.spaceId = 0;
                     contractTenantSwitchState.tenantId = 0;
                     contractTenantSwitchState.contractId = 0;
+                    contractTenantSwitchState.currentTenantName = '';
                     contractTenantSwitchState.tenantName = '';
                     contractTenantSwitchState.contractNumber = '';
                     contractTenantSwitchTenant.value = '';
                     contractTenantSwitchContract.value = '';
                     contractTenantSwitchEffectiveDate.value = '';
                     contractTenantSwitchReason.value = '';
+                    contractTenantSwitchCloseContract.checked = false;
                     contractTenantSwitchError.textContent = '';
                     contractTenantSwitchSave.removeAttribute('disabled');
                     contractTenantSwitchSave.textContent = 'Запланировать смену';
                 };
 
                 const sendContractTenantSwitch = async (options = {}) => {
-                    if (!contractTenantSwitchModal || !contractTenantSwitchTenant || !contractTenantSwitchContract || !contractTenantSwitchEffectiveDate || !contractTenantSwitchReason || !contractTenantSwitchError || !contractTenantSwitchSave) {
+                    if (!contractTenantSwitchModal || !contractTenantSwitchTenant || !contractTenantSwitchContract || !contractTenantSwitchEffectiveDate || !contractTenantSwitchReason || !contractTenantSwitchError || !contractTenantSwitchSave || !contractTenantSwitchCloseContract) {
                         return;
                     }
 
@@ -4364,6 +4504,7 @@
                             ...(contractId > 0 ? { contract_id: contractId } : {}),
                             effective_date: effectiveDate,
                             ...(reason ? { reason } : {}),
+                            close_previous_contract: contractTenantSwitchCloseContract.checked,
                         }),
                     });
 
@@ -4384,6 +4525,82 @@
 
                     // Закрываем модалку перед перезагрузкой
                     closeContractTenantSwitchModal();
+                    window.location.reload();
+                };
+
+                const closeManualTenantSwitchModal = () => {
+                    if (!manualTenantSwitchModal || !manualTenantSwitchCurrentTenant || !manualTenantSwitchTenant || !manualTenantSwitchEffectiveDate || !manualTenantSwitchReason || !manualTenantSwitchCloseContract || !manualTenantSwitchError || !manualTenantSwitchSave) {
+                        return;
+                    }
+
+                    manualTenantSwitchModal.classList.remove('is-open');
+                    manualTenantSwitchModal.hidden = true;
+                    manualTenantSwitchModal.setAttribute('aria-hidden', 'true');
+                    manualTenantSwitchState.spaceId = 0;
+                    manualTenantSwitchState.currentTenantName = '';
+                    manualTenantSwitchState.suggestedTenantId = 0;
+                    manualTenantSwitchState.suggestedTenantName = '';
+                    manualTenantSwitchCurrentTenant.value = '';
+                    manualTenantSwitchTenant.value = '';
+                    manualTenantSwitchEffectiveDate.value = '';
+                    manualTenantSwitchReason.value = '';
+                    manualTenantSwitchCloseContract.checked = false;
+                    manualTenantSwitchError.textContent = '';
+                    manualTenantSwitchSave.removeAttribute('disabled');
+                    manualTenantSwitchSave.textContent = 'Запланировать смену';
+                };
+
+                const sendManualTenantSwitch = async () => {
+                    if (!manualTenantSwitchModal || !manualTenantSwitchTenant || !manualTenantSwitchEffectiveDate || !manualTenantSwitchReason || !manualTenantSwitchCloseContract || !manualTenantSwitchError || !manualTenantSwitchSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(manualTenantSwitchState.spaceId || 0);
+                    const tenantId = Number(manualTenantSwitchTenant.value || 0);
+                    const effectiveDate = String(manualTenantSwitchEffectiveDate.value || '').trim();
+                    const reason = String(manualTenantSwitchReason.value || '').trim();
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(tenantId) || tenantId <= 0) {
+                        manualTenantSwitchError.textContent = 'Выберите нового арендатора.';
+                        return;
+                    }
+
+                    if (!effectiveDate) {
+                        manualTenantSwitchError.textContent = 'Укажите дату начала действия.';
+                        manualTenantSwitchEffectiveDate.focus();
+                        return;
+                    }
+
+                    manualTenantSwitchSave.setAttribute('disabled', 'disabled');
+                    manualTenantSwitchSave.textContent = 'Планируем...';
+                    manualTenantSwitchError.textContent = '';
+
+                    const response = await fetch(reviewTenantSwitchUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            market_space_id: spaceId,
+                            target_tenant_id: tenantId,
+                            effective_date: effectiveDate,
+                            ...(reason ? { reason } : {}),
+                            close_previous_contract: manualTenantSwitchCloseContract.checked,
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        manualTenantSwitchSave.removeAttribute('disabled');
+                        manualTenantSwitchSave.textContent = 'Запланировать смену';
+                        manualTenantSwitchError.textContent = String(data?.message || 'Не удалось запланировать смену арендатора.');
+                        return;
+                    }
+
+                    closeManualTenantSwitchModal();
                     window.location.reload();
                 };
 
@@ -4670,6 +4887,9 @@
                     const contractTenantSwitchLauncher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-contract-tenant-switch-open]')
                         : null;
+                    const manualTenantSwitchLauncher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-manual-tenant-switch-open]')
+                        : null;
 
                     const identityFixLauncher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-identity-fix-open]')
@@ -4722,6 +4942,12 @@
                         return;
                     }
 
+                    if (manualTenantSwitchLauncher && manualTenantSwitchLauncher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openManualTenantSwitchModal(manualTenantSwitchLauncher);
+                        return;
+                    }
+
                     if (identityFixLauncher && identityFixLauncher instanceof HTMLElement) {
                         event.preventDefault();
                         openIdentityFixModal(identityFixLauncher);
@@ -4750,9 +4976,10 @@
                     const quickOpen = quickReviewModal?.classList.contains('is-open');
                     const confirmFreeOpen = confirmFreeModal?.classList.contains('is-open');
                     const contractTenantSwitchOpen = contractTenantSwitchModal?.classList.contains('is-open');
+                    const manualTenantSwitchOpen = manualTenantSwitchModal?.classList.contains('is-open');
                     const identityOpen = identityFixModal?.classList.contains('is-open');
                     const mergeRetireOpen = mergeRetireModal?.classList.contains('is-open');
-                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !contractTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
+                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !contractTenantSwitchOpen && !manualTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
                         return;
                     }
 
@@ -4760,6 +4987,9 @@
                         event.preventDefault();
                         if (contractTenantSwitchOpen) {
                             closeContractTenantSwitchModal();
+                        }
+                        if (manualTenantSwitchOpen) {
+                            closeManualTenantSwitchModal();
                         }
                         if (mergeRetireOpen) {
                             closeMergeRetireModal();
@@ -4871,6 +5101,31 @@
                                 contractTenantSwitchSave.textContent = 'Запланировать смену';
                                 if (contractTenantSwitchError) {
                                     contractTenantSwitchError.textContent = String(errorInstance?.message || errorInstance);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (manualTenantSwitchModal && manualTenantSwitchSave) {
+                    manualTenantSwitchModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-manual-tenant-switch-close')) {
+                            event.preventDefault();
+                            closeManualTenantSwitchModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-manual-tenant-switch-save')) {
+                            event.preventDefault();
+                            sendManualTenantSwitch().catch((errorInstance) => {
+                                manualTenantSwitchSave.removeAttribute('disabled');
+                                manualTenantSwitchSave.textContent = 'Запланировать смену';
+                                if (manualTenantSwitchError) {
+                                    manualTenantSwitchError.textContent = String(errorInstance?.message || errorInstance);
                                 }
                             });
                         }
