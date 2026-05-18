@@ -860,6 +860,7 @@ class MapReviewResultsService
             }
 
             $payload = $this->decodeJsonArray($row->payload ?? null);
+            $source = isset($row->source) ? (string) $row->source : 'tenant_accruals';
             $tenantExternalId = trim((string) ($payload['tenant_external_id'] ?? ($row->accrual_tenant_external_id ?? '')));
             $tenantInn = trim((string) ($payload['inn'] ?? ($row->accrual_tenant_inn ?? '')));
             $tenantKpp = trim((string) ($payload['kpp'] ?? ($row->accrual_tenant_kpp ?? '')));
@@ -872,18 +873,24 @@ class MapReviewResultsService
             $tenantIsActive = isset($row->accrual_tenant_is_active)
                 ? (bool) $row->accrual_tenant_is_active
                 : (int) ($row->accrual_tenant_id ?? 0) > 0;
+            $tenantId = (int) ($row->accrual_tenant_id ?? 0);
+            $hasInactiveExistingTenant = $tenantId > 0 && ! $tenantIsActive;
+            $isTrustedOneCExternalId = $source === '1c'
+                && $tenantExternalId !== ''
+                && preg_match('/^TEST_/i', $tenantExternalId) !== 1;
 
             $signals[$spaceId] = [
                 'priority' => 100,
-                'source' => isset($row->source) ? (string) $row->source : 'tenant_accruals',
+                'source' => $source,
                 'label' => 'Финконтур сообщает о новом арендаторе',
                 'accrual_id' => (int) ($row->accrual_id ?? 0),
-                'tenant_id' => (int) ($row->accrual_tenant_id ?? 0),
+                'tenant_id' => $tenantId,
                 'tenant_name' => $tenantName,
-                'tenant_external_id' => $tenantExternalId !== '' ? $tenantExternalId : null,
+                'tenant_external_id' => $isTrustedOneCExternalId ? $tenantExternalId : null,
                 'tenant_inn' => $tenantInn !== '' ? $tenantInn : null,
                 'tenant_kpp' => $tenantKpp !== '' ? $tenantKpp : null,
-                'requires_tenant_resolution' => ((int) ($row->accrual_tenant_id ?? 0) <= 0) || ! $tenantIsActive,
+                'requires_tenant_resolution' => $tenantId <= 0 || ! $tenantIsActive,
+                'resolution_action' => $hasInactiveExistingTenant ? 'activate_existing_tenant' : 'create_or_match_tenant',
                 'current_tenant_id' => (int) ($row->current_tenant_id ?? 0),
                 'current_tenant_name' => trim((string) ($row->current_tenant_name ?? '')),
                 'latest_period_label' => $period,
@@ -946,6 +953,7 @@ class MapReviewResultsService
             'observed_tenant_inn' => trim((string) ($financialSignal['tenant_inn'] ?? '')) ?: null,
             'observed_tenant_kpp' => trim((string) ($financialSignal['tenant_kpp'] ?? '')) ?: null,
             'requires_tenant_resolution' => (bool) ($financialSignal['requires_tenant_resolution'] ?? false),
+            'resolution_action' => trim((string) ($financialSignal['resolution_action'] ?? '')) ?: null,
             'accrual_id' => (int) ($financialSignal['accrual_id'] ?? 0) ?: null,
             'review_comment' => 'Основание: начисление из финансового контура без найденного договора.',
             'author_name' => 'Система',
