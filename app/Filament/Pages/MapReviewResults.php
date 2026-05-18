@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Models\Market;
+use App\Models\Tenant;
 use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\MapReviewResultsService;
 use Filament\Facades\Filament;
@@ -57,6 +58,18 @@ class MapReviewResults extends Page
                 : $service->needsAttention($marketId, 50))
             : [];
         $appliedChanges = $marketId ? $service->appliedChanges($marketId, 50) : [];
+        $tenantSwitchOptions = $marketId
+            ? Tenant::query()
+                ->where('market_id', $marketId)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Tenant $tenant): array => [
+                    'id' => (int) $tenant->id,
+                    'name' => (string) $tenant->name,
+                ])
+                ->all()
+            : [];
 
         $visibleNeedsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, [], $attentionTab);
 
@@ -81,6 +94,7 @@ class MapReviewResults extends Page
         }
 
         $needsAttentionRows = $this->buildNeedsAttentionRows($needsAttention, $aiData['summaries'], $attentionTab);
+        $needsAttentionRows = $this->annotateTenantSwitchSuggestions($needsAttentionRows, $tenantSwitchOptions);
 
         return [
             'market' => $market,
@@ -108,6 +122,7 @@ class MapReviewResults extends Page
             'aiSummaries' => $aiData['summaries'],
             'aiErrors' => $aiData['errors'],
             'aiMeta' => $aiData['meta'],
+            'tenantSwitchOptions' => $tenantSwitchOptions,
         ];
     }
 
@@ -414,6 +429,94 @@ class MapReviewResults extends Page
 
             return $aiData;
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<array{id:int,name:string}>  $tenantSwitchOptions
+     * @return list<array<string, mixed>>
+     */
+    private function annotateTenantSwitchSuggestions(array $rows, array $tenantSwitchOptions): array
+    {
+        if ($rows === [] || $tenantSwitchOptions === []) {
+            return $rows;
+        }
+
+        $normalizedTenants = array_map(function (array $tenant): array {
+            return [
+                'id' => (int) ($tenant['id'] ?? 0),
+                'name' => trim((string) ($tenant['name'] ?? '')),
+                'normalized' => $this->normalizeTenantHint((string) ($tenant['name'] ?? '')),
+            ];
+        }, $tenantSwitchOptions);
+
+        return array_map(function (array $row) use ($normalizedTenants): array {
+            $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null)
+                ? $row['tenant_change_details']
+                : [];
+            $suggestedTenant = $this->resolveSuggestedTenantSwitchTarget(
+                [
+                    (string) ($tenantChangeDetails['observed_tenant_name'] ?? ''),
+                    (string) ($row['reason'] ?? ''),
+                ],
+                $normalizedTenants
+            );
+
+            $row['suggested_target_tenant_id'] = (int) ($suggestedTenant['id'] ?? 0);
+            $row['suggested_target_tenant_name'] = (string) ($suggestedTenant['name'] ?? '');
+
+            return $row;
+        }, $rows);
+    }
+
+    /**
+     * @param  list<string>  $candidates
+     * @param  list<array{id:int,name:string,normalized:string}>  $normalizedTenants
+     * @return array{id:int,name:string}|null
+     */
+    private function resolveSuggestedTenantSwitchTarget(array $candidates, array $normalizedTenants): ?array
+    {
+        $matches = [];
+
+        foreach ($candidates as $candidate) {
+            $normalizedCandidate = $this->normalizeTenantHint($candidate);
+
+            if ($normalizedCandidate === '') {
+                continue;
+            }
+
+            foreach ($normalizedTenants as $tenant) {
+                $normalizedTenant = (string) ($tenant['normalized'] ?? '');
+
+                if ($normalizedTenant === '') {
+                    continue;
+                }
+
+                if (
+                    str_contains($normalizedCandidate, $normalizedTenant)
+                    || str_contains($normalizedTenant, $normalizedCandidate)
+                ) {
+                    $matches[(int) $tenant['id']] = [
+                        'id' => (int) $tenant['id'],
+                        'name' => (string) $tenant['name'],
+                    ];
+                }
+            }
+        }
+
+        if (count($matches) !== 1) {
+            return null;
+        }
+
+        return array_values($matches)[0];
+    }
+
+    private function normalizeTenantHint(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+
+        return trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
     }
 
     /**

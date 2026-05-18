@@ -2654,6 +2654,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'contract_id' => ['nullable', 'integer', 'min:1'],
             'effective_date' => ['required', 'date_format:Y-m-d'],
             'reason' => ['nullable', 'string', 'max:2000'],
+            'close_previous_contract' => ['nullable', 'boolean'],
         ]);
 
         $space = MarketSpace::query()
@@ -2725,8 +2726,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ], 422);
         }
 
+        $effectiveDate = (string) $validated['effective_date'];
         $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
-        $effectiveAt = CarbonImmutable::parse((string) $validated['effective_date'], $marketTz)->startOfDay()->utc();
+        $effectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
         $contractNumber = trim((string) ($contract->number ?? ''));
         $reason = trim((string) ($validated['reason'] ?? ''));
         $reasonParts = [
@@ -2739,6 +2741,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $closeReviewOnEffectiveAt = true;
         $applyReviewNow = $effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'));
+        $closePreviousContract = (bool) ($validated['close_previous_contract'] ?? false);
 
         // Для future effective_date ревизию закрываем только когда наступит дата действия
         $shouldCloseReviewNow = $applyReviewNow && (int) $space->effectiveTenantId() !== (int) $targetTenant->id;
@@ -2778,6 +2781,47 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ], 422);
         }
 
+        if ($closePreviousContract) {
+            $previousContractEndDate = $effectiveDate;
+
+            if ($contract?->starts_at instanceof \DateTimeInterface) {
+                $previousContractEndDate = $contract->starts_at->format('Y-m-d');
+            } elseif (filled($contract?->starts_at)) {
+                $previousContractEndDate = (string) $contract->starts_at;
+            }
+
+            $previousContractsQuery = TenantContract::query()
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $space->id)
+                ->where('tenant_id', '!=', (int) $targetTenant->id);
+
+            if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+                $previousContractsQuery->where('is_active', true);
+            }
+
+            if (Schema::hasColumn('tenant_contracts', 'status')) {
+                $previousContractsQuery->whereNotIn('status', ['terminated', 'archived']);
+            }
+
+            $previousContracts = $previousContractsQuery->get();
+
+            foreach ($previousContracts as $previousContract) {
+                if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+                    $previousContract->ends_at = $previousContractEndDate;
+                }
+
+                if (Schema::hasColumn('tenant_contracts', 'status')) {
+                    $previousContract->status = 'terminated';
+                }
+
+                if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+                    $previousContract->is_active = false;
+                }
+
+                $previousContract->save();
+            }
+        }
+
         $space->refresh();
 
         if ($shouldCloseReviewNow) {
@@ -2801,6 +2845,170 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'progress' => $buildMapReviewProgress($market),
         ]);
     })->name('filament.admin.market-map.review-contract-tenant-switch');
+
+    Route::post('/admin/market-map/review-tenant-switch', function (Request $request) use (
+        $resolveMarketForMap,
+        $ensureCanEditShapes,
+        $hasMapReviewColumns,
+        $markMarketSpaceReviewed,
+        $buildMapReviewProgress,
+        $mapReviewStatusLabel
+    ) {
+        $ensureCanEditShapes();
+        $market = $resolveMarketForMap();
+
+        if (! $hasMapReviewColumns()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review columns are missing on market_spaces.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'market_space_id' => ['required', 'integer', 'min:1'],
+            'target_tenant_id' => ['required', 'integer', 'min:1'],
+            'effective_date' => ['required', 'date_format:Y-m-d'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'close_previous_contract' => ['nullable', 'boolean'],
+        ]);
+
+        $space = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['market_space_id'])
+            ->first();
+
+        if (! $space) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review space was not found in the current market.',
+            ], 404);
+        }
+
+        $targetTenant = Tenant::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey((int) $validated['target_tenant_id'])
+            ->first();
+
+        if (! $targetTenant) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Target tenant was not found in the current market.',
+            ], 404);
+        }
+
+        $effectiveDate = (string) $validated['effective_date'];
+        $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
+        $effectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
+        $reason = trim((string) ($validated['reason'] ?? ''));
+        $closePreviousContract = (bool) ($validated['close_previous_contract'] ?? false);
+
+        if ($effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC')) && (int) $space->effectiveTenantId() === (int) $targetTenant->id) {
+            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
+
+            return response()->json([
+                'ok' => true,
+                'mode' => 'tenant_switch_already_current',
+                'operation' => null,
+                'item' => [
+                    'market_space_id' => (int) $space->id,
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                ],
+                'progress' => $buildMapReviewProgress($market),
+            ]);
+        }
+
+        try {
+            $operation = app(TenantSwitchPlanner::class)->plan(
+                $space,
+                $targetTenant,
+                $effectiveAt,
+                $reason !== '' ? $reason : 'Смена арендатора подтверждена на карточке ревизии.',
+                Filament::auth()->id(),
+                true,
+            );
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'ok' => false,
+                'message' => collect($exception->errors())->flatten()->first() ?: 'Не удалось запланировать смену арендатора.',
+                'errors' => $exception->errors(),
+            ], 422);
+        }
+
+        if ($closePreviousContract) {
+            $targetContract = TenantContract::query()
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $space->id)
+                ->where('tenant_id', (int) $targetTenant->id)
+                ->orderByDesc('starts_at')
+                ->orderByDesc('id')
+                ->first();
+
+            $previousContractEndDate = $effectiveDate;
+
+            if ($targetContract?->starts_at instanceof \DateTimeInterface) {
+                $previousContractEndDate = $targetContract->starts_at->format('Y-m-d');
+            } elseif (filled($targetContract?->starts_at)) {
+                $previousContractEndDate = (string) $targetContract->starts_at;
+            }
+
+            $previousContractsQuery = TenantContract::query()
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $space->id)
+                ->where('tenant_id', '!=', (int) $targetTenant->id);
+
+            if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+                $previousContractsQuery->where('is_active', true);
+            }
+
+            if (Schema::hasColumn('tenant_contracts', 'status')) {
+                $previousContractsQuery->whereNotIn('status', ['terminated', 'archived']);
+            }
+
+            $previousContracts = $previousContractsQuery->get();
+
+            foreach ($previousContracts as $previousContract) {
+                if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+                    $previousContract->ends_at = $previousContractEndDate;
+                }
+
+                if (Schema::hasColumn('tenant_contracts', 'status')) {
+                    $previousContract->status = 'terminated';
+                }
+
+                if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+                    $previousContract->is_active = false;
+                }
+
+                $previousContract->save();
+            }
+        }
+
+        $space->refresh();
+
+        if ($effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'))) {
+            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
+            $space->refresh();
+        }
+
+        return response()->json([
+            'ok' => true,
+            'mode' => 'tenant_switch_manual',
+            'operation' => [
+                'id' => (int) $operation->id,
+                'status' => (string) $operation->status,
+                'effective_at' => optional($operation->effective_at)->toIso8601String(),
+            ],
+            'item' => [
+                'market_space_id' => (int) $space->id,
+                'review_status' => (string) ($space->map_review_status ?? ''),
+                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+            ],
+            'progress' => $buildMapReviewProgress($market),
+        ]);
+    })->name('filament.admin.market-map.review-tenant-switch');
 
     Route::post('/admin/market-map/review-decision', function (Request $request) use (
         $resolveMarketForMap,
