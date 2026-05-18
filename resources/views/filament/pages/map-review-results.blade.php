@@ -2713,7 +2713,7 @@
                                             $createdByLabel = trim((string) ($row['created_by_name'] ?? ''));
                                             $createdAtLabel = trim((string) ($row['created_at'] ?? ''));
                                             if ($isFinancialSignalCase) {
-                                                $conflictHeadline = 'Финконтур сообщает нового арендатора';
+                                                $conflictHeadline = 'Финконтур сообщает о новом арендаторе';
                                             } elseif ($isContractTenantOverride) {
                                                 $conflictHeadline = 'На месте уже найден новый арендатор по договору';
                                             } elseif ($hasCandidates) {

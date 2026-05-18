@@ -258,7 +258,7 @@ class MapReviewResultsService
                 'reviewed_by_name' => $reviewedByName ?? ($isFinancialOnly ? 'Система' : null),
                 'decision' => $decision,
                 'decision_label' => $isFinancialOnly
-                    ? 'Финконтур сообщает нового арендатора'
+                    ? 'Финконтур сообщает о новом арендаторе'
                     : ($decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null),
                 'reason' => $reason,
                 'tenant_change_details' => $financialSignal !== null
@@ -838,7 +838,7 @@ class MapReviewResultsService
             $signals[$spaceId] = [
                 'priority' => 100,
                 'source' => 'tenant_accruals',
-                'label' => 'Финконтур сообщает нового арендатора',
+                'label' => 'Финконтур сообщает о новом арендаторе',
                 'accrual_id' => (int) ($row->accrual_id ?? 0),
                 'tenant_id' => (int) ($row->accrual_tenant_id ?? 0),
                 'tenant_name' => trim((string) ($row->accrual_tenant_name ?? '')),
@@ -866,7 +866,7 @@ class MapReviewResultsService
         $spaceLabel = $this->spaceLabel($space);
         $period = trim((string) ($financialSignal['latest_period_label'] ?? ''));
 
-        $reason = 'Финконтур сообщает нового арендатора';
+        $reason = 'Финконтур сообщает о новом арендаторе';
 
         if ($tenantName !== '') {
             $reason .= ': ' . $tenantName;
