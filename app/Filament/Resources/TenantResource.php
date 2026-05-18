@@ -33,6 +33,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\HtmlString;
@@ -93,6 +94,17 @@ class TenantResource extends BaseResource
             'external_id',
             'one_c_uid',
         ];
+    }
+
+    public static function getGlobalSearchResultDetails(Model $record): array
+    {
+        /** @var Tenant $record */
+        return static::compactGlobalSearchDetails([
+            'ИНН' => trim((string) ($record->inn ?? '')),
+            'Телефон' => trim((string) ($record->phone ?? '')),
+            'Email' => trim((string) ($record->email ?? '')),
+            'Статус' => $record->is_active ? 'Активен' : 'Неактивен',
+        ]);
     }
 
     public static function form(Schema $schema): Schema
