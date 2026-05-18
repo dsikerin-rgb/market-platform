@@ -4582,13 +4582,38 @@
                     financialTenantResolveState.resolutionAction = String(button.dataset.mrrResolutionAction || '').trim();
                     financialTenantResolveState.resolutionLabel = String(button.dataset.mrrResolutionLabel || '').trim();
 
-                    financialTenantResolveName.value = financialTenantResolveState.tenantName || '—';
-                    financialTenantResolveExternalId.value = financialTenantResolveState.tenantExternalId || '—';
-                    financialTenantResolveInn.value = financialTenantResolveState.tenantInn || '—';
-                    financialTenantResolveKpp.value = financialTenantResolveState.tenantKpp || '—';
+                    // Fill inputs but do not show placeholder dashes for empty values.
+                    financialTenantResolveName.value = financialTenantResolveState.tenantName || '';
+                    financialTenantResolveExternalId.value = financialTenantResolveState.tenantExternalId || '';
+                    financialTenantResolveInn.value = financialTenantResolveState.tenantInn || '';
+                    financialTenantResolveKpp.value = financialTenantResolveState.tenantKpp || '';
+
+                    // Hide fields if values are empty (do not show rows with “—”).
+                    const externalField = financialTenantResolveExternalId.closest('.mrr-clarify-modal__field');
+                    const innField = financialTenantResolveInn.closest('.mrr-clarify-modal__field');
+                    const kppField = financialTenantResolveKpp.closest('.mrr-clarify-modal__field');
+
+                    if (externalField instanceof HTMLElement) {
+                        externalField.style.display = financialTenantResolveState.tenantExternalId ? '' : 'none';
+                    }
+
+                    if (innField instanceof HTMLElement) {
+                        innField.style.display = financialTenantResolveState.tenantInn ? '' : 'none';
+                    }
+
+                    if (kppField instanceof HTMLElement) {
+                        kppField.style.display = financialTenantResolveState.tenantKpp ? '' : 'none';
+                    }
+
                     financialTenantResolveError.textContent = '';
                     financialTenantResolveSave.removeAttribute('disabled');
-                    financialTenantResolveSave.textContent = 'Создать/сопоставить';
+
+                    // Button label depends on resolution_action
+                    if (financialTenantResolveState.resolutionAction === 'activate_existing_tenant') {
+                        financialTenantResolveSave.textContent = 'Активировать';
+                    } else {
+                        financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                    }
 
                     financialTenantResolveModal.hidden = false;
                     financialTenantResolveModal.classList.add('is-open');
@@ -4620,6 +4645,17 @@
                     financialTenantResolveError.textContent = '';
                     financialTenantResolveSave.removeAttribute('disabled');
                     financialTenantResolveSave.textContent = 'Создать/сопоставить';
+
+                    // restore field visibility
+                    try {
+                        const externalField = financialTenantResolveExternalId.closest('.mrr-clarify-modal__field');
+                        const innField = financialTenantResolveInn.closest('.mrr-clarify-modal__field');
+                        const kppField = financialTenantResolveKpp.closest('.mrr-clarify-modal__field');
+
+                        if (externalField instanceof HTMLElement) externalField.style.display = '';
+                        if (innField instanceof HTMLElement) innField.style.display = '';
+                        if (kppField instanceof HTMLElement) kppField.style.display = '';
+                    } catch (e) {}
                 };
 
                 const sendFinancialTenantResolve = async () => {
@@ -4660,7 +4696,11 @@
 
                     if (!response.ok || !data?.ok) {
                         financialTenantResolveSave.removeAttribute('disabled');
-                        financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                        if (financialTenantResolveState.resolutionAction === 'activate_existing_tenant') {
+                            financialTenantResolveSave.textContent = 'Активировать';
+                        } else {
+                            financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                        }
                         financialTenantResolveError.textContent = String(data?.message || 'Не удалось создать или сопоставить арендатора.');
                         return;
                     }
@@ -5552,7 +5592,11 @@
                             event.preventDefault();
                             sendFinancialTenantResolve().catch((errorInstance) => {
                                 financialTenantResolveSave.removeAttribute('disabled');
-                                financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                                if (financialTenantResolveState.resolutionAction === 'activate_existing_tenant') {
+                                    financialTenantResolveSave.textContent = 'Активировать';
+                                } else {
+                                    financialTenantResolveSave.textContent = 'Создать/сопоставить';
+                                }
                                 if (financialTenantResolveError) {
                                     financialTenantResolveError.textContent = String(errorInstance?.message || errorInstance);
                                 }
