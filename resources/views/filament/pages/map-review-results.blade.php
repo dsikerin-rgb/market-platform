@@ -4684,6 +4684,29 @@
                     manualTenantSwitchTenantHint.textContent = `Выбран арендатор: ${tenantOption.name}`;
                 };
 
+                const renderManualTenantSwitchSuggestions = (matchedOptions, hintText) => {
+                    if (!manualTenantSwitchTenantSuggestions || !manualTenantSwitchTenantHint) {
+                        return;
+                    }
+
+                    manualTenantSwitchTenantSuggestions.replaceChildren();
+                    manualTenantSwitchTenantSuggestions.hidden = matchedOptions.length === 0;
+                    manualTenantSwitchTenantHint.textContent = hintText;
+
+                    matchedOptions.forEach((tenantOption) => {
+                        const suggestionButton = document.createElement('button');
+                        suggestionButton.type = 'button';
+                        suggestionButton.className = 'mrr-manual-tenant-switch__suggestion';
+                        suggestionButton.textContent = tenantOption.name;
+                        suggestionButton.addEventListener('click', () => {
+                            selectManualTenantSwitchTenant(tenantOption);
+                            manualTenantSwitchTenantSuggestions.replaceChildren();
+                            manualTenantSwitchTenantSuggestions.hidden = true;
+                        });
+                        manualTenantSwitchTenantSuggestions.appendChild(suggestionButton);
+                    });
+                };
+
                 const updateManualTenantSwitchSuggestions = (query, options = {}) => {
                     if (!manualTenantSwitchTenant || !manualTenantSwitchTenantHint || !manualTenantSwitchTenantSuggestions) {
                         return;
@@ -4699,11 +4722,28 @@
                     manualTenantSwitchTenantSuggestions.hidden = true;
 
                     if (normalizedQuery === '') {
-                        if (options?.preserveSelection && manualTenantSwitchState.suggestedTenantId > 0 && manualTenantSwitchState.suggestedTenantName !== '') {
-                            manualTenantSwitchTenantHint.textContent = `Предполагаемый арендатор: ${manualTenantSwitchState.suggestedTenantName}`;
-                        } else {
-                            manualTenantSwitchTenantHint.textContent = 'Начните вводить имя арендатора, чтобы выбрать нужного.';
+                        const defaultSuggestions = [];
+
+                        if (manualTenantSwitchState.suggestedTenantId > 0) {
+                            const suggestedTenant = normalizedTenantSwitchOptions.find((tenantOption) => tenantOption.id === manualTenantSwitchState.suggestedTenantId);
+
+                            if (suggestedTenant) {
+                                defaultSuggestions.push(suggestedTenant);
+                            }
                         }
+
+                        normalizedTenantSwitchOptions.slice(0, 5).forEach((tenantOption) => {
+                            if (!defaultSuggestions.some((suggestedOption) => suggestedOption.id === tenantOption.id)) {
+                                defaultSuggestions.push(tenantOption);
+                            }
+                        });
+
+                        renderManualTenantSwitchSuggestions(
+                            defaultSuggestions.slice(0, 5),
+                            manualTenantSwitchState.suggestedTenantName !== ''
+                                ? `Подтвердите предполагаемого арендатора или выберите другого: ${manualTenantSwitchState.suggestedTenantName}`
+                                : 'Начните вводить имя арендатора или выберите из подсказок ниже.'
+                        );
 
                         return;
                     }
@@ -4712,6 +4752,9 @@
 
                     if (exactMatches.length === 1) {
                         selectManualTenantSwitchTenant(exactMatches[0]);
+                        if (options?.showSuggestionsOnExactMatch) {
+                            renderManualTenantSwitchSuggestions(exactMatches, 'Подтвердите выбранного арендатора.');
+                        }
                         return;
                     }
 
@@ -4721,6 +4764,9 @@
 
                     if (matchedOptions.length === 1) {
                         selectManualTenantSwitchTenant(matchedOptions[0]);
+                        if (options?.showSuggestionsOnExactMatch) {
+                            renderManualTenantSwitchSuggestions(matchedOptions, 'Подтвердите выбранного арендатора.');
+                        }
                         return;
                     }
 
@@ -4729,21 +4775,7 @@
                         return;
                     }
 
-                    manualTenantSwitchTenantHint.textContent = 'Выберите одного из найденных арендаторов.';
-                    manualTenantSwitchTenantSuggestions.hidden = false;
-
-                    matchedOptions.forEach((tenantOption) => {
-                        const suggestionButton = document.createElement('button');
-                        suggestionButton.type = 'button';
-                        suggestionButton.className = 'mrr-manual-tenant-switch__suggestion';
-                        suggestionButton.textContent = tenantOption.name;
-                        suggestionButton.addEventListener('click', () => {
-                            selectManualTenantSwitchTenant(tenantOption);
-                            manualTenantSwitchTenantSuggestions.replaceChildren();
-                            manualTenantSwitchTenantSuggestions.hidden = true;
-                        });
-                        manualTenantSwitchTenantSuggestions.appendChild(suggestionButton);
-                    });
+                    renderManualTenantSwitchSuggestions(matchedOptions, 'Выберите одного из найденных арендаторов.');
                 };
 
                 const closeIdentityFixModal = () => {
@@ -5275,9 +5307,19 @@
                 }
 
                 if (manualTenantSwitchTenantSearch) {
+                    manualTenantSwitchTenantSearch.addEventListener('focus', (event) => {
+                        const query = event.target instanceof HTMLInputElement ? event.target.value : '';
+                        updateManualTenantSwitchSuggestions(query, {
+                            preserveSelection: true,
+                            showSuggestionsOnExactMatch: true,
+                        });
+                    });
+
                     manualTenantSwitchTenantSearch.addEventListener('input', (event) => {
                         const query = event.target instanceof HTMLInputElement ? event.target.value : '';
-                        updateManualTenantSwitchSuggestions(query);
+                        updateManualTenantSwitchSuggestions(query, {
+                            showSuggestionsOnExactMatch: true,
+                        });
                     });
 
                     manualTenantSwitchTenantSearch.addEventListener('keydown', (event) => {

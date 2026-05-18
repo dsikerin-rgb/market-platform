@@ -835,6 +835,36 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ])->save();
     };
 
+    $recordAppliedMatchedReview = static function (
+        Market $market,
+        MarketSpace $space,
+        ?int $userId = null,
+        $effectiveAt = null,
+        ?string $reason = null
+    ): Operation {
+        $payload = [
+            'market_space_id' => (int) $space->id,
+            'decision' => 'matched',
+        ];
+
+        $normalizedReason = is_string($reason) ? trim($reason) : '';
+        if ($normalizedReason !== '') {
+            $payload['reason'] = $normalizedReason;
+        }
+
+        return Operation::query()->create([
+            'market_id' => (int) $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => (int) $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $effectiveAt ?? now(),
+            'status' => 'applied',
+            'payload' => $payload,
+            'comment' => $normalizedReason !== '' ? $normalizedReason : null,
+            'created_by' => $userId,
+        ]);
+    };
+
     $buildMapReviewProgress = static function (Market $market) use ($hasMapReviewColumns, $mapReviewStatusLabel): array {
         $baseQuery = MarketSpace::query()->where('market_id', (int) $market->id);
 
@@ -2635,6 +2665,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $ensureCanEditShapes,
         $hasMapReviewColumns,
         $markMarketSpaceReviewed,
+        $recordAppliedMatchedReview,
         $buildMapReviewProgress,
         $mapReviewStatusLabel
     ) {
@@ -2826,6 +2857,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         if ($shouldCloseReviewNow) {
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
+            $recordAppliedMatchedReview(
+                $market,
+                $space,
+                Filament::auth()->id(),
+                $operation->effective_at ?? now(),
+                implode('. ', $reasonParts),
+            );
         }
 
         return response()->json([
@@ -2851,6 +2889,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $ensureCanEditShapes,
         $hasMapReviewColumns,
         $markMarketSpaceReviewed,
+        $recordAppliedMatchedReview,
         $buildMapReviewProgress,
         $mapReviewStatusLabel
     ) {
@@ -2990,6 +3029,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         if ($effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'))) {
             $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
             $space->refresh();
+            $recordAppliedMatchedReview(
+                $market,
+                $space,
+                Filament::auth()->id(),
+                $operation->effective_at ?? now(),
+                $reason !== '' ? $reason : 'Смена арендатора подтверждена на карточке ревизии.',
+            );
         }
 
         return response()->json([

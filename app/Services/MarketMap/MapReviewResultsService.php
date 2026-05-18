@@ -954,7 +954,9 @@ class MapReviewResultsService
                 'display_name' => $space?->display_name,
                 'location_name' => $space?->location?->name,
                 'decision' => $decision,
-                'decision_label' => SpaceReviewDecision::labels()[$decision] ?? $decision,
+                'decision_label' => $decision === 'matched'
+                    ? 'Подтверждено'
+                    : (SpaceReviewDecision::labels()[$decision] ?? $decision),
                 'summary' => $this->appliedDecisionSummary(
                     $decision,
                     $payload,
@@ -1015,6 +1017,7 @@ class MapReviewResultsService
     ): string
     {
         return match ($decision) {
+            'matched' => $this->matchedReviewSummary($payload),
             SpaceReviewDecision::BIND_SHAPE_TO_SPACE => 'Фигура привязана к месту'
                 . (filled($payload['shape_id'] ?? null) ? ' · shape #' . (int) $payload['shape_id'] : ''),
             SpaceReviewDecision::UNBIND_SHAPE_FROM_SPACE => 'Фигура отвязана от места'
@@ -1029,6 +1032,16 @@ class MapReviewResultsService
             ),
             default => '—',
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function matchedReviewSummary(array $payload): string
+    {
+        $reason = trim((string) ($payload['reason'] ?? ''));
+
+        return $reason !== '' ? $reason : 'Ревизия подтверждена и закрыта.';
     }
 
     /**
