@@ -14,8 +14,8 @@ class OneCTenantResolver
 {
     /**
      * @param  array<string, mixed>  $payload
-     * @param  array{activate_resolved_tenant?:bool}  $options
-     * @return array{tenant:?Tenant, mode:'existing_external_id'|'matched_inn'|'created'|'failed'}
+     * @param  array{activate_resolved_tenant?:bool,preferred_tenant_id?:int}  $options
+     * @return array{tenant:?Tenant, mode:'preferred_existing'|'existing_external_id'|'matched_inn'|'created'|'failed'}
      */
     public function resolve(
         int $marketId,
@@ -27,10 +27,36 @@ class OneCTenantResolver
     ): array {
         $tenantExternalId = trim($tenantExternalId);
         $activateResolvedTenant = (bool) ($options['activate_resolved_tenant'] ?? false);
+        $preferredTenantId = (int) ($options['preferred_tenant_id'] ?? 0);
 
         $inn = trim((string) ($payload['inn'] ?? ''));
         $kpp = trim((string) ($payload['kpp'] ?? ''));
         $tenantName = trim((string) ($payload['tenant_name'] ?? ''));
+
+        if ($preferredTenantId > 0) {
+            $preferredTenant = Tenant::query()
+                ->where('market_id', $marketId)
+                ->whereKey($preferredTenantId)
+                ->first();
+
+            if ($preferredTenant) {
+                $this->hydrateExistingTenant(
+                    $preferredTenant,
+                    $tenantExternalId,
+                    $inn,
+                    $kpp,
+                    $tenantName,
+                    $source,
+                    $now,
+                    $activateResolvedTenant,
+                );
+
+                return [
+                    'tenant' => $preferredTenant,
+                    'mode' => 'preferred_existing',
+                ];
+            }
+        }
 
         if ($tenantExternalId !== '') {
             $tenant = Tenant::query()

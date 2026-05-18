@@ -2692,6 +2692,8 @@
                                             $financialAccrualId = (int) ($financialSignal['accrual_id'] ?? 0);
                                             $financialRequiresTenantResolution = (bool) ($financialSignal['requires_tenant_resolution'] ?? false);
                                             $financialResolutionAction = trim((string) ($financialSignal['resolution_action'] ?? ''));
+                                            $financialExistingTenantCandidateId = (int) ($financialSignal['existing_tenant_candidate_id'] ?? 0);
+                                            $financialExistingTenantCandidateName = trim((string) ($financialSignal['existing_tenant_candidate_name'] ?? ''));
                                             $financialResolveButtonLabel = $financialResolutionAction === 'activate_existing_tenant'
                                                 ? 'Активировать арендатора'
                                                 : 'Создать/сопоставить арендатора';
@@ -2951,6 +2953,8 @@
                             data-mrr-tenant-external-id="{{ $financialTenantExternalId }}"
                             data-mrr-tenant-inn="{{ $financialTenantInn }}"
                             data-mrr-tenant-kpp="{{ $financialTenantKpp }}"
+                            data-mrr-preferred-tenant-id="{{ $financialExistingTenantCandidateId }}"
+                            data-mrr-preferred-tenant-name="{{ $financialExistingTenantCandidateName }}"
                             data-mrr-resolution-action="{{ $financialResolutionAction }}"
                             data-mrr-resolution-label="{{ $financialResolveButtonLabel }}"
                         >
@@ -3510,6 +3514,11 @@
                         </div>
 
                         <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolvePreferredTenant">Кандидат в БД</label>
+                            <input id="mrrFinancialTenantResolvePreferredTenant" class="mrr-clarify-modal__input" type="text" readonly>
+                        </div>
+
+                        <div class="mrr-clarify-modal__field">
                             <label class="mrr-clarify-modal__label" for="mrrFinancialTenantResolveExternalId">External ID source</label>
                             <input id="mrrFinancialTenantResolveExternalId" class="mrr-clarify-modal__input" type="text" readonly>
                         </div>
@@ -3718,6 +3727,7 @@
                 const financialTenantResolveExternalId = document.getElementById('mrrFinancialTenantResolveExternalId');
                 const financialTenantResolveInn = document.getElementById('mrrFinancialTenantResolveInn');
                 const financialTenantResolveKpp = document.getElementById('mrrFinancialTenantResolveKpp');
+                const financialTenantResolvePreferredTenant = document.getElementById('mrrFinancialTenantResolvePreferredTenant');
                 const financialTenantResolveError = document.getElementById('mrrFinancialTenantResolveError');
                 const financialTenantResolveSave = financialTenantResolveModal?.querySelector('[data-mrr-financial-tenant-resolve-save]');
                 const manualTenantSwitchModal = document.getElementById('mrrManualTenantSwitchModal');
@@ -3783,6 +3793,8 @@
                     tenantExternalId: '',
                     tenantInn: '',
                     tenantKpp: '',
+                    preferredTenantId: 0,
+                    preferredTenantName: '',
                     resolutionAction: '',
                     resolutionLabel: 'Создать/сопоставить',
                 };
@@ -4566,7 +4578,7 @@
                 };
 
                 const openFinancialTenantResolveModal = (button) => {
-                    if (!financialTenantResolveModal || !financialTenantResolveName || !financialTenantResolveExternalId || !financialTenantResolveInn || !financialTenantResolveKpp || !financialTenantResolveError || !financialTenantResolveSave) {
+                    if (!financialTenantResolveModal || !financialTenantResolveName || !financialTenantResolvePreferredTenant || !financialTenantResolveExternalId || !financialTenantResolveInn || !financialTenantResolveKpp || !financialTenantResolveError || !financialTenantResolveSave) {
                         return;
                     }
 
@@ -4583,19 +4595,27 @@
                     financialTenantResolveState.tenantExternalId = String(button.dataset.mrrTenantExternalId || '').trim();
                     financialTenantResolveState.tenantInn = String(button.dataset.mrrTenantInn || '').trim();
                     financialTenantResolveState.tenantKpp = String(button.dataset.mrrTenantKpp || '').trim();
+                    financialTenantResolveState.preferredTenantId = Number(button.dataset.mrrPreferredTenantId || 0);
+                    financialTenantResolveState.preferredTenantName = String(button.dataset.mrrPreferredTenantName || '').trim();
                     financialTenantResolveState.resolutionAction = String(button.dataset.mrrResolutionAction || '').trim();
                     financialTenantResolveState.resolutionLabel = String(button.dataset.mrrResolutionLabel || '').trim();
 
                     // Fill inputs but do not show placeholder dashes for empty values.
                     financialTenantResolveName.value = financialTenantResolveState.tenantName || '';
+                    financialTenantResolvePreferredTenant.value = financialTenantResolveState.preferredTenantName || '';
                     financialTenantResolveExternalId.value = financialTenantResolveState.tenantExternalId || '';
                     financialTenantResolveInn.value = financialTenantResolveState.tenantInn || '';
                     financialTenantResolveKpp.value = financialTenantResolveState.tenantKpp || '';
 
                     // Hide fields if values are empty (do not show rows with “—”).
+                    const preferredTenantField = financialTenantResolvePreferredTenant.closest('.mrr-clarify-modal__field');
                     const externalField = financialTenantResolveExternalId.closest('.mrr-clarify-modal__field');
                     const innField = financialTenantResolveInn.closest('.mrr-clarify-modal__field');
                     const kppField = financialTenantResolveKpp.closest('.mrr-clarify-modal__field');
+
+                    if (preferredTenantField instanceof HTMLElement) {
+                        preferredTenantField.style.display = financialTenantResolveState.preferredTenantId > 0 ? '' : 'none';
+                    }
 
                     if (externalField instanceof HTMLElement) {
                         externalField.style.display = financialTenantResolveState.tenantExternalId ? '' : 'none';
@@ -4627,7 +4647,7 @@
                 };
 
                 const closeFinancialTenantResolveModal = () => {
-                    if (!financialTenantResolveModal || !financialTenantResolveName || !financialTenantResolveExternalId || !financialTenantResolveInn || !financialTenantResolveKpp || !financialTenantResolveError || !financialTenantResolveSave) {
+                    if (!financialTenantResolveModal || !financialTenantResolveName || !financialTenantResolvePreferredTenant || !financialTenantResolveExternalId || !financialTenantResolveInn || !financialTenantResolveKpp || !financialTenantResolveError || !financialTenantResolveSave) {
                         return;
                     }
 
@@ -4640,9 +4660,12 @@
                     financialTenantResolveState.tenantExternalId = '';
                     financialTenantResolveState.tenantInn = '';
                     financialTenantResolveState.tenantKpp = '';
+                    financialTenantResolveState.preferredTenantId = 0;
+                    financialTenantResolveState.preferredTenantName = '';
                     financialTenantResolveState.resolutionAction = '';
                     financialTenantResolveState.resolutionLabel = 'Создать/сопоставить';
                     financialTenantResolveName.value = '';
+                    financialTenantResolvePreferredTenant.value = '';
                     financialTenantResolveExternalId.value = '';
                     financialTenantResolveInn.value = '';
                     financialTenantResolveKpp.value = '';
@@ -4652,10 +4675,12 @@
 
                     // restore field visibility
                     try {
+                        const preferredTenantField = financialTenantResolvePreferredTenant.closest('.mrr-clarify-modal__field');
                         const externalField = financialTenantResolveExternalId.closest('.mrr-clarify-modal__field');
                         const innField = financialTenantResolveInn.closest('.mrr-clarify-modal__field');
                         const kppField = financialTenantResolveKpp.closest('.mrr-clarify-modal__field');
 
+                        if (preferredTenantField instanceof HTMLElement) preferredTenantField.style.display = '';
                         if (externalField instanceof HTMLElement) externalField.style.display = '';
                         if (innField instanceof HTMLElement) innField.style.display = '';
                         if (kppField instanceof HTMLElement) kppField.style.display = '';
@@ -4689,6 +4714,9 @@
                         body: JSON.stringify({
                             market_space_id: spaceId,
                             accrual_id: accrualId,
+                            ...(financialTenantResolveState.preferredTenantId > 0
+                                ? { preferred_tenant_id: financialTenantResolveState.preferredTenantId }
+                                : {}),
                             tenant_external_id: financialTenantResolveState.tenantExternalId,
                             tenant_name: financialTenantResolveState.tenantName,
                             inn: financialTenantResolveState.tenantInn,

@@ -3077,6 +3077,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $validated = $request->validate([
             'market_space_id' => ['required', 'integer', 'min:1'],
             'accrual_id' => ['required', 'integer', 'min:1'],
+            'preferred_tenant_id' => ['nullable', 'integer', 'min:1'],
             'tenant_external_id' => ['nullable', 'string', 'max:255'],
             'tenant_name' => ['nullable', 'string', 'max:255'],
             'inn' => ['nullable', 'string', 'max:32'],
@@ -3117,6 +3118,62 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $existingAccrualTenantId = (int) ($accrual->tenant_id ?? 0);
+        $preferredTenantId = (int) ($validated['preferred_tenant_id'] ?? 0);
+
+        if ($preferredTenantId > 0 && $preferredTenantId !== $existingAccrualTenantId) {
+            $resolution = app(\App\Services\Tenants\OneCTenantResolver::class)->resolve(
+                (int) $market->id,
+                trim((string) ($validated['tenant_external_id'] ?? '')) ?: trim((string) ($payload['tenant_external_id'] ?? '')),
+                [
+                    'tenant_name' => trim((string) ($validated['tenant_name'] ?? '')) ?: trim((string) ($payload['tenant_name'] ?? '')),
+                    'inn' => trim((string) ($validated['inn'] ?? '')) ?: trim((string) ($payload['inn'] ?? '')),
+                    'kpp' => trim((string) ($validated['kpp'] ?? '')) ?: trim((string) ($payload['kpp'] ?? '')),
+                ],
+                'map_review_financial_signal',
+                now(),
+                [
+                    'activate_resolved_tenant' => true,
+                    'preferred_tenant_id' => $preferredTenantId,
+                ],
+            );
+
+            /** @var \App\Models\Tenant|null $preferredTenant */
+            $preferredTenant = $resolution['tenant'] ?? null;
+
+            if (! $preferredTenant) {
+                return response()->json([
+                    'ok' => false,
+                    'mode' => 'tenant_resolve_failed',
+                    'message' => 'Не удалось сопоставить финансовый сигнал с выбранным арендатором.',
+                    'progress' => $buildMapReviewProgress($market),
+                ], 422);
+            }
+
+            $updatedAccruals = 0;
+
+            if ($existingAccrualTenantId > 0 && $existingAccrualTenantId !== (int) $preferredTenant->id) {
+                $updatedAccruals = \App\Models\TenantAccrual::query()
+                    ->where('market_id', (int) $market->id)
+                    ->where('market_space_id', (int) $space->id)
+                    ->where('tenant_id', $existingAccrualTenantId)
+                    ->update([
+                        'tenant_id' => (int) $preferredTenant->id,
+                        'updated_at' => now(),
+                    ]);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'mode' => 'tenant_resolved_existing',
+                'tenant' => [
+                    'id' => (int) $preferredTenant->id,
+                    'name' => (string) $preferredTenant->name,
+                ],
+                'accruals_updated' => $updatedAccruals,
+                'progress' => $buildMapReviewProgress($market),
+            ]);
+        }
+
         if ($existingAccrualTenantId > 0 && \Illuminate\Support\Facades\Schema::hasColumn('tenants', 'is_active')) {
             $existingAccrualTenant = \App\Models\Tenant::query()
                 ->where('market_id', (int) $market->id)
