@@ -2703,10 +2703,16 @@
                                             $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $looksFreeCase && ! $hasCandidates;
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
+                                            $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
+                                            $suggestedTargetTenantName = trim((string) ($row['suggested_target_tenant_name'] ?? ''));
                                             $canManualTenantSwitch = $attentionTab !== 'unconfirmed_links'
                                                 && ! $isContractTenantOverride
                                                 && ! $financialRequiresTenantResolution
-                                                && ($isTenantCase || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1);
+                                                && (
+                                                    $isTenantCase
+                                                    || $suggestedTargetTenantId > 0
+                                                    || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1
+                                                );
                                             $canResolveFinancialTenant = $attentionTab !== 'unconfirmed_links'
                                                 && $isFinancialSignalCase
                                                 && $financialRequiresTenantResolution;
@@ -2718,8 +2724,6 @@
                                             $tenantChangeComment = trim((string) ($tenantChangeDetails['review_comment'] ?? ''));
                                             $tenantChangeAuthor = trim((string) ($tenantChangeDetails['author_name'] ?? ''));
                                             $tenantChangeRecordedAt = trim((string) ($tenantChangeDetails['recorded_at'] ?? ''));
-                                            $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
-                                            $suggestedTargetTenantName = trim((string) ($row['suggested_target_tenant_name'] ?? ''));
                                             $hasTenantChangeDetails = $isTenantCase
                                                 && ($observedTenantName !== ''
                                                     || $tenantChangeComment !== '');
