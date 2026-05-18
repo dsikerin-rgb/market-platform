@@ -535,6 +535,78 @@ class MapReviewContractOverrideTest extends TestCase
             ->assertDontSee('Активировать арендатора', false);
     }
 
+    public function test_review_resolve_financial_tenant_matches_existing_current_tenant_instead_of_creating_duplicate(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $matchedTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Ряднова Тамара Анатольевна',
+            'is_active' => true,
+        ]);
+
+        $placeholderTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'placeholder-ryadnova-ip',
+            'name' => 'Ряднова ИП (placeholder)',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $matchedTenant->id,
+            'number' => 'ОС3',
+            'display_name' => 'Остров',
+            'code' => 'os3-ryadnova',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $accrual = TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $placeholderTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2025-10-01',
+            'source' => 'excel',
+            'source_file' => '2025-10__import.csv',
+            'source_row_hash' => sha1('financial-signal-match-existing-current-tenant'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_name' => 'Ряднова ИП',
+                'space_number' => 'ОС3',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = array_values($rows)[0] ?? [];
+
+        $this->assertSame('match_existing_tenant', data_get($row, 'diagnostics.financial_signal.resolution_action'));
+        $this->assertSame((int) $matchedTenant->id, (int) data_get($row, 'diagnostics.financial_signal.existing_tenant_candidate_id'));
+        $this->assertSame('Ряднова Тамара Анатольевна', data_get($row, 'diagnostics.financial_signal.existing_tenant_candidate_name'));
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-resolve-financial-tenant', [
+            'market_space_id' => $space->id,
+            'accrual_id' => $accrual->id,
+            'preferred_tenant_id' => $matchedTenant->id,
+            'tenant_name' => 'Ряднова ИП',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_resolved_existing')
+            ->assertJsonPath('tenant.id', (int) $matchedTenant->id);
+
+        $this->assertSame((int) $matchedTenant->id, (int) $accrual->refresh()->tenant_id);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $this->assertSame([], $rows);
+    }
+
     public function test_review_resolve_financial_tenant_endpoint_creates_new_tenant_and_then_allows_manual_switch(): void
     {
         $market = $this->createMarket();

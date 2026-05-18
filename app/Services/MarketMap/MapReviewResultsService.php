@@ -11,6 +11,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Operation;
+use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Debt\DebtStatusResolver;
@@ -878,10 +879,10 @@ class MapReviewResultsService
             $tenantExternalId = trim((string) ($payload['tenant_external_id'] ?? ($row->accrual_tenant_external_id ?? '')));
             $tenantInn = trim((string) ($payload['inn'] ?? ($row->accrual_tenant_inn ?? '')));
             $tenantKpp = trim((string) ($payload['kpp'] ?? ($row->accrual_tenant_kpp ?? '')));
-            $tenantName = trim((string) ($row->accrual_tenant_name ?? ''));
+            $tenantName = trim((string) ($payload['tenant_name'] ?? ''));
 
             if ($tenantName === '') {
-                $tenantName = trim((string) ($payload['tenant_name'] ?? ''));
+                $tenantName = trim((string) ($row->accrual_tenant_name ?? ''));
             }
 
             $tenantIsActive = isset($row->accrual_tenant_is_active)
@@ -892,6 +893,20 @@ class MapReviewResultsService
             $isTrustedOneCExternalId = $source === '1c'
                 && $tenantExternalId !== ''
                 && preg_match('/^TEST_/i', $tenantExternalId) !== 1;
+            $existingTenantCandidate = $this->resolveFinancialSignalExistingTenantCandidate(
+                $marketId,
+                $tenantName,
+                $tenantId,
+                (int) ($row->current_tenant_id ?? 0),
+                trim((string) ($row->current_tenant_name ?? ''))
+            );
+            $resolutionAction = $hasInactiveExistingTenant
+                ? 'activate_existing_tenant'
+                : 'create_or_match_tenant';
+
+            if ($existingTenantCandidate !== null && (int) ($existingTenantCandidate['id'] ?? 0) !== $tenantId) {
+                $resolutionAction = 'match_existing_tenant';
+            }
 
             $signals[$spaceId] = [
                 'priority' => 100,
@@ -904,7 +919,9 @@ class MapReviewResultsService
                 'tenant_inn' => $tenantInn !== '' ? $tenantInn : null,
                 'tenant_kpp' => $tenantKpp !== '' ? $tenantKpp : null,
                 'requires_tenant_resolution' => $tenantId <= 0 || ! $tenantIsActive,
-                'resolution_action' => $hasInactiveExistingTenant ? 'activate_existing_tenant' : 'create_or_match_tenant',
+                'resolution_action' => $resolutionAction,
+                'existing_tenant_candidate_id' => (int) ($existingTenantCandidate['id'] ?? 0) ?: null,
+                'existing_tenant_candidate_name' => $existingTenantCandidate['name'] ?? null,
                 'current_tenant_id' => (int) ($row->current_tenant_id ?? 0),
                 'current_tenant_name' => trim((string) ($row->current_tenant_name ?? '')),
                 'latest_period_label' => $period,
@@ -968,10 +985,134 @@ class MapReviewResultsService
             'observed_tenant_kpp' => trim((string) ($financialSignal['tenant_kpp'] ?? '')) ?: null,
             'requires_tenant_resolution' => (bool) ($financialSignal['requires_tenant_resolution'] ?? false),
             'resolution_action' => trim((string) ($financialSignal['resolution_action'] ?? '')) ?: null,
+            'existing_tenant_candidate_id' => (int) ($financialSignal['existing_tenant_candidate_id'] ?? 0) ?: null,
+            'existing_tenant_candidate_name' => trim((string) ($financialSignal['existing_tenant_candidate_name'] ?? '')) ?: null,
             'accrual_id' => (int) ($financialSignal['accrual_id'] ?? 0) ?: null,
             'review_comment' => 'Основание: начисление из финансового контура без найденного договора.',
             'author_name' => 'Система',
             'recorded_at' => $createdAt,
+        ];
+    }
+
+    /**
+     * @return array{id:int,name:string}|null
+     */
+    private function resolveFinancialSignalExistingTenantCandidate(
+        int $marketId,
+        string $observedTenantName,
+        int $observedTenantId,
+        int $currentTenantId,
+        string $currentTenantName
+    ): ?array {
+        $observedTenantName = trim($observedTenantName);
+
+        if ($marketId <= 0 || $observedTenantName === '') {
+            return null;
+        }
+
+        if (
+            $currentTenantId > 0
+            && $currentTenantId !== $observedTenantId
+            && $this->financialSignalTenantNamesLikelyMatch($observedTenantName, $currentTenantName)
+        ) {
+            return [
+                'id' => $currentTenantId,
+                'name' => $currentTenantName,
+            ];
+        }
+
+        $candidateTenants = Tenant::query()
+            ->where('market_id', $marketId)
+            ->when(
+                $observedTenantId > 0,
+                fn ($query) => $query->whereKeyNot($observedTenantId)
+            )
+            ->get(['id', 'name']);
+
+        $matches = $candidateTenants
+            ->filter(function (Tenant $tenant) use ($observedTenantName): bool {
+                return $this->financialSignalTenantNamesLikelyMatch($observedTenantName, (string) $tenant->name);
+            })
+            ->map(fn (Tenant $tenant): array => [
+                'id' => (int) $tenant->id,
+                'name' => (string) $tenant->name,
+            ])
+            ->values();
+
+        if ($matches->count() !== 1) {
+            return null;
+        }
+
+        /** @var array{id:int,name:string} $match */
+        $match = $matches->first();
+
+        return $match;
+    }
+
+    private function financialSignalTenantNamesLikelyMatch(string $left, string $right): bool
+    {
+        $leftParts = $this->financialSignalTenantNameParts($left);
+        $rightParts = $this->financialSignalTenantNameParts($right);
+
+        if (($leftParts['surname'] ?? '') === '' || ($rightParts['surname'] ?? '') === '') {
+            return false;
+        }
+
+        if ($leftParts['surname'] !== $rightParts['surname']) {
+            return false;
+        }
+
+        $leftInitials = (string) ($leftParts['initials'] ?? '');
+        $rightInitials = (string) ($rightParts['initials'] ?? '');
+
+        if ($leftInitials !== '' && $rightInitials !== '') {
+            return $leftInitials === $rightInitials;
+        }
+
+        return (bool) ($leftParts['has_only_surname'] ?? false)
+            || (bool) ($rightParts['has_only_surname'] ?? false);
+    }
+
+    /**
+     * @return array{surname:string,initials:string,has_only_surname:bool}
+     */
+    private function financialSignalTenantNameParts(string $value): array
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+        $tokens = preg_split('/\s+/u', trim($normalized), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $stopwords = ['ип', 'ооо', 'зао', 'пао', 'ао', 'оао', 'нко', 'тд', 'тк', 'чп'];
+
+        $filtered = array_values(array_filter($tokens, static function (string $token) use ($stopwords): bool {
+            return $token !== '' && ! in_array($token, $stopwords, true);
+        }));
+
+        if ($filtered === []) {
+            return [
+                'surname' => '',
+                'initials' => '',
+                'has_only_surname' => false,
+            ];
+        }
+
+        $surname = (string) ($filtered[0] ?? '');
+        $rest = array_slice($filtered, 1);
+        $initials = '';
+
+        foreach ($rest as $token) {
+            if (mb_strlen($token, 'UTF-8') <= 2) {
+                $initials .= $token;
+
+                continue;
+            }
+
+            $initials .= mb_substr($token, 0, 1, 'UTF-8');
+        }
+
+        return [
+            'surname' => $surname,
+            'initials' => $initials,
+            'has_only_surname' => $rest === [],
         ];
     }
 
