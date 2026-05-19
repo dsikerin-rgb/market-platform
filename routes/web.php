@@ -3373,22 +3373,26 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         if ($decision === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION) {
-            $existingClarification = Operation::query()
+            $latestReviewOperation = Operation::query()
                 ->where('market_id', (int) $market->id)
                 ->where('entity_type', 'market_space')
                 ->where('entity_id', (int) $space->id)
                 ->where('type', OperationType::SPACE_REVIEW)
-                ->where('payload->decision', SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION)
-                ->latest('id')
+                ->orderByDesc('effective_at')
+                ->orderByDesc('id')
                 ->first();
 
-            if ($existingClarification) {
+            $latestReviewDecision = trim((string) data_get($latestReviewOperation?->payload, 'decision', ''));
+            $alreadyNeedsClarification = $latestReviewDecision === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION
+                && (string) ($space->map_review_status ?? '') === 'conflict';
+
+            if ($alreadyNeedsClarification) {
                 return response()->json([
                     'ok' => true,
                     'mode' => 'already_marked',
                     'operation' => [
-                        'id' => (int) $existingClarification->id,
-                        'status' => (string) $existingClarification->status,
+                        'id' => (int) $latestReviewOperation->id,
+                        'status' => (string) $latestReviewOperation->status,
                         'decision' => $decision,
                     ],
                     'message' => 'Это место уже отмечено как требующее уточнения.',
