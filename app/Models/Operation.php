@@ -149,7 +149,17 @@ class Operation extends Model
         if ($latestTenantOp) {
             $payload = is_array($latestTenantOp->payload) ? $latestTenantOp->payload : [];
             $tenantId = (int) ($payload['to_tenant_id'] ?? 0);
-            $space->tenant_id = $tenantId > 0 ? $tenantId : null;
+
+            // Если tenantId <= 0 - сбрасываем на null (освобождение места)
+            // Если tenantId > 0, но tenant удалён - пропускаем, не меняем tenant_id
+            // Это защищает от FK violation при rebuild snapshot с историческими операциями
+            if ($tenantId <= 0) {
+                $space->tenant_id = null;
+            } elseif (Tenant::query()->whereKey($tenantId)->exists()) {
+                $space->tenant_id = $tenantId;
+            }
+            // else: не меняем tenant_id
+
             $tenantSwitchDetachedFromGroup = (bool) ($payload['detach_from_group'] ?? false);
             $tenantSwitchOldParentId = (int) ($payload['from_group_parent_id'] ?? 0);
 

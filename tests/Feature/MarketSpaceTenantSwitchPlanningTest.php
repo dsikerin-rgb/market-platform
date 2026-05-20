@@ -1,9 +1,11 @@
 <?php
+# tests/Feature/MarketSpaceTenantSwitchPlanningTest.php
 
 declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domain\Operations\OperationType;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Operation;
@@ -209,5 +211,77 @@ class MarketSpaceTenantSwitchPlanningTest extends TestCase
             'Second planned switch',
             null,
         );
+    }
+
+    public function test_rebuild_snapshot_with_deleted_tenant_succeeds(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Old Tenant',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'New Tenant',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $oldTenant->id,
+            'number' => 'OS10 1',
+            'display_name' => 'OS10 1',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        // Создаём applied TENANT_SWITCH operation на newTenant (без events, чтобы не триггерить rebuild)
+        Operation::withoutEvents(function () use ($market, $space, $oldTenant, $newTenant): void {
+            Operation::query()->create([
+                'market_id' => (int) $market->id,
+                'entity_type' => 'market_space',
+                'entity_id' => (int) $space->id,
+                'type' => OperationType::TENANT_SWITCH,
+                'status' => 'applied',
+                'effective_at' => now()->subHour(),
+                'effective_month' => now()->subHour()->startOfMonth(),
+                'payload' => [
+                    'market_space_id' => (int) $space->id,
+                    'from_tenant_id' => (int) $oldTenant->id,
+                    'to_tenant_id' => (int) $newTenant->id,
+                ],
+            ]);
+        });
+
+        // Проверяем, что создание operation без events НЕ изменило tenant_id
+        $space->refresh();
+        $this->assertSame((int) $oldTenant->id, (int) $space->tenant_id);
+
+        // Удаляем newTenant (имитация: tenant был удалён после смены)
+        $newTenantId = (int) $newTenant->id;
+        Tenant::query()->whereKey($newTenantId)->delete();
+
+        // Запускаем rebuild snapshot
+        $this->artisan('operations:rebuild-space-snapshots', [
+            '--market-id' => (int) $market->id,
+        ])->assertExitCode(0);
+
+        $space->refresh();
+
+        // tenant_id остаётся oldTenant (не меняется, т.к. newTenant удалён)
+        $this->assertSame((int) $oldTenant->id, (int) $space->tenant_id);
+
+        // Запись в историю с удалённым new_tenant_id не создаётся
+        $this->assertDatabaseMissing('market_space_tenant_histories', [
+            'market_space_id' => (int) $space->id,
+            'new_tenant_id' => $newTenantId,
+        ]);
     }
 }
