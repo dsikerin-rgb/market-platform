@@ -45,10 +45,8 @@ use App\Services\Debt\DebtAggregator;
 use App\Support\StaffConversationService;
 use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
-use App\Services\MarketMap\DuplicateSpaceResolutionService;
-use App\Services\MarketSpaces\TenantSwitchPlanner;
+use App\Services\MarketMap\SpaceReviewActionService;
 use App\Services\Marketplace\MarketplaceContextService;
-use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -821,54 +819,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'not_found' => 'Не найдено на карте',
             default => null,
         };
-    };
-
-    $markMarketSpaceReviewed = static function (MarketSpace $space, string $status, ?int $userId = null, $reviewedAt = null) use ($hasMapReviewColumns): void {
-        if (! $hasMapReviewColumns()) {
-            return;
-        }
-
-        $space->forceFill([
-            'map_review_status' => $status,
-            'map_reviewed_at' => $reviewedAt ?? now(),
-            'map_reviewed_by' => $userId,
-        ])->save();
-    };
-
-    $recordAppliedMatchedReview = static function (
-        Market $market,
-        MarketSpace $space,
-        ?int $userId = null,
-        $effectiveAt = null,
-        ?string $reason = null,
-        ?string $sourceReviewStatus = null
-    ): Operation {
-        $payload = [
-            'market_space_id' => (int) $space->id,
-            'decision' => 'matched',
-        ];
-
-        $normalizedSourceReviewStatus = is_string($sourceReviewStatus) ? trim($sourceReviewStatus) : '';
-        if ($normalizedSourceReviewStatus !== '') {
-            $payload['source_review_status'] = $normalizedSourceReviewStatus;
-        }
-
-        $normalizedReason = is_string($reason) ? trim($reason) : '';
-        if ($normalizedReason !== '') {
-            $payload['reason'] = $normalizedReason;
-        }
-
-        return Operation::query()->create([
-            'market_id' => (int) $market->id,
-            'entity_type' => 'market_space',
-            'entity_id' => (int) $space->id,
-            'type' => OperationType::SPACE_REVIEW,
-            'effective_at' => $effectiveAt ?? now(),
-            'status' => 'applied',
-            'payload' => $payload,
-            'comment' => $normalizedReason !== '' ? $normalizedReason : null,
-            'created_by' => $userId,
-        ]);
     };
 
     $buildMapReviewProgress = static function (Market $market) use ($hasMapReviewColumns, $mapReviewStatusLabel): array {
@@ -2667,404 +2617,141 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     })->name('filament.admin.operations.export');
 
     Route::post('/admin/market-map/review-contract-tenant-switch', function (Request $request) use (
-        $resolveMarketForMap,
-        $ensureCanEditShapes,
-        $hasMapReviewColumns,
-        $markMarketSpaceReviewed,
-        $recordAppliedMatchedReview,
-        $buildMapReviewProgress,
-        $mapReviewStatusLabel
-    ) {
-        $ensureCanEditShapes();
-        $market = $resolveMarketForMap();
+    $resolveMarketForMap,
+    $ensureCanEditShapes,
+    $hasMapReviewColumns,
+    $buildMapReviewProgress,
+    $mapReviewStatusLabel
+) {
+    $ensureCanEditShapes();
+    $market = $resolveMarketForMap();
 
-        if (! $hasMapReviewColumns()) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Map review columns are missing on market_spaces.',
-            ], 422);
-        }
-
-        $validated = $request->validate([
-            'market_space_id' => ['required', 'integer', 'min:1'],
-            'target_tenant_id' => ['required', 'integer', 'min:1'],
-            'contract_id' => ['nullable', 'integer', 'min:1'],
-            'effective_date' => ['required', 'date_format:Y-m-d'],
-            'reason' => ['nullable', 'string', 'max:2000'],
-            'close_previous_contract' => ['nullable', 'boolean'],
-        ]);
-
-        $space = MarketSpace::query()
-            ->where('market_id', (int) $market->id)
-            ->whereKey((int) $validated['market_space_id'])
-            ->first();
-
-        if (! $space) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Map review space was not found in the current market.',
-            ], 404);
-        }
-
-        // Guard: проверяем последнюю SPACE_REVIEW по ЭТОМУ месту (без фильтра по decision)
-        $lastSpaceReview = Operation::query()
-            ->where('market_id', (int) $market->id)
-            ->where('entity_type', MarketSpace::class)
-            ->where('entity_id', (int) $space->id)
-            ->where('type', OperationType::SPACE_REVIEW)
-            ->latest('id')
-            ->first();
-
-        if ((string) data_get($lastSpaceReview?->payload, 'decision') === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Найден договор другого арендатора, но точная связь места требует уточнения. Сначала разберите место/дубли, затем подтверждайте смену.',
-            ], 422);
-        }
-
-        $targetTenant = Tenant::query()
-            ->where('market_id', (int) $market->id)
-            ->whereKey((int) $validated['target_tenant_id'])
-            ->first();
-
-        if (! $targetTenant) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Арендатор из договора не найден в текущем рынке.',
-            ], 404);
-        }
-
-        $contractQuery = TenantContract::query()
-            ->where('market_id', (int) $market->id)
-            ->where('market_space_id', (int) $space->id)
-            ->where('tenant_id', (int) $targetTenant->id);
-
-        if (! empty($validated['contract_id'])) {
-            $contractQuery->whereKey((int) $validated['contract_id']);
-        }
-
-        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
-            $contractQuery->where('is_active', true);
-        }
-
-        if (Schema::hasColumn('tenant_contracts', 'status')) {
-            $contractQuery->whereNotIn('status', ['terminated', 'archived']);
-        }
-
-        $contract = $contractQuery
-            ->orderByDesc('starts_at')
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $contract) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Активный договор на это место и арендатора не найден.',
-            ], 422);
-        }
-
-        $effectiveDate = (string) $validated['effective_date'];
-        $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
-        $effectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
-        $contractNumber = trim((string) ($contract->number ?? ''));
-        $reason = trim((string) ($validated['reason'] ?? ''));
-        $reasonParts = [
-            'Смена арендатора подтверждена договором' . ($contractNumber !== '' ? ' ' . $contractNumber : ''),
-        ];
-
-        if ($reason !== '') {
-            $reasonParts[] = $reason;
-        }
-
-        $closeReviewOnEffectiveAt = true;
-        $applyReviewNow = $effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'));
-        $closePreviousContract = (bool) ($validated['close_previous_contract'] ?? false);
-
-        // Для future effective_date ревизию закрываем только когда наступит дата действия
-        $shouldCloseReviewNow = $applyReviewNow && (int) $space->effectiveTenantId() !== (int) $targetTenant->id;
-
-        if ($applyReviewNow && (int) $space->effectiveTenantId() === (int) $targetTenant->id) {
-            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
-
-            return response()->json([
-                'ok' => true,
-                'mode' => 'tenant_switch_already_current',
-                'operation' => null,
-                'item' => [
-                    'market_space_id' => (int) $space->id,
-                    'review_status' => (string) ($space->map_review_status ?? ''),
-                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-                ],
-                'progress' => $buildMapReviewProgress($market),
-            ]);
-        }
-
-        try {
-            $operation = app(TenantSwitchPlanner::class)->plan(
-                $space,
-                $targetTenant,
-                $effectiveAt,
-                implode('. ', $reasonParts),
-                Filament::auth()->id(),
-                $closeReviewOnEffectiveAt,
-                true,
-            );
-        } catch (ValidationException $exception) {
-            return response()->json([
-                'ok' => false,
-                'message' => collect($exception->errors())->flatten()->first() ?: 'Не удалось запланировать смену арендатора.',
-                'errors' => $exception->errors(),
-            ], 422);
-        }
-
-        if ($closePreviousContract) {
-            $previousContractEndDate = $effectiveDate;
-
-            if ($contract?->starts_at instanceof \DateTimeInterface) {
-                $previousContractEndDate = $contract->starts_at->format('Y-m-d');
-            } elseif (filled($contract?->starts_at)) {
-                $previousContractEndDate = (string) $contract->starts_at;
-            }
-
-            $previousContractsQuery = TenantContract::query()
-                ->where('market_id', (int) $market->id)
-                ->where('market_space_id', (int) $space->id)
-                ->where('tenant_id', '!=', (int) $targetTenant->id);
-
-            if (Schema::hasColumn('tenant_contracts', 'is_active')) {
-                $previousContractsQuery->where('is_active', true);
-            }
-
-            if (Schema::hasColumn('tenant_contracts', 'status')) {
-                $previousContractsQuery->whereNotIn('status', ['terminated', 'archived']);
-            }
-
-            $previousContracts = $previousContractsQuery->get();
-
-            foreach ($previousContracts as $previousContract) {
-                if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
-                    $previousContract->ends_at = $previousContractEndDate;
-                }
-
-                if (Schema::hasColumn('tenant_contracts', 'status')) {
-                    $previousContract->status = 'terminated';
-                }
-
-                if (Schema::hasColumn('tenant_contracts', 'is_active')) {
-                    $previousContract->is_active = false;
-                }
-
-                $previousContract->save();
-            }
-        }
-
-        $space->refresh();
-
-        if ($shouldCloseReviewNow) {
-            $sourceReviewStatus = (string) ($space->map_review_status ?? '');
-            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
-            $recordAppliedMatchedReview(
-                $market,
-                $space,
-                Filament::auth()->id(),
-                $operation->effective_at ?? now(),
-                implode('. ', $reasonParts),
-                $sourceReviewStatus,
-            );
-        }
-
+    if (! $hasMapReviewColumns()) {
         return response()->json([
-            'ok' => true,
-            'mode' => 'tenant_switch',
-            'operation' => [
-                'id' => (int) $operation->id,
-                'status' => (string) $operation->status,
-                'effective_at' => optional($operation->effective_at)->toIso8601String(),
-            ],
-            'item' => [
-                'market_space_id' => (int) $space->id,
-                'review_status' => (string) ($space->map_review_status ?? ''),
-                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-            ],
-            'progress' => $buildMapReviewProgress($market),
-        ]);
-    })->name('filament.admin.market-map.review-contract-tenant-switch');
+            'ok' => false,
+            'message' => 'Map review columns are missing on market_spaces.',
+        ], 422);
+    }
+
+    $validated = $request->validate([
+        'market_space_id' => ['required', 'integer', 'min:1'],
+        'target_tenant_id' => ['required', 'integer', 'min:1'],
+        'contract_id' => ['nullable', 'integer', 'min:1'],
+        'effective_date' => ['required', 'date_format:Y-m-d'],
+        'reason' => ['nullable', 'string', 'max:2000'],
+        'close_previous_contract' => ['nullable', 'boolean'],
+    ]);
+
+    $space = MarketSpace::query()
+        ->where('market_id', (int) $market->id)
+        ->whereKey((int) $validated['market_space_id'])
+        ->first();
+
+    if (! $space) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Map review space was not found in the current market.',
+        ], 404);
+    }
+
+    $result = app(SpaceReviewActionService::class)->reviewContractTenantSwitch(
+        $market,
+        $space,
+        $validated,
+        Filament::auth()->id(),
+    );
+
+    if (($result['ok'] ?? false) !== true) {
+        return response()->json([
+            'ok' => false,
+            'message' => (string) ($result['message'] ?? 'Review action failed.'),
+            'errors' => $result['errors'] ?? null,
+        ], (int) ($result['status_code'] ?? 422));
+    }
+
+    $space->refresh();
+
+    return response()->json([
+        'ok' => true,
+        'mode' => (string) ($result['mode'] ?? 'tenant_switch'),
+        'operation' => $result['operation'] ?? null,
+        'item' => [
+            'market_space_id' => (int) $space->id,
+            'review_status' => (string) ($space->map_review_status ?? ''),
+            'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+            'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+        ],
+        'progress' => $buildMapReviewProgress($market),
+    ]);
+})->name('filament.admin.market-map.review-contract-tenant-switch');
 
     Route::post('/admin/market-map/review-tenant-switch', function (Request $request) use (
-        $resolveMarketForMap,
-        $ensureCanEditShapes,
-        $hasMapReviewColumns,
-        $markMarketSpaceReviewed,
-        $recordAppliedMatchedReview,
-        $buildMapReviewProgress,
-        $mapReviewStatusLabel
-    ) {
-        $ensureCanEditShapes();
-        $market = $resolveMarketForMap();
+    $resolveMarketForMap,
+    $ensureCanEditShapes,
+    $hasMapReviewColumns,
+    $buildMapReviewProgress,
+    $mapReviewStatusLabel
+) {
+    $ensureCanEditShapes();
+    $market = $resolveMarketForMap();
 
-        if (! $hasMapReviewColumns()) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Map review columns are missing on market_spaces.',
-            ], 422);
-        }
-
-        $validated = $request->validate([
-            'market_space_id' => ['required', 'integer', 'min:1'],
-            'target_tenant_id' => ['required', 'integer', 'min:1'],
-            'effective_date' => ['required', 'date_format:Y-m-d'],
-            'reason' => ['nullable', 'string', 'max:2000'],
-            'close_previous_contract' => ['nullable', 'boolean'],
-        ]);
-
-        $space = MarketSpace::query()
-            ->where('market_id', (int) $market->id)
-            ->whereKey((int) $validated['market_space_id'])
-            ->first();
-
-        if (! $space) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Map review space was not found in the current market.',
-            ], 404);
-        }
-
-        $targetTenant = Tenant::query()
-            ->where('market_id', (int) $market->id)
-            ->whereKey((int) $validated['target_tenant_id'])
-            ->first();
-
-        if (! $targetTenant) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Target tenant was not found in the current market.',
-            ], 404);
-        }
-
-        $effectiveDate = (string) $validated['effective_date'];
-        $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
-        $effectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
-        $reason = trim((string) ($validated['reason'] ?? ''));
-        $closePreviousContract = (bool) ($validated['close_previous_contract'] ?? false);
-
-        if ($effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC')) && (int) $space->effectiveTenantId() === (int) $targetTenant->id) {
-            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
-
-            return response()->json([
-                'ok' => true,
-                'mode' => 'tenant_switch_already_current',
-                'operation' => null,
-                'item' => [
-                    'market_space_id' => (int) $space->id,
-                    'review_status' => (string) ($space->map_review_status ?? ''),
-                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-                ],
-                'progress' => $buildMapReviewProgress($market),
-            ]);
-        }
-
-        try {
-            $operation = app(TenantSwitchPlanner::class)->plan(
-                $space,
-                $targetTenant,
-                $effectiveAt,
-                $reason !== '' ? $reason : 'Смена арендатора подтверждена на карточке ревизии.',
-                Filament::auth()->id(),
-                true,
-            );
-        } catch (ValidationException $exception) {
-            return response()->json([
-                'ok' => false,
-                'message' => collect($exception->errors())->flatten()->first() ?: 'Не удалось запланировать смену арендатора.',
-                'errors' => $exception->errors(),
-            ], 422);
-        }
-
-        if ($closePreviousContract) {
-            $targetContract = TenantContract::query()
-                ->where('market_id', (int) $market->id)
-                ->where('market_space_id', (int) $space->id)
-                ->where('tenant_id', (int) $targetTenant->id)
-                ->orderByDesc('starts_at')
-                ->orderByDesc('id')
-                ->first();
-
-            $previousContractEndDate = $effectiveDate;
-
-            if ($targetContract?->starts_at instanceof \DateTimeInterface) {
-                $previousContractEndDate = $targetContract->starts_at->format('Y-m-d');
-            } elseif (filled($targetContract?->starts_at)) {
-                $previousContractEndDate = (string) $targetContract->starts_at;
-            }
-
-            $previousContractsQuery = TenantContract::query()
-                ->where('market_id', (int) $market->id)
-                ->where('market_space_id', (int) $space->id)
-                ->where('tenant_id', '!=', (int) $targetTenant->id);
-
-            if (Schema::hasColumn('tenant_contracts', 'is_active')) {
-                $previousContractsQuery->where('is_active', true);
-            }
-
-            if (Schema::hasColumn('tenant_contracts', 'status')) {
-                $previousContractsQuery->whereNotIn('status', ['terminated', 'archived']);
-            }
-
-            $previousContracts = $previousContractsQuery->get();
-
-            foreach ($previousContracts as $previousContract) {
-                if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
-                    $previousContract->ends_at = $previousContractEndDate;
-                }
-
-                if (Schema::hasColumn('tenant_contracts', 'status')) {
-                    $previousContract->status = 'terminated';
-                }
-
-                if (Schema::hasColumn('tenant_contracts', 'is_active')) {
-                    $previousContract->is_active = false;
-                }
-
-                $previousContract->save();
-            }
-        }
-
-        $space->refresh();
-
-        if ($effectiveAt->lessThanOrEqualTo(CarbonImmutable::now('UTC'))) {
-            $sourceReviewStatus = (string) ($space->map_review_status ?? '');
-            $markMarketSpaceReviewed($space, 'matched', Filament::auth()->id(), now());
-            $space->refresh();
-            $recordAppliedMatchedReview(
-                $market,
-                $space,
-                Filament::auth()->id(),
-                $operation->effective_at ?? now(),
-                $reason !== '' ? $reason : 'Смена арендатора подтверждена на карточке ревизии.',
-                $sourceReviewStatus,
-            );
-        }
-
+    if (! $hasMapReviewColumns()) {
         return response()->json([
-            'ok' => true,
-            'mode' => 'tenant_switch_manual',
-            'operation' => [
-                'id' => (int) $operation->id,
-                'status' => (string) $operation->status,
-                'effective_at' => optional($operation->effective_at)->toIso8601String(),
-            ],
-            'item' => [
-                'market_space_id' => (int) $space->id,
-                'review_status' => (string) ($space->map_review_status ?? ''),
-                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-            ],
-            'progress' => $buildMapReviewProgress($market),
-        ]);
-    })->name('filament.admin.market-map.review-tenant-switch');
+            'ok' => false,
+            'message' => 'Map review columns are missing on market_spaces.',
+        ], 422);
+    }
+
+    $validated = $request->validate([
+        'market_space_id' => ['required', 'integer', 'min:1'],
+        'target_tenant_id' => ['required', 'integer', 'min:1'],
+        'effective_date' => ['required', 'date_format:Y-m-d'],
+        'reason' => ['nullable', 'string', 'max:2000'],
+        'close_previous_contract' => ['nullable', 'boolean'],
+    ]);
+
+    $space = MarketSpace::query()
+        ->where('market_id', (int) $market->id)
+        ->whereKey((int) $validated['market_space_id'])
+        ->first();
+
+    if (! $space) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Map review space was not found in the current market.',
+        ], 404);
+    }
+
+    $result = app(SpaceReviewActionService::class)->reviewTenantSwitch(
+        $market,
+        $space,
+        $validated,
+        Filament::auth()->id(),
+    );
+
+    if (($result['ok'] ?? false) !== true) {
+        return response()->json([
+            'ok' => false,
+            'message' => (string) ($result['message'] ?? 'Review action failed.'),
+            'errors' => $result['errors'] ?? null,
+        ], (int) ($result['status_code'] ?? 422));
+    }
+
+    $space->refresh();
+
+    return response()->json([
+        'ok' => true,
+        'mode' => (string) ($result['mode'] ?? 'tenant_switch_manual'),
+        'operation' => $result['operation'] ?? null,
+        'item' => [
+            'market_space_id' => (int) $space->id,
+            'review_status' => (string) ($space->map_review_status ?? ''),
+            'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+            'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+        ],
+        'progress' => $buildMapReviewProgress($market),
+    ]);
+})->name('filament.admin.market-map.review-tenant-switch');
 
     Route::post('/admin/market-map/review-resolve-financial-tenant', function (Request $request) use (
         $resolveMarketForMap,
@@ -3252,300 +2939,80 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     })->name('filament.admin.market-map.review-resolve-financial-tenant');
 
     Route::post('/admin/market-map/review-decision', function (Request $request) use (
-        $resolveMarketForMap,
-        $ensureCanEditShapes,
-        $hasMapReviewColumns,
-        $markMarketSpaceReviewed,
-        $buildMapReviewProgress,
-        $mapReviewStatusLabel,
-        $marketSpaceHasUsableShape
-    ) {
-        $ensureCanEditShapes();
-        $market = $resolveMarketForMap();
+    $resolveMarketForMap,
+    $ensureCanEditShapes,
+    $hasMapReviewColumns,
+    $buildMapReviewProgress,
+    $mapReviewStatusLabel,
+    $marketSpaceHasUsableShape
+) {
+    $ensureCanEditShapes();
+    $market = $resolveMarketForMap();
 
-        if (! $hasMapReviewColumns()) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Map review columns are missing on market_spaces.',
-            ], 422);
-        }
-
-        $validated = $request->validate([
-            'decision' => ['required', 'string', 'max:64'],
-            'market_space_id' => ['required', 'integer', 'min:1'],
-            'shape_id' => ['nullable', 'integer', 'min:1'],
-            'reason' => ['nullable', 'string', 'max:2000'],
-            'observed_tenant_name' => ['nullable', 'string', 'max:255'],
-            'number' => ['nullable', 'string', 'max:255'],
-            'display_name' => ['nullable', 'string', 'max:255'],
-            'candidate_market_space_id' => ['nullable', 'integer', 'min:1'],
-            'effective_date' => ['nullable', 'date_format:Y-m-d'],
-        ]);
-
-        $space = MarketSpace::query()
-            ->where('market_id', (int) $market->id)
-            ->whereKey((int) $validated['market_space_id'])
-            ->first();
-
-        if (! $space) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Map review space was not found in the current market.',
-            ], 404);
-        }
-
-        $decision = (string) $validated['decision'];
-        $userId = Filament::auth()->id();
-        $now = now();
-        $operationEffectiveAt = $now;
-
-        if ($decision === 'matched') {
-            $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
-            $payload = [
-                'market_space_id' => (int) $space->id,
-                'decision' => 'matched',
-            ];
-
-            if ($reason !== '') {
-                $payload['reason'] = $reason;
-            }
-
-            DB::transaction(static fn (): Operation => Operation::query()->create([
-                'market_id' => (int) $market->id,
-                'entity_type' => 'market_space',
-                'entity_id' => (int) $space->id,
-                'type' => OperationType::SPACE_REVIEW,
-                'effective_at' => $now,
-                'status' => 'observed',
-                'payload' => $payload,
-                'comment' => $reason !== '' ? $reason : null,
-                'created_by' => $userId,
-            ]));
-            $space->refresh();
-
-            return response()->json([
-                'ok' => true,
-                'mode' => 'lightweight',
-                'item' => [
-                    'market_space_id' => (int) $space->id,
-                    'review_status' => (string) ($space->map_review_status ?? ''),
-                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-                ],
-                'progress' => $buildMapReviewProgress($market),
-            ]);
-        }
-
-        if (! in_array($decision, SpaceReviewDecision::values(), true)) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Unknown review decision.',
-            ], 422);
-        }
-
-        $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
-
-        if (SpaceReviewDecision::requiresReason($decision) && $reason === '') {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Для этого решения нужен комментарий.',
-            ], 422);
-        }
-
-        $payload = [
-            'market_space_id' => (int) $space->id,
-            'decision' => $decision,
-        ];
-        $duplicateResolutionPreview = null;
-
-        foreach (['shape_id', 'observed_tenant_name', 'number', 'display_name'] as $field) {
-            if (array_key_exists($field, $validated) && $validated[$field] !== null && $validated[$field] !== '') {
-                $payload[$field] = $validated[$field];
-            }
-        }
-
-        if (array_key_exists('effective_date', $validated) && $validated['effective_date'] !== null && $validated['effective_date'] !== '') {
-            $payload['effective_date'] = (string) $validated['effective_date'];
-        }
-
-        if ($reason !== '') {
-            $payload['reason'] = $reason;
-        }
-
-        if ($decision === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION) {
-            $latestReviewOperation = Operation::query()
-                ->where('market_id', (int) $market->id)
-                ->where('entity_type', 'market_space')
-                ->where('entity_id', (int) $space->id)
-                ->where('type', OperationType::SPACE_REVIEW)
-                ->orderByDesc('effective_at')
-                ->orderByDesc('id')
-                ->first();
-
-            $latestReviewDecision = trim((string) data_get($latestReviewOperation?->payload, 'decision', ''));
-            $alreadyNeedsClarification = $latestReviewDecision === SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION
-                && (string) ($space->map_review_status ?? '') === 'conflict';
-
-            if ($alreadyNeedsClarification) {
-                return response()->json([
-                    'ok' => true,
-                    'mode' => 'already_marked',
-                    'operation' => [
-                        'id' => (int) $latestReviewOperation->id,
-                        'status' => (string) $latestReviewOperation->status,
-                        'decision' => $decision,
-                    ],
-                    'message' => 'Это место уже отмечено как требующее уточнения.',
-                    'item' => [
-                        'market_space_id' => (int) $space->id,
-                        'review_status' => (string) ($space->map_review_status ?? ''),
-                        'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                        'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-                    ],
-                    'progress' => $buildMapReviewProgress($market),
-                ]);
-            }
-        }
-
-        if ($decision === SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION) {
-            $candidateSpaceId = (int) ($validated['candidate_market_space_id'] ?? 0);
-
-            if ($candidateSpaceId <= 0 || $candidateSpaceId === (int) $space->id) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Duplicate review candidate space is required.',
-                ], 422);
-            }
-
-            $candidateSpaceExists = MarketSpace::query()
-                ->where('market_id', (int) $market->id)
-                ->whereKey($candidateSpaceId)
-                ->exists();
-
-            if (! $candidateSpaceExists) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Duplicate review candidate space was not found in the current market.',
-                ], 404);
-            }
-
-            $duplicateResolutionPreview = app(DuplicateSpaceResolutionService::class)->preview(
-                (int) $market->id,
-                (int) $space->id,
-                $candidateSpaceId,
-            );
-
-            $payload['candidate_market_space_id'] = $candidateSpaceId;
-            $payload['reason'] = $payload['reason'] ?? 'Выбрано основное место дубля; перенести безопасные связи.';
-            $payload['duplicate_resolution'] = [
-                'candidate_market_space_id' => $candidateSpaceId,
-                'transfer_counts' => $duplicateResolutionPreview['transfer_counts'] ?? [],
-                'blocking_counts' => $duplicateResolutionPreview['blocking_counts'] ?? [],
-                'classification' => $duplicateResolutionPreview['classification'] ?? null,
-                'accrual_classification' => $duplicateResolutionPreview['accrual_classification'] ?? null,
-                'retained_financial_tail' => $duplicateResolutionPreview['retained_financial_tail'] ?? null,
-            ];
-        }
-
-        if ($decision === SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL) {
-            $candidateSpaceId = (int) ($validated['candidate_market_space_id'] ?? 0);
-            $effectiveDate = trim((string) ($validated['effective_date'] ?? ''));
-
-            if ($candidateSpaceId <= 0 || $candidateSpaceId === (int) $space->id) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Выберите основное место, в которое вошло упраздняемое место.',
-                ], 422);
-            }
-
-            if ($effectiveDate === '') {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Укажите дату, с которой место считается объединённым.',
-                ], 422);
-            }
-
-            $candidateSpaceExists = MarketSpace::query()
-                ->where('market_id', (int) $market->id)
-                ->whereKey($candidateSpaceId)
-                ->where('is_active', true)
-                ->exists();
-
-            if (! $candidateSpaceExists) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Основное место не найдено или уже неактивно.',
-                ], 404);
-            }
-
-            $marketTz = $market->timezone ?: (string) config('app.timezone', 'UTC');
-            $operationEffectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
-            $payload['candidate_market_space_id'] = $candidateSpaceId;
-            $payload['reason'] = $payload['reason'] ?? 'Место упразднено: физически объединено с основным местом.';
-        }
-
-        if (isset($payload['shape_id'])) {
-            $shape = MarketSpaceMapShape::query()
-                ->where('market_id', (int) $market->id)
-                ->whereKey((int) $payload['shape_id'])
-                ->first();
-
-            if (! $shape) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Map review shape was not found in the current market.',
-                ], 404);
-            }
-
-            if ($decision === SpaceReviewDecision::BIND_SHAPE_TO_SPACE) {
-                if ((int) ($shape->market_space_id ?? 0) > 0 && (int) $shape->market_space_id !== (int) $space->id) {
-                    return response()->json([
-                        'ok' => false,
-                        'message' => 'Эта разметка уже привязана к другому месту. Сначала отвяжите её или выберите другую разметку.',
-                    ], 422);
-                }
-
-                if ($marketSpaceHasUsableShape((int) $market->id, (int) $space->id, (int) $shape->id)) {
-                    return response()->json([
-                        'ok' => false,
-                        'message' => 'У этого места уже есть привязанная разметка. Выберите место без разметки.',
-                    ], 422);
-                }
-            }
-        }
-
-        $operation = DB::transaction(static fn (): Operation => Operation::query()->create([
-            'market_id' => (int) $market->id,
-            'entity_type' => 'market_space',
-            'entity_id' => (int) $space->id,
-            'type' => OperationType::SPACE_REVIEW,
-            'effective_at' => $operationEffectiveAt,
-            'status' => SpaceReviewDecision::defaultOperationStatus($decision),
-            'payload' => $payload,
-            'comment' => isset($payload['reason']) ? (string) $payload['reason'] : null,
-            'created_by' => $userId,
-        ]));
-
-        $space->refresh();
-
+    if (! $hasMapReviewColumns()) {
         return response()->json([
-            'ok' => true,
-            'mode' => 'operation',
-            'operation' => [
-                'id' => (int) $operation->id,
-                'status' => (string) $operation->status,
-                'decision' => $decision,
-            ],
-            'item' => [
-                'market_space_id' => (int) $space->id,
-                'review_status' => (string) ($space->map_review_status ?? ''),
-                'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
-                'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
-            ],
-            'resolution' => $duplicateResolutionPreview,
-            'progress' => $buildMapReviewProgress($market),
-        ]);
-    })->name('filament.admin.market-map.review-decision');
+            'ok' => false,
+            'message' => 'Map review columns are missing on market_spaces.',
+        ], 422);
+    }
+
+    $validated = $request->validate([
+        'decision' => ['required', 'string', 'max:64'],
+        'market_space_id' => ['required', 'integer', 'min:1'],
+        'shape_id' => ['nullable', 'integer', 'min:1'],
+        'reason' => ['nullable', 'string', 'max:2000'],
+        'observed_tenant_name' => ['nullable', 'string', 'max:255'],
+        'number' => ['nullable', 'string', 'max:255'],
+        'display_name' => ['nullable', 'string', 'max:255'],
+        'candidate_market_space_id' => ['nullable', 'integer', 'min:1'],
+        'effective_date' => ['nullable', 'date_format:Y-m-d'],
+    ]);
+
+    $space = MarketSpace::query()
+        ->where('market_id', (int) $market->id)
+        ->whereKey((int) $validated['market_space_id'])
+        ->first();
+
+    if (! $space) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Map review space was not found in the current market.',
+        ], 404);
+    }
+
+    $result = app(SpaceReviewActionService::class)->reviewDecision(
+        $market,
+        $space,
+        $validated,
+        Filament::auth()->id(),
+        $marketSpaceHasUsableShape,
+    );
+
+    if (($result['ok'] ?? false) !== true) {
+        return response()->json([
+            'ok' => false,
+            'message' => (string) ($result['message'] ?? 'Review action failed.'),
+            'errors' => $result['errors'] ?? null,
+        ], (int) ($result['status_code'] ?? 422));
+    }
+
+    $space->refresh();
+
+    return response()->json([
+        'ok' => true,
+        'mode' => (string) ($result['mode'] ?? 'operation'),
+        'operation' => $result['operation'] ?? null,
+        'message' => $result['message'] ?? null,
+        'item' => [
+            'market_space_id' => (int) $space->id,
+            'review_status' => (string) ($space->map_review_status ?? ''),
+            'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+            'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+        ],
+        'resolution' => $result['resolution'] ?? null,
+        'progress' => $buildMapReviewProgress($market),
+    ]);
+})->name('filament.admin.market-map.review-decision');
 
     Route::get('/admin/map-review-results/ai-review', function (Request $request) use (
         $resolveMarketForMap,

@@ -7,6 +7,7 @@ namespace App\Services\MarketMap;
 
 use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
+use App\Domain\Operations\SpaceReviewStateMachine;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -147,7 +148,7 @@ class MapReviewResultsService
         $reviewSpaces = MarketSpace::query()
             ->with(['location:id,name', 'tenant:id,name'])
             ->where('market_id', $marketId)
-            ->whereIn('map_review_status', ['changed_tenant', 'conflict', 'not_found'])
+            ->whereIn('map_review_status', SpaceReviewStateMachine::attentionReviewStatuses())
             ->when(
                 Schema::hasColumn('market_spaces', 'is_active'),
                 fn ($query) => $query->where('is_active', true)
@@ -226,9 +227,11 @@ class MapReviewResultsService
                 ? $diagnostics[(int) $space->id]['financial_signal']
                 : null;
             $hasOperationDecision = filled($payload['decision'] ?? null);
-            $isFinancialOnly = ! $hasOperationDecision
-                && $financialSignal !== null
-                && ! in_array((string) ($space->map_review_status ?? ''), ['changed_tenant', 'conflict', 'not_found'], true);
+            $isFinancialOnly = SpaceReviewStateMachine::isFinancialOnlyConflict(
+                $hasOperationDecision,
+                $financialSignal !== null,
+                (string) ($space->map_review_status ?? ''),
+            );
             $decision = $hasOperationDecision
                 ? (string) $payload['decision']
                 : ($isFinancialOnly ? SpaceReviewDecision::TENANT_CHANGED_ON_SITE : null);
@@ -1334,7 +1337,7 @@ class MapReviewResultsService
 
         $operations = Operation::query()
             ->where('market_id', $marketId)
-            ->where('entity_type', 'market_space')
+            ->whereIn('entity_type', ['market_space', MarketSpace::class])
             ->where('type', OperationType::SPACE_REVIEW)
             ->where('status', 'applied')
             ->orderByDesc('created_at')
@@ -1447,7 +1450,7 @@ class MapReviewResultsService
 
         return Operation::query()
             ->where('market_id', $marketId)
-            ->where('entity_type', 'market_space')
+            ->whereIn('entity_type', ['market_space', MarketSpace::class])
             ->where('type', OperationType::SPACE_REVIEW)
             ->whereIn('entity_id', $spaceIds)
             ->orderByDesc('effective_at')
