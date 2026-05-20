@@ -156,7 +156,8 @@ class MarketSpaceTenantSwitchPlanningTest extends TestCase
         $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_NONE, $child->space_group_role);
         $this->assertNull($child->space_group_parent_id);
         $this->assertNull($child->space_group_slot);
-        $this->assertSame('OS7 6', $parent->number);
+        $this->assertSame('OS7 6, 8', $parent->number);
+        $this->assertSame('OS7 6', $parent->display_name);
     }
 
     public function test_planner_rejects_second_future_tenant_switch_for_same_place(): void
