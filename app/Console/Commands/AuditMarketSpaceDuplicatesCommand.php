@@ -403,14 +403,14 @@ class AuditMarketSpaceDuplicatesCommand extends Command
             ->map(fn (object $row): array => (array) $row)
             ->all();
 
-        $contractIds = array_values(array_filter(array_map(
-            static fn (array $row): int => (int) ($row['id'] ?? 0),
-            $contracts
-        )));
-
         $contractDebts = [];
-        if (! empty($contractIds) && Schema::hasTable('contract_debts')) {
-            $debtColumns = ['id', 'tenant_contract_id'];
+        $contractExternalIds = array_values(array_filter(array_map(
+            static fn (array $row): string => trim((string) ($row['external_id'] ?? '')),
+            $contracts
+        ), static fn (string $value): bool => $value !== ''));
+
+        if (! empty($contractExternalIds) && Schema::hasTable('contract_debts') && Schema::hasColumn('contract_debts', 'contract_external_id')) {
+            $debtColumns = ['id', 'contract_external_id'];
             foreach (['period', 'status', 'amount', 'debt_amount', 'paid_amount', 'source'] as $column) {
                 if (Schema::hasColumn('contract_debts', $column)) {
                     $debtColumns[] = $column;
@@ -418,7 +418,7 @@ class AuditMarketSpaceDuplicatesCommand extends Command
             }
 
             $contractDebts = DB::table('contract_debts')
-                ->whereIn('tenant_contract_id', $contractIds)
+                ->whereIn('contract_external_id', $contractExternalIds)
                 ->orderByDesc(Schema::hasColumn('contract_debts', 'period') ? 'period' : 'id')
                 ->orderByDesc('id')
                 ->get($debtColumns)
