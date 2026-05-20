@@ -1,4 +1,5 @@
 <?php
+# tests/Feature/MapReviewContractOverrideTest.php
 
 declare(strict_types=1);
 
@@ -1030,6 +1031,7 @@ class MapReviewContractOverrideTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('mode', 'tenant_switch')
+            ->assertJsonPath('item.review_status', 'matched')
             ->assertJsonPath('operation.status', 'applied');
 
         $this->assertDatabaseHas('operations', [
@@ -1239,7 +1241,8 @@ class MapReviewContractOverrideTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('ok', true)
-            ->assertJsonPath('mode', 'tenant_switch_manual');
+            ->assertJsonPath('mode', 'tenant_switch_manual')
+            ->assertJsonPath('item.review_status', 'matched');
 
         $this->assertDatabaseHas('market_spaces', [
             'id' => $space->id,
@@ -1721,6 +1724,99 @@ class MapReviewContractOverrideTest extends TestCase
         $space->refresh();
         $this->assertSame('matched', (string) $space->map_review_status);
         $this->assertSame((int) $newTenant->id, (int) $space->tenant_id);
+    }
+
+    public function test_review_contract_tenant_switch_not_blocked_if_identity_clarification_was_closed_with_matched(): void
+    {
+        $market = $this->createMarket();
+        $reviewer = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Old tenant',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'New tenant',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $oldTenant->id,
+            'number' => 'CLARIFICATION-CLOSED',
+            'display_name' => 'Closed clarification',
+            'code' => 'clarification-closed-space',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'matched',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $reviewer->id,
+        ]);
+
+        Operation::query()->create([
+            'type' => OperationType::SPACE_REVIEW,
+            'entity_type' => MarketSpace::class,
+            'entity_id' => $space->id,
+            'market_id' => $market->id,
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+                'reason' => 'Historical clarification',
+            ],
+            'created_by' => $reviewer->id,
+            'effective_at' => now()->subDay(),
+        ]);
+
+        Operation::query()->create([
+            'type' => OperationType::SPACE_REVIEW,
+            'entity_type' => MarketSpace::class,
+            'entity_id' => $space->id,
+            'market_id' => $market->id,
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => 'matched',
+                'reason' => 'Follow-up review closed the case',
+            ],
+            'created_by' => $reviewer->id,
+            'effective_at' => now(),
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $newTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'OS-77 dated 2026-04-01',
+            'status' => 'active',
+            'starts_at' => '2026-04-01',
+            'is_active' => true,
+        ]);
+
+        $response = $this->withCsrfToken()->postJson('/admin/market-map/review-contract-tenant-switch', [
+            'market_space_id' => $space->id,
+            'target_tenant_id' => $newTenant->id,
+            'contract_id' => $contract->id,
+            'effective_date' => '2026-04-01',
+            'reason' => 'Tenant switch after closed clarification',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('mode', 'tenant_switch');
+
+        $this->assertDatabaseHas('operations', [
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+        ]);
     }
 
     public function test_review_contract_override_keeps_dates_out_of_primary_facts(): void

@@ -120,20 +120,11 @@ final class SpaceReviewDecision
 
     public static function defaultOperationStatus(string $decision): string
     {
-        return in_array($decision, self::observedValues(), true) ? 'observed' : 'applied';
+        return SpaceReviewStateMachine::defaultOperationStatus($decision);
     }
 
     public static function reviewStatusForDecision(string $decision): string
     {
-        return match ($decision) {
-            'matched' => 'matched',
-            self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'conflict',
-            self::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'changed',
-            self::MERGE_SPACE_INTO_CANONICAL => 'changed',
-            self::OCCUPANCY_CONFLICT => 'conflict',
-            self::TENANT_CHANGED_ON_SITE => 'changed_tenant',
-            self::SHAPE_NOT_FOUND => 'not_found',
-            default => 'changed',
-        };
+        return SpaceReviewStateMachine::reviewStatusForDecision($decision);
     }
 }

@@ -1,4 +1,5 @@
 <?php
+# app/Models/Operation.php
 
 declare(strict_types=1);
 
@@ -6,6 +7,7 @@ namespace App\Models;
 
 use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
+use App\Domain\Operations\SpaceReviewStateMachine;
 use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\DuplicateSpaceResolutionService;
 use App\Services\MarketMap\MergedSpaceRetirementService;
@@ -17,7 +19,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Models\Market;
 
 class Operation extends Model
 {
@@ -64,7 +65,7 @@ class Operation extends Model
             if ($operation->type === OperationType::SPACE_REVIEW && blank($operation->status)) {
                 $decision = (string) ($operation->payload['decision'] ?? '');
                 if ($decision !== '') {
-                    $operation->status = SpaceReviewDecision::defaultOperationStatus($decision);
+                    $operation->status = SpaceReviewStateMachine::defaultOperationStatus($decision);
                 }
             }
 
@@ -320,7 +321,7 @@ class Operation extends Model
         }
 
         $reviewAttributes = [
-            'map_review_status' => SpaceReviewDecision::reviewStatusForDecision($decision),
+            'map_review_status' => SpaceReviewStateMachine::reviewStatusForDecision($decision),
             'map_reviewed_at' => $operation->effective_at,
             'map_reviewed_by' => $operation->created_by,
         ];
