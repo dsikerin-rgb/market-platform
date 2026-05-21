@@ -971,6 +971,14 @@ class MapReviewResultsService
             ->limit(max($limit * 10, 100))
             ->get();
 
+        // Contract-contour guard: собрать активные контракты по найденным space_id
+        $spaceIds = $rows->pluck('space_id')
+            ->filter(fn ($id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+        $activeContracts = $this->activeContractsForAccrualSpaceIds($spaceIds, $marketId);
+
         $signals = [];
 
         foreach ($rows as $row) {
@@ -978,6 +986,16 @@ class MapReviewResultsService
 
             if ($spaceId <= 0 || isset($signals[$spaceId])) {
                 continue;
+            }
+
+            // Contract-contour guard: если есть активный контракт с другим tenant_id — пропускаем сигнал
+            if (isset($activeContracts[$spaceId])) {
+                $contractTenantId = (int) $activeContracts[$spaceId]['tenant_id'];
+                $accrualTenantId = (int) ($row->accrual_tenant_id ?? 0);
+
+                if ($contractTenantId > 0 && $contractTenantId !== $accrualTenantId) {
+                    continue; // Пропускаем: активный контракт блокирует финансовый хвост
+                }
             }
 
             $period = null;
@@ -1017,6 +1035,12 @@ class MapReviewResultsService
             $isTrustedOneCExternalId = $source === '1c'
                 && $tenantExternalId !== ''
                 && preg_match('/^TEST_/i', $tenantExternalId) !== 1;
+
+            // Low-trust tenant guard: TEST_* без inn/one_c_uid
+            $isLowTrustTenant = preg_match('/^TEST_/i', $tenantExternalId) === 1
+                && $tenantInn === ''
+                && ! isset($payload['one_c_uid']);
+
             $existingTenantCandidate = $this->resolveFinancialSignalExistingTenantCandidate(
                 $marketId,
                 $tenantName,
@@ -1030,6 +1054,11 @@ class MapReviewResultsService
 
             if ($existingTenantCandidate !== null && (int) ($existingTenantCandidate['id'] ?? 0) !== $tenantId) {
                 $resolutionAction = 'match_existing_tenant';
+            }
+
+            // Low-trust tenant не может быть сильным action-кандидатом
+            if ($isLowTrustTenant && $resolutionAction === 'match_existing_tenant') {
+                $resolutionAction = 'create_or_match_tenant';
             }
 
             $signals[$spaceId] = [
@@ -1071,6 +1100,62 @@ class MapReviewResultsService
             ->max('period');
 
         return filled($value) ? (string) $value : null;
+    }
+
+    /**
+     * @param  list<int>  $spaceIds
+     * @return array<int, array{tenant_id:int}>
+     */
+    private function activeContractsForAccrualSpaceIds(array $spaceIds, int $marketId): array
+    {
+        if ($spaceIds === [] || ! Schema::hasTable('tenant_contracts')) {
+            return [];
+        }
+
+        $query = DB::table('tenant_contracts as tc')
+            ->select('tc.market_space_id as space_id', 'tc.tenant_id')
+            ->join('market_spaces as ms', function ($join): void {
+                $join->on('ms.id', '=', 'tc.market_space_id')
+                    ->on('ms.market_id', '=', 'tc.market_id');
+            })
+            ->whereIn('tc.market_space_id', $spaceIds)
+            ->where('tc.market_id', $marketId);
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+            $query->where('tc.is_active', true);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $query->whereNotIn('tc.status', ['terminated', 'archived']);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('tc.starts_at')
+                    ->orWhere('tc.starts_at', '<=', now());
+            });
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('tc.ends_at')
+                    ->orWhere('tc.ends_at', '>', now());
+            });
+        }
+
+        $rows = $query->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $spaceId = (int) ($row->space_id ?? 0);
+            if ($spaceId > 0 && ! isset($result[$spaceId])) {
+                $result[$spaceId] = [
+                    'tenant_id' => (int) ($row->tenant_id ?? 0),
+                ];
+            }
+        }
+
+        return $result;
     }
 
     private function financialSignalReason(MarketSpace $space, ?array $financialSignal): string
