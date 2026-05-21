@@ -520,6 +520,7 @@ class AiReviewAnalysisTest extends TestCase
             'allowed_actions' => [
                 ['code' => 'resolve_duplicate', 'label' => 'Разобрать дубль', 'category' => 'duplicate'],
                 ['code' => 'review_decision:occupancy_conflict', 'label' => 'Конфликт по занятости', 'category' => 'observed_review_decision'],
+                ['code' => 'manual_review', 'label' => 'Ручная проверка', 'category' => 'manual_review'],
             ],
         ];
 
@@ -530,8 +531,12 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertStringContainsString('[relation_context]', $messages['user']);
         $this->assertStringContainsString('[allowed_actions]', $messages['user']);
         $this->assertStringContainsString('resolve_duplicate', $messages['user']);
+        $this->assertStringContainsString('manual_review', $messages['user']);
         $this->assertStringContainsString('"recommended_action"', $messages['system']);
+        $this->assertStringContainsString('"missing_evidence"', $messages['system']);
+        $this->assertStringContainsString('"ui_gap"', $messages['system']);
         $this->assertStringContainsString('[allowed_actions]', $messages['system']);
+        $this->assertStringContainsString('use manual_review', $messages['system']);
         $this->assertStringContainsString('точная связь с местом не подтверждена', $messages['system']);
         $this->assertStringContainsString('Do not treat other places of the same tenant as automatic proof of a duplicate.', $messages['system']);
     }
@@ -634,5 +639,75 @@ class AiReviewAnalysisTest extends TestCase
 
         $this->assertTrue($result['ok']);
         $this->assertNull($result['error']);
+    }
+
+    public function test_context_pack_always_allows_manual_review_action(): void
+    {
+        $market = Market::create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::withoutEvents(fn () => MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'AI-MANUAL-1',
+            'display_name' => 'AI manual review',
+            'status' => 'occupied',
+            'map_review_status' => 'conflict',
+            'is_active' => true,
+        ]));
+
+        $pack = app(AiContextPackBuilder::class)->build((int) $space->id, (int) $market->id);
+
+        $this->assertContains('manual_review', collect($pack['allowed_actions'])->pluck('code')->all());
+    }
+
+    public function test_validate_safety_allows_manual_review_when_allowed(): void
+    {
+        $service = app(AiReviewService::class);
+        $method = new \ReflectionMethod($service, 'validateSafety');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'summary' => 'Данных недостаточно для безопасного действия.',
+            'why_flagged' => 'Карточка конфликтная, а доступные действия не решают первопричину.',
+            'recommended_next_step' => 'Передать кейс на ручную проверку и подтвердить недостающие связи перед изменением данных.',
+            'recommended_action' => 'manual_review',
+            'risk_score' => 9,
+            'confidence' => 0.72,
+        ], 'conflict', 'space', false, [
+            ['code' => 'manual_review', 'label' => 'Ручная проверка'],
+            ['code' => 'review_decision:occupancy_conflict', 'label' => 'Конфликт по занятости'],
+        ]);
+
+        $this->assertTrue($result['ok']);
+        $this->assertNull($result['error']);
+    }
+
+    public function test_parse_response_keeps_structured_diagnostic_fields(): void
+    {
+        $service = app(AiReviewService::class);
+        $method = new \ReflectionMethod($service, 'parseResponse');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, json_encode([
+            'summary' => 'Нужна ручная диагностика.',
+            'why_flagged' => 'Доступные действия не покрывают кейс.',
+            'recommended_next_step' => 'Проверить первичные документы и выбрать safe data-fix.',
+            'recommended_action' => 'manual_review',
+            'missing_evidence' => [
+                'Подтверждение бухгалтера',
+                'Актуальная связь договора',
+                '',
+            ],
+            'ui_gap' => 'Нет действия для объединения дублей арендаторов.',
+            'risk_score' => 9,
+            'confidence' => 0.8,
+        ], JSON_UNESCAPED_UNICODE));
+
+        $this->assertSame('manual_review', $result['recommended_action']);
+        $this->assertSame(['Подтверждение бухгалтера', 'Актуальная связь договора'], $result['missing_evidence']);
+        $this->assertSame('Нет действия для объединения дублей арендаторов.', $result['ui_gap']);
     }
 }

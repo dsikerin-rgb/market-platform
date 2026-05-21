@@ -2073,6 +2073,10 @@
             }
 
             .mrr-ai-panel__title {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.5rem;
                 margin-bottom: 0.42rem;
                 font-size: 0.7rem;
                 font-weight: 800;
@@ -2223,11 +2227,27 @@
                 margin-bottom: 0.1rem;
             }
 
+            .mrr-ai__diagnostics {
+                font-size: 0.75rem;
+                color: #64748b;
+                line-height: 1.4;
+                margin-top: 0.32rem;
+            }
+
+            .mrr-ai__diagnostics ul {
+                margin: 0.18rem 0 0;
+                padding-left: 1rem;
+            }
+
             .dark .mrr-ai__step {
                 color: #94a3b8;
             }
 
             .dark .mrr-ai__action {
+                color: #94a3b8;
+            }
+
+            .dark .mrr-ai__diagnostics {
                 color: #94a3b8;
             }
 
@@ -2239,11 +2259,19 @@
                 color: #334155;
             }
 
+            .mrr-ai__diagnostics strong {
+                color: #334155;
+            }
+
             .dark .mrr-ai__step strong {
                 color: #e2e8f0;
             }
 
             .dark .mrr-ai__action strong {
+                color: #e2e8f0;
+            }
+
+            .dark .mrr-ai__diagnostics strong {
                 color: #e2e8f0;
             }
 
@@ -3144,7 +3172,17 @@
 
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--ai">
                                                         <div class="mrr-ai-panel">
-                                                            <div class="mrr-ai-panel__title">ИИ-разбор</div>
+                                                            <div class="mrr-ai-panel__title">
+                                                                <span>ИИ-разбор</span>
+                                                                <button
+                                                                    type="button"
+                                                                    class="mrr-link mrr-link--button"
+                                                                    data-mrr-ai-regenerate
+                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                >
+                                                                    Обновить
+                                                                </button>
+                                                            </div>
                                                             <div class="mrr-ai" data-mrr-ai-panel data-mrr-space-id="{{ $row['space_id'] }}">
                                                                 @if ($ai && filled($ai['summary']))
                                                                     <div class="mrr-ai__summary">
@@ -3161,6 +3199,21 @@
                                                                     <div class="mrr-ai__step">
                                                                         <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
                                                                     </div>
+                                                                    @if (! empty($ai['missing_evidence']) && is_array($ai['missing_evidence']))
+                                                                        <div class="mrr-ai__diagnostics">
+                                                                            <strong>Чего не хватает:</strong>
+                                                                            <ul>
+                                                                                @foreach (array_slice($ai['missing_evidence'], 0, 5) as $missingEvidence)
+                                                                                    <li>{{ $humanize($missingEvidence) }}</li>
+                                                                                @endforeach
+                                                                            </ul>
+                                                                        </div>
+                                                                    @endif
+                                                                    @if (filled($ai['ui_gap'] ?? null))
+                                                                        <div class="mrr-ai__diagnostics">
+                                                                            <strong>Пробел в UI:</strong> {{ $humanize($ai['ui_gap']) }}
+                                                                        </div>
+                                                                    @endif
                                                                 @elseif ($hasAiKey)
                                                                     <div class="mrr-ai mrr-ai--empty">
                                                                         <span class="mrr-ai__placeholder">
@@ -3711,6 +3764,7 @@
                 const reviewTenantSwitchUrl = @json(route('filament.admin.market-map.review-tenant-switch'));
                 const reviewResolveFinancialTenantUrl = @json(route('filament.admin.market-map.review-resolve-financial-tenant'));
                 const aiReviewUrl = @json(route('filament.admin.map-review-results.ai-review'));
+                const aiReviewRegenerateUrl = @json(route('filament.admin.map-review-results.ai-review.regenerate'));
                 const tenantSwitchOptions = @json(array_values($tenantSwitchOptions ?? []));
                 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
                 const quickReviewModal = document.getElementById('mrrQuickReviewModal');
@@ -4070,8 +4124,12 @@
                     const whyFlagged = humanizeAiText(review?.why_flagged);
                     const nextStep = humanizeAiText(review?.recommended_next_step);
                     const recommendedAction = humanizeAiText(review?.recommended_action_label || review?.recommended_action);
+                    const missingEvidence = Array.isArray(review?.missing_evidence)
+                        ? review.missing_evidence.map(humanizeAiText).filter(Boolean).slice(0, 5)
+                        : [];
+                    const uiGap = humanizeAiText(review?.ui_gap);
 
-                    if (summary || whyFlagged || recommendedAction || nextStep) {
+                    if (summary || whyFlagged || recommendedAction || nextStep || missingEvidence.length > 0 || uiGap) {
                         const sections = [];
 
                         if (summary) {
@@ -4106,6 +4164,25 @@
                             `);
                         }
 
+                        if (missingEvidence.length > 0) {
+                            sections.push(`
+                                \u003Cdiv class="mrr-ai__diagnostics">
+                                    <strong>Чего не хватает:</strong>
+                                    <ul>
+                                        ${missingEvidence.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+                                    </ul>
+                                \u003C/div>
+                            `);
+                        }
+
+                        if (uiGap) {
+                            sections.push(`
+                                \u003Cdiv class="mrr-ai__diagnostics">
+                                    <strong>Пробел в UI:</strong> ${escapeHtml(uiGap)}
+                                \u003C/div>
+                            `);
+                        }
+
                         panel.innerHTML = sections.join('');
                         return;
                     }
@@ -4128,7 +4205,7 @@
                     renderAiPlaceholder(panel, 'ИИ-анализ недоступен');
                 };
 
-                const loadAiReview = async (spaceId, button = null) => {
+                const loadAiReview = async (spaceId, button = null, regenerate = false) => {
                     const normalizedSpaceId = Number(spaceId || 0);
                     const panel = Number.isFinite(normalizedSpaceId) && normalizedSpaceId > 0
                         ? document.querySelector(`[data-mrr-ai-panel][data-mrr-space-id="${normalizedSpaceId}"]`)
@@ -4142,18 +4219,19 @@
 
                     if (button instanceof HTMLElement) {
                         button.setAttribute('disabled', 'disabled');
-                        button.textContent = 'Загружаем ИИ-разбор...';
+                        button.textContent = regenerate ? 'Обновляем ИИ-разбор...' : 'Загружаем ИИ-разбор...';
                     }
 
                     try {
-                        const url = new URL(aiReviewUrl, window.location.origin);
+                        const url = new URL(regenerate ? aiReviewRegenerateUrl : aiReviewUrl, window.location.origin);
                         url.searchParams.set('space_id', String(normalizedSpaceId));
 
                         const response = await fetch(url.toString(), {
-                            method: 'GET',
+                            method: regenerate ? 'POST' : 'GET',
                             headers: {
                                 'Accept': 'application/json',
                                 'X-Requested-With': 'XMLHttpRequest',
+                                ...(regenerate ? {'X-CSRF-TOKEN': csrfToken} : {}),
                             },
                         });
 
@@ -4174,6 +4252,9 @@
 
                         if (button instanceof HTMLElement) {
                             button.removeAttribute('disabled');
+                            if (regenerate) {
+                                button.textContent = 'Обновить';
+                            }
                         }
                     }
                 };
@@ -5400,6 +5481,9 @@
                     const aiReviewButton = event.target instanceof Element
                         ? event.target.closest('[data-mrr-ai-load]')
                         : null;
+                    const aiRegenerateButton = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-ai-regenerate]')
+                        : null;
 
                     const contractTenantSwitchApply = event.target instanceof Element
                         ? event.target.closest('[data-mrr-contract-tenant-switch-apply]')
@@ -5430,6 +5514,12 @@
                     if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
                         event.preventDefault();
                         loadAiReview(aiReviewButton.dataset.mrrSpaceId, aiReviewButton).catch(() => {});
+                        return;
+                    }
+
+                    if (aiRegenerateButton && aiRegenerateButton instanceof HTMLElement) {
+                        event.preventDefault();
+                        loadAiReview(aiRegenerateButton.dataset.mrrSpaceId, aiRegenerateButton, true).catch(() => {});
                         return;
                     }
 

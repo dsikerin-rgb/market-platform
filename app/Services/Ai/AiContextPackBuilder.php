@@ -1054,6 +1054,13 @@ class AiContextPackBuilder
             ];
         }
 
+        $actions[] = [
+            'code' => 'manual_review',
+            'label' => 'Ручная проверка',
+            'category' => 'manual_review',
+            'description' => 'Использовать, если доступные действия не решают реальную проблему данных.',
+        ];
+
         return collect($actions)
             ->unique('code')
             ->values()

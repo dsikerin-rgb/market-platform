@@ -357,7 +357,9 @@ class AiReviewService
   "summary": "Краткое описание ситуации, 2-3 предложения",
   "why_flagged": "Почему место попало в 'Нужно уточнить', 1-2 предложения",
   "recommended_next_step": "Конкретное действие, 2-4 предложения",
-  "recommended_action": "Code from [allowed_actions] or null",
+  "recommended_action": "Code from [allowed_actions]; use manual_review when no safe UI action fits",
+  "missing_evidence": ["Каких фактов не хватает для безопасного решения"],
+  "ui_gap": "Что в текущем UI не позволяет закрыть кейс безопасно, or null",
   "risk_score": 5,
   "confidence": 0.75
 }
@@ -380,6 +382,9 @@ class AiReviewService
 recommended_action must be exactly one code from [allowed_actions], or null when no safe recommendation is available.
 Do not invent new actions outside [allowed_actions].
 When recommended_action is present and allowed, it may be any code from [allowed_actions] that best matches the facts.
+If none of the action buttons safely resolves the data issue, use manual_review and explain the missing evidence in recommended_next_step.
+Use missing_evidence to list concrete facts the operator must confirm.
+Use ui_gap only when the available UI actions do not cover the safe business resolution.
 allowed_actions:
 {$allowedActionLines}
 
@@ -612,6 +617,28 @@ PROMPT;
             }
 
             $result['recommended_action'] = $recommendedAction;
+        }
+
+        if (array_key_exists('missing_evidence', $decoded) && is_array($decoded['missing_evidence'])) {
+            $missingEvidence = array_values(array_filter(array_map(
+                static fn ($value): string => trim((string) $value),
+                $decoded['missing_evidence']
+            )));
+
+            if ($missingEvidence !== []) {
+                $result['missing_evidence'] = array_slice($missingEvidence, 0, 5);
+            }
+        }
+
+        if (array_key_exists('ui_gap', $decoded) && $decoded['ui_gap'] !== null) {
+            if (! is_string($decoded['ui_gap'])) {
+                return null;
+            }
+
+            $uiGap = trim($decoded['ui_gap']);
+            if ($uiGap !== '') {
+                $result['ui_gap'] = $uiGap;
+            }
         }
 
         return $result;
