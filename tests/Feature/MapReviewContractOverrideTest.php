@@ -1951,4 +1951,137 @@ class MapReviewContractOverrideTest extends TestCase
             ->assertDontSee('Дата договора: 01.06.2023', false)
             ->assertDontSee('С даты: 01.05.2026', false);
     }
+
+    public function test_financial_signal_ignored_when_active_contract_exists_with_different_tenant(): void
+    {
+        $this->travelTo('2026-05-21 12:00:00');
+
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $canonicalTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Косачёв Евгений Сергеевич ИП',
+            'inn' => '222405692915',
+            'is_active' => true,
+        ]);
+
+        $testTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'TEST_206',
+            'name' => 'Косачев ИП',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $canonicalTenant->id,
+            'number' => 'П59/1',
+            'display_name' => 'П59/1',
+            'code' => 'p59-1',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        // Active contract для canonical tenant
+        TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $canonicalTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'П/59/1 от 27.08.2025',
+            'status' => 'active',
+            'starts_at' => '2025-08-27',
+            'is_active' => true,
+        ]);
+
+        // Старое начисление от TEST_206 без inn
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $testTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01', // Latest period (проходит фильтр #687)
+            'source' => 'excel',
+            'source_file' => '2026-05__import.csv',
+            'source_row_hash' => sha1('test-tenant-accrual'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => 'TEST_206',
+                'tenant_name' => 'Косачев ИП',
+                // Нет inn, нет one_c_uid
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        // Financial signal НЕ должен быть показан из-за активного контракта
+        $spaceRow = collect($rows)->first(fn ($row): bool => (int) $row['space_id'] === (int) $space->id);
+        $this->assertNull($spaceRow, 'Финансовый сигнал должен быть заблокирован активным контрактом');
+    }
+
+    public function test_financial_signal_does_not_override_active_contract_with_low_trust_tenant(): void
+    {
+        $this->travelTo('2026-05-21 12:00:00');
+
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $contractTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Contract Tenant LLC',
+            'is_active' => true,
+        ]);
+
+        $lowTrustTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'external_id' => 'TEST_LOW_TRUST',
+            'name' => 'Low Trust Tenant IP',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $contractTenant->id,
+            'number' => 'OS-LOW-TRUST',
+            'display_name' => 'Low Trust Test',
+            'code' => 'os-low-trust',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        // Active contract
+        TenantContract::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $contractTenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'Contract-123',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        // Low-trust accrual (TEST_* без inn)
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $lowTrustTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => 'excel',
+            'source_file' => '2026-05__import.csv',
+            'source_row_hash' => sha1('low-trust-accrual'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+            'payload' => json_encode([
+                'tenant_external_id' => 'TEST_LOW_TRUST',
+                'tenant_name' => 'Low Trust Tenant IP',
+                // Нет inn
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        // Signal должен быть заблокирован активным контрактом
+        $spaceRow = collect($rows)->first(fn ($row): bool => (int) $row['space_id'] === (int) $space->id);
+        $this->assertNull($spaceRow, 'Финансовый сигнал от low-trust tenant должен быть заблокирован активным контрактом');
+    }
 }
