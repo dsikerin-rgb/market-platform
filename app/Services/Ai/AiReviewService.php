@@ -85,7 +85,7 @@ class AiReviewService
      * Кэширует ТОЛЬКО успешный валидный ответ (10 мин).
      * Ошибки НЕ кэшируются — следующий вызов повторит запрос.
      *
-     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null, error_type: 'connectivity'|'policy'|null}
+     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null, error_type: 'connectivity'|'policy'|null}
      *
      * error_type:
      *   null            — успех (review содержит результат)
@@ -108,7 +108,7 @@ class AiReviewService
     /**
      * Прочитать только успешный cached review без сетевого запроса.
      *
-     * @return array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null
+     * @return array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null
      */
     public function getCachedReviewForSpace(int $spaceId, int $marketId): ?array
     {
@@ -157,13 +157,14 @@ class AiReviewService
     /**
      * Основная логика: собрать context pack → отправить в GigaChat → валидировать.
      *
-     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null, error_type: 'connectivity'|'policy'|null}
+     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null, error_type: 'connectivity'|'policy'|null}
      */
     private function doFetchReview(int $spaceId, int $marketId): array
     {
         try {
             $packBuilder = app(AiContextPackBuilder::class);
             $pack = $packBuilder->build($spaceId, $marketId);
+            $allowedActions = is_array($pack['allowed_actions'] ?? null) ? $pack['allowed_actions'] : [];
 
             if (isset($pack['error'])) {
                 return ['review' => null, 'error_type' => 'connectivity'];
@@ -196,12 +197,15 @@ class AiReviewService
                 return ['review' => null, 'error_type' => 'policy'];
             }
 
+            $parsed = $this->attachRecommendedActionLabel($parsed, $allowedActions);
+
             // Safety/semantic validation — единый для всех потребителей
             $safety = $this->validateSafety(
                 $parsed,
                 $pack['map_review_status'] ?? null,
                 $pack['debt_context']['debt_scope'] ?? null,
-                (bool) data_get($pack, 'tenant_context.contract_override.tenant_id')
+                (bool) data_get($pack, 'tenant_context.contract_override.tenant_id'),
+                $allowedActions
             );
             if (! $safety['ok']) {
                 logger()->info('AI review safety violation', [
@@ -290,6 +294,8 @@ class AiReviewService
             'shape_not_found'        => 'место не найдено на карте',
         ];
         $expectedLabel = $expectedLabels[$expected] ?? $expected;
+        $allowedActions = is_array($pack['allowed_actions'] ?? null) ? $pack['allowed_actions'] : [];
+        $allowedActionLines = $this->formatAllowedActionLines($allowedActions);
 
         $safetyRules = $hasContractOverride
             ? "\n\nПРАВИЛА БЕЗОПАСНОСТИ (текущее место подтверждено договором):\n"
@@ -351,6 +357,7 @@ class AiReviewService
   "summary": "Краткое описание ситуации, 2-3 предложения",
   "why_flagged": "Почему место попало в 'Нужно уточнить', 1-2 предложения",
   "recommended_next_step": "Конкретное действие, 2-4 предложения",
+  "recommended_action": "Code from [allowed_actions] or null",
   "risk_score": 5,
   "confidence": 0.75
 }
@@ -369,6 +376,12 @@ class AiReviewService
   * unbind_shape_from_space → «отвязать фигуру от места»
 - Формулируй recommended_next_step как человеческую инструкцию, например:
   {$recommendedExample}
+
+recommended_action must be exactly one code from [allowed_actions], or null when no safe recommendation is available.
+Do not invent new actions outside [allowed_actions].
+When recommended_action is present and allowed, it may be any code from [allowed_actions] that best matches the facts.
+allowed_actions:
+{$allowedActionLines}
 
 risk_score: 1-10, где 10 = только ручной review.
 confidence: 0.0-1.0.
@@ -390,6 +403,7 @@ PROMPT;
         $relations = $pack['relation_context'] ?? [];
         $otherSpaces = $tenant['other_spaces'] ?? [];
         $contractContour = $tenant['contract_contour'] ?? [];
+        $allowedActions = is_array($pack['allowed_actions'] ?? null) ? $pack['allowed_actions'] : [];
 
         $historyLines = count($history) > 0
             ? collect($history)->map(fn ($h) => "- {$h['decision']} ({$h['status']}): {$h['reason']} — {$h['effective_at']}")
@@ -471,6 +485,9 @@ PROMPT;
         $parts[] = 'latest_total_with_vat: ' . ($accrual['latest_total_with_vat'] ?? '—');
         $parts[] = 'latest_source: ' . (string) ($accrual['latest_source'] ?? '—');
         $parts[] = '';
+        $parts[] = '[allowed_actions]';
+        $parts[] = $this->formatAllowedActionLines($allowedActions);
+        $parts[] = '';
         if ($reviewerNote !== '') {
             $parts[] = '[reviewer_note]';
             $parts[] = $reviewerNote;
@@ -541,7 +558,7 @@ PROMPT;
     /**
      * Распарсить JSON-ответ.
      *
-     * @return array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float}|null
+     * @return array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null
      */
     private function parseResponse(?string $raw): ?array
     {
@@ -576,13 +593,28 @@ PROMPT;
             return null;
         }
 
-        return [
+        $result = [
             'summary'               => (string) $decoded['summary'],
             'why_flagged'           => (string) $decoded['why_flagged'],
             'recommended_next_step' => (string) $decoded['recommended_next_step'],
             'risk_score'            => $riskScore,
             'confidence'            => $confidence,
         ];
+
+        if (array_key_exists('recommended_action', $decoded) && $decoded['recommended_action'] !== null) {
+            if (! is_string($decoded['recommended_action'])) {
+                return null;
+            }
+
+            $recommendedAction = trim($decoded['recommended_action']);
+            if ($recommendedAction === '') {
+                return null;
+            }
+
+            $result['recommended_action'] = $recommendedAction;
+        }
+
+        return $result;
     }
 
     /**
@@ -590,9 +622,28 @@ PROMPT;
      *
      * @return array{ok: bool, error: string|null}
      */
-    private function validateSafety(array $parsed, ?string $mapReviewStatus, ?string $debtScope, bool $hasContractOverride = false): array
+    private function validateSafety(
+        array $parsed,
+        ?string $mapReviewStatus,
+        ?string $debtScope,
+        bool $hasContractOverride = false,
+        array $allowedActions = []
+    ): array
     {
         $recommendation = mb_strtolower($parsed['recommended_next_step'], 'UTF-8');
+        $recommendedAction = trim((string) ($parsed['recommended_action'] ?? ''));
+        $allowedActionCodes = collect($allowedActions)
+            ->map(fn ($action): string => trim((string) data_get($action, 'code', '')))
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($recommendedAction !== '' && ! in_array($recommendedAction, $allowedActionCodes, true)) {
+            return [
+                'ok'    => false,
+                'error' => "Recommended action is not allowed: '{$recommendedAction}'",
+            ];
+        }
 
         if ($debtScope === 'tenant_fallback') {
             foreach (self::FORBIDDEN_FOR_TENANT_FALLBACK as $forbidden) {
@@ -633,6 +684,12 @@ PROMPT;
 
         // Принимается либо технический код, либо русская пользовательская формулировка
         if ($hasContractOverride && $mapReviewStatus === 'changed_tenant') {
+            if ($recommendedAction !== '' && $recommendedAction !== 'tenant_switch') {
+                return [
+                    'ok'    => false,
+                    'error' => "Semantic mismatch: contract override requires 'tenant_switch', got '{$recommendedAction}'",
+                ];
+            }
             $mentionsTenantSwitch = str_contains($recommendation, 'сменить арендатора')
                 || str_contains($recommendation, 'новый арендатор')
                 || str_contains($recommendation, 'договор');
@@ -654,16 +711,18 @@ PROMPT;
             return ['ok' => true, 'error' => null];
         }
 
-        $matchesExpected = $expected !== null && (
-            str_contains($recommendation, $expected)
-            || ($expectedLabel !== null && str_contains($recommendation, $expectedLabel))
-        );
+        if ($recommendedAction === '') {
+            $matchesExpected = $expected !== null && (
+                str_contains($recommendation, $expected)
+                || ($expectedLabel !== null && str_contains($recommendation, $expectedLabel))
+            );
 
-        if ($expected && ! $matchesExpected) {
-            return [
-                'ok'    => false,
-                'error' => "Semantic mismatch: expected '{$expected}' or '{$expectedLabel}' for status '{$mapReviewStatus}', got '{$parsed['recommended_next_step']}'",
-            ];
+            if ($expected && ! $matchesExpected) {
+                return [
+                    'ok'    => false,
+                    'error' => "Semantic mismatch: expected '{$expected}' or '{$expectedLabel}' for status '{$mapReviewStatus}', got '{$parsed['recommended_next_step']}'",
+                ];
+            }
         }
 
         if ($parsed['risk_score'] < 7) {
@@ -674,6 +733,59 @@ PROMPT;
         }
 
         return ['ok' => true, 'error' => null];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $allowedActions
+     * @return array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}
+     */
+    private function attachRecommendedActionLabel(array $parsed, array $allowedActions): array
+    {
+        $recommendedAction = trim((string) ($parsed['recommended_action'] ?? ''));
+
+        if ($recommendedAction === '') {
+            return $parsed;
+        }
+
+        $matchedAction = collect($allowedActions)
+            ->first(fn ($action): bool => trim((string) data_get($action, 'code', '')) === $recommendedAction);
+
+        if (is_array($matchedAction)) {
+            $label = trim((string) data_get($matchedAction, 'label', ''));
+
+            if ($label !== '') {
+                $parsed['recommended_action_label'] = $label;
+            }
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $allowedActions
+     */
+    private function formatAllowedActionLines(array $allowedActions): string
+    {
+        if ($allowedActions === []) {
+            return '- none';
+        }
+
+        return collect($allowedActions)
+            ->map(function ($action): string {
+                $code = trim((string) data_get($action, 'code', ''));
+                $label = trim((string) data_get($action, 'label', ''));
+                $category = trim((string) data_get($action, 'category', ''));
+
+                $parts = array_filter([
+                    $code,
+                    $label !== '' ? "label={$label}" : '',
+                    $category !== '' ? "category={$category}" : '',
+                ]);
+
+                return '- ' . implode(', ', $parts);
+            })
+            ->filter()
+            ->join("\n");
     }
 
     /**

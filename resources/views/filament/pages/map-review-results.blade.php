@@ -2216,7 +2216,18 @@
                 margin-bottom: 0.1rem;
             }
 
+            .mrr-ai__action {
+                font-size: 0.75rem;
+                color: #64748b;
+                line-height: 1.4;
+                margin-bottom: 0.1rem;
+            }
+
             .dark .mrr-ai__step {
+                color: #94a3b8;
+            }
+
+            .dark .mrr-ai__action {
                 color: #94a3b8;
             }
 
@@ -2224,7 +2235,15 @@
                 color: #334155;
             }
 
+            .mrr-ai__action strong {
+                color: #334155;
+            }
+
             .dark .mrr-ai__step strong {
+                color: #e2e8f0;
+            }
+
+            .dark .mrr-ai__action strong {
                 color: #e2e8f0;
             }
 
@@ -3134,6 +3153,11 @@
                                                                     <div class="mrr-ai__reason">
                                                                         <strong>Почему:</strong> {{ $humanize($ai['why_flagged']) }}
                                                                     </div>
+                                                                    @if (filled($ai['recommended_action_label'] ?? $ai['recommended_action'] ?? null))
+                                                                        <div class="mrr-ai__action">
+                                                                            <strong>Рекомендованное действие:</strong> {{ $humanize($ai['recommended_action_label'] ?? $ai['recommended_action']) }}
+                                                                        </div>
+                                                                    @endif
                                                                     <div class="mrr-ai__step">
                                                                         <strong>Что сделать:</strong> {{ $humanize($ai['recommended_next_step']) }}
                                                                     </div>
@@ -4045,8 +4069,9 @@
                     const summary = humanizeAiText(review?.summary);
                     const whyFlagged = humanizeAiText(review?.why_flagged);
                     const nextStep = humanizeAiText(review?.recommended_next_step);
+                    const recommendedAction = humanizeAiText(review?.recommended_action_label || review?.recommended_action);
 
-                    if (summary || whyFlagged || nextStep) {
+                    if (summary || whyFlagged || recommendedAction || nextStep) {
                         const sections = [];
 
                         if (summary) {
@@ -4061,6 +4086,14 @@
                             sections.push(`
                                 \u003Cdiv class="mrr-ai__reason">
                                     <strong>Почему:</strong> ${escapeHtml(whyFlagged)}
+                                \u003C/div>
+                            `);
+                        }
+
+                        if (recommendedAction) {
+                            sections.push(`
+                                \u003Cdiv class="mrr-ai__action">
+                                    <strong>Рекомендованное действие:</strong> ${escapeHtml(recommendedAction)}
                                 \u003C/div>
                             `);
                         }
