@@ -379,6 +379,7 @@ class AiReviewService
 
 recommended_action must be exactly one code from [allowed_actions], or null when no safe recommendation is available.
 Do not invent new actions outside [allowed_actions].
+When recommended_action is present and allowed, it may be any code from [allowed_actions] that best matches the facts.
 allowed_actions:
 {$allowedActionLines}
 
@@ -710,23 +711,18 @@ PROMPT;
             return ['ok' => true, 'error' => null];
         }
 
-        if ($recommendedAction !== '' && $expected !== null && $recommendedAction !== 'review_decision:' . $expected) {
-            return [
-                'ok'    => false,
-                'error' => "Semantic mismatch: expected 'review_decision:{$expected}' for status '{$mapReviewStatus}', got '{$recommendedAction}'",
-            ];
-        }
+        if ($recommendedAction === '') {
+            $matchesExpected = $expected !== null && (
+                str_contains($recommendation, $expected)
+                || ($expectedLabel !== null && str_contains($recommendation, $expectedLabel))
+            );
 
-        $matchesExpected = $expected !== null && (
-            str_contains($recommendation, $expected)
-            || ($expectedLabel !== null && str_contains($recommendation, $expectedLabel))
-        );
-
-        if ($expected && ! $matchesExpected) {
-            return [
-                'ok'    => false,
-                'error' => "Semantic mismatch: expected '{$expected}' or '{$expectedLabel}' for status '{$mapReviewStatus}', got '{$parsed['recommended_next_step']}'",
-            ];
+            if ($expected && ! $matchesExpected) {
+                return [
+                    'ok'    => false,
+                    'error' => "Semantic mismatch: expected '{$expected}' or '{$expectedLabel}' for status '{$mapReviewStatus}', got '{$parsed['recommended_next_step']}'",
+                ];
+            }
         }
 
         if ($parsed['risk_score'] < 7) {

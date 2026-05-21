@@ -613,4 +613,26 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertTrue($result['ok']);
         $this->assertNull($result['error']);
     }
+
+    public function test_validate_safety_allows_non_review_action_when_it_is_allowed_for_disputed_case(): void
+    {
+        $service = app(AiReviewService::class);
+        $method = new \ReflectionMethod($service, 'validateSafety');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'summary' => 'Есть более сильный кандидат на каноническое место.',
+            'why_flagged' => 'Текущее место выглядит спорным.',
+            'recommended_next_step' => 'Разобрать дубль и проверить каноническое место перед переносом связей.',
+            'recommended_action' => 'resolve_duplicate',
+            'risk_score' => 8,
+            'confidence' => 0.86,
+        ], 'conflict', 'space', false, [
+            ['code' => 'resolve_duplicate', 'label' => 'Разобрать дубль'],
+            ['code' => 'review_decision:occupancy_conflict', 'label' => 'Конфликт по занятости'],
+        ]);
+
+        $this->assertTrue($result['ok']);
+        $this->assertNull($result['error']);
+    }
 }
