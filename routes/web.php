@@ -42,6 +42,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Services\Debt\DebtAggregator;
+use App\Services\Ai\AiReviewService;
 use App\Support\StaffConversationService;
 use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
