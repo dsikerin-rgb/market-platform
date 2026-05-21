@@ -9,6 +9,7 @@ use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
@@ -142,6 +143,102 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertSame(1, $candidateRelations['relation_counts']['accruals']);
         $this->assertSame(6761.57, $candidateRelations['relation_counts']['debt_total']);
         $this->assertGreaterThan($relations['current_space']['canonical_score'], $candidateRelations['canonical_score']);
+    }
+
+    public function test_context_pack_finds_duplicate_candidate_from_observed_tenant_when_current_space_is_empty(): void
+    {
+        $market = Market::create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::withoutEvents(fn () => Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Fayzulloeva D.M IP',
+            'external_id' => 'tenant-fayzulloeva',
+            'is_active' => true,
+        ]));
+
+        $currentSpace = MarketSpace::withoutEvents(fn () => MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => null,
+            'number' => '70',
+            'code' => 'raw-map-space',
+            'display_name' => 'Cafe',
+            'status' => 'vacant',
+            'map_review_status' => 'changed_tenant',
+            'is_active' => true,
+        ]));
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $currentSpace->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'is_active' => true,
+        ]);
+
+        $canonicalSpace = MarketSpace::withoutEvents(fn () => MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'P70',
+            'code' => 'P/70',
+            'display_name' => 'P70',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]));
+
+        TenantContract::withoutEvents(fn () => TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $canonicalSpace->id,
+            'external_id' => 'contract-p70',
+            'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_AUTO,
+            'number' => 'P/70',
+            'status' => 'active',
+            'starts_at' => '2026-05-01',
+            'is_active' => true,
+        ]));
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $canonicalSpace->id,
+            'period' => '2026-05-01',
+            'source' => 'excel',
+            'total_with_vat' => 53852.76,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $currentSpace->id,
+            'type' => 'space_review',
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $currentSpace->id,
+                'decision' => 'tenant_changed_on_site',
+                'reason' => 'Long ago',
+                'observed_tenant_name' => 'Fayzuloeva',
+            ],
+        ]);
+
+        $pack = app(AiContextPackBuilder::class)->build((int) $currentSpace->id, (int) $market->id);
+
+        $relations = $pack['relation_context'];
+        $this->assertSame((int) $canonicalSpace->id, $relations['likely_canonical_candidate_id']);
+        $this->assertSame((int) $canonicalSpace->id, $relations['same_tenant_candidates'][0]['id']);
+        $this->assertGreaterThan($relations['current_space']['canonical_score'], $relations['same_tenant_candidates'][0]['canonical_score']);
     }
 
     public function test_context_pack_does_not_choose_accrual_only_space_over_space_with_shape_and_contracts(): void

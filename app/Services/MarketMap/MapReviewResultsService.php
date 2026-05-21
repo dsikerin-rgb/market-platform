@@ -201,7 +201,7 @@ class MapReviewResultsService
 
         $spaceIds = $spaces->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $latestOperations = $this->latestSpaceReviewOperationsBySpace($marketId, $spaceIds);
-        $diagnostics = $this->buildSpaceDiagnostics($marketId, $spaces);
+        $diagnostics = $this->buildSpaceDiagnostics($marketId, $spaces, $latestOperations);
 
         $reviewerIds = $spaces->pluck('map_reviewed_by')
             ->filter(fn ($id) => filled($id))
@@ -397,7 +397,7 @@ class MapReviewResultsService
      * @param  Collection<int, MarketSpace>  $spaces
      * @return array<int, array<string, mixed>>
      */
-    private function buildSpaceDiagnostics(int $marketId, Collection $spaces): array
+    private function buildSpaceDiagnostics(int $marketId, Collection $spaces, ?Collection $latestOperations = null): array
     {
         $spaceIds = $spaces->pluck('id')
             ->map(fn ($id): int => (int) $id)
@@ -413,9 +413,12 @@ class MapReviewResultsService
         $contractOverrides = $this->activeContractOverrideForSpaces($spaceIds, $marketId);
         $financialSignals = $this->financialTenantSignals($marketId, max(count($spaceIds), 50));
 
+        $observedTenantIdsBySpace = $this->observedTenantIdsBySpace($marketId, $spaces, $latestOperations ?? collect());
+
         $tenantIds = $spaces->pluck('tenant_id')
             ->filter(fn ($id): bool => filled($id))
             ->map(fn ($id): int => (int) $id)
+            ->merge(collect($observedTenantIdsBySpace)->flatten())
             ->unique()
             ->values()
             ->all();
@@ -446,17 +449,25 @@ class MapReviewResultsService
         $contractDetails = $this->contractDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
         $accrualDetails = $this->accrualDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals): array {
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $observedTenantIdsBySpace): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
             $contractOverride = $contractOverrides[$spaceId] ?? null;
 
             $currentScore = $this->relationStrengthScore($counts);
+            $candidateTenantIds = $tenantId > 0
+                ? [$tenantId]
+                : array_values(array_unique(array_map('intval', $observedTenantIdsBySpace[$spaceId] ?? [])));
 
-            $candidates = $tenantId > 0
-                ? $candidatesByTenant->get($tenantId, collect())
+            $candidates = $candidateTenantIds !== []
+                ? collect($candidateTenantIds)
+                    ->flatMap(fn (int $candidateTenantId): Collection => $candidatesByTenant->get($candidateTenantId, collect()))
+                    ->unique('id')
                     ->reject(fn (MarketSpace $candidate): bool => (int) $candidate->id === $spaceId)
+                    ->sortByDesc(function (MarketSpace $candidate) use ($candidateCounts): int {
+                        return $this->relationStrengthScore($candidateCounts[(int) $candidate->id] ?? []);
+                    })
                     ->take(5)
                     ->map(function (MarketSpace $candidate) use ($candidateCounts, $currentScore, $contractDetails, $accrualDetails): array {
                         $candidateId = (int) $candidate->id;
@@ -497,6 +508,108 @@ class MapReviewResultsService
                 ],
             ];
         })->all();
+    }
+
+    /**
+     * @param  Collection<int, MarketSpace>  $spaces
+     * @param  Collection<int, Operation>  $latestOperations
+     * @return array<int, list<int>>
+     */
+    private function observedTenantIdsBySpace(int $marketId, Collection $spaces, Collection $latestOperations): array
+    {
+        if ($marketId <= 0 || $spaces->isEmpty() || $latestOperations->isEmpty() || ! Schema::hasTable('tenants')) {
+            return [];
+        }
+
+        $hintsBySpace = [];
+
+        foreach ($spaces as $space) {
+            $spaceId = (int) $space->id;
+            $operation = $latestOperations->get($spaceId);
+            $payload = is_array($operation?->payload) ? $operation->payload : [];
+            $hints = array_values(array_filter([
+                $payload['observed_tenant_name'] ?? null,
+                $payload['reason'] ?? null,
+                $operation?->comment,
+            ], fn ($value): bool => filled($value)));
+
+            foreach ($hints as $hint) {
+                $normalized = $this->normalizeTenantMatchText((string) $hint);
+
+                if (mb_strlen($normalized, 'UTF-8') >= 4) {
+                    $hintsBySpace[$spaceId][] = $normalized;
+                }
+            }
+        }
+
+        if ($hintsBySpace === []) {
+            return [];
+        }
+
+        $columns = ['id', 'name'];
+        if (Schema::hasColumn('tenants', 'short_name')) {
+            $columns[] = 'short_name';
+        }
+
+        $tenants = Tenant::query()
+            ->where('market_id', $marketId)
+            ->when(
+                Schema::hasColumn('tenants', 'is_active'),
+                fn ($query) => $query->where('is_active', true)
+            )
+            ->get($columns)
+            ->map(function (Tenant $tenant): array {
+                $names = array_filter([
+                    $tenant->name,
+                    $tenant->short_name ?? null,
+                ], fn ($value): bool => filled($value));
+
+                return [
+                    'id' => (int) $tenant->id,
+                    'tokens' => array_map(fn ($name): string => $this->normalizeTenantMatchText((string) $name), $names),
+                ];
+            });
+
+        $result = [];
+
+        foreach ($hintsBySpace as $spaceId => $hints) {
+            foreach ($tenants as $tenant) {
+                $matchedTenant = false;
+
+                foreach ($hints as $hint) {
+                    foreach ($tenant['tokens'] as $token) {
+                        if ($token === '') {
+                            continue;
+                        }
+
+                        if (str_contains($hint, $token) || str_contains($token, $hint)) {
+                            $result[(int) $spaceId][] = (int) $tenant['id'];
+                            $matchedTenant = true;
+                            break 2;
+                        }
+                    }
+                }
+
+                if ($matchedTenant) {
+                    continue;
+                }
+            }
+        }
+
+        return array_map(
+            fn (array $tenantIds): array => array_values(array_unique(array_map('intval', $tenantIds))),
+            $result
+        );
+    }
+
+    private function normalizeTenantMatchText(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = preg_replace('/\b(ип|ооо|ао|пао|зао)\b/iu', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+        $normalized = trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
+
+        return preg_replace('/(.)\1+/u', '$1', $normalized) ?? $normalized;
     }
 
     /**

@@ -76,6 +76,9 @@ class AiContextPackBuilder
 
         $reviewHistory = $this->buildReviewHistory($space->id, $marketId);
 
+        $relationContext = $this->buildRelationContext($space, $marketId, $reviewHistory);
+        $decisionOptions = $this->buildDecisionOptions($reviewStatus);
+
         return [
             'market_space_id'   => $space->id,
             'map_review_status' => $reviewStatus,
@@ -83,10 +86,11 @@ class AiContextPackBuilder
             'tenant_context'    => $this->buildTenantContext($space),
             'accrual_context'   => $this->buildAccrualContext($space),
             'debt_context'      => $debtContext,
-            'relation_context'  => $this->buildRelationContext($space, $marketId),
+            'relation_context'  => $relationContext,
             'review_history'    => $reviewHistory,
             'reviewer_note'     => $this->extractLatestReviewerNote($reviewHistory),
-            'decision_options'  => $this->buildDecisionOptions($reviewStatus),
+            'decision_options'  => $decisionOptions,
+            'allowed_actions'   => $this->buildAllowedActions($reviewStatus, $relationContext, $decisionOptions, $debtContext),
             'meta'              => $this->buildMeta($space, $marketId),
         ];
     }
@@ -356,12 +360,16 @@ class AiContextPackBuilder
     //  Relation Context
     // ──────────────────────────────────────────────
 
-    private function buildRelationContext(MarketSpace $space, int $marketId): array
+    private function buildRelationContext(MarketSpace $space, int $marketId, array $reviewHistory = []): array
     {
-        $candidateSpaces = $space->tenant_id
+        $candidateTenantIds = $space->tenant_id
+            ? [(int) $space->tenant_id]
+            : $this->observedTenantIdsFromReviewHistory($marketId, $reviewHistory);
+
+        $candidateSpaces = $candidateTenantIds !== []
             ? MarketSpace::query()
                 ->where('market_id', $marketId)
-                ->where('tenant_id', $space->tenant_id)
+                ->whereIn('tenant_id', $candidateTenantIds)
                 ->where('id', '<>', $space->id)
                 ->orderByDesc('is_active')
                 ->orderBy('id')
@@ -454,7 +462,8 @@ class AiContextPackBuilder
     private function canonicalAnchorScore(array $counts): int
     {
         return ((int) ($counts['map_shapes'] ?? 0) * 100)
-            + ((int) ($counts['contracts'] ?? 0) * 50)
+            + ((int) ($counts['contracts'] ?? 0) * 150)
+            + ((int) ($counts['accruals'] ?? 0) * 30)
             + ((int) ($counts['tenant_bindings'] ?? 0) * 20)
             + ((int) ($counts['cabinet_links'] ?? 0) * 10)
             + ((int) ($counts['products'] ?? 0) > 0 ? 5 : 0);
@@ -472,6 +481,7 @@ class AiContextPackBuilder
 
         $definitions = [
             'map_shapes' => ['market_space_map_shapes', 'market_space_id'],
+            'contracts' => ['tenant_contracts', 'market_space_id'],
             'accruals' => ['tenant_accruals', 'market_space_id'],
             'cabinet_links' => ['tenant_user_market_spaces', 'market_space_id'],
             'tenant_bindings' => ['market_space_tenant_bindings', 'market_space_id'],
@@ -836,7 +846,82 @@ class AiContextPackBuilder
             'comment'       => $op->comment,
             'effective_at'  => $op->effective_at?->toDateTimeString(),
             'created_by'    => $op->created_by,
+            'observed_tenant_name' => $op->payload['observed_tenant_name'] ?? null,
         ])->toArray();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $reviewHistory
+     * @return list<int>
+     */
+    private function observedTenantIdsFromReviewHistory(int $marketId, array $reviewHistory): array
+    {
+        if ($marketId <= 0 || $reviewHistory === [] || ! Schema::hasTable('tenants')) {
+            return [];
+        }
+
+        $hints = [];
+
+        foreach ($reviewHistory as $historyItem) {
+            foreach (['observed_tenant_name', 'reason', 'comment'] as $key) {
+                $value = trim((string) ($historyItem[$key] ?? ''));
+
+                if ($value !== '') {
+                    $normalized = $this->normalizeTenantMatchText($value);
+
+                    if (mb_strlen($normalized, 'UTF-8') >= 4) {
+                        $hints[] = $normalized;
+                    }
+                }
+            }
+        }
+
+        if ($hints === []) {
+            return [];
+        }
+
+        $columns = ['id', 'name'];
+        if (Schema::hasColumn('tenants', 'short_name')) {
+            $columns[] = 'short_name';
+        }
+
+        $tenantIds = [];
+
+        Tenant::query()
+            ->where('market_id', $marketId)
+            ->when(
+                Schema::hasColumn('tenants', 'is_active'),
+                fn ($query) => $query->where('is_active', true)
+            )
+            ->get($columns)
+            ->each(function (Tenant $tenant) use ($hints, &$tenantIds): void {
+                $tokens = array_map(
+                    fn ($value): string => $this->normalizeTenantMatchText((string) $value),
+                    array_filter([$tenant->name, $tenant->short_name ?? null], fn ($value): bool => filled($value))
+                );
+
+                foreach ($hints as $hint) {
+                    foreach ($tokens as $token) {
+                        if ($token !== '' && (str_contains($hint, $token) || str_contains($token, $hint))) {
+                            $tenantIds[] = (int) $tenant->id;
+
+                            return;
+                        }
+                    }
+                }
+            });
+
+        return array_values(array_unique($tenantIds));
+    }
+
+    private function normalizeTenantMatchText(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = preg_replace('/\b(ип|ооо|ао|пао|зао)\b/iu', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+        $normalized = trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
+
+        return preg_replace('/(.)\1+/u', '$1', $normalized) ?? $normalized;
     }
 
     /**
@@ -911,6 +996,68 @@ class AiContextPackBuilder
                 $allDecisions
             ),
         ];
+    }
+
+    private function buildAllowedActions(
+        string $mapReviewStatus,
+        array $relationContext,
+        array $decisionOptions,
+        array $debtContext
+    ): array {
+        $actions = [];
+        $likelyCanonicalCandidateId = (int) ($relationContext['likely_canonical_candidate_id'] ?? 0);
+
+        if ($likelyCanonicalCandidateId > 0) {
+            $actions[] = [
+                'code' => 'resolve_duplicate',
+                'label' => 'Разобрать дубль',
+                'category' => 'duplicate',
+                'is_primary_candidate' => true,
+                'target_market_space_id' => $likelyCanonicalCandidateId,
+                'description' => 'Выбрать каноническое место и вывести вторую карточку из рабочего контура.',
+            ];
+        }
+
+        foreach ($decisionOptions['relevant_decisions'] ?? [] as $decision) {
+            $code = (string) ($decision['decision'] ?? '');
+
+            if ($code === '') {
+                continue;
+            }
+
+            $actions[] = [
+                'code' => 'review_decision:' . $code,
+                'label' => (string) ($decision['label'] ?? $code),
+                'category' => ! empty($decision['is_applied']) ? 'applied_review_decision' : 'observed_review_decision',
+                'decision' => $code,
+                'requires_reason' => (bool) ($decision['requires_reason'] ?? false),
+                'requires_shape_id' => (bool) ($decision['requires_shape_id'] ?? false),
+                'requires_observed_tenant_name' => (bool) ($decision['requires_observed_tenant_name'] ?? false),
+            ];
+        }
+
+        if ($mapReviewStatus === 'changed_tenant') {
+            $actions[] = [
+                'code' => 'tenant_switch',
+                'label' => 'Сменить арендатора',
+                'category' => 'tenant_switch',
+                'description' => 'Запланировать или подтвердить смену арендатора у текущего места.',
+            ];
+        }
+
+        if (($debtContext['debt_scope'] ?? null) !== 'tenant_fallback') {
+            $actions[] = [
+                'code' => 'close_without_changes',
+                'label' => 'Закрыть без изменений',
+                'category' => 'close',
+                'description' => 'Закрыть карточку только если данные уже проверены и менять место не нужно.',
+            ];
+        }
+
+        return collect($actions)
+            ->unique('code')
+            ->values()
+            ->all();
     }
 
     // ──────────────────────────────────────────────
