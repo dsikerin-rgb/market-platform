@@ -1,16 +1,20 @@
 <?php
+# app/Filament/Pages/MapReviewResults.php
 
 declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Domain\Operations\OperationType;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Models\Market;
+use App\Models\Operation;
 use App\Models\Tenant;
 use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\MapReviewResultsService;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
@@ -696,5 +700,37 @@ class MapReviewResults extends Page
     private function spaceUrl(int $spaceId): string
     {
         return MarketSpaceResource::getUrl('edit', ['record' => $spaceId]);
+    }
+
+    /**
+     * Обновить подсказку ревизора (payload.reason) для review operation.
+     * Доступно только автору operation.
+     *
+     * @return array{ok:bool,message:?string}
+     */
+    public function updateReviewHint(int $operationId, string $reason): array
+    {
+        $operation = Operation::query()
+            ->where('id', $operationId)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->where('created_by', Auth::id())
+            ->first();
+
+        if (! $operation) {
+            return [
+                'ok' => false,
+                'message' => 'Операция не найдена или у вас нет прав на редактирование.',
+            ];
+        }
+
+        $payload = $operation->payload ?? [];
+        $payload['reason'] = $reason;
+        $operation->payload = $payload;
+        $operation->save();
+
+        return [
+            'ok' => true,
+            'message' => null,
+        ];
     }
 }

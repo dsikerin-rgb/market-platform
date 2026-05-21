@@ -806,6 +806,9 @@
             }
 
             .mrr-conflict-brief__hint-label {
+                display: flex;
+                align-items: center;
+                gap: 0.35rem;
                 font-size: 0.68rem;
                 font-weight: 800;
                 letter-spacing: 0.04em;
@@ -825,6 +828,49 @@
 
             .dark .mrr-conflict-brief__hint-text {
                 color: #e2e8f0;
+            }
+
+            .mrr-hint-edit-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 16px;
+                height: 16px;
+                border: none;
+                border-radius: 0.25rem;
+                background: transparent;
+                color: #94a3b8;
+                cursor: pointer;
+                padding: 0;
+                opacity: 0.65;
+                transition: opacity 0.15s ease, color 0.15s ease;
+            }
+
+            .mrr-hint-edit-btn:hover {
+                opacity: 1;
+                color: #1d4ed8;
+            }
+
+            .dark .mrr-hint-edit-btn {
+                color: #64748b;
+            }
+
+            .dark .mrr-hint-edit-btn:hover {
+                color: #bfdbfe;
+            }
+
+            .mrr-conflict-brief__hint-compact {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                margin-top: 0.45rem;
+                font-size: 0.72rem;
+                font-weight: 700;
+                color: #64748b;
+            }
+
+            .dark .mrr-conflict-brief__hint-compact {
+                color: #94a3b8;
             }
 
             .mrr-conflict-brief__facts {
@@ -2881,8 +2927,34 @@
                                                                 <div class="mrr-conflict-brief__headline">{{ $conflictHeadline }}</div>
                                                                 @if (filled($row['reason']))
                                                                     <div class="mrr-conflict-brief__hint">
-                                                                        <div class="mrr-conflict-brief__hint-label">Подсказка ревизора</div>
+                                                                        <div class="mrr-conflict-brief__hint-label">
+                                                                            <span>Подсказка ревизора</span>
+                                                                            @if (($row['can_edit_reason'] ?? false) && ($row['review_operation_id'] ?? null))
+                                                                                <button
+                                                                                    type="button"
+                                                                                    class="mrr-hint-edit-btn"
+                                                                                    data-mrr-hint-edit-open
+                                                                                    data-mrr-operation-id="{{ $row['review_operation_id'] }}"
+                                                                                    data-mrr-hint-text="{{ $row['reason'] }}"
+                                                                                    title="Редактировать"
+                                                                                    aria-label="Редактировать подсказку"
+                                                                                >✎</button>
+                                                                            @endif
+                                                                        </div>
                                                                         <div class="mrr-conflict-brief__hint-text">{{ $row['reason'] }}</div>
+                                                                    </div>
+                                                                @elseif (($row['can_edit_reason'] ?? false) && ($row['review_operation_id'] ?? null))
+                                                                    <div class="mrr-conflict-brief__hint-compact" data-mrr-reviewer-hint-compact>
+                                                                        <span>Подсказка ревизора</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            class="mrr-hint-edit-btn"
+                                                                            data-mrr-hint-edit-open
+                                                                            data-mrr-operation-id="{{ $row['review_operation_id'] }}"
+                                                                            data-mrr-hint-text=""
+                                                                            title="Добавить"
+                                                                            aria-label="Добавить подсказку"
+                                                                        >✎</button>
                                                                     </div>
                                                                 @else
                                                                     <div class="mrr-conflict-brief__copy">{{ $workflowText }}</div>
@@ -3450,6 +3522,41 @@
                     </div>
                 </div>
 
+                <div id="mrrHintEditModal" class="mrr-clarify-modal" hidden aria-hidden="true">
+                    <div class="mrr-clarify-modal__backdrop" data-mrr-hint-edit-close></div>
+                    <div
+                        class="mrr-clarify-modal__dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="mrrHintEditTitle"
+                        aria-describedby="mrrHintEditDescription"
+                    >
+                        <button type="button" class="mrr-clarify-modal__close" data-mrr-hint-edit-close aria-label="Закрыть">×</button>
+                        <div class="mrr-clarify-modal__eyebrow">Подсказка ревизора</div>
+                        <h3 id="mrrHintEditTitle" class="mrr-clarify-modal__title">Редактировать подсказку</h3>
+                        <p id="mrrHintEditDescription" class="mrr-clarify-modal__description">
+                            Добавьте или обновите заметку по месту. Эта подсказка поможет другим ревизорам понять контекст.
+                        </p>
+                        <div id="mrrHintEditError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div class="mrr-clarify-modal__field">
+                            <label class="mrr-clarify-modal__label" for="mrrHintEditText">Текст подсказки</label>
+                            <textarea
+                                id="mrrHintEditText"
+                                class="mrr-clarify-modal__input"
+                                rows="4"
+                                placeholder="Например: проверено по карте, арендатор на месте не изменён"
+                            ></textarea>
+                            <div class="mrr-clarify-modal__hint">Оставьте пустым, чтобы удалить подсказку.</div>
+                        </div>
+
+                        <div class="mrr-clarify-modal__actions">
+                            <button type="button" class="mrr-clarify-modal__button" data-mrr-hint-edit-close>Отмена</button>
+                            <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-hint-edit-save>Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="mrrIdentityFixModal" class="mrr-clarify-modal mrr-identity-fix-modal" hidden aria-hidden="true">
                     <div class="mrr-clarify-modal__backdrop" data-mrr-identity-fix-close></div>
                     <div
@@ -3786,6 +3893,17 @@
                 const confirmFreeError = document.getElementById('mrrConfirmFreeError');
                 const confirmFreeSummary = document.getElementById('mrrConfirmFreeSummary');
                 const confirmFreeSave = confirmFreeModal?.querySelector('[data-mrr-confirm-free-save]');
+                const currentScriptElement = document.currentScript;
+                const livewireRoot = currentScriptElement instanceof HTMLScriptElement
+                    ? currentScriptElement.closest('[wire\\:id]')
+                    : null;
+                const livewireComponentId = livewireRoot instanceof HTMLElement
+                    ? livewireRoot.getAttribute('wire:id')
+                    : null;
+                const hintEditModal = document.getElementById('mrrHintEditModal');
+                const hintEditText = document.getElementById('mrrHintEditText');
+                const hintEditError = document.getElementById('mrrHintEditError');
+                const hintEditSave = hintEditModal?.querySelector('[data-mrr-hint-edit-save]');
                 const identityFixModal = document.getElementById('mrrIdentityFixModal');
                 const identityFixNumber = document.getElementById('mrrIdentityFixNumber');
                 const identityFixDisplayName = document.getElementById('mrrIdentityFixDisplayName');
@@ -3855,6 +3973,10 @@
                 const confirmFreeState = {
                     spaceId: 0,
                     spaceLabel: '',
+                };
+                const hintEditState = {
+                    operationId: 0,
+                    openerButton: null,
                 };
                 const identityFixState = {
                     spaceId: 0,
@@ -3945,6 +4067,7 @@
                     || !error)
                     && !quickReviewModal
                     && !confirmFreeModal
+                    && !hintEditModal
                     && !contractTenantSwitchModal
                     && !financialTenantResolveModal
                     && !manualTenantSwitchModal
@@ -4006,6 +4129,16 @@
                     .replaceAll('>', '&gt;')
                     .replaceAll('"', '&quot;')
                     .replaceAll("'", '&#039;');
+
+                const getHintEditComponent = () => {
+                    const livewireManager = window.Livewire || window.livewire || globalThis.Livewire;
+
+                    if (!livewireComponentId || !livewireManager || typeof livewireManager.find !== 'function') {
+                        return null;
+                    }
+
+                    return livewireManager.find(livewireComponentId);
+                };
 
                 const appendDetailLine = (target, value) => {
                     const normalized = String(value ?? '').trim();
@@ -4609,6 +4742,82 @@
                         return;
                     }
 
+                    window.location.reload();
+                };
+
+                const openHintEditModal = (button) => {
+                    if (!hintEditModal || !hintEditText || !hintEditError || !hintEditSave) {
+                        return;
+                    }
+
+                    const operationId = Number(button.dataset.mrrOperationId || 0);
+                    if (!Number.isFinite(operationId) || operationId <= 0) {
+                        return;
+                    }
+
+                    hintEditState.operationId = operationId;
+                    hintEditState.openerButton = button;
+                    hintEditText.value = String(button.dataset.mrrHintText || '');
+                    hintEditError.textContent = '';
+                    hintEditSave.removeAttribute('disabled');
+                    hintEditSave.textContent = 'Сохранить';
+
+                    hintEditModal.hidden = false;
+                    hintEditModal.classList.add('is-open');
+                    hintEditModal.setAttribute('aria-hidden', 'false');
+
+                    window.setTimeout(() => hintEditText.focus(), 0);
+                };
+
+                const closeHintEditModal = () => {
+                    if (!hintEditModal || !hintEditText || !hintEditError || !hintEditSave) {
+                        return;
+                    }
+
+                    hintEditModal.classList.remove('is-open');
+                    hintEditModal.hidden = true;
+                    hintEditModal.setAttribute('aria-hidden', 'true');
+                    hintEditState.operationId = 0;
+                    hintEditText.value = '';
+                    hintEditError.textContent = '';
+                    hintEditSave.removeAttribute('disabled');
+                    hintEditSave.textContent = 'Сохранить';
+                };
+
+                const sendHintEdit = async () => {
+                    if (!hintEditModal || !hintEditText || !hintEditError || !hintEditSave) {
+                        return;
+                    }
+
+                    const operationId = Number(hintEditState.operationId || 0);
+                    if (!Number.isFinite(operationId) || operationId <= 0) {
+                        hintEditError.textContent = 'Не удалось определить подсказку для редактирования.';
+                        return;
+                    }
+
+                    const component = getHintEditComponent();
+                    if (!component || typeof component.call !== 'function') {
+                        hintEditError.textContent = 'Livewire-компонент недоступен. Обновите страницу и попробуйте снова.';
+                        return;
+                    }
+
+                    const reason = String(hintEditText.value || '').trim();
+
+                    hintEditSave.setAttribute('disabled', 'disabled');
+                    hintEditSave.textContent = 'Сохраняем...';
+                    hintEditError.textContent = '';
+
+                    const result = await component.call('updateReviewHint', operationId, reason);
+
+                    hintEditSave.removeAttribute('disabled');
+                    hintEditSave.textContent = 'Сохранить';
+
+                    if (!result?.ok) {
+                        hintEditError.textContent = String(result?.message || 'Не удалось сохранить подсказку.');
+                        return;
+                    }
+
+                    closeHintEditModal();
                     window.location.reload();
                 };
 
@@ -5534,6 +5743,9 @@
                     const confirmFreeLauncher = event.target instanceof Element
                         ? event.target.closest('[data-mrr-confirm-free-open]')
                         : null;
+                    const hintEditLauncher = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-hint-edit-open]')
+                        : null;
 
                     if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
                         event.preventDefault();
@@ -5571,6 +5783,12 @@
                     if (confirmFreeLauncher && confirmFreeLauncher instanceof HTMLElement) {
                         event.preventDefault();
                         openConfirmFreeModal(confirmFreeLauncher);
+                        return;
+                    }
+
+                    if (hintEditLauncher && hintEditLauncher instanceof HTMLElement) {
+                        event.preventDefault();
+                        openHintEditModal(hintEditLauncher);
                         return;
                     }
 
@@ -5619,12 +5837,13 @@
                 window.addEventListener('keydown', (event) => {
                     const quickOpen = quickReviewModal?.classList.contains('is-open');
                     const confirmFreeOpen = confirmFreeModal?.classList.contains('is-open');
+                    const hintEditOpen = hintEditModal?.classList.contains('is-open');
                     const contractTenantSwitchOpen = contractTenantSwitchModal?.classList.contains('is-open');
                     const financialTenantResolveOpen = financialTenantResolveModal?.classList.contains('is-open');
                     const manualTenantSwitchOpen = manualTenantSwitchModal?.classList.contains('is-open');
                     const identityOpen = identityFixModal?.classList.contains('is-open');
                     const mergeRetireOpen = mergeRetireModal?.classList.contains('is-open');
-                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !contractTenantSwitchOpen && !financialTenantResolveOpen && !manualTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
+                    if (!modal.classList.contains('is-open') && !quickOpen && !confirmFreeOpen && !hintEditOpen && !contractTenantSwitchOpen && !financialTenantResolveOpen && !manualTenantSwitchOpen && !identityOpen && !mergeRetireOpen) {
                         return;
                     }
 
@@ -5650,6 +5869,9 @@
                         }
                         if (confirmFreeOpen) {
                             closeConfirmFreeModal();
+                        }
+                        if (hintEditOpen) {
+                            closeHintEditModal();
                         }
                         if (modal.classList.contains('is-open')) {
                             closeModal();
@@ -5699,6 +5921,31 @@
                                 confirmFreeSave.textContent = 'Подтвердить свободно';
                                 if (confirmFreeError) {
                                     confirmFreeError.textContent = String(errorInstance?.message || errorInstance);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (hintEditModal && hintEditSave && hintEditText) {
+                    hintEditModal.addEventListener('click', (event) => {
+                        if (!(event.target instanceof Element)) {
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-hint-edit-close')) {
+                            event.preventDefault();
+                            closeHintEditModal();
+                            return;
+                        }
+
+                        if (event.target.hasAttribute('data-mrr-hint-edit-save')) {
+                            event.preventDefault();
+                            sendHintEdit().catch((errorInstance) => {
+                                hintEditSave.removeAttribute('disabled');
+                                hintEditSave.textContent = 'Сохранить';
+                                if (hintEditError) {
+                                    hintEditError.textContent = String(errorInstance?.message || errorInstance);
                                 }
                             });
                         }
