@@ -3174,14 +3174,31 @@
                                                         <div class="mrr-ai-panel">
                                                             <div class="mrr-ai-panel__title">
                                                                 <span>ИИ-разбор</span>
-                                                                <button
-                                                                    type="button"
-                                                                    class="mrr-link mrr-link--button"
-                                                                    data-mrr-ai-regenerate
-                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                >
-                                                                    Обновить
-                                                                </button>
+                                                                @php
+                                                                    $aiHasData = $ai && filled($ai['summary']);
+                                                                    $aiCanLoad = ! $aiHasData
+                                                                        && ! $hasAiKey
+                                                                        && $aiMode !== 'disabled'
+                                                                        && ! in_array($aiMode, ['connectivity_cooldown', 'page_error'], true)
+                                                                        && count($needsAttention) > $aiLimit;
+                                                                    $aiCanShowButton = $aiHasData || $aiCanLoad;
+                                                                    $aiButtonText = $aiHasData
+                                                                        ? 'Обновить ИИ-разбор'
+                                                                        : 'Загрузить ИИ-разбор';
+                                                                    $aiButtonAction = $aiHasData
+                                                                        ? 'data-mrr-ai-regenerate'
+                                                                        : 'data-mrr-ai-load';
+                                                                @endphp
+                                                                @if ($aiCanShowButton)
+                                                                    <button
+                                                                        type="button"
+                                                                        class="mrr-link mrr-link--button"
+                                                                        {!! $aiButtonAction !!}
+                                                                        data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                    >
+                                                                        {{ $aiButtonText }}
+                                                                    </button>
+                                                                @endif
                                                             </div>
                                                             <div class="mrr-ai" data-mrr-ai-panel data-mrr-space-id="{{ $row['space_id'] }}">
                                                                 @if ($ai && filled($ai['summary']))
@@ -3233,17 +3250,6 @@
                                                                 @elseif (in_array($aiMode, ['connectivity_cooldown', 'page_error'], true))
                                                                     <div class="mrr-ai mrr-ai--empty">
                                                                         <span class="mrr-ai__placeholder">AI-сводка временно недоступна</span>
-                                                                    </div>
-                                                                @elseif (count($needsAttention) > $aiLimit)
-                                                                    <div class="mrr-ai mrr-ai--skipped">
-                                                                        <button
-                                                                            type="button"
-                                                                            class="mrr-link mrr-link--button"
-                                                                            data-mrr-ai-load
-                                                                            data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                        >
-                                                                            Загрузить ИИ-разбор
-                                                                        </button>
                                                                     </div>
                                                                 @else
                                                                     <div class="mrr-ai mrr-ai--empty">
@@ -4222,6 +4228,8 @@
                         button.textContent = regenerate ? 'Обновляем ИИ-разбор...' : 'Загружаем ИИ-разбор...';
                     }
 
+                    let loadedSuccessfully = false;
+
                     try {
                         const url = new URL(regenerate ? aiReviewRegenerateUrl : aiReviewUrl, window.location.origin);
                         url.searchParams.set('space_id', String(normalizedSpaceId));
@@ -4242,6 +4250,7 @@
                         }
 
                         renderAiReview(panel, data);
+                        loadedSuccessfully = true;
                     } catch (errorInstance) {
                         renderAiReview(panel, {
                             review: null,
@@ -4252,8 +4261,23 @@
 
                         if (button instanceof HTMLElement) {
                             button.removeAttribute('disabled');
-                            if (regenerate) {
-                                button.textContent = 'Обновить';
+
+                            if (loadedSuccessfully) {
+                                // Успешная загрузка: кнопка становится "Обновить ИИ-разбор"
+                                button.textContent = 'Обновить ИИ-разбор';
+                                button.removeAttribute('data-mrr-ai-load');
+                                button.setAttribute('data-mrr-ai-regenerate', '');
+                            } else {
+                                // Ошибка загрузки: возвращаем кнопку в исходное состояние
+                                if (regenerate) {
+                                    button.textContent = 'Обновить ИИ-разбор';
+                                    button.removeAttribute('data-mrr-ai-load');
+                                    button.setAttribute('data-mrr-ai-regenerate', '');
+                                } else {
+                                    button.textContent = 'Загрузить ИИ-разбор';
+                                    button.removeAttribute('data-mrr-ai-regenerate');
+                                    button.setAttribute('data-mrr-ai-load', '');
+                                }
                             }
                         }
                     }
