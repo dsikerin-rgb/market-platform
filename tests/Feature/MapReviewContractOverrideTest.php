@@ -128,6 +128,8 @@ class MapReviewContractOverrideTest extends TestCase
 
     public function test_review_results_service_adds_financial_signal_when_accrual_has_different_tenant_without_contract(): void
     {
+        $this->travelTo('2026-05-21 12:00:00');
+
         $market = $this->createMarket();
         $this->actingAsSuperAdmin((int) $market->id);
 
@@ -181,6 +183,70 @@ class MapReviewContractOverrideTest extends TestCase
         $this->assertSame('Detyateva O.S. IP', data_get($rows[0], 'tenant_change_details.observed_tenant_name'));
         $this->assertStringContainsString('Detyateva O.S. IP', (string) $rows[0]['reason']);
         $this->assertStringContainsString('Samkolbas LLC', (string) $rows[0]['reason']);
+    }
+
+    public function test_review_results_service_ignores_historical_financial_tenant_tail(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant LLC',
+            'is_active' => true,
+        ]);
+
+        $historicalTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Historical Tenant IP',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'OS15/1',
+            'display_name' => 'OS15/1',
+            'code' => 'os15-1',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $historicalTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'source_row_hash' => sha1('historical-financial-tenant-tail'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+        ]);
+
+        $freshSpace = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'number' => 'OS15/2',
+            'display_name' => 'OS15/2',
+            'code' => 'os15-2',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'market_space_id' => $freshSpace->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'source' => 'excel',
+            'source_row_hash' => sha1('current-market-financial-period'),
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_UNMATCHED,
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+
+        $this->assertSame([], $rows);
     }
 
     public function test_review_results_service_does_not_add_financial_signal_when_accrual_tenant_matches_space(): void

@@ -765,6 +765,10 @@ class MapReviewResultsService
             return [];
         }
 
+        $latestMarketAccrualPeriod = Schema::hasColumn('tenant_accruals', 'period')
+            ? $this->latestAccrualPeriodForMarket($marketId)
+            : null;
+
         $select = [
             'ta.id as accrual_id',
             'ta.market_space_id as space_id',
@@ -844,6 +848,10 @@ class MapReviewResultsService
             ->when(
                 Schema::hasColumn('market_spaces', 'is_active'),
                 fn ($query) => $query->where('ms.is_active', true)
+            )
+            ->when(
+                $latestMarketAccrualPeriod !== null,
+                fn ($query) => $query->whereDate('ta.period', '=', $latestMarketAccrualPeriod)
             )
             ->orderByDesc(Schema::hasColumn('tenant_accruals', 'period') ? 'ta.period' : 'ta.id')
             ->orderByDesc('ta.id')
@@ -940,6 +948,16 @@ class MapReviewResultsService
         }
 
         return $signals;
+    }
+
+    private function latestAccrualPeriodForMarket(int $marketId): ?string
+    {
+        $value = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->whereNotNull('period')
+            ->max('period');
+
+        return filled($value) ? (string) $value : null;
     }
 
     private function financialSignalReason(MarketSpace $space, ?array $financialSignal): string
