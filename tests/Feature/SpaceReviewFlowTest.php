@@ -689,6 +689,89 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee(now()->startOfMonth()->format('m.Y'), false);
     }
 
+    public function test_map_review_results_finds_duplicate_candidate_from_observed_tenant_when_current_space_is_empty(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Fayzulloeva D.M IP',
+            'is_active' => true,
+        ]);
+
+        $canonical = $this->createSpace($market, [
+            'number' => 'P70',
+            'display_name' => 'P70',
+            'code' => 'P/70',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $canonical->id,
+            'number' => 'P/70 from 01.05.2024',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+            'external_id' => 'P70-CONTRACT',
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $canonical->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_place_code' => 'P/70',
+            'source_row_hash' => sha1('observed-tenant-canonical-accrual'),
+        ]);
+
+        $duplicate = $this->createSpace($market, [
+            'number' => '70',
+            'display_name' => 'Cafe',
+            'code' => 'raw-map-space',
+            'status' => 'vacant',
+            'tenant_id' => null,
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+        $this->createShape($market, (int) $duplicate->id);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $duplicate->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $duplicate->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'reason' => 'Long ago',
+                'observed_tenant_name' => 'Fayzuloeva',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = collect($rows)->firstWhere('space_id', (int) $duplicate->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame((int) $canonical->id, (int) data_get($row, 'diagnostics.candidate_spaces.0.space_id'));
+        $this->assertTrue((bool) data_get($row, 'diagnostics.candidate_spaces.0.is_stronger_than_current'));
+
+        Livewire::test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('data-mrr-duplicate-plan="open"', false)
+            ->assertSee('data-current-space-id="' . $duplicate->id . '"', false)
+            ->assertSee('data-candidate-space-id="' . $canonical->id . '"', false);
+    }
+
     public function test_map_review_results_warns_when_current_space_is_not_weaker_than_candidate(): void
     {
         $market = $this->createMarket();
