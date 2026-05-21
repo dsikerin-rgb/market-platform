@@ -517,6 +517,10 @@ class AiReviewAnalysisTest extends TestCase
                     ['label' => 'Отметить место как свободное', 'is_applied' => true, 'is_observed' => false],
                 ],
             ],
+            'allowed_actions' => [
+                ['code' => 'resolve_duplicate', 'label' => 'Разобрать дубль', 'category' => 'duplicate'],
+                ['code' => 'review_decision:occupancy_conflict', 'label' => 'Конфликт по занятости', 'category' => 'observed_review_decision'],
+            ],
         ];
 
         $messages = app(AiReviewService::class)->buildMessagesForPack($pack);
@@ -524,6 +528,10 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertStringContainsString('[contract_contour]', $messages['user']);
         $this->assertStringContainsString('historical_total: 1', $messages['user']);
         $this->assertStringContainsString('[relation_context]', $messages['user']);
+        $this->assertStringContainsString('[allowed_actions]', $messages['user']);
+        $this->assertStringContainsString('resolve_duplicate', $messages['user']);
+        $this->assertStringContainsString('"recommended_action"', $messages['system']);
+        $this->assertStringContainsString('[allowed_actions]', $messages['system']);
         $this->assertStringContainsString('точная связь с местом не подтверждена', $messages['system']);
         $this->assertStringContainsString('Do not treat other places of the same tenant as automatic proof of a duplicate.', $messages['system']);
     }
@@ -559,6 +567,48 @@ class AiReviewAnalysisTest extends TestCase
             'risk_score' => 8,
             'confidence' => 0.82,
         ], 'conflict', 'tenant_fallback');
+
+        $this->assertTrue($result['ok']);
+        $this->assertNull($result['error']);
+    }
+
+    public function test_validate_safety_rejects_recommended_action_outside_allowed_actions(): void
+    {
+        $service = app(AiReviewService::class);
+        $method = new \ReflectionMethod($service, 'validateSafety');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'summary' => 'Есть конфликт по занятости.',
+            'why_flagged' => 'Статус спорный.',
+            'recommended_next_step' => 'Зафиксировать конфликт и передать на ручную проверку.',
+            'recommended_action' => 'close_without_changes',
+            'risk_score' => 8,
+            'confidence' => 0.84,
+        ], 'conflict', 'space', false, [
+            ['code' => 'review_decision:occupancy_conflict', 'label' => 'Конфликт по занятости'],
+        ]);
+
+        $this->assertFalse($result['ok']);
+        $this->assertStringContainsString('not allowed', (string) $result['error']);
+    }
+
+    public function test_validate_safety_allows_recommended_action_from_allowed_actions(): void
+    {
+        $service = app(AiReviewService::class);
+        $method = new \ReflectionMethod($service, 'validateSafety');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'summary' => 'Есть конфликт по занятости.',
+            'why_flagged' => 'Статус спорный.',
+            'recommended_next_step' => 'Отметить конфликт по занятости и передать на ручную проверку.',
+            'recommended_action' => 'review_decision:occupancy_conflict',
+            'risk_score' => 8,
+            'confidence' => 0.84,
+        ], 'conflict', 'space', false, [
+            ['code' => 'review_decision:occupancy_conflict', 'label' => 'Конфликт по занятости'],
+        ]);
 
         $this->assertTrue($result['ok']);
         $this->assertNull($result['error']);

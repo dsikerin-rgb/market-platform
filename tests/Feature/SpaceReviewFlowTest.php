@@ -1234,6 +1234,37 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Stable revisit summary ' . $space->id, false);
     }
 
+    public function test_map_review_results_shows_recommended_action_label_from_ai_summary(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'AI-ACTION-1',
+            'display_name' => 'AI action 1',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        app(AiReviewService::class)->cacheSuccess($space->id, (int) $market->id, [
+            'summary' => 'Action summary ' . $space->id,
+            'why_flagged' => 'Action reason ' . $space->id,
+            'recommended_next_step' => 'Action step ' . $space->id,
+            'recommended_action' => 'resolve_duplicate',
+            'recommended_action_label' => 'Разобрать дубль',
+            'risk_score' => 8,
+            'confidence' => 0.93,
+        ]);
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Рекомендованное действие:', false)
+            ->assertSee('Разобрать дубль', false)
+            ->assertSee('Action step ' . $space->id, false);
+    }
+
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void
     {
         $market = $this->createMarket();
