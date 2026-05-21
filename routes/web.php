@@ -3072,6 +3072,64 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
     })->name('filament.admin.map-review-results.ai-review');
 
+    Route::post('/admin/map-review-results/ai-review/regenerate', function (Request $request) use (
+        $resolveMarketForMap,
+        $canEditShapes
+    ) {
+        abort_unless($canEditShapes(), 403);
+
+        $market = $resolveMarketForMap();
+        $validated = $request->validate([
+            'space_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $spaceId = (int) $validated['space_id'];
+        $spaceExists = MarketSpace::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey($spaceId)
+            ->exists();
+
+        if (! $spaceExists) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Map review space was not found in the current market.',
+            ], 404);
+        }
+
+        $reviewService = app(AiReviewService::class);
+        $reviewService->clearCache($spaceId, (int) $market->id);
+
+        if (! $reviewService->isAvailable()) {
+            return response()->json([
+                'ok' => true,
+                'review' => null,
+                'error_type' => 'disabled',
+            ]);
+        }
+
+        try {
+            $fetchResult = $reviewService->getReviewForSpace($spaceId, (int) $market->id);
+
+            return response()->json([
+                'ok' => true,
+                'review' => $fetchResult['review'] ?? null,
+                'error_type' => $fetchResult['error_type'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            logger()->warning('AI review regenerate endpoint fallback', [
+                'space_id' => $spaceId,
+                'market_id' => (int) $market->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'ok' => true,
+                'review' => null,
+                'error_type' => 'connectivity',
+            ]);
+        }
+    })->name('filament.admin.map-review-results.ai-review.regenerate');
+
     /**
      * Viewer карты рынка (рендер через Blade).
      */

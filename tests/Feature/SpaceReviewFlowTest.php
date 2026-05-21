@@ -1255,6 +1255,10 @@ class SpaceReviewFlowTest extends TestCase
             'recommended_next_step' => 'Action step ' . $space->id,
             'recommended_action' => 'resolve_duplicate',
             'recommended_action_label' => 'Разобрать дубль',
+            'missing_evidence' => [
+                'Manual confirmation ' . $space->id,
+            ],
+            'ui_gap' => 'No safe UI action ' . $space->id,
             'risk_score' => 8,
             'confidence' => 0.93,
         ]);
@@ -1262,7 +1266,85 @@ class SpaceReviewFlowTest extends TestCase
         Livewire::test(MapReviewResults::class)
             ->assertSee('Рекомендованное действие:', false)
             ->assertSee('Разобрать дубль', false)
-            ->assertSee('Action step ' . $space->id, false);
+            ->assertSee('Action step ' . $space->id, false)
+            ->assertSee('Чего не хватает:', false)
+            ->assertSee('Manual confirmation ' . $space->id, false)
+            ->assertSee('Пробел в UI:', false)
+            ->assertSee('No safe UI action ' . $space->id, false)
+            ->assertSee('data-mrr-ai-regenerate', false)
+            ->assertSee('Обновить', false);
+    }
+
+    public function test_ai_review_regenerate_endpoint_clears_cached_summary_and_refetches(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'AI-REGEN-1',
+            'display_name' => 'AI regen 1',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        $service = new class extends AiReviewService {
+            public int $calls = 0;
+
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                $this->calls++;
+
+                return [
+                    'review' => [
+                        'summary' => 'Regenerated summary ' . $spaceId,
+                        'why_flagged' => 'Regenerated reason ' . $marketId,
+                        'recommended_next_step' => 'Regenerated step ' . $spaceId,
+                        'recommended_action' => 'manual_review',
+                        'recommended_action_label' => 'Ручная проверка',
+                        'missing_evidence' => ['Regenerated missing evidence ' . $spaceId],
+                        'ui_gap' => 'Regenerated UI gap ' . $spaceId,
+                        'risk_score' => 9,
+                        'confidence' => 0.81,
+                    ],
+                    'error_type' => null,
+                ];
+            }
+        };
+
+        app()->instance(AiReviewService::class, $service);
+        $service->cacheSuccess($space->id, (int) $market->id, [
+            'summary' => 'Old cached summary ' . $space->id,
+            'why_flagged' => 'Old cached reason ' . $space->id,
+            'recommended_next_step' => 'Old cached step ' . $space->id,
+            'risk_score' => 7,
+            'confidence' => 0.75,
+        ]);
+
+        $this->assertSame('Old cached summary ' . $space->id, $service->getCachedReviewForSpace($space->id, (int) $market->id)['summary']);
+
+        $response = $this->withCsrfToken()->postJson('/admin/map-review-results/ai-review/regenerate', [
+            'space_id' => $space->id,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('review.summary', 'Regenerated summary ' . $space->id)
+            ->assertJsonPath('review.recommended_action', 'manual_review')
+            ->assertJsonPath('review.recommended_action_label', 'Ручная проверка')
+            ->assertJsonPath('review.missing_evidence.0', 'Regenerated missing evidence ' . $space->id)
+            ->assertJsonPath('review.ui_gap', 'Regenerated UI gap ' . $space->id)
+            ->assertJsonPath('error_type', null);
+
+        $this->assertSame(1, $service->calls);
+        $this->assertNull($service->getCachedReviewForSpace($space->id, (int) $market->id));
     }
 
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void
