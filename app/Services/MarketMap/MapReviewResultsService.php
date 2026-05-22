@@ -1253,15 +1253,21 @@ class MapReviewResultsService
                 $observedTenantId > 0,
                 fn ($query) => $query->whereKeyNot($observedTenantId)
             )
-            ->get(['id', 'name']);
+            ->get($this->tenantMatchColumns());
 
         $matches = $candidateTenants
             ->filter(function (Tenant $tenant) use ($observedTenantName): bool {
-                return $this->financialSignalTenantNamesLikelyMatch($observedTenantName, (string) $tenant->name);
+                foreach ($this->tenantMatchTexts($tenant) as $candidateName) {
+                    if ($this->financialSignalTenantNamesLikelyMatch($observedTenantName, $candidateName)) {
+                        return true;
+                    }
+                }
+
+                return false;
             })
             ->map(fn (Tenant $tenant): array => [
                 'id' => (int) $tenant->id,
-                'name' => (string) $tenant->name,
+                'name' => $this->tenantMatchLabel($tenant),
             ])
             ->values();
 
@@ -1974,6 +1980,12 @@ class MapReviewResultsService
         }
 
         $select = ['ta.id as id', 'ta.market_space_id as market_space_id'];
+        $amountColumn = $this->firstExistingColumn('tenant_accruals', [
+            'amount',
+            'total_with_vat',
+            'total_no_vat',
+            'cash_amount',
+        ]);
 
         if (Schema::hasColumn('tenant_accruals', 'period')) {
             $select[] = 'ta.period as period';
@@ -1983,8 +1995,16 @@ class MapReviewResultsService
             $select[] = 't.name as tenant_name';
         }
 
+        if ($amountColumn !== null) {
+            $select[] = 'ta.' . $amountColumn . ' as amount';
+        }
+
         if (Schema::hasColumn('tenant_accruals', 'total_with_vat')) {
             $select[] = 'ta.total_with_vat as total_with_vat';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'total_no_vat')) {
+            $select[] = 'ta.total_no_vat as total_no_vat';
         }
 
         if (Schema::hasColumn('tenant_accruals', 'cash_amount')) {
@@ -1997,6 +2017,18 @@ class MapReviewResultsService
 
         if (Schema::hasColumn('tenant_accruals', 'tenant_contract_id')) {
             $select[] = 'ta.tenant_contract_id as tenant_contract_id';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'source_file')) {
+            $select[] = 'ta.source_file as source_file';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'source_place_name')) {
+            $select[] = 'ta.source_place_name as source_place_name';
+        }
+
+        if (Schema::hasColumn('tenant_accruals', 'source_place_code')) {
+            $select[] = 'ta.source_place_code as source_place_code';
         }
 
         // Include contract fields if tenant_contracts exists
@@ -2064,9 +2096,14 @@ class MapReviewResultsService
                 'id' => isset($row->id) ? (int) $row->id : null,
                 'period' => $period,
                 'tenant_name' => isset($row->tenant_name) ? (string) $row->tenant_name : null,
+                'amount' => isset($row->amount) ? $row->amount : null,
                 'total_with_vat' => isset($row->total_with_vat) ? $row->total_with_vat : null,
+                'total_no_vat' => isset($row->total_no_vat) ? $row->total_no_vat : null,
                 'cash_amount' => isset($row->cash_amount) ? $row->cash_amount : null,
                 'source' => $source,
+                'source_file' => isset($row->source_file) ? (string) $row->source_file : null,
+                'source_place_name' => isset($row->source_place_name) ? (string) $row->source_place_name : null,
+                'source_place_code' => isset($row->source_place_code) ? (string) $row->source_place_code : null,
                 'tenant_contract_id' => isset($row->tenant_contract_id) ? (int) $row->tenant_contract_id : null,
                 'contract_number' => isset($row->contract_number) ? (string) $row->contract_number : null,
                 'contract_market_space_id' => $contractMarketSpaceId,
@@ -2075,5 +2112,78 @@ class MapReviewResultsService
         }
 
         return $accrualsBySpace;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tenantMatchColumns(): array
+    {
+        return $this->existingColumns('tenants', [
+            'id',
+            'name',
+            'short_name',
+            'display_name',
+        ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tenantMatchTexts(Tenant $tenant): array
+    {
+        $values = [];
+
+        foreach (['display_name', 'short_name', 'name'] as $column) {
+            if (! Schema::hasColumn('tenants', $column)) {
+                continue;
+            }
+
+            $value = trim((string) $tenant->getRawOriginal($column));
+            if ($value !== '') {
+                $values[] = $value;
+            }
+        }
+
+        return array_values(array_unique($values));
+    }
+
+    private function tenantMatchLabel(Tenant $tenant): string
+    {
+        foreach ($this->tenantMatchTexts($tenant) as $value) {
+            return $value;
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  list<string>  $columns
+     * @return list<string>
+     */
+    private function existingColumns(string $table, array $columns): array
+    {
+        if (! Schema::hasTable($table)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $columns,
+            fn (string $column): bool => Schema::hasColumn($table, $column)
+        ));
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    private function firstExistingColumn(string $table, array $columns): ?string
+    {
+        foreach ($columns as $column) {
+            if (Schema::hasColumn($table, $column)) {
+                return $column;
+            }
+        }
+
+        return null;
     }
 }

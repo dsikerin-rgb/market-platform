@@ -101,10 +101,23 @@ class AiContextPackBuilder
 
     private function buildSpaceSnapshot(MarketSpace $space): array
     {
-        $shape = MarketSpaceMapShape::query()
-            ->where('market_id', $space->market_id)
-            ->where('market_space_id', $space->id)
-            ->first();
+        $shapeColumns = $this->existingColumns('market_space_map_shapes', [
+            'id',
+            'bbox_x1',
+            'bbox_y1',
+            'bbox_x2',
+            'bbox_y2',
+        ]);
+
+        $shape = $shapeColumns === []
+            || ! Schema::hasColumn('market_space_map_shapes', 'market_id')
+            || ! Schema::hasColumn('market_space_map_shapes', 'market_space_id')
+            ? null
+            : MarketSpaceMapShape::query()
+                ->where('market_id', $space->market_id)
+                ->where('market_space_id', $space->id)
+                ->select($shapeColumns)
+                ->first();
 
         return [
             // обязательные
@@ -164,7 +177,9 @@ class AiContextPackBuilder
             ];
         }
 
-        $tenant = Tenant::query()->find($space->tenant_id);
+        $tenant = Tenant::query()
+            ->select($this->tenantContextColumns())
+            ->find($space->tenant_id);
         $contractRows = TenantContract::query()
             ->where('market_id', $space->market_id)
             ->where('market_space_id', $space->id)
@@ -270,7 +285,7 @@ class AiContextPackBuilder
                 'id'          => $tenant->id,
                 'name'        => $tenant->name,
                 'short_name'  => $tenant->short_name,
-                'display_name'=> $tenant->display_name,
+                'display_name'=> $this->tenantDisplayName($tenant),
                 'inn'         => $tenant->inn,
                 'kpp'         => $tenant->kpp,
                 'ogrn'        => $tenant->ogrn,
@@ -308,15 +323,29 @@ class AiContextPackBuilder
             ->where('market_id', $space->market_id)
             ->where('market_space_id', $space->id);
 
+        $amountColumn = $this->firstExistingColumn('tenant_accruals', [
+            'total_with_vat',
+            'total_no_vat',
+            'cash_amount',
+        ]);
+
+        $select = ['period'];
+        if ($amountColumn !== null) {
+            $select[] = $amountColumn . ' as latest_amount';
+        }
+        if (Schema::hasColumn('tenant_accruals', 'source')) {
+            $select[] = 'source';
+        }
+
         $latest = (clone $query)
             ->orderByDesc('period')
             ->orderByDesc('id')
-            ->first(['period', 'total_with_vat', 'source']);
+            ->first($select);
 
         return [
             'count'                 => (int) (clone $query)->count(),
             'latest_period'         => $latest->period ?? null,
-            'latest_total_with_vat' => isset($latest->total_with_vat) ? (float) $latest->total_with_vat : null,
+            'latest_total_with_vat' => isset($latest->latest_amount) ? (float) $latest->latest_amount : null,
             'latest_source'         => $latest->source ?? null,
         ];
     }
@@ -1103,5 +1132,71 @@ class AiContextPackBuilder
                 'ai_call' => false,
             ],
         ];
+    }
+
+    /**
+     * @param  list<string>  $columns
+     * @return list<string>
+     */
+    private function existingColumns(string $table, array $columns): array
+    {
+        if (! Schema::hasTable($table)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $columns,
+            fn (string $column): bool => Schema::hasColumn($table, $column)
+        ));
+    }
+
+    /**
+     * @param  list<string>  $columns
+     */
+    private function firstExistingColumn(string $table, array $columns): ?string
+    {
+        foreach ($columns as $column) {
+            if (Schema::hasColumn($table, $column)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tenantContextColumns(): array
+    {
+        return $this->existingColumns('tenants', [
+            'id',
+            'name',
+            'short_name',
+            'display_name',
+            'inn',
+            'kpp',
+            'ogrn',
+            'external_id',
+            'one_c_uid',
+            'type',
+            'is_active',
+        ]);
+    }
+
+    private function tenantDisplayName(Tenant $tenant): ?string
+    {
+        foreach (['display_name', 'short_name', 'name'] as $column) {
+            if (! Schema::hasColumn('tenants', $column)) {
+                continue;
+            }
+
+            $value = trim((string) $tenant->getRawOriginal($column));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }
