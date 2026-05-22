@@ -416,11 +416,13 @@ class MapReviewResultsService
             return [];
         }
 
+        $latestOperations ??= collect();
+
         $currentCounts = $this->relationCountsForSpaces($spaceIds);
         $contractOverrides = $this->activeContractOverrideForSpaces($spaceIds, $marketId);
         $financialSignals = $this->financialTenantSignals($marketId, max(count($spaceIds), 50));
 
-        $observedTenantIdsBySpace = $this->observedTenantIdsBySpace($marketId, $spaces, $latestOperations ?? collect());
+        $observedTenantIdsBySpace = $this->observedTenantIdsBySpace($marketId, $spaces, $latestOperations);
 
         $tenantIds = $spaces->pluck('tenant_id')
             ->filter(fn ($id): bool => filled($id))
