@@ -1,5 +1,4 @@
 <?php
-
 # tests/Feature/SpaceReviewFlowTest.php
 
 declare(strict_types=1);
@@ -1345,6 +1344,104 @@ class SpaceReviewFlowTest extends TestCase
 
         $this->assertSame(1, $service->calls);
         $this->assertNull($service->getCachedReviewForSpace($space->id, (int) $market->id));
+    }
+
+    public function test_review_hint_can_be_updated_only_by_operation_author(): void
+    {
+        $market = $this->createMarket();
+        $author = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        $operation = Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'status' => 'observed',
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Old hint',
+            ],
+            'created_by' => $author->id,
+        ]);
+
+        $page = Livewire::test(MapReviewResults::class);
+        $page->call('updateReviewHint', $operation->id, 'Updated hint')
+            ->assertReturned([
+                'ok' => true,
+                'message' => null,
+            ]);
+
+        $operation->refresh();
+        $this->assertSame('Updated hint', $operation->payload['reason'] ?? null);
+
+        $otherUser = User::factory()->create(['market_id' => $market->id]);
+        $otherUser->assignRole('super-admin');
+        $this->actingAs($otherUser, 'web');
+        $this->actingAs($otherUser, 'filament');
+
+        Livewire::test(MapReviewResults::class)
+            ->call('updateReviewHint', $operation->id, 'Another hint')
+            ->assertReturned([
+                'ok' => false,
+                'message' => 'Операция не найдена или у вас нет прав на редактирование.',
+            ]);
+
+        $operation->refresh();
+        $this->assertSame('Updated hint', $operation->payload['reason'] ?? null);
+    }
+
+    public function test_review_rows_expose_hint_edit_permissions_for_operation_author(): void
+    {
+        $market = $this->createMarket();
+        $author = $this->actingAsSuperAdmin((int) $market->id);
+
+        $space = $this->createSpace($market, [
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        $operation = Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'status' => 'observed',
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Editable hint',
+            ],
+            'created_by' => $author->id,
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 50);
+        $row = collect($rows)->firstWhere('space_id', (int) $space->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame((int) $operation->id, $row['review_operation_id']);
+        $this->assertSame((int) $author->id, $row['review_created_by']);
+        $this->assertTrue($row['can_edit_reason']);
+
+        $otherUser = User::factory()->create(['market_id' => $market->id]);
+        $otherUser->assignRole('super-admin');
+        $this->actingAs($otherUser, 'web');
+        $this->actingAs($otherUser, 'filament');
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 50);
+        $row = collect($rows)->firstWhere('space_id', (int) $space->id);
+
+        $this->assertFalse($row['can_edit_reason']);
     }
 
     public function test_map_review_results_explains_ai_unavailable_reason_for_policy_fail(): void

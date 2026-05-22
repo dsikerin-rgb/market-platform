@@ -17,6 +17,7 @@ use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Debt\DebtStatusResolver;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -127,6 +128,9 @@ class MapReviewResultsService
      *   decision:?string,
      *   decision_label:?string,
      *   reason:?string,
+     *   review_operation_id:?int,
+     *   review_created_by:?int,
+     *   can_edit_reason:bool,
      *   tenant_change_details:?array{
      *     observed_tenant_name:?string,
      *     review_comment:?string,
@@ -275,6 +279,9 @@ class MapReviewResultsService
                     ? 'Финконтур сообщает о новом арендаторе'
                     : ($decision ? (SpaceReviewDecision::labels()[$decision] ?? $decision) : null),
                 'reason' => $reason,
+                'review_operation_id' => $operation?->id ? (int) $operation->id : null,
+                'review_created_by' => $operation?->created_by ? (int) $operation->created_by : null,
+                'can_edit_reason' => $operation !== null && (int) ($operation->created_by ?? 0) === Auth::id(),
                 'tenant_change_details' => $financialSignal !== null
                     ? $this->financialTenantChangeDetails($financialSignal, $createdAt)
                     : $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason),
