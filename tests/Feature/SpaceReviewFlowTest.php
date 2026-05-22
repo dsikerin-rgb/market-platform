@@ -1055,6 +1055,182 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame([102, 105, 103, 101, 104], array_column($selectedBatch, 'space_id'));
     }
 
+    public function test_ai_context_builder_uses_schema_safe_fallback_columns(): void
+    {
+        $market = $this->createMarket();
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Full Tenant',
+            'short_name' => 'Short Tenant',
+            'is_active' => true,
+        ]);
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'period' => '2026-05-01',
+            'total_no_vat' => 1234.56,
+            'total_with_vat' => 9999.99,
+            'cash_amount' => 777.77,
+            'source' => '1c',
+        ]);
+
+        $existingTables = [];
+        $existingColumns = [];
+        foreach ([
+            'tenants',
+            'tenant_accruals',
+            'tenant_contracts',
+            'contract_debts',
+            'market_space_map_shapes',
+            'market_space_tenant_histories',
+        ] as $table) {
+            $existingTables[$table] = Schema::hasTable($table);
+            $existingColumns[$table] = $existingTables[$table]
+                ? Schema::getColumnListing($table)
+                : [];
+        }
+
+        $schemaMock = Schema::partialMock();
+        $schemaMock
+            ->shouldReceive('hasColumn')
+            ->andReturnUsing(function (string $table, string $column) use ($existingColumns): bool {
+                if ($table === 'tenants' && $column === 'display_name') {
+                    return false;
+                }
+
+                if ($table === 'tenant_accruals' && $column === 'total_with_vat') {
+                    return false;
+                }
+
+                if ($table === 'tenant_accruals' && $column === 'amount') {
+                    return false;
+                }
+
+                if ($table === 'market_space_tenant_histories' && $column === 'change_type') {
+                    return false;
+                }
+
+                if ($table === 'market_space_map_shapes' && $column === 'label') {
+                    return false;
+                }
+
+                return in_array($column, $existingColumns[$table] ?? [], true);
+            });
+        $schemaMock
+            ->shouldReceive('hasTable')
+            ->andReturnUsing(fn (string $table): bool => (bool) ($existingTables[$table] ?? false));
+
+        $pack = app(\App\Services\Ai\AiContextPackBuilder::class)->build((int) $space->id, (int) $market->id);
+
+        $this->assertSame('Short Tenant', $pack['tenant_context']['tenant']['display_name']);
+        $this->assertSame(1234.56, $pack['accrual_context']['latest_total_with_vat']);
+        $this->assertSame('1c', $pack['accrual_context']['latest_source']);
+    }
+
+    public function test_ai_map_review_results_service_uses_schema_safe_financial_signal_paths(): void
+    {
+        $market = $this->createMarket();
+        $currentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+        $observedTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Observed Temp',
+            'is_active' => true,
+        ]);
+        $candidateTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Legal Entity 77',
+            'short_name' => 'Observed Temp',
+            'is_active' => true,
+        ]);
+        $space = $this->createSpace($market, [
+            'tenant_id' => $currentTenant->id,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $observedTenant->id,
+            'market_space_id' => $space->id,
+            'tenant_contract_id' => null,
+            'period' => '2026-05-01',
+            'total_no_vat' => 4321.0,
+            'cash_amount' => 321.0,
+            'source' => '1c',
+            'source_file' => '1c:accruals',
+            'source_place_name' => 'Observed Place',
+            'source_place_code' => 'A-101',
+        ]);
+
+        $existingTables = [];
+        $existingColumns = [];
+        foreach ([
+            'tenants',
+            'tenant_accruals',
+            'tenant_contracts',
+            'contract_debts',
+            'market_space_map_shapes',
+            'market_space_tenant_histories',
+            'market_spaces',
+        ] as $table) {
+            $existingTables[$table] = Schema::hasTable($table);
+            $existingColumns[$table] = $existingTables[$table]
+                ? Schema::getColumnListing($table)
+                : [];
+        }
+
+        $schemaMock = Schema::partialMock();
+        $schemaMock
+            ->shouldReceive('hasColumn')
+            ->andReturnUsing(function (string $table, string $column) use ($existingColumns): bool {
+                if ($table === 'tenants' && $column === 'display_name') {
+                    return false;
+                }
+
+                if ($table === 'tenant_accruals' && $column === 'amount') {
+                    return false;
+                }
+
+                if ($table === 'tenant_accruals' && $column === 'total_with_vat') {
+                    return false;
+                }
+
+                if ($table === 'market_space_tenant_histories' && $column === 'change_type') {
+                    return false;
+                }
+
+                if ($table === 'market_space_map_shapes' && $column === 'label') {
+                    return false;
+                }
+
+                return in_array($column, $existingColumns[$table] ?? [], true);
+            });
+        $schemaMock
+            ->shouldReceive('hasTable')
+            ->andReturnUsing(fn (string $table): bool => (bool) ($existingTables[$table] ?? false));
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 50);
+        $row = collect($rows)->firstWhere('space_id', (int) $space->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame($candidateTenant->id, data_get($row, 'diagnostics.financial_signal.existing_tenant_candidate_id'));
+        $this->assertSame('Observed Temp', data_get($row, 'diagnostics.financial_signal.existing_tenant_candidate_name'));
+        $this->assertEquals(4321.0, data_get($row, 'diagnostics.accrual_details.0.amount'));
+        $this->assertSame('Observed Place', data_get($row, 'diagnostics.accrual_details.0.source_place_name'));
+        $this->assertSame('A-101', data_get($row, 'diagnostics.accrual_details.0.source_place_code'));
+    }
+
     public function test_map_review_results_loads_ai_on_demand_for_skipped_row_and_keeps_previous_loaded_rows(): void
     {
         $market = $this->createMarket();
