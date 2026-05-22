@@ -1654,6 +1654,51 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('ИИ-анализ отклонён проверкой качества ответа', false);
     }
 
+    public function test_map_review_results_explains_provider_billing_without_enabling_connectivity_cooldown(): void
+    {
+        Cache::flush();
+
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'AI-BILLING',
+            'display_name' => 'AI billing',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        app()->instance(AiReviewService::class, new class extends AiReviewService {
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+
+            public function getReviewForSpace(int $spaceId, int $marketId): array
+            {
+                return [
+                    'review' => null,
+                    'error_type' => 'provider_billing',
+                ];
+            }
+        });
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('AI-сводка недоступна: требуется оплата или лимит провайдера', false);
+
+        $this->assertFalse(Cache::has('gigachat_connectivity_down:market:' . $market->id));
+
+        $response = $this->getJson('/admin/map-review-results/ai-review?space_id=' . $space->id);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('review', null)
+            ->assertJsonPath('error_type', 'provider_billing');
+    }
+
     public function test_map_review_results_connectivity_cooldown_is_scoped_to_market(): void
     {
         Cache::flush();

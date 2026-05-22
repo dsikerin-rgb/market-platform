@@ -3310,6 +3310,14 @@
                                                                                 ИИ-анализ отклонён проверкой качества ответа
                                                                             @elseif ($aiErrorType === 'connectivity')
                                                                                 ИИ-анализ временно недоступен из-за ошибки соединения
+                                                                            @elseif ($aiErrorType === 'provider_billing')
+                                                                                AI-сводка недоступна: требуется оплата или лимит провайдера
+                                                                            @elseif ($aiErrorType === 'provider_rate_limit')
+                                                                                AI-сводка временно недоступна: превышен лимит запросов
+                                                                            @elseif ($aiErrorType === 'provider_auth')
+                                                                                AI-сводка недоступна: ошибка авторизации провайдера
+                                                                            @elseif ($aiErrorType === 'provider_error')
+                                                                                AI-сводка временно недоступна: ошибка провайдера
                                                                             @else
                                                                                 ИИ-анализ недоступен
                                                                             @endif
@@ -4338,6 +4346,26 @@
 
                     if (errorType === 'connectivity') {
                         renderAiPlaceholder(panel, 'ИИ-анализ временно недоступен из-за ошибки соединения');
+                        return;
+                    }
+
+                    if (errorType === 'provider_billing') {
+                        renderAiPlaceholder(panel, 'AI-сводка недоступна: требуется оплата или лимит провайдера');
+                        return;
+                    }
+
+                    if (errorType === 'provider_rate_limit') {
+                        renderAiPlaceholder(panel, 'AI-сводка временно недоступна: превышен лимит запросов');
+                        return;
+                    }
+
+                    if (errorType === 'provider_auth') {
+                        renderAiPlaceholder(panel, 'AI-сводка недоступна: ошибка авторизации провайдера');
+                        return;
+                    }
+
+                    if (errorType === 'provider_error') {
+                        renderAiPlaceholder(panel, 'AI-сводка временно недоступна: ошибка провайдера');
                         return;
                     }
 

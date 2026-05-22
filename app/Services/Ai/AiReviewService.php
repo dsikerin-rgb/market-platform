@@ -1,4 +1,5 @@
 <?php
+# app/Services/Ai/AiReviewService.php
 
 declare(strict_types=1);
 
@@ -85,11 +86,15 @@ class AiReviewService
      * Кэширует ТОЛЬКО успешный валидный ответ (10 мин).
      * Ошибки НЕ кэшируются — следующий вызов повторит запрос.
      *
-     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null, error_type: 'connectivity'|'policy'|null}
+     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null, error_type: 'connectivity'|'policy'|'provider_billing'|'provider_rate_limit'|'provider_auth'|'provider_error'|null}
      *
      * error_type:
      *   null            — успех (review содержит результат)
      *   'connectivity'  — сеть/auth/GigaChat недоступен (caller может включить cooldown)
+     *   'provider_billing'   — provider вернул HTTP 402
+     *   'provider_rate_limit' — provider вернул HTTP 429
+     *   'provider_auth'      — provider вернул HTTP 401/403
+     *   'provider_error'     — provider вернул другую HTTP/API ошибку
      *   'policy'        — модель вернула ответ, но он не прошёл safety/semantic check
      *                     (caller НЕ включает cooldown — это может быть единичный случай)
      */
@@ -157,7 +162,7 @@ class AiReviewService
     /**
      * Основная логика: собрать context pack → отправить в GigaChat → валидировать.
      *
-     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null, error_type: 'connectivity'|'policy'|null}
+     * @return array{review: array{summary:string, why_flagged:string, recommended_next_step:string, risk_score:int, confidence:float, recommended_action?:string, recommended_action_label?:string}|null, error_type: 'connectivity'|'policy'|'provider_billing'|'provider_rate_limit'|'provider_auth'|'provider_error'|null}
      */
     private function doFetchReview(int $spaceId, int $marketId): array
     {
@@ -188,8 +193,11 @@ class AiReviewService
                 ['role' => 'user', 'content' => $userMessage],
             ], temperature: 0.0, maxTokens: 1500);
 
-            if (! $response['ok'] || $response['content'] === null) {
-                return ['review' => null, 'error_type' => 'connectivity'];
+            if (! $response['ok']) {
+                return [
+                    'review' => null,
+                    'error_type' => $this->mapProviderFailureToErrorType($response),
+                ];
             }
 
             $parsed = $this->parseResponse($response['content']);
@@ -236,6 +244,21 @@ class AiReviewService
             ]);
             return ['review' => null, 'error_type' => 'connectivity'];
         }
+    }
+
+    /**
+     * @param  array{failure_kind?:string|null,status?:int|null}  $response
+     * @return 'connectivity'|'provider_billing'|'provider_rate_limit'|'provider_auth'|'provider_error'
+     */
+    private function mapProviderFailureToErrorType(array $response): string
+    {
+        return match ($response['failure_kind'] ?? null) {
+            'billing' => 'provider_billing',
+            'rate_limit' => 'provider_rate_limit',
+            'auth' => 'provider_auth',
+            'provider_http', 'empty_content' => 'provider_error',
+            default => 'connectivity',
+        };
     }
 
     /**
