@@ -2763,6 +2763,9 @@
                                             $currentAccrualDetails = is_array($diagnostics['accrual_details'] ?? null) ? $diagnostics['accrual_details'] : [];
                                             $candidateContractDetails = is_array($primaryCandidate['contract_details'] ?? null) ? $primaryCandidate['contract_details'] : [];
                                             $candidateAccrualDetails = is_array($primaryCandidate['accrual_details'] ?? null) ? $primaryCandidate['accrual_details'] : [];
+                                            $hasNameDuplicateCandidates = collect($candidateSpaces)
+                                                ->contains(fn (array $candidate): bool => in_array('name', (array) ($candidate['match_sources'] ?? []), true)
+                                                    || ($candidate['match_source'] ?? null) === 'name');
                                             $hasDuplicateResolutionAction = $attentionTab !== 'unconfirmed_links' && $primaryCandidate !== null;
                                             $hasRelationDetails = $relationDetails !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
@@ -2828,6 +2831,8 @@
                                                 $conflictHeadline = 'Финконтур сообщает о новом арендаторе';
                                             } elseif ($isContractTenantOverride) {
                                                 $conflictHeadline = 'На месте уже найден новый арендатор по договору';
+                                            } elseif ($hasNameDuplicateCandidates) {
+                                                $conflictHeadline = 'Найден возможный дубль по названию';
                                             } elseif ($hasCandidates) {
                                                 $conflictHeadline = 'Похоже на дубль или спорную привязку места';
                                             } elseif ($looksFreeCase) {
@@ -2856,6 +2861,9 @@
                                             } elseif ($isShapeCase) {
                                                 $workflowTitle = 'Проверить разметку на карте';
                                                 $workflowText = 'Нужно найти фигуру места на карте или зафиксировать, что разметки нет.';
+                                            } elseif ($hasNameDuplicateCandidates) {
+                                                $workflowTitle = 'Разобрать возможный дубль по названию';
+                                                $workflowText = 'Сравните найденные места с таким же нормализованным названием. Если это один физический объект, выберите основное место; если это разные места рядом, закройте карточку с комментарием.';
                                             } elseif ($hasCandidates) {
                                                 $workflowTitle = 'Разобрать возможный дубль';
                                                 $workflowText = 'Сравните текущее место с найденными местами того же арендатора.';
@@ -3133,6 +3141,7 @@
                                                                                 data-current-space-url="{{ $row['space_url'] }}"
                                                                                 data-current-map-url="{{ $row['map_url'] }}"
                                                                                 data-current-counts='@json($relationCounts)'
+                                                                                data-candidates='@json($candidateSpaces)'
                                                                                 data-candidate-space-id="{{ $primaryCandidate['space_id'] }}"
                                                                                 data-candidate-label="{{ $primaryCandidate['label'] }}"
                                                                                 data-candidate-space-url="{{ $primaryCandidate['space_url'] }}"
@@ -3217,7 +3226,22 @@
                                                                 <div class="mrr-diagnostics__compare">
                                                                     <div class="mrr-diagnostics__compare-title">Возможные дубли</div>
                                                                     <div class="mrr-diagnostics__compare-copy">
-                                                                        Найдено {{ count($candidateSpaces) }} {{ count($candidateSpaces) === 1 ? 'место' : 'места' }} того же арендатора. Для выбора основного места используйте действие «Разобрать дубль» в блоке исправлений.
+                                                                        Найдено {{ count($candidateSpaces) }} {{ count($candidateSpaces) === 1 ? 'место' : 'места' }} по связанному арендатору или точному совпадению нормализованного названия. Для выбора основного места используйте действие «Разобрать дубль» в блоке исправлений.
+                                                                    </div>
+                                                                    <div class="mrr-diagnostics__candidates">
+                                                                        @foreach ($candidateSpaces as $candidate)
+                                                                            <div class="mrr-diagnostics__candidate">
+                                                                                <div class="mrr-diagnostics__candidate-main">
+                                                                                    <div>{{ $candidate['label'] ?? ('#' . ($candidate['space_id'] ?? '')) }}</div>
+                                                                                    @if (filled($candidate['tenant_name'] ?? null))
+                                                                                        <div class="mrr-diagnostics__candidate-meta">{{ $candidate['tenant_name'] }}</div>
+                                                                                    @endif
+                                                                                </div>
+                                                                                @if (filled($candidate['match_reason'] ?? null))
+                                                                                    <div class="mrr-diagnostics__candidate-meta">{{ $candidate['match_reason'] }}</div>
+                                                                                @endif
+                                                                            </div>
+                                                                        @endforeach
                                                                     </div>
                                                                 </div>
                                                             @elseif ($hasRelationDetails)
@@ -3464,6 +3488,8 @@
                             Выберите, какое место должно остаться основным. Система перенесёт карту, кабинет и товары на выбранную карточку, а вторую выведет из рабочего контура. Договоры, начисления и долги не переносятся.
                         </p>
                         <div id="mrrDuplicatePlanError" class="mrr-clarify-modal__error" aria-live="polite"></div>
+
+                        <div id="mrrDuplicatePlanCandidateOptions" class="mrr-duplicate-plan__picker"></div>
 
                         <div class="mrr-duplicate-plan__grid">
                             <div id="mrrDuplicatePlanCurrentCard" class="mrr-duplicate-plan__card">
@@ -3968,6 +3994,7 @@
                 const currentMapLink = document.getElementById('mrrDuplicatePlanCurrentMapLink');
                 const candidateSpaceLink = document.getElementById('mrrDuplicatePlanCandidateSpaceLink');
                 const candidateMapLink = document.getElementById('mrrDuplicatePlanCandidateMapLink');
+                const candidateOptions = document.getElementById('mrrDuplicatePlanCandidateOptions');
                 const selectionTitle = document.getElementById('mrrDuplicatePlanSelectionTitle');
                 const selectionCopy = document.getElementById('mrrDuplicatePlanSelectionCopy');
                 const createButton = modal?.querySelector('[data-mrr-duplicate-plan-create]');
@@ -4045,10 +4072,14 @@
                     selectedPrimary: 'candidate',
                     currentCounts: [],
                     candidateCounts: [],
+                    currentContracts: [],
+                    currentAccruals: [],
                     currentSpaceId: 0,
                     candidateSpaceId: 0,
                     currentLabel: '',
                     candidateLabel: '',
+                    candidates: [],
+                    selectedCandidate: null,
                 };
 
                 if (
@@ -4069,6 +4100,7 @@
                     || !currentMapLink
                     || !candidateSpaceLink
                     || !candidateMapLink
+                    || !candidateOptions
                     || !selectionTitle
                     || !selectionCopy
                     || !createButton
@@ -4478,6 +4510,89 @@
                     return 0;
                 };
 
+                const normalizeDuplicateCandidate = (candidate) => {
+                    if (!candidate || typeof candidate !== 'object') {
+                        return null;
+                    }
+
+                    const spaceId = Number(candidate.space_id || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        return null;
+                    }
+
+                    return {
+                        space_id: spaceId,
+                        label: String(candidate.label || '').trim(),
+                        tenant_name: String(candidate.tenant_name || '').trim(),
+                        match_reason: String(candidate.match_reason || '').trim(),
+                        relation_counts: Array.isArray(candidate.relation_counts) ? candidate.relation_counts : [],
+                        space_url: String(candidate.space_url || '').trim(),
+                        map_url: String(candidate.map_url || '').trim(),
+                        contract_details: Array.isArray(candidate.contract_details) ? candidate.contract_details : [],
+                        accrual_details: Array.isArray(candidate.accrual_details) ? candidate.accrual_details : [],
+                        resolution_decision: String(candidate.resolution_decision || 'duplicate_space_needs_resolution').trim(),
+                        resolution_reason: String(candidate.resolution_reason || '').trim(),
+                    };
+                };
+
+                const renderDuplicateCandidateOptions = () => {
+                    candidateOptions.innerHTML = '';
+
+                    duplicatePlanState.candidates.forEach((candidate, index) => {
+                        const option = document.createElement('button');
+                        option.type = 'button';
+                        option.className = 'mrr-duplicate-plan__picker-button';
+                        option.dataset.mrrDuplicateCandidateIndex = String(index);
+                        option.classList.toggle(
+                            'is-selected',
+                            duplicatePlanState.selectedCandidate?.space_id === candidate.space_id,
+                        );
+
+                        const label = candidate.label ? `#${candidate.space_id} · ${candidate.label}` : `#${candidate.space_id}`;
+                        option.textContent = candidate.tenant_name
+                            ? `${label} · ${candidate.tenant_name}`
+                            : label;
+
+                        candidateOptions.appendChild(option);
+                    });
+                };
+
+                const applyDuplicateCandidate = (candidate) => {
+                    if (!candidate) {
+                        return;
+                    }
+
+                    duplicatePlanState.selectedCandidate = candidate;
+
+                    const candidateLabel = candidate.label;
+                    const candidateSpaceId = String(candidate.space_id);
+                    const parsedCandidateCounts = candidate.relation_counts;
+                    const parsedCandidateContracts = candidate.contract_details;
+                    const parsedCandidateAccruals = candidate.accrual_details;
+
+                    candidateTitle.textContent = candidateLabel
+                        ? `#${candidateSpaceId} · ${candidateLabel}`
+                        : `#${candidateSpaceId}`;
+
+                    renderCounts(candidateCounts, parsedCandidateCounts);
+                    setLink(candidateSpaceLink, candidate.space_url);
+                    setLink(candidateMapLink, countByLabel(parsedCandidateCounts, 'Карта') > 0 ? candidate.map_url : '');
+                    modal.dataset.candidateSpaceId = candidateSpaceId;
+                    modal.dataset.resolutionDecision = candidate.resolution_decision || 'duplicate_space_needs_resolution';
+                    duplicatePlanState.candidateCounts = parsedCandidateCounts;
+                    duplicatePlanState.candidateSpaceId = Number(candidateSpaceId || 0);
+                    duplicatePlanState.candidateLabel = candidateLabel ? `#${candidateSpaceId} · ${candidateLabel}` : `#${candidateSpaceId}`;
+                    renderDuplicatePlanDetails(
+                        duplicatePlanState.currentContracts,
+                        duplicatePlanState.currentAccruals,
+                        parsedCandidateContracts,
+                        parsedCandidateAccruals,
+                    );
+                    updateDuplicatePlanSelection('candidate');
+                    renderDuplicateCandidateOptions();
+                };
+
                 const updateDuplicatePlanSelection = (selectedPrimary) => {
                     duplicatePlanState.selectedPrimary = selectedPrimary === 'current' ? 'current' : 'candidate';
 
@@ -4499,6 +4614,10 @@
                         : 'Основным станет второе место того же арендатора';
                     selectionCopy.textContent = `${primaryLabel || 'Выбранное место'} останется основным. Система перенесёт с ${secondaryLabel || 'второй карточки'} карту: ${mapCount}, кабинет: ${cabinetCount}, товары: ${productCount}, а вторую карточку выведет из рабочего контура. Договоры, начисления и долги не переносятся.`;
                     createButton.textContent = 'Применить разбор дубля';
+                    selectionTitle.textContent = keepCurrent
+                        ? 'Основным останется место из ревизии'
+                        : 'Основным станет выбранное похожее место';
+                    selectionCopy.textContent = `${primaryLabel || 'Выбранное место'} останется основным. Система обработает ${secondaryLabel || 'вторую карточку'} как дубль: карта ${mapCount}, кабинет ${cabinetCount}, товары ${productCount}. Договоры, начисления и долги не переносятся автоматически.`;
                 };
 
                 const openModal = (button) => {
@@ -4512,6 +4631,21 @@
                     const parsedCurrentAccruals = parseJson(button.dataset.currentAccruals, []);
                     const parsedCandidateContracts = parseJson(button.dataset.candidateContracts, []);
                     const parsedCandidateAccruals = parseJson(button.dataset.candidateAccruals, []);
+                    const parsedCandidates = parseJson(button.dataset.candidates, [])
+                        .map(normalizeDuplicateCandidate)
+                        .filter(Boolean);
+                    const fallbackCandidate = normalizeDuplicateCandidate({
+                        space_id: candidateSpaceId,
+                        label: candidateLabel,
+                        relation_counts: parsedCandidateCounts,
+                        space_url: button.dataset.candidateSpaceUrl,
+                        map_url: button.dataset.candidateMapUrl,
+                        contract_details: parsedCandidateContracts,
+                        accrual_details: parsedCandidateAccruals,
+                    });
+                    const candidates = parsedCandidates.length > 0
+                        ? parsedCandidates
+                        : (fallbackCandidate ? [fallbackCandidate] : []);
 
                     currentTitle.textContent = currentLabel
                         ? `#${currentSpaceId} · ${currentLabel}`
@@ -4531,17 +4665,14 @@
                     modal.dataset.candidateSpaceId = candidateSpaceId;
                     duplicatePlanState.currentCounts = parsedCurrentCounts;
                     duplicatePlanState.candidateCounts = parsedCandidateCounts;
+                    duplicatePlanState.currentContracts = parsedCurrentContracts;
+                    duplicatePlanState.currentAccruals = parsedCurrentAccruals;
                     duplicatePlanState.currentSpaceId = Number(currentSpaceId || 0);
                     duplicatePlanState.candidateSpaceId = Number(candidateSpaceId || 0);
                     duplicatePlanState.currentLabel = currentLabel ? `#${currentSpaceId} · ${currentLabel}` : `#${currentSpaceId}`;
                     duplicatePlanState.candidateLabel = candidateLabel ? `#${candidateSpaceId} · ${candidateLabel}` : `#${candidateSpaceId}`;
-                    updateDuplicatePlanSelection('candidate');
-                    renderDuplicatePlanDetails(
-                        parsedCurrentContracts,
-                        parsedCurrentAccruals,
-                        parsedCandidateContracts,
-                        parsedCandidateAccruals,
-                    );
+                    duplicatePlanState.candidates = candidates;
+                    applyDuplicateCandidate(candidates[0] || fallbackCandidate);
 
                     modal.hidden = false;
                     modal.classList.add('is-open');
@@ -4557,6 +4688,9 @@
                     error.textContent = '';
                     createButton.removeAttribute('disabled');
                     duplicatePlanState.selectedPrimary = 'candidate';
+                    duplicatePlanState.candidates = [];
+                    duplicatePlanState.selectedCandidate = null;
+                    candidateOptions.innerHTML = '';
                     createButton.textContent = 'Применить разбор дубля';
                 };
 
@@ -5659,6 +5793,11 @@
                     const keepCurrent = duplicatePlanState.selectedPrimary === 'current';
                     const duplicateSpaceId = keepCurrent ? candidateSpaceId : currentSpaceId;
                     const canonicalSpaceId = keepCurrent ? currentSpaceId : candidateSpaceId;
+                    const resolutionDecision = String(modal.dataset.resolutionDecision || 'duplicate_space_needs_resolution');
+                    const isMergeResolution = resolutionDecision === 'merge_space_into_canonical';
+                    const duplicateReason = keepCurrent
+                        ? 'Основным оставлено место из ревизии; похожая карточка обработана как дубль.'
+                        : 'Основным выбрано похожее место; карточка из ревизии обработана как дубль.';
 
                     createButton.setAttribute('disabled', 'disabled');
                     createButton.textContent = 'Применяем разбор...';
@@ -5672,12 +5811,11 @@
                             'X-CSRF-TOKEN': csrfToken,
                         },
                         body: JSON.stringify({
-                            decision: 'duplicate_space_needs_resolution',
+                            decision: resolutionDecision,
                             market_space_id: duplicateSpaceId,
                             candidate_market_space_id: canonicalSpaceId,
-                            reason: keepCurrent
-                                ? 'Основным оставлено место из ревизии; безопасные связи перенести со второй карточки.'
-                                : 'Основным выбрано второе место того же арендатора; безопасные связи перенести с карточки из ревизии.',
+                            ...(isMergeResolution ? { effective_date: new Date().toISOString().slice(0, 10) } : {}),
+                            reason: duplicateReason,
                         }),
                     });
 
@@ -5714,6 +5852,15 @@
                     if (event.target.hasAttribute('data-mrr-duplicate-plan-close')) {
                         event.preventDefault();
                         closeModal();
+                        return;
+                    }
+
+                    const candidateOption = event.target.closest('[data-mrr-duplicate-candidate-index]');
+
+                    if (candidateOption instanceof HTMLElement) {
+                        event.preventDefault();
+                        const index = Number(candidateOption.dataset.mrrDuplicateCandidateIndex || -1);
+                        applyDuplicateCandidate(duplicatePlanState.candidates[index] || null);
                         return;
                     }
 

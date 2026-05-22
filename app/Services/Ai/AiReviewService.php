@@ -462,6 +462,7 @@ PROMPT;
 
         $currentRelations = $relations['current_space']['relation_counts'] ?? [];
         $relationCandidates = $relations['same_tenant_candidates'] ?? [];
+        $nameDuplicateCandidates = $relations['name_duplicate_candidates'] ?? [];
         $currentRelationLine = $this->formatRelationLine($relations['current_space'] ?? [
             'id' => $space['id'],
             'number' => $space['number'],
@@ -474,6 +475,10 @@ PROMPT;
         $candidateRelationLines = count($relationCandidates) > 0
             ? collect($relationCandidates)->map(fn ($candidate): string => $this->formatRelationLine($candidate))->join("\n")
             : '(нет кандидатов того же арендатора)';
+
+        $nameDuplicateRelationLines = count($nameDuplicateCandidates) > 0
+            ? collect($nameDuplicateCandidates)->map(fn ($candidate): string => $this->formatRelationLine($candidate))->join("\n")
+            : '(нет кандидатов по совпадению названия)';
 
         $parts = [];
         $parts[] = '[space]';
@@ -502,6 +507,8 @@ PROMPT;
         $parts[] = 'duplicate_review_hint: ' . (string) ($relations['duplicate_review_hint'] ?? '—');
         $parts[] = 'candidates:';
         $parts[] = $candidateRelationLines;
+        $parts[] = 'name_duplicate_candidates:';
+        $parts[] = $nameDuplicateRelationLines;
         $parts[] = '';
         $parts[] = '[debt]';
         $parts[] = "status: {$debt['debt_status']} ({$debt['debt_label']}), scope: {$debt['debt_scope']}";

@@ -673,7 +673,7 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('Карта: 1', false)
             ->assertSee('Кабинет: 1', false)
             ->assertSee('Возможные дубли', false)
-            ->assertSee('Найдено 1 место того же арендатора', false)
+            ->assertSee('Найдено 1 место по связанному арендатору или точному совпадению нормализованного названия', false)
             ->assertSee('Разобрать дубль', false)
             ->assertSee('Открыть место', false)
             ->assertSee('Открыть карту', false)
@@ -769,6 +769,83 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('data-mrr-duplicate-plan="open"', false)
             ->assertSee('data-current-space-id="' . $duplicate->id . '"', false)
             ->assertSee('data-candidate-space-id="' . $canonical->id . '"', false);
+    }
+
+    public function test_map_review_results_finds_duplicate_candidate_by_normalized_name_across_tenants(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Current',
+            'is_active' => true,
+        ]);
+        $candidateTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Candidate',
+            'is_active' => true,
+        ]);
+
+        $current = $this->createSpace($market, [
+            'number' => 'Холодильная камера 3 (просто договор)',
+            'display_name' => 'Холодильная камера камера 3 (просто договор)',
+            'tenant_id' => $currentTenant->id,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+
+        $candidate = $this->createSpace($market, [
+            'number' => 'Холодильная камера 3',
+            'display_name' => 'Холодильная камера 3',
+            'tenant_id' => $candidateTenant->id,
+        ]);
+        $this->createShape($market, (int) $candidate->id);
+
+        $nearbyDifferentNumber = $this->createSpace($market, [
+            'number' => 'Холодильная камера 2',
+            'display_name' => 'Холодильная камера 2',
+            'tenant_id' => $candidateTenant->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $current->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $current->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Needs duplicate review',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = collect($rows)->firstWhere('space_id', (int) $current->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame((int) $candidate->id, (int) data_get($row, 'diagnostics.candidate_spaces.0.space_id'));
+        $this->assertSame('name', data_get($row, 'diagnostics.candidate_spaces.0.match_source'));
+        $this->assertSame(SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL, data_get($row, 'diagnostics.candidate_spaces.0.resolution_decision'));
+        $this->assertNotContains((int) $nearbyDifferentNumber->id, collect(data_get($row, 'diagnostics.candidate_spaces', []))->pluck('space_id')->map(fn ($id): int => (int) $id)->all());
+
+        $aiPack = app(\App\Services\Ai\AiContextPackBuilder::class)->build((int) $current->id, (int) $market->id);
+        $this->assertSame((int) $candidate->id, (int) data_get($aiPack, 'relation_context.name_duplicate_candidates.0.id'));
+        $this->assertNotContains((int) $nearbyDifferentNumber->id, collect(data_get($aiPack, 'relation_context.name_duplicate_candidates', []))->pluck('id')->map(fn ($id): int => (int) $id)->all());
+
+        Livewire::test(MapReviewResults::class)
+            ->assertSee('Найден возможный дубль по названию', false)
+            ->assertSee('data-mrr-duplicate-plan="open"', false)
+            ->assertSee('data-candidates=', false)
+            ->assertSee('Холодильная камера 3', false)
+            ->assertSee('Tenant Candidate', false)
+            ->assertSee('merge_space_into_canonical', false);
     }
 
     public function test_map_review_results_warns_when_current_space_is_not_weaker_than_candidate(): void
