@@ -986,7 +986,9 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('data-mrr-duplicate-blocked-warning', false)
-            ->assertSee($candidate['duplicate_resolution_block_reason'] ?? '', false);
+            ->assertSee($candidate['duplicate_resolution_block_reason'] ?? '', false)
+            ->assertSee('data-mrr-manual-tenant-switch-open', false)
+            ->assertSee('Сменить арендатора', false);
     }
 
     public function test_map_review_results_finds_duplicate_candidate_by_normalized_name_across_tenants(): void
