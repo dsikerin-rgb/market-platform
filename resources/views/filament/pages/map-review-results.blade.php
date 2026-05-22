@@ -2767,6 +2767,8 @@
                                                 ->contains(fn (array $candidate): bool => in_array('name', (array) ($candidate['match_sources'] ?? []), true)
                                                     || ($candidate['match_source'] ?? null) === 'name');
                                             $hasDuplicateResolutionAction = $attentionTab !== 'unconfirmed_links' && $primaryCandidate !== null;
+                                            $canApplyDuplicateResolution = $hasDuplicateResolutionAction && ($primaryCandidate['can_apply_duplicate_resolution'] ?? true);
+                                            $duplicateResolutionBlockReason = $primaryCandidate['duplicate_resolution_block_reason'] ?? null;
                                             $hasRelationDetails = $relationDetails !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
                                             $isContractTenantOverride = $contractOverride !== null;
@@ -3131,30 +3133,38 @@
                                                                                 Упразднить и связать
                                                                             </button>
                                                                         @endif
-                                                                        @if ($hasDuplicateResolutionAction && $primaryCandidate)
-                                                                            <button
-                                                                                type="button"
-                                                                                class="mrr-link mrr-link--button mrr-link--primary"
-                                                                                data-mrr-duplicate-plan="open"
-                                                                                data-current-space-id="{{ $row['space_id'] }}"
-                                                                                data-current-label="{{ $currentSpaceLabel }}"
-                                                                                data-current-space-url="{{ $row['space_url'] }}"
-                                                                                data-current-map-url="{{ $row['map_url'] }}"
-                                                                                data-current-counts='@json($relationCounts)'
-                                                                                data-candidates='@json($candidateSpaces)'
-                                                                                data-candidate-space-id="{{ $primaryCandidate['space_id'] }}"
-                                                                                data-candidate-label="{{ $primaryCandidate['label'] }}"
-                                                                                data-candidate-space-url="{{ $primaryCandidate['space_url'] }}"
-                                                                                data-candidate-map-url="{{ $primaryCandidate['map_url'] }}"
-                                                                                data-candidate-counts='@json($primaryCandidate['relation_counts'] ?? [])'
-                                                                                data-current-contracts='@json($currentContractDetails)'
-                                                                                data-current-accruals='@json($currentAccrualDetails)'
-                                                                                data-candidate-contracts='@json($candidateContractDetails)'
-                                                                                data-candidate-accruals='@json($candidateAccrualDetails)'
-                                                                            >
-                                                                                Разобрать дубль
-                                                                            </button>
-                                                                        @endif
+                    @if ($canApplyDuplicateResolution && $primaryCandidate)
+                        <button
+                            type="button"
+                            class="mrr-link mrr-link--button mrr-link--primary"
+                            data-mrr-duplicate-plan="open"
+                            data-current-space-id="{{ $row['space_id'] }}"
+                            data-current-label="{{ $currentSpaceLabel }}"
+                            data-current-space-url="{{ $row['space_url'] }}"
+                            data-current-map-url="{{ $row['map_url'] }}"
+                            data-current-counts='@json($relationCounts)'
+                            data-candidates='@json($candidateSpaces)'
+                            data-candidate-space-id="{{ $primaryCandidate['space_id'] }}"
+                            data-candidate-label="{{ $primaryCandidate['label'] }}"
+                            data-candidate-space-url="{{ $primaryCandidate['space_url'] }}"
+                            data-candidate-map-url="{{ $primaryCandidate['map_url'] }}"
+                            data-candidate-counts='@json($primaryCandidate['relation_counts'] ?? [])'
+                            data-current-contracts='@json($currentContractDetails)'
+                            data-current-accruals='@json($currentAccrualDetails)'
+                            data-candidate-contracts='@json($candidateContractDetails)'
+                            data-candidate-accruals='@json($candidateAccrualDetails)'
+                        >
+                            Разобрать дубль
+                        </button>
+                    @endif
+                    @if ($hasDuplicateResolutionAction && ! $canApplyDuplicateResolution && $duplicateResolutionBlockReason)
+                        <div class="mrr-warning mrr-warning--block">
+                            <div class="mrr-warning__icon">⚠️</div>
+                            <div class="mrr-warning__content">
+                                {{ $duplicateResolutionBlockReason }}
+                            </div>
+                        </div>
+                    @endif
                                                                         @if ($canConfirmFree)
                                                                             <button
                                                                                 type="button"
@@ -3239,6 +3249,14 @@
                                                                                 </div>
                                                                                 @if (filled($candidate['match_reason'] ?? null))
                                                                                     <div class="mrr-diagnostics__candidate-meta">{{ $candidate['match_reason'] }}</div>
+                                                                                @endif
+                                                                                @if (! ($candidate['can_apply_duplicate_resolution'] ?? true) && filled($candidate['duplicate_resolution_block_reason'] ?? null))
+                                                                                    <div class="mrr-warning mrr-warning--block" data-mrr-duplicate-blocked-warning>
+                                                                                        <div class="mrr-warning__icon">⚠️</div>
+                                                                                        <div class="mrr-warning__content">
+                                                                                            {{ $candidate['duplicate_resolution_block_reason'] }}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 @endif
                                                                             </div>
                                                                         @endforeach

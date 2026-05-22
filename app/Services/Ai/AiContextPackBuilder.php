@@ -1,5 +1,5 @@
 <?php
-# app/Services/Ai/AiContextPackBuilder.php
+// app/Services/Ai/AiContextPackBuilder.php
 
 declare(strict_types=1);
 
@@ -421,12 +421,14 @@ class AiContextPackBuilder
         $currentCounts['debt_total'] = $debtTotals[(int) $space->id] ?? null;
 
         $candidates = $candidateSpaces
-            ->map(function (MarketSpace $candidate) use ($counts, $debtTotals): array {
+            ->map(function (MarketSpace $candidate) use ($counts, $debtTotals, $space): array {
                 $candidateId = (int) $candidate->id;
                 $candidateCounts = $counts[$candidateId] ?? $this->emptyRelationCounts();
                 $candidateCounts['debt_total'] = $debtTotals[$candidateId] ?? null;
 
-                return [
+                // AI context is diagnostic only. Do NOT compute or invent apply-safety here.
+                // Keep the candidate payload minimal and diagnostic (scores/counts).
+                $candidateArr = [
                     'id' => $candidateId,
                     'number' => $candidate->number,
                     'display_name' => $candidate->display_name,
@@ -435,6 +437,8 @@ class AiContextPackBuilder
                     'relation_counts' => $candidateCounts,
                     'canonical_score' => $this->canonicalScore($candidateCounts),
                 ];
+
+                return $candidateArr;
             })
             ->sortByDesc('canonical_score')
             ->values()
@@ -481,11 +485,13 @@ class AiContextPackBuilder
             ],
             'same_tenant_candidates' => $candidates,
             'name_duplicate_candidates' => $nameCandidates,
+            // AI context is diagnostic. Apply-safety (whether "Разобрать дубль" is allowed)
+            // is determined by backend logic (MapReviewResultsService) and UI allowed actions.
             'likely_canonical_candidate_id' => $bestCandidateIsLikelyCanonical
                 ? (int) $bestCandidate['id']
                 : null,
             'duplicate_review_hint' => $bestCandidateIsLikelyCanonical
-                ? 'У другого места того же арендатора больше подтверждённых связей. Текущее место нельзя подтверждать без выбора канонического места.'
+                ? 'Найден диагностический кандидат с более сильными подтверждёнными связями. Безопасность применения разборa дубля определяется backend (MapReviewResultsService) и списком доступных действий в UI.'
                 : 'Каноническое место не определяется автоматически. Нужна ручная проверка связей.',
         ];
     }

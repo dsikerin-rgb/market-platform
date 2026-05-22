@@ -771,6 +771,139 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('data-candidate-space-id="' . $canonical->id . '"', false);
     }
 
+    public function test_map_review_results_blocks_duplicate_resolution_when_current_has_tenant_but_observed_differs_and_candidate_is_stronger(): void
+    {
+        // П52у/2-3-like scenario:
+        // - current space tenant = СЕРВИСМАРКЕТ;
+        // - current space имеет map_shape, accruals;
+        // - observed tenant = другой арендатор;
+        // - candidate = П55 с тем же tenant СЕРВИСМАРКЕТ и сильными договорными/финансовыми связями;
+        // - candidate отображается как диагностический;
+        // - кнопка "Разобрать дубль" не отображается;
+        // - warning/block reason отображается.
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $currentTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'СЕРВИСМАРКЕТ ООО',
+            'is_active' => true,
+        ]);
+
+        $candidateSpace = $this->createSpace($market, [
+            'number' => 'П55',
+            'display_name' => 'П55',
+            'code' => 'P/55',
+            'status' => 'occupied',
+            'tenant_id' => $currentTenant->id,
+        ]);
+        $this->createShape($market, (int) $candidateSpace->id);
+
+        $candidateContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'market_space_id' => $candidateSpace->id,
+            'number' => 'P/55 from 01.01.2024',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+            'external_id' => 'P55-CONTRACT',
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'tenant_contract_id' => $candidateContract->id,
+            'market_space_id' => $candidateSpace->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_place_code' => 'P/55',
+            'source_row_hash' => sha1('candidate-accrual-1'),
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'tenant_contract_id' => $candidateContract->id,
+            'market_space_id' => $candidateSpace->id,
+            'period' => now()->subMonth()->startOfMonth()->toDateString(),
+            'source_place_code' => 'P/55',
+            'source_row_hash' => sha1('candidate-accrual-2'),
+        ]);
+
+        $currentSpace = $this->createSpace($market, [
+            'number' => 'П52у/2-3',
+            'display_name' => 'П52у/2-3',
+            'code' => 'P/52u/2-3',
+            'status' => 'occupied',
+            'tenant_id' => $currentTenant->id,
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+
+        // current space имеет map_shape — это independent anchor
+        $this->createShape($market, (int) $currentSpace->id);
+
+        // current space имеет accruals — это дополнительный independent anchor
+        $currentAccrual = TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $currentTenant->id,
+            'market_space_id' => $currentSpace->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_place_code' => 'P/52u/2-3',
+            'source_row_hash' => sha1('current-accrual-1'),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $currentSpace->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $currentSpace->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'reason' => 'на месте другой арендатор',
+                'observed_tenant_name' => 'Другой Арендатор ООО',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        // Создаём observed tenant, чтобы он нашёлся в системе
+        $observedTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Другой Арендатор ООО',
+            'is_active' => true,
+        ]);
+
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = collect($rows)->firstWhere('space_id', (int) $currentSpace->id);
+
+        $this->assertNotNull($row);
+        $this->assertSame((int) $candidateSpace->id, (int) data_get($row, 'diagnostics.candidate_spaces.0.space_id'));
+        $this->assertTrue((bool) data_get($row, 'diagnostics.candidate_spaces.0.is_stronger_than_current'));
+        // Кандидат показывается как диагностическая подсказка
+        $this->assertTrue((bool) data_get($row, 'diagnostics.has_candidates'));
+
+        // Проверка блокировки duplicate resolution:
+        // current tenant = СЕРВИСМАРКЕТ, observed tenant = Другой Арендатор (отличается)
+        // candidate найден по тому же tenant, current space ИМЕЕТ independent anchors
+        // Поэтому can_apply_duplicate_resolution = false
+        $candidate = data_get($row, 'diagnostics.candidate_spaces.0', []);
+        $this->assertNotNull($candidate);
+        $this->assertSame((int) $candidateSpace->id, (int) ($candidate['space_id'] ?? null));
+        $this->assertFalse((bool) ($candidate['can_apply_duplicate_resolution'] ?? true));
+        $this->assertNotNull($candidate['duplicate_resolution_block_reason'] ?? null);
+        $this->assertStringContainsString('Кандидат найден по текущему арендатору', $candidate['duplicate_resolution_block_reason'] ?? '');
+
+        Livewire::test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('data-mrr-duplicate-blocked-warning', false)
+            ->assertSee($candidate['duplicate_resolution_block_reason'] ?? '', false);
+    }
+
     public function test_map_review_results_finds_duplicate_candidate_by_normalized_name_across_tenants(): void
     {
         $market = $this->createMarket();
