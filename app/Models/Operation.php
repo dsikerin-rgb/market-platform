@@ -371,6 +371,7 @@ class Operation extends Model
 
         if ($decision === SpaceReviewDecision::MARK_SPACE_FREE) {
             $space->status = 'vacant';
+            $space->tenant_id = null;
         }
 
         if ($decision === SpaceReviewDecision::MARK_SPACE_SERVICE) {
