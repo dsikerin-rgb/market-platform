@@ -27,6 +27,8 @@ class MarketSpaceTenantBindingRecorder
 
         MarketSpaceTenantBinding::query()
             ->where('market_space_id', $space->id)
+            ->whereNull('tenant_contract_id')
+            ->where('binding_type', 'space_snapshot')
             ->whereNull('ended_at')
             ->update([
                 'ended_at' => $now,
