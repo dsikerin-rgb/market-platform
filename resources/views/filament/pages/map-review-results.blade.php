@@ -2810,6 +2810,7 @@
                                                 && ! $financialRequiresTenantResolution
                                                 && (
                                                     $isTenantCase
+                                                    || $isConflictCase
                                                     || $suggestedTargetTenantId > 0
                                                     || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1
                                                 );
