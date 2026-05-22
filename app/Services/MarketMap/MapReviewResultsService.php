@@ -536,7 +536,7 @@ class MapReviewResultsService
                     return $this->relationStrengthScore($candidateCounts[(int) $item['space']->id] ?? []);
                 })
                 ->take(5)
-                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails): array {
+                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace): array {
                     /** @var MarketSpace $candidate */
                     $candidate = $item['space'];
                     $candidateId = (int) $candidate->id;
@@ -544,6 +544,60 @@ class MapReviewResultsService
                     $counts = $candidateCounts[$candidateId] ?? [];
                     $candidateScore = $this->relationStrengthScore($counts);
                     $sameTenantContour = $tenantId <= 0 || $candidateTenantId <= 0 || $tenantId === $candidateTenantId;
+
+                    // ─── Duplicate Resolution Apply Guard (П52у/2-3-like scenario) ─────────────────────────────────
+                    // Блокировать destructive action "Разобрать дубль", если:
+                    // 1) current space имеет tenant_id (current_tenant);
+                    // 2) observed tenant отличается от current tenant;
+                    // 3) candidate найден как более сильное место для current tenant (same tenant contour);
+                    // 4) candidate stronger за счёт договоров/начислений/tenant bindings текущего системного арендатора.
+                    //
+                    // Наличие независимых anchor у current space (map_shapes/accruals/products/contracts) —
+                    // это ДОПОЛНИТЕЛЬНЫЙ АРГУМЕНТ ЗА блокировку, а не условие для разрешения действия.
+                    //
+                    // Важно: НЕ блокировать, если:
+                    // - current place пустое (tenant_id = null) — это кейс смены арендатора, не дубль
+                    // - candidate найден по name, а не по tenant
+                    // - current place имеет map_shapes/accruals, но нет observed_tenant (это нормальный дубль)
+
+                    $currentHasTenant = $tenantId > 0;
+                    $hasObservedDifferentTenant = ! empty($observedTenantIdsBySpace[(int) $space->id] ?? []);
+
+                    // observed tenant должен отличаться от current tenant
+                    $observedDiffersFromCurrent = false;
+                    if ($currentHasTenant && $hasObservedDifferentTenant) {
+                        $observedTenantIds = $observedTenantIdsBySpace[(int) $space->id] ?? [];
+                        $observedDiffersFromCurrent = ! in_array($tenantId, array_map('intval', $observedTenantIds), true);
+                    }
+
+                    // Candidate stronger за счёт финансовых связей (contracts/accruals)
+                    $candidateHasFinancials = ($counts['contracts'] ?? 0) > 0 || ($counts['accruals'] ?? 0) > 0;
+                    $candidateStrongerByFinancials = $candidateScore > $currentScore && $candidateHasFinancials;
+
+                    // Current place имеет собственные подтверждённые связи — это дополнительный аргумент ЗА блокировку
+                    $currentSpaceCounts = $currentCounts[(int) $space->id] ?? [];
+                    $currentHasIndependentAnchors = ((int) ($currentSpaceCounts['map_shapes'] ?? 0) > 0)
+                        || ((int) ($currentSpaceCounts['contracts'] ?? 0) > 0)
+                        || ((int) ($currentSpaceCounts['accruals'] ?? 0) > 0)
+                        || ((int) ($currentSpaceCounts['products'] ?? 0) > 0);
+
+                    // Блокируем, если current tenant отличается от observed tenant и кандидат найден по current tenant
+                    // Наличие independent anchors усиливает аргументацию за блокировку
+                    $isP52uLikeScenario = $currentHasTenant
+                        && $observedDiffersFromCurrent
+                        && $sameTenantContour
+                        && $candidateStrongerByFinancials;
+
+                    $canApplyDuplicateResolution = ! $isP52uLikeScenario;
+                    $duplicateResolutionBlockReason = null;
+
+                    if ($isP52uLikeScenario) {
+                        if ($currentHasIndependentAnchors) {
+                            $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается другой арендатор. На месте есть собственные связи (карта/договоры/начисления/товары). Сначала проверьте актуального арендатора места.';
+                        } else {
+                            $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается другой арендатор. Сначала проверьте актуального арендатора места.';
+                        }
+                    }
 
                     return [
                         'space_id' => $candidateId,
@@ -556,6 +610,8 @@ class MapReviewResultsService
                         'has_map' => (int) ($counts['map_shapes'] ?? 0) > 0,
                         'relation_score' => $candidateScore,
                         'is_stronger_than_current' => $candidateScore > $currentScore,
+                        'can_apply_duplicate_resolution' => $canApplyDuplicateResolution,
+                        'duplicate_resolution_block_reason' => $duplicateResolutionBlockReason,
                         'resolution_decision' => $sameTenantContour
                             ? SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION
                             : SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL,
@@ -1033,6 +1089,8 @@ class MapReviewResultsService
             'contract_details' => [],
             'accrual_details' => [],
             'financial_signal' => null,
+            'can_apply_duplicate_resolution' => true,
+            'duplicate_resolution_block_reason' => null,
         ];
     }
 
