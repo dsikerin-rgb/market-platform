@@ -460,7 +460,7 @@ class MapReviewResultsService
         $contractDetails = $this->contractDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
         $accrualDetails = $this->accrualDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $nameCandidateSpaces, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $observedTenantIdsBySpace): array {
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $nameCandidateSpaces, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $observedTenantIdsBySpace, $latestOperations): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
@@ -507,6 +507,7 @@ class MapReviewResultsService
                     ])
                 : collect();
 
+            $latestOperationsForCandidateMap = $latestOperations;
             $candidates = $tenantCandidates
                 ->merge($nameCandidates)
                 ->groupBy(fn (array $item): int => (int) $item['space']->id)
@@ -536,7 +537,7 @@ class MapReviewResultsService
                     return $this->relationStrengthScore($candidateCounts[(int) $item['space']->id] ?? []);
                 })
                 ->take(5)
-                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace): array {
+                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $latestOperationsForCandidateMap): array {
                     /** @var MarketSpace $candidate */
                     $candidate = $item['space'];
                     $candidateId = (int) $candidate->id;
@@ -581,10 +582,15 @@ class MapReviewResultsService
                         || ((int) ($currentSpaceCounts['accruals'] ?? 0) > 0)
                         || ((int) ($currentSpaceCounts['products'] ?? 0) > 0);
 
-                    // Блокируем, если current tenant отличается от observed tenant и кандидат найден по current tenant
-                    // Наличие independent anchors усиливает аргументацию за блокировку
+                    $currentSpaceOperation = $latestOperationsForCandidateMap->get((int) $space->id);
+                    $currentSpacePayload = is_array($currentSpaceOperation?->payload) ? $currentSpaceOperation->payload : [];
+                    $currentReviewDecision = (string) ($currentSpacePayload['decision'] ?? '');
+                    $isOccupancyConflict = $currentReviewDecision === SpaceReviewDecision::OCCUPANCY_CONFLICT;
+
+                    // Блокируем, если current tenant отличается от observed tenant или наблюдается конфликт занятости,
+                    // и кандидат найден по current tenant. Наличие independent anchors усиливает аргументацию за блокировку.
                     $isP52uLikeScenario = $currentHasTenant
-                        && $observedDiffersFromCurrent
+                        && ($observedDiffersFromCurrent || $isOccupancyConflict)
                         && $sameTenantContour
                         && $candidateStrongerByFinancials;
 
@@ -592,7 +598,13 @@ class MapReviewResultsService
                     $duplicateResolutionBlockReason = null;
 
                     if ($isP52uLikeScenario) {
-                        if ($currentHasIndependentAnchors) {
+                        if ($isOccupancyConflict) {
+                            if ($currentHasIndependentAnchors) {
+                                $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается конфликт занятости. На месте есть собственные связи (карта/договоры/начисления/товары). Сначала проверьте актуального арендатора места.';
+                            } else {
+                                $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается конфликт занятости. Сначала проверьте актуального арендатора места.';
+                            }
+                        } elseif ($currentHasIndependentAnchors) {
                             $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается другой арендатор. На месте есть собственные связи (карта/договоры/начисления/товары). Сначала проверьте актуального арендатора места.';
                         } else {
                             $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается другой арендатор. Сначала проверьте актуального арендатора места.';
