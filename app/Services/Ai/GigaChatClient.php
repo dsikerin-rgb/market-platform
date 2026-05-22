@@ -1,4 +1,5 @@
 <?php
+# app/Services/Ai/GigaChatClient.php
 
 declare(strict_types=1);
 
@@ -8,9 +9,7 @@ use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Минимальный HTTP-клиент для GigaChat API.
- *
- * Без SDK — только OAuth-авторизация + chat completions.
+ * Minimal HTTP client for GigaChat API.
  */
 class GigaChatClient
 {
@@ -37,35 +36,44 @@ class GigaChatClient
     }
 
     /**
-     * Отправить запрос в GigaChat и вернуть ответ.
-     *
      * @param  array<int, array{role: string, content: string}>  $messages
-     * @return array{ok: bool, content: string|null, error: string|null, model_used: string|null}
+     * @return array{
+     *   ok: bool,
+     *   content: string|null,
+     *   error: string|null,
+     *   model_used: string|null,
+     *   status: int|null,
+     *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null
+     * }
      */
     public function chat(array $messages, ?float $temperature = 0.0, ?int $maxTokens = 2000): array
     {
         if (empty($this->authKey)) {
             return [
-                'ok'         => false,
-                'content'    => null,
-                'error'      => 'GIGACHAT_AUTH_KEY не задан',
+                'ok' => false,
+                'content' => null,
+                'error' => 'GIGACHAT_AUTH_KEY is not set',
                 'model_used' => null,
+                'status' => null,
+                'failure_kind' => 'auth',
             ];
         }
 
-        $token = $this->getAccessToken();
-        if ($token === null) {
+        $tokenResult = $this->getAccessToken();
+        if (! $tokenResult['ok']) {
             return [
-                'ok'         => false,
-                'content'    => null,
-                'error'      => 'Не удалось получить access token от GigaChat',
+                'ok' => false,
+                'content' => null,
+                'error' => $tokenResult['error'] ?: 'Failed to get access token from GigaChat',
                 'model_used' => null,
+                'status' => $tokenResult['status'],
+                'failure_kind' => $tokenResult['failure_kind'],
             ];
         }
 
         $payload = [
-            'model'       => $this->model,
-            'messages'    => $messages,
+            'model' => $this->model,
+            'messages' => $messages,
             'temperature' => $temperature,
         ];
 
@@ -77,24 +85,26 @@ class GigaChatClient
             $response = $this->http
                 ->timeout(60)
                 ->withHeaders([
-                    'Authorization' => 'Bearer ' . $token,
-                    'Content-Type'  => 'application/json',
+                    'Authorization' => 'Bearer ' . $tokenResult['token'],
+                    'Content-Type' => 'application/json',
                 ])
                 ->withOptions([
                     'verify' => $this->verifySsl,
                 ])
-                ->post(self::GIGACHAT_API_BASE . '/api/v1/chat/completions', $payload);
+                ->post(self::chatUrl(), $payload);
 
             if (! $response->successful()) {
                 return [
-                    'ok'         => false,
-                    'content'    => null,
-                    'error'      => sprintf(
+                    'ok' => false,
+                    'content' => null,
+                    'error' => sprintf(
                         'GigaChat HTTP %d: %s',
                         $response->status(),
                         $response->body()
                     ),
                     'model_used' => null,
+                    'status' => $response->status(),
+                    'failure_kind' => $this->failureKindForStatus($response->status()),
                 ];
             }
 
@@ -102,87 +112,192 @@ class GigaChatClient
             $content = $body['choices'][0]['message']['content'] ?? null;
             $modelUsed = $body['model'] ?? $this->model;
 
+            if (! is_string($content) || $content === '') {
+                return [
+                    'ok' => false,
+                    'content' => null,
+                    'error' => 'GigaChat returned empty content',
+                    'model_used' => $modelUsed,
+                    'status' => $response->status(),
+                    'failure_kind' => 'empty_content',
+                ];
+            }
+
             return [
-                'ok'         => true,
-                'content'    => $content,
-                'error'      => null,
+                'ok' => true,
+                'content' => $content,
+                'error' => null,
                 'model_used' => $modelUsed,
+                'status' => $response->status(),
+                'failure_kind' => null,
             ];
         } catch (\Throwable $e) {
             return [
-                'ok'         => false,
-                'content'    => null,
-                'error'      => 'GigaChat request error: ' . $e->getMessage(),
+                'ok' => false,
+                'content' => null,
+                'error' => 'GigaChat request error: ' . $e->getMessage(),
                 'model_used' => null,
+                'status' => null,
+                'failure_kind' => 'network',
             ];
         }
     }
 
     /**
-     * Получить access token через OAuth.
-     * Кэширует токен на 25 минут (токен живёт ~30 мин).
+     * @return array{
+     *   ok: bool,
+     *   token: string|null,
+     *   error: string|null,
+     *   status: int|null,
+     *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null
+     * }
      */
-    private function getAccessToken(): ?string
+    private function getAccessToken(): array
     {
         $cacheKey = 'gigachat_access_token';
+        $cached = Cache::get($cacheKey);
 
-        return Cache::remember($cacheKey, now()->addMinutes(25), function (): ?string {
-            return $this->fetchAccessToken();
-        });
+        if (is_string($cached) && $cached !== '') {
+            return [
+                'ok' => true,
+                'token' => $cached,
+                'error' => null,
+                'status' => null,
+                'failure_kind' => null,
+            ];
+        }
+
+        $result = $this->fetchAccessToken();
+
+        if ($result['ok'] && is_string($result['token']) && $result['token'] !== '') {
+            Cache::put($cacheKey, $result['token'], now()->addMinutes(25));
+        }
+
+        return $result;
     }
 
-    private function fetchAccessToken(): ?string
+    /**
+     * @return array{
+     *   ok: bool,
+     *   token: string|null,
+     *   error: string|null,
+     *   status: int|null,
+     *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null
+     * }
+     */
+    private function fetchAccessToken(): array
     {
         try {
             $response = $this->http
                 ->timeout(15)
                 ->withHeaders([
                     'Authorization' => 'Basic ' . $this->authKey,
-                    'Accept'        => 'application/json',
-                    'RqUID'         => (string) \Str::uuid(),
+                    'Accept' => 'application/json',
+                    'RqUID' => (string) \Str::uuid(),
                 ])
                 ->withOptions([
                     'verify' => $this->verifySsl,
                 ])
                 ->asForm()
-                ->post(self::AUTH_API_BASE . '/api/v2/oauth', [
+                ->post(self::authUrl(), [
                     'scope' => $this->scope,
                 ]);
 
             if (! $response->successful()) {
                 logger()->error('GigaChat auth failed', [
                     'status' => $response->status(),
-                    'body'   => $response->body(),
+                    'body' => $response->body(),
                 ]);
-                return null;
+
+                return [
+                    'ok' => false,
+                    'token' => null,
+                    'error' => sprintf(
+                        'GigaChat auth HTTP %d: %s',
+                        $response->status(),
+                        $response->body()
+                    ),
+                    'status' => $response->status(),
+                    'failure_kind' => $this->failureKindForStatus($response->status()),
+                ];
             }
 
             $body = $response->json();
+            $token = $body['access_token'] ?? null;
 
-            return $body['access_token'] ?? null;
+            if (! is_string($token) || $token === '') {
+                logger()->error('GigaChat auth empty token response', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return [
+                    'ok' => false,
+                    'token' => null,
+                    'error' => 'GigaChat auth returned empty access token',
+                    'status' => $response->status(),
+                    'failure_kind' => 'provider_http',
+                ];
+            }
+
+            return [
+                'ok' => true,
+                'token' => $token,
+                'error' => null,
+                'status' => $response->status(),
+                'failure_kind' => null,
+            ];
         } catch (\GuzzleHttp\Exception\ConnectException $e) {
             logger()->error('GigaChat auth connection error', [
                 'message' => $e->getMessage(),
-                'url' => self::AUTH_API_BASE . '/api/v2/oauth',
+                'url' => self::authUrl(),
             ]);
-            return null;
+
+            return [
+                'ok' => false,
+                'token' => null,
+                'error' => 'GigaChat auth connection error: ' . $e->getMessage(),
+                'status' => null,
+                'failure_kind' => 'network',
+            ];
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             logger()->error('GigaChat auth request error', [
                 'message' => $e->getMessage(),
                 'response' => $e->hasResponse() ? $e->getResponse()->getBody()->getContents() : null,
             ]);
-            return null;
+
+            return [
+                'ok' => false,
+                'token' => null,
+                'error' => 'GigaChat auth request error: ' . $e->getMessage(),
+                'status' => null,
+                'failure_kind' => 'network',
+            ];
         } catch (\Throwable $e) {
             logger()->error('GigaChat auth unknown error', ['message' => $e->getMessage()]);
-            return null;
+
+            return [
+                'ok' => false,
+                'token' => null,
+                'error' => 'GigaChat auth unknown error: ' . $e->getMessage(),
+                'status' => null,
+                'failure_kind' => 'network',
+            ];
         }
     }
 
-    /**
-     * Инвалидировать кэш токена (для отладки).
-     */
     public function clearTokenCache(): void
     {
         Cache::forget('gigachat_access_token');
+    }
+
+    private function failureKindForStatus(int $status): string
+    {
+        return match ($status) {
+            402 => 'billing',
+            429 => 'rate_limit',
+            401, 403 => 'auth',
+            default => 'provider_http',
+        };
     }
 }
