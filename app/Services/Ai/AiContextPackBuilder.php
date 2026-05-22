@@ -13,6 +13,7 @@ use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Services\Debt\DebtStatusResolver;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -405,9 +406,11 @@ class AiContextPackBuilder
                 ->limit(5)
                 ->get(['id', 'number', 'display_name', 'status', 'is_active'])
             : collect();
+        $nameCandidateSpaces = $this->nameDuplicateCandidateSpaces($space, $marketId);
 
         $spaceIds = collect([(int) $space->id])
             ->merge($candidateSpaces->pluck('id')->map(fn ($id): int => (int) $id))
+            ->merge($nameCandidateSpaces->pluck('id')->map(fn ($id): int => (int) $id))
             ->unique()
             ->values()
             ->all();
@@ -436,6 +439,26 @@ class AiContextPackBuilder
             ->sortByDesc('canonical_score')
             ->values()
             ->all();
+        $nameCandidates = $nameCandidateSpaces
+            ->map(function (MarketSpace $candidate) use ($counts, $debtTotals): array {
+                $candidateId = (int) $candidate->id;
+                $candidateCounts = $counts[$candidateId] ?? $this->emptyRelationCounts();
+                $candidateCounts['debt_total'] = $debtTotals[$candidateId] ?? null;
+
+                return [
+                    'id' => $candidateId,
+                    'number' => $candidate->number,
+                    'display_name' => $candidate->display_name,
+                    'status' => $candidate->status,
+                    'is_active' => (bool) $candidate->is_active,
+                    'relation_counts' => $candidateCounts,
+                    'canonical_score' => $this->canonicalScore($candidateCounts),
+                    'match_source' => 'name',
+                ];
+            })
+            ->sortByDesc('canonical_score')
+            ->values()
+            ->all();
 
         $bestCandidate = $candidates[0] ?? null;
         $currentScore = $this->canonicalScore($currentCounts);
@@ -457,6 +480,7 @@ class AiContextPackBuilder
                 'canonical_score' => $currentScore,
             ],
             'same_tenant_candidates' => $candidates,
+            'name_duplicate_candidates' => $nameCandidates,
             'likely_canonical_candidate_id' => $bestCandidateIsLikelyCanonical
                 ? (int) $bestCandidate['id']
                 : null,
@@ -483,6 +507,89 @@ class AiContextPackBuilder
         }
 
         return $this->canonicalAnchorScore($candidateCounts) > $this->canonicalAnchorScore($currentCounts);
+    }
+
+    /**
+     * @return Collection<int, MarketSpace>
+     */
+    private function nameDuplicateCandidateSpaces(MarketSpace $space, int $marketId): Collection
+    {
+        $tokens = $this->spaceNameDuplicateTokens($space);
+
+        if ($tokens === []) {
+            return collect();
+        }
+
+        return MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where('id', '<>', (int) $space->id)
+            ->when(
+                Schema::hasColumn('market_spaces', 'is_active'),
+                fn ($query) => $query->where('is_active', true)
+            )
+            ->when(
+                filled($space->location_id ?? null),
+                fn ($query) => $query->where('location_id', (int) $space->location_id)
+            )
+            ->orderByRaw('COALESCE(number, display_name, code) asc')
+            ->get(['id', 'number', 'display_name', 'code', 'location_id', 'status', 'is_active'])
+            ->filter(fn (MarketSpace $candidate): bool => array_intersect($tokens, $this->spaceNameDuplicateTokens($candidate)) !== [])
+            ->take(5)
+            ->values();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function spaceNameDuplicateTokens(MarketSpace $space): array
+    {
+        $tokens = [];
+
+        foreach ([$space->number, $space->display_name, $space->code] as $value) {
+            $normalized = $this->normalizeSpaceDuplicateName((string) $value);
+
+            if ($normalized !== '' && $this->isUsableDuplicateNameToken($normalized)) {
+                $tokens[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
+    private function normalizeSpaceDuplicateName(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = str_replace('ё', 'е', $normalized);
+        $normalized = preg_replace('/\((?:[^)]*(?:просто\s+договор|договор|контракт|временн)[^)]*)\)/iu', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\b(?:просто\s+договор|договор|контракт|временн(?:ое|ый|ая)?)\b/iu', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+        $normalized = trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
+
+        $parts = $normalized === '' ? [] : explode(' ', $normalized);
+        $deduped = [];
+
+        foreach ($parts as $part) {
+            if ($part === '' || $part === end($deduped)) {
+                continue;
+            }
+
+            $deduped[] = $part;
+        }
+
+        return implode(' ', $deduped);
+    }
+
+    private function isUsableDuplicateNameToken(string $value): bool
+    {
+        if (mb_strlen($value, 'UTF-8') < 4) {
+            return false;
+        }
+
+        if (preg_match('/\d/u', $value) !== 1) {
+            return false;
+        }
+
+        return preg_match('/\p{L}/u', $value) === 1;
     }
 
     /**

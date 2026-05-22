@@ -432,6 +432,7 @@ class MapReviewResultsService
 
         $candidateSpaces = $tenantIds !== []
             ? MarketSpace::query()
+                ->with(['tenant:id,name'])
                 ->where('market_id', $marketId)
                 ->whereIn('tenant_id', $tenantIds)
                 ->when(
@@ -439,12 +440,15 @@ class MapReviewResultsService
                     fn ($query) => $query->where('is_active', true)
                 )
             ->orderByRaw('COALESCE(number, display_name, code) asc')
-            ->get(['id', 'tenant_id', 'number', 'display_name', 'code'])
+            ->get(['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code'])
             : collect();
+        $nameCandidateSpaces = $this->nameDuplicateCandidateSpaces($marketId, $spaces);
 
         $candidateIds = $candidateSpaces->pluck('id')
+            ->merge($nameCandidateSpaces->pluck('id'))
             ->map(fn ($id): int => (int) $id)
             ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
             ->values()
             ->all();
 
@@ -456,7 +460,7 @@ class MapReviewResultsService
         $contractDetails = $this->contractDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
         $accrualDetails = $this->accrualDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $observedTenantIdsBySpace): array {
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $nameCandidateSpaces, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $observedTenantIdsBySpace): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
@@ -467,7 +471,7 @@ class MapReviewResultsService
                 ? [$tenantId]
                 : array_values(array_unique(array_map('intval', $observedTenantIdsBySpace[$spaceId] ?? [])));
 
-            $candidates = $candidateTenantIds !== []
+            $tenantCandidates = $candidateTenantIds !== []
                 ? collect($candidateTenantIds)
                     ->flatMap(fn (int $candidateTenantId): Collection => $candidatesByTenant->get($candidateTenantId, collect()))
                     ->unique('id')
@@ -475,24 +479,95 @@ class MapReviewResultsService
                     ->sortByDesc(function (MarketSpace $candidate) use ($candidateCounts): int {
                         return $this->relationStrengthScore($candidateCounts[(int) $candidate->id] ?? []);
                     })
-                    ->take(5)
-                    ->map(function (MarketSpace $candidate) use ($candidateCounts, $currentScore, $contractDetails, $accrualDetails): array {
-                        $candidateId = (int) $candidate->id;
-                        $counts = $candidateCounts[$candidateId] ?? [];
-                        $candidateScore = $this->relationStrengthScore($counts);
+                    ->map(fn (MarketSpace $candidate): array => [
+                        'space' => $candidate,
+                        'match_source' => 'tenant',
+                        'match_reason' => 'То же связанное юрлицо/арендатор',
+                    ])
+                : collect();
 
-                        return [
-                            'space_id' => $candidateId,
-                            'label' => $this->spaceLabel($candidate),
-                            'relation_counts' => $this->compactRelationCounts($counts),
-                            'has_map' => (int) ($counts['map_shapes'] ?? 0) > 0,
-                            'relation_score' => $candidateScore,
-                            'is_stronger_than_current' => $candidateScore > $currentScore,
-                            'contract_details' => $contractDetails[$candidateId] ?? [],
-                            'accrual_details' => $accrualDetails[$candidateId] ?? [],
-                        ];
-                    })->values()->all()
-                : [];
+            $currentNameTokens = $this->spaceNameDuplicateTokens($space);
+            $nameCandidates = $currentNameTokens !== []
+                ? $nameCandidateSpaces
+                    ->reject(fn (MarketSpace $candidate): bool => (int) $candidate->id === $spaceId)
+                    ->filter(function (MarketSpace $candidate) use ($space, $currentNameTokens): bool {
+                        $candidateLocationId = (int) ($candidate->location_id ?? 0);
+                        $spaceLocationId = (int) ($space->location_id ?? 0);
+
+                        if ($spaceLocationId > 0 && $candidateLocationId > 0 && $spaceLocationId !== $candidateLocationId) {
+                            return false;
+                        }
+
+                        return array_intersect($currentNameTokens, $this->spaceNameDuplicateTokens($candidate)) !== [];
+                    })
+                    ->map(fn (MarketSpace $candidate): array => [
+                        'space' => $candidate,
+                        'match_source' => 'name',
+                        'match_reason' => 'Похоже по названию/номеру в той же локации',
+                    ])
+                : collect();
+
+            $candidates = $tenantCandidates
+                ->merge($nameCandidates)
+                ->groupBy(fn (array $item): int => (int) $item['space']->id)
+                ->map(function (Collection $group): array {
+                    $first = $group->first();
+                    $sources = $group
+                        ->pluck('match_source')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+                    $reasons = $group
+                        ->pluck('match_reason')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+
+                    return [
+                        'space' => $first['space'],
+                        'match_source' => in_array('tenant', $sources, true) ? 'tenant' : 'name',
+                        'match_sources' => $sources,
+                        'match_reason' => implode('; ', $reasons),
+                    ];
+                })
+                ->sortByDesc(function (array $item) use ($candidateCounts): int {
+                    return $this->relationStrengthScore($candidateCounts[(int) $item['space']->id] ?? []);
+                })
+                ->take(5)
+                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails): array {
+                    /** @var MarketSpace $candidate */
+                    $candidate = $item['space'];
+                    $candidateId = (int) $candidate->id;
+                    $candidateTenantId = (int) ($candidate->tenant_id ?? 0);
+                    $counts = $candidateCounts[$candidateId] ?? [];
+                    $candidateScore = $this->relationStrengthScore($counts);
+                    $sameTenantContour = $tenantId <= 0 || $candidateTenantId <= 0 || $tenantId === $candidateTenantId;
+
+                    return [
+                        'space_id' => $candidateId,
+                        'label' => $this->spaceLabel($candidate),
+                        'tenant_name' => $candidate->tenant?->name,
+                        'match_source' => $item['match_source'],
+                        'match_sources' => $item['match_sources'],
+                        'match_reason' => $item['match_reason'],
+                        'relation_counts' => $this->compactRelationCounts($counts),
+                        'has_map' => (int) ($counts['map_shapes'] ?? 0) > 0,
+                        'relation_score' => $candidateScore,
+                        'is_stronger_than_current' => $candidateScore > $currentScore,
+                        'resolution_decision' => $sameTenantContour
+                            ? SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION
+                            : SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL,
+                        'resolution_reason' => $sameTenantContour
+                            ? 'Можно разобрать как дубль с переносом безопасных связей.'
+                            : 'Арендаторы отличаются: безопаснее упразднить дубль без переноса договоров и начислений.',
+                        'contract_details' => $contractDetails[$candidateId] ?? [],
+                        'accrual_details' => $accrualDetails[$candidateId] ?? [],
+                    ];
+                })
+                ->values()
+                ->all();
 
             $hasStrongerCandidate = collect($candidates)
                 ->contains(fn (array $candidate): bool => (bool) ($candidate['is_stronger_than_current'] ?? false));
@@ -607,6 +682,97 @@ class MapReviewResultsService
             fn (array $tenantIds): array => array_values(array_unique(array_map('intval', $tenantIds))),
             $result
         );
+    }
+
+    /**
+     * @param  Collection<int, MarketSpace>  $spaces
+     * @return Collection<int, MarketSpace>
+     */
+    private function nameDuplicateCandidateSpaces(int $marketId, Collection $spaces): Collection
+    {
+        if ($marketId <= 0 || $spaces->isEmpty()) {
+            return collect();
+        }
+
+        $hasNameTokens = $spaces
+            ->contains(fn (MarketSpace $space): bool => $this->spaceNameDuplicateTokens($space) !== []);
+
+        if (! $hasNameTokens) {
+            return collect();
+        }
+
+        $locationIds = $spaces
+            ->pluck('location_id')
+            ->filter(fn ($id): bool => filled($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        return MarketSpace::query()
+            ->with(['tenant:id,name'])
+            ->where('market_id', $marketId)
+            ->when(
+                Schema::hasColumn('market_spaces', 'is_active'),
+                fn ($query) => $query->where('is_active', true)
+            )
+            ->when($locationIds !== [], fn ($query) => $query->whereIn('location_id', $locationIds))
+            ->orderByRaw('COALESCE(number, display_name, code) asc')
+            ->get(['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code']);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function spaceNameDuplicateTokens(MarketSpace $space): array
+    {
+        $tokens = [];
+
+        foreach ([$space->number, $space->display_name, $space->code] as $value) {
+            $normalized = $this->normalizeSpaceDuplicateName((string) $value);
+
+            if ($normalized !== '' && $this->isUsableDuplicateNameToken($normalized)) {
+                $tokens[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
+    private function normalizeSpaceDuplicateName(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        $normalized = str_replace('ё', 'е', $normalized);
+        $normalized = preg_replace('/\((?:[^)]*(?:просто\s+договор|договор|контракт|временн)[^)]*)\)/iu', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/\b(?:просто\s+договор|договор|контракт|временн(?:ое|ый|ая)?)\b/iu', ' ', $normalized) ?? $normalized;
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+        $normalized = trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
+
+        $parts = $normalized === '' ? [] : explode(' ', $normalized);
+        $deduped = [];
+
+        foreach ($parts as $part) {
+            if ($part === '' || $part === end($deduped)) {
+                continue;
+            }
+
+            $deduped[] = $part;
+        }
+
+        return implode(' ', $deduped);
+    }
+
+    private function isUsableDuplicateNameToken(string $value): bool
+    {
+        if (mb_strlen($value, 'UTF-8') < 4) {
+            return false;
+        }
+
+        if (preg_match('/\d/u', $value) !== 1) {
+            return false;
+        }
+
+        return preg_match('/\p{L}/u', $value) === 1;
     }
 
     private function normalizeTenantMatchText(string $value): string
