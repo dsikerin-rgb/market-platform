@@ -1,4 +1,7 @@
 @php
+    use App\Filament\Widgets\MapReviewDataQualitySignalsWidget;
+    use Livewire\Livewire;
+
     $activeReviewResultsTab = in_array(request()->query('tab', 'review'), ['review', 'unconfirmed_links', 'data_quality', 'applied'], true)
         ? request()->query('tab', 'review')
         : 'review';
@@ -6,7 +9,7 @@
 
 @if ($activeReviewResultsTab === 'data_quality')
     <div id="mrrDataQualitySignalsSource" hidden>
-        @include('filament.widgets.map-review-data-quality-signals-widget')
+        {!! Livewire::mount(MapReviewDataQualitySignalsWidget::class) !!}
     </div>
 @endif
 
