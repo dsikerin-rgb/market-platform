@@ -11,6 +11,8 @@
     <div id="mrrDataQualitySignalsSource" hidden>
         {!! Livewire::mount(MapReviewDataQualitySignalsWidget::class) !!}
     </div>
+
+    @include('filament.partials.tenant-merge-preflight-exact-links')
 @endif
 
 @if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links'], true))
