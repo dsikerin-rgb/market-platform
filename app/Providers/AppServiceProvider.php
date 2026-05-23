@@ -3,15 +3,19 @@
 
 namespace App\Providers;
 
+use App\Filament\Pages\MapReviewResults;
 use App\Listeners\NotifySuperAdminsAboutUserLogin;
 use App\Models\IntegrationExchange;
 use App\Models\Task;
 use App\Observers\IntegrationExchangeObserver;
 use App\Policies\TaskPolicy;
+use Filament\Support\Facades\FilamentView;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\View\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -32,5 +36,11 @@ class AppServiceProvider extends ServiceProvider
         IntegrationExchange::observe(IntegrationExchangeObserver::class);
 
         Event::listen(Login::class, NotifySuperAdminsAboutUserLogin::class);
+
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
+            fn (): View => view('filament.widgets.map-review-data-quality-signals-widget'),
+            scopes: [MapReviewResults::class],
+        );
     }
 }
