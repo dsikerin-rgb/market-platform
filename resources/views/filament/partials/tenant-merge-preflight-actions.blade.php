@@ -180,6 +180,28 @@
         color: #cbd5e1;
     }
 
+    .mrr-tenant-merge-modal__technical {
+        margin-top: 0.3rem;
+        color: #64748b;
+        font-size: 0.74rem;
+    }
+
+    .mrr-tenant-merge-modal__technical summary {
+        cursor: pointer;
+        font-weight: 750;
+    }
+
+    .mrr-tenant-merge-modal__technical-body {
+        display: grid;
+        gap: 0.14rem;
+        margin-top: 0.28rem;
+        word-break: break-all;
+    }
+
+    .dark .mrr-tenant-merge-modal__technical {
+        color: #cbd5e1;
+    }
+
     .mrr-tenant-merge-modal__commands {
         display: grid;
         gap: 0.65rem;
@@ -306,19 +328,19 @@
     <div class="mrr-tenant-merge-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="mrrTenantMergePreflightTitle">
         <button type="button" class="mrr-tenant-merge-modal__close" data-mrr-tenant-merge-close aria-label="Закрыть">×</button>
         <div class="mrr-tenant-merge-modal__eyebrow">Подготовка слияния</div>
-        <h3 id="mrrTenantMergePreflightTitle" class="mrr-tenant-merge-modal__title">Проверить слияние арендаторов</h3>
+        <h3 id="mrrTenantMergePreflightTitle" class="mrr-tenant-merge-modal__title">Разобрать дубль арендатора</h3>
         <p class="mrr-tenant-merge-modal__copy">
-            Это read-only подготовка. Кнопка не запускает слияние и не меняет данные. Сначала выполните dry-run и проверьте переносы, конфликты и aliases.
+            Сначала проверьте, что будет перенесено при объединении. На этом шаге данные не изменятся.
         </p>
 
         <div class="mrr-tenant-merge-modal__grid">
             <div class="mrr-tenant-merge-modal__tenant is-primary">
-                <div class="mrr-tenant-merge-modal__tenant-label">Оставить основным</div>
+                <div class="mrr-tenant-merge-modal__tenant-label">Основная карточка</div>
                 <div id="mrrTenantMergeCanonicalName" class="mrr-tenant-merge-modal__tenant-name">—</div>
                 <div id="mrrTenantMergeCanonicalMeta" class="mrr-tenant-merge-modal__tenant-meta"></div>
             </div>
             <div class="mrr-tenant-merge-modal__tenant">
-                <div class="mrr-tenant-merge-modal__tenant-label">Слить в основного</div>
+                <div class="mrr-tenant-merge-modal__tenant-label">Карточка-дубль</div>
                 <div id="mrrTenantMergeSourceName" class="mrr-tenant-merge-modal__tenant-name">—</div>
                 <div id="mrrTenantMergeSourceMeta" class="mrr-tenant-merge-modal__tenant-meta"></div>
             </div>
@@ -326,25 +348,25 @@
 
         <div class="mrr-tenant-merge-modal__commands">
             <div class="mrr-tenant-merge-modal__command">
-                <div class="mrr-tenant-merge-modal__command-label">Сначала dry-run</div>
+                <div class="mrr-tenant-merge-modal__command-label">Проверка</div>
                 <pre id="mrrTenantMergeDryRunCommand" class="mrr-tenant-merge-modal__code">—</pre>
             </div>
             <div class="mrr-tenant-merge-modal__command">
-                <div class="mrr-tenant-merge-modal__command-label">Только после проверки dry-run</div>
+                <div class="mrr-tenant-merge-modal__command-label">Слияние после проверки</div>
                 <pre id="mrrTenantMergeExecuteCommand" class="mrr-tenant-merge-modal__code">—</pre>
             </div>
         </div>
 
         <div class="mrr-tenant-merge-modal__warning">
-            На production перед фактическим выполнением слияния нужен осознанный контроль: dry-run, проверка конфликтов и понимание, какая карточка остаётся канонической. Автоматическое слияние из UI пока намеренно не выполняется.
+            После проверки можно будет перейти к подтверждению объединения.
         </div>
 
         <div class="mrr-tenant-merge-modal__actions">
-            <button type="button" class="mrr-tenant-merge-modal__button" data-mrr-tenant-merge-swap>Поменять местами</button>
-            <a id="mrrTenantMergeCanonicalLink" class="mrr-tenant-merge-modal__button" href="#" target="_blank" rel="noopener">Открыть основного</a>
+            <button type="button" class="mrr-tenant-merge-modal__button" data-mrr-tenant-merge-swap>Сделать основной другую</button>
+            <a id="mrrTenantMergeCanonicalLink" class="mrr-tenant-merge-modal__button" href="#" target="_blank" rel="noopener">Открыть основную</a>
             <a id="mrrTenantMergeSourceLink" class="mrr-tenant-merge-modal__button" href="#" target="_blank" rel="noopener">Открыть дубль</a>
-            <button type="button" class="mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--primary" data-mrr-tenant-merge-copy="dry-run">Скопировать dry-run</button>
-            <button type="button" class="mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger" data-mrr-tenant-merge-copy="execute">Скопировать execute</button>
+            <button type="button" class="mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--primary" data-mrr-tenant-merge-copy="dry-run">Проверить</button>
+            <button type="button" class="mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger" data-mrr-tenant-merge-copy="execute">Слить дубль</button>
             <button type="button" class="mrr-tenant-merge-modal__button" data-mrr-tenant-merge-close>Закрыть</button>
         </div>
     </div>
@@ -374,11 +396,12 @@
         const parseMeta = (tenantCard) => {
             const meta = {
                 inn: '',
+                kpp: '',
                 externalId: '',
                 oneCUid: '',
             };
 
-            tenantCard.querySelectorAll('.mrr-quality-signal__tenant-meta span').forEach((item) => {
+            tenantCard.querySelectorAll('span').forEach((item) => {
                 const text = String(item.textContent || '').trim();
                 const value = text.split(':').slice(1).join(':').trim();
 
@@ -386,11 +409,15 @@
                     meta.inn = value === '—' ? '' : value;
                 }
 
-                if (text.startsWith('external_id:')) {
+                if (text.startsWith('КПП:')) {
+                    meta.kpp = value === '—' ? '' : value;
+                }
+
+                if (text.startsWith('external_id:') || text.startsWith('ID из 1С:')) {
                     meta.externalId = value === '—' ? '' : value;
                 }
 
-                if (text.startsWith('one_c_uid:')) {
+                if (text.startsWith('one_c_uid:') || text.startsWith('UID из 1С:')) {
                     meta.oneCUid = value === '—' ? '' : value;
                 }
             });
@@ -427,13 +454,43 @@
 
             [
                 ['ИНН', tenant?.inn || '—'],
-                ['external_id', tenant?.externalId || '—'],
-                ['one_c_uid', tenant?.oneCUid || '—'],
+                ['КПП', tenant?.kpp || ''],
             ].forEach(([label, value]) => {
+                if (value === '') {
+                    return;
+                }
+
                 const line = document.createElement('span');
                 line.textContent = `${label}: ${value}`;
                 target.appendChild(line);
             });
+
+            if (tenant?.externalId || tenant?.oneCUid) {
+                const details = document.createElement('details');
+                details.className = 'mrr-tenant-merge-modal__technical';
+
+                const summary = document.createElement('summary');
+                summary.textContent = 'Технические данные 1С';
+                details.appendChild(summary);
+
+                const body = document.createElement('div');
+                body.className = 'mrr-tenant-merge-modal__technical-body';
+
+                if (tenant.externalId) {
+                    const line = document.createElement('span');
+                    line.textContent = `ID из 1С: ${tenant.externalId}`;
+                    body.appendChild(line);
+                }
+
+                if (tenant.oneCUid) {
+                    const line = document.createElement('span');
+                    line.textContent = `UID из 1С: ${tenant.oneCUid}`;
+                    body.appendChild(line);
+                }
+
+                details.appendChild(body);
+                target.appendChild(details);
+            }
         };
 
         const commandFor = (execute = false) => {
