@@ -73,6 +73,20 @@
         color: inherit;
         opacity: 0.88;
     }
+
+    .mrr-tenant-merge-modal__result-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 0.8rem;
+    }
+
+    .mrr-tenant-merge-modal__button:disabled,
+    .mrr-tenant-merge-modal__button[aria-disabled="true"] {
+        cursor: not-allowed;
+        opacity: 0.58;
+    }
 </style>
 
 <script>
@@ -115,8 +129,10 @@
             }
 
             button.textContent = 'Проверить безопасно';
+            button.style.display = '';
             button.removeAttribute('disabled');
             button.removeAttribute('aria-disabled');
+            button.removeAttribute('aria-hidden');
             button.setAttribute('title', 'Запустить безопасную проверку. Данные не изменятся.');
         };
 
@@ -126,6 +142,7 @@
             }
 
             if (loading) {
+                button.style.display = '';
                 button.textContent = 'Проверяю…';
                 button.setAttribute('disabled', 'disabled');
                 button.setAttribute('aria-disabled', 'true');
@@ -141,17 +158,45 @@
             }
 
             if (isError) {
+                button.style.display = '';
                 button.textContent = 'Повторить проверку';
                 button.removeAttribute('disabled');
                 button.setAttribute('aria-disabled', 'false');
+                button.removeAttribute('aria-hidden');
                 button.setAttribute('title', 'Проверка не прошла. Нажмите, чтобы повторить безопасную проверку.');
                 return;
             }
 
-            button.textContent = 'Проверка выполнена';
+            button.style.display = 'none';
             button.setAttribute('disabled', 'disabled');
             button.setAttribute('aria-disabled', 'true');
-            button.setAttribute('title', 'Проверка выполнена. Данные не изменены.');
+            button.setAttribute('aria-hidden', 'true');
+        };
+
+        const appendNextActions = (result, isError = false) => {
+            if (isError) {
+                return;
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'mrr-tenant-merge-modal__result-actions';
+
+            const mergeButton = document.createElement('button');
+            mergeButton.type = 'button';
+            mergeButton.className = 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger';
+            mergeButton.textContent = 'Слить дубль — нужен backup';
+            mergeButton.setAttribute('disabled', 'disabled');
+            mergeButton.setAttribute('aria-disabled', 'true');
+            mergeButton.setAttribute('title', 'Реальное слияние из интерфейса пока выключено. Сначала нужен backup.');
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'mrr-tenant-merge-modal__button';
+            closeButton.textContent = 'Закрыть';
+            closeButton.setAttribute('data-mrr-tenant-merge-close', '1');
+
+            actions.append(mergeButton, closeButton);
+            result.appendChild(actions);
         };
 
         const renderResult = (modal, data, isError = false) => {
@@ -162,7 +207,7 @@
 
             const title = document.createElement('div');
             title.className = 'mrr-tenant-merge-modal__result-title';
-            title.textContent = data?.message || (isError ? 'Проверка не прошла.' : 'Проверка прошла.');
+            title.textContent = data?.message || (isError ? 'Проверка не прошла.' : 'Проверка прошла. Данные не изменены.');
             result.appendChild(title);
 
             const summary = data?.summary || null;
@@ -213,8 +258,10 @@
             next.className = 'mrr-tenant-merge-modal__result-note';
             next.textContent = isError
                 ? 'Слияние заблокировано до исправления причины.'
-                : 'Данные пока не изменены. Реальное слияние добавим отдельным защищённым шагом.';
+                : 'Следующий шаг — реальное слияние дубля. В интерфейсе оно пока выключено: сначала нужен backup и отдельное подтверждение.';
             result.appendChild(next);
+
+            appendNextActions(result, isError);
             result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         };
 
@@ -276,7 +323,7 @@
 
             const warning = modal.querySelector('.mrr-tenant-merge-modal__warning');
             if (warning instanceof HTMLElement) {
-                warning.textContent = 'Реальное слияние из UI пока выключено. После проверки система только покажет понятный отчёт.';
+                warning.textContent = 'Реальное слияние из UI пока выключено. После проверки система покажет следующий шаг, но не изменит данные.';
             }
 
             const result = modal.querySelector('[data-mrr-tenant-merge-result]');
