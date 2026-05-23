@@ -117,6 +117,7 @@
             button.textContent = 'Проверить безопасно';
             button.removeAttribute('disabled');
             button.removeAttribute('aria-disabled');
+            button.setAttribute('title', 'Запустить безопасную проверку. Данные не изменятся.');
         };
 
         const setLoading = (button, loading) => {
@@ -139,9 +140,18 @@
                 return;
             }
 
-            button.textContent = isError ? 'Проверка не прошла' : 'Проверка выполнена';
-            button.removeAttribute('disabled');
-            button.setAttribute('aria-disabled', 'false');
+            if (isError) {
+                button.textContent = 'Повторить проверку';
+                button.removeAttribute('disabled');
+                button.setAttribute('aria-disabled', 'false');
+                button.setAttribute('title', 'Проверка не прошла. Нажмите, чтобы повторить безопасную проверку.');
+                return;
+            }
+
+            button.textContent = 'Проверка выполнена';
+            button.setAttribute('disabled', 'disabled');
+            button.setAttribute('aria-disabled', 'true');
+            button.setAttribute('title', 'Проверка выполнена. Данные не изменены.');
         };
 
         const renderResult = (modal, data, isError = false) => {
