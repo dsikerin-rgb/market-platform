@@ -13,6 +13,7 @@
     </div>
 
     @include('filament.partials.tenant-merge-preflight-exact-links')
+    @include('filament.partials.tenant-merge-preflight-friendly-actions')
 @endif
 
 @if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links'], true))
