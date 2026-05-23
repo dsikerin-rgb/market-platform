@@ -1237,6 +1237,61 @@ class SpaceReviewFlowTest extends TestCase
             ->assertSee('FILTER-TEST', false);
     }
 
+    public function test_manual_tenant_switch_modal_no_auto_select_single_partial_match(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Old Tenant',
+            'is_active' => true,
+        ]);
+
+        $dinislovaTenant = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'Динисламова ЕД ИП',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'P52U-2-3',
+            'display_name' => 'Test P52u',
+            'tenant_id' => $oldTenant->id,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Conflict detected on P52u',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $html = Livewire::test(MapReviewResults::class)->html();
+
+        // Кнопка "Сменить арендатора" должна быть видна
+        $this->assertStringContainsString('data-mrr-manual-tenant-switch-open', $html);
+        $this->assertStringContainsString('Сменить арендатора', $html);
+
+        // Проверяем, что в HTML нет автоселекта через selectManualTenantSwitchTenant для partial match
+        $this->assertStringNotContainsString('selectManualTenantSwitchTenant(matchedOptions[0])', $html);
+
+        // Проверяем наличие текста подсказки для одного кандидата
+        $this->assertStringContainsString('Найден один похожий арендатор. Нажмите на него, чтобы выбрать.', $html);
+    }
+
     public function test_map_review_results_shows_tenant_change_card_with_review_hint(): void
     {
         $market = $this->createMarket();
