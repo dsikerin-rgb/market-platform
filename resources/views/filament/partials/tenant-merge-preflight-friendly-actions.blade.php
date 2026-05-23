@@ -148,12 +148,12 @@
                 return;
             }
 
-            button.textContent = 'Проверить безопасно';
+            button.textContent = 'Проверить';
             button.style.display = '';
             button.removeAttribute('disabled');
             button.removeAttribute('aria-disabled');
             button.removeAttribute('aria-hidden');
-            button.setAttribute('title', 'Запустить безопасную проверку. Данные не изменятся.');
+            button.setAttribute('title', 'Показать, что будет перенесено. Данные не изменятся.');
         };
 
         const setLoading = (button, text = 'Проверяю…') => {
@@ -178,7 +178,7 @@
                 button.removeAttribute('disabled');
                 button.setAttribute('aria-disabled', 'false');
                 button.removeAttribute('aria-hidden');
-                button.setAttribute('title', 'Проверка не прошла. Нажмите, чтобы повторить безопасную проверку.');
+                button.setAttribute('title', 'Проверка не прошла. Нажмите, чтобы повторить.');
                 return;
             }
 
@@ -215,7 +215,7 @@
 
             const title = document.createElement('div');
             title.className = 'mrr-tenant-merge-modal__result-title';
-            title.textContent = data?.message || 'Дубль слит. Backup создан, данные перенесены.';
+            title.textContent = data?.message || 'Дубль слит. Данные перенесены.';
             result.appendChild(title);
 
             const backup = data?.backup || null;
@@ -228,12 +228,11 @@
 
             const next = document.createElement('div');
             next.className = 'mrr-tenant-merge-modal__result-note';
-            next.textContent = 'Карточка дубля больше не должна появляться в подозрительных дублях после обновления списка.';
+            next.textContent = 'Список обновится автоматически…';
             result.appendChild(next);
 
             const actions = document.createElement('div');
             actions.className = 'mrr-tenant-merge-modal__result-actions';
-            addButton(actions, 'Обновить список', 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--primary', () => window.location.reload());
             appendCloseButton(actions);
             result.appendChild(actions);
             result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -247,7 +246,7 @@
                 return;
             }
 
-            setLoading(button, 'Создаю backup и сливаю…');
+            setLoading(button, 'Объединяю…');
 
             try {
                 const response = await fetch(applyUrl, {
@@ -292,12 +291,12 @@
 
             const note = document.createElement('div');
             note.className = 'mrr-tenant-merge-modal__result-note';
-            note.textContent = `${pair.sourceName} будет слит в ${pair.canonicalName}. Система сначала создаст backup, затем выполнит слияние.`;
+            note.textContent = `${pair.sourceName} будет слит в ${pair.canonicalName}.`;
             result.appendChild(note);
 
             const warning = document.createElement('div');
             warning.className = 'mrr-tenant-merge-modal__result-note';
-            warning.textContent = 'После подтверждения отменить слияние кнопкой нельзя. Восстановление возможно только через backup.';
+            warning.textContent = 'После подтверждения отменить слияние кнопкой нельзя.';
             result.appendChild(warning);
 
             const actions = document.createElement('div');
@@ -313,7 +312,7 @@
             actions.className = 'mrr-tenant-merge-modal__result-actions';
 
             if (!isError) {
-                addButton(actions, 'Слить дубль', 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger', () => renderConfirm(modal));
+                addButton(actions, 'Продолжить', 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--primary', () => renderConfirm(modal));
             }
 
             appendCloseButton(actions);
@@ -335,6 +334,11 @@
             const summary = data?.summary || null;
 
             if (summary && Array.isArray(summary.non_zero_transfers) && summary.non_zero_transfers.length > 0) {
+                const intro = document.createElement('div');
+                intro.className = 'mrr-tenant-merge-modal__result-note';
+                intro.textContent = 'Будет перенесено:';
+                result.appendChild(intro);
+
                 const list = document.createElement('ul');
                 list.className = 'mrr-tenant-merge-modal__result-list';
 
@@ -361,7 +365,7 @@
             if (summary) {
                 const notes = [];
 
-                notes.push(`Alias для будущих импортов 1С: ${Number(summary.alias_count || 0)}`);
+                notes.push(`Для будущих импортов 1С: ${Number(summary.alias_count || 0)} связь`);
                 notes.push(summary.showcase_action || 'действий с витриной нет');
 
                 if (Number(summary.accrual_conflict_count || 0) > 0) {
@@ -380,7 +384,7 @@
             next.className = 'mrr-tenant-merge-modal__result-note';
             next.textContent = isError
                 ? 'Слияние заблокировано до исправления причины.'
-                : 'Проверка завершена. Можно выполнить слияние: система сама создаст backup и повторно проверит данные.';
+                : 'Если всё верно, нажмите «Продолжить».';
             result.appendChild(next);
 
             if (!isError) {
@@ -443,12 +447,12 @@
 
             const copy = modal.querySelector('.mrr-tenant-merge-modal__copy');
             if (copy instanceof HTMLElement) {
-                copy.textContent = 'Сначала выполните безопасную проверку. Она покажет, что будет перенесено, но ничего не изменит.';
+                copy.textContent = 'Сначала проверьте, что будет перенесено при объединении. На этом шаге данные не изменятся.';
             }
 
             const warning = modal.querySelector('.mrr-tenant-merge-modal__warning');
             if (warning instanceof HTMLElement) {
-                warning.textContent = 'После успешной проверки super-admin сможет слить дубль прямо здесь. Перед слиянием система автоматически создаст backup.';
+                warning.textContent = 'После проверки можно будет перейти к подтверждению объединения.';
             }
 
             const result = modal.querySelector('[data-mrr-tenant-merge-result]');
