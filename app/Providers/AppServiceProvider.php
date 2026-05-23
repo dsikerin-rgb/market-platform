@@ -4,7 +4,6 @@
 namespace App\Providers;
 
 use App\Filament\Pages\MapReviewResults;
-use App\Filament\Widgets\MapReviewDataQualitySignalsWidget;
 use App\Listeners\NotifySuperAdminsAboutUserLogin;
 use App\Models\IntegrationExchange;
 use App\Models\Task;
@@ -16,7 +15,7 @@ use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
-use Livewire\Livewire;
+use Illuminate\View\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,7 +39,7 @@ class AppServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
-            fn (): string => Livewire::mount(MapReviewDataQualitySignalsWidget::class),
+            fn (): View => view('filament.partials.map-review-results-tab-controller'),
             scopes: [MapReviewResults::class],
         );
     }
