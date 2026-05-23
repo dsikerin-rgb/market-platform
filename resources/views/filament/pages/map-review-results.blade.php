@@ -5605,10 +5605,11 @@
                         .slice(0, 5);
 
                     if (matchedOptions.length === 1) {
-                        selectManualTenantSwitchTenant(matchedOptions[0]);
-                        if (options?.showSuggestionsOnExactMatch) {
-                            renderManualTenantSwitchSuggestions(matchedOptions, 'Подтвердите выбранного арендатора.');
-                        }
+                        renderManualTenantSwitchSuggestions(
+                            matchedOptions,
+                            'Найден один похожий арендатор. Нажмите на него, чтобы выбрать.'
+                        );
+
                         return;
                     }
 
@@ -6261,6 +6262,14 @@
 
                     manualTenantSwitchTenantSearch.addEventListener('input', (event) => {
                         const query = event.target instanceof HTMLInputElement ? event.target.value : '';
+                        const currentSelectedId = Number(manualTenantSwitchTenant?.value || 0);
+                        const selectedTenant = normalizedTenantSwitchOptions.find(t => t.id === currentSelectedId);
+                        const currentSelectedName = selectedTenant?.name || '';
+
+                        if (query !== currentSelectedName) {
+                            manualTenantSwitchTenant.value = '';
+                        }
+
                         updateManualTenantSwitchSuggestions(query, {
                             showSuggestionsOnExactMatch: true,
                         });
