@@ -268,4 +268,6 @@
             </div>
         </section>
     </div>
+
+    @include('filament.partials.tenant-merge-preflight-actions')
 </x-filament::section>
