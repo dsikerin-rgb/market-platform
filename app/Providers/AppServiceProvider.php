@@ -22,17 +22,11 @@ use Illuminate\View\View;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         Gate::policy(Task::class, TaskPolicy::class);
@@ -45,7 +39,7 @@ class AppServiceProvider extends ServiceProvider
             ->name('filament.admin.tenant-merge.preflight');
 
         Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])
-            ->post('/admin/tenant-merge/apply', [TenantMergePreflightController::class, 'apply'])
+            ->post('/admin/tenant-merge/apply', \App\Http\Controllers\Admin\TenantMergeApplyController::class)
             ->name('filament.admin.tenant-merge.apply');
 
         FilamentView::registerRenderHook(
