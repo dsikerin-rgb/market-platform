@@ -139,9 +139,12 @@
                 return;
             }
 
-            button.textContent = isError ? 'Проверка не прошла' : 'Проверка выполнена';
+            button.textContent = isError ? 'Проверить ещё раз' : 'Проверить ещё раз';
             button.removeAttribute('disabled');
             button.setAttribute('aria-disabled', 'false');
+            button.setAttribute('title', isError
+                ? 'Проверка не прошла. Нажмите, чтобы повторить безопасную проверку.'
+                : 'Проверка уже выполнена. Нажмите, чтобы повторить безопасную проверку.');
         };
 
         const renderResult = (modal, data, isError = false) => {
