@@ -3778,6 +3778,116 @@ JS;
         $this->assertStringContainsString('Основание: договорная привязка #247', $html, 'Binding ID should be in HTML');
     }
 
+    public function test_applied_changes_shows_linked_tenant_switch_for_matched_review(): void
+    {
+        $market = $this->createMarket();
+        $marketId = (int) $market->id;
+        $user = $this->actingAsSuperAdmin($marketId);
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Test Tenant',
+            'is_active' => true,
+        ]);
+        $space = $this->createSpace($market, [
+            'number' => 'TS-101',
+            'display_name' => 'Tenant Switch Space',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $tenantSwitchEffectiveAt = now()->subDays(1)->startOfDay();
+        $spaceReviewEffectiveAt = now()->subDays(1)->startOfDay()->addMinutes(5);
+
+        $tenantSwitch = Operation::create([
+            'market_id' => $marketId,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'effective_at' => $tenantSwitchEffectiveAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'target_tenant_id' => $tenant->id,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $spaceReview = Operation::create([
+            'market_id' => $marketId,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $spaceReviewEffectiveAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => 'matched',
+                'source_review_status' => 'matched',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $service = app(MapReviewResultsService::class);
+        $changes = $service->appliedChanges($marketId, 50);
+
+        $matchedChange = collect($changes)->first(fn ($change) => $change['operation_id'] === $spaceReview->id);
+
+        $this->assertNotNull($matchedChange, 'Should find matched review in applied changes');
+        $this->assertSame('matched', $matchedChange['decision']);
+        $this->assertSame((int) $space->id, $matchedChange['space_id']);
+        $this->assertNotNull($matchedChange['linked_tenant_switch_operation_id'], 'Should have linked tenant_switch id');
+        $this->assertSame((int) $tenantSwitch->id, $matchedChange['linked_tenant_switch_operation_id']);
+        $this->assertTrue($matchedChange['can_fix_effective_date'] ?? false, 'can_fix_effective_date should be true');
+        $this->assertNull($matchedChange['effective_date_fix_block_reason'] ?? null, 'block_reason should be null');
+        $this->assertNotNull($matchedChange['current_effective_at'], 'current_effective_at should not be empty');
+        $this->assertNotNull($matchedChange['linked_tenant_switch_effective_at'], 'linked_tenant_switch_effective_at should not be empty');
+        $this->assertNotNull($matchedChange['current_effective_date_label'], 'current_effective_date_label should not be empty');
+    }
+
+    public function test_applied_changes_shows_block_reason_for_matched_without_tenant_switch(): void
+    {
+        $market = $this->createMarket();
+        $marketId = (int) $market->id;
+        $user = $this->actingAsSuperAdmin($marketId);
+        $space = $this->createSpace($market, [
+            'number' => 'NO-TS-101',
+            'display_name' => 'No Tenant Switch Space',
+        ]);
+
+        $spaceReviewEffectiveAt = now()->subDays(1)->startOfDay();
+
+        $spaceReview = Operation::create([
+            'market_id' => $marketId,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $spaceReviewEffectiveAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => 'matched',
+                'source_review_status' => 'matched',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $service = app(MapReviewResultsService::class);
+        $changes = $service->appliedChanges($marketId, 50);
+
+        $matchedChange = collect($changes)->first(fn ($change) => $change['operation_id'] === $spaceReview->id);
+
+        $this->assertNotNull($matchedChange, 'Should find matched review in applied changes');
+        $this->assertSame('matched', $matchedChange['decision']);
+        $this->assertNull($matchedChange['linked_tenant_switch_operation_id'], 'Should not have linked tenant_switch id');
+        $this->assertFalse($matchedChange['can_fix_effective_date'] ?? true, 'can_fix_effective_date should be false');
+        $this->assertSame(
+            'Связанная операция смены арендатора не найдена.',
+            $matchedChange['effective_date_fix_block_reason'] ?? null,
+            'block_reason should indicate tenant_switch not found'
+        );
+        $this->assertNotNull($matchedChange['current_effective_at'], 'current_effective_at should not be empty');
+        $this->assertNull($matchedChange['linked_tenant_switch_effective_at'], 'linked_tenant_switch_effective_at should be null');
+    }
+
     private function hasMapReviewColumns(): bool
     {
         if (! Schema::hasTable('market_spaces')) {

@@ -1864,7 +1864,7 @@ class MapReviewResultsService
             ->whereIn('id', $creatorIds)
             ->pluck('name', 'id');
 
-        return $operations->map(function (Operation $operation) use ($spaces, $creators): array {
+        return $operations->map(function (Operation $operation) use ($spaces, $creators, $marketId): array {
             $payload = is_array($operation->payload) ? $operation->payload : [];
             $spaceId = (int) ($operation->entity_id ?? 0);
             /** @var MarketSpace|null $space */
@@ -1875,6 +1875,43 @@ class MapReviewResultsService
             $isAutoClosed = (bool) ($payload['auto_closed_by_reconciliation'] ?? false);
             $autoCloseAt = $payload['auto_close_at'] ?? null;
             $autoCloseBindingId = $payload['auto_close_binding_id'] ?? null;
+
+            $linkedTenantSwitchOperationId = null;
+            $canFixEffectiveDate = false;
+            $effectiveDateFixBlockReason = null;
+            $currentEffectiveAt = null;
+            $linkedTenantSwitchEffectiveAt = null;
+            $currentEffectiveDateLabel = null;
+
+            if ($decision !== 'matched') {
+                $canFixEffectiveDate = false;
+                $linkedTenantSwitchOperationId = null;
+                $effectiveDateFixBlockReason = 'Исправление даты доступно только для применённой смены арендатора.';
+            } elseif ($decision === 'matched' && $operation->effective_at instanceof \DateTimeInterface) {
+                $currentEffectiveAt = $operation->effective_at->toIso8601String();
+
+                $tenantSwitch = Operation::query()
+                    ->where('market_id', $marketId)
+                    ->whereIn('entity_type', ['market_space', \App\Models\MarketSpace::class])
+                    ->where('entity_id', $spaceId)
+                    ->where('type', OperationType::TENANT_SWITCH)
+                    ->where('status', 'applied')
+                    ->whereDate('effective_at', $operation->effective_at->format('Y-m-d'))
+                    ->where('created_by', $operation->created_by)
+                    ->where('id', '<', $operation->id)
+                    ->orderByDesc('id')
+                    ->first(['id', 'effective_at']);
+
+                if ($tenantSwitch) {
+                    $linkedTenantSwitchOperationId = (int) $tenantSwitch->id;
+                    $linkedTenantSwitchEffectiveAt = $tenantSwitch->effective_at?->toIso8601String();
+                    $canFixEffectiveDate = true;
+                    $effectiveDateFixBlockReason = null;
+                    $currentEffectiveDateLabel = $tenantSwitch->effective_at?->format('d.m.Y');
+                } else {
+                    $effectiveDateFixBlockReason = 'Связанная операция смены арендатора не найдена.';
+                }
+            }
 
             return [
                 'operation_id' => (int) $operation->id,
@@ -1901,6 +1938,12 @@ class MapReviewResultsService
                 'is_auto_closed' => $isAutoClosed,
                 'auto_close_at' => $autoCloseAt ? (new \DateTime($autoCloseAt))->format('d.m.Y H:i') : null,
                 'auto_close_binding_id' => $autoCloseBindingId ? (int) $autoCloseBindingId : null,
+                'linked_tenant_switch_operation_id' => $linkedTenantSwitchOperationId,
+                'can_fix_effective_date' => $canFixEffectiveDate,
+                'effective_date_fix_block_reason' => $effectiveDateFixBlockReason,
+                'current_effective_at' => $currentEffectiveAt,
+                'linked_tenant_switch_effective_at' => $linkedTenantSwitchEffectiveAt,
+                'current_effective_date_label' => $currentEffectiveDateLabel,
             ];
         })->all();
     }
