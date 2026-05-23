@@ -29,6 +29,12 @@
         color: #991b1b;
     }
 
+    .mrr-tenant-merge-modal__result.is-success {
+        border-color: rgba(22, 163, 74, 0.22);
+        background: rgba(240, 253, 244, 0.9);
+        color: #166534;
+    }
+
     .dark .mrr-tenant-merge-modal__result {
         border-color: rgba(96, 165, 250, 0.22);
         background: rgba(30, 64, 175, 0.18);
@@ -39,6 +45,12 @@
         border-color: rgba(248, 113, 113, 0.26);
         background: rgba(127, 29, 29, 0.22);
         color: #fecaca;
+    }
+
+    .dark .mrr-tenant-merge-modal__result.is-success {
+        border-color: rgba(74, 222, 128, 0.28);
+        background: rgba(20, 83, 45, 0.22);
+        color: #bbf7d0;
     }
 
     .mrr-tenant-merge-modal__result-title {
@@ -92,6 +104,7 @@
 <script>
     (() => {
         const preflightUrl = @json(route('filament.admin.tenant-merge.preflight'));
+        const applyUrl = @json(route('filament.admin.tenant-merge.apply'));
         const csrfToken = @json(csrf_token());
 
         const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
@@ -101,6 +114,13 @@
 
             return match ? Number(match[1]) : 0;
         };
+
+        const tenantPair = () => ({
+            canonicalId: parseTenantId(document.getElementById('mrrTenantMergeCanonicalName')?.textContent || ''),
+            sourceId: parseTenantId(document.getElementById('mrrTenantMergeSourceName')?.textContent || ''),
+            canonicalName: clean(document.getElementById('mrrTenantMergeCanonicalName')?.textContent || ''),
+            sourceName: clean(document.getElementById('mrrTenantMergeSourceName')?.textContent || ''),
+        });
 
         const ensureResultBox = (modal) => {
             let result = modal.querySelector('[data-mrr-tenant-merge-result]');
@@ -136,20 +156,15 @@
             button.setAttribute('title', 'Запустить безопасную проверку. Данные не изменятся.');
         };
 
-        const setLoading = (button, loading) => {
+        const setLoading = (button, text = 'Проверяю…') => {
             if (!(button instanceof HTMLElement)) {
                 return;
             }
 
-            if (loading) {
-                button.style.display = '';
-                button.textContent = 'Проверяю…';
-                button.setAttribute('disabled', 'disabled');
-                button.setAttribute('aria-disabled', 'true');
-                return;
-            }
-
-            resetCheckButton(button);
+            button.style.display = '';
+            button.textContent = text;
+            button.setAttribute('disabled', 'disabled');
+            button.setAttribute('aria-disabled', 'true');
         };
 
         const setCompleted = (button, isError = false) => {
@@ -173,29 +188,135 @@
             button.setAttribute('aria-hidden', 'true');
         };
 
-        const appendNextActions = (result, isError = false) => {
-            if (isError) {
-                return;
-            }
+        const addButton = (actions, text, className, handler) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = className;
+            button.textContent = text;
+            button.addEventListener('click', handler);
+            actions.appendChild(button);
+            return button;
+        };
 
-            const actions = document.createElement('div');
-            actions.className = 'mrr-tenant-merge-modal__result-actions';
-
-            const mergeButton = document.createElement('button');
-            mergeButton.type = 'button';
-            mergeButton.className = 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger';
-            mergeButton.textContent = 'Слить дубль — нужен backup';
-            mergeButton.setAttribute('disabled', 'disabled');
-            mergeButton.setAttribute('aria-disabled', 'true');
-            mergeButton.setAttribute('title', 'Реальное слияние из интерфейса пока выключено. Сначала нужен backup.');
-
+        const appendCloseButton = (actions) => {
             const closeButton = document.createElement('button');
             closeButton.type = 'button';
             closeButton.className = 'mrr-tenant-merge-modal__button';
             closeButton.textContent = 'Закрыть';
             closeButton.setAttribute('data-mrr-tenant-merge-close', '1');
+            actions.appendChild(closeButton);
+        };
 
-            actions.append(mergeButton, closeButton);
+        const renderApplySuccess = (modal, data) => {
+            const result = ensureResultBox(modal);
+            result.classList.add('is-open', 'is-success');
+            result.classList.remove('is-error');
+            result.replaceChildren();
+
+            const title = document.createElement('div');
+            title.className = 'mrr-tenant-merge-modal__result-title';
+            title.textContent = data?.message || 'Дубль слит. Backup создан, данные перенесены.';
+            result.appendChild(title);
+
+            const backup = data?.backup || null;
+            if (backup) {
+                const note = document.createElement('div');
+                note.className = 'mrr-tenant-merge-modal__result-note';
+                note.textContent = `Backup: ${backup.path || 'создан'} · размер: ${Number(backup.size_bytes || 0)} байт`;
+                result.appendChild(note);
+            }
+
+            const next = document.createElement('div');
+            next.className = 'mrr-tenant-merge-modal__result-note';
+            next.textContent = 'Карточка дубля больше не должна появляться в подозрительных дублях после обновления списка.';
+            result.appendChild(next);
+
+            const actions = document.createElement('div');
+            actions.className = 'mrr-tenant-merge-modal__result-actions';
+            addButton(actions, 'Обновить список', 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--primary', () => window.location.reload());
+            appendCloseButton(actions);
+            result.appendChild(actions);
+            result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        };
+
+        const runApply = async (modal, button) => {
+            const pair = tenantPair();
+
+            if (pair.canonicalId <= 0 || pair.sourceId <= 0 || pair.canonicalId === pair.sourceId) {
+                renderResult(modal, { message: 'Не удалось определить пару арендаторов. Закройте окно и откройте карточку заново.' }, true);
+                return;
+            }
+
+            setLoading(button, 'Создаю backup и сливаю…');
+
+            try {
+                const response = await fetch(applyUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        source_tenant_id: pair.sourceId,
+                        canonical_tenant_id: pair.canonicalId,
+                        confirmation: 'MERGE_TENANTS',
+                    }),
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok || data?.ok === false) {
+                    renderResult(modal, data, true);
+                    return;
+                }
+
+                renderApplySuccess(modal, data);
+            } catch (error) {
+                renderResult(modal, { message: 'Не удалось выполнить слияние. Данные могли не измениться. Проверьте журнал и попробуйте позже.' }, true);
+            }
+        };
+
+        const renderConfirm = (modal) => {
+            const result = ensureResultBox(modal);
+            const pair = tenantPair();
+
+            result.classList.add('is-open');
+            result.classList.remove('is-error', 'is-success');
+            result.replaceChildren();
+
+            const title = document.createElement('div');
+            title.className = 'mrr-tenant-merge-modal__result-title';
+            title.textContent = 'Подтвердите слияние';
+            result.appendChild(title);
+
+            const note = document.createElement('div');
+            note.className = 'mrr-tenant-merge-modal__result-note';
+            note.textContent = `${pair.sourceName} будет слит в ${pair.canonicalName}. Система сначала создаст backup, затем выполнит слияние.`;
+            result.appendChild(note);
+
+            const warning = document.createElement('div');
+            warning.className = 'mrr-tenant-merge-modal__result-note';
+            warning.textContent = 'После подтверждения отменить слияние кнопкой нельзя. Восстановление возможно только через backup.';
+            result.appendChild(warning);
+
+            const actions = document.createElement('div');
+            actions.className = 'mrr-tenant-merge-modal__result-actions';
+            addButton(actions, 'Да, слить дубль', 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger', (event) => runApply(modal, event.currentTarget));
+            addButton(actions, 'Отмена', 'mrr-tenant-merge-modal__button', () => renderResult(modal, modal.dataset.mrrLastPreflight ? JSON.parse(modal.dataset.mrrLastPreflight) : {}, false));
+            result.appendChild(actions);
+            result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        };
+
+        const appendNextActions = (modal, result, isError = false) => {
+            const actions = document.createElement('div');
+            actions.className = 'mrr-tenant-merge-modal__result-actions';
+
+            if (!isError) {
+                addButton(actions, 'Слить дубль', 'mrr-tenant-merge-modal__button mrr-tenant-merge-modal__button--danger', () => renderConfirm(modal));
+            }
+
+            appendCloseButton(actions);
             result.appendChild(actions);
         };
 
@@ -203,6 +324,7 @@
             const result = ensureResultBox(modal);
             result.classList.add('is-open');
             result.classList.toggle('is-error', isError);
+            result.classList.remove('is-success');
             result.replaceChildren();
 
             const title = document.createElement('div');
@@ -258,24 +380,27 @@
             next.className = 'mrr-tenant-merge-modal__result-note';
             next.textContent = isError
                 ? 'Слияние заблокировано до исправления причины.'
-                : 'Следующий шаг — реальное слияние дубля. В интерфейсе оно пока выключено: сначала нужен backup и отдельное подтверждение.';
+                : 'Проверка завершена. Можно выполнить слияние: система сама создаст backup и повторно проверит данные.';
             result.appendChild(next);
 
-            appendNextActions(result, isError);
+            if (!isError) {
+                modal.dataset.mrrLastPreflight = JSON.stringify(data || {});
+            }
+
+            appendNextActions(modal, result, isError);
             result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         };
 
         const runPreflight = async (modal, button) => {
-            const canonicalId = parseTenantId(document.getElementById('mrrTenantMergeCanonicalName')?.textContent || '');
-            const sourceId = parseTenantId(document.getElementById('mrrTenantMergeSourceName')?.textContent || '');
+            const pair = tenantPair();
 
-            if (canonicalId <= 0 || sourceId <= 0 || canonicalId === sourceId) {
+            if (pair.canonicalId <= 0 || pair.sourceId <= 0 || pair.canonicalId === pair.sourceId) {
                 renderResult(modal, { message: 'Не удалось определить пару арендаторов. Закройте окно и откройте карточку заново.' }, true);
                 setCompleted(button, true);
                 return;
             }
 
-            setLoading(button, true);
+            setLoading(button);
 
             try {
                 const response = await fetch(preflightUrl, {
@@ -286,8 +411,8 @@
                         'X-CSRF-TOKEN': csrfToken,
                     },
                     body: JSON.stringify({
-                        source_tenant_id: sourceId,
-                        canonical_tenant_id: canonicalId,
+                        source_tenant_id: pair.sourceId,
+                        canonical_tenant_id: pair.canonicalId,
                     }),
                 });
 
@@ -323,14 +448,16 @@
 
             const warning = modal.querySelector('.mrr-tenant-merge-modal__warning');
             if (warning instanceof HTMLElement) {
-                warning.textContent = 'Реальное слияние из UI пока выключено. После проверки система покажет следующий шаг, но не изменит данные.';
+                warning.textContent = 'После успешной проверки super-admin сможет слить дубль прямо здесь. Перед слиянием система автоматически создаст backup.';
             }
 
             const result = modal.querySelector('[data-mrr-tenant-merge-result]');
             if (result instanceof HTMLElement) {
-                result.classList.remove('is-open', 'is-error');
+                result.classList.remove('is-open', 'is-error', 'is-success');
                 result.replaceChildren();
             }
+
+            delete modal.dataset.mrrLastPreflight;
 
             const checkButton = modal.querySelector('[data-mrr-tenant-merge-copy="dry-run"]');
             resetCheckButton(checkButton);
