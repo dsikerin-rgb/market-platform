@@ -40,7 +40,7 @@ class AppServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
-            fn (): string => Livewire::mount(MapReviewDataQualitySignalsWidget::class)->html(),
+            fn (): string => Livewire::mount(MapReviewDataQualitySignalsWidget::class),
             scopes: [MapReviewResults::class],
         );
     }
