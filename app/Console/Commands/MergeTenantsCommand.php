@@ -24,8 +24,6 @@ class MergeTenantsCommand extends Command
     protected $description = 'Безопасное слияние дублей tenants: dry-run по умолчанию, preflight конфликтов, перенос ссылок в транзакции';
 
     /**
-     * Явный список ссылок на tenant_id, которые переносим.
-     *
      * @var list<array{table:string,column:string}>
      */
     private array $referenceTargets = [
@@ -59,8 +57,6 @@ class MergeTenantsCommand extends Command
     ];
 
     /**
-     * Политика атрибутов: в каноне не перетираем, только дозаполняем пустые.
-     *
      * @var list<string>
      */
     private array $fillEmptyAttributes = [
@@ -122,6 +118,7 @@ class MergeTenantsCommand extends Command
         $showcasePlan = $this->buildShowcasePlan($fromId, $toId);
         $attributePlan = $this->buildAttributeMergePlan($from, $to);
         $accrualPreflight = $this->preflightAccrualConflicts($fromId, $toId, $preflightLimit);
+        $aliasPlan = $this->buildExternalAliasPlan($from, $to);
 
         $this->line('References to move:');
         foreach ($counts as $key => $count) {
@@ -137,6 +134,8 @@ class MergeTenantsCommand extends Command
         foreach ($attributePlan['messages'] as $message) {
             $this->line(" - {$message}");
         }
+
+        $this->line('External aliases to keep for future 1C imports: ' . count($aliasPlan));
 
         $this->line('Preflight unique conflicts:');
         $this->line(' - tenant_accruals( market_id, period, source_row_hash ): ' . $accrualPreflight['count']);
@@ -202,6 +201,7 @@ class MergeTenantsCommand extends Command
 
             $attributePlan = $this->buildAttributeMergePlan($fromLocked, $toLocked);
             $this->applyAttributeMergePlan($attributePlan, $fromLocked, $toLocked);
+            $this->recordExternalAliases($this->buildExternalAliasPlan($fromLocked, $toLocked));
 
             $this->markMergeNotes($fromLocked, $toLocked);
 
@@ -321,12 +321,7 @@ class MergeTenantsCommand extends Command
     }
 
     /**
-     * @return array{
-     *   action:string,
-     *   from_row_id:int|null,
-     *   to_row_id:int|null,
-     *   merge_values:array<string,mixed>
-     * }
+     * @return array{action:string,from_row_id:int|null,to_row_id:int|null,merge_values:array<string,mixed>}
      */
     private function buildShowcasePlan(int $fromId, int $toId): array
     {
@@ -374,12 +369,7 @@ class MergeTenantsCommand extends Command
     }
 
     /**
-     * @param array{
-     *   action:string,
-     *   from_row_id:int|null,
-     *   to_row_id:int|null,
-     *   merge_values:array<string,mixed>
-     * } $showcasePlan
+     * @param array{action:string,from_row_id:int|null,to_row_id:int|null,merge_values:array<string,mixed>} $showcasePlan
      */
     private function applyShowcasePlan(array $showcasePlan, int $fromId, int $toId): void
     {
@@ -411,11 +401,7 @@ class MergeTenantsCommand extends Command
     }
 
     /**
-     * @return array{
-     *   transfers:array<string,mixed>,
-     *   clear_on_from:list<string>,
-     *   messages:list<string>
-     * }
+     * @return array{transfers:array<string,mixed>,clear_on_from:list<string>,messages:list<string>}
      */
     private function buildAttributeMergePlan(Tenant $from, Tenant $to): array
     {
@@ -463,11 +449,7 @@ class MergeTenantsCommand extends Command
     }
 
     /**
-     * @param array{
-     *   transfers:array<string,mixed>,
-     *   clear_on_from:list<string>,
-     *   messages:list<string>
-     * } $plan
+     * @param array{transfers:array<string,mixed>,clear_on_from:list<string>,messages:list<string>} $plan
      */
     private function applyAttributeMergePlan(array $plan, Tenant $from, Tenant $to): void
     {
@@ -477,6 +459,82 @@ class MergeTenantsCommand extends Command
 
         foreach ($plan['clear_on_from'] as $field) {
             $from->{$field} = null;
+        }
+    }
+
+    /**
+     * @return list<array{market_id:int,canonical_tenant_id:int,source_tenant_id:int,alias_type:string,alias_value:string,source:string,payload:string,created_at:mixed,updated_at:mixed}>
+     */
+    private function buildExternalAliasPlan(Tenant $from, Tenant $to): array
+    {
+        if (! Schema::hasTable('tenant_external_aliases')) {
+            return [];
+        }
+
+        $now = now();
+        $aliases = [];
+
+        foreach (['external_id', 'one_c_uid', 'inn'] as $field) {
+            if (! Schema::hasColumn('tenants', $field)) {
+                continue;
+            }
+
+            $value = $this->normalizeScalar($from->{$field});
+
+            if ($value === null) {
+                continue;
+            }
+
+            $aliases[] = [
+                'market_id' => (int) $from->market_id,
+                'canonical_tenant_id' => (int) $to->id,
+                'source_tenant_id' => (int) $from->id,
+                'alias_type' => $field,
+                'alias_value' => (string) $value,
+                'source' => 'tenants:merge',
+                'payload' => $this->safeJsonEncode([
+                    'source_tenant_id' => (int) $from->id,
+                    'source_name' => (string) ($from->name ?? ''),
+                    'canonical_tenant_id' => (int) $to->id,
+                    'canonical_name' => (string) ($to->name ?? ''),
+                ]),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        return $aliases;
+    }
+
+    /**
+     * @param list<array{market_id:int,canonical_tenant_id:int,source_tenant_id:int,alias_type:string,alias_value:string,source:string,payload:string,created_at:mixed,updated_at:mixed}> $aliases
+     */
+    private function recordExternalAliases(array $aliases): void
+    {
+        if ($aliases === []
+            || ! Schema::hasTable('tenant_external_aliases')
+            || ! Schema::hasColumn('tenant_external_aliases', 'canonical_tenant_id')
+            || ! Schema::hasColumn('tenant_external_aliases', 'alias_type')
+            || ! Schema::hasColumn('tenant_external_aliases', 'alias_value')) {
+            return;
+        }
+
+        foreach ($aliases as $alias) {
+            DB::table('tenant_external_aliases')->updateOrInsert(
+                [
+                    'market_id' => $alias['market_id'],
+                    'alias_type' => $alias['alias_type'],
+                    'alias_value' => $alias['alias_value'],
+                ],
+                [
+                    'canonical_tenant_id' => $alias['canonical_tenant_id'],
+                    'source_tenant_id' => $alias['source_tenant_id'],
+                    'source' => $alias['source'],
+                    'payload' => $alias['payload'],
+                    'updated_at' => $alias['updated_at'],
+                    'created_at' => $alias['created_at'],
+                ],
+            );
         }
     }
 
@@ -546,6 +604,18 @@ class MergeTenantsCommand extends Command
         }
 
         return [];
+    }
+
+    private function safeJsonEncode(mixed $value): string
+    {
+        $json = json_encode(
+            $value,
+            JSON_UNESCAPED_UNICODE
+            | JSON_PRESERVE_ZERO_FRACTION
+            | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+
+        return is_string($json) ? $json : '{}';
     }
 
     private function normalizeScalar(mixed $value): mixed

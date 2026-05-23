@@ -8,6 +8,7 @@ namespace App\Services\Tenants;
 
 use App\Models\Tenant;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class OneCTenantResolver
@@ -15,7 +16,7 @@ class OneCTenantResolver
     /**
      * @param  array<string, mixed>  $payload
      * @param  array{activate_resolved_tenant?:bool,preferred_tenant_id?:int}  $options
-     * @return array{tenant:?Tenant, mode:'preferred_existing'|'existing_external_id'|'matched_inn'|'created'|'failed'}
+     * @return array{tenant:?Tenant, mode:'preferred_existing'|'existing_external_id'|'matched_alias'|'matched_inn'|'created'|'failed'}
      */
     public function resolve(
         int $marketId,
@@ -81,6 +82,27 @@ class OneCTenantResolver
                     'mode' => 'existing_external_id',
                 ];
             }
+        }
+
+        $tenantByAlias = $this->findTenantByAlias($marketId, $tenantExternalId, $inn);
+
+        if ($tenantByAlias) {
+            $this->hydrateExistingTenant(
+                $tenantByAlias,
+                $tenantExternalId,
+                $inn,
+                $kpp,
+                $tenantName,
+                $source,
+                $now,
+                $activateResolvedTenant,
+                false,
+            );
+
+            return [
+                'tenant' => $tenantByAlias,
+                'mode' => 'matched_alias',
+            ];
         }
 
         if ($inn !== '') {
@@ -156,12 +178,13 @@ class OneCTenantResolver
         string $source,
         CarbonInterface $now,
         bool $activateResolvedTenant,
+        bool $allowExternalIdentityUpdate = true,
     ): void {
-        if ($tenantExternalId !== '') {
+        if ($allowExternalIdentityUpdate && $tenantExternalId !== '') {
             $tenant->external_id = $tenantExternalId;
         }
 
-        if ($this->looksLikeUuid($tenantExternalId)) {
+        if ($allowExternalIdentityUpdate && $this->looksLikeUuid($tenantExternalId)) {
             $tenant->one_c_uid = $tenantExternalId;
         }
 
@@ -194,8 +217,62 @@ class OneCTenantResolver
             $existing['created_from'] = $source;
         }
 
+        if (! $allowExternalIdentityUpdate && $tenantExternalId !== '') {
+            $existing['last_alias_external_id'] = $tenantExternalId;
+        }
+
         $tenant->one_c_data = $this->safeJsonEncode($existing);
         $tenant->save();
+    }
+
+    private function findTenantByAlias(int $marketId, string $tenantExternalId, string $inn): ?Tenant
+    {
+        if (! Schema::hasTable('tenant_external_aliases')
+            || ! Schema::hasColumn('tenant_external_aliases', 'canonical_tenant_id')
+            || ! Schema::hasColumn('tenant_external_aliases', 'alias_type')
+            || ! Schema::hasColumn('tenant_external_aliases', 'alias_value')) {
+            return null;
+        }
+
+        $aliases = [];
+
+        if ($tenantExternalId !== '') {
+            $aliases[] = ['type' => 'external_id', 'value' => $tenantExternalId];
+
+            if ($this->looksLikeUuid($tenantExternalId)) {
+                $aliases[] = ['type' => 'one_c_uid', 'value' => $tenantExternalId];
+            }
+        }
+
+        if ($inn !== '') {
+            $aliases[] = ['type' => 'inn', 'value' => $inn];
+        }
+
+        foreach ($aliases as $alias) {
+            $row = DB::table('tenant_external_aliases')
+                ->where('market_id', $marketId)
+                ->where('alias_type', $alias['type'])
+                ->where('alias_value', $alias['value'])
+                ->orderByDesc('id')
+                ->first(['canonical_tenant_id']);
+
+            $canonicalTenantId = (int) ($row->canonical_tenant_id ?? 0);
+
+            if ($canonicalTenantId <= 0) {
+                continue;
+            }
+
+            $tenant = Tenant::query()
+                ->where('market_id', $marketId)
+                ->whereKey($canonicalTenantId)
+                ->first();
+
+            if ($tenant) {
+                return $tenant;
+            }
+        }
+
+        return null;
     }
 
     /**
