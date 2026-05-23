@@ -35,7 +35,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Login::class, NotifySuperAdminsAboutUserLogin::class);
 
         Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])
-            ->post('/admin/tenant-merge/preflight', [TenantMergePreflightController::class, 'preflight'])
+            ->post('/admin/tenant-merge/preflight', TenantMergePreflightController::class)
             ->name('filament.admin.tenant-merge.preflight');
 
         Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])
