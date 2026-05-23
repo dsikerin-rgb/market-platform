@@ -109,20 +109,39 @@
             return result;
         };
 
+        const resetCheckButton = (button) => {
+            if (!(button instanceof HTMLElement)) {
+                return;
+            }
+
+            button.textContent = 'Проверить безопасно';
+            button.removeAttribute('disabled');
+            button.removeAttribute('aria-disabled');
+        };
+
         const setLoading = (button, loading) => {
             if (!(button instanceof HTMLElement)) {
                 return;
             }
 
             if (loading) {
-                button.dataset.mrrOriginalText = button.textContent || '';
                 button.textContent = 'Проверяю…';
                 button.setAttribute('disabled', 'disabled');
+                button.setAttribute('aria-disabled', 'true');
                 return;
             }
 
-            button.textContent = button.dataset.mrrOriginalText || 'Проверить безопасно';
+            resetCheckButton(button);
+        };
+
+        const setCompleted = (button, isError = false) => {
+            if (!(button instanceof HTMLElement)) {
+                return;
+            }
+
+            button.textContent = isError ? 'Проверка не прошла' : 'Проверка выполнена';
             button.removeAttribute('disabled');
+            button.setAttribute('aria-disabled', 'false');
         };
 
         const renderResult = (modal, data, isError = false) => {
@@ -186,6 +205,7 @@
                 ? 'Слияние заблокировано до исправления причины.'
                 : 'Данные пока не изменены. Реальное слияние добавим отдельным защищённым шагом.';
             result.appendChild(next);
+            result.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         };
 
         const runPreflight = async (modal, button) => {
@@ -194,6 +214,7 @@
 
             if (canonicalId <= 0 || sourceId <= 0 || canonicalId === sourceId) {
                 renderResult(modal, { message: 'Не удалось определить пару арендаторов. Закройте окно и откройте карточку заново.' }, true);
+                setCompleted(button, true);
                 return;
             }
 
@@ -214,11 +235,13 @@
                 });
 
                 const data = await response.json().catch(() => ({}));
-                renderResult(modal, data, !response.ok || data?.ok === false);
+                const isError = !response.ok || data?.ok === false;
+
+                renderResult(modal, data, isError);
+                setCompleted(button, isError);
             } catch (error) {
                 renderResult(modal, { message: 'Не удалось выполнить проверку. Попробуйте обновить страницу.' }, true);
-            } finally {
-                setLoading(button, false);
+                setCompleted(button, true);
             }
         };
 
@@ -246,9 +269,16 @@
                 warning.textContent = 'Реальное слияние из UI пока выключено. После проверки система только покажет понятный отчёт.';
             }
 
+            const result = modal.querySelector('[data-mrr-tenant-merge-result]');
+            if (result instanceof HTMLElement) {
+                result.classList.remove('is-open', 'is-error');
+                result.replaceChildren();
+            }
+
             const checkButton = modal.querySelector('[data-mrr-tenant-merge-copy="dry-run"]');
+            resetCheckButton(checkButton);
+
             if (checkButton instanceof HTMLElement && checkButton.dataset.mrrFriendlyBound !== '1') {
-                checkButton.textContent = 'Проверить безопасно';
                 checkButton.dataset.mrrFriendlyBound = '1';
                 checkButton.addEventListener('click', (event) => {
                     event.preventDefault();
