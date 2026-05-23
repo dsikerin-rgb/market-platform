@@ -2,6 +2,37 @@
     (() => {
         const cleanText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 
+        const improveSuccessState = (modal) => {
+            const result = modal.querySelector('[data-mrr-tenant-merge-result]');
+            if (!(result instanceof HTMLElement) || !result.classList.contains('is-success')) {
+                return;
+            }
+
+            const title = cleanText(result.querySelector('.mrr-tenant-merge-modal__result-title')?.textContent || '');
+            if (!title.includes('Дубль слит')) {
+                return;
+            }
+
+            result.querySelectorAll('.mrr-tenant-merge-modal__result-actions button').forEach((button) => {
+                if (button instanceof HTMLElement && cleanText(button.textContent) === 'Обновить список') {
+                    button.remove();
+                }
+            });
+
+            if (modal.dataset.mrrTenantMergeAutoRefresh === '1') {
+                return;
+            }
+
+            modal.dataset.mrrTenantMergeAutoRefresh = '1';
+
+            const note = document.createElement('div');
+            note.className = 'mrr-tenant-merge-modal__result-note';
+            note.textContent = 'Список обновится автоматически…';
+            result.appendChild(note);
+
+            window.setTimeout(() => window.location.reload(), 1400);
+        };
+
         const relabel = () => {
             const modal = document.getElementById('mrrTenantMergePreflightModal');
             if (!(modal instanceof HTMLElement)) {
@@ -18,6 +49,8 @@
                 button.classList.add('mrr-tenant-merge-modal__button--primary');
                 button.setAttribute('title', 'Перейти к финальному подтверждению. Данные пока не изменятся.');
             });
+
+            improveSuccessState(modal);
         };
 
         const boot = () => {
