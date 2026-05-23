@@ -15,6 +15,7 @@
 
 @if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links'], true))
     @include('filament.partials.map-review-card-tenant-context')
+    @include('filament.partials.map-review-tenant-switch-picker')
 @endif
 
 <script>
