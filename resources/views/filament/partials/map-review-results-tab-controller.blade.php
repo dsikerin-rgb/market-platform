@@ -13,6 +13,10 @@
     </div>
 @endif
 
+@if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links'], true))
+    @include('filament.partials.map-review-card-tenant-context')
+@endif
+
 <script>
     (() => {
         const activeTab = @json($activeReviewResultsTab);
