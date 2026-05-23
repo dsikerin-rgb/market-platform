@@ -14,6 +14,7 @@
 
     @include('filament.partials.tenant-merge-preflight-exact-links')
     @include('filament.partials.tenant-merge-preflight-friendly-actions')
+    @include('filament.partials.tenant-merge-confirmation-wording')
 @endif
 
 @if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links'], true))
