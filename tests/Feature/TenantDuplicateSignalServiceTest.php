@@ -40,8 +40,8 @@ class TenantDuplicateSignalServiceTest extends TestCase
 
         $this->assertCount(1, $signals);
         $this->assertSame('tenant_identity_resolution', $signals[0]['type']);
-        $this->assertSame('Возможная ошибка сопоставления арендатора из 1С', $signals[0]['title']);
-        $this->assertContains('короткое название похоже на сокращение полного имени', $signals[0]['reasons']);
+        $this->assertSame('Возможный дубль арендатора', $signals[0]['title']);
+        $this->assertContains('Короткое название похоже на сокращение полного имени', $signals[0]['reasons']);
         $this->assertSame($before, Tenant::query()->count());
     }
 
@@ -82,7 +82,7 @@ class TenantDuplicateSignalServiceTest extends TestCase
 
         $this->assertCount(1, $signals);
         $this->assertSame('high', $signals[0]['severity']);
-        $this->assertContains('идентификатор правой карточки уже записан как alias левой', $signals[0]['reasons']);
+        $this->assertContains('Одна карточка уже была объединена с другой', $signals[0]['reasons']);
     }
 
     public function test_it_ignores_unrelated_tenants(): void

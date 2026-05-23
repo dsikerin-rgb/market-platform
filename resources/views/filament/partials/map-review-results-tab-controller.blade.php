@@ -27,7 +27,7 @@
         const tabItems = [
             { key: 'review', label: 'Ревизионные решения', url: @json(request()->fullUrlWithQuery(['tab' => 'review'])) },
             { key: 'unconfirmed_links', label: 'Связь не подтверждена', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links'])) },
-            { key: 'data_quality', label: 'Сигналы качества данных', url: @json(request()->fullUrlWithQuery(['tab' => 'data_quality'])) },
+            { key: 'data_quality', label: 'Дубли арендаторов', url: @json(request()->fullUrlWithQuery(['tab' => 'data_quality'])) },
             { key: 'applied', label: 'Применено', url: @json(request()->fullUrlWithQuery(['tab' => 'applied'])) },
         ];
 
@@ -41,8 +41,8 @@
                 copy: 'Места на карте, где статус взят по арендатору, но точная связь с местом не подтверждена.',
             },
             data_quality: {
-                title: 'Сигналы качества данных',
-                copy: 'Read-only сигналы по справочникам и 1С-сопоставлениям. Они ничего не меняют автоматически и нужны для ручной проверки.',
+                title: 'Возможные дубли арендаторов',
+                copy: 'Пары арендаторов, которые похожи друг на друга и могут быть заведены дважды. Проверьте пару и объедините карточки, если это один арендатор.',
             },
             applied: {
                 title: 'Применено',

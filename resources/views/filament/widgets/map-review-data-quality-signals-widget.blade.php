@@ -127,6 +127,28 @@
             color: #cbd5e1;
         }
 
+        .mrr-quality-signal__technical {
+            margin-top: 0.35rem;
+            font-size: 0.74rem;
+            color: #64748b;
+        }
+
+        .mrr-quality-signal__technical summary {
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .mrr-quality-signal__technical-body {
+            display: grid;
+            gap: 0.15rem;
+            margin-top: 0.3rem;
+            word-break: break-all;
+        }
+
+        .dark .mrr-quality-signal__technical {
+            color: #cbd5e1;
+        }
+
         .mrr-quality-signal__reasons {
             margin: 0.8rem 0 0;
             padding-left: 1.1rem;
@@ -191,18 +213,18 @@
         <section class="aw-panel aw-panel--muted">
             <div class="aw-panel-head">
                 <div>
-                    <h2 class="aw-panel-title">Сигналы качества данных</h2>
+                    <h2 class="aw-panel-title">Возможные дубли арендаторов</h2>
                     <p class="aw-panel-copy">
-                        Read-only сигналы по справочникам и 1С-сопоставлениям. Они ничего не меняют автоматически и нужны для ручной проверки.
+                        Здесь показаны арендаторы, которые могут быть заведены дважды. Проверьте пару и, если это один и тот же арендатор, объедините карточки.
                     </p>
                 </div>
             </div>
 
             <div class="aw-panel-body">
                 @if ($marketId <= 0)
-                    <div class="mrr-empty">Выберите рынок, чтобы увидеть сигналы качества данных.</div>
+                    <div class="mrr-empty">Выберите рынок, чтобы увидеть возможные дубли арендаторов.</div>
                 @elseif ($signals === [])
-                    <div class="mrr-empty">Подозрительных дублей арендаторов сейчас не найдено.</div>
+                    <div class="mrr-empty">Возможные дубли арендаторов сейчас не найдены.</div>
                 @else
                     <div class="mrr-quality-signals">
                         @foreach ($signals as $signal)
@@ -210,7 +232,6 @@
                                 $candidateA = is_array($signal['candidate_a'] ?? null) ? $signal['candidate_a'] : [];
                                 $candidateB = is_array($signal['candidate_b'] ?? null) ? $signal['candidate_b'] : [];
                                 $severity = (string) ($signal['severity'] ?? 'medium');
-                                $score = (int) ($signal['score'] ?? 0);
                             @endphp
 
                             <article class="mrr-quality-signal">
@@ -218,14 +239,13 @@
                                     <h3 class="mrr-quality-signal__title">{{ $signal['title'] ?? 'Возможный дубль арендатора' }}</h3>
                                     <div class="mrr-quality-signal__meta">
                                         <span class="mrr-quality-signal__badge {{ $severity === 'high' ? 'mrr-quality-signal__badge--high' : '' }}">
-                                            {{ $severity === 'high' ? 'Высокий риск' : 'Средний риск' }}
+                                            {{ $severity === 'high' ? 'Очень похоже на дубль' : 'Похоже на дубль' }}
                                         </span>
-                                        <span class="mrr-quality-signal__badge">Score {{ $score }}</span>
                                     </div>
                                 </div>
 
                                 <div class="mrr-quality-signal__grid">
-                                    @foreach ([['label' => 'Кандидат 1', 'tenant' => $candidateA], ['label' => 'Кандидат 2', 'tenant' => $candidateB]] as $item)
+                                    @foreach ([['label' => 'Карточка 1', 'tenant' => $candidateA], ['label' => 'Карточка 2', 'tenant' => $candidateB]] as $item)
                                         @php($tenant = $item['tenant'])
                                         <div class="mrr-quality-signal__tenant">
                                             <div class="mrr-quality-signal__tenant-label">{{ $item['label'] }}</div>
@@ -234,9 +254,23 @@
                                             </div>
                                             <div class="mrr-quality-signal__tenant-meta">
                                                 <span>ИНН: {{ filled($tenant['inn'] ?? null) ? $tenant['inn'] : '—' }}</span>
-                                                <span>external_id: {{ filled($tenant['external_id'] ?? null) ? $tenant['external_id'] : '—' }}</span>
-                                                <span>one_c_uid: {{ filled($tenant['one_c_uid'] ?? null) ? $tenant['one_c_uid'] : '—' }}</span>
+                                                @if (filled($tenant['kpp'] ?? null))
+                                                    <span>КПП: {{ $tenant['kpp'] }}</span>
+                                                @endif
                                             </div>
+                                            @if (filled($tenant['external_id'] ?? null) || filled($tenant['one_c_uid'] ?? null))
+                                                <details class="mrr-quality-signal__technical">
+                                                    <summary>Технические данные 1С</summary>
+                                                    <div class="mrr-quality-signal__technical-body">
+                                                        @if (filled($tenant['external_id'] ?? null))
+                                                            <span>ID из 1С: {{ $tenant['external_id'] }}</span>
+                                                        @endif
+                                                        @if (filled($tenant['one_c_uid'] ?? null))
+                                                            <span>UID из 1С: {{ $tenant['one_c_uid'] }}</span>
+                                                        @endif
+                                                    </div>
+                                                </details>
+                                            @endif
                                         </div>
                                     @endforeach
                                 </div>
@@ -251,15 +285,15 @@
 
                                 <div class="mrr-quality-signal__actions">
                                     @if (! empty($candidateA['url']))
-                                        <a class="mrr-quality-signal__link" href="{{ $candidateA['url'] }}">Открыть арендатора #{{ $candidateA['id'] }}</a>
+                                        <a class="mrr-quality-signal__link" href="{{ $candidateA['url'] }}">Открыть карточку #{{ $candidateA['id'] }}</a>
                                     @endif
                                     @if (! empty($candidateB['url']))
-                                        <a class="mrr-quality-signal__link" href="{{ $candidateB['url'] }}">Открыть арендатора #{{ $candidateB['id'] }}</a>
+                                        <a class="mrr-quality-signal__link" href="{{ $candidateB['url'] }}">Открыть карточку #{{ $candidateB['id'] }}</a>
                                     @endif
                                 </div>
 
                                 <div class="mrr-quality-signal__note">
-                                    {{ $signal['recommendation'] ?? 'Проверьте вручную. Автоматическое слияние не выполняется.' }}
+                                    {{ $signal['recommendation'] ?? 'Откройте обе карточки и проверьте ИНН, договоры, начисления и торговые места.' }}
                                 </div>
                             </article>
                         @endforeach
