@@ -99,7 +99,7 @@ class TenantDuplicateSignalService
 
         if ($leftInn !== '' && $leftInn === $rightInn) {
             $score += 96;
-            $reasons[] = 'совпадает ИНН';
+            $reasons[] = 'Совпадает ИНН';
             $technicalReasons[] = 'same_inn';
         }
 
@@ -108,7 +108,7 @@ class TenantDuplicateSignalService
 
             if ($canonicalTenantId > 0 && $canonicalTenantId === (int) $right['id']) {
                 $score += 98;
-                $reasons[] = 'идентификатор левой карточки уже записан как alias правой';
+                $reasons[] = 'Одна карточка уже была объединена с другой';
                 $technicalReasons[] = 'left_identity_is_right_alias';
             }
         }
@@ -118,7 +118,7 @@ class TenantDuplicateSignalService
 
             if ($canonicalTenantId > 0 && $canonicalTenantId === (int) $left['id']) {
                 $score += 98;
-                $reasons[] = 'идентификатор правой карточки уже записан как alias левой';
+                $reasons[] = 'Одна карточка уже была объединена с другой';
                 $technicalReasons[] = 'right_identity_is_left_alias';
             }
         }
@@ -138,14 +138,14 @@ class TenantDuplicateSignalService
 
         return [
             'type' => 'tenant_identity_resolution',
-            'title' => 'Возможная ошибка сопоставления арендатора из 1С',
+            'title' => 'Возможный дубль арендатора',
             'severity' => $score >= 90 ? 'high' : 'medium',
             'score' => min(100, $score),
             'reasons' => array_values(array_unique($reasons)),
             'technical_reasons' => array_values(array_unique($technicalReasons)),
             'candidate_a' => $this->publicTenantSummary($ordered[0]),
             'candidate_b' => $this->publicTenantSummary($ordered[1]),
-            'recommendation' => 'Проверьте обе карточки вручную. Если это действительно один арендатор, используйте безопасный сценарий tenants:merge с dry-run/preflight.',
+            'recommendation' => 'Откройте обе карточки и проверьте ИНН, договоры, начисления и торговые места. Если это один арендатор — нажмите «Подготовить слияние».',
         ];
     }
 
@@ -198,10 +198,10 @@ class TenantDuplicateSignalService
         $minTokenCount = min((int) ($left['token_count'] ?? 0), (int) ($right['token_count'] ?? 0));
 
         if ($score >= 82 && $minTokenCount <= 2) {
-            return 'короткое название похоже на сокращение полного имени';
+            return 'Короткое название похоже на сокращение полного имени';
         }
 
-        return 'похожие нормализованные названия';
+        return 'Похожие названия';
     }
 
     /**
