@@ -5,6 +5,7 @@ namespace App\Providers;
 
 use App\Filament\Pages\MapReviewResults;
 use App\Http\Controllers\Admin\TenantDuplicateIgnoreController;
+use App\Http\Controllers\Admin\TenantDuplicateRestoreController;
 use App\Http\Controllers\Admin\TenantMergePreflightController;
 use App\Listeners\NotifySuperAdminsAboutUserLogin;
 use App\Models\IntegrationExchange;
@@ -46,6 +47,10 @@ class AppServiceProvider extends ServiceProvider
         Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])
             ->post('/admin/tenant-duplicates/ignore', TenantDuplicateIgnoreController::class)
             ->name('filament.admin.tenant-duplicates.ignore');
+
+        Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])
+            ->post('/admin/tenant-duplicates/restore', TenantDuplicateRestoreController::class)
+            ->name('filament.admin.tenant-duplicates.restore');
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,

@@ -9,6 +9,8 @@ use App\Filament\Resources\TenantResource;
 use App\Services\Tenants\TenantDuplicateSignalService;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MapReviewDataQualitySignalsWidget extends Widget
 {
@@ -38,6 +40,7 @@ class MapReviewDataQualitySignalsWidget extends Widget
         return [
             'marketId' => $marketId,
             'signals' => array_map(fn (array $signal): array => $this->withTenantUrls($signal), $signals),
+            'hiddenPairs' => $marketId > 0 ? $this->hiddenPairsForMarket($marketId) : [],
         ];
     }
 
@@ -69,5 +72,63 @@ class MapReviewDataQualitySignalsWidget extends Widget
         }
 
         return $signal;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function hiddenPairsForMarket(int $marketId): array
+    {
+        if (! Schema::hasTable('tenant_duplicate_ignores')) {
+            return [];
+        }
+
+        return DB::table('tenant_duplicate_ignores as ignored')
+            ->join('tenants as left_tenant', 'left_tenant.id', '=', 'ignored.tenant_left_id')
+            ->join('tenants as right_tenant', 'right_tenant.id', '=', 'ignored.tenant_right_id')
+            ->where('ignored.market_id', $marketId)
+            ->orderByDesc('ignored.updated_at')
+            ->limit(24)
+            ->get([
+                'ignored.id',
+                'ignored.tenant_left_id',
+                'ignored.tenant_right_id',
+                'ignored.reason',
+                'ignored.comment',
+                'ignored.updated_at',
+                'left_tenant.name as left_name',
+                'right_tenant.name as right_name',
+            ])
+            ->map(function (object $row): array {
+                $leftTenantId = (int) $row->tenant_left_id;
+                $rightTenantId = (int) $row->tenant_right_id;
+
+                return [
+                    'id' => (int) $row->id,
+                    'tenant_a' => [
+                        'id' => $leftTenantId,
+                        'name' => (string) $row->left_name,
+                        'url' => TenantResource::getUrl('edit', ['record' => $leftTenantId]),
+                    ],
+                    'tenant_b' => [
+                        'id' => $rightTenantId,
+                        'name' => (string) $row->right_name,
+                        'url' => TenantResource::getUrl('edit', ['record' => $rightTenantId]),
+                    ],
+                    'reason' => (string) $row->reason,
+                    'reason_label' => $this->reasonLabel((string) $row->reason),
+                    'comment' => (string) ($row->comment ?? ''),
+                    'hidden_at' => filled($row->updated_at) ? (string) $row->updated_at : '',
+                ];
+            })
+            ->all();
+    }
+
+    private function reasonLabel(string $reason): string
+    {
+        return match ($reason) {
+            'different_tenants' => 'разные арендаторы',
+            default => $reason !== '' ? $reason : 'проверено вручную',
+        };
     }
 }

@@ -19,7 +19,8 @@
             background: rgba(69, 26, 3, 0.16);
         }
 
-        .mrr-quality-signal.is-ignored {
+        .mrr-quality-signal.is-ignored,
+        .mrr-hidden-pair.is-restored {
             display: none;
         }
 
@@ -165,7 +166,8 @@
             color: #cbd5e1;
         }
 
-        .mrr-quality-signal__actions {
+        .mrr-quality-signal__actions,
+        .mrr-hidden-pair__actions {
             display: flex;
             flex-wrap: wrap;
             gap: 0.45rem;
@@ -236,6 +238,55 @@
             color: #991b1b;
         }
 
+        .mrr-hidden-pairs {
+            margin-bottom: 0.9rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(100, 116, 139, 0.18);
+            background: rgba(248, 250, 252, 0.88);
+            padding: 0.75rem 0.85rem;
+        }
+
+        .mrr-hidden-pairs summary {
+            cursor: pointer;
+            color: #334155;
+            font-size: 0.88rem;
+            font-weight: 850;
+        }
+
+        .mrr-hidden-pairs__copy {
+            margin: 0.45rem 0 0;
+            color: #64748b;
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+
+        .mrr-hidden-pairs__list {
+            display: grid;
+            gap: 0.55rem;
+            margin-top: 0.7rem;
+        }
+
+        .mrr-hidden-pair {
+            border-radius: 0.85rem;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255, 255, 255, 0.82);
+            padding: 0.65rem 0.75rem;
+        }
+
+        .mrr-hidden-pair__title {
+            color: #0f172a;
+            font-size: 0.84rem;
+            font-weight: 850;
+            line-height: 1.35;
+        }
+
+        .mrr-hidden-pair__meta {
+            margin-top: 0.28rem;
+            color: #64748b;
+            font-size: 0.74rem;
+            line-height: 1.45;
+        }
+
         .dark .mrr-quality-signal__note {
             border-color: rgba(96, 165, 250, 0.2);
             background: rgba(30, 64, 175, 0.16);
@@ -252,6 +303,26 @@
             border-color: rgba(248, 113, 113, 0.26);
             background: rgba(127, 29, 29, 0.22);
             color: #fecaca;
+        }
+
+        .dark .mrr-hidden-pairs {
+            border-color: rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.42);
+        }
+
+        .dark .mrr-hidden-pairs summary,
+        .dark .mrr-hidden-pair__title {
+            color: #f8fafc;
+        }
+
+        .dark .mrr-hidden-pairs__copy,
+        .dark .mrr-hidden-pair__meta {
+            color: #cbd5e1;
+        }
+
+        .dark .mrr-hidden-pair {
+            border-color: rgba(148, 163, 184, 0.16);
+            background: rgba(15, 23, 42, 0.48);
         }
 
         @media (max-width: 760px) {
@@ -275,88 +346,133 @@
             <div class="aw-panel-body">
                 @if ($marketId <= 0)
                     <div class="mrr-empty">Выберите рынок, чтобы увидеть возможные дубли арендаторов.</div>
-                @elseif ($signals === [])
-                    <div class="mrr-empty">Возможные дубли арендаторов сейчас не найдены.</div>
                 @else
-                    <div class="mrr-quality-signals">
-                        @foreach ($signals as $signal)
-                            @php
-                                $candidateA = is_array($signal['candidate_a'] ?? null) ? $signal['candidate_a'] : [];
-                                $candidateB = is_array($signal['candidate_b'] ?? null) ? $signal['candidate_b'] : [];
-                                $severity = (string) ($signal['severity'] ?? 'medium');
-                            @endphp
-
-                            <article
-                                class="mrr-quality-signal"
-                                data-tenant-a-id="{{ (int) ($candidateA['id'] ?? 0) }}"
-                                data-tenant-b-id="{{ (int) ($candidateB['id'] ?? 0) }}"
-                            >
-                                <div class="mrr-quality-signal__head">
-                                    <h3 class="mrr-quality-signal__title">{{ $signal['title'] ?? 'Возможный дубль арендатора' }}</h3>
-                                    <div class="mrr-quality-signal__meta">
-                                        <span class="mrr-quality-signal__badge {{ $severity === 'high' ? 'mrr-quality-signal__badge--high' : '' }}">
-                                            {{ $severity === 'high' ? 'Очень похоже на дубль' : 'Похоже на дубль' }}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div class="mrr-quality-signal__grid">
-                                    @foreach ([['label' => 'Карточка 1', 'tenant' => $candidateA], ['label' => 'Карточка 2', 'tenant' => $candidateB]] as $item)
-                                        @php($tenant = $item['tenant'])
-                                        <div class="mrr-quality-signal__tenant">
-                                            <div class="mrr-quality-signal__tenant-label">{{ $item['label'] }}</div>
-                                            <div class="mrr-quality-signal__tenant-name">
-                                                #{{ $tenant['id'] ?? '—' }} · {{ $tenant['name'] ?? 'Без названия' }}
-                                            </div>
-                                            <div class="mrr-quality-signal__tenant-meta">
-                                                <span>ИНН: {{ filled($tenant['inn'] ?? null) ? $tenant['inn'] : '—' }}</span>
-                                                @if (filled($tenant['kpp'] ?? null))
-                                                    <span>КПП: {{ $tenant['kpp'] }}</span>
-                                                @endif
-                                            </div>
-                                            @if (filled($tenant['external_id'] ?? null) || filled($tenant['one_c_uid'] ?? null))
-                                                <details class="mrr-quality-signal__technical">
-                                                    <summary>Технические данные 1С</summary>
-                                                    <div class="mrr-quality-signal__technical-body">
-                                                        @if (filled($tenant['external_id'] ?? null))
-                                                            <span>ID из 1С: {{ $tenant['external_id'] }}</span>
-                                                        @endif
-                                                        @if (filled($tenant['one_c_uid'] ?? null))
-                                                            <span>UID из 1С: {{ $tenant['one_c_uid'] }}</span>
-                                                        @endif
-                                                    </div>
-                                                </details>
+                    @if (! empty($hiddenPairs))
+                        <details class="mrr-hidden-pairs">
+                            <summary>Скрытые пары: {{ count($hiddenPairs) }}</summary>
+                            <p class="mrr-hidden-pairs__copy">
+                                Здесь пары, которые вручную отмечены как разные арендаторы. Если пару скрыли ошибочно, верните её в список проверки.
+                            </p>
+                            <div class="mrr-hidden-pairs__list">
+                                @foreach ($hiddenPairs as $pair)
+                                    @php
+                                        $tenantA = is_array($pair['tenant_a'] ?? null) ? $pair['tenant_a'] : [];
+                                        $tenantB = is_array($pair['tenant_b'] ?? null) ? $pair['tenant_b'] : [];
+                                    @endphp
+                                    <article
+                                        class="mrr-hidden-pair"
+                                        data-hidden-tenant-a-id="{{ (int) ($tenantA['id'] ?? 0) }}"
+                                        data-hidden-tenant-b-id="{{ (int) ($tenantB['id'] ?? 0) }}"
+                                    >
+                                        <div class="mrr-hidden-pair__title">
+                                            #{{ $tenantA['id'] ?? '—' }} · {{ $tenantA['name'] ?? 'Без названия' }} / #{{ $tenantB['id'] ?? '—' }} · {{ $tenantB['name'] ?? 'Без названия' }}
+                                        </div>
+                                        <div class="mrr-hidden-pair__meta">
+                                            Причина: {{ $pair['reason_label'] ?? 'проверено вручную' }}
+                                            @if (filled($pair['hidden_at'] ?? null))
+                                                · скрыто: {{ $pair['hidden_at'] }}
                                             @endif
                                         </div>
-                                    @endforeach
-                                </div>
+                                        <div class="mrr-hidden-pair__actions">
+                                            @if (! empty($tenantA['url']))
+                                                <a class="mrr-quality-signal__link" href="{{ $tenantA['url'] }}">Открыть #{{ $tenantA['id'] }}</a>
+                                            @endif
+                                            @if (! empty($tenantB['url']))
+                                                <a class="mrr-quality-signal__link" href="{{ $tenantB['url'] }}">Открыть #{{ $tenantB['id'] }}</a>
+                                            @endif
+                                            <button type="button" class="mrr-quality-signal__link" data-mrr-tenant-duplicate-restore>
+                                                Вернуть в список
+                                            </button>
+                                        </div>
+                                    </article>
+                                @endforeach
+                            </div>
+                        </details>
+                    @endif
 
-                                @if (! empty($signal['reasons']))
-                                    <ul class="mrr-quality-signal__reasons">
-                                        @foreach ($signal['reasons'] as $reason)
-                                            <li>{{ $reason }}</li>
+                    @if ($signals === [])
+                        <div class="mrr-empty">Возможные дубли арендаторов сейчас не найдены.</div>
+                    @else
+                        <div class="mrr-quality-signals">
+                            @foreach ($signals as $signal)
+                                @php
+                                    $candidateA = is_array($signal['candidate_a'] ?? null) ? $signal['candidate_a'] : [];
+                                    $candidateB = is_array($signal['candidate_b'] ?? null) ? $signal['candidate_b'] : [];
+                                    $severity = (string) ($signal['severity'] ?? 'medium');
+                                @endphp
+
+                                <article
+                                    class="mrr-quality-signal"
+                                    data-tenant-a-id="{{ (int) ($candidateA['id'] ?? 0) }}"
+                                    data-tenant-b-id="{{ (int) ($candidateB['id'] ?? 0) }}"
+                                >
+                                    <div class="mrr-quality-signal__head">
+                                        <h3 class="mrr-quality-signal__title">{{ $signal['title'] ?? 'Возможный дубль арендатора' }}</h3>
+                                        <div class="mrr-quality-signal__meta">
+                                            <span class="mrr-quality-signal__badge {{ $severity === 'high' ? 'mrr-quality-signal__badge--high' : '' }}">
+                                                {{ $severity === 'high' ? 'Очень похоже на дубль' : 'Похоже на дубль' }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mrr-quality-signal__grid">
+                                        @foreach ([['label' => 'Карточка 1', 'tenant' => $candidateA], ['label' => 'Карточка 2', 'tenant' => $candidateB]] as $item)
+                                            @php($tenant = $item['tenant'])
+                                            <div class="mrr-quality-signal__tenant">
+                                                <div class="mrr-quality-signal__tenant-label">{{ $item['label'] }}</div>
+                                                <div class="mrr-quality-signal__tenant-name">
+                                                    #{{ $tenant['id'] ?? '—' }} · {{ $tenant['name'] ?? 'Без названия' }}
+                                                </div>
+                                                <div class="mrr-quality-signal__tenant-meta">
+                                                    <span>ИНН: {{ filled($tenant['inn'] ?? null) ? $tenant['inn'] : '—' }}</span>
+                                                    @if (filled($tenant['kpp'] ?? null))
+                                                        <span>КПП: {{ $tenant['kpp'] }}</span>
+                                                    @endif
+                                                </div>
+                                                @if (filled($tenant['external_id'] ?? null) || filled($tenant['one_c_uid'] ?? null))
+                                                    <details class="mrr-quality-signal__technical">
+                                                        <summary>Технические данные 1С</summary>
+                                                        <div class="mrr-quality-signal__technical-body">
+                                                            @if (filled($tenant['external_id'] ?? null))
+                                                                <span>ID из 1С: {{ $tenant['external_id'] }}</span>
+                                                            @endif
+                                                            @if (filled($tenant['one_c_uid'] ?? null))
+                                                                <span>UID из 1С: {{ $tenant['one_c_uid'] }}</span>
+                                                            @endif
+                                                        </div>
+                                                    </details>
+                                                @endif
+                                            </div>
                                         @endforeach
-                                    </ul>
-                                @endif
+                                    </div>
 
-                                <div class="mrr-quality-signal__actions">
-                                    @if (! empty($candidateA['url']))
-                                        <a class="mrr-quality-signal__link" href="{{ $candidateA['url'] }}">Открыть карточку #{{ $candidateA['id'] }}</a>
+                                    @if (! empty($signal['reasons']))
+                                        <ul class="mrr-quality-signal__reasons">
+                                            @foreach ($signal['reasons'] as $reason)
+                                                <li>{{ $reason }}</li>
+                                            @endforeach
+                                        </ul>
                                     @endif
-                                    @if (! empty($candidateB['url']))
-                                        <a class="mrr-quality-signal__link" href="{{ $candidateB['url'] }}">Открыть карточку #{{ $candidateB['id'] }}</a>
-                                    @endif
-                                    <button type="button" class="mrr-quality-signal__link mrr-quality-signal__link--muted" data-mrr-tenant-duplicate-ignore>
-                                        Это разные арендаторы
-                                    </button>
-                                </div>
 
-                                <div class="mrr-quality-signal__note">
-                                    {{ $signal['recommendation'] ?? 'Откройте обе карточки и проверьте ИНН, договоры, начисления и торговые места.' }}
-                                </div>
-                            </article>
-                        @endforeach
-                    </div>
+                                    <div class="mrr-quality-signal__actions">
+                                        @if (! empty($candidateA['url']))
+                                            <a class="mrr-quality-signal__link" href="{{ $candidateA['url'] }}">Открыть карточку #{{ $candidateA['id'] }}</a>
+                                        @endif
+                                        @if (! empty($candidateB['url']))
+                                            <a class="mrr-quality-signal__link" href="{{ $candidateB['url'] }}">Открыть карточку #{{ $candidateB['id'] }}</a>
+                                        @endif
+                                        <button type="button" class="mrr-quality-signal__link mrr-quality-signal__link--muted" data-mrr-tenant-duplicate-ignore>
+                                            Это разные арендаторы
+                                        </button>
+                                    </div>
+
+                                    <div class="mrr-quality-signal__note">
+                                        {{ $signal['recommendation'] ?? 'Откройте обе карточки и проверьте ИНН, договоры, начисления и торговые места.' }}
+                                    </div>
+                                </article>
+                            @endforeach
+                        </div>
+                    @endif
                 @endif
             </div>
         </section>
@@ -367,6 +483,7 @@
     <script>
         (() => {
             const ignoreUrl = @json(route('filament.admin.tenant-duplicates.ignore'));
+            const restoreUrl = @json(route('filament.admin.tenant-duplicates.restore'));
             const csrfToken = @json(csrf_token());
 
             const notice = (article, message, isError = false) => {
@@ -380,6 +497,26 @@
                 box.setAttribute('data-mrr-tenant-duplicate-ignore-notice', '1');
                 box.textContent = message;
                 article.appendChild(box);
+            };
+
+            const postPair = async (url, tenantAId, tenantBId, payload = {}) => {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify({
+                        tenant_a_id: tenantAId,
+                        tenant_b_id: tenantBId,
+                        ...payload,
+                    }),
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                return { response, data };
             };
 
             const ignorePair = async (article, button) => {
@@ -401,21 +538,7 @@
                 button.setAttribute('disabled', 'disabled');
 
                 try {
-                    const response = await fetch(ignoreUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': csrfToken,
-                        },
-                        body: JSON.stringify({
-                            tenant_a_id: tenantAId,
-                            tenant_b_id: tenantBId,
-                            reason: 'different_tenants',
-                        }),
-                    });
-
-                    const data = await response.json().catch(() => ({}));
+                    const { response, data } = await postPair(ignoreUrl, tenantAId, tenantBId, { reason: 'different_tenants' });
 
                     if (!response.ok || data?.ok === false) {
                         notice(article, data?.message || 'Не удалось скрыть пару. Попробуйте ещё раз.', true);
@@ -425,9 +548,7 @@
                     }
 
                     notice(article, data?.message || 'Пара скрыта из списка дублей.');
-                    window.setTimeout(() => {
-                        article.classList.add('is-ignored');
-                    }, 700);
+                    window.setTimeout(() => window.location.reload(), 700);
                 } catch (error) {
                     notice(article, 'Не удалось скрыть пару. Проверьте соединение и попробуйте ещё раз.', true);
                     button.textContent = originalText;
@@ -435,22 +556,71 @@
                 }
             };
 
+            const restorePair = async (article, button) => {
+                const tenantAId = Number(article.dataset.hiddenTenantAId || 0);
+                const tenantBId = Number(article.dataset.hiddenTenantBId || 0);
+
+                if (tenantAId <= 0 || tenantBId <= 0 || tenantAId === tenantBId) {
+                    notice(article, 'Не удалось определить пару арендаторов. Обновите страницу и попробуйте ещё раз.', true);
+                    return;
+                }
+
+                const confirmed = window.confirm('Вернуть эту пару в список проверки?');
+                if (!confirmed) {
+                    return;
+                }
+
+                const originalText = button.textContent;
+                button.textContent = 'Возвращаю…';
+                button.setAttribute('disabled', 'disabled');
+
+                try {
+                    const { response, data } = await postPair(restoreUrl, tenantAId, tenantBId);
+
+                    if (!response.ok || data?.ok === false) {
+                        notice(article, data?.message || 'Не удалось вернуть пару. Попробуйте ещё раз.', true);
+                        button.textContent = originalText;
+                        button.removeAttribute('disabled');
+                        return;
+                    }
+
+                    notice(article, data?.message || 'Пара возвращена в список проверки.');
+                    window.setTimeout(() => window.location.reload(), 700);
+                } catch (error) {
+                    notice(article, 'Не удалось вернуть пару. Проверьте соединение и попробуйте ещё раз.', true);
+                    button.textContent = originalText;
+                    button.removeAttribute('disabled');
+                }
+            };
+
             document.addEventListener('click', (event) => {
-                const button = event.target instanceof Element
+                const ignoreButton = event.target instanceof Element
                     ? event.target.closest('[data-mrr-tenant-duplicate-ignore]')
                     : null;
+                const restoreButton = event.target instanceof Element
+                    ? event.target.closest('[data-mrr-tenant-duplicate-restore]')
+                    : null;
 
-                if (!(button instanceof HTMLElement)) {
+                if (ignoreButton instanceof HTMLElement) {
+                    const article = ignoreButton.closest('.mrr-quality-signal');
+                    if (!(article instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    ignorePair(article, ignoreButton);
                     return;
                 }
 
-                const article = button.closest('.mrr-quality-signal');
-                if (!(article instanceof HTMLElement)) {
-                    return;
-                }
+                if (restoreButton instanceof HTMLElement) {
+                    const article = restoreButton.closest('.mrr-hidden-pair');
+                    if (!(article instanceof HTMLElement)) {
+                        return;
+                    }
 
-                event.preventDefault();
-                ignorePair(article, button);
+                    event.preventDefault();
+                    restorePair(article, restoreButton);
+                }
             });
         })();
     </script>

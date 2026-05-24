@@ -92,20 +92,7 @@ class TenantDuplicateSignalServiceTest extends TestCase
             'name' => 'Test market',
         ]);
 
-        $tenantA = Tenant::query()->create([
-            'market_id' => $market->id,
-            'name' => 'МДН ООО',
-            'external_id' => 'tenant-a',
-            'inn' => '2222904674',
-            'is_active' => true,
-        ]);
-
-        $tenantB = Tenant::query()->create([
-            'market_id' => $market->id,
-            'name' => 'МДН Инжиниринг ООО',
-            'external_id' => 'tenant-b',
-            'is_active' => true,
-        ]);
+        [$tenantA, $tenantB] = $this->createMdnDuplicatePair((int) $market->id);
 
         DB::table('tenant_duplicate_ignores')->insert([
             'market_id' => $market->id,
@@ -119,6 +106,35 @@ class TenantDuplicateSignalServiceTest extends TestCase
         $signals = app(TenantDuplicateSignalService::class)->signalsForMarket((int) $market->id);
 
         $this->assertSame([], $signals);
+    }
+
+    public function test_it_shows_restored_duplicate_pair_again(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test market',
+        ]);
+
+        [$tenantA, $tenantB] = $this->createMdnDuplicatePair((int) $market->id);
+
+        DB::table('tenant_duplicate_ignores')->insert([
+            'market_id' => $market->id,
+            'tenant_left_id' => min($tenantA->id, $tenantB->id),
+            'tenant_right_id' => max($tenantA->id, $tenantB->id),
+            'reason' => 'different_tenants',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_duplicate_ignores')
+            ->where('market_id', $market->id)
+            ->where('tenant_left_id', min($tenantA->id, $tenantB->id))
+            ->where('tenant_right_id', max($tenantA->id, $tenantB->id))
+            ->delete();
+
+        $signals = app(TenantDuplicateSignalService::class)->signalsForMarket((int) $market->id);
+
+        $this->assertCount(1, $signals);
+        $this->assertSame('Возможный дубль арендатора', $signals[0]['title']);
     }
 
     public function test_it_ignores_unrelated_tenants(): void
@@ -146,5 +162,28 @@ class TenantDuplicateSignalServiceTest extends TestCase
         $signals = app(TenantDuplicateSignalService::class)->signalsForMarket((int) $market->id);
 
         $this->assertSame([], $signals);
+    }
+
+    /**
+     * @return array{0:Tenant,1:Tenant}
+     */
+    private function createMdnDuplicatePair(int $marketId): array
+    {
+        $tenantA = Tenant::query()->create([
+            'market_id' => $marketId,
+            'name' => 'МДН ООО',
+            'external_id' => 'tenant-a',
+            'inn' => '2222904674',
+            'is_active' => true,
+        ]);
+
+        $tenantB = Tenant::query()->create([
+            'market_id' => $marketId,
+            'name' => 'МДН Инжиниринг ООО',
+            'external_id' => 'tenant-b',
+            'is_active' => true,
+        ]);
+
+        return [$tenantA, $tenantB];
     }
 }
