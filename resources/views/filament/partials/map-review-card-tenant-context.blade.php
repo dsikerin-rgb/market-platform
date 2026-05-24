@@ -44,6 +44,16 @@
     .mrr-place__meta.is-redundant {
         display: none;
     }
+
+    .mrr-card-actions__warning--tenant-mismatch {
+        flex-basis: 100%;
+        margin-bottom: 0.35rem;
+    }
+
+    .mrr-link--contract-mismatch {
+        opacity: 0.62;
+        cursor: not-allowed;
+    }
 </style>
 
 <script>
@@ -162,44 +172,19 @@
             }
         };
 
+
         const enhanceCards = () => {
             document.querySelectorAll('.mrr-needs-card').forEach((card) => {
-                if (!(card instanceof HTMLElement) || card.dataset.mrrTenantContextEnhanced === '1') {
+                if (!(card instanceof HTMLElement)) {
                     return;
                 }
 
-                compactDuplicateMeta(card);
-
-                const summaryGrid = card.querySelector('.mrr-needs-card__summary-grid');
-                if (!(summaryGrid instanceof HTMLElement)) {
-                    return;
-                }
-
-                const current = currentTenantName(card);
-                const target = targetTenantName(card);
-
-                if (current === '' && target === '') {
+                if (card.dataset.mrrTenantContextEnhanced !== '1') {
+                    compactDuplicateMeta(card);
                     card.dataset.mrrTenantContextEnhanced = '1';
-                    return;
                 }
 
-                const container = document.createElement('div');
-                container.className = 'mrr-needs-card__tenant-context';
 
-                addTenantPill(container, 'Текущий:', current !== '' ? current : 'не указан');
-
-                if (target !== '' && target !== current) {
-                    addTenantPill(container, 'Фактический/новый:', target, ' mrr-needs-card__tenant-pill--target');
-                }
-
-                const brief = summaryGrid.querySelector('.mrr-needs-card__summary-brief');
-                if (brief instanceof HTMLElement) {
-                    summaryGrid.insertBefore(container, brief);
-                } else {
-                    summaryGrid.appendChild(container);
-                }
-
-                card.dataset.mrrTenantContextEnhanced = '1';
             });
         };
 

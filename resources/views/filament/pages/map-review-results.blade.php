@@ -2778,8 +2778,33 @@
                                             $hasRelationDetails = $relationDetails !== [];
                                             $contractOverride = is_array($diagnostics['contract_override'] ?? null) ? $diagnostics['contract_override'] : null;
                                             $isContractTenantOverride = $contractOverride !== null;
+                                            $normalizeTenantNameForMismatch = static function (?string $value): string {
+                                                $normalized = mb_strtolower(trim((string) $value), 'UTF-8');
+                                                $normalized = preg_replace('/\b(ип|ооо|ао|пао|зао|оао)\b/iu', ' ', $normalized) ?? $normalized;
+                                                $normalized = preg_replace('/[«»"\'()]/u', ' ', $normalized) ?? $normalized;
+                                                $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? $normalized;
+
+                                                return trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
+                                            };
+                                            $tenantNamesLookSame = static function (?string $left, ?string $right) use ($normalizeTenantNameForMismatch): bool {
+                                                $leftNormalized = $normalizeTenantNameForMismatch($left);
+                                                $rightNormalized = $normalizeTenantNameForMismatch($right);
+
+                                                if ($leftNormalized === '' || $rightNormalized === '') {
+                                                    return false;
+                                                }
+
+                                                return $leftNormalized === $rightNormalized
+                                                    || str_contains($leftNormalized, $rightNormalized)
+                                                    || str_contains($rightNormalized, $leftNormalized);
+                                            };
                                             $currentTenantName = trim((string) ($row['current_tenant_name'] ?? ''));
                                             $targetTenantName = trim((string) ($contractOverride['tenant_name'] ?? ''));
+                                            $reviewerTenantName = trim((string) ($row['reviewer_tenant_name'] ?? ''));
+                                            $hasContractTenantMismatch = $isContractTenantOverride
+                                                && $reviewerTenantName !== ''
+                                                && $targetTenantName !== ''
+                                                && ! $tenantNamesLookSame($reviewerTenantName, $targetTenantName);
                                             $contractNumberLabel = trim((string) ($contractOverride['contract_number'] ?? ''));
                                             $hasIdentityClarification = $decision === 'space_identity_needs_clarification';
                                             $isIdentityCase = $hasIdentityClarification && ! $isContractTenantOverride;
@@ -2811,13 +2836,25 @@
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
                                             $suggestedTargetTenantName = trim((string) ($row['suggested_target_tenant_name'] ?? ''));
+                                            if ($hasContractTenantMismatch) {
+                                                $suggestedTargetTenantId = 0;
+                                                $suggestedTargetTenantName = $reviewerTenantName;
+                                            }
+
+                                            $manualTenantSwitchLabel = $hasContractTenantMismatch
+                                                ? 'Сменить на арендатора из ревизии'
+                                                : 'Сменить арендатора';
                                             $canManualTenantSwitch = $attentionTab !== 'unconfirmed_links'
-                                                && ! $isContractTenantOverride
                                                 && ! $financialRequiresTenantResolution
+                                                && (
+                                                    ! $isContractTenantOverride
+                                                    || $hasContractTenantMismatch
+                                                )
                                                 && (
                                                     $isTenantCase
                                                     || $isConflictCase
                                                     || $suggestedTargetTenantId > 0
+                                                    || $hasContractTenantMismatch
                                                     || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1
                                                 );
                                             $canResolveFinancialTenant = $attentionTab !== 'unconfirmed_links'
@@ -2858,6 +2895,9 @@
                                             } elseif ($isFinancialSignalCase) {
                                                 $workflowTitle = 'Разобрать финансовый сигнал';
                                                 $workflowText = 'По месту есть начисление на другого арендатора без найденного договора. Нужно подтвердить смену арендатора и отдельно разобрать договор.';
+                                            } elseif ($hasContractTenantMismatch) {
+                                                $workflowTitle = 'Проверить арендатора из ревизии';
+                                                $workflowText = 'Ревизор указал другого арендатора, чем договорный кандидат. Договорную смену нельзя подтверждать без ручного выбора.';
                                             } elseif ($isContractTenantOverride) {
                                                 $workflowTitle = 'Подтвердить смену арендатора';
                                                 $workflowText = 'Новый арендатор уже найден по договору. Нужно только подтвердить смену.';
@@ -2907,7 +2947,13 @@
                                                 ], static fn ($value): bool => filled($value))));
                                                 $summaryReason = trim((string) ($row['reason'] ?? ''));
 
-                                                if (preg_match('/^Текущий:\s*.+Фактический\/новый:\s*.+$/u', $summaryReason) === 1) {
+                                                if (
+                                                    str_contains($summaryReason, 'Текущ')
+                                                    && (
+                                                        str_contains($summaryReason, 'Фактическ')
+                                                        || str_contains($summaryReason, 'нов')
+                                                    )
+                                                ) {
                                                     $summaryReason = '';
                                                 }
                                             @endphp
@@ -3096,7 +3142,22 @@
                                                                 <div class="mrr-card-actions__group mrr-card-actions__group--primary">
                                                                     <div class="mrr-card-actions__label">Решение</div>
                                                                     <div class="mrr-card-actions__row">
-                    @if ($isContractTenantOverride && ! $hasIdentityClarification)
+                    @if ($hasContractTenantMismatch)
+                        <div class="mrr-card-actions__warning mrr-card-actions__warning--tenant-mismatch">
+                            <strong>Проверьте арендатора:</strong>
+                            ревизор указал «{{ $reviewerTenantName }}», а договор предлагает «{{ $targetTenantName }}».
+                            Договорная кнопка отключена, выберите арендатора вручную.
+                        </div>
+                        <button
+                            type="button"
+                            class="mrr-link mrr-link--button mrr-link--contract-mismatch"
+                            disabled
+                            aria-disabled="true"
+                            title="Ревизор указал {{ $reviewerTenantName }}, договор предлагает {{ $targetTenantName }}"
+                        >
+                            Договорный кандидат не совпадает
+                        </button>
+                    @elseif ($isContractTenantOverride && ! $hasIdentityClarification)
                         <button
                             type="button"
                             class="mrr-link mrr-link--button mrr-link--primary"
@@ -3143,7 +3204,7 @@
                             data-mrr-effective-date="{{ now()->format('Y-m-d') }}"
                             data-mrr-reason="{{ $tenantChangeComment !== '' ? $tenantChangeComment : ($row['reason'] ?? '') }}"
                         >
-                            Сменить арендатора
+                            {{ $manualTenantSwitchLabel }}
                         </button>
                     @endif
                     @if ($hasIdentityClarification && $isContractTenantOverride)
