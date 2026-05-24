@@ -36,11 +36,16 @@ class TenantDuplicateSignalService
         }
 
         $aliases = $this->aliasesForMarket($marketId);
+        $ignoredPairs = $this->ignoredPairKeysForMarket($marketId);
         $signals = [];
 
         $count = count($tenants);
         for ($leftIndex = 0; $leftIndex < $count; $leftIndex++) {
             for ($rightIndex = $leftIndex + 1; $rightIndex < $count; $rightIndex++) {
+                if (isset($ignoredPairs[$this->pairKey((int) $tenants[$leftIndex]['id'], (int) $tenants[$rightIndex]['id'])])) {
+                    continue;
+                }
+
                 $signal = $this->buildSignal($tenants[$leftIndex], $tenants[$rightIndex], $aliases);
 
                 if ($signal !== null) {
@@ -256,6 +261,35 @@ class TenantDuplicateSignalService
         }
 
         return $aliases;
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function ignoredPairKeysForMarket(int $marketId): array
+    {
+        if (! Schema::hasTable('tenant_duplicate_ignores')) {
+            return [];
+        }
+
+        $rows = DB::table('tenant_duplicate_ignores')
+            ->where('market_id', $marketId)
+            ->get(['tenant_left_id', 'tenant_right_id']);
+
+        $ignored = [];
+        foreach ($rows as $row) {
+            $ignored[$this->pairKey((int) $row->tenant_left_id, (int) $row->tenant_right_id)] = true;
+        }
+
+        return $ignored;
+    }
+
+    private function pairKey(int $leftTenantId, int $rightTenantId): string
+    {
+        $left = min($leftTenantId, $rightTenantId);
+        $right = max($leftTenantId, $rightTenantId);
+
+        return $left . ':' . $right;
     }
 
     /**

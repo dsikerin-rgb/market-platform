@@ -1,4 +1,5 @@
 <?php
+# tests/Feature/TenantDuplicateSignalServiceTest.php
 
 namespace Tests\Feature;
 
@@ -83,6 +84,41 @@ class TenantDuplicateSignalServiceTest extends TestCase
         $this->assertCount(1, $signals);
         $this->assertSame('high', $signals[0]['severity']);
         $this->assertContains('Одна карточка уже была объединена с другой', $signals[0]['reasons']);
+    }
+
+    public function test_it_hides_manually_ignored_duplicate_pair(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test market',
+        ]);
+
+        $tenantA = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'МДН ООО',
+            'external_id' => 'tenant-a',
+            'inn' => '2222904674',
+            'is_active' => true,
+        ]);
+
+        $tenantB = Tenant::query()->create([
+            'market_id' => $market->id,
+            'name' => 'МДН Инжиниринг ООО',
+            'external_id' => 'tenant-b',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_duplicate_ignores')->insert([
+            'market_id' => $market->id,
+            'tenant_left_id' => min($tenantA->id, $tenantB->id),
+            'tenant_right_id' => max($tenantA->id, $tenantB->id),
+            'reason' => 'different_tenants',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $signals = app(TenantDuplicateSignalService::class)->signalsForMarket((int) $market->id);
+
+        $this->assertSame([], $signals);
     }
 
     public function test_it_ignores_unrelated_tenants(): void
