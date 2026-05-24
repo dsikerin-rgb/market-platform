@@ -170,35 +170,6 @@
 
                 compactDuplicateMeta(card);
 
-                const summaryGrid = card.querySelector('.mrr-needs-card__summary-grid');
-                if (!(summaryGrid instanceof HTMLElement)) {
-                    return;
-                }
-
-                const current = currentTenantName(card);
-                const target = targetTenantName(card);
-
-                if (current === '' && target === '') {
-                    card.dataset.mrrTenantContextEnhanced = '1';
-                    return;
-                }
-
-                const container = document.createElement('div');
-                container.className = 'mrr-needs-card__tenant-context';
-
-                addTenantPill(container, 'Текущий:', current !== '' ? current : 'не указан');
-
-                if (target !== '' && target !== current) {
-                    addTenantPill(container, 'Фактический/новый:', target, ' mrr-needs-card__tenant-pill--target');
-                }
-
-                const brief = summaryGrid.querySelector('.mrr-needs-card__summary-brief');
-                if (brief instanceof HTMLElement) {
-                    summaryGrid.insertBefore(container, brief);
-                } else {
-                    summaryGrid.appendChild(container);
-                }
-
                 card.dataset.mrrTenantContextEnhanced = '1';
             });
         };

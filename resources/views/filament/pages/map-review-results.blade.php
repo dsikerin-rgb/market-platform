@@ -2907,7 +2907,13 @@
                                                 ], static fn ($value): bool => filled($value))));
                                                 $summaryReason = trim((string) ($row['reason'] ?? ''));
 
-                                                if (preg_match('/^Текущий:\s*.+Фактический\/новый:\s*.+$/u', $summaryReason) === 1) {
+                                                if (
+                                                    str_contains($summaryReason, 'Текущ')
+                                                    && (
+                                                        str_contains($summaryReason, 'Фактическ')
+                                                        || str_contains($summaryReason, 'нов')
+                                                    )
+                                                ) {
                                                     $summaryReason = '';
                                                 }
                                             @endphp
