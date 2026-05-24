@@ -1,4 +1,8 @@
 <?php
+/**
+ * Path: app/Services/MarketMap/OperationEffectiveDateFixer.php
+ * Description: Service для исправления effective_date у уже применённой пары tenant_switch + space_review.
+ */
 
 declare(strict_types=1);
 
@@ -280,7 +284,7 @@ final class OperationEffectiveDateFixer
                 'reason' => $reason,
             ];
 
-            $auditOperationId = DB::table('operations')->insertGetId([
+            DB::table('operations')->insert([
                 'market_id' => $marketId,
                 'entity_type' => 'market_space',
                 'entity_id' => $spaceReviewEntityId,
@@ -306,7 +310,9 @@ final class OperationEffectiveDateFixer
                 ],
             ];
         } catch (\Throwable $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
 
             return [
                 'ok' => false,

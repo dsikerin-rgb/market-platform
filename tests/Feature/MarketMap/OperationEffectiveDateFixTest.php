@@ -1,4 +1,8 @@
 <?php
+/**
+ * Path: tests/Feature/MarketMap/OperationEffectiveDateFixTest.php
+ * Description: Feature tests для OperationEffectiveDateFixer.
+ */
 
 declare(strict_types=1);
 
