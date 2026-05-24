@@ -262,6 +262,14 @@ class MapReviewResultsService
                 $suggestedTargetTenantName = trim((string) ($financialSignal['tenant_name'] ?? ''));
             }
 
+            $tenantChangeDetails = $financialSignal !== null
+                ? $this->financialTenantChangeDetails($financialSignal, $createdAt)
+                : $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason);
+            $reviewerTenantName = trim((string) data_get($tenantChangeDetails, 'observed_tenant_name', ''));
+            if ($reviewerTenantName === '') {
+                $reviewerTenantName = $this->reviewerTenantNameFromReason((string) ($reason ?? ''));
+            }
+
             return [
                 'space_id' => (int) $space->id,
                 'number' => $space->number,
@@ -282,9 +290,8 @@ class MapReviewResultsService
                 'review_operation_id' => $operation?->id ? (int) $operation->id : null,
                 'review_created_by' => $operation?->created_by ? (int) $operation->created_by : null,
                 'can_edit_reason' => $operation !== null && (int) ($operation->created_by ?? 0) === Auth::id(),
-                'tenant_change_details' => $financialSignal !== null
-                    ? $this->financialTenantChangeDetails($financialSignal, $createdAt)
-                    : $this->tenantChangeDetails($decision, $payload, $createdByName, $createdAt, $reason),
+                'tenant_change_details' => $tenantChangeDetails,
+                'reviewer_tenant_name' => $reviewerTenantName !== '' ? $reviewerTenantName : null,
                 'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
                 'suggested_target_tenant_id' => $suggestedTargetTenantId,
                 'suggested_target_tenant_name' => $suggestedTargetTenantName,
@@ -1751,6 +1758,26 @@ class MapReviewResultsService
      *   recorded_at:?string
      * }|null
      */
+    private function reviewerTenantNameFromReason(string $reason): string
+    {
+        $source = trim(preg_replace('/\s+/u', ' ', $reason) ?? '');
+
+        if ($source === '') {
+            return '';
+        }
+
+        if (preg_match('/арендатор\s+(?:стал|стала|сменился|сменился\s+на|теперь|новый)?\s*[:—-]?\s*(.+?)(?:\.|$)/iu', $source, $matches) !== 1) {
+            return '';
+        }
+
+        $value = trim((string) ($matches[1] ?? ''));
+        $value = preg_replace('/^(стал|стала)\s+/iu', '', $value) ?? $value;
+        $value = preg_replace('/\s+(стоит|уже|договор|по\s+данным|после|старый|старые)\b.*$/iu', '', $value) ?? $value;
+        $value = trim($value, " \t\n\r\0\x0B.;,:—-");
+
+        return mb_strlen($value, 'UTF-8') >= 3 ? $value : '';
+    }
+
     private function tenantChangeDetails(
         ?string $decision,
         array $payload,

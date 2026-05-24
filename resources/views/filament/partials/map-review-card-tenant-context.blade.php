@@ -172,117 +172,6 @@
             }
         };
 
-        const canonicalTenantName = (value) => clean(value)
-            .toLocaleLowerCase('ru-RU')
-            .replace(/[«»"'()]/g, ' ')
-            .replace(/\b(ип|ооо|ао|пао|зао|оао)\b/giu, ' ')
-            .replace(/[^\p{L}\p{N}]+/gu, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        const tenantNamesLookSame = (left, right) => {
-            const a = canonicalTenantName(left);
-            const b = canonicalTenantName(right);
-
-            if (a === '' || b === '') {
-                return false;
-            }
-
-            return a === b || a.includes(b) || b.includes(a);
-        };
-
-        const reviewReasonText = (card) => clean(
-            card.querySelector('.mrr-conflict-brief__hint-text')?.textContent
-            || card.querySelector('.mrr-needs-card__reason')?.textContent
-            || ''
-        );
-
-        const extractReviewerTenantName = (reason) => {
-            const source = clean(reason);
-
-            if (source === '') {
-                return '';
-            }
-
-            const explicitMatch = source.match(/арендатор\s+(?:стал|стала|сменился|сменился\s+на|теперь|новый)?\s*[:—-]?\s*(.+?)(?:\.|$)/iu);
-            let text = clean(explicitMatch?.[1] || '');
-
-            if (text === '') {
-                return '';
-            }
-
-            text = text
-                .replace(/^(стал|стала)\s+/iu, '')
-                .replace(/\s+(стоит|уже|договор|по\s+данным|после|старый|старые)\b.*$/iu, '')
-                .replace(/[.;,:—-]+$/u, '')
-                .trim();
-
-            return text.length >= 3 ? text : '';
-        };
-
-        const addManualTenantOverrideAction = (card) => {
-            if (!(card instanceof HTMLElement) || card.dataset.mrrManualTenantOverrideEnhanced === '1') {
-                return;
-            }
-
-            const contractButton = card.querySelector('[data-mrr-contract-tenant-switch-apply]');
-            if (!(contractButton instanceof HTMLButtonElement)) {
-                card.dataset.mrrManualTenantOverrideEnhanced = '1';
-                return;
-            }
-
-            const reason = reviewReasonText(card);
-            const reviewerTenantName = extractReviewerTenantName(reason);
-            const contractTenantName = clean(contractButton.dataset.mrrTenantName || targetTenantName(card));
-
-            if (
-                reviewerTenantName === ''
-                || contractTenantName === ''
-                || tenantNamesLookSame(reviewerTenantName, contractTenantName)
-            ) {
-                card.dataset.mrrManualTenantOverrideEnhanced = '1';
-                return;
-            }
-
-            const row = contractButton.closest('.mrr-card-actions__row');
-            if (!(row instanceof HTMLElement)) {
-                card.dataset.mrrManualTenantOverrideEnhanced = '1';
-                return;
-            }
-
-            const warning = document.createElement('div');
-            warning.className = 'mrr-card-actions__warning mrr-card-actions__warning--tenant-mismatch';
-
-            const warningStrong = document.createElement('strong');
-            warningStrong.textContent = 'Проверьте арендатора:';
-
-            const warningText = document.createElement('span');
-            warningText.textContent = ` ревизор указал «${reviewerTenantName}», а договор предлагает «${contractTenantName}». Договорная кнопка отключена, выберите арендатора вручную.`;
-
-            warning.append(warningStrong, warningText);
-
-            const manualButton = document.createElement('button');
-            manualButton.type = 'button';
-            manualButton.className = 'mrr-link mrr-link--button mrr-link--primary';
-            manualButton.setAttribute('data-mrr-manual-tenant-switch-open', '');
-            manualButton.dataset.mrrSpaceId = clean(contractButton.dataset.mrrSpaceId || '');
-            manualButton.dataset.mrrCurrentTenantName = clean(contractButton.dataset.mrrCurrentTenantName || currentTenantName(card));
-            manualButton.dataset.mrrSuggestedTenantId = '0';
-            manualButton.dataset.mrrSuggestedTenantName = reviewerTenantName;
-            manualButton.dataset.mrrEffectiveDate = new Date().toISOString().slice(0, 10);
-            manualButton.dataset.mrrReason = reason || `По ревизии: арендатор стал ${reviewerTenantName}.`;
-            manualButton.textContent = 'Сменить на арендатора из ревизии';
-
-            contractButton.textContent = 'Договорный кандидат не совпадает';
-            contractButton.title = `Ревизор указал ${reviewerTenantName}, договор предлагает ${contractTenantName}`;
-            contractButton.classList.add('mrr-link--contract-mismatch');
-            contractButton.setAttribute('disabled', 'disabled');
-            contractButton.setAttribute('aria-disabled', 'true');
-
-            row.insertBefore(warning, contractButton);
-            row.insertBefore(manualButton, contractButton.nextSibling);
-            card.dataset.mrrManualTenantOverrideEnhanced = '1';
-        };
 
         const enhanceCards = () => {
             document.querySelectorAll('.mrr-needs-card').forEach((card) => {
@@ -295,7 +184,7 @@
                     card.dataset.mrrTenantContextEnhanced = '1';
                 }
 
-                addManualTenantOverrideAction(card);
+
             });
         };
 
