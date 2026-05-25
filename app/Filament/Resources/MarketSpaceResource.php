@@ -1050,9 +1050,7 @@ class MarketSpaceResource extends BaseResource
                                     ->options(function (?MarketSpace $record): array {
                                         $options = static::groupRoleOptions();
 
-                                        if (filled($record?->id)
-                                            && (string) ($record?->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_CHILD
-                                        ) {
+                                        if (filled($record?->id) && ! static::isChildWithParent($record)) {
                                             unset($options[MarketSpace::SPACE_GROUP_ROLE_CHILD]);
                                         }
 
@@ -1068,11 +1066,19 @@ class MarketSpaceResource extends BaseResource
                                             return null;
                                         }
 
-                                        if ((string) ($record?->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+                                        if (static::isChildWithParent($record)) {
                                             return 'Связь с группой меняется кнопкой «Перенести в группу» в шапке карточки.';
                                         }
 
                                         return 'Чтобы сделать место частью группы, используйте кнопку «Добавить в группу» в шапке карточки.';
+                                    })
+                                    ->afterStateHydrated(function (Forms\Components\Select $component, ?string $state, ?MarketSpace $record): void {
+                                        if (filled($record?->id)
+                                            && (string) ($record?->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD
+                                            && blank($record?->space_group_parent_id)
+                                        ) {
+                                            $component->state(MarketSpace::SPACE_GROUP_ROLE_NONE);
+                                        }
                                     })
                                     ->afterStateUpdated(function (?string $state, callable $set): void {
                                         if ($state === 'none') {
