@@ -286,6 +286,9 @@ class MarketSpaceResource extends BaseResource
                 't.name as tenant_name',
                 't.short_name as tenant_short_name',
                 'b.started_at',
+                'b.area_sqm',
+                'b.rent_rate',
+                'b.share_note',
                 'b.source',
             ])
             ->map(function ($row): array {
@@ -297,6 +300,9 @@ class MarketSpaceResource extends BaseResource
                     'tenant_id' => $row->tenant_id ? (int) $row->tenant_id : null,
                     'tenant_name' => $tenantName !== '' ? $tenantName : 'Арендатор',
                     'started_at' => $row->started_at ? (string) $row->started_at : null,
+                    'area_sqm' => $row->area_sqm !== null ? (float) $row->area_sqm : null,
+                    'rent_rate' => $row->rent_rate !== null ? (float) $row->rent_rate : null,
+                    'share_note' => trim((string) ($row->share_note ?? '')),
                     'source' => trim((string) ($row->source ?? '')),
                 ];
             })
@@ -316,6 +322,16 @@ class MarketSpaceResource extends BaseResource
 
         foreach ($rows as $row) {
             $meta = [];
+            if ($row['area_sqm'] !== null) {
+                $area = number_format((float) $row['area_sqm'], 2, ',', ' ');
+                $area = rtrim(rtrim($area, '0'), ',');
+                $meta[] = 'площадь: ' . $area . ' м²';
+            }
+            if ($row['rent_rate'] !== null) {
+                $rate = number_format((float) $row['rent_rate'], 2, ',', ' ');
+                $rate = rtrim(rtrim($rate, '0'), ',');
+                $meta[] = 'ставка: ' . $rate . ' ₽';
+            }
             if (! empty($row['started_at'])) {
                 $meta[] = 'с ' . \Carbon\Carbon::parse($row['started_at'])->format('d.m.Y');
             }
@@ -328,9 +344,14 @@ class MarketSpaceResource extends BaseResource
                 $meta[] = $sourceLabel;
             }
 
+            $note = $row['share_note'] !== ''
+                ? '<div style="font-size:11px;line-height:1.35;color:#64748b;">' . e((string) $row['share_note']) . '</div>'
+                : '';
+
             $items .= '<li style="display:grid;gap:2px;padding:7px 0;border-top:1px solid rgba(37,99,235,.14);">'
                 . '<div style="font-size:13px;font-weight:800;color:#0f172a;">' . e((string) $row['tenant_name']) . '</div>'
                 . ($meta !== [] ? '<div style="font-size:12px;color:#475569;">' . e(implode(' · ', $meta)) . '</div>' : '')
+                . $note
                 . '</li>';
         }
 
