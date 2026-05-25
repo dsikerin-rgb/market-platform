@@ -211,20 +211,13 @@ class MarketSpace extends Model
 
     public function effectiveOccupancySourceSpace(): ?self
     {
-        if (filled($this->tenant_id)) {
-            return $this;
+        if ($this->space_group_role === self::SPACE_GROUP_ROLE_CHILD && filled($this->space_group_parent_id)) {
+            $parent = $this->spaceGroupParent;
+
+            return $parent instanceof self && filled($parent->tenant_id) ? $parent : null;
         }
 
-        if ($this->space_group_role !== self::SPACE_GROUP_ROLE_CHILD) {
-            return null;
-        }
-
-        $parent = $this->spaceGroupParent;
-        if (! $parent instanceof self) {
-            return null;
-        }
-
-        return filled($parent->tenant_id) ? $parent : null;
+        return filled($this->tenant_id) ? $this : null;
     }
 
     public function effectiveTenant(): ?Tenant
@@ -265,15 +258,13 @@ class MarketSpace extends Model
 
     public function effectiveOccupancySource(): string
     {
-        if (filled($this->tenant_id)) {
-            return 'direct';
+        $sourceSpace = $this->effectiveOccupancySourceSpace();
+
+        if (! $sourceSpace instanceof self) {
+            return 'none';
         }
 
-        if ($this->effectiveOccupancySourceSpace() instanceof self) {
-            return $this->space_group_role === self::SPACE_GROUP_ROLE_CHILD ? 'parent' : 'direct';
-        }
-
-        return 'none';
+        return $sourceSpace->is($this) ? 'direct' : 'parent';
     }
 
     public function isEffectivelyOccupied(): bool
