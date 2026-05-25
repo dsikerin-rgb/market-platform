@@ -7,6 +7,7 @@ use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use App\Services\Operations\MarketPeriodResolver;
@@ -247,6 +248,47 @@ class MarketSpaceResource extends BaseResource
             . '<div style="font-size:13px;font-weight:800;color:#1d4ed8;">Это место входит в группу</div>'
             . $rows
             . '<div style="font-size:12px;line-height:1.45;color:#475569;">Родительская группа и номер внутри группы меняются через действие «Перенести в группу», а не через обычные поля карточки.</div>'
+            . '</div>'
+        );
+    }
+
+
+    public static function activeMapShapeCountForRecord(?MarketSpace $record): int
+    {
+        if (! filled($record?->id) || ! SchemaFacade::hasTable('market_space_map_shapes')) {
+            return 0;
+        }
+
+        $query = MarketSpaceMapShape::query()
+            ->where('market_space_id', (int) $record->id);
+
+        if (SchemaFacade::hasColumn('market_space_map_shapes', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        return (int) $query->count();
+    }
+
+    public static function requiresParentGroupMapShapeResolution(?MarketSpace $record, ?string $selectedRole): bool
+    {
+        return filled($record?->id)
+            && (string) $selectedRole === MarketSpace::SPACE_GROUP_ROLE_PARENT
+            && static::activeMapShapeCountForRecord($record) > 0;
+    }
+
+    private static function renderParentGroupMapShapeWarning(?MarketSpace $record): ?HtmlString
+    {
+        $shapeCount = static::activeMapShapeCountForRecord($record);
+
+        if ($shapeCount <= 0) {
+            return null;
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #f59e0b;border-radius:12px;background:#fffbeb;color:#92400e;">'
+            . '<div style="font-size:13px;font-weight:800;">' . e('У этого места есть активная фигура карты') . '</div>'
+            . '<div style="font-size:12px;line-height:1.45;">' . e('Parent-группа не должна иметь обычную фигуру карты. Выберите, что сделать с фигурой при сохранении.') . '</div>'
+            . '<div style="font-size:12px;line-height:1.45;">' . e('Активных фигур: ' . $shapeCount) . '</div>'
             . '</div>'
         );
     }
@@ -1104,6 +1146,41 @@ class MarketSpaceResource extends BaseResource
                                             ->columnSpanFull(),
                                     ])
                                     ->visible(fn (?MarketSpace $record): bool => static::isChildWithParent($record))
+                                    ->columnSpanFull()
+                                    ->compact(),
+
+
+                                Section::make('Фигура карты у parent-группы')
+                                    ->schema([
+                                        Forms\Components\Placeholder::make('parent_group_map_shape_warning')
+                                            ->hiddenLabel()
+                                            ->content(fn (?MarketSpace $record): ?HtmlString => static::renderParentGroupMapShapeWarning($record))
+                                            ->columnSpanFull(),
+
+                                        Forms\Components\Radio::make('parent_group_map_shape_action')
+                                            ->label('Что сделать с активной фигурой карты?')
+                                            ->options([
+                                                'deactivate' => 'Отвязать от места и деактивировать',
+                                                'delete' => 'Удалить фигуру полностью',
+                                            ])
+                                            ->required(fn ($get, ?MarketSpace $record): bool => static::requiresParentGroupMapShapeResolution(
+                                                $record,
+                                                (string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                                            ))
+                                            ->visible(fn ($get, ?MarketSpace $record): bool => static::requiresParentGroupMapShapeResolution(
+                                                $record,
+                                                (string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                                            ))
+                                            ->dehydrated(fn ($get, ?MarketSpace $record): bool => static::requiresParentGroupMapShapeResolution(
+                                                $record,
+                                                (string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                                            ))
+                                            ->helperText('Без этого выбора parent-группа осталась бы с обычной фигурой карты, что может запутать учёт и ревизию.'),
+                                    ])
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => static::requiresParentGroupMapShapeResolution(
+                                        $record,
+                                        (string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                                    ))
                                     ->columnSpanFull()
                                     ->compact(),
 
