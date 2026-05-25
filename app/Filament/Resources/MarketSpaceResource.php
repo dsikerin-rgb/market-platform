@@ -200,17 +200,53 @@ class MarketSpaceResource extends BaseResource
 
     private static function renderChildInheritanceNotice(?MarketSpace $record): ?HtmlString
     {
-        if (! $record instanceof MarketSpace) {
+        if (! static::isChildWithParent($record)) {
             return null;
         }
 
-        if ((string) ($record->space_group_role ?? '') !== 'child' || ! filled($record->space_group_parent_id)) {
-            return null;
+        $parent = $record?->spaceGroupParent;
+        $parentLabel = trim((string) ($parent?->number ?? ''));
+
+        if ($parentLabel === '') {
+            $parentLabel = trim((string) ($parent?->display_name ?? ''));
+        }
+
+        if ($parentLabel === '' && $parent instanceof MarketSpace) {
+            $parentLabel = '#' . (int) $parent->id;
+        }
+
+        if ($parentLabel === '') {
+            $parentLabel = '#' . (int) ($record?->space_group_parent_id ?? 0);
+        }
+
+        $slot = trim((string) ($record?->space_group_slot ?? ''));
+        $tenantName = trim((string) ($record?->effectiveTenantName() ?? ''));
+        $parentLocationName = trim((string) ($parent?->location?->name ?? ''));
+
+        $items = [
+            'Родительская группа' => $parentLabel,
+            'Номер в группе' => $slot !== '' ? $slot : '—',
+            'Фактический арендатор' => $tenantName !== '' ? $tenantName : 'Не назначен',
+        ];
+
+        if ($parentLocationName !== '') {
+            $items['Локация группы'] = $parentLocationName;
+        }
+
+        $rows = '';
+
+        foreach ($items as $label => $value) {
+            $rows .= '<div style="display:grid;grid-template-columns:minmax(130px,0.42fr) minmax(0,1fr);gap:8px;align-items:start;">'
+                . '<div style="font-size:12px;font-weight:700;color:#64748b;">' . e($label) . '</div>'
+                . '<div style="font-size:13px;font-weight:700;color:#0f172a;">' . e($value) . '</div>'
+                . '</div>';
         }
 
         return new HtmlString(
-            '<div style="padding:10px 12px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;font-size:13px;line-height:1.45;color:#334155;">'
-            . 'Это место входит в группу. Прямые поля могут быть пустыми, но фактическая занятость берётся из группы.'
+            '<div style="display:grid;gap:10px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e293b;">'
+            . '<div style="font-size:13px;font-weight:800;color:#1d4ed8;">Это место входит в группу</div>'
+            . $rows
+            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Родительская группа и номер внутри группы меняются через действие «Перенести в группу», а не через обычные поля карточки.</div>'
             . '</div>'
         );
     }
@@ -1032,6 +1068,17 @@ class MarketSpaceResource extends BaseResource
                                             // space_group_slot не трогаем — вводится пользователем
                                         }
                                     }),
+
+                                Section::make('Связь с группой')
+                                    ->schema([
+                                        Forms\Components\Placeholder::make('child_group_context')
+                                            ->hiddenLabel()
+                                            ->content(fn (?MarketSpace $record): ?HtmlString => static::renderChildInheritanceNotice($record))
+                                            ->columnSpanFull(),
+                                    ])
+                                    ->visible(fn (?MarketSpace $record): bool => static::isChildWithParent($record))
+                                    ->columnSpanFull()
+                                    ->compact(),
 
                                 Forms\Components\Select::make('space_group_parent_id')
                                     ->label('Родительская группа')
