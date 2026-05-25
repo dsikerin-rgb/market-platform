@@ -1438,6 +1438,9 @@ class MarketMapLinkingTest extends TestCase
                 'tenant_contract_id' => null,
                 'started_at' => '2025-01-01 00:00:00',
                 'ended_at' => null,
+                'area_sqm' => 2,
+                'rent_rate' => 250,
+                'share_note' => 'Тестовая площадь участника',
                 'binding_type' => 'shared_use',
                 'confidence' => 'medium',
                 'source' => 'test_shared_use',
@@ -1453,6 +1456,9 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Место используют несколько арендаторов', false);
+        $response->assertSee('площадь: 2 м²', false);
+        $response->assertSee('ставка: 250 ₽', false);
+        $response->assertSee('Тестовая площадь участника', false);
         $response->assertSee('ООО Совместный 1', false);
         $response->assertSee('ООО Совместный 2', false);
     }
