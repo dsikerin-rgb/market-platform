@@ -58,10 +58,11 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         // Оперативная часть (состояние "сейчас") НЕ зависит от отчётного месяца.
         $now = CarbonImmutable::now($tz);
 
-        $spacesQuery = MarketSpace::query()->where('market_id', $marketId);
-        $totalSpaces = $spacesQuery->count();
+        $spacesQuery = $this->accountingSpacesQuery($marketId);
+        $totalSpaces = (clone $spacesQuery)->count();
 
-        // Текущее занято/свободно берём из статуса мест (операционная истина внутри платформы).
+        // Текущее занято/свободно берём из статуса учётных единиц.
+        // Child с parent — физический сегмент карты, но не самостоятельная строка 1С/таблицы/площади.
         $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
         $freeSpaces = (clone $spacesQuery)->where('status', 'vacant')->count();
 
@@ -114,12 +115,13 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $paidValue = $paid ?? 0.0;
         $debtValue = $debt ?? ($accruedValue - $paidValue);
         $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
+        $accountingScopeDesc = $marketScopeDesc . ' · обычные места и группы без child-сегментов';
         $occupancyRate = $totalSpaces > 0
             ? round(($occupiedSpaces / $totalSpaces) * 100)
             : 0;
         $occupancyDesc = $totalSpaces > 0
-            ? "Занято {$occupiedSpaces} из {$totalSpaces}"
-            : 'На рынке пока нет мест';
+            ? "Занято {$occupiedSpaces} из {$totalSpaces} учётных мест"
+            : 'На рынке пока нет учётных мест';
 
         $stats[] = $this->makeStat(
             label: 'Арендаторы сейчас',
@@ -130,9 +132,9 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-users',
         );
         $stats[] = $this->makeStat(
-            label: 'Торговых мест',
+            label: 'Учётных мест',
             value: $totalSpaces,
-            description: $marketScopeDesc,
+            description: $accountingScopeDesc,
             url: $spacesUrl,
             color: 'gray',
             icon: 'heroicon-o-home-modern',
@@ -140,7 +142,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat(
             label: 'Занято мест',
             value: $occupiedSpaces,
-            description: 'Фильтр: занятые места',
+            description: 'Фильтр: занятые учётные места',
             url: $occupiedSpacesUrl,
             color: 'success',
             icon: 'heroicon-o-check-circle',
@@ -148,7 +150,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat(
             label: 'Свободно мест',
             value: $freeSpaces,
-            description: 'Фильтр: свободные места',
+            description: 'Фильтр: свободные учётные места',
             url: $vacantSpacesUrl,
             color: 'warning',
             icon: 'heroicon-o-sparkles',
@@ -208,7 +210,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         $stats[] = $this->makeStat('Арендаторы сейчас', 0, $note, null, 'primary', 'heroicon-o-users');
-        $stats[] = $this->makeStat('Торговых мест', 0, $note, null, 'gray', 'heroicon-o-home-modern');
+        $stats[] = $this->makeStat('Учётных мест', 0, $note, null, 'gray', 'heroicon-o-home-modern');
         $stats[] = $this->makeStat('Занято мест', 0, $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободно мест', 0, $note, null, 'warning', 'heroicon-o-sparkles');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
@@ -217,6 +219,18 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
 
         return $stats;
+    }
+
+    private function accountingSpacesQuery(int $marketId)
+    {
+        return MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('space_group_role')
+                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                    ->orWhereNull('space_group_parent_id');
+            });
     }
 
     private function makeStat(
