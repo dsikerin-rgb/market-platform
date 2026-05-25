@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/MarketSpaceResource/Pages/EditMarketSpace.php
 
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
@@ -27,6 +28,8 @@ class EditMarketSpace extends BaseEditRecord
     protected static string $resource = MarketSpaceResource::class;
 
     protected static ?string $title = null;
+
+    protected ?string $pendingParentGroupMapShapeAction = null;
 
     public function getTitle(): string|Htmlable
     {
@@ -98,6 +101,13 @@ class EditMarketSpace extends BaseEditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $this->pendingParentGroupMapShapeAction = null;
+
+        $parentGroupMapShapeAction = trim((string) ($data['parent_group_map_shape_action'] ?? ''));
+        unset($data['parent_group_map_shape_action']);
+
+        $this->prepareParentGroupMapShapeResolution($data, $parentGroupMapShapeAction);
+
         $user = Filament::auth()->user();
 
         if (! $user) {
@@ -123,6 +133,134 @@ class EditMarketSpace extends BaseEditRecord
         }
 
         return $data;
+    }
+
+
+    private function prepareParentGroupMapShapeResolution(array $data, string $action): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $nextRole = (string) ($data['space_group_role'] ?? $this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
+
+        if ($nextRole !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            return;
+        }
+
+        if ($this->activeParentGroupMapShapeCount($this->record) <= 0) {
+            return;
+        }
+
+        if (! in_array($action, ['deactivate', 'delete'], true)) {
+            throw ValidationException::withMessages([
+                'parent_group_map_shape_action' => 'Выберите, что сделать с активной фигурой карты при переводе места в parent-группу.',
+            ]);
+        }
+
+        $this->pendingParentGroupMapShapeAction = $action;
+    }
+
+    private function activeParentGroupMapShapeQuery(MarketSpace $record)
+    {
+        $query = MarketSpaceMapShape::query()
+            ->where('market_space_id', (int) $record->id);
+
+        if (Schema::hasColumn('market_space_map_shapes', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        return $query;
+    }
+
+    private function activeParentGroupMapShapeCount(MarketSpace $record): int
+    {
+        if (! Schema::hasTable('market_space_map_shapes')) {
+            return 0;
+        }
+
+        return (int) $this->activeParentGroupMapShapeQuery($record)->count();
+    }
+
+    protected function afterSave(): void
+    {
+        $this->applyPendingParentGroupMapShapeResolution();
+    }
+
+    private function applyPendingParentGroupMapShapeResolution(): void
+    {
+        if (! $this->record instanceof MarketSpace || $this->pendingParentGroupMapShapeAction === null) {
+            return;
+        }
+
+        $this->record->refresh();
+
+        if ((string) ($this->record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            $this->pendingParentGroupMapShapeAction = null;
+
+            return;
+        }
+
+        $action = $this->pendingParentGroupMapShapeAction;
+        $this->pendingParentGroupMapShapeAction = null;
+
+        $shapeCount = $this->activeParentGroupMapShapeCount($this->record);
+
+        if ($shapeCount <= 0) {
+            return;
+        }
+
+        $recordId = (int) $this->record->id;
+        $marketId = (int) $this->record->market_id;
+        $number = trim((string) ($this->record->number ?? ''));
+
+        DB::transaction(function () use ($action, $recordId, $marketId, $number, $shapeCount): void {
+            $query = MarketSpaceMapShape::query()
+                ->where('market_space_id', $recordId);
+
+            if (Schema::hasColumn('market_space_map_shapes', 'is_active')) {
+                $query->where('is_active', true);
+            }
+
+            if ($action === 'delete') {
+                $query->delete();
+            } else {
+                $updates = ['market_space_id' => null];
+
+                if (Schema::hasColumn('market_space_map_shapes', 'is_active')) {
+                    $updates['is_active'] = false;
+                }
+
+                $query->update($updates);
+            }
+
+            Operation::create([
+                'market_id' => $marketId,
+                'entity_type' => 'market_space',
+                'entity_id' => $recordId,
+                'type' => OperationType::SPACE_ATTRS_CHANGE,
+                'status' => 'applied',
+                'comment' => 'Разбор фигуры карты при переводе места в parent-группу',
+                'payload' => [
+                    'market_space_id' => $recordId,
+                    'number' => $number !== '' ? $number : null,
+                    'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                    'map_shape_action' => $action,
+                    'affected_shapes_count' => $shapeCount,
+                ],
+            ]);
+        });
+
+        Notification::make()
+            ->success()
+            ->title($action === 'delete' ? 'Фигура карты удалена' : 'Фигура карты отвязана')
+            ->body($action === 'delete'
+                ? 'Место стало parent-группой. Старая обычная фигура карты удалена.'
+                : 'Место стало parent-группой. Старая обычная фигура карты отвязана и деактивирована.')
+            ->send();
+
+        $this->record->refresh();
+        $this->fillForm();
     }
 
     public function toggleMarketSpaceActiveState(): void

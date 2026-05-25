@@ -7,6 +7,7 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\MarketSpaceResource\Pages\CreateMarketSpace;
+use App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -452,6 +453,105 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_effective_tenant_id', (int) $parentTenant->id);
         $response->assertJsonPath('item.space_effective_tenant_name', $parentTenant->display_name);
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
+    }
+
+
+    public function test_editing_space_to_parent_group_can_deactivate_existing_map_shape(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ORD-TO-PARENT-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $shape = MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(EditMarketSpace::class, ['record' => $space->getRouteKey()])
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'ORD-TO-PARENT-1',
+                'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                'parent_group_map_shape_action' => 'deactivate',
+            ])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $space->refresh();
+        $shape->refresh();
+
+        $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_PARENT, $space->space_group_role);
+        $this->assertNull($shape->market_space_id);
+        $this->assertFalse((bool) $shape->is_active);
+    }
+
+    public function test_editing_space_to_parent_group_can_delete_existing_map_shape(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'ORD-TO-PARENT-2',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $shape = MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'is_active' => true,
+        ]);
+
+        Livewire::test(EditMarketSpace::class, ['record' => $space->getRouteKey()])
+            ->fillForm([
+                'market_id' => $market->id,
+                'number' => 'ORD-TO-PARENT-2',
+                'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                'parent_group_map_shape_action' => 'delete',
+            ])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $space->refresh();
+
+        $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_PARENT, $space->space_group_role);
+        $this->assertDatabaseMissing('market_space_map_shapes', [
+            'id' => $shape->id,
+        ]);
     }
 
     public function test_market_map_shape_store_rejects_parent_group_binding(): void
