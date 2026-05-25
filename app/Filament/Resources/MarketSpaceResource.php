@@ -263,6 +263,81 @@ class MarketSpaceResource extends BaseResource
         );
     }
 
+    private static function hasSharedUseTenants(?MarketSpace $record): bool
+    {
+        return static::sharedUseTenantRows($record) !== [];
+    }
+
+    private static function sharedUseTenantRows(?MarketSpace $record): array
+    {
+        if (! filled($record?->id) || ! SchemaFacade::hasTable('market_space_tenant_bindings')) {
+            return [];
+        }
+
+        return DB::table('market_space_tenant_bindings as b')
+            ->leftJoin('tenants as t', 't.id', '=', 'b.tenant_id')
+            ->where('b.market_space_id', (int) $record->id)
+            ->where('b.binding_type', 'shared_use')
+            ->whereNull('b.ended_at')
+            ->orderBy('t.name')
+            ->orderBy('b.tenant_id')
+            ->get([
+                'b.tenant_id',
+                't.name as tenant_name',
+                't.short_name as tenant_short_name',
+                'b.started_at',
+                'b.source',
+            ])
+            ->map(function ($row): array {
+                $shortName = trim((string) ($row->tenant_short_name ?? ''));
+                $name = trim((string) ($row->tenant_name ?? ''));
+                $tenantName = $shortName !== '' ? $shortName : $name;
+
+                return [
+                    'tenant_id' => $row->tenant_id ? (int) $row->tenant_id : null,
+                    'tenant_name' => $tenantName !== '' ? $tenantName : 'Арендатор',
+                    'started_at' => $row->started_at ? (string) $row->started_at : null,
+                    'source' => trim((string) ($row->source ?? '')),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private static function renderSharedUseTenantsNotice(?MarketSpace $record): HtmlString
+    {
+        $rows = static::sharedUseTenantRows($record);
+
+        if ($rows === []) {
+            return new HtmlString('');
+        }
+
+        $items = '';
+
+        foreach ($rows as $row) {
+            $meta = [];
+            if (! empty($row['started_at'])) {
+                $meta[] = 'с ' . \Carbon\Carbon::parse($row['started_at'])->format('d.m.Y');
+            }
+            if (! empty($row['source'])) {
+                $meta[] = 'источник: ' . $row['source'];
+            }
+
+            $items .= '<li style="display:grid;gap:2px;padding:7px 0;border-top:1px solid rgba(37,99,235,.14);">'
+                . '<div style="font-size:13px;font-weight:800;color:#0f172a;">' . e((string) $row['tenant_name']) . '</div>'
+                . ($meta !== [] ? '<div style="font-size:12px;color:#475569;">' . e(implode(' ? ', $meta)) . '</div>' : '')
+                . '</li>';
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #93c5fd;border-radius:12px;background:#eff6ff;color:#1e293b;">'
+            . '<div style="font-size:13px;font-weight:900;color:#1d4ed8;">Место используют несколько арендаторов</div>'
+            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Это shared-use: несколько арендаторов используют одно физическое место.</div>'
+            . '<ul style="display:grid;gap:0;margin:0;padding:0;list-style:none;">' . $items . '</ul>'
+            . '</div>'
+        );
+    }
+
     public static function activeMapShapeCountForRecord(?MarketSpace $record): int
     {
         if (! filled($record?->id) || ! SchemaFacade::hasTable('market_space_map_shapes')) {
@@ -899,6 +974,12 @@ class MarketSpaceResource extends BaseResource
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?MarketSpace $record): HtmlString => static::renderPrioritySummary($record))
+                                    ->columnSpanFull(),
+                                Forms\Components\Placeholder::make('shared_use_tenants')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderSharedUseTenantsNotice($record))
+                                    ->visible(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
