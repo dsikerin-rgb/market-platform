@@ -224,6 +224,10 @@ class MarketSpaceResource extends BaseResource
         $tenantName = trim((string) ($record?->effectiveTenantName() ?? ''));
         $parentLocationName = trim((string) ($parent?->location?->name ?? ''));
 
+        $parentUrl = $parent instanceof MarketSpace
+            ? static::getUrl('edit', ['record' => $parent])
+            : null;
+
         $items = [
             'Родительская группа' => $parentLabel,
             'Номер в группе' => $slot !== '' ? $slot : '—',
@@ -243,15 +247,21 @@ class MarketSpaceResource extends BaseResource
                 . '</div>';
         }
 
+        $openParentButton = $parentUrl
+            ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+                . '<a href="' . e($parentUrl) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:#2563eb;color:#fff;font-size:12px;font-weight:800;padding:8px 12px;text-decoration:none;">Открыть карточку группы</a>'
+                . '</div>'
+            : '';
+
         return new HtmlString(
             '<div style="display:grid;gap:10px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e293b;">'
             . '<div style="font-size:13px;font-weight:800;color:#1d4ed8;">Это место входит в группу</div>'
             . $rows
+            . $openParentButton
             . '<div style="font-size:12px;line-height:1.45;color:#475569;">Родительская группа и номер внутри группы меняются через действие «Перенести в группу», а не через обычные поля карточки.</div>'
             . '</div>'
         );
     }
-
 
     public static function activeMapShapeCountForRecord(?MarketSpace $record): int
     {
