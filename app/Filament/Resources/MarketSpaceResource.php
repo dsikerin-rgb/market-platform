@@ -1047,12 +1047,33 @@ class MarketSpaceResource extends BaseResource
 
                                 Forms\Components\Select::make('space_group_role')
                                     ->label('Тип группировки')
-                                    ->options(static::groupRoleOptions())
+                                    ->options(function (?MarketSpace $record): array {
+                                        $options = static::groupRoleOptions();
+
+                                        if (filled($record?->id)
+                                            && (string) ($record?->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_CHILD
+                                        ) {
+                                            unset($options[MarketSpace::SPACE_GROUP_ROLE_CHILD]);
+                                        }
+
+                                        return $options;
+                                    })
                                     ->default('none')
                                     ->required()
                                     ->live()
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Определяет, как место участвует в группировке. "Обычное место" — не входит в группу. "Группа мест" — контейнер для связанных мест. "Место в группе" — часть группы, которая выбирает родителя из списка.')
+                                    ->hintIconTooltip('Определяет, как место участвует в группировке. Для существующего места перевод в группу выполняется отдельной кнопкой в шапке карточки, чтобы сразу выбрать родительскую группу и номер внутри группы.')
+                                    ->helperText(function (?MarketSpace $record): ?string {
+                                        if (! filled($record?->id)) {
+                                            return null;
+                                        }
+
+                                        if ((string) ($record?->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+                                            return 'Связь с группой меняется кнопкой «Перенести в группу» в шапке карточки.';
+                                        }
+
+                                        return 'Чтобы сделать место частью группы, используйте кнопку «Добавить в группу» в шапке карточки.';
+                                    })
                                     ->afterStateUpdated(function (?string $state, callable $set): void {
                                         if ($state === 'none') {
                                             $set('space_group_token', null);
