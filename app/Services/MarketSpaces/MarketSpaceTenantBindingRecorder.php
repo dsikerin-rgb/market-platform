@@ -1,4 +1,5 @@
 <?php
+# app/Services/MarketSpaces/MarketSpaceTenantBindingRecorder.php
 
 declare(strict_types=1);
 
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Auth;
 
 class MarketSpaceTenantBindingRecorder
 {
+    public const BINDING_TYPE_SHARED_USE = 'shared_use';
+
     public function __construct(
         private readonly ContractDocumentClassifier $classifier,
     ) {
@@ -83,6 +86,7 @@ class MarketSpaceTenantBindingRecorder
         if ($activeBinding === null) {
             MarketSpaceTenantBinding::query()
                 ->where('tenant_contract_id', $contract->id)
+                ->where('binding_type', '!=', self::BINDING_TYPE_SHARED_USE)
                 ->whereNull('ended_at')
                 ->update([
                     'ended_at' => $this->resolveContractEnd($contract, $now),
@@ -95,6 +99,7 @@ class MarketSpaceTenantBindingRecorder
 
         MarketSpaceTenantBinding::query()
             ->where('tenant_contract_id', $contract->id)
+            ->where('binding_type', '!=', self::BINDING_TYPE_SHARED_USE)
             ->whereNull('ended_at')
             ->where(function ($query) use ($activeBinding): void {
                 $query->where('market_space_id', '!=', $activeBinding['market_space_id'])
@@ -109,7 +114,7 @@ class MarketSpaceTenantBindingRecorder
         MarketSpaceTenantBinding::query()
             ->where('market_space_id', $activeBinding['market_space_id'])
             ->whereNull('ended_at')
-            ->where('binding_type', '!=', 'space_snapshot')
+            ->whereNotIn('binding_type', ['space_snapshot', self::BINDING_TYPE_SHARED_USE])
             ->where(function ($query) use ($activeBinding): void {
                 $query->where('tenant_contract_id', '!=', $activeBinding['tenant_contract_id'])
                     ->orWhereNull('tenant_contract_id')
@@ -125,6 +130,7 @@ class MarketSpaceTenantBindingRecorder
             ->where('tenant_contract_id', $contract->id)
             ->where('market_space_id', $activeBinding['market_space_id'])
             ->where('tenant_id', $activeBinding['tenant_id'])
+            ->where('binding_type', '!=', self::BINDING_TYPE_SHARED_USE)
             ->whereNull('ended_at')
             ->first();
 
