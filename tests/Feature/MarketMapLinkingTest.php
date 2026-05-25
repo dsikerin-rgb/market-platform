@@ -1405,5 +1405,57 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Открыть карточку группы', false);
         $response->assertSee(MarketSpaceResource::getUrl('edit', ['record' => $parent]), false);
     }
+    public function test_market_space_edit_page_shows_shared_use_tenants(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Shared-1',
+            'display_name' => 'Shared space',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenantA = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный 1',
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный 2',
+        ]);
+
+        foreach ([$tenantA, $tenantB] as $tenant) {
+            DB::table('market_space_tenant_bindings')->insert([
+                'market_id' => $market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenant->id,
+                'tenant_contract_id' => null,
+                'started_at' => '2025-01-01 00:00:00',
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'medium',
+                'source' => 'test_shared_use',
+                'created_by_user_id' => null,
+                'resolution_reason' => 'test_shared_space_use',
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+
+        $response->assertOk();
+        $response->assertSee('Место используют несколько арендаторов', false);
+        $response->assertSee('ООО Совместный 1', false);
+        $response->assertSee('ООО Совместный 2', false);
+    }
+
 }
 
