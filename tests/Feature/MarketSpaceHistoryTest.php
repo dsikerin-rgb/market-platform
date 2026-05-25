@@ -254,6 +254,131 @@ class MarketSpaceHistoryTest extends TestCase
         ]);
     }
 
+    public function test_contract_binding_sync_preserves_active_shared_use_bindings_on_same_space(): void
+    {
+        Carbon::setTestNow('2025-03-01 09:00:00');
+
+        $market = Market::create(['name' => 'Тестовый рынок']);
+
+        $tenantA = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Основной',
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'number' => 'Shared-1',
+            'status' => 'occupied',
+        ]);
+
+        $shared = MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenantB->id,
+            'tenant_contract_id' => null,
+            'started_at' => Carbon::parse('2025-01-01 00:00:00'),
+            'ended_at' => null,
+            'binding_type' => 'shared_use',
+            'confidence' => 'medium',
+            'source' => 'manual_shared_use',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'shared_space_use',
+            'meta' => ['note' => 'same physical space'],
+        ]);
+
+        TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'market_space_id' => $space->id,
+            'number' => 'Договор Shared-1',
+            'status' => 'active',
+            'starts_at' => '2025-03-01',
+            'is_active' => true,
+        ]);
+
+        $shared->refresh();
+
+        $this->assertNull($shared->ended_at);
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'id' => $shared->id,
+            'binding_type' => 'shared_use',
+            'ended_at' => null,
+        ]);
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenantA->id,
+            'binding_type' => 'exact',
+            'ended_at' => null,
+        ]);
+    }
+
+    public function test_contract_binding_sync_does_not_rewrite_shared_use_binding_for_same_contract(): void
+    {
+        Carbon::setTestNow('2025-03-01 09:00:00');
+
+        $market = Market::create(['name' => 'Тестовый рынок']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'Shared-Contract-1',
+            'status' => 'occupied',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'number' => 'Договор Shared Contract',
+            'status' => 'draft',
+            'starts_at' => '2025-03-01',
+            'is_active' => false,
+        ]);
+
+        $shared = MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'started_at' => Carbon::parse('2025-01-01 00:00:00'),
+            'ended_at' => null,
+            'binding_type' => 'shared_use',
+            'confidence' => 'medium',
+            'source' => 'manual_shared_use',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'shared_space_use',
+            'meta' => ['note' => 'preserve manual shared binding'],
+        ]);
+
+        $contract->status = 'active';
+        $contract->is_active = true;
+        $contract->save();
+
+        $shared->refresh();
+
+        $this->assertNull($shared->ended_at);
+        $this->assertSame('shared_use', $shared->binding_type);
+        $this->assertSame('manual_shared_use', $shared->source);
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'binding_type' => 'exact',
+            'ended_at' => null,
+        ]);
+    }
+
     public function test_service_contract_does_not_create_binding_when_primary_contract_exists_for_same_tenant_and_space(): void
     {
         Carbon::setTestNow('2025-03-01 09:00:00');
