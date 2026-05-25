@@ -1374,4 +1374,36 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('OS7 8', false);
         $response->assertSee('Открыть', false);
     }
+
+    public function test_child_space_edit_page_links_to_parent_group_card(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Parent-Nav',
+            'display_name' => 'Parent Navigation Group',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Child-Nav-1',
+            'display_name' => 'Child Navigation 1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $child]));
+
+        $response->assertOk();
+        $response->assertSee('Открыть карточку группы', false);
+        $response->assertSee(MarketSpaceResource::getUrl('edit', ['record' => $parent]), false);
+    }
 }
+

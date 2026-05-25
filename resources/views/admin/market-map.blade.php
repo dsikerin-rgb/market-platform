@@ -6746,6 +6746,12 @@
                 btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '" title="Открыть карточку торгового места в новой вкладке" aria-label="Открыть карточку торгового места в новой вкладке">Открыть место</button>');
               }
 
+              const spaceGroupRoleForParentNavigation = hit?.space?.space_group_role ?? hit?.space_group_role ?? '';
+              const groupParentIdForNavigation = Number(hit?.space?.group_parent?.id ?? hit?.space?.space_group_parent_id ?? hit?.space_group_parent_id ?? 0);
+              if (spaceGroupRoleForParentNavigation === 'child' && Number.isFinite(groupParentIdForNavigation) && groupParentIdForNavigation > 0) {
+                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupParentIdForNavigation) + '" title="Открыть карточку группы в новой вкладке" aria-label="Открыть карточку группы в новой вкладке">Открыть карточку группы</button>');
+              }
+
               if (hitTenantId && Number.isFinite(hitTenantId) && hitTenantId > 0) {
                 btns.push('<button type="button" data-action="open-tenant" data-tenant-id="' + String(hitTenantId) + '" title="Открыть карточку арендатора в новой вкладке" aria-label="Открыть карточку арендатора в новой вкладке">Открыть арендатора</button>');
               }
