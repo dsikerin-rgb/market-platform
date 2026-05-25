@@ -762,15 +762,32 @@ class MarketSpaceResource extends BaseResource
             $groupMeta = $childrenCount > 0 ? 'Объединяет ' . $childrenCount . ' мест' : 'Группа пока пустая';
         }
 
-        $hasSharedUseTenants = static::hasSharedUseTenants($record);
+        $sharedUseRows = static::sharedUseTenantRows($record);
+        $hasSharedUseTenants = $sharedUseRows !== [];
+        $sharedUseTenantCount = count($sharedUseRows);
+        $sharedUseAreaSum = array_sum(array_map(
+            static fn (array $row): float => $row['area_sqm'] !== null ? (float) $row['area_sqm'] : 0.0,
+            $sharedUseRows,
+        ));
+
         $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
         $tenantValue = $tenantName !== '' ? $tenantName : 'Не назначен';
         $tenantMeta = $tenantName === '' ? 'Сейчас место свободно' : 'Указан на этом месте';
         $tenantTone = $tenantName === '' ? 'vacant' : 'occupied';
-        $tenantLabel = $hasSharedUseTenants ? 'Основной арендатор' : 'Арендатор';
+        $tenantLabel = 'Арендатор';
 
-        if ($tenantName !== '' && $hasSharedUseTenants) {
-            $tenantMeta = 'Указан как основной; ниже показаны арендаторы совместного использования';
+        if ($hasSharedUseTenants) {
+            $tenantWord = match (true) {
+                $sharedUseTenantCount % 10 === 1 && $sharedUseTenantCount % 100 !== 11 => 'участник',
+                in_array($sharedUseTenantCount % 10, [2, 3, 4], true)
+                    && ! in_array($sharedUseTenantCount % 100, [12, 13, 14], true) => 'участника',
+                default => 'участников',
+            };
+
+            $tenantLabel = 'Совместное использование';
+            $tenantValue = 'Активно';
+            $tenantMeta = $sharedUseTenantCount . ' ' . $tenantWord . '; добавление и завершение участия будет отдельным действием';
+            $tenantTone = 'occupied';
         }
 
         if ($tenantName !== '' && $record->effectiveOccupancySource() === 'parent') {
@@ -793,23 +810,35 @@ class MarketSpaceResource extends BaseResource
             . '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-8.9 8.9a2 2 0 0 1-.878.513l-2.5.714a.75.75 0 0 1-.927-.927l.714-2.5a2 2 0 0 1 .513-.878l8.9-8.9ZM12.525 5.707 5.533 12.7a.5.5 0 0 0-.128.22l-.425 1.49 1.49-.425a.5.5 0 0 0 .22-.128l6.992-6.992-1.157-1.157Z"/></svg>'
             . '</button>';
 
+        if ($hasSharedUseTenants) {
+            $tenantActionHtml = '';
+        }
+
         $availabilityValue = $tenantName === '' ? 'Свободно' : 'Занято';
         $availabilityMeta = $tenantName === '' ? 'Арендатор не назначен' : 'Сейчас место используется';
         $availabilityTone = $tenantName === '' ? 'vacant' : 'occupied';
 
         if ($hasSharedUseTenants) {
-            $availabilityMeta = 'Используется несколькими арендаторами';
+            $availabilityValue = 'Занято совместно';
+            $availabilityMeta = 'Место используется несколькими арендаторами';
         }
 
+        $areaLabel = 'Площадь';
         $areaValue = 'Не указана';
         $areaMeta = 'Нужна для расчётов и отчётов';
         if ($record->area_sqm !== null) {
             $formattedArea = number_format((float) $record->area_sqm, 2, ',', ' ');
             $formattedArea = rtrim(rtrim($formattedArea, '0'), ',');
             $areaValue = $formattedArea . ' м²';
-            $areaMeta = $hasSharedUseTenants
-                ? 'Площадь основного места; не распределена между арендаторами'
-                : 'Используется в ставке и аналитике';
+            $areaMeta = 'Используется в ставке и аналитике';
+        }
+
+        if ($hasSharedUseTenants) {
+            $formattedSharedArea = number_format((float) $sharedUseAreaSum, 2, ',', ' ');
+            $formattedSharedArea = rtrim(rtrim($formattedSharedArea, '0'), ',');
+            $areaLabel = 'Общая площадь участников';
+            $areaValue = $formattedSharedArea !== '' ? $formattedSharedArea . ' м²' : 'Не указана';
+            $areaMeta = 'Сумма площадей активных участников; площадь самого места хранится отдельно';
         }
 
         $unitLabel = filled($record->rent_rate_unit)
@@ -842,9 +871,12 @@ class MarketSpaceResource extends BaseResource
             static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta),
             static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
             static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone),
-            static::renderPrioritySummaryItem($hasSharedUseTenants ? 'Площадь основного места' : 'Площадь', $areaValue, $areaMeta),
-            static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts)),
+            static::renderPrioritySummaryItem($areaLabel, $areaValue, $areaMeta),
         ];
+
+        if (! $hasSharedUseTenants) {
+            $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
+        }
 
         return new HtmlString('<div class="market-space-priority-summary">' . implode('', $items) . '</div>');
     }

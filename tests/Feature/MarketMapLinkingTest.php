@@ -1455,6 +1455,13 @@ class MarketMapLinkingTest extends TestCase
         $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $space]));
 
         $response->assertOk();
+        $response->assertSee('Совместное использование', false);
+        $response->assertSee('2 участника; добавление и завершение участия будет отдельным действием', false);
+        $response->assertSee('Занято совместно', false);
+        $response->assertSee('Общая площадь участников', false);
+        $response->assertSee('Сумма площадей активных участников', false);
+        $response->assertDontSee('Основной арендатор', false);
+        $response->assertDontSee('Площадь основного места', false);
         $response->assertSee('Место используют несколько арендаторов', false);
         $response->assertSee('площадь: 2 м²', false);
         $response->assertSee('ставка: 250 ₽', false);
