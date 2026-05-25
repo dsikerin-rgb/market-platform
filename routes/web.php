@@ -811,6 +811,29 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             && Schema::hasColumn('market_spaces', 'map_reviewed_by');
     };
 
+    $rejectParentGroupMapShape = static function (?int $marketSpaceId, int $marketId): void {
+        if ($marketSpaceId === null) {
+            return;
+        }
+
+        $space = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->whereKey($marketSpaceId)
+            ->first(['id', 'number', 'space_group_role']);
+
+        if (! $space) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'market_space_id не принадлежит текущему рынку',
+            ]);
+        }
+
+        if ((string) ($space->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Parent-группа не должна иметь обычную фигуру карты. Отрисуйте child-места группы или используйте отдельный контур группы.',
+            ]);
+        }
+    };
+
     $mapReviewStatusLabel = static function (?string $status): ?string {
         return match ($status) {
             'matched' => 'Совпало',
@@ -919,7 +942,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     Route::post('/admin/market-map/shapes', function (Request $request) use (
         $resolveMarketForMap,
         $ensureCanEditShapes,
-        $normalizePolygonAndBbox
+        $normalizePolygonAndBbox,
+        $rejectParentGroupMapShape
     ) {
         $ensureCanEditShapes();
         $market = $resolveMarketForMap();
@@ -953,18 +977,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $marketSpaceId = $validated['market_space_id'] ?? null;
 
-        if ($marketSpaceId !== null) {
-            $belongs = MarketSpace::query()
-                ->where('market_id', (int) $market->id)
-                ->whereKey((int) $marketSpaceId)
-                ->exists();
-
-            if (! $belongs) {
-                throw ValidationException::withMessages([
-                    'market_space_id' => 'market_space_id не принадлежит текущему рынку',
-                ]);
-            }
-        }
+        $rejectParentGroupMapShape(
+            $marketSpaceId !== null ? (int) $marketSpaceId : null,
+            (int) $market->id,
+        );
 
         [$polygon, $bbox] = $normalizePolygonAndBbox($validated['polygon']);
 
@@ -1057,7 +1073,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     Route::patch('/admin/market-map/shapes/{shape}', function (Request $request, $shape) use (
         $resolveMarketForMap,
         $ensureCanEditShapes,
-        $normalizePolygonAndBbox
+        $normalizePolygonAndBbox,
+        $rejectParentGroupMapShape
     ) {
         $ensureCanEditShapes();
         $market = $resolveMarketForMap();
@@ -1109,18 +1126,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         if (array_key_exists('market_space_id', $validated)) {
             $marketSpaceId = $validated['market_space_id'];
 
-            if ($marketSpaceId !== null) {
-                $belongs = MarketSpace::query()
-                    ->where('market_id', (int) $market->id)
-                    ->whereKey((int) $marketSpaceId)
-                    ->exists();
-
-                if (! $belongs) {
-                    throw ValidationException::withMessages([
-                        'market_space_id' => 'market_space_id не принадлежит текущему рынку',
-                    ]);
-                }
-            }
+            $rejectParentGroupMapShape(
+                $marketSpaceId !== null ? (int) $marketSpaceId : null,
+                (int) $market->id,
+            );
         }
 
         if ($nextMarketSpaceId !== null) {

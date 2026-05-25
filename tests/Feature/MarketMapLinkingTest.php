@@ -454,6 +454,40 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
 
+    public function test_market_map_shape_store_rejects_parent_group_binding(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'OS7 6, 7, 8',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson(route('filament.admin.market-map.shapes.store'), [
+            'market_space_id' => $parent->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['market_space_id']);
+
+        $this->assertDatabaseMissing('market_space_map_shapes', [
+            'market_id' => $market->id,
+            'market_space_id' => $parent->id,
+        ]);
+    }
+
     public function test_market_map_shapes_endpoint_exposes_space_group_fields(): void
     {
         $this->actingAsSuperAdmin();
