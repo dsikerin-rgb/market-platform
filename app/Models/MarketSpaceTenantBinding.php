@@ -1,4 +1,5 @@
 <?php
+# app/Models/MarketSpaceTenantBinding.php
 
 declare(strict_types=1);
 
@@ -22,6 +23,9 @@ class MarketSpaceTenantBinding extends Model
         'tenant_contract_id',
         'started_at',
         'ended_at',
+        'area_sqm',
+        'rent_rate',
+        'share_note',
         'binding_type',
         'confidence',
         'source',
@@ -33,6 +37,8 @@ class MarketSpaceTenantBinding extends Model
     protected $casts = [
         'started_at' => 'datetime',
         'ended_at' => 'datetime',
+        'area_sqm' => 'decimal:2',
+        'rent_rate' => 'decimal:2',
         'meta' => 'array',
     ];
 
