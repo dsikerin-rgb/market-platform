@@ -786,7 +786,9 @@ class MarketSpaceResource extends BaseResource
             $formattedArea = number_format((float) $record->area_sqm, 2, ',', ' ');
             $formattedArea = rtrim(rtrim($formattedArea, '0'), ',');
             $areaValue = $formattedArea . ' м²';
-            $areaMeta = 'Используется в ставке и аналитике';
+            $areaMeta = $hasSharedUseTenants
+                ? 'Площадь основного места; не распределена между арендаторами'
+                : 'Используется в ставке и аналитике';
         }
 
         $unitLabel = filled($record->rent_rate_unit)
@@ -819,7 +821,7 @@ class MarketSpaceResource extends BaseResource
             static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta),
             static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
             static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone),
-            static::renderPrioritySummaryItem('Площадь', $areaValue, $areaMeta),
+            static::renderPrioritySummaryItem($hasSharedUseTenants ? 'Площадь основного места' : 'Площадь', $areaValue, $areaMeta),
             static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts)),
         ];
 
