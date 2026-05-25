@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ru">
 <head>
   @php
@@ -6621,21 +6621,31 @@
                     // Статус арендатора (нет точной связи с местом)
                     if (debtStatus === 'green') {
                       line4 = 'Статус арендатора: Нет задолженности';
-                      scopeExplanation = 'Точная связь с местом не подтверждена';
+                      scopeExplanation = financialSource === 'parent'
+                        ? 'Точная связь группы с 1С не подтверждена'
+                        : 'Точная связь с местом не подтверждена';
                     } else if (debtStatus === 'pending') {
                       line4 = 'Статус арендатора: Срок не нарушен';
-                      scopeExplanation = 'Точная связь с местом не подтверждена';
+                      scopeExplanation = financialSource === 'parent'
+                        ? 'Точная связь группы с 1С не подтверждена'
+                        : 'Точная связь с местом не подтверждена';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус арендатора: ' + escapeHtml(debtLabel))
                         : ('Просрочка арендатора: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
-                      scopeExplanation = 'Точная связь с местом не подтверждена';
+                      scopeExplanation = financialSource === 'parent'
+                        ? 'Точная связь группы с 1С не подтверждена'
+                        : 'Точная связь с местом не подтверждена';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус арендатора: Нет данных 1С';
-                      scopeExplanation = 'Точная связь с местом не подтверждена';
+                      scopeExplanation = financialSource === 'parent'
+                        ? 'Точная связь группы с 1С не подтверждена'
+                        : 'Точная связь с местом не подтверждена';
                     } else {
                       line4 = debtLabel ? ('Задолженность арендатора: ' + escapeHtml(debtLabel)) : 'Задолженность арендатора: —';
-                      scopeExplanation = 'Точная связь с местом не подтверждена';
+                      scopeExplanation = financialSource === 'parent'
+                        ? 'Точная связь группы с 1С не подтверждена'
+                        : 'Точная связь с местом не подтверждена';
                     }
                   } else {
                     // scope=none или неизвестный
@@ -6686,7 +6696,8 @@
                 : (occupancySource === 'parent'
                   || (hit.space_effective_tenant_id !== null && hit.space_effective_tenant_id !== undefined)
                   || (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined));
-              const isTenantFallback = (hit.debt_status_scope || 'none') === 'tenant_fallback';
+              const effectiveDebtScopeForActions = hit.space_effective_debt_status_scope || hit.debt_status_scope || 'none';
+              const isTenantFallback = effectiveDebtScopeForActions === 'tenant_fallback';
               const hitReviewStatus = String(hit.review_status || hit.space_review_status || hit?.space?.review_status || hit?.space?.map_review_status || '').trim();
               const hitReviewStatusLabel = String(hit.review_status_label || hit.space_review_status_label || hit?.space?.review_status_label || '').trim();
               const hitReviewStatusText = hitReviewStatusLabel || hitReviewStatus;
