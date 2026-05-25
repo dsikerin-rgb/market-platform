@@ -2105,6 +2105,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
         $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+        $effectiveTenant = $space?->effectiveTenant();
+        $effectiveTenantName = $space?->effectiveTenantName();
+
+        $financialContextSpace = $space?->effectiveOccupancySourceSpace() ?: $space;
+        $financialContextTenant = $financialContextSpace?->tenant instanceof Tenant
+            ? $financialContextSpace->tenant
+            : null;
 
         $resolver = app(DebtStatusResolver::class);
         $resolvedDebt = $space && $tenant
@@ -2119,8 +2126,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ];
 
         $locationName = null;
-        $rentRateValue = $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null;
-        $rentRateUnit = filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null;
+        $rentRateValue = $financialContextSpace?->rent_rate_value !== null ? (float) $financialContextSpace->rent_rate_value : null;
+        $rentRateUnit = filled($financialContextSpace?->rent_rate_unit) ? (string) $financialContextSpace->rent_rate_unit : null;
         $currentAccrualPeriod = null;
         $currentAccrualTotal = null;
         $currentAccrualMode = null;
@@ -2135,11 +2142,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
                 $accrualQuery = DB::table('tenant_accruals')
                     ->where('market_id', (int) $market->id)
-                    ->where('market_space_id', (int) $space->id)
+                    ->where('market_space_id', (int) $financialContextSpace->id)
                     ->where('period', $currentPeriod->toDateString());
 
-                if ($tenant?->id) {
-                    $accrualQuery->where('tenant_id', (int) $tenant->id);
+                if ($financialContextTenant?->id) {
+                    $accrualQuery->where('tenant_id', (int) $financialContextTenant->id);
                 }
 
                 $accrualRow = $accrualQuery
@@ -2158,10 +2165,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 if ($currentAccrualTotal === null) {
                     $latestAccrualQuery = DB::table('tenant_accruals')
                         ->where('market_id', (int) $market->id)
-                        ->where('market_space_id', (int) $space->id);
+                        ->where('market_space_id', (int) $financialContextSpace->id);
 
-                    if ($tenant?->id) {
-                        $latestAccrualQuery->where('tenant_id', (int) $tenant->id);
+                    if ($financialContextTenant?->id) {
+                        $latestAccrualQuery->where('tenant_id', (int) $financialContextTenant->id);
                     }
 
                     $latestAccrual = $latestAccrualQuery
@@ -2252,14 +2259,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ] : null,
                 ...$effectiveOccupancy,
 
-                'tenant' => $tenant ? [
-                    'id' => (int) ($tenant->id ?? 0),
-                    'name' => (string) ($tenantName ?? ''),
-                    'debt_status' => $resolvedDebt['status'],
-                    'debt_status_label' => $resolvedDebt['label'],
-                    'debt_status_mode' => $resolvedDebt['mode'],
+                'tenant' => $effectiveTenant ? [
+                    'id' => (int) ($effectiveTenant->id ?? 0),
+                    'name' => (string) ($effectiveTenantName ?? ''),
+                    'debt_status' => $effectiveFinancial['space_effective_debt_status'] ?? $resolvedDebt['status'],
+                    'debt_status_label' => $effectiveFinancial['space_effective_debt_status_label'] ?? $resolvedDebt['label'],
+                    'debt_status_mode' => $effectiveFinancial['space_effective_debt_status_mode'] ?? $resolvedDebt['mode'],
                 ] : null,
-                'tenant_id' => $tenant?->id ? (int) $tenant->id : null,
+                'tenant_id' => $effectiveTenant?->id ? (int) $effectiveTenant->id : null,
                 'space_tenant_id' => $space?->tenant_id ? (int) $space->tenant_id : null,
 
                 'debt_status' => $resolvedDebt['status'],
