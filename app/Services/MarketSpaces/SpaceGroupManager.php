@@ -339,9 +339,13 @@ final class SpaceGroupManager
             ]);
         }
 
-        if ($space->space_group_role !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
+        $isOrdinary = $space->space_group_role === MarketSpace::SPACE_GROUP_ROLE_NONE;
+        $isOrphanChild = $space->space_group_role === MarketSpace::SPACE_GROUP_ROLE_CHILD
+            && ! filled($space->space_group_parent_id);
+
+        if (! $isOrdinary && ! $isOrphanChild) {
             throw ValidationException::withMessages([
-                'target_parent_id' => 'Добавить в группу можно только обычное место (без группы).',
+                'target_parent_id' => 'Добавить в группу можно только обычное место или место без выбранной родительской группы.',
             ]);
         }
 

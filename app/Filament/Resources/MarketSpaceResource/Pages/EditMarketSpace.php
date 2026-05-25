@@ -999,10 +999,17 @@ class EditMarketSpace extends BaseEditRecord
     private function makeRegroupAction(string $actionClass): mixed
     {
         $isChild = fn (): bool => $this->record instanceof MarketSpace
-            && (string) ($this->record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD;
+            && (string) ($this->record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD
+            && filled($this->record->space_group_parent_id);
 
         $isOrdinary = fn (): bool => $this->record instanceof MarketSpace
-            && (string) ($this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_NONE;
+            && (
+                (string) ($this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_NONE
+                || (
+                    (string) ($this->record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD
+                    && blank($this->record->space_group_parent_id)
+                )
+            );
 
         return $actionClass::make('regroup_child')
             ->label(fn (): string => $isChild() ? 'Перенести в группу' : 'Добавить в группу')
