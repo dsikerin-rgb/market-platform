@@ -267,7 +267,7 @@ class SpaceGroupRoleTest extends TestCase
         $this->assertTrue($child->effectiveOccupancySourceSpace()->is($parent));
     }
 
-    public function test_child_space_prefers_direct_tenant_over_parent_effective_occupancy(): void
+    public function test_child_space_inherits_parent_effective_occupancy_even_when_direct_tenant_exists(): void
     {
         $market = Market::create(['name' => 'Test Market']);
         $parentTenant = Tenant::create([
@@ -299,11 +299,11 @@ class SpaceGroupRoleTest extends TestCase
         ]);
 
         $this->assertSame($childTenant->id, $child->tenant_id);
-        $this->assertSame('direct', $child->effectiveOccupancySource());
+        $this->assertSame('parent', $child->effectiveOccupancySource());
         $this->assertTrue($child->isEffectivelyOccupied());
-        $this->assertSame($childTenant->id, $child->effectiveTenantId());
-        $this->assertSame($childTenant->display_name, $child->effectiveTenantName());
-        $this->assertTrue($child->effectiveOccupancySourceSpace()->is($child));
+        $this->assertSame($parentTenant->id, $child->effectiveTenantId());
+        $this->assertSame($parentTenant->display_name, $child->effectiveTenantName());
+        $this->assertTrue($child->effectiveOccupancySourceSpace()->is($parent));
     }
 
     public function test_child_space_without_parent_tenant_stays_free(): void
