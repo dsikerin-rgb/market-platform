@@ -320,12 +320,17 @@ class MarketSpaceResource extends BaseResource
                 $meta[] = 'с ' . \Carbon\Carbon::parse($row['started_at'])->format('d.m.Y');
             }
             if (! empty($row['source'])) {
-                $meta[] = 'источник: ' . $row['source'];
+                $sourceLabel = match ((string) $row['source']) {
+                    'sklad21_pseudo_space_accruals' => 'создано из начислений Склад 21',
+                    default => 'источник: ' . $row['source'],
+                };
+
+                $meta[] = $sourceLabel;
             }
 
             $items .= '<li style="display:grid;gap:2px;padding:7px 0;border-top:1px solid rgba(37,99,235,.14);">'
                 . '<div style="font-size:13px;font-weight:800;color:#0f172a;">' . e((string) $row['tenant_name']) . '</div>'
-                . ($meta !== [] ? '<div style="font-size:12px;color:#475569;">' . e(implode(' ? ', $meta)) . '</div>' : '')
+                . ($meta !== [] ? '<div style="font-size:12px;color:#475569;">' . e(implode(' · ', $meta)) . '</div>' : '')
                 . '</li>';
         }
 
@@ -736,10 +741,16 @@ class MarketSpaceResource extends BaseResource
             $groupMeta = $childrenCount > 0 ? 'Объединяет ' . $childrenCount . ' мест' : 'Группа пока пустая';
         }
 
+        $hasSharedUseTenants = static::hasSharedUseTenants($record);
         $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
         $tenantValue = $tenantName !== '' ? $tenantName : 'Не назначен';
         $tenantMeta = $tenantName === '' ? 'Сейчас место свободно' : 'Указан на этом месте';
         $tenantTone = $tenantName === '' ? 'vacant' : 'occupied';
+        $tenantLabel = $hasSharedUseTenants ? 'Основной арендатор' : 'Арендатор';
+
+        if ($tenantName !== '' && $hasSharedUseTenants) {
+            $tenantMeta = 'Указан как основной; ниже показаны арендаторы совместного использования';
+        }
 
         if ($tenantName !== '' && $record->effectiveOccupancySource() === 'parent') {
             $sourceSpace = $record->effectiveOccupancySourceSpace();
@@ -754,6 +765,7 @@ class MarketSpaceResource extends BaseResource
             }
 
             $tenantMeta = 'Наследуется от группы ' . $sourceLabel;
+            $tenantLabel = 'Арендатор';
         }
 
         $tenantActionHtml = '<button type="button" class="market-space-priority-summary__action" wire:click="mountAction(\'switch_tenant\')" title="Сменить арендатора" aria-label="Сменить арендатора">'
@@ -763,6 +775,10 @@ class MarketSpaceResource extends BaseResource
         $availabilityValue = $tenantName === '' ? 'Свободно' : 'Занято';
         $availabilityMeta = $tenantName === '' ? 'Арендатор не назначен' : 'Сейчас место используется';
         $availabilityTone = $tenantName === '' ? 'vacant' : 'occupied';
+
+        if ($hasSharedUseTenants) {
+            $availabilityMeta = 'Используется несколькими арендаторами';
+        }
 
         $areaValue = 'Не указана';
         $areaMeta = 'Нужна для расчётов и отчётов';
@@ -801,7 +817,7 @@ class MarketSpaceResource extends BaseResource
 
         $items = [
             static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta),
-            static::renderPrioritySummaryItem('Арендатор', $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
+            static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
             static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone),
             static::renderPrioritySummaryItem('Площадь', $areaValue, $areaMeta),
             static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts)),
