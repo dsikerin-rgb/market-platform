@@ -2300,6 +2300,48 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ];
         }
 
+        // Shared use summary
+        $sharedUse = null;
+        if ($space && Schema::hasTable('market_space_tenant_bindings')) {
+            $bindingsQuery = DB::table('market_space_tenant_bindings')
+                ->where('market_space_id', (int) $space->id)
+                ->where('binding_type', 'shared_use')
+                ->whereNull('ended_at')
+                ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'market_space_tenant_bindings.tenant_contract_id')
+                ->leftJoin('tenants as t', 't.id', '=', 'tc.tenant_id')
+                ->select([
+                    'market_space_tenant_bindings.tenant_contract_id',
+                    'market_space_tenant_bindings.tenant_id',
+                    't.name as tenant_name',
+                    'market_space_tenant_bindings.area_sqm',
+                    'market_space_tenant_bindings.rent_rate',
+                    'market_space_tenant_bindings.share_note',
+                ]);
+
+            $sharedUseBindings = $bindingsQuery->get();
+
+            if ($sharedUseBindings->isNotEmpty()) {
+                $participants = $sharedUseBindings->map(function ($binding): array {
+                    return [
+                        'tenant_id' => (int) $binding->tenant_id,
+                        'tenant_name' => filled($binding->tenant_name) ? (string) $binding->tenant_name : null,
+                        'area_sqm' => $binding->area_sqm !== null ? (float) $binding->area_sqm : null,
+                        'rent_rate' => $binding->rent_rate !== null ? (float) $binding->rent_rate : null,
+                        'share_note' => filled($binding->share_note) ? (string) $binding->share_note : null,
+                    ];
+                })->toArray();
+
+                $totalArea = array_sum(array_column($participants, 'area_sqm'));
+
+                $sharedUse = [
+                    'is_shared_use' => true,
+                    'active_count' => count($participants),
+                    'total_area_sqm' => round($totalArea, 2),
+                    'participants' => $participants,
+                ];
+            }
+        }
+
         return response()->json([
             'ok' => true,
             'hit' => [
@@ -2349,6 +2391,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
                 'debt_status_scope' => $resolvedDebt['extra']['scope'] ?? 'none',
                 ...$effectiveFinancial,
+
+                'shared_use' => $sharedUse,
 
                 'debt' => null,
                 'color' => null,
