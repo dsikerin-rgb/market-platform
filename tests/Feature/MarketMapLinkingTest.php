@@ -882,6 +882,109 @@ class MarketMapLinkingTest extends TestCase
         $this->assertContains((int) $ordinary->id, $ids);
     }
 
+    public function test_market_map_without_shapes_excludes_shared_use_participant_pseudo_spaces(): void
+    {
+        // Regression test: shared-use participant-псевдо-места (с pattern __t\d+ или _t\d+)
+        // не должны попадать в список "Мест без фигур", если у основного места есть фигура.
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        // Основное место "Склад 21" с фигурой
+        $baseSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 21',
+            'display_name' => 'Склад 21',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $baseSpace->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 20, 'y' => 10],
+                ['x' => 20, 'y' => 20],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 20,
+            'bbox_y2' => 20,
+            'is_active' => true,
+        ]);
+
+        // Participant-псевдо-места (с suffix __t\d+ и _t\d+)
+        $participant1 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 21__t80',
+            'display_name' => 'Склад 21',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $participant2 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 21__t81',
+            'display_name' => 'Склад 21',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $participant3 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 21_t210',
+            'display_name' => 'Склад 21',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $participant4 = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 21_t211',
+            'display_name' => 'Склад 21',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        // Обычное место без фигуры (должно попадать в список)
+        $ordinaryWithoutShape = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 99',
+            'display_name' => 'Склад 99',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'without_shapes' => true,
+            'limit' => 50,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+        $numbers = $items->pluck('number')->all();
+
+        // Participant-псевдо-места НЕ должны быть в списке
+        $this->assertNotContains((int) $participant1->id, $ids, 'Participant __t80 не должен быть в списке');
+        $this->assertNotContains((int) $participant2->id, $ids, 'Participant __t81 не должен быть в списке');
+        $this->assertNotContains((int) $participant3->id, $ids, 'Participant _t210 не должен быть в списке');
+        $this->assertNotContains((int) $participant4->id, $ids, 'Participant _t211 не должен быть в списке');
+
+        // Основное место НЕ должно быть в списке (у него есть фигура)
+        $this->assertNotContains((int) $baseSpace->id, $ids, 'Base space с фигурой не должен быть в списке');
+
+        // Обычное место без фигуры ДОЛЖНО быть в списке
+        $this->assertContains((int) $ordinaryWithoutShape->id, $ids, 'Обычное место без фигуры должно быть в списке');
+        $this->assertContains('Склад 99', $numbers, 'Склад 99 должен быть в numbers');
+    }
+
     public function test_market_map_spaces_search_is_case_insensitive(): void
     {
         $this->actingAsSuperAdmin();
