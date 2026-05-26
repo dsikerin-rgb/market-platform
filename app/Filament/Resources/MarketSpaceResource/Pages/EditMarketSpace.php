@@ -1099,6 +1099,7 @@ class EditMarketSpace extends BaseEditRecord
                             ->label('Площадь, м²')
                             ->numeric()
                             ->inputMode('decimal')
+                            ->required(fn ($get): bool => blank($get('binding_id')))
                             ->placeholder('Например: 2.5')
                             ->suffix('м²'),
                         \Filament\Forms\Components\TextInput::make('rent_rate')
@@ -1135,6 +1136,36 @@ class EditMarketSpace extends BaseEditRecord
             ])
             ->action(function (array $data): void {
                 $this->syncSharedUseParticipants($data['participants'] ?? []);
+            });
+    }
+
+    private function makeStartSharedUseAction(string $actionClass): mixed
+    {
+        return $actionClass::make('start_shared_use')
+            ->label('Начать совместное использование')
+            ->icon('heroicon-o-user-group')
+            ->tooltip('Подтвердить переход к совместному использованию и сразу выбрать участников')
+            ->size('lg')
+            ->outlined()
+            ->color('primary')
+            ->visible(function (): bool {
+                if (! $this->record instanceof MarketSpace) {
+                    return false;
+                }
+
+                return (string) ($this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_NONE
+                    && ! MarketSpaceResource::hasSharedUseTenants($this->record);
+            })
+            ->extraAttributes([
+                'class' => 'market-space-card-action market-space-card-action--primary',
+            ])
+            ->requiresConfirmation()
+            ->modalHeading('Начать совместное использование')
+            ->modalDescription('После подтверждения сразу откроется форма выбора арендатора и параметров его участия.')
+            ->modalSubmitActionLabel('Продолжить')
+            ->modalCancelActionLabel('Отмена')
+            ->action(function (): void {
+                $this->replaceMountedAction('manage_shared_use');
             });
     }
 
@@ -1233,6 +1264,12 @@ class EditMarketSpace extends BaseEditRecord
             $startedAt = \Illuminate\Support\Carbon::parse($startedAtRaw);
             $area = $this->normalizeNullableDecimal($areaInput, "participants.{$index}.area_sqm");
             $rentRate = $this->normalizeNullableDecimal($rentInput, "participants.{$index}.rent_rate");
+
+            if ($bindingId === null && $area === null) {
+                throw ValidationException::withMessages([
+                    "participants.{$index}.area_sqm" => 'Укажите площадь, которую будет занимать арендатор.',
+                ]);
+            }
 
             if ($bindingId !== null) {
                 /** @var MarketSpaceTenantBinding $binding */
@@ -1681,6 +1718,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeStartSharedUseAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeSharedUseManageAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Actions\Action::class);
@@ -1748,6 +1786,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeStartSharedUseAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeSharedUseManageAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Pages\Actions\Action::class);

@@ -1687,6 +1687,36 @@ class MarketMapLinkingTest extends TestCase
             ->assertHasNoActionErrors();
     }
 
+    public function test_market_space_start_shared_use_action_confirms_without_runtime_error(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Shared-Start',
+            'display_name' => 'Shared start space',
+            'status' => 'occupied',
+            'is_active' => true,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+        ]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->assertActionExists('start_shared_use')
+            ->mountAction('start_shared_use')
+            ->assertActionMounted('start_shared_use')
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+    }
+
     public function test_market_space_shared_use_action_requires_later_date_for_area_change(): void
     {
         $user = $this->actingAsSuperAdmin();
@@ -1765,6 +1795,60 @@ class MarketMapLinkingTest extends TestCase
 
             $this->assertInstanceOf(\Illuminate\Validation\ValidationException::class, $validation);
             $this->assertArrayHasKey('participants.0.started_at', $validation->errors());
+        }
+    }
+
+    public function test_market_space_shared_use_action_requires_area_for_new_participant(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Shared-4',
+            'display_name' => 'Shared space 4',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный E',
+        ]);
+
+        $component = Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ]);
+
+        $method = new \ReflectionMethod(EditMarketSpace::class, 'syncSharedUseParticipants');
+        $method->setAccessible(true);
+
+        try {
+            $method->invoke($component->instance(), [[
+                'tenant_id' => $tenant->id,
+                'area_sqm' => '',
+                'rent_rate' => '250',
+                'started_at' => '2025-01-01 00:00:00',
+                'share_note' => 'Новый участник без площади',
+            ]]);
+
+            $this->fail('Expected validation exception was not thrown.');
+        } catch (\ReflectionException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            $previous = $exception->getPrevious();
+            $validation = $previous instanceof \Illuminate\Validation\ValidationException
+                ? $previous
+                : ($exception instanceof \Illuminate\Validation\ValidationException ? $exception : null);
+
+            $this->assertInstanceOf(\Illuminate\Validation\ValidationException::class, $validation);
+            $this->assertArrayHasKey('participants.0.area_sqm', $validation->errors());
         }
     }
 
