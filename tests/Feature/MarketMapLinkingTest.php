@@ -1576,7 +1576,7 @@ class MarketMapLinkingTest extends TestCase
                 'tenant_id' => $tenantA->id,
                 'area_sqm' => '4.5',
                 'rent_rate' => '450',
-                'started_at' => '2025-01-01 00:00:00',
+                'started_at' => '2025-02-01 00:00:00',
                 'share_note' => 'Обновили площадь',
             ],
             [
@@ -1590,9 +1590,26 @@ class MarketMapLinkingTest extends TestCase
 
         $this->assertDatabaseHas('market_space_tenant_bindings', [
             'id' => $bindingA->id,
+            'area_sqm' => 2,
+            'rent_rate' => 250,
+            'share_note' => 'Первая площадь',
+            'resolution_reason' => 'shared_use_terms_updated',
+        ]);
+
+        $this->assertSame(
+            '2025-01-31 23:59:59',
+            DB::table('market_space_tenant_bindings')->where('id', $bindingA->id)->value('ended_at')
+        );
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenantA->id,
             'area_sqm' => 4.5,
             'rent_rate' => 450,
             'share_note' => 'Обновили площадь',
+            'binding_type' => 'shared_use',
+            'source' => 'manual_shared_use',
+            'resolution_reason' => 'shared_use_terms_updated',
             'ended_at' => null,
         ]);
 
@@ -1615,6 +1632,87 @@ class MarketMapLinkingTest extends TestCase
         $this->assertNotNull(
             DB::table('market_space_tenant_bindings')->where('id', $bindingB->id)->value('ended_at')
         );
+    }
+
+    public function test_market_space_shared_use_action_requires_later_date_for_area_change(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Shared-3',
+            'display_name' => 'Shared space 3',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный D',
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => '2025-01-01 00:00:00',
+            'ended_at' => null,
+            'area_sqm' => 2,
+            'rent_rate' => 250,
+            'share_note' => 'Первая площадь',
+            'binding_type' => 'shared_use',
+            'confidence' => 'medium',
+            'source' => 'test_shared_use',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'test_shared_space_use',
+            'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $binding = DB::table('market_space_tenant_bindings')
+            ->where('market_space_id', $space->id)
+            ->where('tenant_id', $tenant->id)
+            ->whereNull('ended_at')
+            ->first();
+
+        $component = Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ]);
+
+        $method = new \ReflectionMethod(EditMarketSpace::class, 'syncSharedUseParticipants');
+        $method->setAccessible(true);
+
+        try {
+            $method->invoke($component->instance(), [[
+                'binding_id' => $binding->id,
+                'tenant_id' => $tenant->id,
+                'area_sqm' => '4.5',
+                'rent_rate' => '250',
+                'started_at' => '2025-01-01 00:00:00',
+                'share_note' => 'Изменили площадь без новой даты',
+            ]]);
+
+            $this->fail('Expected validation exception was not thrown.');
+        } catch (\ReflectionException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            $previous = $exception->getPrevious();
+            $validation = $previous instanceof \Illuminate\Validation\ValidationException
+                ? $previous
+                : ($exception instanceof \Illuminate\Validation\ValidationException ? $exception : null);
+
+            $this->assertInstanceOf(\Illuminate\Validation\ValidationException::class, $validation);
+            $this->assertArrayHasKey('participants.0.started_at', $validation->errors());
+        }
     }
 
 }
