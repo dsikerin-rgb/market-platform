@@ -1460,6 +1460,8 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Занято совместно', false);
         $response->assertSee('Общая площадь участников', false);
         $response->assertSee('Сумма площадей активных участников', false);
+        $response->assertSee('Справочная площадь физического места, м²', false);
+        $response->assertSee('Справочное поле старой карточки. Не влияет на общую площадь участников и не меняет их площади.', false);
         $response->assertDontSee('Основной арендатор', false);
         $response->assertDontSee('Площадь основного места', false);
         $response->assertSee('Место используют несколько арендаторов', false);
