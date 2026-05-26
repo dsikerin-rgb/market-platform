@@ -1061,6 +1061,9 @@ class EditMarketSpace extends BaseEditRecord
             ->modalSubmitActionLabel('Сохранить участников')
             ->modalCancelActionLabel('Отмена')
             ->modalWidth(Width::FiveExtraLarge)
+            ->slideOver()
+            ->stickyModalHeader()
+            ->stickyModalFooter()
             ->fillForm(fn (): array => [
                 'participants' => $this->sharedUseParticipantsFormState(),
             ])
