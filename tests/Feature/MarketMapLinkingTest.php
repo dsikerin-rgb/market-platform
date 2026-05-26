@@ -1455,20 +1455,22 @@ class MarketMapLinkingTest extends TestCase
         $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $space]));
 
         $response->assertOk();
-        $response->assertSee('Совместное использование', false);
-        $response->assertSee('2 участника; добавление и завершение участия будет отдельным действием', false);
+        $response->assertSee('Участники совместного использования', false);
+        $response->assertSee('2 участника', false);
         $response->assertSee('Занято совместно', false);
         $response->assertSee('Общая площадь участников', false);
         $response->assertSee('Сумма площадей активных участников', false);
         $response->assertSee('Справочная площадь физического места, м²', false);
-        $response->assertSee('Старое поле карточки. Не влияет на общую площадь участников. Рабочая площадь задаётся у каждого участника совместного использования.', false);
+        $response->assertSee('Справочное поле карточки. Рабочая площадь задаётся у участников.', false);
         $response->assertDontSee('Основной арендатор', false);
         $response->assertDontSee('Площадь основного места', false);
-        $response->assertSee('Место используют несколько арендаторов', false);
+        $response->assertSee('Площадь и состав управляются отдельно по каждому участнику.', false);
         $response->assertSee('площадь: 2 м²', false);
         $response->assertSee('ставка: 250 ₽', false);
         $response->assertDontSee('источник:', false);
+        $response->assertDontSee('источники:', false);
         $response->assertSee('Участники', false);
+        $response->assertDontSee('Площадь, м²', false);
         $response->assertSee('Тестовая площадь участника', false);
         $response->assertSee('ООО Совместный 1', false);
         $response->assertSee('ООО Совместный 2', false);
