@@ -455,6 +455,112 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('item.space_occupancy_source_space_number', (string) $parent->number);
     }
 
+    public function test_market_map_hit_returns_shared_use_summary_for_space_popup(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'MAP-SHARED-1',
+            'display_name' => 'Popup shared-use space',
+            'area_sqm' => 15,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenantA = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Popup Tenant A',
+            'is_active' => true,
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Popup Tenant B',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 40, 'y' => 10],
+                ['x' => 40, 'y' => 40],
+                ['x' => 10, 'y' => 40],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 40,
+            'bbox_y2' => 40,
+            'is_active' => true,
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            [
+                'market_id' => $market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenantA->id,
+                'tenant_contract_id' => null,
+                'started_at' => '2025-01-01 00:00:00',
+                'ended_at' => null,
+                'area_sqm' => 5.5,
+                'rent_rate' => 250,
+                'share_note' => 'Popup note A',
+                'binding_type' => 'shared_use',
+                'confidence' => 'medium',
+                'source' => 'test_shared_use',
+                'created_by_user_id' => null,
+                'resolution_reason' => 'test_shared_space_use',
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'market_id' => $market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenantB->id,
+                'tenant_contract_id' => null,
+                'started_at' => '2025-01-02 00:00:00',
+                'ended_at' => null,
+                'area_sqm' => 6.5,
+                'rent_rate' => 350,
+                'share_note' => 'Popup note B',
+                'binding_type' => 'shared_use',
+                'confidence' => 'medium',
+                'source' => 'test_shared_use',
+                'created_by_user_id' => null,
+                'resolution_reason' => 'test_shared_space_use',
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.hit', [
+            'x' => 20,
+            'y' => 20,
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('hit.market_space_id', (int) $space->id);
+        $response->assertJsonPath('hit.shared_use.is_shared_use', true);
+        $response->assertJsonPath('hit.shared_use.active_count', 2);
+        $response->assertJsonPath('hit.shared_use.total_area_sqm', 12);
+        $response->assertJsonPath('hit.shared_use.participants.0.tenant_name', 'Popup Tenant A');
+        $response->assertJsonPath('hit.shared_use.participants.1.tenant_name', 'Popup Tenant B');
+        $response->assertJsonPath('hit.space.shared_use.is_shared_use', true);
+        $response->assertJsonPath('hit.space.shared_use.participants.0.area_sqm', 5.5);
+        $response->assertJsonPath('hit.space.shared_use.participants.1.area_sqm', 6.5);
+    }
+
 
     public function test_editing_space_to_parent_group_can_deactivate_existing_map_shape(): void
     {
