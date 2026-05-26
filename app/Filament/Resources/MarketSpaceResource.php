@@ -1465,15 +1465,24 @@ class MarketSpaceResource extends BaseResource
                                     }),
 
                                 Forms\Components\TextInput::make('area_sqm')
-                                    ->label('Площадь, м²')
+                                    ->label(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)
+                                        ? 'Справочная площадь физического места, м²'
+                                        : 'Площадь, м²')
                                     ->numeric()
                                     ->inputMode('decimal')
                                     ->placeholder('Например: 48')
                                     ->suffix('м²')
+                                    ->disabled(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
+                                    ->dehydrated(fn (?MarketSpace $record): bool => ! static::hasSharedUseTenants($record))
                                     ->extraFieldWrapperAttributes(['style' => 'width:min(100%, 14rem);'])
                                     ->extraInputAttributes(['style' => 'width:100%;'])
+                                    ->helperText(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)
+                                        ? 'Справочное поле старой карточки. Не влияет на общую площадь участников и не меняет их площади.'
+                                        : 'Площадь обычного торгового места. Для совместного использования площади задаются у участников.')
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
+                                    ->hintIconTooltip(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)
+                                        ? 'Для совместного места рабочие площади задаются у участников в блоке совместного использования. Это поле оставлено только как справочная площадь физической карточки.'
+                                        : 'Площадь используется в отчётах и расчётах. Допускаются десятичные значения.'),
 
                                 Forms\Components\Select::make('status')
                                     ->label('Прямой статус места')
