@@ -302,12 +302,28 @@ class MarketSpaceResource extends BaseResource
                     'started_at' => $row->started_at ? (string) $row->started_at : null,
                     'area_sqm' => $row->area_sqm !== null ? (float) $row->area_sqm : null,
                     'rent_rate' => $row->rent_rate !== null ? (float) $row->rent_rate : null,
-                    'share_note' => trim((string) ($row->share_note ?? '')),
+                    'share_note' => static::sanitizeSharedUseNote((string) ($row->share_note ?? '')),
                     'source' => trim((string) ($row->source ?? '')),
                 ];
             })
             ->values()
             ->all();
+    }
+
+    private static function sanitizeSharedUseNote(string $note): string
+    {
+        $note = trim($note);
+
+        if ($note === '') {
+            return '';
+        }
+
+        $note = preg_replace('/(?:^|[;,.]\s*)источники?:\s*[^;,.]+/iu', '', $note) ?? $note;
+        $note = preg_replace('/\s{2,}/u', ' ', $note) ?? $note;
+        $note = preg_replace('/\s*;\s*;\s*/u', '; ', $note) ?? $note;
+        $note = preg_replace('/^[;,\s]+|[;,\s]+$/u', '', $note) ?? $note;
+
+        return trim($note);
     }
 
     private static function renderSharedUseTenantsNotice(?MarketSpace $record): HtmlString
@@ -348,8 +364,10 @@ class MarketSpaceResource extends BaseResource
 
         return new HtmlString(
             '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #93c5fd;border-radius:12px;background:#eff6ff;color:#1e293b;">'
-            . '<div style="font-size:13px;font-weight:900;color:#1d4ed8;">Место используют несколько арендаторов</div>'
-            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Это shared-use: несколько арендаторов используют одно физическое место.</div>'
+            . '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+            . '<div style="font-size:13px;font-weight:900;color:#1d4ed8;">Участники совместного использования</div>'
+            . '<div style="font-size:12px;color:#475569;">Площадь и состав управляются отдельно по каждому участнику.</div>'
+            . '</div>'
             . '<ul style="display:grid;gap:0;margin:0;padding:0;list-style:none;">' . $items . '</ul>'
             . '</div>'
         );
@@ -373,7 +391,7 @@ class MarketSpaceResource extends BaseResource
             '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;color:#1e293b;width:min(100%,22rem);">'
             . '<div style="font-size:12px;font-weight:800;color:#64748b;">Справочная площадь физического места, м²</div>'
             . '<div style="font-size:16px;font-weight:800;color:#0f172a;">' . e($area) . '</div>'
-            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Старое поле карточки. Не влияет на общую площадь участников. Рабочая площадь задаётся у каждого участника совместного использования.</div>'
+            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Справочное поле карточки. Рабочая площадь задаётся у участников.</div>'
             . '</div>'
         );
     }
@@ -747,13 +765,10 @@ class MarketSpaceResource extends BaseResource
             );
         }
 
-        $number = trim((string) ($record->number ?? ''));
-        $displayName = trim((string) ($record->display_name ?? ''));
+        $groupValue = 'Не состоит в группе';
+        $groupMeta = 'Можно использовать как самостоятельное место';
 
-        $groupValue = 'Отдельное место';
-        $groupMeta = 'Не входит в группу';
-
-        if (static::isChildWithParent($record)) {
+        if ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD && $record->spaceGroupParent) {
             $parent = $record->spaceGroupParent;
             $parentLabel = trim((string) ($parent?->number ?? ''));
 
@@ -798,9 +813,9 @@ class MarketSpaceResource extends BaseResource
                 default => 'участников',
             };
 
-            $tenantLabel = 'Совместное использование';
-            $tenantValue = 'Активно';
-            $tenantMeta = $sharedUseTenantCount . ' ' . $tenantWord . '; добавление и завершение участия будет отдельным действием';
+            $tenantLabel = 'Участники';
+            $tenantValue = $sharedUseTenantCount . ' ' . $tenantWord;
+            $tenantMeta = 'Площадь и состав управляются отдельно';
             $tenantTone = 'occupied';
         }
 
@@ -854,7 +869,7 @@ class MarketSpaceResource extends BaseResource
             $formattedSharedArea = rtrim(rtrim($formattedSharedArea, '0'), ',');
             $areaLabel = 'Общая площадь участников';
             $areaValue = $formattedSharedArea !== '' ? $formattedSharedArea . ' м²' : 'Не указана';
-            $areaMeta = 'Сумма площадей активных участников; площадь самого места хранится отдельно';
+            $areaMeta = 'Сумма площадей активных участников';
         }
 
         $unitLabel = filled($record->rent_rate_unit)
@@ -886,11 +901,11 @@ class MarketSpaceResource extends BaseResource
         $items = [
             static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta),
             static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
-            static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone),
             static::renderPrioritySummaryItem($areaLabel, $areaValue, $areaMeta),
         ];
 
         if (! $hasSharedUseTenants) {
+            $items[] = static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone);
             $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
         }
 
@@ -1481,7 +1496,7 @@ class MarketSpaceResource extends BaseResource
                                     }),
 
                                 Forms\Components\Placeholder::make('shared_use_reference_area')
-                                    ->label('Площадь, м²')
+                                    ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?MarketSpace $record): HtmlString => static::renderSharedUseReferenceArea($record))
                                     ->visible(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
