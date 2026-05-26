@@ -1461,16 +1461,158 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Общая площадь участников', false);
         $response->assertSee('Сумма площадей активных участников', false);
         $response->assertSee('Справочная площадь физического места, м²', false);
-        $response->assertSee('Справочное поле старой карточки. Не влияет на общую площадь участников и не меняет их площади.', false);
+        $response->assertSee('Старое поле карточки. Не влияет на общую площадь участников. Рабочая площадь задаётся у каждого участника совместного использования.', false);
         $response->assertDontSee('Основной арендатор', false);
         $response->assertDontSee('Площадь основного места', false);
         $response->assertSee('Место используют несколько арендаторов', false);
         $response->assertSee('площадь: 2 м²', false);
         $response->assertSee('ставка: 250 ₽', false);
+        $response->assertDontSee('источник:', false);
+        $response->assertSee('Участники', false);
         $response->assertSee('Тестовая площадь участника', false);
         $response->assertSee('ООО Совместный 1', false);
         $response->assertSee('ООО Совместный 2', false);
     }
 
-}
+    public function test_market_space_shared_use_action_updates_participants_and_areas(): void
+    {
+        $user = $this->actingAsSuperAdmin();
 
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Shared-2',
+            'display_name' => 'Shared space 2',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenantA = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный A',
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный B',
+        ]);
+
+        $tenantC = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный C',
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            [
+                'market_id' => $market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenantA->id,
+                'tenant_contract_id' => null,
+                'started_at' => '2025-01-01 00:00:00',
+                'ended_at' => null,
+                'area_sqm' => 2,
+                'rent_rate' => 250,
+                'share_note' => 'Первая площадь',
+                'binding_type' => 'shared_use',
+                'confidence' => 'medium',
+                'source' => 'test_shared_use',
+                'created_by_user_id' => null,
+                'resolution_reason' => 'test_shared_space_use',
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'market_id' => $market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenantB->id,
+                'tenant_contract_id' => null,
+                'started_at' => '2025-01-02 00:00:00',
+                'ended_at' => null,
+                'area_sqm' => 3,
+                'rent_rate' => 350,
+                'share_note' => 'Вторая площадь',
+                'binding_type' => 'shared_use',
+                'confidence' => 'medium',
+                'source' => 'test_shared_use',
+                'created_by_user_id' => null,
+                'resolution_reason' => 'test_shared_space_use',
+                'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $bindingA = DB::table('market_space_tenant_bindings')
+            ->where('market_space_id', $space->id)
+            ->where('tenant_id', $tenantA->id)
+            ->whereNull('ended_at')
+            ->first();
+
+        $bindingB = DB::table('market_space_tenant_bindings')
+            ->where('market_space_id', $space->id)
+            ->where('tenant_id', $tenantB->id)
+            ->whereNull('ended_at')
+            ->first();
+
+        $component = Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->assertActionExists('manage_shared_use');
+
+        $method = new \ReflectionMethod(EditMarketSpace::class, 'syncSharedUseParticipants');
+        $method->setAccessible(true);
+        $method->invoke($component->instance(), [
+            [
+                'binding_id' => $bindingA->id,
+                'tenant_id' => $tenantA->id,
+                'area_sqm' => '4.5',
+                'rent_rate' => '450',
+                'started_at' => '2025-01-01 00:00:00',
+                'share_note' => 'Обновили площадь',
+            ],
+            [
+                'tenant_id' => $tenantC->id,
+                'area_sqm' => '1.5',
+                'rent_rate' => '150',
+                'started_at' => '2025-02-01 00:00:00',
+                'share_note' => 'Новый участник',
+            ],
+        ]);
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'id' => $bindingA->id,
+            'area_sqm' => 4.5,
+            'rent_rate' => 450,
+            'share_note' => 'Обновили площадь',
+            'ended_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenantC->id,
+            'area_sqm' => 1.5,
+            'rent_rate' => 150,
+            'share_note' => 'Новый участник',
+            'binding_type' => 'shared_use',
+            'source' => 'manual_shared_use',
+            'ended_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'id' => $bindingB->id,
+            'resolution_reason' => 'shared_use_participation_ended',
+        ]);
+
+        $this->assertNotNull(
+            DB::table('market_space_tenant_bindings')->where('id', $bindingB->id)->value('ended_at')
+        );
+    }
+
+}
