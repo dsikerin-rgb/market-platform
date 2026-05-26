@@ -1766,6 +1766,63 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->limit($limit)
                 ->get(['id', 'number', 'code', 'display_name', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
 
+            // Фильтр shared-use participant-псевдо-мест (с pattern __t\d+ или _t\d+ в number),
+            // если у основного места есть фигура на карте.
+            // Participant-псевдо-места имеют number вида "Склад 21__t210" или "Склад 21_t210".
+            // Основное место — это "Склад 21" (без suffix).
+            //
+            // Собираем base numbers всех participant-псевдо-мест
+            $participantBaseNumbers = [];
+            foreach ($rows as $row) {
+                $number = (string) $row->number;
+                $baseNumber = preg_replace('/__t[0-9]+$/', '', $number);
+                if ($baseNumber === $number) {
+                    $baseNumber = preg_replace('/_t[0-9]+$/', '', $number);
+                }
+                if ($baseNumber !== $number) {
+                    // Это participant-псевдо-место
+                    $participantBaseNumbers[$baseNumber] = true;
+                }
+            }
+
+            // Проверяем, у каких base numbers ЕСТЬ фигура
+            $baseNumbersWithShapes = [];
+            if (!empty($participantBaseNumbers)) {
+                $spacesWithShapes = MarketSpace::query()
+                    ->where('market_id', (int) $market->id)
+                    ->whereIn('number', array_keys($participantBaseNumbers))
+                    ->whereHas('mapShapes', function ($q) use ($market) {
+                        $q->where('market_id', (int) $market->id)
+                          ->where('is_active', true)
+                          ->where(function ($sub) {
+                              $sub->whereNotNull('bbox_x1')
+                                  ->whereNotNull('bbox_y1')
+                                  ->whereNotNull('bbox_x2')
+                                  ->whereNotNull('bbox_y2')
+                                  ->whereColumn('bbox_x1', '<', 'bbox_x2')
+                                  ->whereColumn('bbox_y1', '<', 'bbox_y2');
+                              $sub->orWhereJsonLength('polygon', '>=', 3);
+                          });
+                    })
+                    ->pluck('number')
+                    ->toArray();
+                $baseNumbersWithShapes = array_fill_keys($spacesWithShapes, true);
+            }
+
+            // Исключаем participant-псевдо-места, у которых основное место с фигурой
+            $rows = $rows->filter(function ($row) use ($baseNumbersWithShapes) {
+                $number = (string) $row->number;
+                $baseNumber = preg_replace('/__t[0-9]+$/', '', $number);
+                if ($baseNumber === $number) {
+                    $baseNumber = preg_replace('/_t[0-9]+$/', '', $number);
+                }
+                if ($baseNumber !== $number) {
+                    // Это participant-псевдо-место — исключаем, если у base есть фигура
+                    return !isset($baseNumbersWithShapes[$baseNumber]);
+                }
+                return true;
+            });
+
             $spaceIds = $rows->pluck('id')->map(static fn ($id): int => (int) $id)->values();
             $today = now()->toDateString();
 
