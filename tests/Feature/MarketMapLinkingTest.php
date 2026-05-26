@@ -1634,6 +1634,59 @@ class MarketMapLinkingTest extends TestCase
         );
     }
 
+    public function test_market_space_shared_use_action_mounts_without_runtime_error(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Shared-Action',
+            'display_name' => 'Shared action space',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный Mount',
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => '2025-01-01 00:00:00',
+            'ended_at' => null,
+            'area_sqm' => 2,
+            'rent_rate' => 250,
+            'share_note' => 'Тестовое участие',
+            'binding_type' => 'shared_use',
+            'confidence' => 'medium',
+            'source' => 'test_shared_use',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'test_shared_space_use',
+            'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->assertActionExists('manage_shared_use')
+            ->mountAction('manage_shared_use')
+            ->assertActionMounted('manage_shared_use')
+            ->assertHasNoActionErrors();
+    }
+
     public function test_market_space_shared_use_action_requires_later_date_for_area_change(): void
     {
         $user = $this->actingAsSuperAdmin();

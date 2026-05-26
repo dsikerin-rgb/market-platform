@@ -1094,7 +1094,7 @@ class EditMarketSpace extends BaseEditRecord
                             ->searchable()
                             ->preload()
                             ->placeholder('Выберите арендатора')
-                            ->disabled(fn (\Filament\Forms\Get $get): bool => filled($get('binding_id'))),
+                            ->disabled(fn ($get): bool => filled($get('binding_id'))),
                         \Filament\Forms\Components\TextInput::make('area_sqm')
                             ->label('Площадь, м²')
                             ->numeric()
