@@ -3476,6 +3476,15 @@
           }).format(num) + ' ₽';
         }
 
+        function formatAreaRu(value) {
+          const num = Number(value);
+          if (!Number.isFinite(num)) return '';
+          return new Intl.NumberFormat('ru-RU', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          }).format(num);
+        }
+
         function buildPopoverRow(text, extraClass = '') {
           if (!text) return '';
 
@@ -6531,7 +6540,33 @@
                 }
                 line1 = metaParts.join(' • ');
 
-                if (!hasTenant) {
+                if (isSharedUse) {
+                  const sharedUseData = hit?.space?.shared_use || hit?.shared_use || {};
+                  const participantsCount = sharedUseData.active_count || 0;
+                  const totalArea = sharedUseData.total_area_sqm || 0;
+                  const physicalArea = space.area_sqm || '';
+                  const participants = sharedUseData.participants || [];
+
+                  line2 = 'Совместное использование';
+                  line3 = participantsCount + ' активн' + (participantsCount === 1 ? 'ий' : 'их') + ' участник' + (participantsCount === 1 ? '' : 'ов');
+                  line4 = 'Общая площадь участников: ' + formatAreaRu(totalArea) + ' м²';
+                  line5 = physicalArea ? ('Физическая площадь карточки: ' + escapeHtml(physicalArea) + ' м²') : '';
+                  
+                  if (participants.length > 0) {
+                    const participantLines = participants.slice(0, 2).map(p => {
+                      const name = p.tenant_name || '—';
+                      const area = p.area_sqm !== null ? formatAreaRu(p.area_sqm) + ' м²' : '';
+                      return escapeHtml(name) + (area ? ' — ' + area : '');
+                    });
+                    line6 = participantLines.join(' • ');
+                    if (participants.length > 2) {
+                      line6 += ' и ещё ' + (participants.length - 2) + ' учт.';
+                    }
+                  } else {
+                    line6 = '';
+                  }
+                  line7 = '';
+                } else if (!hasTenant) {
                   line2 = 'Свободно';
                   line3 = isChildInGroup && groupParentLabel ? ('Группа: ' + escapeHtml(groupParentLabel)) : '';
                   line4 = isChildInGroup
@@ -6696,6 +6731,7 @@
                 : (occupancySource === 'parent'
                   || (hit.space_effective_tenant_id !== null && hit.space_effective_tenant_id !== undefined)
                   || (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined));
+              const isSharedUse = (hit?.space?.shared_use?.is_shared_use === true) || (hit?.shared_use?.is_shared_use === true);
               const effectiveDebtScopeForActions = hit.space_effective_debt_status_scope || hit.debt_status_scope || 'none';
               const isTenantFallback = effectiveDebtScopeForActions === 'tenant_fallback';
               const hitReviewStatus = String(hit.review_status || hit.space_review_status || hit?.space?.review_status || hit?.space?.map_review_status || '').trim();
@@ -6752,7 +6788,7 @@
                 btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupParentIdForNavigation) + '" title="Открыть карточку группы в новой вкладке" aria-label="Открыть карточку группы в новой вкладке">Открыть карточку группы</button>');
               }
 
-              if (hitTenantId && Number.isFinite(hitTenantId) && hitTenantId > 0) {
+              if (hitTenantId && Number.isFinite(hitTenantId) && hitTenantId > 0 && !isSharedUse) {
                 btns.push('<button type="button" data-action="open-tenant" data-tenant-id="' + String(hitTenantId) + '" title="Открыть карточку арендатора в новой вкладке" aria-label="Открыть карточку арендатора в новой вкладке">Открыть арендатора</button>');
               }
 
@@ -6808,7 +6844,7 @@
                 btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" data-default-action="' + escapeHtml(groupDefaultAction) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
               }
 
-              if (CAN_EDIT && hasGroupMembershipSpace) {
+              if (CAN_EDIT && hasGroupMembershipSpace && !isSharedUse) {
                 if (spaceGroupRole === 'parent') {
                   btns.push('<button type="button" disabled title="Состав группы меняется через обычные или дочерние места">Состав группы</button>');
                 } else if (spaceGroupRole === 'child') {
@@ -6816,6 +6852,10 @@
                 } else {
                   btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Добавить в группу</button>');
                 }
+              }
+
+              if (isSharedUse && hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {
+                btns.push('<button type="button" data-action="manage-shared-use" data-space-id="' + String(hitSpaceId) + '">Участники</button>');
               }
 
               if (btns.length) {
@@ -6991,6 +7031,14 @@
                 hidePopover();
                 openGroupMembershipModal(spaceForGroup);
               }
+              return;
+            }
+
+            if (action === 'manage-shared-use') {
+              const id = Number(t.getAttribute('data-space-id') || 0);
+              if (!Number.isFinite(id) || id <= 0) return;
+
+              window.location.href = '/admin/market-spaces/' + String(id) + '/edit?action=manage_shared_use';
               return;
             }
 
