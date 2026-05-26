@@ -2557,6 +2557,45 @@ html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-input-wrp:
   border-color: #5f8fdc;
   box-shadow: 0 0 0 4px rgba(95, 143, 220, 0.14);
 }
+
+/* ====================================================================== */
+/* === Market spaces: shared-use slide-over must scroll inside body       === */
+/* ====================================================================== */
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-window,
+html:not([data-admin-overrides="0"]) [role="dialog"] .fi-modal-window{
+  max-height: calc(100dvh - 1rem) !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-window{
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-header,
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-footer{
+  flex: 0 0 auto !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-content,
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-content > form,
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over form{
+  min-height: 0 !important;
+}
+
+html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-content{
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  padding-bottom: 1rem !important;
+}
+
+/* Fallback: keep dialog body scrollable if Filament changes slide-over body classes. */
+html:not([data-admin-overrides="0"]) [role="dialog"] .fi-modal-content{
+  max-height: calc(100dvh - 9rem) !important;
+  overflow-y: auto !important;
+}
+
 </style>
 
 {{-- Tabs stay in the relation-manager container and are positioned via CSS only. --}}
