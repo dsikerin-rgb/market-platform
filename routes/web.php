@@ -759,20 +759,35 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             return $empty;
         }
 
+        $hasAreaColumn = Schema::hasColumn('market_space_tenant_bindings', 'area_sqm');
+        $hasRentRateColumn = Schema::hasColumn('market_space_tenant_bindings', 'rent_rate');
+        $hasShareNoteColumn = Schema::hasColumn('market_space_tenant_bindings', 'share_note');
+
+        $selectColumns = [
+            'b.tenant_id',
+            't.name as tenant_name',
+            't.short_name as tenant_short_name',
+        ];
+
+        if ($hasAreaColumn) {
+            $selectColumns[] = 'b.area_sqm';
+        }
+
+        if ($hasRentRateColumn) {
+            $selectColumns[] = 'b.rent_rate';
+        }
+
+        if ($hasShareNoteColumn) {
+            $selectColumns[] = 'b.share_note';
+        }
+
         $rows = DB::table('market_space_tenant_bindings as b')
             ->leftJoin('tenants as t', 't.id', '=', 'b.tenant_id')
             ->where('b.market_space_id', (int) $space->id)
             ->where('b.binding_type', 'shared_use')
             ->whereNull('b.ended_at')
             ->orderBy('t.name')
-            ->get([
-                'b.tenant_id',
-                'b.area_sqm',
-                'b.rent_rate',
-                'b.share_note',
-                't.name as tenant_name',
-                't.short_name as tenant_short_name',
-            ]);
+            ->get($selectColumns);
 
         if ($rows->isEmpty()) {
             return $empty;
@@ -783,7 +798,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $hasArea = false;
 
         foreach ($rows as $row) {
-            $area = $row->area_sqm !== null ? (float) $row->area_sqm : null;
+            $area = $hasAreaColumn && isset($row->area_sqm) && $row->area_sqm !== null
+                ? (float) $row->area_sqm
+                : null;
 
             if ($area !== null) {
                 $totalArea += $area;
@@ -796,8 +813,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'tenant_id' => $row->tenant_id !== null ? (int) $row->tenant_id : null,
                 'tenant_name' => $tenantName !== '' ? $tenantName : '-',
                 'area_sqm' => $area,
-                'rent_rate' => $row->rent_rate !== null ? (float) $row->rent_rate : null,
-                'share_note' => $row->share_note !== null ? (string) $row->share_note : null,
+                'rent_rate' => $hasRentRateColumn && isset($row->rent_rate) && $row->rent_rate !== null ? (float) $row->rent_rate : null,
+                'share_note' => $hasShareNoteColumn && isset($row->share_note) && $row->share_note !== null ? (string) $row->share_note : null,
             ];
         }
 
@@ -1938,6 +1955,20 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ])
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
+            ->whereHas('mapShapes', function ($q) use ($market) {
+                $q->where('market_id', (int) $market->id)
+                    ->where('is_active', true)
+                    ->where(function ($sub) {
+                        $sub->where(static function ($bbox) {
+                            $bbox->whereNotNull('bbox_x1')
+                                ->whereNotNull('bbox_y1')
+                                ->whereNotNull('bbox_x2')
+                                ->whereNotNull('bbox_y2')
+                                ->whereColumn('bbox_x1', '<', 'bbox_x2')
+                                ->whereColumn('bbox_y1', '<', 'bbox_y2');
+                        })->orWhereJsonLength('polygon', '>=', 3);
+                    });
+            })
             ->where(function ($qq) use ($isNumeric, $q, $qLike) {
                 if ($isNumeric) {
                     $qq->orWhere('id', '=', (int) $q);
