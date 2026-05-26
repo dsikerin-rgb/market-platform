@@ -747,6 +747,68 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ];
     };
 
+    $buildSharedUseSummary = static function (?MarketSpace $space): array {
+        $empty = [
+            'is_shared_use' => false,
+            'active_count' => 0,
+            'total_area_sqm' => null,
+            'participants' => [],
+        ];
+
+        if (! $space || ! Schema::hasTable('market_space_tenant_bindings')) {
+            return $empty;
+        }
+
+        $rows = DB::table('market_space_tenant_bindings as b')
+            ->leftJoin('tenants as t', 't.id', '=', 'b.tenant_id')
+            ->where('b.market_space_id', (int) $space->id)
+            ->where('b.binding_type', 'shared_use')
+            ->whereNull('b.ended_at')
+            ->orderBy('t.name')
+            ->get([
+                'b.tenant_id',
+                'b.area_sqm',
+                'b.rent_rate',
+                'b.share_note',
+                't.name as tenant_name',
+                't.short_name as tenant_short_name',
+            ]);
+
+        if ($rows->isEmpty()) {
+            return $empty;
+        }
+
+        $participants = [];
+        $totalArea = 0.0;
+        $hasArea = false;
+
+        foreach ($rows as $row) {
+            $area = $row->area_sqm !== null ? (float) $row->area_sqm : null;
+
+            if ($area !== null) {
+                $totalArea += $area;
+                $hasArea = true;
+            }
+
+            $tenantName = trim((string) ($row->tenant_short_name ?: $row->tenant_name ?: ''));
+
+            $participants[] = [
+                'tenant_id' => $row->tenant_id !== null ? (int) $row->tenant_id : null,
+                'tenant_name' => $tenantName !== '' ? $tenantName : '-',
+                'area_sqm' => $area,
+                'rent_rate' => $row->rent_rate !== null ? (float) $row->rent_rate : null,
+                'share_note' => $row->share_note !== null ? (string) $row->share_note : null,
+            ];
+        }
+
+        return [
+            'is_shared_use' => true,
+            'active_count' => count($participants),
+            'total_area_sqm' => $hasArea ? $totalArea : null,
+            'participants' => $participants,
+        ];
+    };
+
     $marketSpaceHasUsableShape = static function (int $marketId, int $spaceId, ?int $ignoreShapeId = null): bool {
         if (! Schema::hasTable('market_space_map_shapes')) {
             return false;
@@ -1944,7 +2006,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * HIT-test: клик по карте -> поиск места по bbox + polygon.
      */
-    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
+    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $buildSharedUseSummary) {
         $market = $resolveMarketForMap();
 
         $validated = $request->validate([
@@ -2265,6 +2327,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'current_accrual_period' => $currentAccrualPeriod,
                     'current_accrual_total' => $currentAccrualTotal,
                     'current_accrual_mode' => $currentAccrualMode,
+                    'shared_use' => $buildSharedUseSummary($space),
                 ] : null,
                 ...$effectiveOccupancy,
 
