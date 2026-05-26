@@ -263,7 +263,7 @@ class MarketSpaceResource extends BaseResource
         );
     }
 
-    private static function hasSharedUseTenants(?MarketSpace $record): bool
+    public static function hasSharedUseTenants(?MarketSpace $record): bool
     {
         return static::sharedUseTenantRows($record) !== [];
     }
@@ -335,15 +335,6 @@ class MarketSpaceResource extends BaseResource
             if (! empty($row['started_at'])) {
                 $meta[] = 'с ' . \Carbon\Carbon::parse($row['started_at'])->format('d.m.Y');
             }
-            if (! empty($row['source'])) {
-                $sourceLabel = match ((string) $row['source']) {
-                    'sklad21_pseudo_space_accruals' => 'создано из начислений Склад 21',
-                    default => 'источник: ' . $row['source'],
-                };
-
-                $meta[] = $sourceLabel;
-            }
-
             $note = $row['share_note'] !== ''
                 ? '<div style="font-size:11px;line-height:1.35;color:#64748b;">' . e((string) $row['share_note']) . '</div>'
                 : '';
@@ -360,6 +351,29 @@ class MarketSpaceResource extends BaseResource
             . '<div style="font-size:13px;font-weight:900;color:#1d4ed8;">Место используют несколько арендаторов</div>'
             . '<div style="font-size:12px;line-height:1.45;color:#475569;">Это shared-use: несколько арендаторов используют одно физическое место.</div>'
             . '<ul style="display:grid;gap:0;margin:0;padding:0;list-style:none;">' . $items . '</ul>'
+            . '</div>'
+        );
+    }
+
+    private static function renderSharedUseReferenceArea(?MarketSpace $record): HtmlString
+    {
+        if (! $record instanceof MarketSpace) {
+            return new HtmlString('');
+        }
+
+        $area = 'Не указана';
+
+        if ($record->area_sqm !== null) {
+            $formatted = number_format((float) $record->area_sqm, 2, ',', ' ');
+            $formatted = rtrim(rtrim($formatted, '0'), ',');
+            $area = $formatted . ' м²';
+        }
+
+        return new HtmlString(
+            '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;color:#1e293b;width:min(100%,22rem);">'
+            . '<div style="font-size:12px;font-weight:800;color:#64748b;">Справочная площадь физического места, м²</div>'
+            . '<div style="font-size:16px;font-weight:800;color:#0f172a;">' . e($area) . '</div>'
+            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Старое поле карточки. Не влияет на общую площадь участников. Рабочая площадь задаётся у каждого участника совместного использования.</div>'
             . '</div>'
         );
     }
@@ -811,7 +825,9 @@ class MarketSpaceResource extends BaseResource
             . '</button>';
 
         if ($hasSharedUseTenants) {
-            $tenantActionHtml = '';
+            $tenantActionHtml = '<button type="button" class="market-space-priority-summary__action" wire:click="mountAction(\'manage_shared_use\')" title="Управлять участниками" aria-label="Управлять участниками">'
+                . '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3.75a3.25 3.25 0 1 1 0 6.5 3.25 3.25 0 0 1 0-6.5ZM4.75 5.5a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 0 0 0-5.5Zm10.5 0a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 0 0 0-5.5ZM10 11.5c-2.65 0-4.75 1.49-4.75 3.25 0 .41.34.75.75.75h8c.41 0 .75-.34.75-.75 0-1.76-2.1-3.25-4.75-3.25Zm-5.25.75c-1.76 0-3.25.95-3.25 2.25 0 .41.34.75.75.75h1.88c.1-1.17.8-2.2 1.88-2.9a4.89 4.89 0 0 0-1.26-.1Zm10.5 0c-.43 0-.85.04-1.25.12 1.06.7 1.76 1.72 1.86 2.88h1.89c.41 0 .75-.34.75-.75 0-1.3-1.5-2.25-3.25-2.25Z"/></svg>'
+                . '</button>';
         }
 
         $availabilityValue = $tenantName === '' ? 'Свободно' : 'Занято';
@@ -1464,6 +1480,13 @@ class MarketSpaceResource extends BaseResource
                                         return implode(' ', $parts);
                                     }),
 
+                                Forms\Components\Placeholder::make('shared_use_reference_area')
+                                    ->label('Площадь, м²')
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderSharedUseReferenceArea($record))
+                                    ->visible(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
+                                    ->columnSpanFull(),
+
                                 Forms\Components\TextInput::make('area_sqm')
                                     ->label(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)
                                         ? 'Справочная площадь физического места, м²'
@@ -1472,8 +1495,7 @@ class MarketSpaceResource extends BaseResource
                                     ->inputMode('decimal')
                                     ->placeholder('Например: 48')
                                     ->suffix('м²')
-                                    ->disabled(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
-                                    ->dehydrated(fn (?MarketSpace $record): bool => ! static::hasSharedUseTenants($record))
+                                    ->visible(fn (?MarketSpace $record): bool => ! static::hasSharedUseTenants($record))
                                     ->extraFieldWrapperAttributes(['style' => 'width:min(100%, 14rem);'])
                                     ->extraInputAttributes(['style' => 'width:100%;'])
                                     ->helperText(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)

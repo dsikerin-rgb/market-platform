@@ -7,6 +7,7 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Models\MarketSpaceTenantBinding;
 use App\Models\Operation;
 use App\Services\MarketSpaces\SpaceGroupManager;
 use App\Services\MarketSpaces\TenantSwitchPlanner;
@@ -1043,6 +1044,284 @@ class EditMarketSpace extends BaseEditRecord
         );
     }
 
+    private function makeSharedUseManageAction(string $actionClass): mixed
+    {
+        return $actionClass::make('manage_shared_use')
+            ->label('Участники')
+            ->icon('heroicon-o-users')
+            ->tooltip('Редактировать участников совместного использования и их площади')
+            ->size('lg')
+            ->outlined()
+            ->color('primary')
+            ->visible(fn (): bool => $this->record instanceof MarketSpace && MarketSpaceResource::hasSharedUseTenants($this->record))
+            ->extraAttributes([
+                'class' => 'market-space-card-action market-space-card-action--primary',
+            ])
+            ->modalHeading('Совместное использование')
+            ->modalSubmitActionLabel('Сохранить участников')
+            ->modalCancelActionLabel('Отмена')
+            ->modalWidth(Width::FiveExtraLarge)
+            ->fillForm(fn (): array => [
+                'participants' => $this->sharedUseParticipantsFormState(),
+            ])
+            ->form([
+                \Filament\Forms\Components\Placeholder::make('shared_use_manage_notice')
+                    ->hiddenLabel()
+                    ->content(new HtmlString(
+                        '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e3a8a;">'
+                        . '<div style="font-size:13px;font-weight:800;">Площадь редактируется у каждого арендатора отдельно.</div>'
+                        . '<div style="font-size:12px;line-height:1.45;color:#475569;">Удаление строки завершает участие арендатора и сохраняет историю. Справочная площадь самого места остаётся на карточке отдельно.</div>'
+                        . '</div>'
+                    )),
+                \Filament\Forms\Components\Repeater::make('participants')
+                    ->label('Участники')
+                    ->schema([
+                        \Filament\Forms\Components\Hidden::make('binding_id'),
+                        \Filament\Forms\Components\Select::make('tenant_id')
+                            ->label('Арендатор')
+                            ->options(function (): array {
+                                if (! $this->record instanceof MarketSpace) {
+                                    return [];
+                                }
+
+                                return Tenant::query()
+                                    ->where('market_id', (int) $this->record->market_id)
+                                    ->active()
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id')
+                                    ->all();
+                            })
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Выберите арендатора'),
+                        \Filament\Forms\Components\TextInput::make('area_sqm')
+                            ->label('Площадь, м²')
+                            ->numeric()
+                            ->inputMode('decimal')
+                            ->placeholder('Например: 2.5')
+                            ->suffix('м²'),
+                        \Filament\Forms\Components\TextInput::make('rent_rate')
+                            ->label('Ставка')
+                            ->numeric()
+                            ->inputMode('decimal')
+                            ->placeholder('Например: 2500')
+                            ->suffix('₽'),
+                        \Filament\Forms\Components\DateTimePicker::make('started_at')
+                            ->label('Начало участия')
+                            ->seconds(false)
+                            ->default(fn (): \Illuminate\Support\Carbon => now()),
+                        \Filament\Forms\Components\Textarea::make('share_note')
+                            ->label('Комментарий')
+                            ->rows(2)
+                            ->maxLength(1000)
+                            ->placeholder('Например: площадь этой части места'),
+                    ])
+                    ->columns(2)
+                    ->defaultItems(0)
+                    ->addActionLabel('Добавить участника')
+                    ->reorderable(false)
+                    ->cloneable(false)
+                    ->itemLabel(function (array $state): ?string {
+                        $tenantId = (int) ($state['tenant_id'] ?? 0);
+
+                        if ($tenantId <= 0) {
+                            return 'Новый участник';
+                        }
+
+                        return Tenant::query()->whereKey($tenantId)->value('name') ?: 'Участник';
+                    }),
+            ])
+            ->action(function (array $data): void {
+                $this->syncSharedUseParticipants($data['participants'] ?? []);
+            });
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function sharedUseParticipantsFormState(): array
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return [];
+        }
+
+        return MarketSpaceTenantBinding::query()
+            ->where('market_space_id', (int) $this->record->id)
+            ->where('binding_type', 'shared_use')
+            ->whereNull('ended_at')
+            ->orderBy('started_at')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (MarketSpaceTenantBinding $binding): array => [
+                'binding_id' => (int) $binding->id,
+                'tenant_id' => (int) $binding->tenant_id,
+                'area_sqm' => $binding->area_sqm !== null ? (float) $binding->area_sqm : null,
+                'rent_rate' => $binding->rent_rate !== null ? (float) $binding->rent_rate : null,
+                'started_at' => $binding->started_at?->format('Y-m-d H:i:s'),
+                'share_note' => (string) ($binding->share_note ?? ''),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $participants
+     */
+    private function syncSharedUseParticipants(array $participants): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $activeBindings = MarketSpaceTenantBinding::query()
+            ->where('market_space_id', (int) $this->record->id)
+            ->where('binding_type', 'shared_use')
+            ->whereNull('ended_at')
+            ->get()
+            ->keyBy('id');
+
+        $normalized = [];
+        $tenantIds = [];
+
+        foreach ($participants as $index => $row) {
+            $tenantId = (int) ($row['tenant_id'] ?? 0);
+            $bindingId = isset($row['binding_id']) && $row['binding_id'] !== '' ? (int) $row['binding_id'] : null;
+            $startedAtRaw = trim((string) ($row['started_at'] ?? ''));
+            $shareNote = trim((string) ($row['share_note'] ?? ''));
+            $areaInput = $row['area_sqm'] ?? null;
+            $rentInput = $row['rent_rate'] ?? null;
+
+            if (
+                $bindingId === null
+                && $tenantId <= 0
+                && trim((string) $areaInput) === ''
+                && trim((string) $rentInput) === ''
+                && $startedAtRaw === ''
+                && $shareNote === ''
+            ) {
+                continue;
+            }
+
+            if ($tenantId <= 0) {
+                throw ValidationException::withMessages([
+                    "participants.{$index}.tenant_id" => 'Выберите арендатора.',
+                ]);
+            }
+
+            if (in_array($tenantId, $tenantIds, true)) {
+                throw ValidationException::withMessages([
+                    "participants.{$index}.tenant_id" => 'Один и тот же арендатор не должен повторяться в активных участниках.',
+                ]);
+            }
+
+            $tenantIds[] = $tenantId;
+
+            if ($bindingId !== null && ! $activeBindings->has($bindingId)) {
+                throw ValidationException::withMessages([
+                    "participants.{$index}.tenant_id" => 'Участник не найден среди активных записей этого места.',
+                ]);
+            }
+
+            if ($startedAtRaw === '') {
+                throw ValidationException::withMessages([
+                    "participants.{$index}.started_at" => 'Укажите дату начала участия.',
+                ]);
+            }
+
+            $normalized[] = [
+                'binding_id' => $bindingId,
+                'tenant_id' => $tenantId,
+                'area_sqm' => $this->normalizeNullableDecimal($areaInput, "participants.{$index}.area_sqm"),
+                'rent_rate' => $this->normalizeNullableDecimal($rentInput, "participants.{$index}.rent_rate"),
+                'started_at' => \Illuminate\Support\Carbon::parse($startedAtRaw),
+                'share_note' => $shareNote,
+            ];
+        }
+
+        $now = now();
+        $keptBindingIds = array_values(array_filter(array_map(
+            static fn (array $row): ?int => $row['binding_id'],
+            $normalized,
+        )));
+
+        DB::transaction(function () use ($activeBindings, $normalized, $now, $keptBindingIds): void {
+            foreach ($activeBindings as $bindingId => $binding) {
+                if (in_array((int) $bindingId, $keptBindingIds, true)) {
+                    continue;
+                }
+
+                $binding->forceFill([
+                    'ended_at' => $now,
+                    'resolution_reason' => 'shared_use_participation_ended',
+                ])->save();
+            }
+
+            foreach ($normalized as $row) {
+                if ($row['binding_id'] !== null) {
+                    /** @var MarketSpaceTenantBinding $binding */
+                    $binding = $activeBindings->get($row['binding_id']);
+                    $binding->forceFill([
+                        'tenant_id' => $row['tenant_id'],
+                        'area_sqm' => $row['area_sqm'],
+                        'rent_rate' => $row['rent_rate'],
+                        'started_at' => $row['started_at'],
+                        'share_note' => $row['share_note'] !== '' ? $row['share_note'] : null,
+                    ])->save();
+
+                    continue;
+                }
+
+                MarketSpaceTenantBinding::query()->create([
+                    'market_id' => (int) $this->record->market_id,
+                    'market_space_id' => (int) $this->record->id,
+                    'tenant_id' => $row['tenant_id'],
+                    'tenant_contract_id' => null,
+                    'started_at' => $row['started_at'],
+                    'ended_at' => null,
+                    'area_sqm' => $row['area_sqm'],
+                    'rent_rate' => $row['rent_rate'],
+                    'share_note' => $row['share_note'] !== '' ? $row['share_note'] : null,
+                    'binding_type' => 'shared_use',
+                    'confidence' => 'medium',
+                    'source' => 'manual_shared_use',
+                    'created_by_user_id' => Filament::auth()->id(),
+                    'resolution_reason' => 'shared_space_use',
+                    'meta' => [],
+                ]);
+            }
+        });
+
+        $this->record->refresh();
+        $this->fillForm();
+
+        Notification::make()
+            ->success()
+            ->title('Совместное использование обновлено')
+            ->body('Состав участников и их площади сохранены.')
+            ->send();
+    }
+
+    private function normalizeNullableDecimal(mixed $value, string $field): ?float
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = str_replace(',', '.', trim((string) $value));
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (! is_numeric($normalized)) {
+            throw ValidationException::withMessages([
+                $field => 'Введите число.',
+            ]);
+        }
+
+        return (float) $normalized;
+    }
+
     private function makeTenantSwitchAction(string $actionClass): mixed
     {
         return $actionClass::make('switch_tenant')
@@ -1341,6 +1620,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeSharedUseManageAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Actions\Action::class);
 
@@ -1407,6 +1687,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeSharedUseManageAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeRegroupAction(\Filament\Pages\Actions\Action::class);
 
@@ -1598,6 +1879,10 @@ class EditMarketSpace extends BaseEditRecord
             }
 
             return 'Входит в группу: ' . $sourceLabel;
+        }
+
+        if (MarketSpaceResource::hasSharedUseTenants($this->record)) {
+            return 'Занято совместно';
         }
 
         if ($source === 'direct') {
