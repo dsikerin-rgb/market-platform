@@ -1069,8 +1069,8 @@ class EditMarketSpace extends BaseEditRecord
                     ->hiddenLabel()
                     ->content(new HtmlString(
                         '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e3a8a;">'
-                        . '<div style="font-size:13px;font-weight:800;">Площадь редактируется у каждого арендатора отдельно.</div>'
-                        . '<div style="font-size:12px;line-height:1.45;color:#475569;">Удаление строки завершает участие арендатора и сохраняет историю. Справочная площадь самого места остаётся на карточке отдельно.</div>'
+                        . '<div style="font-size:13px;font-weight:800;">Площадь и ставка меняются с датой вступления в силу.</div>'
+                        . '<div style="font-size:12px;line-height:1.45;color:#475569;">Для действующего участника укажите более позднюю дату в поле «С даты действия». Система закроет текущую строку и создаст новую, чтобы сохранить историю и не спорить с импортом.</div>'
                         . '</div>'
                     )),
                 \Filament\Forms\Components\Repeater::make('participants')
@@ -1093,7 +1093,8 @@ class EditMarketSpace extends BaseEditRecord
                             })
                             ->searchable()
                             ->preload()
-                            ->placeholder('Выберите арендатора'),
+                            ->placeholder('Выберите арендатора')
+                            ->disabled(fn (\Filament\Forms\Get $get): bool => filled($get('binding_id'))),
                         \Filament\Forms\Components\TextInput::make('area_sqm')
                             ->label('Площадь, м²')
                             ->numeric()
@@ -1107,9 +1108,10 @@ class EditMarketSpace extends BaseEditRecord
                             ->placeholder('Например: 2500')
                             ->suffix('₽'),
                         \Filament\Forms\Components\DateTimePicker::make('started_at')
-                            ->label('Начало участия')
+                            ->label('С даты действия')
                             ->seconds(false)
-                            ->default(fn (): \Illuminate\Support\Carbon => now()),
+                            ->default(fn (): \Illuminate\Support\Carbon => now())
+                            ->helperText('Для новой версии строки укажите более позднюю дату, чем у текущей записи.'),
                         \Filament\Forms\Components\Textarea::make('share_note')
                             ->label('Комментарий')
                             ->rows(2)
@@ -1224,16 +1226,45 @@ class EditMarketSpace extends BaseEditRecord
 
             if ($startedAtRaw === '') {
                 throw ValidationException::withMessages([
-                    "participants.{$index}.started_at" => 'Укажите дату начала участия.',
+                    "participants.{$index}.started_at" => 'Укажите дату начала действия.',
                 ]);
+            }
+
+            $startedAt = \Illuminate\Support\Carbon::parse($startedAtRaw);
+            $area = $this->normalizeNullableDecimal($areaInput, "participants.{$index}.area_sqm");
+            $rentRate = $this->normalizeNullableDecimal($rentInput, "participants.{$index}.rent_rate");
+
+            if ($bindingId !== null) {
+                /** @var MarketSpaceTenantBinding $binding */
+                $binding = $activeBindings->get($bindingId);
+
+                if ((int) $binding->tenant_id !== $tenantId) {
+                    throw ValidationException::withMessages([
+                        "participants.{$index}.tenant_id" => 'Для действующего участника нельзя менять арендатора в той же строке. Завершите участие и добавьте нового.',
+                    ]);
+                }
+
+                $currentStartedAt = $binding->started_at?->copy();
+                $currentArea = $binding->area_sqm !== null ? (float) $binding->area_sqm : null;
+                $currentRentRate = $binding->rent_rate !== null ? (float) $binding->rent_rate : null;
+                $hasTermsChange = $area !== $currentArea
+                    || $rentRate !== $currentRentRate
+                    || $shareNote !== trim((string) ($binding->share_note ?? ''))
+                    || ! $currentStartedAt?->equalTo($startedAt);
+
+                if ($hasTermsChange && $currentStartedAt !== null && $startedAt->lessThanOrEqualTo($currentStartedAt)) {
+                    throw ValidationException::withMessages([
+                        "participants.{$index}.started_at" => 'Для изменения площади или ставки укажите более позднюю дату начала действия, чтобы сохранить историю.',
+                    ]);
+                }
             }
 
             $normalized[] = [
                 'binding_id' => $bindingId,
                 'tenant_id' => $tenantId,
-                'area_sqm' => $this->normalizeNullableDecimal($areaInput, "participants.{$index}.area_sqm"),
-                'rent_rate' => $this->normalizeNullableDecimal($rentInput, "participants.{$index}.rent_rate"),
-                'started_at' => \Illuminate\Support\Carbon::parse($startedAtRaw),
+                'area_sqm' => $area,
+                'rent_rate' => $rentRate,
+                'started_at' => $startedAt,
                 'share_note' => $shareNote,
             ];
         }
@@ -1260,13 +1291,43 @@ class EditMarketSpace extends BaseEditRecord
                 if ($row['binding_id'] !== null) {
                     /** @var MarketSpaceTenantBinding $binding */
                     $binding = $activeBindings->get($row['binding_id']);
+                    $currentStartedAt = $binding->started_at?->copy();
+                    $currentArea = $binding->area_sqm !== null ? (float) $binding->area_sqm : null;
+                    $currentRentRate = $binding->rent_rate !== null ? (float) $binding->rent_rate : null;
+                    $currentShareNote = trim((string) ($binding->share_note ?? ''));
+                    $hasTermsChange = $currentArea !== $row['area_sqm']
+                        || $currentRentRate !== $row['rent_rate']
+                        || $currentShareNote !== $row['share_note']
+                        || ! $currentStartedAt?->equalTo($row['started_at']);
+
+                    if (! $hasTermsChange) {
+                        continue;
+                    }
+
                     $binding->forceFill([
+                        'ended_at' => $row['started_at']->copy()->subSecond(),
+                        'resolution_reason' => 'shared_use_terms_updated',
+                    ])->save();
+
+                    MarketSpaceTenantBinding::query()->create([
+                        'market_id' => (int) $this->record->market_id,
+                        'market_space_id' => (int) $this->record->id,
                         'tenant_id' => $row['tenant_id'],
+                        'tenant_contract_id' => $binding->tenant_contract_id,
+                        'started_at' => $row['started_at'],
+                        'ended_at' => null,
                         'area_sqm' => $row['area_sqm'],
                         'rent_rate' => $row['rent_rate'],
-                        'started_at' => $row['started_at'],
                         'share_note' => $row['share_note'] !== '' ? $row['share_note'] : null,
-                    ])->save();
+                        'binding_type' => 'shared_use',
+                        'confidence' => 'medium',
+                        'source' => 'manual_shared_use',
+                        'created_by_user_id' => Filament::auth()->id(),
+                        'resolution_reason' => 'shared_use_terms_updated',
+                        'meta' => [
+                            'previous_binding_id' => (int) $binding->id,
+                        ],
+                    ]);
 
                     continue;
                 }
@@ -1297,7 +1358,7 @@ class EditMarketSpace extends BaseEditRecord
         Notification::make()
             ->success()
             ->title('Совместное использование обновлено')
-            ->body('Состав участников и их площади сохранены.')
+            ->body('Состав участников и их площади сохранены с историей изменений.')
             ->send();
     }
 
