@@ -6497,6 +6497,8 @@
               let groupParentId = 0;
               let isChildInGroup = false;
               let needsGroupTenantAssignment = false;
+              const occupancySource = hit.space_occupancy_source ? String(hit.space_occupancy_source) : 'none';
+              const isSharedUse = (hit?.space?.shared_use?.is_shared_use === true) || (hit?.shared_use?.is_shared_use === true);
 
               if (space) {
                 const label = (space.number && String(space.number).trim()) ? String(space.number) : (space.code || '');
@@ -6505,12 +6507,11 @@
                 if (space.location_name) {
                   metaParts.push('Локация: ' + escapeHtml(space.location_name));
                 }
-                if (space.area_sqm) {
+                if (!isSharedUse && space.area_sqm) {
                   metaParts.push('Площадь: ' + escapeHtml(space.area_sqm) + ' м²');
                 }
 
                 // Проверяем наличие арендатора
-                const occupancySource = hit.space_occupancy_source ? String(hit.space_occupancy_source) : 'none';
                 const hasTenant = hit.space_effective_is_occupied !== null && hit.space_effective_is_occupied !== undefined
                   ? Boolean(hit.space_effective_is_occupied)
                   : (occupancySource === 'parent'
@@ -6535,7 +6536,7 @@
                 const currentAccrualTotal = space.current_accrual_total !== null && space.current_accrual_total !== undefined ? Number(space.current_accrual_total) : null;
                 const currentAccrualPeriod = space.current_accrual_period ? String(space.current_accrual_period) : '';
                 const currentAccrualMode = space.current_accrual_mode ? String(space.current_accrual_mode) : '';
-                if (storefrontLabel) {
+                if (storefrontLabel && storefrontLabel !== label) {
                   metaParts.push('Отдел / вывеска: ' + escapeHtml(storefrontLabel));
                 }
                 line1 = metaParts.join(' • ');
@@ -6544,27 +6545,19 @@
                   const sharedUseData = hit?.space?.shared_use || hit?.shared_use || {};
                   const participantsCount = sharedUseData.active_count || 0;
                   const totalArea = sharedUseData.total_area_sqm || 0;
-                  const physicalArea = space.area_sqm || '';
                   const participants = sharedUseData.participants || [];
 
                   line2 = 'Совместное использование';
                   line3 = participantsCount + ' активн' + (participantsCount === 1 ? 'ий' : 'их') + ' участник' + (participantsCount === 1 ? '' : 'ов');
-                  line4 = 'Общая площадь участников: ' + formatAreaRu(totalArea) + ' м²';
-                  line5 = physicalArea ? ('Физическая площадь карточки: ' + escapeHtml(physicalArea) + ' м²') : '';
-                  
-                  if (participants.length > 0) {
-                    const participantLines = participants.slice(0, 2).map(p => {
-                      const name = p.tenant_name || '—';
-                      const area = p.area_sqm !== null ? formatAreaRu(p.area_sqm) + ' м²' : '';
-                      return escapeHtml(name) + (area ? ' — ' + area : '');
-                    });
-                    line6 = participantLines.join(' • ');
-                    if (participants.length > 2) {
-                      line6 += ' и ещё ' + (participants.length - 2) + ' учт.';
-                    }
-                  } else {
-                    line6 = '';
-                  }
+                  line4 = 'Площадь места: ' + formatAreaRu(totalArea) + ' м²';
+                  line5 = participants.length > 0
+                    ? ('Участники:<br>' + participants.map(p => {
+                        const name = p.tenant_name || '—';
+                        const area = p.area_sqm !== null ? formatAreaRu(p.area_sqm) + ' м²' : '';
+                        return escapeHtml(name) + (area ? ' — ' + area : '');
+                      }).join('<br>'))
+                    : '';
+                  line6 = '';
                   line7 = '';
                 } else if (!hasTenant) {
                   line2 = 'Свободно';
@@ -6731,7 +6724,6 @@
                 : (occupancySource === 'parent'
                   || (hit.space_effective_tenant_id !== null && hit.space_effective_tenant_id !== undefined)
                   || (hit.space_tenant_id !== null && hit.space_tenant_id !== undefined));
-              const isSharedUse = (hit?.space?.shared_use?.is_shared_use === true) || (hit?.shared_use?.is_shared_use === true);
               const effectiveDebtScopeForActions = hit.space_effective_debt_status_scope || hit.debt_status_scope || 'none';
               const isTenantFallback = effectiveDebtScopeForActions === 'tenant_fallback';
               const hitReviewStatus = String(hit.review_status || hit.space_review_status || hit?.space?.review_status || hit?.space?.map_review_status || '').trim();
