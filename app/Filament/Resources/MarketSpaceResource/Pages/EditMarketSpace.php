@@ -1157,7 +1157,8 @@ class EditMarketSpace extends BaseEditRecord
                 }
 
                 return (string) ($this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_NONE
-                    && ! MarketSpaceResource::hasSharedUseTenants($this->record);
+                    && ! MarketSpaceResource::hasSharedUseTenants($this->record)
+                    && ! MarketSpaceResource::isSharedUseSourceSpace($this->record);
             })
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--primary',
@@ -1540,7 +1541,8 @@ class EditMarketSpace extends BaseEditRecord
             ->outlined()
             ->color('primary')
             ->visible(fn (): bool => ($isChild() || $isOrdinary())
-                && ! MarketSpaceResource::hasSharedUseTenants($this->record))
+                && ! MarketSpaceResource::hasSharedUseTenants($this->record)
+                && ! MarketSpaceResource::isSharedUseSourceSpace($this->record))
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--primary',
             ])

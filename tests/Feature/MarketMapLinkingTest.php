@@ -1487,9 +1487,89 @@ class MarketMapLinkingTest extends TestCase
         $response->assertOk();
         $response->assertDontSee('Состав группы', false);
         $response->assertSee('Добавить в группу', false);
+        $response->assertSee('Начать совместное использование', false);
         $response->assertSee('Группа', false);
         $response->assertSee('Не состоит в группе', false);
         $response->assertSee('Можно использовать как самостоятельное место', false);
+    }
+
+    public function test_legacy_shared_use_source_space_edit_page_shows_canonical_notice_and_hides_group_actions(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $canonical = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Склад 21',
+            'display_name' => 'Склад 21',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $sourceA = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Legacy source 80',
+            'display_name' => 'Ларь / Лунин Е.А. ИП /х',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $sourceB = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Legacy source 82',
+            'display_name' => 'Ларь / Лунин Е.А. ИП / Лаптева',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Лунин Евгений Александрович ИП',
+            'is_active' => true,
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $canonical->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => '2025-01-01 00:00:00',
+            'ended_at' => null,
+            'area_sqm' => 4,
+            'rent_rate' => 265,
+            'share_note' => 'Тестовая связь с legacy source-space',
+            'binding_type' => 'shared_use',
+            'confidence' => 'medium',
+            'source' => 'sklad21_pseudo_space_accruals',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'shared_physical_space_from_legacy_pseudo_spaces',
+            'meta' => json_encode([
+                'target_space_id' => (int) $canonical->id,
+                'target_space_number' => 'Склад 21',
+                'source_space_ids' => [(int) $sourceA->id, (int) $sourceB->id],
+                'sklad21_shared_use' => [
+                    'source_space_ids' => [(int) $sourceA->id, (int) $sourceB->id],
+                ],
+            ], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $sourceA]));
+
+        $response->assertOk();
+        $response->assertSee('Это служебная запись участника совместного использования', false);
+        $response->assertSee('Управляйте участниками в карточке основного места', false);
+        $response->assertSee('Открыть основное место', false);
+        $response->assertSee(MarketSpaceResource::getUrl('edit', ['record' => $canonical]), false);
+        $response->assertDontSee('Начать совместное использование', false);
+        $response->assertDontSee('Добавить в группу', false);
+        $response->assertDontSee('Перенести в группу', false);
+        $response->assertDontSee('Убрать из группы', false);
+        $response->assertDontSee('Не состоит в группе', false);
+        $response->assertDontSee('Можно использовать как самостоятельное место', false);
     }
 
     public function test_child_space_edit_page_does_not_show_group_composition_block(): void
