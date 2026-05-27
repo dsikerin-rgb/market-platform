@@ -1539,7 +1539,8 @@ class EditMarketSpace extends BaseEditRecord
             ->size('lg')
             ->outlined()
             ->color('primary')
-            ->visible(fn (): bool => $isChild() || $isOrdinary())
+            ->visible(fn (): bool => ($isChild() || $isOrdinary())
+                && ! MarketSpaceResource::hasSharedUseTenants($this->record))
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--primary',
             ])
