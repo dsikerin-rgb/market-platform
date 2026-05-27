@@ -575,6 +575,62 @@ class MarketMapLinkingTest extends TestCase
         $response->assertJsonPath('hit.space.shared_use.participants.1.area_sqm', 6.5);
     }
 
+    public function test_market_map_payload_keeps_service_space_status_for_shapes_and_hit(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'SVC-101',
+            'display_name' => 'Служебное место',
+            'status' => 'maintenance',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 20, 'y' => 10],
+                ['x' => 20, 'y' => 20],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 20,
+            'bbox_y2' => 20,
+            'is_active' => true,
+        ]);
+
+        $shapesResponse = $this->getJson(route('filament.admin.market-map.shapes', [
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $shapesResponse->assertOk();
+        $shapeItem = collect($shapesResponse->json('items'))
+            ->firstWhere('market_space_id', (int) $space->id);
+
+        $this->assertNotNull($shapeItem);
+        $this->assertSame('maintenance', $shapeItem['space_status'] ?? null);
+
+        $hitResponse = $this->getJson(route('filament.admin.market-map.hit', [
+            'x' => 15,
+            'y' => 15,
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $hitResponse->assertOk();
+        $hitResponse->assertJsonPath('hit.market_space_id', (int) $space->id);
+        $hitResponse->assertJsonPath('hit.space.status', 'maintenance');
+    }
+
 
     public function test_editing_space_to_parent_group_can_deactivate_existing_map_shape(): void
     {
@@ -2100,6 +2156,99 @@ class MarketMapLinkingTest extends TestCase
             ->assertActionMounted('start_shared_use')
             ->callMountedAction()
             ->assertHasNoActionErrors();
+    }
+
+    public function test_market_space_mark_service_action_closes_active_bindings_and_clears_tenant(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Сервисный арендатор',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'Service-1',
+            'display_name' => 'Service candidate',
+            'status' => 'occupied',
+            'is_active' => true,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => '2025-01-01 00:00:00',
+            'ended_at' => null,
+            'binding_type' => 'manual',
+            'confidence' => 'high',
+            'source' => 'test_manual_service_cleanup',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'manual_override',
+            'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->assertActionExists('mark_service_status')
+            ->callAction('mark_service_status')
+            ->assertHasNoActionErrors();
+
+        $space->refresh();
+
+        $this->assertSame('maintenance', $space->status);
+        $this->assertNull($space->tenant_id);
+        $this->assertDatabaseHas('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'resolution_reason' => 'maintenance_space_reconciled',
+        ]);
+        $this->assertDatabaseMissing('market_space_tenant_bindings', [
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'ended_at' => null,
+        ]);
+    }
+
+    public function test_market_space_mark_service_action_is_disabled_for_grouped_space(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Service-Group',
+            'display_name' => 'Grouped candidate',
+            'status' => 'occupied',
+            'is_active' => true,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => 999,
+        ]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(EditMarketSpace::class, [
+                'record' => (string) $space->getRouteKey(),
+            ])
+            ->assertActionDisabled('mark_service_status');
     }
 
     public function test_market_space_shared_use_action_requires_later_date_for_area_change(): void

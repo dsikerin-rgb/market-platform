@@ -73,17 +73,6 @@
         }
     </style>
 
-    <p class="market-space-danger-zone__eyebrow">Опасная зона</p>
-    <h3 class="market-space-danger-zone__title">Полное удаление доступно только super-admin</h3>
-    <p class="market-space-danger-zone__text">
-        Это необратимое действие. В отличие от упразднения, место будет удалено из системы полностью.
-        Используйте его только для технических случаев, когда карточку нужно убрать окончательно.
-    </p>
-
-    @if (! empty($isCascadeDelete))
-        <div class="market-space-danger-zone__meta">Будет удалена и фигура на карте</div>
-    @endif
-
     <div class="market-space-danger-zone__actions">
         <x-filament::actions :actions="$actions" alignment="start" />
     </div>

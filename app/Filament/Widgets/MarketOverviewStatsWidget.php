@@ -11,8 +11,8 @@ use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
-use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -58,13 +58,16 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         // Оперативная часть (состояние "сейчас") НЕ зависит от отчётного месяца.
         $now = CarbonImmutable::now($tz);
 
-        $spacesQuery = $this->accountingSpacesQuery($marketId);
-        $totalSpaces = (clone $spacesQuery)->count();
-
-        // Текущее занято/свободно берём из статуса учётных единиц.
-        // Child с parent — физический сегмент карты, но не самостоятельная строка 1С/таблицы/площади.
-        $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
-        $freeSpaces = (clone $spacesQuery)->where('status', 'vacant')->count();
+        $spaceMetrics = MarketSpaceDashboardMetrics::summarize($marketId);
+        $totalSpaces = (int) $spaceMetrics['total_spaces'];
+        $totalArea = (float) $spaceMetrics['total_area_sqm'];
+        $occupiedSpaces = (int) $spaceMetrics['occupied_spaces'];
+        $occupiedArea = (float) $spaceMetrics['occupied_area_sqm'];
+        $freeSpaces = (int) $spaceMetrics['vacant_spaces'];
+        $freeArea = (float) $spaceMetrics['vacant_area_sqm'];
+        $maintenanceSpaces = (int) $spaceMetrics['maintenance_spaces'];
+        $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
+        $rentableArea = (float) $spaceMetrics['rentable_area_sqm'];
 
         $tenantsNow = $this->countTenantsActiveOnDate($marketId, $now);
         if ($tenantsNow === null) {
@@ -95,6 +98,11 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
                 'status' => ['value' => 'vacant'],
             ],
         ]);
+        $maintenanceSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'tableFilters' => [
+                'status' => ['value' => 'maintenance'],
+            ],
+        ]);
         $stats = [];
 
         if ($isSuperAdmin) {
@@ -115,13 +123,17 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $paidValue = $paid ?? 0.0;
         $debtValue = $debt ?? ($accruedValue - $paidValue);
         $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
-        $accountingScopeDesc = $marketScopeDesc . ' · обычные места и группы без child-сегментов';
-        $occupancyRate = $totalSpaces > 0
-            ? round(($occupiedSpaces / $totalSpaces) * 100)
+        $accountingScopeDesc = $marketScopeDesc . ' · ' . number_format($totalSpaces, 0, ',', ' ') . ' учётных мест';
+        $occupancyRate = $rentableArea > 0
+            ? round(($occupiedArea / $rentableArea) * 100)
             : 0;
-        $occupancyDesc = $totalSpaces > 0
-            ? "Занято {$occupiedSpaces} из {$totalSpaces} учётных мест"
+        $occupancyDesc = $rentableArea > 0
+            ? 'Занято ' . $this->formatArea($occupiedArea) . ' из ' . $this->formatArea($rentableArea) . ' арендуемых м²'
             : 'На рынке пока нет учётных мест';
+
+        if ($maintenanceSpaces > 0) {
+            $occupancyDesc .= ' · служебных: ' . $this->formatArea($maintenanceArea);
+        }
 
         $stats[] = $this->makeStat(
             label: 'Арендаторы сейчас',
@@ -132,28 +144,36 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-users',
         );
         $stats[] = $this->makeStat(
-            label: 'Учётных мест',
-            value: $totalSpaces,
+            label: 'Площадь фонда',
+            value: $this->formatArea($totalArea),
             description: $accountingScopeDesc,
             url: $spacesUrl,
             color: 'gray',
             icon: 'heroicon-o-home-modern',
         );
         $stats[] = $this->makeStat(
-            label: 'Занято мест',
-            value: $occupiedSpaces,
-            description: 'Фильтр: занятые учётные места',
+            label: 'Занято, м²',
+            value: $this->formatArea($occupiedArea),
+            description: 'Фильтр: занятые учётные места · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.',
             url: $occupiedSpacesUrl,
             color: 'success',
             icon: 'heroicon-o-check-circle',
         );
         $stats[] = $this->makeStat(
-            label: 'Свободно мест',
-            value: $freeSpaces,
-            description: 'Фильтр: свободные учётные места',
+            label: 'Свободно, м²',
+            value: $this->formatArea($freeArea),
+            description: 'Фильтр: свободные учётные места · ' . number_format($freeSpaces, 0, ',', ' ') . ' шт.',
             url: $vacantSpacesUrl,
             color: 'warning',
             icon: 'heroicon-o-sparkles',
+        );
+        $stats[] = $this->makeStat(
+            label: 'Служебно, м²',
+            value: $this->formatArea($maintenanceArea),
+            description: 'Фильтр: служебные учётные места · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
+            url: $maintenanceSpacesUrl,
+            color: 'gray',
+            icon: 'heroicon-o-wrench-screwdriver',
         );
         $stats[] = $this->makeStat(
             label: 'Заполняемость',
@@ -210,27 +230,16 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         $stats[] = $this->makeStat('Арендаторы сейчас', 0, $note, null, 'primary', 'heroicon-o-users');
-        $stats[] = $this->makeStat('Учётных мест', 0, $note, null, 'gray', 'heroicon-o-home-modern');
-        $stats[] = $this->makeStat('Занято мест', 0, $note, null, 'success', 'heroicon-o-check-circle');
-        $stats[] = $this->makeStat('Свободно мест', 0, $note, null, 'warning', 'heroicon-o-sparkles');
+        $stats[] = $this->makeStat('Площадь фонда', '0 м²', $note, null, 'gray', 'heroicon-o-home-modern');
+        $stats[] = $this->makeStat('Занято, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
+        $stats[] = $this->makeStat('Свободно, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
+        $stats[] = $this->makeStat('Служебно, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
         $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
 
         return $stats;
-    }
-
-    private function accountingSpacesQuery(int $marketId)
-    {
-        return MarketSpace::query()
-            ->where('market_id', $marketId)
-            ->where(function ($query): void {
-                $query
-                    ->whereNull('space_group_role')
-                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
-                    ->orWhereNull('space_group_parent_id');
-            });
     }
 
     private function makeStat(
@@ -750,5 +759,12 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
     private function formatMoney(float $value): string
     {
         return number_format($value, 0, ',', ' ');
+    }
+
+    private function formatArea(float $value): string
+    {
+        $precision = abs($value - round($value)) < 0.01 ? 0 : 1;
+
+        return number_format($value, $precision, ',', ' ') . ' м²';
     }
 }

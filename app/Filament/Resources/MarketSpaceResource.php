@@ -762,6 +762,10 @@ class MarketSpaceResource extends BaseResource
             return static::renderPriorityCard('Арендатор', 'Появится после сохранения');
         }
 
+        if ((string) ($record->status ?? '') === 'maintenance') {
+            return static::renderPriorityCard('Назначение', 'Управляющая компания', 'Служебное место', 'default');
+        }
+
         $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
 
         if ($tenantName === '') {
@@ -793,6 +797,10 @@ class MarketSpaceResource extends BaseResource
     {
         if (! $record instanceof MarketSpace) {
             return static::renderPriorityCard('Свободно / занято', 'Появится после сохранения');
+        }
+
+        if ((string) ($record->status ?? '') === 'maintenance') {
+            return static::renderPriorityCard('Свободно / занято', 'Служебное место', 'В распоряжении управляющей компании', 'default');
         }
 
         $tenantName = trim((string) ($record->effectiveTenantName() ?? ''));
@@ -911,6 +919,7 @@ class MarketSpaceResource extends BaseResource
         $sharedUseRows = static::sharedUseTenantRows($record);
         $hasSharedUseTenants = $sharedUseRows !== [];
         $isSharedUseSourceSpace = static::isSharedUseSourceSpace($record);
+        $isMaintenance = (string) ($record->status ?? '') === 'maintenance';
         $sharedUseTenantCount = count($sharedUseRows);
         $sharedUseAreaSum = array_sum(array_map(
             static fn (array $row): float => $row['area_sqm'] !== null ? (float) $row['area_sqm'] : 0.0,
@@ -922,6 +931,17 @@ class MarketSpaceResource extends BaseResource
         $tenantMeta = $tenantName === '' ? 'Сейчас место свободно' : 'Указан на этом месте';
         $tenantTone = $tenantName === '' ? 'vacant' : 'occupied';
         $tenantLabel = 'Арендатор';
+        $tenantActionHtml = '<button type="button" class="market-space-priority-summary__action" wire:click="mountAction(\'switch_tenant\')" title="Сменить арендатора" aria-label="Сменить арендатора">'
+            . '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-8.9 8.9a2 2 0 0 1-.878.513l-2.5.714a.75.75 0 0 1-.927-.927l.714-2.5a2 2 0 0 1 .513-.878l8.9-8.9ZM12.525 5.707 5.533 12.7a.5.5 0 0 0-.128.22l-.425 1.49 1.49-.425a.5.5 0 0 0 .22-.128l6.992-6.992-1.157-1.157Z"/></svg>'
+            . '</button>';
+
+        if ($isMaintenance) {
+            $tenantLabel = 'Назначение';
+            $tenantValue = 'Управляющая компания';
+            $tenantMeta = 'Служебное место';
+            $tenantTone = 'default';
+            $tenantActionHtml = '';
+        }
 
         if ($hasSharedUseTenants) {
             $tenantWord = match (true) {
@@ -958,10 +978,6 @@ class MarketSpaceResource extends BaseResource
             $tenantLabel = 'Арендатор';
         }
 
-        $tenantActionHtml = '<button type="button" class="market-space-priority-summary__action" wire:click="mountAction(\'switch_tenant\')" title="Сменить арендатора" aria-label="Сменить арендатора">'
-            . '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-8.9 8.9a2 2 0 0 1-.878.513l-2.5.714a.75.75 0 0 1-.927-.927l.714-2.5a2 2 0 0 1 .513-.878l8.9-8.9ZM12.525 5.707 5.533 12.7a.5.5 0 0 0-.128.22l-.425 1.49 1.49-.425a.5.5 0 0 0 .22-.128l6.992-6.992-1.157-1.157Z"/></svg>'
-            . '</button>';
-
         if ($hasSharedUseTenants) {
             $tenantActionHtml = '<button type="button" class="market-space-priority-summary__action" wire:click="mountAction(\'manage_shared_use\')" title="Управлять участниками" aria-label="Управлять участниками">'
                 . '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 3.75a3.25 3.25 0 1 1 0 6.5 3.25 3.25 0 0 1 0-6.5ZM4.75 5.5a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 0 0 0-5.5Zm10.5 0a2.75 2.75 0 1 0 0 5.5 2.75 2.75 0 0 0 0-5.5ZM10 11.5c-2.65 0-4.75 1.49-4.75 3.25 0 .41.34.75.75.75h8c.41 0 .75-.34.75-.75 0-1.76-2.1-3.25-4.75-3.25Zm-5.25.75c-1.76 0-3.25.95-3.25 2.25 0 .41.34.75.75.75h1.88c.1-1.17.8-2.2 1.88-2.9a4.89 4.89 0 0 0-1.26-.1Zm10.5 0c-.43 0-.85.04-1.25.12 1.06.7 1.76 1.72 1.86 2.88h1.89c.41 0 .75-.34.75-.75 0-1.3-1.5-2.25-3.25-2.25Z"/></svg>'
@@ -971,6 +987,12 @@ class MarketSpaceResource extends BaseResource
         $availabilityValue = $tenantName === '' ? 'Свободно' : 'Занято';
         $availabilityMeta = $tenantName === '' ? 'Арендатор не назначен' : 'Сейчас место используется';
         $availabilityTone = $tenantName === '' ? 'vacant' : 'occupied';
+
+        if ($isMaintenance) {
+            $availabilityValue = 'Служебное место';
+            $availabilityMeta = 'В распоряжении управляющей компании';
+            $availabilityTone = 'default';
+        }
 
         if ($hasSharedUseTenants) {
             $availabilityValue = 'Занято совместно';
@@ -1023,7 +1045,7 @@ class MarketSpaceResource extends BaseResource
 
         $items = [];
 
-        if (! $hasSharedUseTenants && ! $isSharedUseSourceSpace) {
+        if (! $hasSharedUseTenants && ! $isSharedUseSourceSpace && ! $isMaintenance) {
             $items[] = static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta);
         }
 
@@ -1032,7 +1054,9 @@ class MarketSpaceResource extends BaseResource
 
         if (! $hasSharedUseTenants) {
             $items[] = static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone);
-            $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
+            if (! $isMaintenance) {
+                $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
+            }
         }
 
         return new HtmlString('<div class="market-space-priority-summary">' . implode('', $items) . '</div>');
@@ -1408,8 +1432,14 @@ class MarketSpaceResource extends BaseResource
 
                                 Forms\Components\Select::make('space_group_role')
                                     ->label('Тип группировки')
-                                    ->options(function (?MarketSpace $record): array {
+                                    ->options(function ($get, ?MarketSpace $record): array {
                                         $options = static::groupRoleOptions();
+
+                                        if (! filled($record?->id) && (string) ($get('status') ?? 'vacant') === 'maintenance') {
+                                            return [
+                                                MarketSpace::SPACE_GROUP_ROLE_NONE => $options[MarketSpace::SPACE_GROUP_ROLE_NONE] ?? 'Не входит в группу',
+                                            ];
+                                        }
 
                                         if (static::hasSharedUseTenants($record)) {
                                             return [
@@ -1426,7 +1456,10 @@ class MarketSpaceResource extends BaseResource
                                     ->default('none')
                                     ->required()
                                     ->live()
-                                    ->disabled(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record) || static::isSharedUseSourceSpace($record))
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => (string) ($record?->status ?? $get('status') ?? 'vacant') !== 'maintenance')
+                                    ->disabled(fn ($get, ?MarketSpace $record): bool => static::hasSharedUseTenants($record)
+                                        || static::isSharedUseSourceSpace($record)
+                                        || (! filled($record?->id) && (string) ($get('status') ?? 'vacant') === 'maintenance'))
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip(function (?MarketSpace $record): string {
                                         if (static::isSharedUseSourceSpace($record)) {
@@ -1435,7 +1468,11 @@ class MarketSpaceResource extends BaseResource
 
                                         return 'Определяет, как место участвует в группировке. Для существующего места перевод в группу выполняется отдельной кнопкой в шапке карточки, чтобы сразу выбрать родительскую группу и номер внутри группы.';
                                     })
-                                    ->helperText(function (?MarketSpace $record): ?string {
+                                    ->helperText(function ($get, ?MarketSpace $record): ?string {
+                                        if (! filled($record?->id) && (string) ($get('status') ?? 'vacant') === 'maintenance') {
+                                            return 'Служебное место не может входить в группу и не может быть parent-группой.';
+                                        }
+
                                         if (! filled($record?->id)) {
                                             return null;
                                         }
@@ -1485,7 +1522,7 @@ class MarketSpaceResource extends BaseResource
                                             ->content(fn (?MarketSpace $record): ?HtmlString => static::renderChildInheritanceNotice($record))
                                             ->columnSpanFull(),
                                     ])
-                                    ->visible(fn (?MarketSpace $record): bool => static::isChildWithParent($record))
+                                    ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance' && static::isChildWithParent($record))
                                     ->columnSpanFull()
                                     ->compact(),
 
@@ -1517,10 +1554,11 @@ class MarketSpaceResource extends BaseResource
                                             ))
                                             ->helperText('Без этого выбора parent-группа осталась бы с обычной фигурой карты, что может запутать учёт и ревизию.'),
                                     ])
-                                    ->visible(fn ($get, ?MarketSpace $record): bool => static::requiresParentGroupMapShapeResolution(
-                                        $record,
-                                        (string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
-                                    ))
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => (string) ($record?->status ?? $get('status') ?? 'vacant') !== 'maintenance'
+                                        && static::requiresParentGroupMapShapeResolution(
+                                            $record,
+                                            (string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                                        ))
                                     ->columnSpanFull()
                                     ->compact(),
 
@@ -1537,7 +1575,9 @@ class MarketSpaceResource extends BaseResource
                                     ->searchable()
                                     ->preload()
                                     ->required(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
-                                    ->visible(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => (string) ($record?->status ?? $get('status') ?? 'vacant') !== 'maintenance'
+                                        && ! filled($record?->id)
+                                        && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
                                     ->dehydrated(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Выбирается только для места в группе. Родитель определяет, к какой группе относится child-место.')
@@ -1548,7 +1588,9 @@ class MarketSpaceResource extends BaseResource
                                     ->label('Номер в группе')
                                     ->maxLength(255)
                                     ->required(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
-                                    ->visible(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => (string) ($record?->status ?? $get('status') ?? 'vacant') !== 'maintenance'
+                                        && ! filled($record?->id)
+                                        && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
                                     ->dehydrated(fn ($get, ?MarketSpace $record): bool => ! filled($record?->id) && (string) ($get('space_group_role') ?? 'none') === MarketSpace::SPACE_GROUP_ROLE_CHILD)
                                     ->placeholder('Например: 6')
                                     ->hintIcon('heroicon-m-question-mark-circle')
@@ -1662,7 +1704,7 @@ class MarketSpaceResource extends BaseResource
                                     ->extraInputAttributes(['style' => 'width:100%;'])
                                     ->helperText(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)
                                         ? 'Справочное поле старой карточки. Не влияет на общую площадь участников и не меняет их площади.'
-                                        : 'Площадь обычного торгового места. Для совместного использования площади задаются у участников.')
+                                        : 'Площадь самого места. Если место используется совместно, площади участников задаются отдельно.')
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip(fn (?MarketSpace $record): string => static::hasSharedUseTenants($record)
                                         ? 'Для совместного места рабочие площади задаются у участников в блоке совместного использования. Это поле оставлено только как справочная площадь физической карточки.'
@@ -1730,7 +1772,8 @@ class MarketSpaceResource extends BaseResource
                                 ->columnSpanFull(),
 
                             ])
-                            ->collapsible(),
+                            ->collapsible()
+                            ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance'),
 
                         Section::make('Примечания')
                             ->schema([
@@ -1746,7 +1789,8 @@ class MarketSpaceResource extends BaseResource
                             ->collapsed(),
 
                         Section::make('Состав группы')
-                            ->visible(fn (?MarketSpace $record): bool => (string) ($record?->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT)
+                            ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance'
+                                && (string) ($record?->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT)
                             ->schema([
                                 Forms\Components\Placeholder::make('group_composition')
                                     ->hiddenLabel()

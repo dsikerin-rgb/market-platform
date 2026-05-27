@@ -57,6 +57,7 @@ class CreateMarketSpace extends BaseCreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $this->assertUniqueNumberWithinMarket($data);
+        $this->assertMaintenanceSpaceIsNotGrouped($data);
 
         if ($this->pendingShapeId !== null) {
             $this->resolvePendingShapeForMarket(isset($data['market_id']) ? (int) $data['market_id'] : null);
@@ -272,5 +273,21 @@ class CreateMarketSpace extends BaseCreateRecord
         throw ValidationException::withMessages([
             'data.market_id' => $message,
         ]);
+    }
+
+    private function assertMaintenanceSpaceIsNotGrouped(array $data): void
+    {
+        $status = trim((string) ($data['status'] ?? 'vacant'));
+        $role = trim((string) ($data['space_group_role'] ?? MarketSpace::SPACE_GROUP_ROLE_NONE));
+
+        if ($status !== 'maintenance') {
+            return;
+        }
+
+        if ($role !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
+            throw ValidationException::withMessages([
+                'space_group_role' => 'Служебное место не может входить в группу и не может быть parent-группой.',
+            ]);
+        }
     }
 }

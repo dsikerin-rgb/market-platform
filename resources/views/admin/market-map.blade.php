@@ -1131,6 +1131,10 @@
       background: #e5e7eb;
       border: 1px solid #94a3b8;
     }
+    .legend-color.legend-service {
+      background: #e9d5ff;
+      border: 1px solid #8b5cf6;
+    }
     .legend-color.legend-unlinked {
       background:
         repeating-linear-gradient(
@@ -2310,6 +2314,10 @@
               <span class="legend-label">Свободно</span>
             </div>
             <div class="legend-item">
+              <span class="legend-color legend-service"></span>
+              <span class="legend-label">Служебное место</span>
+            </div>
+            <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
               <span class="legend-label">Без привязки</span>
             </div>
@@ -2340,6 +2348,10 @@
             <div class="legend-item">
               <span class="legend-color legend-vacant"></span>
               <span class="legend-label">Свободно</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-color legend-service"></span>
+              <span class="legend-label">Служебное место</span>
             </div>
             <div class="legend-item">
               <span class="legend-color legend-unlinked"></span>
@@ -4851,6 +4863,12 @@
               // Проверяем состояние места
               const hasSpace = isLinked;
               const occupancySource = s.space_occupancy_source ? String(s.space_occupancy_source) : 'none';
+              const rawStatus = hasSpace
+                ? (typeof s.space_status === 'string' && s.space_status !== ''
+                  ? String(s.space_status)
+                  : (typeof s.status === 'string' ? String(s.status) : ''))
+                : '';
+              const normalizedStatus = rawStatus === 'free' ? 'vacant' : rawStatus;
               const hasTenant = hasSpace && (s.space_effective_is_occupied !== null && s.space_effective_is_occupied !== undefined
                 ? Boolean(s.space_effective_is_occupied)
                 : (occupancySource === 'parent'
@@ -4883,13 +4901,16 @@
               };
 
               // Определяем тип отрисовки
-              let fillStyle = 'normal'; // normal, debt, rent, rent-missing, vacant, unlinked
+              let fillStyle = 'normal'; // normal, debt, rent, rent-missing, vacant, service, unlinked
               let debtFill = null;
               let rentFill = null;
 
               if (!hasSpace) {
                 // Shape без market_space_id — разметка без привязки
                 fillStyle = 'unlinked';
+              } else if (normalizedStatus === 'maintenance') {
+                // Служебное место не должно выглядеть свободным
+                fillStyle = 'service';
               } else if (!hasTenant) {
                 // Место есть, но арендатора нет — свободно
                 fillStyle = 'vacant';
@@ -4925,6 +4946,11 @@
                 // Свободно: плотная светло-серая заливка, чтобы не просвечивала подложка
                 fill = '#e5e7eb';
                 stroke = '#94a3b8';
+                fo = 0.92;
+              } else if (fillStyle === 'service') {
+                // Служебное: отдельная фиолетовая метка, чтобы не смешивать со свободными
+                fill = '#e9d5ff';
+                stroke = '#8b5cf6';
                 fo = 0.92;
               } else if (fillStyle === 'debt') {
                 // Debt status: закрашиваем цветом долга
@@ -6512,6 +6538,8 @@
                 }
 
                 // Проверяем наличие арендатора
+                const popupRawStatus = space.status ? String(space.status) : '';
+                const popupStatus = popupRawStatus === 'free' ? 'vacant' : popupRawStatus;
                 const hasTenant = hit.space_effective_is_occupied !== null && hit.space_effective_is_occupied !== undefined
                   ? Boolean(hit.space_effective_is_occupied)
                   : (occupancySource === 'parent'
@@ -6557,6 +6585,13 @@
                         return escapeHtml(name) + (area ? ' — ' + area : '');
                       }).join('<br>'))
                     : '';
+                  line6 = '';
+                  line7 = '';
+                } else if (popupStatus === 'maintenance') {
+                  line2 = 'Служебное место';
+                  line3 = 'В распоряжении управляющей компании';
+                  line4 = '';
+                  line5 = '';
                   line6 = '';
                   line7 = '';
                 } else if (!hasTenant) {
@@ -6824,8 +6859,10 @@
               const groupMembershipSpaceId = Number(hit?.market_space_id ?? hit?.space?.id ?? 0);
               const hasGroupMembershipSpace = Number.isFinite(groupMembershipSpaceId) && groupMembershipSpaceId > 0;
               const groupOpenSpaceId = isChildInGroup ? groupParentId : 0;
+              const actionRawStatus = hit?.space?.status ? String(hit.space.status) : '';
+              const actionStatus = actionRawStatus === 'free' ? 'vacant' : actionRawStatus;
 
-              if (groupOpenSpaceId > 0) {
+              if (groupOpenSpaceId > 0 && actionStatus !== 'maintenance') {
                 const groupOpenTitle = needsGroupTenantAssignment
                   ? 'Открыть карточку группы, чтобы назначить арендатора'
                   : 'Открыть карточку группы в новой вкладке';
@@ -6836,7 +6873,7 @@
                 btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" data-default-action="' + escapeHtml(groupDefaultAction) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
               }
 
-              if (CAN_EDIT && hasGroupMembershipSpace && !isSharedUse) {
+              if (CAN_EDIT && hasGroupMembershipSpace && !isSharedUse && actionStatus !== 'maintenance') {
                 if (spaceGroupRole === 'parent') {
                   btns.push('<button type="button" disabled title="Состав группы меняется через обычные или дочерние места">Состав группы</button>');
                 } else if (spaceGroupRole === 'child') {
