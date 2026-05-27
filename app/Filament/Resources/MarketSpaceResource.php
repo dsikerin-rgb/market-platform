@@ -1285,6 +1285,12 @@ class MarketSpaceResource extends BaseResource
                                     ->options(function (?MarketSpace $record): array {
                                         $options = static::groupRoleOptions();
 
+                                        if (static::hasSharedUseTenants($record)) {
+                                            return [
+                                                MarketSpace::SPACE_GROUP_ROLE_NONE => $options[MarketSpace::SPACE_GROUP_ROLE_NONE] ?? 'Не входит в группу',
+                                            ];
+                                        }
+
                                         if (filled($record?->id) && ! static::isChildWithParent($record)) {
                                             unset($options[MarketSpace::SPACE_GROUP_ROLE_CHILD]);
                                         }
@@ -1294,11 +1300,16 @@ class MarketSpaceResource extends BaseResource
                                     ->default('none')
                                     ->required()
                                     ->live()
+                                    ->disabled(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip('Определяет, как место участвует в группировке. Для существующего места перевод в группу выполняется отдельной кнопкой в шапке карточки, чтобы сразу выбрать родительскую группу и номер внутри группы.')
                                     ->helperText(function (?MarketSpace $record): ?string {
                                         if (! filled($record?->id)) {
                                             return null;
+                                        }
+
+                                        if (static::hasSharedUseTenants($record)) {
+                                            return 'Совместное место не может быть parent-группой или местом внутри группы.';
                                         }
 
                                         if (static::isChildWithParent($record)) {
