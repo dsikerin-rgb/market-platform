@@ -38,6 +38,20 @@ class MarketMapLinkingTest extends TestCase
         return $user;
     }
 
+    private function actingAsMarketAdmin(Market $market): User
+    {
+        Role::findOrCreate('market-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => $market->id,
+        ]);
+        $user->assignRole('market-admin');
+
+        $this->loginForPossibleGuards($user);
+
+        return $user;
+    }
+
     private function loginForPossibleGuards(User $user): void
     {
         // Всегда логинимся в web
@@ -1143,6 +1157,57 @@ class MarketMapLinkingTest extends TestCase
         $this->assertNull($space->tenant_id);
     }
 
+    public function test_super_admin_sees_market_field_on_create_page(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        Livewire::test(CreateMarketSpace::class)
+            ->assertSee('Рынок', false);
+    }
+
+    public function test_super_admin_does_not_see_market_field_on_edit_page(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'EDIT-100',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+
+        $response->assertOk();
+        $response->assertDontSee('Рынок', false);
+    }
+
+    public function test_market_admin_does_not_see_market_field_on_create_or_edit_page(): void
+    {
+        $market = $this->createMarketWithMap();
+        $this->actingAsMarketAdmin($market);
+        $this->selectMarketInSession($market);
+
+        Livewire::test(CreateMarketSpace::class)
+            ->assertDontSee('Рынок', false);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'MKT-100',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(MarketSpaceResource::getUrl('edit', ['record' => $space]));
+
+        $response->assertOk();
+        $response->assertDontSee('Рынок', false);
+    }
+
     public function test_create_market_space_page_rejects_protocol_relative_return_url(): void
     {
         $this->actingAsSuperAdmin();
@@ -1570,6 +1635,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertDontSee('Убрать из группы', false);
         $response->assertDontSee('Не состоит в группе', false);
         $response->assertDontSee('Можно использовать как самостоятельное место', false);
+        $response->assertDontSee('Рынок', false);
     }
 
     public function test_child_space_edit_page_does_not_show_group_composition_block(): void

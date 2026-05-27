@@ -1159,27 +1159,21 @@ class MarketSpaceResource extends BaseResource
         $components = [];
 
         if ((bool) $user && $user->isSuperAdmin()) {
-            $selectedMarketId = static::selectedMarketIdFromSession();
-
-            if (filled($selectedMarketId)) {
-                $components[] = Forms\Components\Hidden::make('market_id')
-                    ->default(fn () => (int) $selectedMarketId)
-                    ->dehydrated(true);
-            } else {
-                $components[] = Forms\Components\Select::make('market_id')
-                    ->label('Рынок')
-                    ->relationship('market', 'name')
-                    ->required()
-                    ->searchable()
-                    ->preload()
-                    ->reactive()
-                    ->hintIcon('heroicon-m-question-mark-circle')
-                    ->hintIconTooltip('Рынок нужен, чтобы корректно фильтровать локации, арендаторов и тарифы.')
-                    ->dehydrated(true);
-            }
+            $components[] = Forms\Components\Select::make('market_id')
+                ->label('Рынок')
+                ->relationship('market', 'name')
+                ->required()
+                ->searchable()
+                ->preload()
+                ->reactive()
+                ->default(fn () => static::selectedMarketIdFromSession())
+                ->visible(fn (?MarketSpace $record): bool => blank($record))
+                ->hintIcon('heroicon-m-question-mark-circle')
+                ->hintIconTooltip('Рынок нужен, чтобы корректно фильтровать локации, арендаторов и тарифы.')
+                ->dehydrated(true);
         } else {
             $components[] = Forms\Components\Hidden::make('market_id')
-                ->default(fn () => $user?->market_id)
+                ->default(fn () => static::selectedMarketIdFromSession() ?? $user?->market_id)
                 ->dehydrated(true);
         }
 
