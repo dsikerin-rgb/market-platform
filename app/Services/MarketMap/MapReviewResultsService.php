@@ -449,7 +449,10 @@ class MapReviewResultsService
                     fn ($query) => $query->where('is_active', true)
                 )
             ->orderByRaw('COALESCE(number, display_name, code) asc')
-            ->get(['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code'])
+            ->get(array_merge(
+                ['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code'],
+                Schema::hasColumn('market_spaces', 'space_group_role') ? ['space_group_role'] : []
+            ))
             : collect();
         $nameCandidateSpaces = $this->nameDuplicateCandidateSpaces($marketId, $spaces);
 
@@ -546,7 +549,7 @@ class MapReviewResultsService
                     return $this->relationStrengthScore($candidateCounts[(int) $item['space']->id] ?? []);
                 })
                 ->take(5)
-                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $latestOperationsForCandidateMap): array {
+                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $latestOperationsForCandidateMap, $currentCounts): array {
                     /** @var MarketSpace $candidate */
                     $candidate = $item['space'];
                     $candidateId = (int) $candidate->id;
@@ -597,16 +600,31 @@ class MapReviewResultsService
                     $isOccupancyConflict = $currentReviewDecision === SpaceReviewDecision::OCCUPANCY_CONFLICT;
 
                     // Блокируем, если current tenant отличается от observed tenant или наблюдается конфликт занятости,
-                    // и кандидат найден по current tenant. Наличие independent anchors усиливает аргументацию за блокировку.
+                    // и кандидат найден по current tenant.
+                    // НО: explicit duplicate/identity scenario (child без shape -> parent/group с shape)
+                    // должен позволять duplicate resolution несмотря на P52u-like признаки.
                     $isP52uLikeScenario = $currentHasTenant
                         && ($observedDiffersFromCurrent || $isOccupancyConflict)
                         && $sameTenantContour
                         && $candidateStrongerByFinancials;
 
-                    $canApplyDuplicateResolution = ! $isP52uLikeScenario;
+                    // Явный признак duplicate/identity сценария: child место без shape дублирует parent/group
+                    $candidateIsGroupOrCanonical = in_array((string) ($candidate->space_group_role ?? ''), [
+                        MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                    ], true);
+                    $candidateHasUsableShape = ((int) ($counts['map_shapes'] ?? 0)) > 0;
+                    $currentHasNoUsableShape = ((int) ($currentSpaceCounts['map_shapes'] ?? 0)) === 0;
+                    $reasonText = (string) ($currentSpacePayload['reason'] ?? '') . ' ' . (string) ($currentSpaceOperation?->comment ?? '');
+                    $reasonIndicatesDuplicate = preg_match('/дубль|дублируется|группа\s+мест|связь\s+с\s+местом/iu', $reasonText) === 1;
+                    $isExplicitDuplicateScenario = $candidateIsGroupOrCanonical
+                        && $candidateHasUsableShape
+                        && $currentHasNoUsableShape
+                        && $reasonIndicatesDuplicate;
+
+                    $canApplyDuplicateResolution = ! $isP52uLikeScenario || $isExplicitDuplicateScenario;
                     $duplicateResolutionBlockReason = null;
 
-                    if ($isP52uLikeScenario) {
+                    if ($isP52uLikeScenario && ! $isExplicitDuplicateScenario) {
                         if ($isOccupancyConflict) {
                             if ($currentHasIndependentAnchors) {
                                 $duplicateResolutionBlockReason = 'Кандидат найден по текущему арендатору, но на месте наблюдается конфликт занятости. На месте есть собственные связи (карта/договоры/начисления/товары). Сначала проверьте актуального арендатора места.';
@@ -633,6 +651,7 @@ class MapReviewResultsService
                         'is_stronger_than_current' => $candidateScore > $currentScore,
                         'can_apply_duplicate_resolution' => $canApplyDuplicateResolution,
                         'duplicate_resolution_block_reason' => $duplicateResolutionBlockReason,
+                        'is_explicit_duplicate_scenario' => $isExplicitDuplicateScenario,
                         'resolution_decision' => $sameTenantContour
                             ? SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION
                             : SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL,
@@ -795,7 +814,10 @@ class MapReviewResultsService
             )
             ->when($locationIds !== [], fn ($query) => $query->whereIn('location_id', $locationIds))
             ->orderByRaw('COALESCE(number, display_name, code) asc')
-            ->get(['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code']);
+            ->get(array_merge(
+                ['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code'],
+                Schema::hasColumn('market_spaces', 'space_group_role') ? ['space_group_role'] : []
+            ));
     }
 
     /**

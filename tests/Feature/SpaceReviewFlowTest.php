@@ -888,10 +888,9 @@ class SpaceReviewFlowTest extends TestCase
         // Кандидат показывается как диагностическая подсказка
         $this->assertTrue((bool) data_get($row, 'diagnostics.has_candidates'));
 
-        // Проверка блокировки duplicate resolution:
-        // current tenant = СЕРВИСМАРКЕТ, observed tenant = Другой Арендатор (отличается)
-        // candidate найден по тому же tenant, current space ИМЕЕТ independent anchors
-        // Поэтому can_apply_duplicate_resolution = false
+        // Проверка: current space ИМЕЕТ independent anchors (map_shape + accrual),
+        // поэтому duplicate resolution остаётся заблокированным (логика unchanged).
+        // Отсутствие shape/anchors само по себе не разрешает duplicate resolution. Нужен явный duplicate/identity indicator.
         $candidate = data_get($row, 'diagnostics.candidate_spaces.0', []);
         $this->assertNotNull($candidate);
         $this->assertSame((int) $candidateSpace->id, (int) ($candidate['space_id'] ?? null));
@@ -3895,5 +3894,212 @@ JS;
         }
 
         return Schema::hasColumn('market_spaces', 'map_review_status');
+    }
+
+    /**
+     * Regression test: duplicate/identity priority over tenant-switch.
+     *
+     * Case: child space (id=222) without shape is a duplicate of parent group (id=130) with shape.
+     * UI should show "Разобрать дубль" as primary action, NOT "Сменить арендатора".
+     */
+    public function test_review_card_shows_duplicate_scenario_over_tenant_switch_for_parent_group_candidate(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Parent Group',
+            'is_active' => true,
+        ]);
+
+        // Parent group (id=130): has shape, is group with child places
+        $parentGroup = $this->createSpace($market, [
+            'number' => 'ОС1 7, 8, У',
+            'display_name' => 'ОС1 7, 8, У Группа мест',
+            'code' => 'OS1-7-8-U',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'OS1-7-8-U',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        // Parent group has shape on map
+        $parentShape = $this->createShape($market, (int) $parentGroup->id);
+
+        // Parent group has contract (strengthening anchor)
+        $parentContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $parentGroup->id,
+            'number' => 'DOG-OS1-PARENT',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+            'external_id' => 'DOG-OS1-PARENT-EXT',
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $parentContract->id,
+            'market_space_id' => $parentGroup->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('parent-group-accrual'),
+        ]);
+
+        // Child space (id=222): no shape, duplicate candidate
+        $childSpace = $this->createSpace($market, [
+            'number' => 'ОС1 7, 8, У',
+            'display_name' => 'ОС1 7, 8, У',
+            'code' => 'OS1-7-8-U-CHILD',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parentGroup->id,
+            'space_group_token' => 'OS1-7-8-U',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+        // NO shape for child space — this is the key characteristic of the case
+
+        // Create space review with occupancy_conflict — like "Место дублируется"
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $childSpace->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $childSpace->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Место дублируется с местом id' . $parentGroup->id . ' ' . $parentGroup->number . ' Группа мест',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        // Get diagnostics from MapReviewResultsService
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = collect($rows)->firstWhere('space_id', (int) $childSpace->id);
+
+        $this->assertNotNull($row, 'Child space should appear in needsAttention list');
+
+        // Verify diagnostics have candidate with parent group
+        $this->assertTrue((bool) data_get($row, 'diagnostics.has_candidates'), 'Should have duplicate candidate');
+        $candidates = data_get($row, 'diagnostics.candidate_spaces', []);
+        $this->assertNotEmpty($candidates, 'Should have candidate_spaces');
+
+        /** @var array<string, mixed> $primaryCandidate */
+        $primaryCandidate = $candidates[0] ?? [];
+        $this->assertSame((int) $parentGroup->id, (int) ($primaryCandidate['space_id'] ?? null));
+        $this->assertTrue((bool) ($primaryCandidate['has_map'] ?? false), 'Parent group should have map shape');
+        $this->assertTrue((bool) ($primaryCandidate['can_apply_duplicate_resolution'] ?? false), 'Duplicate resolution should be applicable');
+
+        // Render card and verify: duplicate action takes priority over tenant-switch
+        $html = Livewire::test(\App\Filament\Pages\MapReviewResults::class)->html();
+
+        // Primary action: "Разобрать дубль" should be visible
+        $this->assertStringContainsString('data-mrr-duplicate-plan="open"', $html);
+        $this->assertStringContainsString('data-current-space-id="' . $childSpace->id . '"', $html);
+        $this->assertStringContainsString('data-candidate-space-id="' . $parentGroup->id . '"', $html);
+
+        // Check if the button text is present (try both encoded and non-encoded versions)
+        $buttonTextFound = mb_stripos($html, 'Разобрать дубль', 0, 'UTF-8') !== false
+            || mb_stripos($html, '&gt;Разобрать дубль&lt;', 0, 'UTF-8') !== false
+            || mb_stripos($html, 'Разобрать', 0, 'UTF-8') !== false;
+        $this->assertTrue($buttonTextFound, 'Button text "Разобрать дубль" should be present in HTML');
+
+        // Secondary action: "Сменить арендатора" should NOT be visible as primary action
+        // because this is a duplicate case, not a pure tenant change case.
+        // Note: the attribute "data-mrr-manual-tenant-switch-open" might still appear in other contexts,
+        // so we check specifically for the button with that attribute.
+        $manualSwitchButtonFound = preg_match('/<button[^>]+data-mrr-manual-tenant-switch-open[^>]*>/i', $html) === 1;
+        $this->assertFalse($manualSwitchButtonFound, 'The "Сменить арендатора" button should not be present in HTML when duplicate candidates exist');
+
+        // Verify diagnostics section shows the duplicate candidates
+        $this->assertStringContainsString('Возможные дубли', $html);
+        $this->assertStringContainsString((string) $parentGroup->number, $html);
+    }
+
+    /**
+     * Regression test: normal tenant-switch case (without duplicate indicators) should still work.
+     * If there are NO candidates/duplicate indicators, tenant-switch should be available.
+     */
+    public function test_review_card_shows_tenant_switch_when_no_duplicate_candidates(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $oldTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Old Tenant',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'New Tenant from Review',
+            'is_active' => true,
+        ]);
+
+        // Space with shape but no duplicate candidates
+        $space = $this->createSpace($market, [
+            'number' => 'P52U-TENANT-SWITCH',
+            'display_name' => 'P52u Tenant Switch Test',
+            'code' => 'P/52u/TS',
+            'tenant_id' => $oldTenant->id,
+            'status' => 'occupied',
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+
+        // Has shape (so it's not a "child without shape" duplicate case)
+        $this->createShape($market, (int) $space->id);
+
+        // Create occupancy conflict with observed tenant
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'На месте другой арендатор',
+                'observed_tenant_name' => 'New Tenant from Review',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        // Get diagnostics - should NOT have candidates
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = collect($rows)->firstWhere('space_id', (int) $space->id);
+
+        $this->assertNotNull($row, 'Space should appear in needsAttention list');
+        // NO candidates - this is a pure tenant-switch case
+        $this->assertFalse((bool) data_get($row, 'diagnostics.has_candidates', false));
+
+        // Render card - should show "Сменить арендатора" as it's a pure tenant change
+        $html = Livewire::test(\App\Filament\Pages\MapReviewResults::class)->html();
+
+        // Primary action: "Сменить арендатора" button should be visible (check both attribute and text)
+        $manualSwitchButtonFound = preg_match('/<button[^>]+data-mrr-manual-tenant-switch-open[^>]*>/i', $html) === 1;
+        $this->assertTrue($manualSwitchButtonFound, 'The "Сменить арендатора" button should be present in HTML when there are no duplicate candidates');
+
+        // Also check that the button text is present (try multiple forms)
+        $buttonTextFound = mb_stripos($html, 'Сменить арендатора', 0, 'UTF-8') !== false
+            || mb_stripos($html, '&gt;Сменить арендатора&lt;', 0, 'UTF-8') !== false
+            || mb_stripos($html, 'Сменить', 0, 'UTF-8') !== false;
+        $this->assertTrue($buttonTextFound, 'Button text "Сменить арендатора" should be present in HTML');
     }
 }
