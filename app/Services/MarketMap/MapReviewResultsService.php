@@ -545,11 +545,53 @@ class MapReviewResultsService
                         'match_reason' => implode('; ', $reasons),
                     ];
                 })
-                ->sortByDesc(function (array $item) use ($candidateCounts): int {
-                    return $this->relationStrengthScore($candidateCounts[(int) $item['space']->id] ?? []);
+                ->values()
+                ->all();
+
+            // Extract current space operation data for sorting and candidate processing
+            $currentSpaceOperation = $latestOperationsForCandidateMap->get((int) $space->id);
+            $currentSpacePayload = is_array($currentSpaceOperation?->payload) ? $currentSpaceOperation->payload : [];
+            $currentSpaceCounts = $currentCounts[(int) $space->id] ?? [];
+
+            $candidates = collect($candidates)
+                ->sortByDesc(function (array $item) use ($candidateCounts, $currentSpacePayload, $currentSpaceOperation, $currentSpaceCounts): int {
+                    // Приоритет сортировки:
+                    // 1. Explicit duplicate с явным упоминанием id в reason/comment (приоритет 1000)
+                    // 2. Explicit duplicate без упоминания id (приоритет 100)
+                    // 3. relation_score (приоритет по умолчанию)
+                    $candidate = $item['space'];
+                    $candidateId = (int) $candidate->id;
+                    $counts = $candidateCounts[$candidateId] ?? [];
+                    
+                    $candidateIsGroupOrCanonical = in_array((string) ($candidate->space_group_role ?? ''), [
+                        MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                    ], true);
+                    $candidateHasUsableShape = ((int) ($counts['map_shapes'] ?? 0)) > 0;
+                    $currentHasNoUsableShape = ((int) ($currentSpaceCounts['map_shapes'] ?? 0)) === 0;
+                    $reasonText = (string) ($currentSpacePayload['reason'] ?? '') . ' ' . (string) ($currentSpaceOperation?->comment ?? '');
+                    $reasonIndicatesDuplicate = preg_match('/дубль|дублируется|группа\s+мест|связь\s+с\s+местом/iu', $reasonText) === 1;
+                    
+                    // Проверка: упомянут ли candidate id в reason/comment
+                    $candidateIdInReason = preg_match('/\b(id|№|number)\s*[:#]?\s*' . preg_quote((string) $candidateId, '/') . '\b/iu', $reasonText) === 1
+                        || preg_match('/\b' . preg_quote((string) $candidateId, '/') . '\b/u', $reasonText) === 1;
+                    
+                    $isExplicitDuplicate = $candidateIsGroupOrCanonical
+                        && $candidateHasUsableShape
+                        && $currentHasNoUsableShape
+                        && $reasonIndicatesDuplicate;
+
+                    if ($isExplicitDuplicate && $candidateIdInReason) {
+                        return 1000; // Максимальный приоритет
+                    }
+                    if ($isExplicitDuplicate) {
+                        return 100; // Высокий приоритет
+                    }
+                    
+                    // Обычный приоритет по relation_score
+                    return $this->relationStrengthScore($counts);
                 })
                 ->take(5)
-                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $latestOperationsForCandidateMap, $currentCounts): array {
+                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $latestOperationsForCandidateMap, $currentCounts, $currentSpacePayload, $currentSpaceOperation, $currentSpaceCounts): array {
                     /** @var MarketSpace $candidate */
                     $candidate = $item['space'];
                     $candidateId = (int) $candidate->id;
@@ -588,14 +630,11 @@ class MapReviewResultsService
                     $candidateStrongerByFinancials = $candidateScore > $currentScore && $candidateHasFinancials;
 
                     // Current place имеет собственные подтверждённые связи — это дополнительный аргумент ЗА блокировку
-                    $currentSpaceCounts = $currentCounts[(int) $space->id] ?? [];
                     $currentHasIndependentAnchors = ((int) ($currentSpaceCounts['map_shapes'] ?? 0) > 0)
                         || ((int) ($currentSpaceCounts['contracts'] ?? 0) > 0)
                         || ((int) ($currentSpaceCounts['accruals'] ?? 0) > 0)
                         || ((int) ($currentSpaceCounts['products'] ?? 0) > 0);
 
-                    $currentSpaceOperation = $latestOperationsForCandidateMap->get((int) $space->id);
-                    $currentSpacePayload = is_array($currentSpaceOperation?->payload) ? $currentSpaceOperation->payload : [];
                     $currentReviewDecision = (string) ($currentSpacePayload['decision'] ?? '');
                     $isOccupancyConflict = $currentReviewDecision === SpaceReviewDecision::OCCUPANCY_CONFLICT;
 
@@ -616,6 +655,11 @@ class MapReviewResultsService
                     $currentHasNoUsableShape = ((int) ($currentSpaceCounts['map_shapes'] ?? 0)) === 0;
                     $reasonText = (string) ($currentSpacePayload['reason'] ?? '') . ' ' . (string) ($currentSpaceOperation?->comment ?? '');
                     $reasonIndicatesDuplicate = preg_match('/дубль|дублируется|группа\s+мест|связь\s+с\s+местом/iu', $reasonText) === 1;
+                    
+                    // Проверка: упомянут ли candidate id в reason/comment
+                    $candidateIdInReason = preg_match('/\b(id|№|number)\s*[:#]?\s*' . preg_quote((string) $candidateId, '/') . '\b/iu', $reasonText) === 1
+                        || preg_match('/\b' . preg_quote((string) $candidateId, '/') . '\b/u', $reasonText) === 1;
+                    
                     $isExplicitDuplicateScenario = $candidateIsGroupOrCanonical
                         && $candidateHasUsableShape
                         && $currentHasNoUsableShape
@@ -652,6 +696,8 @@ class MapReviewResultsService
                         'can_apply_duplicate_resolution' => $canApplyDuplicateResolution,
                         'duplicate_resolution_block_reason' => $duplicateResolutionBlockReason,
                         'is_explicit_duplicate_scenario' => $isExplicitDuplicateScenario,
+                        'explicit_duplicate_priority' => $isExplicitDuplicateScenario ? 100 : 0,
+                        'candidate_id_in_reason' => $candidateIdInReason,
                         'resolution_decision' => $sameTenantContour
                             ? SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION
                             : SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL,
