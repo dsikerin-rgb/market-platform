@@ -268,6 +268,53 @@ class MarketSpaceResource extends BaseResource
         return static::sharedUseTenantRows($record) !== [];
     }
 
+    public static function sharedUseCanonicalSpaceForSource(?MarketSpace $record): ?MarketSpace
+    {
+        if (! filled($record?->id) || ! filled($record?->market_id) || ! SchemaFacade::hasTable('market_space_tenant_bindings')) {
+            return null;
+        }
+
+        $sourceSpaceId = (int) $record->id;
+        static $canonicalSpaceCache = [];
+        $cacheKey = (int) $record->market_id . ':' . $sourceSpaceId;
+
+        if (array_key_exists($cacheKey, $canonicalSpaceCache)) {
+            return $canonicalSpaceCache[$cacheKey];
+        }
+
+        $bindings = DB::table('market_space_tenant_bindings as b')
+            ->where('b.market_id', (int) $record->market_id)
+            ->where('b.binding_type', 'shared_use')
+            ->whereNull('b.ended_at')
+            ->orderBy('b.id')
+            ->get(['b.market_space_id', 'b.meta']);
+
+        foreach ($bindings as $binding) {
+            $canonicalSpaceId = (int) ($binding->market_space_id ?? 0);
+            if ($canonicalSpaceId <= 0 || $canonicalSpaceId === $sourceSpaceId) {
+                continue;
+            }
+
+            $meta = static::sharedUseBindingMeta($binding->meta ?? null);
+            $sourceSpaceIds = static::sharedUseSourceSpaceIdsFromMeta($meta);
+
+            if ($sourceSpaceIds !== [] && in_array($sourceSpaceId, $sourceSpaceIds, true)) {
+                $canonicalSpace = MarketSpace::query()->find($canonicalSpaceId);
+
+                if ($canonicalSpace instanceof MarketSpace) {
+                    return $canonicalSpace;
+                }
+            }
+        }
+
+        return $canonicalSpaceCache[$cacheKey] = null;
+    }
+
+    public static function isSharedUseSourceSpace(?MarketSpace $record): bool
+    {
+        return static::sharedUseCanonicalSpaceForSource($record) instanceof MarketSpace;
+    }
+
     private static function sharedUseTenantRows(?MarketSpace $record): array
     {
         if (! filled($record?->id) || ! SchemaFacade::hasTable('market_space_tenant_bindings')) {
@@ -308,6 +355,49 @@ class MarketSpaceResource extends BaseResource
             })
             ->values()
             ->all();
+    }
+
+    private static function sharedUseBindingMeta(mixed $meta): array
+    {
+        if (is_array($meta)) {
+            return $meta;
+        }
+
+        if (! is_string($meta) || trim($meta) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($meta, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return list<int>
+     */
+    private static function sharedUseSourceSpaceIdsFromMeta(array $meta): array
+    {
+        $ids = [];
+
+        foreach ([
+            $meta['source_space_ids'] ?? [],
+            data_get($meta, 'sklad21_shared_use.source_space_ids', []),
+        ] as $value) {
+            if (! is_array($value)) {
+                continue;
+            }
+
+            foreach ($value as $sourceSpaceId) {
+                if (! is_numeric($sourceSpaceId)) {
+                    continue;
+                }
+
+                $ids[(int) $sourceSpaceId] = true;
+            }
+        }
+
+        return array_map('intval', array_keys($ids));
     }
 
     private static function sanitizeSharedUseNote(string $note): string
@@ -369,6 +459,33 @@ class MarketSpaceResource extends BaseResource
             . '<div style="font-size:12px;color:#475569;">Площадь и состав управляются отдельно по каждому участнику.</div>'
             . '</div>'
             . '<ul style="display:grid;gap:0;margin:0;padding:0;list-style:none;">' . $items . '</ul>'
+            . '</div>'
+        );
+    }
+
+    private static function renderSharedUseSourceSpaceNotice(?MarketSpace $record): HtmlString
+    {
+        $canonicalSpace = static::sharedUseCanonicalSpaceForSource($record);
+
+        if (! $canonicalSpace instanceof MarketSpace) {
+            return new HtmlString('');
+        }
+
+        $canonicalLabel = trim((string) ($canonicalSpace->number ?? ''));
+        if ($canonicalLabel === '') {
+            $canonicalLabel = trim((string) ($canonicalSpace->display_name ?? ''));
+        }
+        if ($canonicalLabel === '') {
+            $canonicalLabel = '#' . (int) $canonicalSpace->id;
+        }
+
+        $canonicalUrl = static::getUrl('edit', ['record' => $canonicalSpace]);
+
+        return new HtmlString(
+            '<div style="display:grid;gap:10px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e293b;">'
+            . '<div style="font-size:13px;font-weight:800;color:#1d4ed8;">Это служебная запись участника совместного использования</div>'
+            . '<div style="font-size:12px;line-height:1.45;color:#475569;">Управляйте участниками в карточке основного места. Основное место: <a href="' . e($canonicalUrl) . '" target="_blank" rel="noopener" style="color:#1d4ed8;font-weight:800;text-decoration:underline;">' . e($canonicalLabel) . '</a>.</div>'
+            . '<div><a href="' . e($canonicalUrl) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;border-radius:10px;background:#2563eb;color:#fff;font-size:12px;font-weight:800;padding:8px 12px;text-decoration:none;">Открыть основное место</a></div>'
             . '</div>'
         );
     }
@@ -793,6 +910,7 @@ class MarketSpaceResource extends BaseResource
 
         $sharedUseRows = static::sharedUseTenantRows($record);
         $hasSharedUseTenants = $sharedUseRows !== [];
+        $isSharedUseSourceSpace = static::isSharedUseSourceSpace($record);
         $sharedUseTenantCount = count($sharedUseRows);
         $sharedUseAreaSum = array_sum(array_map(
             static fn (array $row): float => $row['area_sqm'] !== null ? (float) $row['area_sqm'] : 0.0,
@@ -817,6 +935,11 @@ class MarketSpaceResource extends BaseResource
             $tenantValue = $sharedUseTenantCount . ' ' . $tenantWord;
             $tenantMeta = 'Площадь и состав управляются отдельно';
             $tenantTone = 'occupied';
+            $tenantActionHtml = '';
+        }
+
+        if ($isSharedUseSourceSpace) {
+            $tenantActionHtml = '';
         }
 
         if ($tenantName !== '' && $record->effectiveOccupancySource() === 'parent') {
@@ -900,7 +1023,7 @@ class MarketSpaceResource extends BaseResource
 
         $items = [];
 
-        if (! $hasSharedUseTenants) {
+        if (! $hasSharedUseTenants && ! $isSharedUseSourceSpace) {
             $items[] = static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta);
         }
 
@@ -1075,6 +1198,12 @@ class MarketSpaceResource extends BaseResource
                     ->schema([
                         Section::make('Ключевая информация')
                             ->schema([
+                                Forms\Components\Placeholder::make('shared_use_source_space_notice')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderSharedUseSourceSpaceNotice($record))
+                                    ->visible(fn (?MarketSpace $record): bool => static::isSharedUseSourceSpace($record))
+                                    ->columnSpanFull(),
                                 Forms\Components\Placeholder::make('priority_summary')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
@@ -1303,12 +1432,22 @@ class MarketSpaceResource extends BaseResource
                                     ->default('none')
                                     ->required()
                                     ->live()
-                                    ->disabled(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
+                                    ->disabled(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record) || static::isSharedUseSourceSpace($record))
                                     ->hintIcon('heroicon-m-question-mark-circle')
-                                    ->hintIconTooltip('Определяет, как место участвует в группировке. Для существующего места перевод в группу выполняется отдельной кнопкой в шапке карточки, чтобы сразу выбрать родительскую группу и номер внутри группы.')
+                                    ->hintIconTooltip(function (?MarketSpace $record): string {
+                                        if (static::isSharedUseSourceSpace($record)) {
+                                            return 'Это служебная запись участника совместного использования. Управляйте участниками в карточке основного места.';
+                                        }
+
+                                        return 'Определяет, как место участвует в группировке. Для существующего места перевод в группу выполняется отдельной кнопкой в шапке карточки, чтобы сразу выбрать родительскую группу и номер внутри группы.';
+                                    })
                                     ->helperText(function (?MarketSpace $record): ?string {
                                         if (! filled($record?->id)) {
                                             return null;
+                                        }
+
+                                        if (static::isSharedUseSourceSpace($record)) {
+                                            return 'Это служебная запись участника совместного использования. Управляйте участниками в карточке основного места.';
                                         }
 
                                         if (static::hasSharedUseTenants($record)) {
