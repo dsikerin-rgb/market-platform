@@ -314,7 +314,7 @@
             }
 
             .dashboard-workspace__panel-body {
-                padding: 1.25rem;
+                padding: 1.75rem;
             }
 
             .dashboard-workspace__section-head {
@@ -364,6 +364,7 @@
 
             .dashboard-workspace__widgets.fi-wi {
                 gap: 1rem;
+                align-items: start;
             }
 
             .dashboard-workspace__widgets .fi-wi-widget {
@@ -379,6 +380,27 @@
                 border-color: var(--dashboard-border);
                 background: var(--dashboard-panel-soft);
                 box-shadow: none;
+                overflow: hidden;
+            }
+
+            .dashboard-workspace__widgets .fi-section-content-ctn {
+                padding: 0 !important;
+            }
+
+            .dashboard-workspace__widgets .fi-section-content {
+                padding: 1.25rem !important;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview .fi-section-content {
+                padding: 1.25rem 1.25rem 1.5rem !important;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview .fi-wi {
+                gap: 1.125rem !important;
+            }
+
+            .dashboard-workspace__panel .dashboard-workspace__widgets {
+                margin-bottom: 0;
             }
 
             .dashboard-workspace__attention-overlay {

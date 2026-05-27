@@ -6,7 +6,7 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MarketSpaceResource;
-use App\Models\MarketSpace;
+use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Contracts\Support\Htmlable;
@@ -14,9 +14,14 @@ use Illuminate\Support\HtmlString;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
+    protected int|string|array $columnSpan = [
+        'md' => 1,
+        'xl' => 2,
+    ];
+
     protected ?string $pollingInterval = null;
 
-    protected ?string $heading = 'Заполняемость торговых мест';
+    protected ?string $heading = 'Сдано по площади';
 
     protected function getType(): string
     {
@@ -89,41 +94,39 @@ class MarketSpacesStatusChartWidget extends ChartWidget
             return $this->emptyChart('Выберите рынок');
         }
 
-        $baseQuery = MarketSpace::query()
-            ->where('market_id', $marketId);
+        $metrics = MarketSpaceDashboardMetrics::summarize($marketId);
+        $totalArea = (float) $metrics['total_area_sqm'];
 
-        $totalSpaces = (clone $baseQuery)->count();
-
-        if ($totalSpaces <= 0) {
+        if ($totalArea <= 0) {
             return $this->emptyChart('Нет торговых мест');
         }
 
-        $occupiedSpaces = max((clone $baseQuery)->where('status', 'occupied')->count(), 0);
-        $vacantSpaces = max((clone $baseQuery)->where('status', 'vacant')->count(), 0);
-        $maintenanceSpaces = max((clone $baseQuery)->where('status', 'maintenance')->count(), 0);
+        $occupiedArea = max((float) $metrics['occupied_area_sqm'], 0.0);
+        $vacantArea = max((float) $metrics['vacant_area_sqm'], 0.0);
+        $maintenanceArea = max((float) $metrics['maintenance_area_sqm'], 0.0);
 
         $labels = [];
         $data = [];
         $backgroundColor = [];
         $borderColor = [];
 
-        if ($vacantSpaces > 0) {
-            $labels[] = 'Свободно (' . $vacantSpaces . ')';
-            $data[] = $vacantSpaces;
+        if ($vacantArea > 0) {
+            $labels[] = 'Свободно (' . $this->formatAreaLabel($vacantArea) . ')';
+            $data[] = round($vacantArea, 2);
             $backgroundColor[] = '#94A3B8';
             $borderColor[] = '#FFFFFF';
         }
 
-        if ($occupiedSpaces > 0) {
-            $labels[] = 'Занято (' . $occupiedSpaces . ')';
-            $data[] = $occupiedSpaces;
+        if ($occupiedArea > 0) {
+            $labels[] = 'Сдано (' . $this->formatAreaLabel($occupiedArea) . ')';
+            $data[] = round($occupiedArea, 2);
             $backgroundColor[] = '#22C55E';
             $borderColor[] = '#FFFFFF';
         }
 
-        if ($maintenanceSpaces > 0) {
-            $labels[] = 'Служебные места (' . $maintenanceSpaces . ')';
-            $data[] = $maintenanceSpaces;
+        if ($maintenanceArea > 0) {
+            $labels[] = 'Служебные места (' . $this->formatAreaLabel($maintenanceArea) . ')';
+            $data[] = round($maintenanceArea, 2);
             $backgroundColor[] = '#A855F7';
             $borderColor[] = '#FFFFFF';
         }
@@ -178,5 +181,12 @@ class MarketSpacesStatusChartWidget extends ChartWidget
                 ],
             ],
         ];
+    }
+
+    private function formatAreaLabel(float $value): string
+    {
+        $precision = abs($value - round($value)) < 0.01 ? 0 : 1;
+
+        return number_format($value, $precision, ',', ' ') . ' м²';
     }
 }

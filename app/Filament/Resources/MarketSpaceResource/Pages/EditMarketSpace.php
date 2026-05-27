@@ -1053,7 +1053,9 @@ class EditMarketSpace extends BaseEditRecord
             ->size('lg')
             ->outlined()
             ->color('primary')
-            ->visible(fn (): bool => $this->record instanceof MarketSpace && MarketSpaceResource::hasSharedUseTenants($this->record))
+            ->visible(fn (): bool => $this->record instanceof MarketSpace
+                && ! $this->isMaintenanceSpace($this->record)
+                && MarketSpaceResource::hasSharedUseTenants($this->record))
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--primary',
             ])
@@ -1157,6 +1159,7 @@ class EditMarketSpace extends BaseEditRecord
                 }
 
                 return (string) ($this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_NONE
+                    && ! $this->isMaintenanceSpace($this->record)
                     && ! MarketSpaceResource::hasSharedUseTenants($this->record)
                     && ! MarketSpaceResource::isSharedUseSourceSpace($this->record);
             })
@@ -1170,6 +1173,52 @@ class EditMarketSpace extends BaseEditRecord
             ->modalCancelActionLabel('Отмена')
             ->action(function (): void {
                 $this->replaceMountedAction('manage_shared_use');
+            });
+    }
+
+    private function makeServiceStatusAction(string $actionClass): mixed
+    {
+        $isMaintenance = $this->record instanceof MarketSpace && $this->isMaintenanceSpace($this->record);
+
+        return $actionClass::make($isMaintenance ? 'clear_service_status' : 'mark_service_status')
+            ->label($isMaintenance ? 'Снять служебный статус' : 'Отметить как служебное')
+            ->icon($isMaintenance ? 'heroicon-o-arrow-uturn-left' : 'heroicon-o-wrench-screwdriver')
+            ->tooltip($isMaintenance
+                ? 'Вернуть место в обычный режим без арендатора'
+                : 'Перевести место в служебное и закрыть активные арендные связи')
+            ->size('lg')
+            ->outlined()
+            ->color($isMaintenance ? 'gray' : 'warning')
+            ->visible(fn (): bool => $this->record instanceof MarketSpace)
+            ->disabled(fn (): bool => ! $isMaintenance && $this->isGroupedSpace($this->record))
+            ->extraAttributes([
+                'class' => 'market-space-card-action market-space-card-action--secondary',
+            ])
+            ->requiresConfirmation()
+            ->modalHeading($isMaintenance ? 'Снять служебный статус' : 'Отметить как служебное')
+            ->modalDescription($isMaintenance
+                ? 'Место станет обычным и получит статус «Свободно». Арендаторы и совместное использование автоматически не восстанавливаются.'
+                : 'Место станет служебным. Активные привязки арендаторов и совместного использования будут закрыты.')
+            ->modalSubmitActionLabel($isMaintenance ? 'Снять статус' : 'Перевести в служебное')
+            ->modalCancelActionLabel('Отмена')
+            ->action(function () use ($isMaintenance): void {
+                if (! $this->record instanceof MarketSpace) {
+                    return;
+                }
+
+                if (! $isMaintenance && $this->isGroupedSpace($this->record)) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Служебное место не может состоять в группе')
+                        ->body('Сначала уберите место из группы, затем повторите действие.')
+                        ->send();
+
+                    return;
+                }
+
+                $isMaintenance
+                    ? $this->clearServiceStatus()
+                    : $this->markRecordAsService();
             });
     }
 
@@ -1518,10 +1567,12 @@ class EditMarketSpace extends BaseEditRecord
     private function makeRegroupAction(string $actionClass): mixed
     {
         $isChild = fn (): bool => $this->record instanceof MarketSpace
+            && ! $this->isMaintenanceSpace($this->record)
             && (string) ($this->record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD
             && filled($this->record->space_group_parent_id);
 
         $isOrdinary = fn (): bool => $this->record instanceof MarketSpace
+            && ! $this->isMaintenanceSpace($this->record)
             && (
                 (string) ($this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_NONE
                 || (
@@ -1724,6 +1775,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeServiceStatusAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeStartSharedUseAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeSharedUseManageAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Actions\Action::class);
@@ -1792,6 +1844,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeServiceStatusAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeStartSharedUseAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeSharedUseManageAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeTenantSwitchAction(\Filament\Pages\Actions\Action::class);
@@ -2035,6 +2088,85 @@ class EditMarketSpace extends BaseEditRecord
             'maintenance' => 'gray',
             default => 'gray',
         };
+    }
+
+    private function isMaintenanceSpace(?MarketSpace $space): bool
+    {
+        return $space instanceof MarketSpace && (string) ($space->status ?? '') === 'maintenance';
+    }
+
+    private function isGroupedSpace(?MarketSpace $space): bool
+    {
+        if (! $space instanceof MarketSpace) {
+            return false;
+        }
+
+        return (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_NONE
+            || filled($space->space_group_parent_id);
+    }
+
+    private function markRecordAsService(): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $spaceId = (int) $this->record->id;
+        $marketId = (int) $this->record->market_id;
+        $now = now();
+
+        DB::transaction(function () use ($marketId, $spaceId, $now): void {
+            DB::table('market_space_tenant_bindings')
+                ->where('market_id', $marketId)
+                ->where('market_space_id', $spaceId)
+                ->whereNull('ended_at')
+                ->update([
+                    'ended_at' => $now,
+                    'updated_at' => $now,
+                    'resolution_reason' => 'maintenance_space_reconciled',
+                ]);
+
+            DB::table('market_spaces')
+                ->where('id', $spaceId)
+                ->update([
+                    'status' => 'maintenance',
+                    'tenant_id' => null,
+                    'updated_at' => $now,
+                ]);
+        });
+
+        $this->record->refresh();
+        $this->fillForm();
+
+        Notification::make()
+            ->success()
+            ->title('Место отмечено как служебное')
+            ->body('Активные арендные связи закрыты.')
+            ->send();
+    }
+
+    private function clearServiceStatus(): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        DB::table('market_spaces')
+            ->where('id', (int) $this->record->id)
+            ->update([
+                'status' => 'vacant',
+                'tenant_id' => null,
+                'updated_at' => now(),
+            ]);
+
+        $this->record->refresh();
+        $this->fillForm();
+
+        Notification::make()
+            ->success()
+            ->title('Служебный статус снят')
+            ->body('Место переведено в статус «Свободно».')
+            ->send();
     }
 
 }

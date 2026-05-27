@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketAttentionWidget;
+use App\Filament\Widgets\MarketAverageRentRateWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\AccrualCompositionWidget;
@@ -15,10 +16,10 @@ use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Models\ContractDebt;
 use App\Models\Market;
-use App\Models\MarketSpace;
 use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\TenantRequest;
+use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -213,6 +214,7 @@ class Dashboard extends BaseDashboard
                 ],
                 'widgets' => $this->resolveVisibleWorkspaceWidgets([
                     MarketOverviewStatsWidget::class,
+                    MarketAverageRentRateWidget::class,
                     MarketSpacesStatusChartWidget::class,
                 ]),
             ],
@@ -264,8 +266,13 @@ class Dashboard extends BaseDashboard
 
         $tenantsCount = 0;
         $totalSpaces = 0;
+        $totalArea = 0.0;
         $occupiedSpaces = 0;
+        $occupiedArea = 0.0;
         $vacantSpaces = 0;
+        $vacantArea = 0.0;
+        $maintenanceSpaces = 0;
+        $maintenanceArea = 0.0;
         $openRequests = 0;
         $overdueTasks = 0;
         $vacantSpacesUrl = $this->appendQueryString(
@@ -290,10 +297,15 @@ class Dashboard extends BaseDashboard
                 ->active()
                 ->count();
 
-            $spacesQuery = MarketSpace::query()->where('market_id', $marketId);
-            $totalSpaces = (clone $spacesQuery)->count();
-            $occupiedSpaces = (clone $spacesQuery)->where('status', 'occupied')->count();
-            $vacantSpaces = (clone $spacesQuery)->where('status', 'vacant')->count();
+            $spaceMetrics = MarketSpaceDashboardMetrics::summarize($marketId);
+            $totalSpaces = (int) $spaceMetrics['total_spaces'];
+            $totalArea = (float) $spaceMetrics['total_area_sqm'];
+            $occupiedSpaces = (int) $spaceMetrics['occupied_spaces'];
+            $occupiedArea = (float) $spaceMetrics['occupied_area_sqm'];
+            $vacantSpaces = (int) $spaceMetrics['vacant_spaces'];
+            $vacantArea = (float) $spaceMetrics['vacant_area_sqm'];
+            $maintenanceSpaces = (int) $spaceMetrics['maintenance_spaces'];
+            $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
 
             $openRequests = TenantRequest::query()
                 ->where('market_id', $marketId)
@@ -320,8 +332,8 @@ class Dashboard extends BaseDashboard
                     'url' => \App\Filament\Resources\TenantResource::getUrl('index'),
                 ],
                 [
-                    'label' => 'Свободные места',
-                    'value' => number_format($vacantSpaces, 0, ',', ' '),
+                    'label' => 'Свободно, м²',
+                    'value' => $this->formatArea($vacantArea),
                     'tone' => $vacantSpaces > 0 ? 'success' : 'neutral',
                     'url' => $vacantSpacesUrl,
                 ],
@@ -367,9 +379,7 @@ class Dashboard extends BaseDashboard
                 [
                     'title' => 'Торговые места',
                     'description' => 'Открыть фонд мест и быстро оценить текущую занятость и свободный остаток.',
-                    'meta' => $totalSpaces > 0
-                        ? number_format($occupiedSpaces, 0, ',', ' ') . ' из ' . number_format($totalSpaces, 0, ',', ' ') . ' занято'
-                        : 'Открыть раздел',
+                    'meta' => 'Открыть раздел',
                     'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
                     'icon' => 'heroicon-o-home-modern',
                 ],
@@ -528,6 +538,10 @@ class Dashboard extends BaseDashboard
             'spaces_status' => [
                 'class' => MarketSpacesStatusChartWidget::class,
                 'label' => 'Статусы торговых мест',
+            ],
+            'average_rent_rate' => [
+                'class' => MarketAverageRentRateWidget::class,
+                'label' => 'Средняя ставка за м²',
             ],
             'recent_requests' => [
                 'class' => RecentTenantRequestsWidget::class,
@@ -1073,5 +1087,12 @@ class Dashboard extends BaseDashboard
         }
 
         return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $queryString;
+    }
+
+    private function formatArea(float $value): string
+    {
+        $precision = abs($value - round($value)) < 0.01 ? 0 : 1;
+
+        return number_format($value, $precision, ',', ' ') . ' м²';
     }
 }
