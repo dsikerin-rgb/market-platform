@@ -1487,6 +1487,9 @@ class MarketMapLinkingTest extends TestCase
         $response->assertOk();
         $response->assertDontSee('Состав группы', false);
         $response->assertSee('Добавить в группу', false);
+        $response->assertSee('Группа', false);
+        $response->assertSee('Не состоит в группе', false);
+        $response->assertSee('Можно использовать как самостоятельное место', false);
     }
 
     public function test_child_space_edit_page_does_not_show_group_composition_block(): void
@@ -1692,6 +1695,9 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Справочное поле карточки. Рабочая площадь задаётся у участников.', false);
         $response->assertDontSee('Основной арендатор', false);
         $response->assertDontSee('Площадь основного места', false);
+        $response->assertDontSee('Группа', false);
+        $response->assertDontSee('Не состоит в группе', false);
+        $response->assertDontSee('Можно использовать как самостоятельное место', false);
         $response->assertSee('Площадь и состав управляются отдельно по каждому участнику.', false);
         $response->assertSee('площадь: 2 м²', false);
         $response->assertSee('ставка: 250 ₽', false);

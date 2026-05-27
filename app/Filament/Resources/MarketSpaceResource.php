@@ -898,11 +898,14 @@ class MarketSpaceResource extends BaseResource
             $rentMetaParts[] = 'Ставка ещё не заполнена';
         }
 
-        $items = [
-            static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta),
-            static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml),
-            static::renderPrioritySummaryItem($areaLabel, $areaValue, $areaMeta),
-        ];
+        $items = [];
+
+        if (! $hasSharedUseTenants) {
+            $items[] = static::renderPrioritySummaryItem('Группа', $groupValue, $groupMeta);
+        }
+
+        $items[] = static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml);
+        $items[] = static::renderPrioritySummaryItem($areaLabel, $areaValue, $areaMeta);
 
         if (! $hasSharedUseTenants) {
             $items[] = static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone);
