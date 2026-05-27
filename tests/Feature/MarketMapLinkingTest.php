@@ -1486,6 +1486,7 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertDontSee('Состав группы', false);
+        $response->assertSee('Добавить в группу', false);
     }
 
     public function test_child_space_edit_page_does_not_show_group_composition_block(): void
@@ -1613,6 +1614,7 @@ class MarketMapLinkingTest extends TestCase
         $response->assertOk();
         $response->assertSee('Открыть карточку группы', false);
         $response->assertSee(MarketSpaceResource::getUrl('edit', ['record' => $parent]), false);
+        $response->assertSee('Перенести в группу', false);
     }
     public function test_market_space_edit_page_shows_shared_use_tenants(): void
     {
@@ -1626,6 +1628,23 @@ class MarketMapLinkingTest extends TestCase
             'number' => 'Shared-1',
             'display_name' => 'Shared space',
             'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 20, 'y' => 10],
+                ['x' => 20, 'y' => 20],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 20,
+            'bbox_y2' => 20,
             'is_active' => true,
         ]);
 
@@ -1676,6 +1695,11 @@ class MarketMapLinkingTest extends TestCase
         $response->assertSee('Площадь и состав управляются отдельно по каждому участнику.', false);
         $response->assertSee('площадь: 2 м²', false);
         $response->assertSee('ставка: 250 ₽', false);
+        $response->assertSee('Показать на карте', false);
+        $response->assertDontSee('Нет карты', false);
+        $response->assertDontSee('Добавить в группу', false);
+        $response->assertDontSee('Перенести в группу', false);
+        $response->assertDontSee('Убрать из группы', false);
         $response->assertDontSee('источник:', false);
         $response->assertDontSee('источники:', false);
         $response->assertSee('Участники', false);
