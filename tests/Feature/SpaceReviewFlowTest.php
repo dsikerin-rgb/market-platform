@@ -4102,4 +4102,147 @@ JS;
             || mb_stripos($html, 'Сменить', 0, 'UTF-8') !== false;
         $this->assertTrue($buttonTextFound, 'Button text "Сменить арендатора" should be present in HTML');
     }
+
+    /**
+     * Regression test: explicit duplicate candidate with id mention in reason/comment
+     * should take priority over other same-tenant candidates.
+     *
+     * Case: two candidates exist:
+     * - #129: stronger by financials but NOT a parent/group
+     * - #130: parent/group with shape, explicitly mentioned in reason ("id130")
+     *
+     * Expected: primary candidate = #130, duplicate action visible, tenant-switch hidden.
+     */
+    public function test_explicit_duplicate_candidate_with_id_mention_takes_priority_over_stronger_candidate(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Group',
+            'is_active' => true,
+        ]);
+
+        // Candidate #129: stronger by financials, NOT a parent/group
+        $strongerCandidate = $this->createSpace($market, [
+            'number' => 'П55',
+            'display_name' => 'П55 Сильное место',
+            'code' => 'P/55-STRONG',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+        $this->createShape($market, (int) $strongerCandidate->id);
+        $strongerContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $strongerCandidate->id,
+            'number' => 'P/55-STRONG',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+            'external_id' => 'STRONG-CONTRACT',
+        ]);
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $strongerContract->id,
+            'market_space_id' => $strongerCandidate->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('stronger-accrual'),
+        ]);
+
+        // Candidate #130: parent/group with shape, explicitly mentioned in reason
+        $parentGroup = $this->createSpace($market, [
+            'number' => 'ОС1 7, 8, У',
+            'display_name' => 'ОС1 7, 8, У Группа мест',
+            'code' => 'OS1-7-8-U',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'OS1-7-8-U',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+        $this->createShape($market, (int) $parentGroup->id);
+        $parentContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $parentGroup->id,
+            'number' => 'DOG-OS1-PARENT',
+            'status' => 'active',
+            'starts_at' => now()->startOfMonth()->toDateString(),
+            'is_active' => true,
+            'external_id' => 'PARENT-CONTRACT',
+        ]);
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $parentContract->id,
+            'market_space_id' => $parentGroup->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('parent-accrual'),
+        ]);
+
+        // Current space: child without shape, reason explicitly mentions id130
+        $childSpace = $this->createSpace($market, [
+            'number' => 'ОС1 7, 8, У',
+            'display_name' => 'ОС1 7, 8, У',
+            'code' => 'OS1-7-8-U-CHILD',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parentGroup->id,
+            'space_group_token' => 'OS1-7-8-U',
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+        // NO shape for child space
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $childSpace->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $childSpace->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Место дублируется с местом id' . $parentGroup->id . ' ' . $parentGroup->number . ' Группа мест',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        // Get diagnostics
+        $rows = app(MapReviewResultsService::class)->needsAttention((int) $market->id, 10);
+        $row = collect($rows)->firstWhere('space_id', (int) $childSpace->id);
+
+        $this->assertNotNull($row, 'Child space should appear in needsAttention list');
+        $this->assertTrue((bool) data_get($row, 'diagnostics.has_candidates'), 'Should have candidates');
+
+        $candidates = data_get($row, 'diagnostics.candidate_spaces', []);
+        $this->assertNotEmpty($candidates, 'Should have at least one candidate');
+
+        // Primary candidate should be #130 (parent/group with explicit mention)
+        $primaryCandidate = $candidates[0] ?? [];
+        $this->assertSame((int) $parentGroup->id, (int) ($primaryCandidate['space_id'] ?? null), 'Primary candidate should be parent group #130');
+        $this->assertTrue((bool) ($primaryCandidate['is_explicit_duplicate_scenario'] ?? false), 'Primary candidate should be explicit duplicate');
+        $this->assertTrue((bool) ($primaryCandidate['candidate_id_in_reason'] ?? false), 'Primary candidate id should be mentioned in reason');
+        $this->assertTrue((bool) ($primaryCandidate['can_apply_duplicate_resolution'] ?? false), 'Duplicate resolution should be applicable');
+
+        // Render card and verify
+        $html = Livewire::test(\App\Filament\Pages\MapReviewResults::class)->html();
+
+        // Duplicate action should be visible with candidate #130
+        $this->assertStringContainsString('data-mrr-duplicate-plan="open"', $html);
+        $this->assertStringContainsString('data-candidate-space-id="' . $parentGroup->id . '"', $html);
+
+        // Tenant-switch should NOT be visible
+        $manualSwitchButtonFound = preg_match('/<button[^>]+data-mrr-manual-tenant-switch-open[^>]*>/i', $html) === 1;
+        $this->assertFalse($manualSwitchButtonFound, 'The "Сменить арендатора" button should not be present when explicit duplicate candidate exists');
+    }
 }

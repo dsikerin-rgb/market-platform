@@ -2845,11 +2845,10 @@
                                                 ? 'Сменить на арендатора из ревизии'
                                                 : 'Сменить арендатора';
                                             // ─── Duplicate/Identity priority over tenant-switch ───────────────────────────────
-                                            // Если есть явные признаки дубля (кандидат — parent/group, current без shape, reason указывает на дубль),
+                                            // Если любой кандидат имеет явные признаки дубля (parent/group + shape + reason указывает на дубль),
                                             // приоритет у "Разобрать дубль". Tenant-switch показывается только как secondary warning.
                                             $hasExplicitDuplicateIndicators = $hasCandidates
-                                                && $primaryCandidate !== null
-                                                && ($primaryCandidate['is_explicit_duplicate_scenario'] ?? false);
+                                                && collect($candidateSpaces)->contains(fn ($c): bool => ($c['is_explicit_duplicate_scenario'] ?? false));
                                             $canManualTenantSwitch = $attentionTab !== 'unconfirmed_links'
                                                 && ! $financialRequiresTenantResolution
                                                 && ! $hasExplicitDuplicateIndicators
