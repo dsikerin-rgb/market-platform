@@ -14,9 +14,14 @@ use Illuminate\Support\HtmlString;
 
 class MarketSpacesStatusChartWidget extends ChartWidget
 {
+    protected int|string|array $columnSpan = [
+        'md' => 1,
+        'xl' => 2,
+    ];
+
     protected ?string $pollingInterval = null;
 
-    protected ?string $heading = 'Заполняемость торговых мест';
+    protected ?string $heading = 'Сдано по площади';
 
     protected function getType(): string
     {
@@ -113,7 +118,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         }
 
         if ($occupiedArea > 0) {
-            $labels[] = 'Занято (' . $this->formatAreaLabel($occupiedArea) . ')';
+            $labels[] = 'Сдано (' . $this->formatAreaLabel($occupiedArea) . ')';
             $data[] = round($occupiedArea, 2);
             $backgroundColor[] = '#22C55E';
             $borderColor[] = '#FFFFFF';

@@ -13,9 +13,14 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class MarketAverageRentRateWidget extends StatsOverviewWidget
 {
+    protected int|string|array $columnSpan = [
+        'md' => 1,
+        'xl' => 1,
+    ];
+
     protected ?string $pollingInterval = null;
 
-    protected ?string $heading = 'Средняя ставка';
+    protected ?string $heading = null;
 
     protected function getStats(): array
     {

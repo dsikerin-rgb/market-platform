@@ -27,9 +27,11 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
     use InteractsWithPageFilters;
     use ResolvesDashboardFilterMonth;
 
+    protected int|string|array $columnSpan = 'full';
+
     protected ?string $pollingInterval = null;
 
-    protected ?string $heading = 'Показатели рынка';
+    protected ?string $heading = null;
 
     protected function getStats(): array
     {
@@ -128,7 +130,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             ? round(($occupiedArea / $rentableArea) * 100)
             : 0;
         $occupancyDesc = $rentableArea > 0
-            ? 'Занято ' . $this->formatArea($occupiedArea) . ' из ' . $this->formatArea($rentableArea) . ' арендуемых м²'
+            ? 'Сдано ' . $this->formatArea($occupiedArea) . ' из ' . $this->formatArea($rentableArea) . ' арендуемых м²'
             : 'На рынке пока нет учётных мест';
 
         if ($maintenanceSpaces > 0) {
@@ -152,9 +154,9 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-home-modern',
         );
         $stats[] = $this->makeStat(
-            label: 'Занято, м²',
+            label: 'Сдано, м²',
             value: $this->formatArea($occupiedArea),
-            description: 'Фильтр: занятые учётные места · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Фильтр: сданные учётные места · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.',
             url: $occupiedSpacesUrl,
             color: 'success',
             icon: 'heroicon-o-check-circle',
@@ -231,7 +233,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         $stats[] = $this->makeStat('Арендаторы сейчас', 0, $note, null, 'primary', 'heroicon-o-users');
         $stats[] = $this->makeStat('Площадь фонда', '0 м²', $note, null, 'gray', 'heroicon-o-home-modern');
-        $stats[] = $this->makeStat('Занято, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
+        $stats[] = $this->makeStat('Сдано, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободно, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
         $stats[] = $this->makeStat('Служебно, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');

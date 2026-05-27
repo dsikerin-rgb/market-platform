@@ -379,10 +379,7 @@ class Dashboard extends BaseDashboard
                 [
                     'title' => 'Торговые места',
                     'description' => 'Открыть фонд мест и быстро оценить текущую занятость и свободный остаток.',
-                    'meta' => ($occupiedArea + $vacantArea) > 0
-                        ? $this->formatArea($occupiedArea) . ' из ' . $this->formatArea($occupiedArea + $vacantArea) . ' занято'
-                            . ($maintenanceArea > 0 ? ' · служебных: ' . $this->formatArea($maintenanceArea) : '')
-                        : 'Открыть раздел',
+                    'meta' => 'Открыть раздел',
                     'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
                     'icon' => 'heroicon-o-home-modern',
                 ],
