@@ -9,8 +9,12 @@ use App\Http\Controllers\Admin\TenantDuplicateRestoreController;
 use App\Http\Controllers\Admin\TenantMergePreflightController;
 use App\Listeners\NotifySuperAdminsAboutUserLogin;
 use App\Models\IntegrationExchange;
+use App\Models\MarketSpace;
+use App\Models\MarketSpaceTenantBinding;
 use App\Models\Task;
 use App\Observers\IntegrationExchangeObserver;
+use App\Observers\MarketSpaceGroupSharedUseObserver;
+use App\Observers\MarketSpaceTenantBindingSharedUseObserver;
 use App\Policies\TaskPolicy;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Filament\Support\Facades\FilamentView;
@@ -33,6 +37,8 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(Task::class, TaskPolicy::class);
         IntegrationExchange::observe(IntegrationExchangeObserver::class);
+        MarketSpace::observe(MarketSpaceGroupSharedUseObserver::class);
+        MarketSpaceTenantBinding::observe(MarketSpaceTenantBindingSharedUseObserver::class);
 
         Event::listen(Login::class, NotifySuperAdminsAboutUserLogin::class);
 
