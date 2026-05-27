@@ -38,6 +38,14 @@ class MarketSpaceDashboardMetrics
             'rent_rate_unit',
         ]);
 
+        $areaCap = self::resolveAreaOutlierCap(
+            $spaces
+                ->pluck('area_sqm')
+                ->map(static fn ($value): float => max((float) ($value ?? 0), 0.0))
+                ->filter(static fn (float $value): bool => $value > 0)
+                ->all()
+        );
+
         $sharedUse = MarketSpaceTenantBinding::query()
             ->where('market_id', $marketId)
             ->where('binding_type', MarketSpaceTenantBindingRecorder::BINDING_TYPE_SHARED_USE)
@@ -75,7 +83,10 @@ class MarketSpaceDashboardMetrics
 
             $status = self::normalizeStatus((string) ($space->status ?? 'vacant'));
             $spaceId = (int) $space->id;
-            $physicalArea = max((float) ($space->area_sqm ?? 0), 0.0);
+            $physicalArea = self::sanitizePhysicalArea(
+                max((float) ($space->area_sqm ?? 0), 0.0),
+                $areaCap,
+            );
             $shared = $sharedUse->get($spaceId);
             $sharedArea = $shared ? max((float) ($shared->total_area_sqm ?? 0), 0.0) : 0.0;
             $effectivePhysicalArea = $physicalArea > 0 ? $physicalArea : $sharedArea;
@@ -167,5 +178,31 @@ class MarketSpaceDashboardMetrics
             'per_space_month' => $area > 0 ? ($value / $area) : null,
             default => null,
         };
+    }
+
+    /**
+     * @param  list<float>  $areas
+     */
+    private static function resolveAreaOutlierCap(array $areas): float
+    {
+        if ($areas === []) {
+            return 10000.0;
+        }
+
+        sort($areas, SORT_NUMERIC);
+
+        $index = (int) floor((count($areas) - 1) * 0.95);
+        $p95 = (float) ($areas[$index] ?? 0.0);
+
+        return max(10000.0, $p95 * 10.0);
+    }
+
+    private static function sanitizePhysicalArea(float $area, float $cap): float
+    {
+        if ($area <= 0) {
+            return 0.0;
+        }
+
+        return $area > $cap ? 0.0 : $area;
     }
 }
