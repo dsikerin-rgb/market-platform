@@ -2367,11 +2367,11 @@
             </div>
             <div class="legend-item">
               <span class="legend-color legend-fallback"></span>
-              <span class="legend-label" title="У места есть арендатор, но точная связь с договорами и 1С не подтверждена">Связь с местом не подтверждена</span>
+              <span class="legend-label" title="У места есть арендатор, но финансовая связь с договорами и 1С не подтверждена">Финансовая связь не подтверждена</span>
             </div>
             <div class="legend-item">
               <span class="legend-color legend-combined-review"></span>
-              <span class="legend-label" title="Место одновременно помечено как конфликтное и не имеет подтвержденной per-space связи">Конфликт + связь не подтверждена</span>
+              <span class="legend-label" title="Место одновременно помечено как конфликтное и не имеет подтвержденной per-space связи">Конфликт + финансовая связь не подтверждена</span>
             </div>
           </div>
         </div>
@@ -6681,34 +6681,34 @@
                       scopeExplanation = '';
                     }
                   } else if (debtScope === 'tenant_fallback') {
-                    // Статус арендатора (нет точной связи с местом)
+                    // Статус арендатора (нет финансовой связи с местом)
                     if (debtStatus === 'green') {
                       line4 = 'Статус арендатора: Нет задолженности';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Точная связь группы с 1С не подтверждена'
-                        : 'Точная связь с местом не подтверждена';
+                        ? 'Финансовая связь группы с 1С не подтверждена'
+                        : 'Финансовая связь с местом не подтверждена';
                     } else if (debtStatus === 'pending') {
                       line4 = 'Статус арендатора: Срок не нарушен';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Точная связь группы с 1С не подтверждена'
-                        : 'Точная связь с местом не подтверждена';
+                        ? 'Финансовая связь группы с 1С не подтверждена'
+                        : 'Финансовая связь с местом не подтверждена';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус арендатора: ' + escapeHtml(debtLabel))
                         : ('Просрочка арендатора: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Точная связь группы с 1С не подтверждена'
-                        : 'Точная связь с местом не подтверждена';
+                        ? 'Финансовая связь группы с 1С не подтверждена'
+                        : 'Финансовая связь с местом не подтверждена';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус арендатора: Нет данных 1С';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Точная связь группы с 1С не подтверждена'
-                        : 'Точная связь с местом не подтверждена';
+                        ? 'Финансовая связь группы с 1С не подтверждена'
+                        : 'Финансовая связь с местом не подтверждена';
                     } else {
                       line4 = debtLabel ? ('Задолженность арендатора: ' + escapeHtml(debtLabel)) : 'Задолженность арендатора: —';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Точная связь группы с 1С не подтверждена'
-                        : 'Точная связь с местом не подтверждена';
+                        ? 'Финансовая связь группы с 1С не подтверждена'
+                        : 'Финансовая связь с местом не подтверждена';
                     }
                   } else {
                     // scope=none или неизвестный
@@ -6802,7 +6802,7 @@
               }
 
               function shouldShowMatchedReviewDecision(hasTenant, isTenantFallback) {
-                return hasTenant && !isTenantFallback;
+                return hasTenant;
               }
 
               if (hitSpaceId && Number.isFinite(hitSpaceId) && hitSpaceId > 0) {

@@ -537,7 +537,7 @@ class AiReviewAnalysisTest extends TestCase
         $this->assertStringContainsString('"ui_gap"', $messages['system']);
         $this->assertStringContainsString('[allowed_actions]', $messages['system']);
         $this->assertStringContainsString('use manual_review', $messages['system']);
-        $this->assertStringContainsString('точная связь с местом не подтверждена', $messages['system']);
+        $this->assertStringContainsString('финансовая связь с местом не подтверждена', $messages['system']);
         $this->assertStringContainsString('Do not treat other places of the same tenant as automatic proof of a duplicate.', $messages['system']);
     }
 
@@ -549,7 +549,7 @@ class AiReviewAnalysisTest extends TestCase
 
         $result = $method->invoke($service, [
             'summary' => 'Кейс выглядит спорным.',
-            'why_flagged' => 'Точная связь с местом не подтверждена.',
+            'why_flagged' => 'Финансовая связь с местом не подтверждена.',
             'recommended_next_step' => 'Отметить место как свободное и применить уточнение.',
             'risk_score' => 9,
             'confidence' => 0.8,

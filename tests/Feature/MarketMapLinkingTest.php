@@ -293,10 +293,10 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Ревизионный конфликт', false);
-        $response->assertSee('Связь с местом не подтверждена', false);
-        $response->assertSee('Связь с местом не подтверждена', false);
+        $response->assertSee('Финансовая связь с местом не подтверждена', false);
+        $response->assertSee('Финансовая связь с местом не подтверждена', false);
         $response->assertDontSee('Спорное место', false);
-        $response->assertSee('Точная связь с местом не подтверждена', false);
+        $response->assertSee('Финансовая связь с местом не подтверждена', false);
         $response->assertDontSee('Нет точной связи с местом', false);
         $response->assertDontSee('>Применить уточнение</button>', false);
     }

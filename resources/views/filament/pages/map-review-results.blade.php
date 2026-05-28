@@ -2665,7 +2665,7 @@
                                 <h2 class="aw-panel-title">Нужно уточнить</h2>
                                 <p class="aw-panel-copy">
                                     {{ $attentionTab === 'unconfirmed_links'
-                                        ? 'Места на карте, где статус взят по арендатору, но точная связь с местом не подтверждена.'
+                                        ? 'Места на карте, где статус взят по арендатору, но финансовая связь с местом не подтверждена.'
                                         : 'Места со спорным или незавершённым ревизионным результатом.' }}
                                 </p>
                                 <div class="mrr-sort-toggle">
@@ -2679,7 +2679,7 @@
                                         class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links' ? 'is-active' : '' }}"
                                         href="{{ $attentionUnconfirmedUrl }}"
                                     >
-                                        Связь не подтверждена
+                                        Связь с финансами не подтверждена
                                     </a>
                                 </div>
                             </div>

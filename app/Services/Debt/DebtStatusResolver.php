@@ -144,7 +144,7 @@ class DebtStatusResolver
                     status: $tenantResolved['status'],
                     label: $tenantResolved['label'],
                     updatedAt: $tenantResolved['updated_at'],
-                    source: 'tenant-fallback: нет точной связи с местом',
+                    source: 'tenant-fallback: нет финансовой связи с местом',
                     severity: $tenantResolved['severity'],
                     extra: ['scope' => 'tenant_fallback']
                 );
@@ -243,7 +243,7 @@ class DebtStatusResolver
                     status: $tenantResolved['status'],
                     label: $tenantResolved['label'],
                     updatedAt: $tenantResolved['updated_at'],
-                    source: 'tenant-fallback: нет точных данных по месту',
+                    source: 'tenant-fallback: нет финансовых данных по месту',
                     severity: $tenantResolved['severity'],
                     extra: ['scope' => 'tenant_fallback']
                 );
