@@ -132,7 +132,7 @@ class MarketSpaceResource extends BaseResource
             'vacant' => 'Свободно',
             'occupied' => 'Занято',
             'reserved' => 'Зарезервировано',
-            'maintenance' => 'На обслуживании',
+            'maintenance' => 'Служебное место',
             default => $state,
         };
     }
@@ -1716,7 +1716,7 @@ class MarketSpaceResource extends BaseResource
                                         'vacant' => 'Свободно',
                                         'occupied' => 'Занято',
                                         'reserved' => 'Зарезервировано',
-                                        'maintenance' => 'На обслуживании',
+                                        'maintenance' => 'Служебное место',
                                     ])
                                     ->default('vacant')
                                     ->afterStateHydrated(function (Forms\Components\Select $component, $state): void {
@@ -2456,7 +2456,7 @@ class MarketSpaceResource extends BaseResource
                         'vacant' => 'Свободно',
                         'occupied' => 'Занято',
                         'reserved' => 'Зарезервировано',
-                        'maintenance' => 'На обслуживании',
+                        'maintenance' => 'Служебное место',
                     ]),
 
                 SelectFilter::make('type')
@@ -2809,7 +2809,7 @@ class MarketSpaceResource extends BaseResource
                 // 1. child tenant есть -> Занято напрямую
                 // 2. parent tenant есть -> Занято через группу
                 // 3. rawStatus === reserved -> Зарезервировано
-                // 4. rawStatus === maintenance -> На обслуживании
+                // 4. rawStatus === maintenance -> Служебное место
                 // 5. иначе -> Свободно
 
                 if ($hasChildTenant) {
@@ -2831,7 +2831,7 @@ class MarketSpaceResource extends BaseResource
                     $occupancyStatus = 'reserved';
                 } elseif ($rawStatus === 'maintenance') {
                     $tenantName = 'Не указан';
-                    $statusLabel = 'На обслуживании';
+                    $statusLabel = 'Служебное место';
                     $statusColor = 'gray';
                     $occupancyStatus = 'maintenance';
                 } else {

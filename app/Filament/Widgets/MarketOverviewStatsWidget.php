@@ -130,7 +130,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             : 'На рынке пока нет учётных мест';
 
         if ($maintenanceSpaces > 0) {
-            $occupancyDesc .= ' · на обслуживании: ' . $this->formatArea($maintenanceArea);
+            $occupancyDesc .= ' · служебных: ' . $this->formatArea($maintenanceArea);
         }
 
         $stats[] = $this->makeStat(
@@ -166,9 +166,9 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-sparkles',
         );
         $stats[] = $this->makeStat(
-            label: 'На обслуживании, м²',
+            label: 'Служебные места, м²',
             value: $this->formatArea($maintenanceArea),
-            description: 'Фильтр: прямой статус места = На обслуживании · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Фильтр: служебные места · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
             url: $maintenanceSpacesUrl,
             color: 'gray',
             icon: 'heroicon-o-wrench-screwdriver',
@@ -231,7 +231,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat('Площадь фонда', '0 м²', $note, null, 'gray', 'heroicon-o-home-modern');
         $stats[] = $this->makeStat('Сдано, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободно, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
-        $stats[] = $this->makeStat('На обслуживании, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
+        $stats[] = $this->makeStat('Служебные места, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
