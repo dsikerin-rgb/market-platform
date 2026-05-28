@@ -11,7 +11,6 @@ use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
-use App\Models\Tenant;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -71,10 +70,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
         $rentableArea = (float) $spaceMetrics['rentable_area_sqm'];
 
-        $tenantsNow = $this->countTenantsActiveOnDate($marketId, $now);
-        if ($tenantsNow === null) {
-            $tenantsNow = Tenant::query()->where('market_id', $marketId)->active()->count();
-        }
+        $tenantsNow = MarketSpaceDashboardMetrics::countCurrentTenants($marketId);
 
         // Финансовая/отчётная часть зависит от выбранного месяца.
         [$monthYm, $monthStart, $monthEnd] = $this->resolveFinancialMonthRange($marketId, $tz);

@@ -17,7 +17,6 @@ use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\Task;
-use App\Models\Tenant;
 use App\Models\TenantRequest;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Carbon\CarbonImmutable;
@@ -292,10 +291,7 @@ class Dashboard extends BaseDashboard
         $accrualsPeriodLabel = $this->formatWorkspaceMonthLabel($accrualsMonth, $tz);
 
         if ($marketId > 0) {
-            $tenantsCount = Tenant::query()
-                ->where('market_id', $marketId)
-                ->active()
-                ->count();
+            $tenantsCount = MarketSpaceDashboardMetrics::countCurrentTenants($marketId);
 
             $spaceMetrics = MarketSpaceDashboardMetrics::summarize($marketId);
             $totalSpaces = (int) $spaceMetrics['total_spaces'];
