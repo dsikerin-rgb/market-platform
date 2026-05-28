@@ -6,8 +6,12 @@ declare(strict_types=1);
 namespace App\Support\MarketSpaces;
 
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceTenantBinding;
+use App\Models\Tenant;
 use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class MarketSpaceDashboardMetrics
 {
@@ -30,12 +34,19 @@ class MarketSpaceDashboardMetrics
      */
     public static function summarize(int $marketId): array
     {
-        $spaces = self::accountingSpacesQuery($marketId)->get([
+        $spaces = self::physicalSpacesQuery($marketId)
+            ->with([
+                'spaceGroupParent:id,tenant_id,rent_rate_value,rent_rate_unit',
+            ])
+            ->get([
             'id',
+            'tenant_id',
             'status',
             'area_sqm',
             'rent_rate_value',
             'rent_rate_unit',
+            'space_group_role',
+            'space_group_parent_id',
         ]);
 
         $areaCap = self::resolveAreaOutlierCap(
@@ -109,7 +120,11 @@ class MarketSpaceDashboardMetrics
                 continue;
             }
 
-            if ($status === 'occupied') {
+            if ($space->isEffectivelyOccupied()) {
+                $summary['occupied_spaces']++;
+                $summary['occupied_area_sqm'] += $effectivePhysicalArea;
+                $summary['rentable_area_sqm'] += $effectivePhysicalArea;
+            } elseif ($status === 'occupied') {
                 $summary['occupied_spaces']++;
                 $summary['occupied_area_sqm'] += $effectivePhysicalArea;
                 $summary['rentable_area_sqm'] += $effectivePhysicalArea;
@@ -122,11 +137,7 @@ class MarketSpaceDashboardMetrics
                 $summary['reserved_area_sqm'] += $effectivePhysicalArea;
             }
 
-            $normalizedRate = self::normalizeSpaceRentRatePerSqm(
-                (float) ($space->rent_rate_value ?? 0),
-                (string) ($space->rent_rate_unit ?? ''),
-                $effectivePhysicalArea,
-            );
+            $normalizedRate = self::resolveNormalizedRateForPhysicalSpace($space, $effectivePhysicalArea);
 
             if ($normalizedRate !== null && $effectivePhysicalArea > 0) {
                 $weightedRateSum += $normalizedRate * $effectivePhysicalArea;
@@ -142,16 +153,93 @@ class MarketSpaceDashboardMetrics
         return $summary;
     }
 
+    public static function countCurrentTenants(int $marketId): int
+    {
+        $spaces = self::physicalSpacesQuery($marketId)
+            ->with([
+                'spaceGroupParent:id,tenant_id',
+            ])
+            ->get([
+            'id',
+            'tenant_id',
+            'status',
+            'space_group_role',
+            'space_group_parent_id',
+        ]);
+
+        if ($spaces->isEmpty()) {
+            return 0;
+        }
+
+        $spaceIds = $spaces->pluck('id')->map(static fn ($id): int => (int) $id)->all();
+
+        $directTenantIds = $spaces
+            ->filter(static function (MarketSpace $space): bool {
+                return $space->isEffectivelyOccupied() || (
+                    self::normalizeStatus((string) ($space->status ?? 'vacant')) === 'occupied'
+                    && filled($space->tenant_id)
+                );
+            })
+            ->map(static fn (MarketSpace $space): int => (int) ($space->effectiveTenantId() ?? $space->tenant_id ?? 0));
+
+        $sharedTenantIds = MarketSpaceTenantBinding::query()
+            ->where('market_id', $marketId)
+            ->whereIn('market_space_id', $spaceIds)
+            ->where('binding_type', MarketSpaceTenantBindingRecorder::BINDING_TYPE_SHARED_USE)
+            ->whereNull('ended_at')
+            ->pluck('tenant_id')
+            ->map(static fn ($id): int => (int) $id);
+
+        $tenantIds = $directTenantIds
+            ->concat($sharedTenantIds)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($tenantIds->isEmpty()) {
+            return 0;
+        }
+
+        return Tenant::query()
+            ->where('market_id', $marketId)
+            ->active()
+            ->whereIn('id', $tenantIds->all())
+            ->count();
+    }
+
     public static function accountingSpacesQuery(int $marketId)
     {
         return MarketSpace::query()
             ->where('market_id', $marketId)
+            ->where('is_active', true)
             ->where(function ($query): void {
                 $query
                     ->whereNull('space_group_role')
                     ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
                     ->orWhereNull('space_group_parent_id');
             });
+    }
+
+    public static function physicalSpacesQuery(int $marketId): Builder
+    {
+        $query = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('space_group_role')
+                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
+            });
+
+        if (! Schema::hasTable('market_space_map_shapes')) {
+            return $query;
+        }
+
+        return $query->whereHas('mapShapes', static function (Builder $shapeQuery): void {
+            if (Schema::hasColumn('market_space_map_shapes', 'is_active')) {
+                $shapeQuery->where('is_active', true);
+            }
+        });
     }
 
     private static function normalizeStatus(string $status): string
@@ -178,6 +266,37 @@ class MarketSpaceDashboardMetrics
             'per_space_month' => $area > 0 ? ($value / $area) : null,
             default => null,
         };
+    }
+
+    private static function resolveNormalizedRateForPhysicalSpace(MarketSpace $space, float $effectivePhysicalArea): ?float
+    {
+        $localRate = self::normalizeSpaceRentRatePerSqm(
+            (float) ($space->rent_rate_value ?? 0),
+            (string) ($space->rent_rate_unit ?? ''),
+            $effectivePhysicalArea,
+        );
+
+        if ($localRate !== null) {
+            return $localRate;
+        }
+
+        $parent = $space->spaceGroupParent;
+
+        if (! $parent instanceof MarketSpace) {
+            return null;
+        }
+
+        $parentUnit = (string) ($parent->rent_rate_unit ?? '');
+
+        if ($parentUnit !== 'per_sqm_month') {
+            return null;
+        }
+
+        return self::normalizeSpaceRentRatePerSqm(
+            (float) ($parent->rent_rate_value ?? 0),
+            $parentUnit,
+            $effectivePhysicalArea,
+        );
     }
 
     /**
