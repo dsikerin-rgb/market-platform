@@ -168,7 +168,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat(
             label: 'Служебно, м²',
             value: $this->formatArea($maintenanceArea),
-            description: 'Фильтр: служебные учётные места · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Статус: на обслуживании · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
             url: $maintenanceSpacesUrl,
             color: 'gray',
             icon: 'heroicon-o-wrench-screwdriver',
