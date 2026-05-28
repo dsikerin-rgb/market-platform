@@ -321,3 +321,35 @@ storage/backups/market_prod_before_tenant_duplicate_ignores_20260524_094029.dump
 3. После этого переходить к вкладке `Связь не подтверждена`.
 
 Если импорт покажет новые активные дубли — сначала разбираем их, затем продолжаем работу над связями торговых мест.
+
+---
+
+## 6. Временные группы и учётный фонд по периодам
+
+Полное нормативное описание см.: [Проявленность временных group-карточек](market-space-period-effectiveness.md)
+
+### Этап 1 — Computed effectiveness MVP
+
+- создать `MarketSpacePeriodEffectivenessService`;
+- подключить его к dashboard/statistics;
+- исключить задвоение parent + child;
+- добавить regression tests;
+- без миграций.
+
+### Этап 2 — Missing shape logic
+
+- ordinary active без shape считать проблемой;
+- parent/group без shape не считать проблемой;
+- inactive без shape не считать проблемой.
+
+### Этап 3 — Review safety
+
+- не создавать ревизионный конфликт только из-за отсутствия shape у group;
+- для group/duplicate ambiguity не делать tenant-switch primary;
+- добавить сценарии `проверить состав группы` / `разобрать структуру`.
+
+### Этап 4 — Group episodes
+
+- добавить явные периоды проявленности group;
+- добавить историю состава episode;
+- переключить `MarketSpacePeriodEffectivenessService` с computed-источников на explicit episodes.
