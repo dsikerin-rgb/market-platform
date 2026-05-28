@@ -97,6 +97,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             ],
         ]);
         $maintenanceSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'only_maintenance' => 1,
             'tableFilters' => [
                 'status' => ['value' => 'maintenance'],
             ],
