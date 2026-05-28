@@ -87,11 +87,13 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $tenantsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
         $occupiedSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'tab' => 'occupied',
             'tableFilters' => [
                 'status' => ['value' => 'occupied'],
             ],
         ]);
         $vacantSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'tab' => 'vacant',
             'tableFilters' => [
                 'status' => ['value' => 'vacant'],
             ],
@@ -153,7 +155,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat(
             label: 'Сдано, м²',
             value: $this->formatArea($occupiedArea),
-            description: 'Фильтр: сданные учётные места · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Открыть список сданных мест · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.',
             url: $occupiedSpacesUrl,
             color: 'success',
             icon: 'heroicon-o-check-circle',
@@ -178,7 +180,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             label: 'Заполняемость',
             value: $occupancyRate . ' %',
             description: $occupancyDesc,
-            url: $occupiedSpacesUrl,
+            url: null,
             color: $occupiedSpaces > 0 ? 'success' : 'gray',
             icon: 'heroicon-o-chart-bar',
         );
