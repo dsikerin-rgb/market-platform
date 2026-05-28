@@ -97,6 +97,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             ],
         ]);
         $maintenanceSpacesUrl = $this->appendQueryString($spacesUrl, [
+            'only_maintenance' => 1,
             'tableFilters' => [
                 'status' => ['value' => 'maintenance'],
             ],
@@ -134,7 +135,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         }
 
         $stats[] = $this->makeStat(
-            label: 'Арендаторы сейчас',
+            label: 'Текущие арендаторы',
             value: $tenantsNow,
             description: $marketScopeDesc,
             url: $tenantsUrl,
@@ -158,17 +159,17 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-check-circle',
         );
         $stats[] = $this->makeStat(
-            label: 'Свободно, м²',
+            label: 'Свободные места, м²',
             value: $this->formatArea($freeArea),
-            description: 'Фильтр: свободные учётные места · ' . number_format($freeSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Фильтр: свободные места · ' . number_format($freeSpaces, 0, ',', ' ') . ' шт.',
             url: $vacantSpacesUrl,
             color: 'warning',
             icon: 'heroicon-o-sparkles',
         );
         $stats[] = $this->makeStat(
-            label: 'Служебно, м²',
+            label: 'Служебные места, м²',
             value: $this->formatArea($maintenanceArea),
-            description: 'Статус: на обслуживании · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Фильтр: служебные места · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
             url: $maintenanceSpacesUrl,
             color: 'gray',
             icon: 'heroicon-o-wrench-screwdriver',
@@ -227,11 +228,11 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             );
         }
 
-        $stats[] = $this->makeStat('Арендаторы сейчас', 0, $note, null, 'primary', 'heroicon-o-users');
+        $stats[] = $this->makeStat('Текущие арендаторы', 0, $note, null, 'primary', 'heroicon-o-users');
         $stats[] = $this->makeStat('Площадь фонда', '0 м²', $note, null, 'gray', 'heroicon-o-home-modern');
         $stats[] = $this->makeStat('Сдано, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
-        $stats[] = $this->makeStat('Свободно, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
-        $stats[] = $this->makeStat('Служебно, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
+        $stats[] = $this->makeStat('Свободные места, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
+        $stats[] = $this->makeStat('Служебные места, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');

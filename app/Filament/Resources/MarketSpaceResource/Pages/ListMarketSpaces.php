@@ -32,18 +32,28 @@ class ListMarketSpaces extends ListRecords
             $this->activeTab = (string) $legacyTab;
         }
 
-        if (! request()->boolean('only_vacant')) {
+        if (request()->boolean('only_vacant')) {
+            if ($this->activeTab === 'all') {
+                $this->activeTab = 'vacant';
+            }
+
+            $currentValue = $this->tableFilters['status']['value'] ?? null;
+
+            if (blank($currentValue)) {
+                $this->tableFilters['status']['value'] = 'vacant';
+            }
+
             return;
         }
 
-        if ($this->activeTab === 'all') {
-            $this->activeTab = 'vacant';
+        if (! request()->boolean('only_maintenance')) {
+            return;
         }
 
         $currentValue = $this->tableFilters['status']['value'] ?? null;
 
         if (blank($currentValue)) {
-            $this->tableFilters['status']['value'] = 'vacant';
+            $this->tableFilters['status']['value'] = 'maintenance';
         }
     }
 
