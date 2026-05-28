@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Services\MarketMap;
 
 use App\Domain\Operations\OperationType;
+use App\Domain\Operations\SpaceReviewCaseResolver;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Domain\Operations\SpaceReviewStateMachine;
 use App\Models\Market;
@@ -716,6 +717,20 @@ class MapReviewResultsService
 
             $resolvedFinancialSignal = $financialSignals[$spaceId] ?? null;
 
+            // Resolve review case using backend resolver
+            $reviewCaseResolver = app(SpaceReviewCaseResolver::class);
+            $spaceOperation = $latestOperations->get($spaceId);
+            $spaceOperationPayload = is_array($spaceOperation?->payload) ? $spaceOperation->payload : [];
+            $reviewCase = $reviewCaseResolver->resolve([
+                'review_status' => $space->map_review_status,
+                'decision' => $spaceOperationPayload['decision'] ?? null,
+                'reason' => $spaceOperationPayload['reason'] ?? null,
+                'candidate_spaces' => $candidates,
+                'diagnostics' => [
+                    'has_stronger_candidate' => $hasStrongerCandidate,
+                ],
+            ]);
+
             return [
                 $spaceId => [
                     'relation_counts' => $this->displayRelationCounts($counts),
@@ -729,6 +744,7 @@ class MapReviewResultsService
                     'contract_details' => $contractDetails[$spaceId] ?? [],
                     'accrual_details' => $accrualDetails[$spaceId] ?? [],
                     'financial_signal' => $resolvedFinancialSignal,
+                    'review_case' => $reviewCase->toArray(),
                 ],
             ];
         })->all();
@@ -1180,6 +1196,7 @@ class MapReviewResultsService
             'financial_signal' => null,
             'can_apply_duplicate_resolution' => true,
             'duplicate_resolution_block_reason' => null,
+            'review_case' => null,
         ];
     }
 
