@@ -130,7 +130,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             : 'На рынке пока нет учётных мест';
 
         if ($maintenanceSpaces > 0) {
-            $occupancyDesc .= ' · служебных: ' . $this->formatArea($maintenanceArea);
+            $occupancyDesc .= ' · на обслуживании: ' . $this->formatArea($maintenanceArea);
         }
 
         $stats[] = $this->makeStat(
@@ -166,9 +166,9 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-sparkles',
         );
         $stats[] = $this->makeStat(
-            label: 'Служебно, м²',
+            label: 'На обслуживании, м²',
             value: $this->formatArea($maintenanceArea),
-            description: 'Статус: на обслуживании · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
+            description: 'Фильтр: прямой статус места = На обслуживании · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.',
             url: $maintenanceSpacesUrl,
             color: 'gray',
             icon: 'heroicon-o-wrench-screwdriver',
@@ -231,7 +231,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat('Площадь фонда', '0 м²', $note, null, 'gray', 'heroicon-o-home-modern');
         $stats[] = $this->makeStat('Сдано, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободно, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
-        $stats[] = $this->makeStat('Служебно, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
+        $stats[] = $this->makeStat('На обслуживании, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
