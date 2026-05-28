@@ -34,7 +34,7 @@ class MapReviewResultsService
             'changed_tenant' => 'Сменился арендатор',
             'conflict' => 'Конфликт',
             'not_found' => 'Не найдено на карте',
-            'unconfirmed_link' => 'Связь с местом не подтверждена',
+            'unconfirmed_link' => 'Финансовая связь с местом не подтверждена',
         ];
     }
 
@@ -396,7 +396,7 @@ class MapReviewResultsService
                 'created_at' => null,
                 'created_by_name' => 'Система',
                 'review_status' => 'unconfirmed_link',
-                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link') ?? 'Связь с местом не подтверждена',
+                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link') ?? 'Финансовая связь с местом не подтверждена',
                 'reviewed_at' => null,
                 'reviewed_by_name' => 'Система',
                 'decision' => null,

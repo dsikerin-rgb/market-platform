@@ -26,7 +26,7 @@
         const activeTab = @json($activeReviewResultsTab);
         const tabItems = [
             { key: 'review', label: 'Ревизионные решения', url: @json(request()->fullUrlWithQuery(['tab' => 'review'])) },
-            { key: 'unconfirmed_links', label: 'Связь не подтверждена', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links'])) },
+            { key: 'unconfirmed_links', label: 'Финансовая связь не подтверждена', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links'])) },
             { key: 'data_quality', label: 'Дубли арендаторов', url: @json(request()->fullUrlWithQuery(['tab' => 'data_quality'])) },
             { key: 'applied', label: 'Применено', url: @json(request()->fullUrlWithQuery(['tab' => 'applied'])) },
         ];
@@ -38,7 +38,7 @@
             },
             unconfirmed_links: {
                 title: 'Нужно уточнить',
-                copy: 'Места на карте, где статус взят по арендатору, но точная связь с местом не подтверждена.',
+                copy: 'Места на карте, где статус взят по арендатору, но финансовая связь с местом не подтверждена.',
             },
             data_quality: {
                 title: 'Возможные дубли арендаторов',

@@ -1167,8 +1167,8 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::withQueryParams(['tab' => 'unconfirmed_links'])
             ->test(\App\Filament\Pages\MapReviewResults::class)
-            ->assertSee('Связь не подтверждена', false)
-            ->assertSee('Связь с местом не подтверждена', false)
+            ->assertSee('Финансовая связь не подтверждена', false)
+            ->assertSee('Финансовая связь с местом не подтверждена', false)
             ->assertDontSee('Обычный порядок', false)
             ->assertDontSee('AI-приоритет', false)
             ->assertDontSee('Последнее решение', false)
