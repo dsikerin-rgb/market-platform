@@ -1,9 +1,11 @@
 <?php
+# app/Filament/Resources/MarketSpaceResource/Pages/ListMarketSpaces.php
 
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Widgets\MarketSpacesWorkspaceWidget;
+use App\Models\MarketSpace;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -98,12 +100,46 @@ class ListMarketSpaces extends ListRecords
             'vacant' => $this->makeTab(
                 $tabClass,
                 'Свободные',
-                fn (Builder $query) => $query->where('status', 'vacant')
+                fn (Builder $query) => $query->where(function (Builder $query): void {
+                    // non-child / orphan-child без tenant_id
+                    $query->whereNull('tenant_id')
+                        ->where(function (Builder $query): void {
+                            $query->where('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                ->orWhereNull('space_group_role')
+                                ->orWhere('space_group_parent_id', null);
+                        });
+
+                    // child с parent_id, у которого parent не имеет tenant_id
+                    $query->orWhere(function (Builder $query): void {
+                        $query->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                            ->whereNotNull('space_group_parent_id')
+                            ->whereDoesntHave('spaceGroupParent', function (Builder $query): void {
+                                $query->whereNotNull('tenant_id');
+                            });
+                    });
+                })
             ),
             'occupied' => $this->makeTab(
                 $tabClass,
                 'Занятые',
-                fn (Builder $query) => $query->where('status', 'occupied')
+                fn (Builder $query) => $query->where(function (Builder $query): void {
+                    // non-child / orphan-child с tenant_id
+                    $query->whereNotNull('tenant_id')
+                        ->where(function (Builder $query): void {
+                            $query->where('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                ->orWhereNull('space_group_role')
+                                ->orWhere('space_group_parent_id', null);
+                        });
+
+                    // child с parent_id, у которого parent имеет tenant_id
+                    $query->orWhere(function (Builder $query): void {
+                        $query->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                            ->whereNotNull('space_group_parent_id')
+                            ->whereHas('spaceGroupParent', function (Builder $query): void {
+                                $query->whereNotNull('tenant_id');
+                            });
+                    });
+                })
             ),
         ];
     }

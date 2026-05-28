@@ -1092,7 +1092,7 @@ class MarketSpaceResource extends BaseResource
         return match ($record->effectiveOccupancySource()) {
             'parent' => 'В группе',
             'direct' => 'Занято',
-            default => static::statusLabel($record->status),
+            'none' => 'Свободно',
         };
     }
 
