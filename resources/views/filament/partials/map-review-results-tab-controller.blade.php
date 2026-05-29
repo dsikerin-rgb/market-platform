@@ -241,9 +241,7 @@
                         <div class="mrr-duplicate-space-picker__selected-title"></div>
                         <div class="mrr-duplicate-space-picker__selected-meta"></div>
                     </div>
-                    <div class="mrr-duplicate-space-picker__results" id="mrrManualDuplicateSearchResults">
-                        <div class="mrr-duplicate-space-picker__empty">Начните вводить номер, название или арендатора основного места.</div>
-                    </div>
+                    <div class="mrr-duplicate-space-picker__results" id="mrrManualDuplicateSearchResults"></div>
                 </div>
             </div>
 
@@ -433,6 +431,18 @@
                 }
             };
 
+            const createPickerMessage = (message) => {
+                const node = document.createElement('div');
+                node.className = 'mrr-duplicate-space-picker__empty';
+                node.textContent = message;
+
+                return node;
+            };
+
+            const setPickerMessage = (message) => {
+                searchResultsTarget.replaceChildren(createPickerMessage(message));
+            };
+
             const formatSpaceTitle = (space) => {
                 const id = Number(space?.id || 0);
                 const number = String(space?.number || '').trim();
@@ -488,7 +498,7 @@
                     selectedTarget.hidden = true;
                 }
 
-                searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Начните вводить номер, название или арендатора основного места.</div>';
+                setPickerMessage('Начните вводить номер, название или арендатора основного места.');
             };
 
             const selectCanonicalSpace = (space) => {
@@ -513,7 +523,7 @@
 
             const renderSearchResults = (items) => {
                 if (!Array.isArray(items) || items.length === 0) {
-                    searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Подходящие места не найдены. Уточните запрос.</div>';
+                    setPickerMessage('Подходящие места не найдены. Уточните запрос.');
                     return;
                 }
 
@@ -521,24 +531,16 @@
 
                 items.forEach((space) => {
                     const button = document.createElement('button');
+                    const title = document.createElement('div');
+                    const meta = document.createElement('div');
+
                     button.type = 'button';
                     button.className = 'mrr-duplicate-space-picker__option';
-                    button.innerHTML = `
-                        <div class="mrr-duplicate-space-picker__option-title"></div>
-                        <div class="mrr-duplicate-space-picker__option-meta"></div>
-                    `;
-
-                    const title = button.querySelector('.mrr-duplicate-space-picker__option-title');
-                    const meta = button.querySelector('.mrr-duplicate-space-picker__option-meta');
-
-                    if (title instanceof HTMLElement) {
-                        title.textContent = formatSpaceTitle(space);
-                    }
-
-                    if (meta instanceof HTMLElement) {
-                        meta.textContent = formatSpaceMeta(space);
-                    }
-
+                    title.className = 'mrr-duplicate-space-picker__option-title';
+                    meta.className = 'mrr-duplicate-space-picker__option-meta';
+                    title.textContent = formatSpaceTitle(space);
+                    meta.textContent = formatSpaceMeta(space);
+                    button.append(title, meta);
                     button.addEventListener('click', () => selectCanonicalSpace(space));
                     searchResultsTarget.appendChild(button);
                 });
@@ -555,7 +557,7 @@
                 }
 
                 if (query.length < 2) {
-                    searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Введите минимум 2 символа для поиска.</div>';
+                    setPickerMessage('Введите минимум 2 символа для поиска.');
                     return;
                 }
 
@@ -564,7 +566,7 @@
                 }
 
                 activeSearchController = new AbortController();
-                searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Ищем подходящие места...</div>';
+                setPickerMessage('Ищем подходящие места...');
 
                 const url = new URL(duplicateSearchUrl, window.location.origin);
                 url.searchParams.set('q', query);
@@ -583,7 +585,7 @@
                     const data = await response.json().catch(() => ({}));
 
                     if (!response.ok || !data?.ok) {
-                        searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Не удалось выполнить поиск. Попробуйте ещё раз.</div>';
+                        setPickerMessage('Не удалось выполнить поиск. Попробуйте ещё раз.');
                         return;
                     }
 
@@ -593,7 +595,7 @@
                         return;
                     }
 
-                    searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Не удалось выполнить поиск. Попробуйте ещё раз.</div>';
+                    setPickerMessage('Не удалось выполнить поиск. Попробуйте ещё раз.');
                 }
             };
 
