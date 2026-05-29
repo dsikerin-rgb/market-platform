@@ -1,4 +1,5 @@
 <?php
+# app/Models/MarketHoliday.php
 
 declare(strict_types=1);
 
@@ -9,6 +10,8 @@ use App\Support\MarketHolidayAnnouncementSync;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
@@ -81,6 +84,29 @@ class MarketHoliday extends Model
     public function announcement(): HasOne
     {
         return $this->hasOne(MarketplaceAnnouncement::class, 'market_holiday_id');
+    }
+
+    /**
+     * Связи через market_holiday_task_links.
+     */
+    public function taskLinks(): HasMany
+    {
+        return $this->hasMany(MarketHolidayTaskLink::class, 'market_holiday_id');
+    }
+
+    /**
+     * Связанные задачи через market_holiday_task_links.
+     */
+    public function tasks(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Task::class,
+            'market_holiday_task_links',
+            'market_holiday_id',
+            'task_id'
+        )
+            ->withPivot(['market_id', 'scenario_key'])
+            ->withTimestamps();
     }
 
     public function resolveDefaultNotifyDays(): ?int

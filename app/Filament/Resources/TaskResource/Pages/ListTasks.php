@@ -229,7 +229,9 @@ class ListTasks extends ListRecords
             ->map(function (object $tab, string $key) use ($query): array {
                 $tabQuery = $query;
 
-                if ($key !== 'all') {
+                // relevant — default, поэтому не добавляем tab для него
+                // all — явный фильтр, добавляем tab=all
+                if ($key !== 'relevant') {
                     $tabQuery['tab'] = $key;
                 }
 
@@ -237,7 +239,7 @@ class ListTasks extends ListRecords
                     'key' => $key,
                     'label' => method_exists($tab, 'getLabel') ? (string) $tab->getLabel() : $key,
                     'url' => TaskResource::getUrl('index', $tabQuery),
-                    'active' => ($this->activeTab ?? 'all') === $key,
+                    'active' => ($this->activeTab ?? 'relevant') === $key,
                 ];
             })
             ->values()
