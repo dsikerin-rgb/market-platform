@@ -31,7 +31,13 @@ class SpaceReviewCaseResolver
         $candidateSpaces = $context['candidate_spaces'] ?? [];
         $diagnostics = $context['diagnostics'] ?? [];
 
-        // 1. Проверка на duplicate_identity
+        // 1. Историческая составная карточка имеет приоритет над дублем:
+        // в таких кейсах нельзя выбирать основное место и переносить связи.
+        if ($this->isHistoricalGroupStructure($reason, $decision, $diagnostics)) {
+            return SpaceReviewCase::historicalGroupStructure();
+        }
+
+        // 2. Проверка на duplicate_identity
         if ($this->isDuplicateIdentity($reason, $candidateSpaces, $diagnostics)) {
             $relatedSpaces = $this->extractRelatedSpaces($candidateSpaces);
             $hasExplicitCandidate = $this->hasExplicitCandidate($candidateSpaces);
@@ -39,18 +45,48 @@ class SpaceReviewCaseResolver
             return SpaceReviewCase::duplicateIdentity($relatedSpaces, $hasExplicitCandidate);
         }
 
-        // 2. Проверка на tenant_change
+        // 3. Проверка на tenant_change
         if ($this->isTenantChange($reason, $decision, $reviewStatus)) {
             return SpaceReviewCase::tenantChange();
         }
 
-        // 3. Проверка на identity_clarification
+        // 4. Проверка на identity_clarification
         if ($this->isIdentityClarification($decision, $reviewStatus)) {
             return SpaceReviewCase::identityClarification();
         }
 
-        // 4. Fallback: generic_manual_conflict
+        // 5. Fallback: generic_manual_conflict
         return SpaceReviewCase::genericManualConflict();
+    }
+
+    /**
+     * Проверить, является ли кейс исторической составной карточкой.
+     */
+    private function isHistoricalGroupStructure(string $reason, string $decision, array $diagnostics): bool
+    {
+        if ($decision === SpaceReviewDecision::HISTORICAL_COMPOSED_SPACE_REVIEWED) {
+            return true;
+        }
+
+        $normalized = mb_strtolower(trim($reason), 'UTF-8');
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        $hasHistoricalSignal = preg_match('/историческ|раньше|ранее|бывш|прошл(ый|ом|ая|ое)|финансов(ая|ый|ые)\s+истори|финансов(ый|ые)\s+хвост/iu', $normalized) === 1;
+        $hasComposedSignal = preg_match('/составн|группов|группа\s+мест|объедин[её]нн|част[еи]|несколько\s+мест|\d+\s*,\s*\d+/iu', $normalized) === 1;
+        $hasCurrentSeparateSignal = preg_match('/сейчас|текущ|отдельн|свободн|не\s+вход(ит|ят)|не\s+активн/iu', $normalized) === 1;
+
+        if ($hasHistoricalSignal && $hasComposedSignal) {
+            return true;
+        }
+
+        if ($hasComposedSignal && $hasCurrentSeparateSignal && preg_match('/не\s+дубл|не\s+является\s+дубл/iu', $normalized) === 1) {
+            return true;
+        }
+
+        return (bool) ($diagnostics['is_historical_group_structure'] ?? false);
     }
 
     /**

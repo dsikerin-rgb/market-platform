@@ -16,6 +16,7 @@ final class SpaceReviewDecision
     public const MERGE_SPACE_INTO_CANONICAL = 'merge_space_into_canonical';
     public const SPACE_IDENTITY_NEEDS_CLARIFICATION = 'space_identity_needs_clarification';
     public const DUPLICATE_SPACE_NEEDS_RESOLUTION = 'duplicate_space_needs_resolution';
+    public const HISTORICAL_COMPOSED_SPACE_REVIEWED = 'historical_composed_space_reviewed';
     public const OCCUPANCY_CONFLICT = 'occupancy_conflict';
     public const TENANT_CHANGED_ON_SITE = 'tenant_changed_on_site';
     public const SHAPE_NOT_FOUND = 'shape_not_found';
@@ -34,6 +35,7 @@ final class SpaceReviewDecision
             self::FIX_SPACE_IDENTITY => 'Применить уточнение',
             self::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'Требует уточнения',
             self::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'Разбор дубля места',
+            self::HISTORICAL_COMPOSED_SPACE_REVIEWED => 'Закрыть как историческое составное место',
             self::OCCUPANCY_CONFLICT => 'Конфликт по месту',
             self::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
             self::SHAPE_NOT_FOUND => 'Место не найдено на карте',
@@ -61,6 +63,7 @@ final class SpaceReviewDecision
             self::FIX_SPACE_IDENTITY,
             self::MERGE_SPACE_INTO_CANONICAL,
             self::DUPLICATE_SPACE_NEEDS_RESOLUTION,
+            self::HISTORICAL_COMPOSED_SPACE_REVIEWED,
         ];
     }
 
@@ -89,6 +92,7 @@ final class SpaceReviewDecision
     {
         return in_array($decision, [
             self::SPACE_IDENTITY_NEEDS_CLARIFICATION,
+            self::HISTORICAL_COMPOSED_SPACE_REVIEWED,
             self::OCCUPANCY_CONFLICT,
             self::TENANT_CHANGED_ON_SITE,
             self::SHAPE_NOT_FOUND,
