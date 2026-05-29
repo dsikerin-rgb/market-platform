@@ -12,7 +12,7 @@ namespace App\Domain\Operations;
 class SpaceReviewCase
 {
     /**
-     * @param  'duplicate_identity'|'generic_manual_conflict'|'tenant_change'|'identity_clarification'|'other'  $caseType
+     * @param  'duplicate_identity'|'historical_group_structure'|'generic_manual_conflict'|'tenant_change'|'identity_clarification'|'other'  $caseType
      * @param  array<string, mixed>  $context
      */
     private function __construct(
@@ -53,6 +53,34 @@ class SpaceReviewCase
             closePolicy: 'after_duplicate_resolution',
             context: [
                 'has_explicit_candidate' => $hasExplicitCandidate,
+            ],
+        );
+    }
+
+    /**
+     * Создать результат для исторической составной карточки.
+     */
+    public static function historicalGroupStructure(): self
+    {
+        return new self(
+            caseType: 'historical_group_structure',
+            caseSeverity: 90,
+            recommendedAction: 'close_as_historical_composed_space',
+            availableActions: ['close_as_historical_composed_space', 'manual_review'],
+            requiresInput: [
+                'close_as_historical_composed_space' => ['reason'],
+            ],
+            blockedActions: [
+                'resolve_duplicate' => 'Это историческое составное место, а не дубль. Не переносите связи и не выбирайте основное место.',
+                'switch_tenant' => 'Сначала зафиксируйте историческую структуру места.',
+            ],
+            caseExplanation: 'Это историческая составная карточка места. Закройте ревизию без переноса связей: текущие части должны жить отдельно, а финансовая история остаётся на этой карточке.',
+            relatedSpaces: [],
+            canCloseWithoutChanges: true,
+            closePolicy: 'close_as_historical_composed_space',
+            context: [
+                'decision' => SpaceReviewDecision::HISTORICAL_COMPOSED_SPACE_REVIEWED,
+                'button_label' => 'Закрыть как историческое составное место',
             ],
         );
     }
@@ -136,6 +164,7 @@ class SpaceReviewCase
             'related_spaces' => $this->relatedSpaces,
             'can_close_without_changes' => $this->canCloseWithoutChanges,
             'close_policy' => $this->closePolicy,
+            'context' => $this->context,
         ];
     }
 }
