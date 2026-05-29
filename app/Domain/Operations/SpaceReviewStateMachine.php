@@ -36,6 +36,7 @@ final class SpaceReviewStateMachine
             SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION => 'conflict',
             SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'changed',
             SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL => 'changed',
+            SpaceReviewDecision::HISTORICAL_COMPOSED_SPACE_REVIEWED => 'matched',
             SpaceReviewDecision::OCCUPANCY_CONFLICT => 'conflict',
             SpaceReviewDecision::TENANT_CHANGED_ON_SITE => 'changed_tenant',
             SpaceReviewDecision::SHAPE_NOT_FOUND => 'not_found',
