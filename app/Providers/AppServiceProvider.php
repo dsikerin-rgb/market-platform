@@ -157,5 +157,11 @@ class AppServiceProvider extends ServiceProvider
             fn (): View => view('filament.partials.map-review-results-tab-controller'),
             scopes: [MapReviewResults::class],
         );
+
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
+            fn (): View => view('filament.partials.map-review-historical-group-actions'),
+            scopes: [MapReviewResults::class],
+        );
     }
 }
