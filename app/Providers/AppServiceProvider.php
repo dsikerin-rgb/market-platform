@@ -96,7 +96,7 @@ class AppServiceProvider extends ServiceProvider
                 $queryLike = '%' . $queryEscaped . '%';
 
                 $spaces = MarketSpace::query()
-                    ->with(['tenant:id,name,display_name,short_name'])
+                    ->with(['tenant:id,name,short_name'])
                     ->where('market_id', (int) $marketId)
                     ->where('is_active', true)
                     ->when($currentSpaceId > 0, fn ($query) => $query->whereKeyNot($currentSpaceId))
@@ -110,7 +110,6 @@ class AppServiceProvider extends ServiceProvider
                             ->orWhere('display_name', 'like', $queryLike)
                             ->orWhereHas('tenant', function ($tenantQuery) use ($queryLike): void {
                                 $tenantQuery->where('name', 'like', $queryLike)
-                                    ->orWhere('display_name', 'like', $queryLike)
                                     ->orWhere('short_name', 'like', $queryLike);
                             });
                     })
