@@ -23,11 +23,11 @@ class ListTasks extends ListRecords
     protected static ?string $title = 'Задачи';
 
     protected array $queryString = [
-        'activeTab' => ['as' => 'tab', 'except' => 'all'],
+        'activeTab' => ['as' => 'tab', 'except' => 'relevant'],
         'viewMode' => ['as' => 'view', 'except' => 'list'],
     ];
 
-    public ?string $activeTab = 'all';
+    public ?string $activeTab = 'relevant';
 
     public string $viewMode = 'list';
 
@@ -76,7 +76,7 @@ class ListTasks extends ListRecords
 
     public function getDefaultActiveTab(): string|int|null
     {
-        return 'all';
+        return 'relevant';
     }
 
     public function getView(): string
@@ -106,14 +106,23 @@ class ListTasks extends ListRecords
 
         if (! $user) {
             return [
-                'all' => $tabClass::make('Все'),
+                'relevant' => $tabClass::make('Актуальные'),
             ];
         }
 
         $myId = (int) $user->id;
 
         return [
-            'all' => $tabClass::make('Все'),
+            'relevant' => $this->makeTab(
+                $tabClass,
+                'Актуальные',
+                fn (Builder $query) => $query
+                    ->whereNotIn('status', Task::CLOSED_STATUSES)
+                    ->where(function (Builder $builder): void {
+                        $builder->whereNull('due_at')
+                            ->orWhereDate('due_at', '>=', now()->startOfDay());
+                    })
+            ),
             'my' => $this->makeTab(
                 $tabClass,
                 'Мне назначено',
@@ -157,6 +166,7 @@ class ListTasks extends ListRecords
                 'Критичные',
                 fn (Builder $query) => $query->urgent()->workOrder()
             ),
+            'all' => $tabClass::make('Все'),
         ];
     }
 

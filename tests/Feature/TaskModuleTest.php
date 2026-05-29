@@ -103,4 +103,132 @@ class TaskModuleTest extends TestCase
 
         Notification::assertSentTo($assignee, TaskAssignedNotification::class);
     }
+
+    public function test_relevant_tab_shows_only_upcoming_and_no_deadline_tasks(): void
+    {
+        $market = Market::create([
+            'name' => 'Рынок для теста',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'market_id' => $market->id,
+        ]);
+
+        // Дадим пользователю роль, чтобы он мог видеть задачи
+        $role = Role::findOrCreate('market-admin');
+        $user->assignRole($role);
+
+        $today = now()->startOfDay();
+        $tomorrow = $today->copy()->addDay();
+        $yesterday = $today->copy()->subDay();
+
+        // Актуальные задачи (должны попадать в таб "relevant")
+        $taskNoDeadline = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Без дедлайна',
+            'status' => Task::STATUS_NEW,
+            'priority' => Task::PRIORITY_NORMAL,
+        ]);
+
+        $taskToday = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Дедлайн сегодня',
+            'status' => Task::STATUS_NEW,
+            'priority' => Task::PRIORITY_NORMAL,
+            'due_at' => $today,
+        ]);
+
+        $taskFuture = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Дедлайн в будущем',
+            'status' => Task::STATUS_IN_PROGRESS,
+            'priority' => Task::PRIORITY_NORMAL,
+            'due_at' => $tomorrow,
+        ]);
+
+        // Неохватные задачи (не должны попадать в таб "relevant")
+        $taskOverdue = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Просроченная',
+            'status' => Task::STATUS_NEW,
+            'priority' => Task::PRIORITY_NORMAL,
+            'due_at' => $yesterday,
+        ]);
+
+        $taskCompleted = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Завершённая без дедлайна',
+            'status' => Task::STATUS_COMPLETED,
+            'priority' => Task::PRIORITY_NORMAL,
+        ]);
+
+        $taskCancelledPast = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Отменённая с прошлым дедлайном',
+            'status' => Task::STATUS_CANCELLED,
+            'priority' => Task::PRIORITY_NORMAL,
+            'due_at' => $yesterday,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('filament.admin.resources.tasks.index', ['tab' => 'relevant']))
+            ->assertOk()
+            ->assertSeeText($taskNoDeadline->title)
+            ->assertSeeText($taskToday->title)
+            ->assertSeeText($taskFuture->title)
+            ->assertDontSeeText($taskOverdue->title)
+            ->assertDontSeeText($taskCompleted->title)
+            ->assertDontSeeText($taskCancelledPast->title);
+    }
+
+    public function test_all_tab_shows_all_tasks(): void
+    {
+        $market = Market::create([
+            'name' => 'Рынок для теста all',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'market_id' => $market->id,
+        ]);
+
+        // Дадим пользователю роль, чтобы он мог видеть задачи
+        $role = Role::findOrCreate('market-admin');
+        $user->assignRole($role);
+
+        $today = now()->startOfDay();
+        $yesterday = $today->copy()->subDay();
+
+        $taskRelevant = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Актуальная задача',
+            'status' => Task::STATUS_NEW,
+            'priority' => Task::PRIORITY_NORMAL,
+        ]);
+
+        $taskOverdue = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Просроченная',
+            'status' => Task::STATUS_NEW,
+            'priority' => Task::PRIORITY_NORMAL,
+            'due_at' => $yesterday,
+        ]);
+
+        $taskClosed = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Завершённая',
+            'status' => Task::STATUS_COMPLETED,
+            'priority' => Task::PRIORITY_NORMAL,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('filament.admin.resources.tasks.index', ['tab' => 'all']))
+            ->assertOk()
+            ->assertSeeText($taskRelevant->title)
+            ->assertSeeText($taskOverdue->title)
+            ->assertSeeText($taskClosed->title);
+    }
 }
