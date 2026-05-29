@@ -64,11 +64,11 @@ class TaskCalendarFilters
 
     /**
      * Синхронизация календарных фильтров с табами страницы /admin/tasks?tab=...
-     * Табы: all|in_progress|my|coexecuting|observing|overdue|unassigned|urgent
+     * Табы: relevant|all|in_progress|my|coexecuting|observing|overdue|unassigned|urgent
      */
     public static function normalizeForTab(array $filters, ?string $tab): array
     {
-        $tab = is_string($tab) && $tab !== '' ? $tab : 'all';
+        $tab = is_string($tab) && $tab !== '' ? $tab : 'relevant';
 
         return match ($tab) {
             'my' => array_merge($filters, [
@@ -94,16 +94,22 @@ class TaskCalendarFilters
     }
 
     /**
-     * Применяем табы, которые не выражаются текущими фильтрами (in_progress/unassigned/urgent).
+     * Применяем табы, которые не выражаются текущими фильтрами (in_progress/unassigned/urgent/relevant).
      */
     public static function applyTabToTaskQuery(Builder $query, ?string $tab, User $user): Builder
     {
-        $tab = is_string($tab) && $tab !== '' ? $tab : 'all';
+        $tab = is_string($tab) && $tab !== '' ? $tab : 'relevant';
 
         return match ($tab) {
             'in_progress' => method_exists($query, 'inWork') ? $query->inWork() : $query,
             'unassigned' => method_exists($query, 'unassigned') ? $query->unassigned() : $query->whereNull('assignee_id'),
             'urgent' => method_exists($query, 'urgent') ? $query->urgent() : $query,
+            'relevant' => $query
+                ->whereNotIn('status', Task::CLOSED_STATUSES)
+                ->where(function (Builder $builder): void {
+                    $builder->whereNull('due_at')
+                        ->orWhereDate('due_at', '>=', now()->startOfDay());
+                }),
             default => $query,
         };
     }
