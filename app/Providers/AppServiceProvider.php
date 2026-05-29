@@ -26,7 +26,6 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\View\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -155,13 +154,8 @@ class AppServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
-            fn (): View => view('filament.partials.map-review-results-tab-controller'),
-            scopes: [MapReviewResults::class],
-        );
-
-        FilamentView::registerRenderHook(
-            PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
-            fn (): View => view('filament.partials.map-review-duplicate-space-picker'),
+            fn (): string => view('filament.partials.map-review-results-tab-controller')->render()
+                . view('filament.partials.map-review-duplicate-space-picker')->render(),
             scopes: [MapReviewResults::class],
         );
     }
