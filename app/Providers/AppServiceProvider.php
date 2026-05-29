@@ -154,8 +154,10 @@ class AppServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
-            fn (): string => view('filament.partials.map-review-results-tab-controller')->render()
-                . view('filament.partials.map-review-duplicate-space-picker')->render(),
+            fn (): string => '<div data-mrr-review-results-hooks style="display: contents">'
+                . view('filament.partials.map-review-results-tab-controller')->render()
+                . view('filament.partials.map-review-duplicate-space-picker')->render()
+                . '</div>',
             scopes: [MapReviewResults::class],
         );
     }
