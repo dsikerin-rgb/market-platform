@@ -41,12 +41,16 @@
             foreach (app(MapReviewResultsService::class)->needsAttention((int) $selectedMarketId, 50) as $row) {
                 $diagnostics = is_array($row['diagnostics'] ?? null) ? $row['diagnostics'] : [];
                 $reviewCase = is_array($diagnostics['review_case'] ?? null) ? $diagnostics['review_case'] : [];
+                $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
+                $caseType = (string) ($reviewCase['case_type'] ?? '');
+                $recommendedAction = (string) ($reviewCase['recommended_action'] ?? '');
+                $isHistoricalCase = $caseType === 'historical_group_structure'
+                    && $recommendedAction === 'close_as_historical_composed_space';
+                $isManualDuplicateCase = $caseType === 'duplicate_identity'
+                    && $recommendedAction === 'resolve_duplicate'
+                    && $candidateSpaces === [];
 
-                if (($reviewCase['case_type'] ?? null) !== 'historical_group_structure') {
-                    continue;
-                }
-
-                if (($reviewCase['recommended_action'] ?? null) !== 'close_as_historical_composed_space') {
+                if (! $isHistoricalCase && ! $isManualDuplicateCase) {
                     continue;
                 }
 
@@ -60,7 +64,9 @@
                     'space_id' => $spaceId,
                     'label' => $spaceLabel($row),
                     'reason' => trim((string) ($row['reason'] ?? '')),
-                    'case_explanation' => trim((string) ($reviewCase['case_explanation'] ?? '')),
+                    'case_explanation' => $isHistoricalCase
+                        ? trim((string) ($reviewCase['case_explanation'] ?? ''))
+                        : 'Если это не дубль, а историческая составная карточка, закройте её без переноса связей: текущие части живут отдельно, финансовая история остаётся на этой карточке.',
                     'default_reason' => 'Историческое составное место: текущие части живут отдельно, финансовая история остаётся на этой карточке. Закрыто без переноса связей.',
                 ];
             }
