@@ -6,10 +6,12 @@ declare(strict_types=1);
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\BaseResource;
+use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Resources\TaskResource\Pages;
 use App\Filament\Resources\TaskResource\RelationManagers\TaskAttachmentsRelationManager;
 use App\Filament\Resources\TaskResource\RelationManagers\TaskCommentsRelationManager;
 use App\Models\Market;
+use App\Models\MarketHoliday;
 use App\Models\Task;
 use App\Models\TaskParticipant;
 use App\Models\User;
@@ -627,6 +629,16 @@ $creatorDisplay = $readonlyText(
             fn (?Task $record, string $operation): bool => $operation === 'edit',
         );
 
+        $linkedHolidayReadonly = $readonlyText(
+            'linked_holiday_readonly',
+            'Связанное событие',
+            fn (?Task $record, string $operation): HtmlString => $operation === 'edit' && $record?->linkedMarketHoliday()
+                ? static::buildLinkedHolidayHtml($record->linkedMarketHoliday())
+                : new HtmlString('—'),
+            'full',
+            fn (?Task $record, string $operation): bool => $operation === 'edit' && $record?->linkedMarketHoliday(),
+        );
+
         $createWizard = Wizard::make([
             Step::make('Основное')
                 ->description('Что нужно сделать')
@@ -714,6 +726,7 @@ $creatorDisplay = $readonlyText(
 
         $editGrid = static::makeGrid(12, [
             $tabsComponent,
+            $linkedHolidayReadonly,
         ]);
 
         if (method_exists($editGrid, 'visible')) {
@@ -1592,5 +1605,35 @@ $assigneeColumn = TextColumn::make('assignee.name')
         return $fallbackId !== null
             ? ('Пользователь #' . $fallbackId)
             : '—';
+    }
+
+    /**
+     * Построить HTML для отображения связанного события.
+     */
+    protected static function buildLinkedHolidayHtml(MarketHoliday $holiday): HtmlString
+    {
+        $editUrl = MarketHolidayResource::getUrl('edit', ['record' => $holiday]);
+        $title = e($holiday->title);
+        $startDate = $holiday->starts_at?->format('d.m.Y') ?? '—';
+        $endDate = $holiday->ends_at?->format('d.m.Y') ?? '—';
+        $source = $holiday->source ?? 'market_event';
+
+        $sourceLabel = match ($source) {
+            'national_holiday' => 'Государственный праздник',
+            'sanitary_auto' => 'Санитарный день',
+            'promotion' => 'Акция',
+            'market_event' => 'Мероприятие рынка',
+            'maintenance' => 'Технические работы',
+            default => $source,
+        };
+
+        $html = "<div style='padding: 0.5rem 0;'>";
+        $html .= "<div style='margin-bottom: 0.25rem;'><strong>{$title}</strong></div>";
+        $html .= "<div style='font-size: 0.875rem; color: #6b7280;'>Начало: {$startDate} | Окончание: {$endDate}</div>";
+        $html .= "<div style='font-size: 0.875rem; color: #6b7280;'>Тип: {$sourceLabel}</div>";
+        $html .= "<div style='margin-top: 0.5rem;'><a href='{$editUrl}' target='_blank' style='color: #2563eb; text-decoration: underline;'>Открыть событие ↗</a></div>";
+        $html .= "</div>";
+
+        return new HtmlString($html);
     }
 }

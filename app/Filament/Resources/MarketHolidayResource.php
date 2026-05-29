@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/MarketHolidayResource.php
 
 declare(strict_types=1);
 
@@ -6,6 +7,8 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketHolidayResource\Pages;
 use App\Models\MarketHoliday;
+use App\Models\MarketHolidayTaskLink;
+use App\Models\Task;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -191,6 +194,16 @@ class MarketHolidayResource extends BaseResource
                 ->columns(3)
                 ->columnSpanFull(),
 
+            Section::make('Связанные задачи')
+                ->description('Задачи, которые созданы по этому событию или вручную связаны с ним.')
+                ->schema([
+                    Forms\Components\Placeholder::make('related_tasks')
+                        ->label('')
+                        ->content(fn (?MarketHoliday $record): HtmlString => static::renderRelatedTasks($record)),
+                ])
+                ->visible(fn (?MarketHoliday $record): bool => (bool) $record?->exists)
+                ->columnSpanFull(),
+
             Section::make('Публичная карточка маркетплейса')
                 ->description('Эти поля формируют страницу анонса на маркетплейсе: краткое описание, подробный текст, программа, акции и практическая информация для посетителей.')
                 ->schema([
@@ -365,6 +378,57 @@ class MarketHolidayResource extends BaseResource
                 ->columns(2)
                 ->collapsible(),
         ]);
+    }
+
+    private static function renderRelatedTasks(?MarketHoliday $record): HtmlString
+    {
+        if (! $record?->exists) {
+            return new HtmlString('<span style="color:#94a3b8;">Сначала сохраните событие.</span>');
+        }
+
+        $links = MarketHolidayTaskLink::query()
+            ->where('market_holiday_id', (int) $record->getKey())
+            ->with(['task.assignee'])
+            ->orderBy('id')
+            ->get();
+
+        if ($links->isEmpty()) {
+            return new HtmlString('<span style="color:#94a3b8;">Связанных задач пока нет</span>');
+        }
+
+        $rows = [];
+
+        foreach ($links as $link) {
+            $task = $link->task;
+
+            if (! $task instanceof Task) {
+                continue;
+            }
+
+            $taskUrl = TaskResource::getUrl('edit', ['record' => $task]);
+            $title = e((string) $task->title);
+            $status = e(Task::STATUS_LABELS[$task->status] ?? (string) $task->status);
+            $dueAt = e($task->due_at?->format('d.m.Y H:i') ?? 'Без дедлайна');
+            $assignee = e($task->assignee?->name ?? 'Не назначен');
+            $safeTaskUrl = e($taskUrl);
+
+            $rows[] = '<div style="display:grid;gap:.35rem;padding:.75rem 0;border-bottom:1px solid rgba(148,163,184,.22);">'
+                . '<div><a href="' . $safeTaskUrl . '" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;font-weight:600;">'
+                . $title
+                . ' — Открыть задачу ↗</a></div>'
+                . '<div style="font-size:.875rem;color:#64748b;">'
+                . 'Статус: ' . $status
+                . ' · Дедлайн: ' . $dueAt
+                . ' · Исполнитель: ' . $assignee
+                . '</div>'
+                . '</div>';
+        }
+
+        if ($rows === []) {
+            return new HtmlString('<span style="color:#94a3b8;">Связанных задач пока нет</span>');
+        }
+
+        return new HtmlString('<div style="display:grid;gap:.25rem;">' . implode('', $rows) . '</div>');
     }
 
     public static function table(Table $table): Table

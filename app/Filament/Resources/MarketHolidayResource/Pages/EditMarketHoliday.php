@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/MarketHolidayResource/Pages/EditMarketHoliday.php
 
 declare(strict_types=1);
 
@@ -46,6 +47,7 @@ class EditMarketHoliday extends BaseEditRecord
                     $record = $this->record;
 
                     $date = $record->starts_at?->toDateString();
+
                     if (! $date) {
                         Notification::make()
                             ->title('Не удалось определить дату события')

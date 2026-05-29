@@ -8,6 +8,7 @@ namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
 use App\Models\Task;
+use App\Services\TaskHolidayLinkService;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -572,6 +573,32 @@ class EditTask extends BaseEditRecord
                     );
                 }),
 
+            Actions\Action::make('create_holiday_from_task')
+                ->label('Создать событие из задачи')
+                ->icon('heroicon-o-calendar')
+                ->color('primary')
+                ->size(Size::Small)
+                ->extraAttributes(['class' => 'task-hero-action task-hero-action--create-holiday'])
+                ->visible(function (): bool {
+                    if (! ($this->record instanceof Task)) {
+                        return false;
+                    }
+
+                    // Показываем только если нет связанного события и есть права updateCore
+                    if ($this->record->linkedMarketHoliday()) {
+                        return false;
+                    }
+
+                    return $this->canUpdateCore() && $this->record->market_id;
+                })
+                ->requiresConfirmation()
+                ->modalHeading('Создать событие из задачи?')
+                ->modalDescription('Создаст событие рынка и свяжет его с этой задачей.')
+                ->modalSubmitActionLabel('Создать')
+                ->action(function (): void {
+                    $this->createHolidayFromTask();
+                }),
+
             Actions\Action::make('accept')
                 ->label('Принять')
                 ->icon('heroicon-o-play')
@@ -827,6 +854,42 @@ class EditTask extends BaseEditRecord
         Notification::make()
             ->title($successTitle)
             ->success()
+            ->send();
+    }
+
+    private function createHolidayFromTask(): void
+    {
+        if (! ($this->record instanceof Task)) {
+            return;
+        }
+
+        /** @var Task $task */
+        $task = $this->record;
+
+        $service = new TaskHolidayLinkService();
+        $result = $service->createHolidayFromTask($task);
+
+        if (! $result['success']) {
+            Notification::make()
+                ->title($result['message'])
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $holiday = $result['holiday'];
+
+        $this->record->refresh();
+
+        // Перенаправляем на редактирование созданного события
+        $editUrl = \App\Filament\Resources\MarketHolidayResource::getUrl('edit', ['record' => $holiday]);
+
+        Notification::make()
+            ->title('Событие создано и связано с задачей')
+            ->success()
+            ->body("Событие: {$holiday->title}")
+            ->action('Открыть событие', $editUrl)
             ->send();
     }
 

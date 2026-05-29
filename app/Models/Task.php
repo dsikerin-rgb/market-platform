@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\Schema;
 
@@ -155,6 +156,12 @@ class Task extends Model
 
             try {
                 $task->participantEntries()->delete();
+            } catch (\Throwable) {
+                // ignore
+            }
+
+            try {
+                $task->marketHolidayTaskLink()->delete();
             } catch (\Throwable) {
                 // ignore
             }
@@ -388,6 +395,41 @@ class Task extends Model
         return $this->hasMany(TaskAttachment::class, 'task_id');
     }
 
+    /**
+     * Связь через market_holiday_task_links (явная связь).
+     */
+    public function marketHolidayTaskLink(): HasOne
+    {
+        return $this->hasOne(MarketHolidayTaskLink::class, 'task_id');
+    }
+
+    /**
+     * Получить связанное событие через явную связь или source_type/source_id.
+     */
+    public function linkedMarketHoliday(): ?MarketHoliday
+    {
+        $link = $this->relationLoaded('marketHolidayTaskLink')
+            ? $this->marketHolidayTaskLink
+            : $this->marketHolidayTaskLink()->with('marketHoliday')->first();
+
+        if ($link?->marketHoliday) {
+            $holiday = $link->marketHoliday;
+
+            if (! $this->market_id || (int) $holiday->market_id === (int) $this->market_id) {
+                return $holiday;
+            }
+        }
+
+        if ($this->source_type === MarketHoliday::class && $this->source_id) {
+            return MarketHoliday::query()
+                ->whereKey((int) $this->source_id)
+                ->when($this->market_id, fn (Builder $query) => $query->where('market_id', (int) $this->market_id))
+                ->first();
+        }
+
+        return null;
+    }
+
     public function getSourceLabelAttribute(): string
     {
         if (! $this->source_type || ! $this->source_id) {
@@ -396,6 +438,19 @@ class Task extends Model
 
         if ($this->source_type === Ticket::class) {
             return "Заявка #{$this->source_id}";
+        }
+
+        if ($this->source_type === MarketHoliday::class) {
+            $holiday = MarketHoliday::query()
+                ->whereKey((int) $this->source_id)
+                ->when($this->market_id, fn (Builder $query) => $query->where('market_id', (int) $this->market_id))
+                ->first();
+
+            if ($holiday) {
+                return "Событие: {$holiday->title}";
+            }
+
+            return "Событие #{$this->source_id}";
         }
 
         $base = class_basename($this->source_type);
