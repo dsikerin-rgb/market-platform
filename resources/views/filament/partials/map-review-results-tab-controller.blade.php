@@ -128,6 +128,82 @@
         .dark .mrr-manual-duplicate__summary-copy {
             color: #cbd5e1;
         }
+
+        .mrr-duplicate-space-picker {
+            display: grid;
+            gap: 0.65rem;
+        }
+
+        .mrr-duplicate-space-picker__results {
+            display: grid;
+            gap: 0.5rem;
+            max-height: 16rem;
+            overflow: auto;
+        }
+
+        .mrr-duplicate-space-picker__empty,
+        .mrr-duplicate-space-picker__selected {
+            border-radius: 0.85rem;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            padding: 0.75rem 0.85rem;
+            font-size: 0.82rem;
+            line-height: 1.45;
+            color: #64748b;
+        }
+
+        .dark .mrr-duplicate-space-picker__empty,
+        .dark .mrr-duplicate-space-picker__selected {
+            border-color: rgba(148, 163, 184, 0.22);
+            color: #cbd5e1;
+        }
+
+        .mrr-duplicate-space-picker__option {
+            width: 100%;
+            border: 1px solid rgba(148, 163, 184, 0.26);
+            border-radius: 0.95rem;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 0.75rem 0.85rem;
+            text-align: left;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+        }
+
+        .mrr-duplicate-space-picker__option:hover,
+        .mrr-duplicate-space-picker__option:focus-visible {
+            border-color: rgba(37, 99, 235, 0.46);
+            box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
+            outline: none;
+            transform: translateY(-1px);
+        }
+
+        .dark .mrr-duplicate-space-picker__option {
+            border-color: rgba(148, 163, 184, 0.22);
+            background: rgba(15, 23, 42, 0.72);
+        }
+
+        .mrr-duplicate-space-picker__option-title,
+        .mrr-duplicate-space-picker__selected-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .dark .mrr-duplicate-space-picker__option-title,
+        .dark .mrr-duplicate-space-picker__selected-title {
+            color: #f8fafc;
+        }
+
+        .mrr-duplicate-space-picker__option-meta,
+        .mrr-duplicate-space-picker__selected-meta {
+            margin-top: 0.25rem;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            color: #64748b;
+        }
+
+        .dark .mrr-duplicate-space-picker__option-meta,
+        .dark .mrr-duplicate-space-picker__selected-meta {
+            color: #cbd5e1;
+        }
     </style>
 
     <div class="mrr-clarify-modal" id="mrrManualDuplicateModal" data-mrr-manual-duplicate-modal hidden aria-hidden="true">
@@ -138,7 +214,7 @@
                 <div class="mrr-clarify-modal__eyebrow">Разбор дубля</div>
                 <h3 class="mrr-clarify-modal__title" id="mrrManualDuplicateTitle">Выберите основное место</h3>
                 <p class="mrr-clarify-modal__description" id="mrrManualDuplicateDescription">
-                    Автоматический кандидат не найден. Укажите ID основного места, чтобы закрыть конфликт из этой карточки ревизии.
+                    Автоматический кандидат не найден. Найдите и выберите основное место, чтобы закрыть конфликт из этой карточки ревизии.
                 </p>
             </div>
 
@@ -150,17 +226,25 @@
             </div>
 
             <div class="mrr-clarify-modal__field">
-                <label class="mrr-clarify-modal__label" for="mrrManualDuplicateCanonicalId">ID основного места</label>
+                <label class="mrr-clarify-modal__label" for="mrrManualDuplicateCanonicalSearch">Найти основное место</label>
                 <input
-                    id="mrrManualDuplicateCanonicalId"
+                    id="mrrManualDuplicateCanonicalSearch"
                     class="mrr-clarify-modal__input"
-                    type="number"
-                    min="1"
-                    step="1"
-                    inputmode="numeric"
-                    placeholder="Например: 169"
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Например: ОС8, Марянина, П60у/1 или 169"
                 >
-                <div class="mrr-quick-review__hint">Это место останется основным. Текущая карточка будет обработана как дубль.</div>
+                <input id="mrrManualDuplicateCanonicalId" type="hidden">
+                <div class="mrr-quick-review__hint">Введите номер, название, код, арендатора или ID. Это место останется основным.</div>
+                <div class="mrr-duplicate-space-picker">
+                    <div class="mrr-duplicate-space-picker__selected" id="mrrManualDuplicateSelectedSpace" hidden>
+                        <div class="mrr-duplicate-space-picker__selected-title"></div>
+                        <div class="mrr-duplicate-space-picker__selected-meta"></div>
+                    </div>
+                    <div class="mrr-duplicate-space-picker__results" id="mrrManualDuplicateSearchResults">
+                        <div class="mrr-duplicate-space-picker__empty">Начните вводить номер, название или арендатора основного места.</div>
+                    </div>
+                </div>
             </div>
 
             <div class="mrr-clarify-modal__field">
@@ -169,7 +253,7 @@
                     id="mrrManualDuplicateReason"
                     class="mrr-clarify-modal__input mrr-quick-review__field"
                     rows="3"
-                    placeholder="Например: подтверждён дубль, основным оставить место #169"
+                    placeholder="Например: подтверждён дубль, основным оставить место ОС8 8, 9, 10"
                 ></textarea>
             </div>
 
@@ -177,7 +261,7 @@
 
             <div class="mrr-clarify-modal__actions">
                 <button type="button" class="mrr-clarify-modal__button" data-mrr-manual-duplicate-close>Отмена</button>
-                <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-manual-duplicate-save>Применить разбор дубля</button>
+                <button type="button" class="mrr-clarify-modal__button mrr-clarify-modal__button--primary" data-mrr-manual-duplicate-save disabled>Применить разбор дубля</button>
             </div>
         </div>
     </div>
@@ -292,7 +376,7 @@
             const text = String(message || '').trim();
 
             if (text.includes('Duplicate review candidate space is required')) {
-                return 'Укажите ID основного места. Оно не должно совпадать с текущим местом.';
+                return 'Выберите основное место из результатов поиска. Оно не должно совпадать с текущим местом.';
             }
 
             if (text.includes('Duplicate review candidate space was not found')) {
@@ -315,22 +399,215 @@
             const labelTarget = document.getElementById('mrrManualDuplicateSpaceLabel');
             const copyTarget = document.getElementById('mrrManualDuplicateCaseCopy');
             const canonicalInput = document.getElementById('mrrManualDuplicateCanonicalId');
+            const canonicalSearchInput = document.getElementById('mrrManualDuplicateCanonicalSearch');
+            const selectedTarget = document.getElementById('mrrManualDuplicateSelectedSpace');
+            const selectedTitle = selectedTarget?.querySelector('.mrr-duplicate-space-picker__selected-title');
+            const selectedMeta = selectedTarget?.querySelector('.mrr-duplicate-space-picker__selected-meta');
+            const searchResultsTarget = document.getElementById('mrrManualDuplicateSearchResults');
             const reasonInput = document.getElementById('mrrManualDuplicateReason');
             const errorTarget = document.getElementById('mrrManualDuplicateError');
             const saveButton = modal?.querySelector('[data-mrr-manual-duplicate-save]');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
             const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
+            const duplicateSearchUrl = @json(route('filament.admin.map-review-results.duplicate-space-search'));
             let activeAction = null;
+            let activeSearchController = null;
+            let searchTimer = null;
 
-            if (!(modal instanceof HTMLElement) || !(canonicalInput instanceof HTMLInputElement) || !(reasonInput instanceof HTMLTextAreaElement) || !(saveButton instanceof HTMLButtonElement)) {
+            if (
+                !(modal instanceof HTMLElement)
+                || !(canonicalInput instanceof HTMLInputElement)
+                || !(canonicalSearchInput instanceof HTMLInputElement)
+                || !(reasonInput instanceof HTMLTextAreaElement)
+                || !(searchResultsTarget instanceof HTMLElement)
+                || !(saveButton instanceof HTMLButtonElement)
+            ) {
                 return;
             }
 
             const actionBySpace = new Map(manualDuplicateActions.map((action) => [Number(action.space_id || 0), action]));
 
+            const setError = (message) => {
+                if (errorTarget instanceof HTMLElement) {
+                    errorTarget.textContent = message || '';
+                }
+            };
+
+            const formatSpaceTitle = (space) => {
+                const id = Number(space?.id || 0);
+                const number = String(space?.number || '').trim();
+                const displayName = String(space?.display_name || '').trim();
+
+                if (number && displayName && number !== displayName) {
+                    return `#${id} · ${number} · ${displayName}`;
+                }
+
+                if (number) {
+                    return `#${id} · ${number}`;
+                }
+
+                if (displayName) {
+                    return `#${id} · ${displayName}`;
+                }
+
+                return `#${id}`;
+            };
+
+            const formatSpaceMeta = (space) => {
+                const parts = [];
+                const tenantName = String(space?.tenant?.name || '').trim();
+                const code = String(space?.code || '').trim();
+                const status = String(space?.status || '').trim();
+                const role = String(space?.space_group_role || '').trim();
+
+                if (tenantName) {
+                    parts.push(`Арендатор: ${tenantName}`);
+                }
+
+                if (code) {
+                    parts.push(`Код: ${code}`);
+                }
+
+                if (status) {
+                    parts.push(`Статус: ${status}`);
+                }
+
+                if (role && role !== 'none') {
+                    parts.push(`Роль группы: ${role}`);
+                }
+
+                return parts.join(' · ') || 'Без арендатора и дополнительных признаков';
+            };
+
+            const resetDuplicatePicker = () => {
+                canonicalInput.value = '';
+                canonicalSearchInput.value = '';
+                saveButton.setAttribute('disabled', 'disabled');
+
+                if (selectedTarget instanceof HTMLElement) {
+                    selectedTarget.hidden = true;
+                }
+
+                searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Начните вводить номер, название или арендатора основного места.</div>';
+            };
+
+            const selectCanonicalSpace = (space) => {
+                const selectedId = Number(space?.id || 0);
+
+                if (!Number.isFinite(selectedId) || selectedId <= 0) {
+                    return;
+                }
+
+                canonicalInput.value = String(selectedId);
+                canonicalSearchInput.value = formatSpaceTitle(space);
+
+                if (selectedTarget instanceof HTMLElement && selectedTitle instanceof HTMLElement && selectedMeta instanceof HTMLElement) {
+                    selectedTitle.textContent = `Выбрано основное место: ${formatSpaceTitle(space)}`;
+                    selectedMeta.textContent = formatSpaceMeta(space);
+                    selectedTarget.hidden = false;
+                }
+
+                saveButton.removeAttribute('disabled');
+                setError('');
+            };
+
+            const renderSearchResults = (items) => {
+                if (!Array.isArray(items) || items.length === 0) {
+                    searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Подходящие места не найдены. Уточните запрос.</div>';
+                    return;
+                }
+
+                searchResultsTarget.replaceChildren();
+
+                items.forEach((space) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'mrr-duplicate-space-picker__option';
+                    button.innerHTML = `
+                        <div class="mrr-duplicate-space-picker__option-title"></div>
+                        <div class="mrr-duplicate-space-picker__option-meta"></div>
+                    `;
+
+                    const title = button.querySelector('.mrr-duplicate-space-picker__option-title');
+                    const meta = button.querySelector('.mrr-duplicate-space-picker__option-meta');
+
+                    if (title instanceof HTMLElement) {
+                        title.textContent = formatSpaceTitle(space);
+                    }
+
+                    if (meta instanceof HTMLElement) {
+                        meta.textContent = formatSpaceMeta(space);
+                    }
+
+                    button.addEventListener('click', () => selectCanonicalSpace(space));
+                    searchResultsTarget.appendChild(button);
+                });
+            };
+
+            const runCanonicalSearch = async () => {
+                const query = canonicalSearchInput.value.trim();
+
+                canonicalInput.value = '';
+                saveButton.setAttribute('disabled', 'disabled');
+
+                if (selectedTarget instanceof HTMLElement) {
+                    selectedTarget.hidden = true;
+                }
+
+                if (query.length < 2) {
+                    searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Введите минимум 2 символа для поиска.</div>';
+                    return;
+                }
+
+                if (activeSearchController) {
+                    activeSearchController.abort();
+                }
+
+                activeSearchController = new AbortController();
+                searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Ищем подходящие места...</div>';
+
+                const url = new URL(duplicateSearchUrl, window.location.origin);
+                url.searchParams.set('q', query);
+                url.searchParams.set('limit', '10');
+                url.searchParams.set('current_space_id', String(activeAction?.space_id || '0'));
+
+                try {
+                    const response = await fetch(url.toString(), {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        signal: activeSearchController.signal,
+                    });
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Не удалось выполнить поиск. Попробуйте ещё раз.</div>';
+                        return;
+                    }
+
+                    renderSearchResults(data.items || []);
+                } catch (error) {
+                    if (error?.name === 'AbortError') {
+                        return;
+                    }
+
+                    searchResultsTarget.innerHTML = '<div class="mrr-duplicate-space-picker__empty">Не удалось выполнить поиск. Попробуйте ещё раз.</div>';
+                }
+            };
+
+            canonicalSearchInput.addEventListener('input', () => {
+                canonicalInput.value = '';
+                saveButton.setAttribute('disabled', 'disabled');
+
+                window.clearTimeout(searchTimer);
+                searchTimer = window.setTimeout(runCanonicalSearch, 250);
+            });
+
             const openModal = (action) => {
                 activeAction = action;
-                canonicalInput.value = '';
+                resetDuplicatePicker();
                 reasonInput.value = String(action.reason || '').trim();
 
                 if (labelTarget instanceof HTMLElement) {
@@ -343,16 +620,12 @@
                     copyTarget.textContent = action.case_explanation || 'Выберите основное место дубля. Backend повторно проверит выбранную пару мест.';
                 }
 
-                if (errorTarget instanceof HTMLElement) {
-                    errorTarget.textContent = '';
-                }
-
-                saveButton.removeAttribute('disabled');
+                setError('');
                 saveButton.textContent = 'Применить разбор дубля';
                 modal.hidden = false;
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
-                window.setTimeout(() => canonicalInput.focus(), 0);
+                window.setTimeout(() => canonicalSearchInput.focus(), 0);
             };
 
             const closeModal = () => {
@@ -360,14 +633,10 @@
                 modal.classList.remove('is-open');
                 modal.hidden = true;
                 modal.setAttribute('aria-hidden', 'true');
-                canonicalInput.value = '';
+                resetDuplicatePicker();
                 reasonInput.value = '';
-                saveButton.removeAttribute('disabled');
                 saveButton.textContent = 'Применить разбор дубля';
-
-                if (errorTarget instanceof HTMLElement) {
-                    errorTarget.textContent = '';
-                }
+                setError('');
             };
 
             const applyManualDuplicate = async () => {
@@ -376,26 +645,19 @@
                 const reason = String(reasonInput.value || '').trim();
 
                 if (!Number.isFinite(currentSpaceId) || currentSpaceId <= 0) {
-                    if (errorTarget instanceof HTMLElement) {
-                        errorTarget.textContent = 'Не удалось определить текущую карточку ревизии.';
-                    }
+                    setError('Не удалось определить текущую карточку ревизии.');
                     return;
                 }
 
                 if (!Number.isFinite(canonicalSpaceId) || canonicalSpaceId <= 0 || canonicalSpaceId === currentSpaceId) {
-                    if (errorTarget instanceof HTMLElement) {
-                        errorTarget.textContent = 'Укажите ID другого основного места.';
-                    }
-                    canonicalInput.focus();
+                    setError('Выберите другое основное место из результатов поиска.');
+                    canonicalSearchInput.focus();
                     return;
                 }
 
                 saveButton.setAttribute('disabled', 'disabled');
                 saveButton.textContent = 'Применяем...';
-
-                if (errorTarget instanceof HTMLElement) {
-                    errorTarget.textContent = '';
-                }
+                setError('');
 
                 const response = await fetch(reviewDecisionUrl, {
                     method: 'POST',
@@ -415,13 +677,11 @@
                 const data = await response.json().catch(() => ({}));
 
                 if (!response.ok || !data?.ok) {
-                    saveButton.removeAttribute('disabled');
-                    saveButton.textContent = 'Применить разбор дубля';
-
-                    if (errorTarget instanceof HTMLElement) {
-                        errorTarget.textContent = humanManualDuplicateError(data?.message);
+                    if (Number(canonicalInput.value || 0) > 0) {
+                        saveButton.removeAttribute('disabled');
                     }
-
+                    saveButton.textContent = 'Применить разбор дубля';
+                    setError(humanManualDuplicateError(data?.message));
                     return;
                 }
 
@@ -510,12 +770,11 @@
                 if (event.target.hasAttribute('data-mrr-manual-duplicate-save')) {
                     event.preventDefault();
                     applyManualDuplicate().catch((errorInstance) => {
-                        saveButton.removeAttribute('disabled');
-                        saveButton.textContent = 'Применить разбор дубля';
-
-                        if (errorTarget instanceof HTMLElement) {
-                            errorTarget.textContent = humanManualDuplicateError(errorInstance?.message || errorInstance);
+                        if (Number(canonicalInput.value || 0) > 0) {
+                            saveButton.removeAttribute('disabled');
                         }
+                        saveButton.textContent = 'Применить разбор дубля';
+                        setError(humanManualDuplicateError(errorInstance?.message || errorInstance));
                     });
                 }
             });
