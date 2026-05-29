@@ -155,7 +155,7 @@ class AppServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
-            fn (): View => view('filament.partials.map-review-results-footer-hooks'),
+            fn (): View => view('filament.partials.map-review-results-tab-controller'),
             scopes: [MapReviewResults::class],
         );
     }
