@@ -177,5 +177,11 @@ class AppServiceProvider extends ServiceProvider
             fn (): View => view('filament.partials.map-review-historical-group-actions'),
             scopes: [MapReviewResults::class],
         );
+
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::PAGE_FOOTER_WIDGETS_BEFORE,
+            fn (): View => view('filament.partials.map-review-retire-canonical-picker'),
+            scopes: [MapReviewResults::class],
+        );
     }
 }
