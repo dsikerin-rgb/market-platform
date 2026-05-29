@@ -84,6 +84,7 @@ class AppServiceProvider extends ServiceProvider
 
                 $queryText = trim(str_replace(['№', '#'], '', (string) ($validated['q'] ?? '')));
                 $queryText = trim(str_replace(["\n", "\r", "\t"], ' ', $queryText));
+                $queryText = trim((string) preg_replace('/\s+/u', ' ', $queryText));
 
                 if ($queryText === '') {
                     return response()->json(['ok' => true, 'items' => []]);
@@ -94,26 +95,39 @@ class AppServiceProvider extends ServiceProvider
                 $isNumeric = ctype_digit($queryText);
                 $queryEscaped = str_replace(['%', '_'], ['\%', '\_'], $queryText);
                 $queryLike = '%' . $queryEscaped . '%';
+                $driverName = \Illuminate\Support\Facades\DB::connection()->getDriverName();
+                $orWhereNormalizedLike = static function ($query, string $column, string $value) use ($driverName): void {
+                    if ($driverName === 'pgsql') {
+                        $query->orWhereRaw("regexp_replace(coalesce({$column}, ''), '[[:space:]]+', ' ', 'g') like ?", [$value]);
+
+                        return;
+                    }
+
+                    $query->orWhere($column, 'like', $value);
+                };
+                $numberExactOrderSql = $driverName === 'pgsql'
+                    ? "CASE WHEN regexp_replace(coalesce(number, ''), '[[:space:]]+', ' ', 'g') = ? THEN 0 ELSE 1 END"
+                    : 'CASE WHEN number = ? THEN 0 ELSE 1 END';
 
                 $spaces = MarketSpace::query()
                     ->with(['tenant:id,name,short_name'])
                     ->where('market_id', (int) $marketId)
                     ->where('is_active', true)
                     ->when($currentSpaceId > 0, fn ($query) => $query->whereKeyNot($currentSpaceId))
-                    ->where(function ($query) use ($isNumeric, $queryText, $queryLike): void {
+                    ->where(function ($query) use ($isNumeric, $queryText, $queryLike, $orWhereNormalizedLike): void {
                         if ($isNumeric) {
                             $query->orWhere('id', '=', (int) $queryText);
                         }
 
-                        $query->orWhere('number', 'like', $queryLike)
-                            ->orWhere('code', 'like', $queryLike)
-                            ->orWhere('display_name', 'like', $queryLike)
-                            ->orWhereHas('tenant', function ($tenantQuery) use ($queryLike): void {
-                                $tenantQuery->where('name', 'like', $queryLike)
-                                    ->orWhere('short_name', 'like', $queryLike);
-                            });
+                        $orWhereNormalizedLike($query, 'number', $queryLike);
+                        $orWhereNormalizedLike($query, 'code', $queryLike);
+                        $orWhereNormalizedLike($query, 'display_name', $queryLike);
+                        $query->orWhereHas('tenant', function ($tenantQuery) use ($queryLike, $orWhereNormalizedLike): void {
+                            $orWhereNormalizedLike($tenantQuery, 'name', $queryLike);
+                            $orWhereNormalizedLike($tenantQuery, 'short_name', $queryLike);
+                        });
                     })
-                    ->orderByRaw('CASE WHEN number = ? THEN 0 ELSE 1 END', [$queryText])
+                    ->orderByRaw($numberExactOrderSql, [$queryText])
                     ->orderBy('number')
                     ->orderBy('id')
                     ->limit($limit)
