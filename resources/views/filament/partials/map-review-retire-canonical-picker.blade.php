@@ -1,4 +1,26 @@
 <style>
+    #mrrMergeRetireModal .mrr-clarify-modal__dialog {
+        max-height: calc(100dvh - 1.5rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    #mrrMergeRetireModal .mrr-clarify-modal__actions {
+        position: sticky;
+        bottom: -1px;
+        z-index: 1;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+        backdrop-filter: blur(10px);
+    }
+
+    .dark #mrrMergeRetireModal .mrr-clarify-modal__actions {
+        background: rgba(15, 23, 42, 0.96);
+        border-top-color: rgba(148, 163, 184, 0.16);
+    }
+
     .mrr-retire-canonical-picker {
         display: grid;
         gap: 0.55rem;
@@ -7,8 +29,18 @@
     .mrr-retire-canonical-picker__results {
         display: grid;
         gap: 0.5rem;
-        max-height: 15rem;
+        max-height: min(11rem, 30dvh);
         overflow: auto;
+    }
+
+    @media (max-height: 760px) {
+        #mrrMergeRetireModal .mrr-clarify-modal__dialog {
+            max-height: calc(100dvh - 1rem);
+        }
+
+        .mrr-retire-canonical-picker__results {
+            max-height: min(8.5rem, 24dvh);
+        }
     }
 
     .mrr-retire-canonical-picker__empty,
