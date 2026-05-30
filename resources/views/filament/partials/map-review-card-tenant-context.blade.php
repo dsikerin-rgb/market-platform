@@ -59,6 +59,7 @@
 <script>
     (() => {
         const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+        const observedTenantLabelPattern = /^Фактический\s+арендатор$/u;
 
         const valueFromDataset = (element, keys) => {
             if (!(element instanceof HTMLElement)) {
@@ -130,7 +131,7 @@
                 || valueFromDataset(contractAction, ['mrrTenantName'])
                 || valueFromDataset(financialAction, ['mrrTenantName'])
                 || sideValueByLabel(card, /^Станет$/u)
-                || detailValueByLabel(card, /^Фактический арендатор$/u)
+                || detailValueByLabel(card, observedTenantLabelPattern)
                 || '';
         };
 

@@ -1,4 +1,5 @@
 <?php
+# app/Services/Operations/OperationPayloadValidator.php
 
 declare(strict_types=1);
 
@@ -200,6 +201,10 @@ final class OperationPayloadValidator
             }
         }
 
+        if (isset($payload['retirement']) && is_array($payload['retirement'])) {
+            $normalized['retirement'] = self::normalizeRetirementPayload($payload['retirement']);
+        }
+
         if (array_key_exists('auto_closed_by_reconciliation', $payload)) {
             $normalized['auto_closed_by_reconciliation'] = (bool) $payload['auto_closed_by_reconciliation'];
         }
@@ -214,6 +219,25 @@ final class OperationPayloadValidator
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function normalizeRetirementPayload(array $payload): array
+    {
+        $relationCounts = $payload['relation_counts'] ?? [];
+        if (! is_array($relationCounts)) {
+            $relationCounts = [];
+        }
+
+        return [
+            'canonical_market_space_id' => self::intOrNull($payload['canonical_market_space_id'] ?? null),
+            'deactivated_map_shapes' => self::intOrNull($payload['deactivated_map_shapes'] ?? null) ?? 0,
+            'closed_snapshot_bindings' => self::intOrNull($payload['closed_snapshot_bindings'] ?? null) ?? 0,
+            'relation_counts' => array_map(static fn (mixed $value): int => is_numeric($value) ? (int) $value : 0, $relationCounts),
+        ];
     }
 
     /**
@@ -318,11 +342,27 @@ final class OperationPayloadValidator
         throw ValidationException::withMessages(['payload' => 'Ожидалось числовое значение.']);
     }
 
+    private static function boolOrNull(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+    }
+
     private static function stringOrNull(mixed $value, bool $required = false): ?string
     {
-        $value = is_string($value) ? trim($value) : null;
+        if ($value === null) {
+            if ($required) {
+                throw ValidationException::withMessages(['payload' => 'Не заполнено обязательное поле.']);
+            }
+            return null;
+        }
 
-        if ($value === null || $value === '') {
+        $value = trim((string) $value);
+
+        if ($value === '') {
             if ($required) {
                 throw ValidationException::withMessages(['payload' => 'Не заполнено обязательное поле.']);
             }
@@ -340,22 +380,11 @@ final class OperationPayloadValidator
             return null;
         }
 
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
-            throw ValidationException::withMessages([
-                'payload.effective_date' => 'Нужна дата в формате YYYY-MM-DD.',
-            ]);
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            throw ValidationException::withMessages(['payload' => 'Нужна дата в формате YYYY-MM-DD.']);
         }
 
         return $value;
-    }
-
-    private static function boolOrNull(mixed $value): ?bool
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        return (bool) $value;
     }
 
     private static function spaceStatusOrNull(mixed $value): ?string
@@ -366,14 +395,8 @@ final class OperationPayloadValidator
             return null;
         }
 
-        $allowed = ['occupied', 'vacant', 'maintenance', 'reserved'];
-
-        if (in_array($value, $allowed, true)) {
-            return $value;
-        }
-
-        throw ValidationException::withMessages([
-            'payload.status' => 'Invalid market space status.',
-        ]);
+        return in_array($value, ['vacant', 'occupied', 'reserved', 'maintenance'], true)
+            ? $value
+            : null;
     }
 }
