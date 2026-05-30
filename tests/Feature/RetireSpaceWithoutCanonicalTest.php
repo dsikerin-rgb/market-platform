@@ -11,6 +11,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Operation;
+use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -72,8 +73,15 @@ class RetireSpaceWithoutCanonicalTest extends TestCase
             'filament.admin.selected_market_id' => (int) $market->id,
         ]);
 
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Исторический арендатор',
+            'is_active' => true,
+        ]);
+
         $space = MarketSpace::create([
             'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
             'number' => 'ПРМ СТ',
             'display_name' => 'Промостойка',
             'status' => 'occupied',
@@ -102,6 +110,7 @@ class RetireSpaceWithoutCanonicalTest extends TestCase
 
         $accrual = TenantAccrual::create([
             'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
             'market_space_id' => $space->id,
             'period' => '2025-03-01',
             'source_row_hash' => sha1('retired-space-accrual'),
@@ -110,7 +119,7 @@ class RetireSpaceWithoutCanonicalTest extends TestCase
         DB::table('market_space_tenant_bindings')->insert([
             'market_id' => $market->id,
             'market_space_id' => $space->id,
-            'tenant_id' => null,
+            'tenant_id' => $tenant->id,
             'tenant_contract_id' => null,
             'binding_type' => 'space_snapshot',
             'source' => 'test',
@@ -147,6 +156,7 @@ class RetireSpaceWithoutCanonicalTest extends TestCase
         $this->assertNull($shape->market_space_id);
         $this->assertFalse((bool) $shape->is_active);
         $this->assertSame((int) $space->id, (int) $accrual->market_space_id);
+        $this->assertSame((int) $tenant->id, (int) $accrual->tenant_id);
 
         $this->assertDatabaseHas('market_space_tenant_bindings', [
             'market_id' => $market->id,
