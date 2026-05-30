@@ -195,7 +195,7 @@ class AppServiceProvider extends ServiceProvider
                 $marketSpaceId = (int) $validated['market_space_id'];
                 $effectiveDate = (string) $validated['effective_date'];
                 $reason = trim((string) $validated['reason']);
-                $marketTz = (string) (DB::table('markets')->whereKey((int) $marketId)->value('timezone') ?: config('app.timezone', 'UTC'));
+                $marketTz = (string) (DB::table('markets')->where('id', (int) $marketId)->value('timezone') ?: config('app.timezone', 'UTC'));
                 $effectiveAt = CarbonImmutable::parse($effectiveDate, $marketTz)->startOfDay()->utc();
                 $now = now();
 
