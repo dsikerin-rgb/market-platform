@@ -940,6 +940,347 @@ class EditMarketSpace extends BaseEditRecord
         ];
     }
 
+    /**
+     * Pre-check для отметки места как свободного.
+     * Проверяет блокирующие связи (договоры, начисления, привязки) и классифицирует их.
+     *
+     * @return array{
+     *   canMarkFree: bool,
+     *   contracts: list<array{id:int,number:string,tenant_name:string,ends_at:?string,is_expired:bool}>,
+     *   accruals: list<array{id:int,period:string,is_current:bool,total:float,contract_number:string}>,
+     *   currentAccrualsCount: int,
+     *   blockingContractsCount: int,
+     *   autoClosePossible: bool,
+     *   warnings: list<string>,
+     *   contractsUrl: ?string,
+     *   accrualsUrl: ?string,
+     * }
+     */
+    public function buildMarkSpaceFreePrecheckData(): array
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return [
+                'canMarkFree' => false,
+                'contracts' => [],
+                'accruals' => [],
+                'currentAccrualsCount' => 0,
+                'blockingContractsCount' => 0,
+                'autoClosePossible' => false,
+                'warnings' => [],
+                'contractsUrl' => null,
+                'accrualsUrl' => null,
+            ];
+        }
+
+        $recordId = (int) $this->record->getKey();
+        $marketId = (int) $this->record->market_id;
+
+        $contractsUrl = \App\Filament\Resources\TenantContractResource::getUrl('index', [
+            'marketSpaceId' => $recordId,
+            'tab' => 'all',
+        ]);
+
+        $accrualsUrl = \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
+            'marketSpaceId' => $recordId,
+            'tab' => 'all',
+        ]);
+
+        // 1. Договоры с классификацией
+        $contracts = [];
+        $blockingContractsCount = 0;
+
+        if (Schema::hasTable('tenant_contracts')) {
+            $contractsData = DB::table('tenant_contracts as tc')
+                ->leftJoin('tenants as t', 't.id', '=', 'tc.tenant_id')
+                ->where('tc.market_space_id', $recordId)
+                ->where(function ($q) {
+                    $q->where('tc.is_active', true)
+                        ->orWhereNotIn('tc.status', ['terminated', 'archived']);
+                })
+                ->orderByDesc('tc.starts_at')
+                ->orderByDesc('tc.id')
+                ->get([
+                    'tc.id',
+                    'tc.number',
+                    'tc.status',
+                    'tc.is_active',
+                    'tc.ends_at',
+                    't.name as tenant_name',
+                ]);
+
+            foreach ($contractsData as $row) {
+                $endsAt = $row->ends_at ? (string) $row->ends_at : null;
+                $isExpired = $endsAt !== null && strtotime($endsAt) < time();
+
+                if (! $isExpired) {
+                    $blockingContractsCount++;
+                }
+
+                $contracts[] = [
+                    'id' => (int) $row->id,
+                    'number' => $row->number ? (string) $row->number : '—',
+                    'tenant_name' => $row->tenant_name ? (string) $row->tenant_name : '—',
+                    'ends_at' => $endsAt,
+                    'is_expired' => $isExpired,
+                ];
+            }
+        }
+
+        // 2. Начисления с классификацией
+        $accruals = [];
+        $currentAccrualsCount = 0;
+
+        if (Schema::hasTable('tenant_accruals')) {
+            $accrualsData = DB::table('tenant_accruals as ta')
+                ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'ta.tenant_contract_id')
+                ->where('ta.market_space_id', $recordId)
+                ->orderByDesc('ta.period')
+                ->orderByDesc('ta.id')
+                ->get([
+                    'ta.id',
+                    'ta.period',
+                    'ta.total_with_vat',
+                    'tc.number as contract_number',
+                ]);
+
+            $currentMonth = date('Y-m');
+
+            foreach ($accrualsData as $row) {
+                $period = $row->period ? (string) $row->period : '';
+                $isCurrent = $period !== '' && $period >= $currentMonth;
+
+                if ($isCurrent) {
+                    $currentAccrualsCount++;
+                }
+
+                $accruals[] = [
+                    'id' => (int) $row->id,
+                    'period' => $period,
+                    'is_current' => $isCurrent,
+                    'total' => $row->total_with_vat !== null ? (float) $row->total_with_vat : 0.0,
+                    'contract_number' => $row->contract_number ? (string) $row->contract_number : '—',
+                ];
+            }
+        }
+
+        // 3. Активные привязки по договору
+        $activeBindingsCount = 0;
+        if (Schema::hasTable('market_space_tenant_bindings')) {
+            $activeBindingsCount = (int) DB::table('market_space_tenant_bindings')
+                ->where('market_space_id', $recordId)
+                ->whereNotNull('tenant_contract_id')
+                ->whereNull('ended_at')
+                ->count();
+        }
+
+        // 4. Открытые заявки
+        $requestsCount = 0;
+        if (Schema::hasTable('tenant_requests')) {
+            $requestsCount = (int) DB::table('tenant_requests')
+                ->where('market_space_id', $recordId)
+                ->whereNotIn('status', ['closed', 'cancelled'])
+                ->count();
+        }
+
+        // 5. Открытые тикеты
+        $ticketsCount = 0;
+        if (Schema::hasTable('tickets')) {
+            $ticketsCount = (int) DB::table('tickets')
+                ->where('market_space_id', $recordId)
+                ->whereNotIn('status', ['closed', 'resolved', 'cancelled'])
+                ->count();
+        }
+
+        // Классификация: можно ли отметить свободно?
+        $canMarkFree = $blockingContractsCount === 0
+            && $currentAccrualsCount === 0
+            && $activeBindingsCount === 0
+            && $requestsCount === 0
+            && $ticketsCount === 0;
+
+        // Можно ли автоматически завершить договоры?
+        $autoClosePossible = $blockingContractsCount === 0
+            && count($contracts) > 0
+            && collect($contracts)->every(fn ($c) => $c['is_expired']);
+
+        // Предупреждения
+        $warnings = [];
+        if ($currentAccrualsCount > 0) {
+            $warnings[] = "Найдены текущие начисления ({$currentAccrualsCount}). Проверьте, не ошибочные ли они.";
+        }
+        if ($activeBindingsCount > 0) {
+            $warnings[] = "Найдены активные привязки по договору ({$activeBindingsCount}). Требуется ручное завершение.";
+        }
+        if ($requestsCount > 0) {
+            $warnings[] = "Найдены открытые заявки ({$requestsCount}). Требуется решение.";
+        }
+        if ($ticketsCount > 0) {
+            $warnings[] = "Найдены открытые тикеты ({$ticketsCount}). Требуется решение.";
+        }
+
+        return [
+            'canMarkFree' => $canMarkFree,
+            'contracts' => $contracts,
+            'accruals' => $accruals,
+            'currentAccrualsCount' => $currentAccrualsCount,
+            'blockingContractsCount' => $blockingContractsCount,
+            'autoClosePossible' => $autoClosePossible,
+            'warnings' => $warnings,
+            'contractsUrl' => $contractsUrl,
+            'accrualsUrl' => $accrualsUrl,
+        ];
+    }
+
+    /**
+     * Метод проверки перед отметкой места как свободного.
+     */
+    public function canMarkSpaceFreeAfterPrecheck(): bool
+    {
+        $precheck = $this->buildMarkSpaceFreePrecheckData();
+
+        return (bool) ($precheck['canMarkFree'] ?? false);
+    }
+
+    /**
+     * Отметить место как свободное после проверки связей.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function markSpaceFreeAfterPrecheck(array $data): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $precheck = $this->buildMarkSpaceFreePrecheckData();
+
+        if (! $precheck['canMarkFree']) {
+            $this->throwBlockingRelationsException($precheck);
+        }
+
+        $confirmContractsClose = (bool) ($data['confirm_contracts_close'] ?? false);
+        $confirmAccrualsWarning = (bool) ($data['confirm_accruals_warning'] ?? false);
+
+        // Проверка подтверждений
+        if ($precheck['blockingContractsCount'] > 0 && ! $confirmContractsClose) {
+            throw ValidationException::withMessages([
+                'confirm_contracts_close' => 'Подтвердите завершение договоров.',
+            ]);
+        }
+
+        if ($precheck['currentAccrualsCount'] > 0 && ! $confirmAccrualsWarning) {
+            throw ValidationException::withMessages([
+                'confirm_accruals_warning' => 'Подтвердите, что текущие начисления проверены.',
+            ]);
+        }
+
+        // Завершение истёкших договоров (если разрешено)
+        if ($confirmContractsClose && $precheck['contracts'] !== []) {
+            $this->terminateExpiredContracts($this->record, $precheck['contracts']);
+        }
+
+        // Создать операцию mark_space_free
+        $reason = trim((string) ($data['reason'] ?? ''));
+        $operationPayload = [
+            'market_space_id' => (int) $this->record->id,
+            'decision' => 'mark_space_free',
+        ];
+
+        if ($reason !== '') {
+            $operationPayload['reason'] = $reason;
+        }
+
+        if ($confirmContractsClose) {
+            $operationPayload['contracts_closed'] = true;
+            $operationPayload['closed_contracts_count'] = count($precheck['contracts']);
+        }
+
+        Operation::create([
+            'market_id' => (int) $this->record->market_id,
+            'entity_type' => 'market_space',
+            'entity_id' => (int) $this->record->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'status' => 'applied',
+            'payload' => $operationPayload,
+            'comment' => $reason !== '' ? $reason : null,
+            'created_by' => Filament::auth()->id(),
+        ]);
+
+        $this->record->refresh();
+        $this->fillForm();
+
+        Notification::make()
+            ->success()
+            ->title('Место отмечено как свободное')
+            ->body(
+                ($confirmContractsClose && count($precheck['contracts']) > 0)
+                    ? 'Место переведено в свободные. Завершено договоров: ' . count($precheck['contracts']) . '.'
+                    : 'Место переведено в свободные.'
+            )
+            ->send();
+    }
+
+    /**
+     * Завершить истёкшие договоры.
+     *
+     * @param  list<array{id:int,number:string,tenant_name:string,ends_at:?string,is_expired:bool}>  $contracts
+     */
+    private function terminateExpiredContracts(MarketSpace $space, array $contracts): void
+    {
+        if (! Schema::hasTable('tenant_contracts')) {
+            return;
+        }
+
+        $now = now();
+
+        foreach ($contracts as $contract) {
+            if (! $contract['is_expired']) {
+                continue;
+            }
+
+            $contractModel = \App\Models\TenantContract::query()
+                ->where('market_id', (int) $space->market_id)
+                ->whereKey($contract['id'])
+                ->first();
+
+            if (! $contractModel) {
+                continue;
+            }
+
+            $contractModel->forceFill([
+                'is_active' => false,
+                'status' => 'terminated',
+                'ends_at' => $contract['ends_at'] ?? $now->format('Y-m-d'),
+            ])->save();
+        }
+    }
+
+    /**
+     * Бросить исключение с деталями блокирующих связей.
+     *
+     * @param  array<string, mixed>  $precheck
+     */
+    private function throwBlockingRelationsException(array $precheck): void
+    {
+        $parts = [];
+
+        if ($precheck['blockingContractsCount'] > 0) {
+            $parts[] = 'активные договоры';
+        }
+        if ($precheck['currentAccrualsCount'] > 0) {
+            $parts[] = 'текущие начисления';
+        }
+        if (($precheck['contractsUrl'] ?? null) !== null) {
+            // Дополнительная информация доступна
+        }
+
+        $message = 'Невозможно отметить место как свободное. Сначала разберите: ' . implode(', ', $parts) . '.';
+
+        throw ValidationException::withMessages([
+            'mark_space_free' => $message,
+        ])->errorBanner();
+    }
+
     private function buildTenantSwitchImpactHtml(): HtmlString
     {
         if (! $this->record instanceof MarketSpace) {
@@ -1775,6 +2116,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeMarkSpaceFreeAction();
             $actions[] = $this->makeServiceStatusAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeStartSharedUseAction(\Filament\Actions\Action::class);
             $actions[] = $this->makeSharedUseManageAction(\Filament\Actions\Action::class);
@@ -1844,6 +2186,7 @@ class EditMarketSpace extends BaseEditRecord
                 ->viewData([
                     'isActive' => (bool) ($this->record?->is_active ?? false),
                 ]);
+            $actions[] = $this->makeMarkSpaceFreeAction();
             $actions[] = $this->makeServiceStatusAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeStartSharedUseAction(\Filament\Pages\Actions\Action::class);
             $actions[] = $this->makeSharedUseManageAction(\Filament\Pages\Actions\Action::class);
@@ -2002,6 +2345,136 @@ class EditMarketSpace extends BaseEditRecord
             ->action(function (array $data): void {
                 $this->deleteMarketSpaceWithShapes($data);
             });
+    }
+
+    private function makeMarkSpaceFreeAction(): mixed
+    {
+        $actionClass = class_exists(\Filament\Actions\Action::class)
+            ? \Filament\Actions\Action::class
+            : \Filament\Pages\Actions\Action::class;
+
+        return $actionClass::make('mark_space_free')
+            ->label('Отметить как свободное')
+            ->icon('heroicon-o-arrow-right-start-on-rectangle')
+            ->tooltip('Проверка связей перед отметкой места как свободного')
+            ->size('lg')
+            ->outlined()
+            ->color('warning')
+            ->extraAttributes([
+                'class' => 'market-space-card-action market-space-card-action--secondary',
+            ])
+            ->modalHeading('Отметить место как свободное')
+            ->modalSubmitActionLabel('Подтвердить свободно')
+            ->modalCancelActionLabel('Отмена')
+            ->modalWidth(Width::FiveExtraLarge)
+            ->stickyModalHeader()
+            ->stickyModalFooter()
+            ->form([
+                \Filament\Forms\Components\Placeholder::make('mark_space_free_notice')
+                    ->hiddenLabel()
+                    ->content(fn (): HtmlString => $this->buildMarkSpaceFreePrecheckModalContent()),
+                \Filament\Forms\Components\Textarea::make('reason')
+                    ->label('Причина')
+                    ->rows(2)
+                    ->required()
+                    ->maxLength(1000)
+                    ->placeholder('Укажите причину, почему место считается свободным.'),
+                \Filament\Forms\Components\Checkbox::make('confirm_contracts_close')
+                    ->label('Завершить истёкшие договоры')
+                    ->visible(fn (): bool => $this->buildMarkSpaceFreePrecheckData()['contracts'] !== [])
+                    ->helperText('Система завершит только истёкшие договоры. Активные договоры потребуют ручного завершения.'),
+                \Filament\Forms\Components\Checkbox::make('confirm_accruals_warning')
+                    ->label('Подтвердить проверку текущих начислений')
+                    ->visible(fn (): bool => $this->buildMarkSpaceFreePrecheckData()['currentAccrualsCount'] > 0)
+                    ->helperText('Текущие начисления останутся на месте как финансовая история.'),
+            ])
+            ->action(function (array $data): void {
+                $this->markSpaceFreeAfterPrecheck($data);
+            });
+    }
+
+    /**
+     * Содержимое модального окна pre-check.
+     */
+    private function buildMarkSpaceFreePrecheckModalContent(): HtmlString
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return new HtmlString('<div>Нет данных для проверки.</div>');
+        }
+
+        $precheck = $this->buildMarkSpaceFreePrecheckData();
+
+        $html = '<div style="display:grid;gap:12px;">';
+
+        // Статус
+        if ($precheck['canMarkFree']) {
+            $html .= '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #86efac;border-radius:12px;background:#f0fdf4;color:#166534;">';
+            $html .= '<div style="font-size:13px;font-weight:700;">Блокирующих связей не найдено</div>';
+            $html .= '<div style="font-size:12px;line-height:1.45;">Место можно отметить как свободное.</div>';
+            $html .= '</div>';
+        } else {
+            $html .= '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;color:#991b1b;">';
+            $html .= '<div style="font-size:13px;font-weight:700;">Найдены блокирующие связи</div>';
+            $html .= '<div style="font-size:12px;line-height:1.45;">Сначала завершите активные связи вручную.</div>';
+            $html .= '</div>';
+        }
+
+        // Договоры
+        if ($precheck['contracts'] !== []) {
+            $html .= '<div style="display:grid;gap:6px;">';
+            $html .= '<div style="font-size:13px;font-weight:700;color:#0f172a;">Договоры: ' . count($precheck['contracts']) . '</div>';
+            $html .= '<div style="display:grid;gap:4px;">';
+            foreach ($precheck['contracts'] as $contract) {
+                $statusColor = $contract['is_expired'] ? '#86efac' : '#fca5a5';
+                $statusText = $contract['is_expired'] ? 'истёк' : 'активен';
+                $html .= '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">';
+                $html .= '<div style="font-size:12px;color:#334155;">' . e($contract['number']) . ' · ' . e($contract['tenant_name']) . '</div>';
+                $html .= '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:' . $statusColor . ';color:#0f172a;">' . $statusText . '</span>';
+                $html .= '</div>';
+            }
+            $html .= '</div>';
+            if ($precheck['contractsUrl']) {
+                $html .= '<a href="' . e($precheck['contractsUrl']) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;margin-top:4px;">Все договоры →</a>';
+            }
+            $html .= '</div>';
+        }
+
+        // Начисления
+        if ($precheck['accruals'] !== []) {
+            $html .= '<div style="display:grid;gap:6px;">';
+            $html .= '<div style="font-size:13px;font-weight:700;color:#0f172a;">Начисления: ' . count($precheck['accruals']) . '</div>';
+            $html .= '<div style="display:grid;gap:4px;">';
+            foreach (array_slice($precheck['accruals'], 0, 5) as $accrual) {
+                $statusColor = $accrual['is_current'] ? '#fde68a' : '#e5e7eb';
+                $statusText = $accrual['is_current'] ? 'текущий' : 'прошедший';
+                $html .= '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">';
+                $html .= '<div style="font-size:12px;color:#334155;">' . e($accrual['period']) . ' · ' . number_format($accrual['total'], 0, ',', ' ') . ' ₽</div>';
+                $html .= '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:' . $statusColor . ';color:#0f172a;">' . $statusText . '</span>';
+                $html .= '</div>';
+            }
+            if (count($precheck['accruals']) > 5) {
+                $html .= '<div style="font-size:11px;color:#64748b;">Ещё ' . (count($precheck['accruals']) - 5) . ' записей...</div>';
+            }
+            $html .= '</div>';
+            if ($precheck['accrualsUrl']) {
+                $html .= '<a href="' . e($precheck['accrualsUrl']) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;margin-top:4px;">Все начисления →</a>';
+            }
+            $html .= '</div>';
+        }
+
+        // Предупреждения
+        if ($precheck['warnings'] !== []) {
+            $html .= '<div style="display:grid;gap:4px;padding:12px 14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">';
+            $html .= '<div style="font-size:12px;font-weight:700;color:#92400e;">Предупреждения:</div>';
+            foreach ($precheck['warnings'] as $warning) {
+                $html .= '<div style="font-size:12px;color:#92400e;">• ' . e($warning) . '</div>';
+            }
+            $html .= '</div>';
+        }
+
+        $html .= '</div>';
+
+        return new HtmlString($html);
     }
 
     private function resolveSpaceHeading(): string|Htmlable
