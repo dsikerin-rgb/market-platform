@@ -3112,6 +3112,185 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ]);
     })->name('filament.admin.market-map.review-resolve-financial-tenant');
 
+    /**
+     * Pre-check перед отметкой места как свободного (на странице ревизии).
+     */
+    Route::post('/admin/market-map/review-mark-space-free-precheck', function (Request $request) use (
+        $resolveMarketForMap,
+    ) {
+        $user = Filament::auth()->user();
+        abort_unless($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin(), 403);
+
+        $marketSpaceId = (int) ($request->input('market_space_id') ?? 0);
+        if ($marketSpaceId <= 0) {
+            return response()->json(['ok' => false, 'message' => 'Место не найдено.'], 422);
+        }
+
+        $marketSpace = \App\Models\MarketSpace::find($marketSpaceId);
+        if (! $marketSpace) {
+            return response()->json(['ok' => false, 'message' => 'Место не найдено.'], 404);
+        }
+
+        $market = $resolveMarketForMap($marketSpace);
+        if (! $market) {
+            return response()->json(['ok' => false, 'message' => 'Рынок не найден.'], 404);
+        }
+
+        // Вызываем тот же pre-check что и на карточке места
+        $precheck = [
+            'canMarkFree' => true,
+            'contracts' => [],
+            'accruals' => [],
+            'currentAccrualsCount' => 0,
+            'blockingContractsCount' => 0,
+            'autoClosePossible' => false,
+            'warnings' => [],
+            'contractsUrl' => null,
+            'accrualsUrl' => null,
+        ];
+
+        // Упрощённая логика pre-check для ревизии
+        $contractsUrl = \App\Filament\Resources\TenantContractResource::getUrl('index', [
+            'marketSpaceId' => $marketSpaceId,
+            'tab' => 'all',
+        ]);
+
+        $accrualsUrl = \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
+            'marketSpaceId' => $marketSpaceId,
+            'tab' => 'all',
+        ]);
+
+        // Договоры
+        $contracts = [];
+        $blockingContractsCount = 0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('tenant_contracts')) {
+            $contractsData = \Illuminate\Support\Facades\DB::table('tenant_contracts as tc')
+                ->leftJoin('tenants as t', 't.id', '=', 'tc.tenant_id')
+                ->where('tc.market_space_id', $marketSpaceId)
+                ->where(function ($q) {
+                    $q->where('tc.is_active', true)
+                        ->orWhereNotIn('tc.status', ['terminated', 'archived']);
+                })
+                ->orderByDesc('tc.starts_at')
+                ->orderByDesc('tc.id')
+                ->get(['tc.id', 'tc.number', 'tc.status', 'tc.is_active', 'tc.ends_at', 't.name as tenant_name']);
+
+            foreach ($contractsData as $row) {
+                $endsAt = $row->ends_at ? (string) $row->ends_at : null;
+                $isExpired = $endsAt !== null && strtotime($endsAt) < time();
+
+                if (! $isExpired) {
+                    $blockingContractsCount++;
+                }
+
+                $contracts[] = [
+                    'id' => (int) $row->id,
+                    'number' => $row->number ? (string) $row->number : '—',
+                    'tenant_name' => $row->tenant_name ? (string) $row->tenant_name : '—',
+                    'ends_at' => $endsAt,
+                    'is_expired' => $isExpired,
+                ];
+            }
+        }
+
+        // Начисления
+        $accruals = [];
+        $currentAccrualsCount = 0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('tenant_accruals')) {
+            $accrualsData = \Illuminate\Support\Facades\DB::table('tenant_accruals as ta')
+                ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'ta.tenant_contract_id')
+                ->where('ta.market_space_id', $marketSpaceId)
+                ->orderByDesc('ta.period')
+                ->orderByDesc('ta.id')
+                ->get(['ta.id', 'ta.period', 'ta.total_with_vat', 'tc.number as contract_number']);
+
+            $currentMonth = date('Y-m');
+
+            foreach ($accrualsData as $row) {
+                $period = $row->period ? (string) $row->period : '';
+                $isCurrent = $period !== '' && $period >= $currentMonth;
+
+                if ($isCurrent) {
+                    $currentAccrualsCount++;
+                }
+
+                $accruals[] = [
+                    'id' => (int) $row->id,
+                    'period' => $period,
+                    'is_current' => $isCurrent,
+                    'total' => $row->total_with_vat !== null ? (float) $row->total_with_vat : 0.0,
+                    'contract_number' => $row->contract_number ? (string) $row->contract_number : '—',
+                ];
+            }
+        }
+
+        // Активные привязки, заявки, тикеты
+        $activeBindingsCount = 0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('market_space_tenant_bindings')) {
+            $activeBindingsCount = (int) \Illuminate\Support\Facades\DB::table('market_space_tenant_bindings')
+                ->where('market_space_id', $marketSpaceId)
+                ->whereNotNull('tenant_contract_id')
+                ->whereNull('ended_at')
+                ->count();
+        }
+
+        $requestsCount = 0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('tenant_requests')) {
+            $requestsCount = (int) \Illuminate\Support\Facades\DB::table('tenant_requests')
+                ->where('market_space_id', $marketSpaceId)
+                ->whereNotIn('status', ['closed', 'cancelled'])
+                ->count();
+        }
+
+        $ticketsCount = 0;
+        if (\Illuminate\Support\Facades\Schema::hasTable('tickets')) {
+            $ticketsCount = (int) \Illuminate\Support\Facades\DB::table('tickets')
+                ->where('market_space_id', $marketSpaceId)
+                ->whereNotIn('status', ['closed', 'resolved', 'cancelled'])
+                ->count();
+        }
+
+        // Итоговая классификация
+        $canMarkFree = $blockingContractsCount === 0
+            && $currentAccrualsCount === 0
+            && $activeBindingsCount === 0
+            && $requestsCount === 0
+            && $ticketsCount === 0;
+
+        $autoClosePossible = $blockingContractsCount === 0
+            && count($contracts) > 0
+            && collect($contracts)->every(fn ($c) => $c['is_expired']);
+
+        $warnings = [];
+        if ($currentAccrualsCount > 0) {
+            $warnings[] = "Найдены текущие начисления ({$currentAccrualsCount}). Проверьте, не ошибочные ли они.";
+        }
+        if ($activeBindingsCount > 0) {
+            $warnings[] = "Найдены активные привязки по договору ({$activeBindingsCount}). Требуется ручное завершение.";
+        }
+        if ($requestsCount > 0) {
+            $warnings[] = "Найдены открытые заявки ({$requestsCount}). Требуется решение.";
+        }
+        if ($ticketsCount > 0) {
+            $warnings[] = "Найдены открытые тикеты ({$ticketsCount}). Требуется решение.";
+        }
+
+        $precheck = [
+            'ok' => true,
+            'canMarkFree' => $canMarkFree,
+            'contracts' => $contracts,
+            'accruals' => $accruals,
+            'currentAccrualsCount' => $currentAccrualsCount,
+            'blockingContractsCount' => $blockingContractsCount,
+            'autoClosePossible' => $autoClosePossible,
+            'warnings' => $warnings,
+            'contractsUrl' => $contractsUrl,
+            'accrualsUrl' => $accrualsUrl,
+        ];
+
+        return response()->json($precheck);
+    })->name('filament.admin.market-map.review-mark-space-free-precheck');
+
     Route::post('/admin/market-map/review-decision', function (Request $request) use (
     $resolveMarketForMap,
     $ensureCanEditShapes,

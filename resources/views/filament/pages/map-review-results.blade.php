@@ -2829,9 +2829,9 @@
                                             $isTenantCase = $decision === 'tenant_changed_on_site' || $reviewStatus === 'changed_tenant';
                                             $isShapeCase = $decision === 'shape_not_found' || $reviewStatus === 'not_found';
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
-                                            $looksFreeCase = $isConflictCase
-                                                && preg_match('/(свобод|съех|не стоит|нет арендатора|пуст)/iu', (string) ($row['reason'] ?? '')) === 1;
-                                            $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $looksFreeCase && ! $hasCandidates;
+$looksFreeCase = $isConflictCase
+    && preg_match('/(свобод|съех|не стоит|нет арендатора|пуст)/iu', (string) ($row['reason'] ?? '')) === 1;
+$canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase && ! $hasCandidates;
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
@@ -4041,11 +4041,33 @@
                 const quickReviewSave = quickReviewModal?.querySelector('[data-mrr-quick-review-save]');
                 const quickReviewChoiceButtons = Array.from(document.querySelectorAll('[data-mrr-quick-review-choice]'));
                 const quickReviewHintBlocks = Array.from(document.querySelectorAll('[data-mrr-quick-review-hint]'));
-                const confirmFreeModal = document.getElementById('mrrConfirmFreeModal');
-                const confirmFreeReason = document.getElementById('mrrConfirmFreeReason');
-                const confirmFreeError = document.getElementById('mrrConfirmFreeError');
-                const confirmFreeSummary = document.getElementById('mrrConfirmFreeSummary');
-                const confirmFreeSave = confirmFreeModal?.querySelector('[data-mrr-confirm-free-save]');
+const confirmFreeModal = document.getElementById('mrrConfirmFreeModal');
+const confirmFreeReason = document.getElementById('mrrConfirmFreeReason');
+const confirmFreeError = document.getElementById('mrrConfirmFreeError');
+const confirmFreeSummary = document.getElementById('mrrConfirmFreeSummary');
+const confirmFreeSave = confirmFreeModal?.querySelector('[data-mrr-confirm-free-save]');
+
+// Mark Space Free Modal
+const markSpaceFreeModal = document.getElementById('mrrMarkSpaceFreeModal');
+const markSpaceFreeReason = document.getElementById('mrrMarkSpaceFreeReason');
+const markSpaceFreeError = document.getElementById('mrrMarkSpaceFreeError');
+const markSpaceFreeSave = document.getElementById('mrrMarkSpaceFreeSave');
+const markSpaceFreePrecheck = document.getElementById('mrrMarkSpaceFreePrecheck');
+const markSpaceFreeStatus = document.getElementById('mrrMarkSpaceFreeStatus');
+const markSpaceFreeReady = document.getElementById('mrrMarkSpaceFreeReady');
+const markSpaceFreeBlocking = document.getElementById('mrrMarkSpaceFreeBlocking');
+const markSpaceFreeBlockingList = document.getElementById('mrrMarkSpaceFreeBlockingList');
+const markSpaceFreeContractsSection = document.getElementById('mrrMarkSpaceFreeContractsSection');
+const markSpaceFreeContractsList = document.getElementById('mrrMarkSpaceFreeContractsList');
+const markSpaceFreeContractsClose = document.getElementById('mrrMarkSpaceFreeContractsClose');
+const markSpaceFreeContractsCheckboxLabel = document.getElementById('mrrMarkSpaceFreeContractsCheckboxLabel');
+const markSpaceFreeAccrualsSection = document.getElementById('mrrMarkSpaceFreeAccrualsSection');
+const markSpaceFreeAccrualsList = document.getElementById('mrrMarkSpaceFreeAccrualsList');
+const markSpaceFreeAccrualsConfirm = document.getElementById('mrrMarkSpaceFreeAccrualsConfirm');
+const markSpaceFreeAccrualsCheckboxLabel = document.getElementById('mrrMarkSpaceFreeAccrualsCheckboxLabel');
+const markSpaceFreeWarnings = document.getElementById('mrrMarkSpaceFreeWarnings');
+
+const reviewMarkSpaceFreePrecheckUrl = @json(route('filament.admin.market-map.review-mark-space-free-precheck'));
                 const currentScriptElement = document.currentScript;
                 const livewireRoot = currentScriptElement instanceof HTMLScriptElement
                     ? currentScriptElement.closest('[wire\\:id]')
@@ -4124,10 +4146,16 @@
                     reasonRequired: false,
                     spaceId: 0,
                 };
-                const confirmFreeState = {
-                    spaceId: 0,
-                    spaceLabel: '',
-                };
+const confirmFreeState = {
+    spaceId: 0,
+    spaceLabel: '',
+};
+
+const markSpaceFreeState = {
+    spaceId: 0,
+    spaceLabel: '',
+    precheck: null,
+};
                 const hintEditState = {
                     operationId: 0,
                     openerButton: null,
@@ -5024,6 +5052,260 @@
                     }
 
                     window.location.reload();
+                };
+
+                // Mark Space Free Modal Functions
+                const openMarkSpaceFreeModal = async (button) => {
+                    if (!markSpaceFreeModal || !markSpaceFreeReason || !markSpaceFreeError || !markSpaceFreeSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        return;
+                    }
+
+                    markSpaceFreeState.spaceId = spaceId;
+                    markSpaceFreeState.spaceLabel = String(button.dataset.mrrSpaceLabel || '').trim();
+                    markSpaceFreeState.precheck = null;
+
+                    // Show modal
+                    markSpaceFreePrecheck.style.display = 'grid';
+                    markSpaceFreeReady.style.display = 'none';
+                    markSpaceFreeStatus.className = 'mrr-mark-space-free-precheck__status is-warning';
+                    markSpaceFreeStatus.textContent = 'Загружаю информацию о связях...';
+                    markSpaceFreeBlocking.style.display = 'none';
+                    markSpaceFreeContractsSection.style.display = 'none';
+                    markSpaceFreeAccrualsSection.style.display = 'none';
+                    markSpaceFreeWarnings.style.display = 'none';
+                    markSpaceFreeReason.value = '';
+                    markSpaceFreeError.textContent = '';
+                    markSpaceFreeSave.disabled = true;
+                    markSpaceFreeSave.textContent = 'Проверяю...';
+
+                    markSpaceFreeModal.hidden = false;
+                    markSpaceFreeModal.classList.add('is-open');
+                    markSpaceFreeModal.setAttribute('aria-hidden', 'false');
+
+                    // Call pre-check
+                    try {
+                        const response = await fetch(reviewMarkSpaceFreePrecheckUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                            body: JSON.stringify({ market_space_id: spaceId }),
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || !data?.ok) {
+                            throw new Error(data?.message || 'Не удалось загрузить информацию о связях.');
+                        }
+
+                        markSpaceFreeState.precheck = data;
+                        renderMarkSpaceFreePrecheck(data);
+                    } catch (errorInstance) {
+                        markSpaceFreeStatus.className = 'mrr-mark-space-free-precheck__status is-error';
+                        markSpaceFreeStatus.textContent = String(errorInstance?.message || errorInstance);
+                        markSpaceFreeSave.disabled = true;
+                        markSpaceFreeSave.textContent = 'Отметить как свободное';
+                    }
+
+                    window.setTimeout(() => markSpaceFreeReason?.focus(), 0);
+                };
+
+                const closeMarkSpaceFreeModal = () => {
+                    if (!markSpaceFreeModal || !markSpaceFreeReason || !markSpaceFreeError || !markSpaceFreeSave) {
+                        return;
+                    }
+
+                    markSpaceFreeModal.classList.remove('is-open');
+                    markSpaceFreeModal.hidden = true;
+                    markSpaceFreeModal.setAttribute('aria-hidden', 'true');
+                    markSpaceFreeState.spaceId = 0;
+                    markSpaceFreeState.spaceLabel = '';
+                    markSpaceFreeState.precheck = null;
+                    markSpaceFreeReason.value = '';
+                    markSpaceFreeError.textContent = '';
+                    markSpaceFreeSave.disabled = false;
+                    markSpaceFreeSave.textContent = 'Отметить как свободное';
+                };
+
+                const renderMarkSpaceFreePrecheck = (data) => {
+                    if (!data) return;
+
+                    const canMarkFree = data.canMarkFree === true;
+                    const blockingCount = data.blockingContractsCount || 0;
+                    const currentAccrualsCount = data.currentAccrualsCount || 0;
+
+                    if (canMarkFree) {
+                        markSpaceFreePrecheck.style.display = 'none';
+                        markSpaceFreeReady.style.display = 'block';
+                        markSpaceFreeSave.disabled = false;
+                        markSpaceFreeSave.textContent = 'Отметить как свободное';
+                        return;
+                    }
+
+                    markSpaceFreePrecheck.style.display = 'grid';
+                    markSpaceFreeReady.style.display = 'none';
+
+                    // Status
+                    if (blockingCount > 0 || currentAccrualsCount > 0) {
+                        markSpaceFreeStatus.className = 'mrr-mark-space-free-precheck__status is-error';
+                        markSpaceFreeStatus.textContent = `Найдены активные связи (договоры: ${blockingCount}, текущие начисления: ${currentAccrualsCount}). Выберите действие ниже.`;
+                        markSpaceFreeSave.disabled = true;
+                    } else {
+                        markSpaceFreeStatus.className = 'mrr-mark-space-free-precheck__status is-warning';
+                        markSpaceFreeStatus.textContent = 'Найдены связи, требующие внимания. Проверьте ниже.';
+                        markSpaceFreeSave.disabled = false;
+                    }
+
+                    // Blocking connections
+                    if (blockingCount > 0 || currentAccrualsCount > 0) {
+                        markSpaceFreeBlocking.style.display = 'block';
+                        markSpaceFreeBlockingList.innerHTML = `
+                            ${blockingCount > 0 ? `<div class="mrr-mark-space-free-precheck__item is-blocking">Активные договоры: ${blockingCount}</div>` : ''}
+                            ${currentAccrualsCount > 0 ? `<div class="mrr-mark-space-free-precheck__item is-blocking">Текущие начисления: ${currentAccrualsCount}</div>` : ''}
+                        `;
+                    } else {
+                        markSpaceFreeBlocking.style.display = 'none';
+                    }
+
+                    // Contracts
+                    if (data.contracts && data.contracts.length > 0) {
+                        markSpaceFreeContractsSection.style.display = 'block';
+                        markSpaceFreeContractsList.innerHTML = data.contracts.map(c => `
+                            <div class="mrr-mark-space-free-precheck__item ${c.is_expired ? 'is-expired' : 'is-blocking'}">
+                                <div class="mrr-mark-space-free-precheck__item-label">#${c.id} · ${c.number || '—'} · ${c.tenant_name || '—'}</div>
+                                <div class="mrr-mark-space-free-precheck__item-meta">${c.is_expired ? 'Истёк' : 'Активен'} · До: ${c.ends_at || '—'}</div>
+                            </div>
+                        `).join('');
+                        if (markSpaceFreeContractsCheckboxLabel) {
+                            const hasActiveContracts = data.contracts.some(c => !c.is_expired);
+                            markSpaceFreeContractsCheckboxLabel.style.display = hasActiveContracts ? 'flex' : 'none';
+                        }
+                        if (markSpaceFreeContractsClose) {
+                            markSpaceFreeContractsClose.checked = false;
+                        }
+                    } else {
+                        markSpaceFreeContractsSection.style.display = 'none';
+                    }
+
+                    // Accruals
+                    if (data.accruals && data.accruals.length > 0) {
+                        markSpaceFreeAccrualsSection.style.display = 'block';
+                        markSpaceFreeAccrualsList.innerHTML = data.accruals.map(a => `
+                            <div class="mrr-mark-space-free-precheck__item ${a.is_current ? 'is-blocking' : 'is-expired'}">
+                                <div class="mrr-mark-space-free-precheck__item-label">Период: ${a.period || '—'}</div>
+                                <div class="mrr-mark-space-free-precheck__item-meta">${a.is_current ? 'Текущее' : 'Прошедшее'} · Сумма: ${a.total || 0} ₽</div>
+                            </div>
+                        `).join('');
+                        if (markSpaceFreeAccrualsCheckboxLabel) {
+                            markSpaceFreeAccrualsCheckboxLabel.style.display = currentAccrualsCount > 0 ? 'flex' : 'none';
+                        }
+                        if (markSpaceFreeAccrualsConfirm) {
+                            markSpaceFreeAccrualsConfirm.checked = false;
+                        }
+                    } else {
+                        markSpaceFreeAccrualsSection.style.display = 'none';
+                    }
+
+                    // Warnings
+                    if (data.warnings && data.warnings.length > 0) {
+                        markSpaceFreeWarnings.style.display = 'grid';
+                        markSpaceFreeWarnings.innerHTML = data.warnings.map(w => `<div class="mrr-mark-space-free-precheck__warning">${w}</div>`).join('');
+                    } else {
+                        markSpaceFreeWarnings.style.display = 'none';
+                    }
+                };
+
+                const sendMarkSpaceFree = async () => {
+                    if (!markSpaceFreeModal || !markSpaceFreeReason || !markSpaceFreeError || !markSpaceFreeSave) {
+                        return;
+                    }
+
+                    const spaceId = Number(markSpaceFreeState.spaceId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0) {
+                        markSpaceFreeError.textContent = 'Не удалось определить место для изменения.';
+                        return;
+                    }
+
+                    const reason = String(markSpaceFreeReason.value || '').trim();
+
+                    if (!reason) {
+                        markSpaceFreeError.textContent = 'Напишите короткий комментарий, почему место можно отметить как свободное.';
+                        markSpaceFreeReason.focus();
+                        return;
+                    }
+
+                    // Pre-check validation
+                    const precheck = markSpaceFreeState.precheck;
+                    if (precheck && !precheck.canMarkFree) {
+                        const blockingCount = precheck.blockingContractsCount || 0;
+                        const currentAccrualsCount = precheck.currentAccrualsCount || 0;
+                        if (blockingCount > 0 || currentAccrualsCount > 0) {
+                            // Check if user confirmed actions
+                            const hasActiveContracts = precheck.contracts?.some(c => !c.is_expired);
+                            const contractsConfirmed = hasActiveContracts && markSpaceFreeContractsClose?.checked;
+                            const accrualsConfirmed = currentAccrualsCount > 0 && markSpaceFreeAccrualsConfirm?.checked;
+
+                            if (!contractsConfirmed || !accrualsConfirmed) {
+                                markSpaceFreeError.textContent = 'Подтвердите все активные связи в списке выше.';
+                                return;
+                            }
+                        }
+                    }
+
+                    markSpaceFreeSave.disabled = true;
+                    markSpaceFreeSave.textContent = 'Сохраняю...';
+                    markSpaceFreeError.textContent = '';
+
+                    const body = {
+                        decision: 'mark_space_free',
+                        market_space_id: spaceId,
+                        reason,
+                        contracts_closed: false,
+                        contracts_close_confirmed: false,
+                        accruals_warning_confirmed: false,
+                    };
+
+                    if (precheck?.contracts && precheck.contracts.length > 0 && markSpaceFreeContractsClose?.checked) {
+                        body.contracts_closed = true;
+                        body.contracts_close_confirmed = true;
+                    }
+                    if (precheck?.currentAccrualsCount > 0 && markSpaceFreeAccrualsConfirm?.checked) {
+                        body.accruals_warning_confirmed = true;
+                    }
+
+                    try {
+                        const response = await fetch(reviewDecisionUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                            body: JSON.stringify(body),
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+
+                        if (!response.ok || !data?.ok) {
+                            throw new Error(data?.message || 'Не удалось отметить место как свободное.');
+                        }
+
+                        // Redirect to "Applied" tab
+                        window.location.href = window.location.pathname + '?tab=applied';
+                    } catch (errorInstance) {
+                        markSpaceFreeSave.disabled = false;
+                        markSpaceFreeSave.textContent = 'Отметить как свободное';
+                        markSpaceFreeError.textContent = String(errorInstance?.message || errorInstance);
+                    }
                 };
 
                 const openHintEditModal = (button) => {
@@ -6035,12 +6317,17 @@
                         ? event.target.closest('[data-mrr-merge-retire-open]')
                         : null;
 
-                    const confirmFreeLauncher = event.target instanceof Element
-                        ? event.target.closest('[data-mrr-confirm-free-open]')
-                        : null;
-                    const hintEditLauncher = event.target instanceof Element
-                        ? event.target.closest('[data-mrr-hint-edit-open]')
-                        : null;
+const confirmFreeLauncher = event.target instanceof Element
+    ? event.target.closest('[data-mrr-confirm-free-open]')
+    : null;
+
+const markSpaceFreeLauncher = event.target instanceof Element
+    ? event.target.closest('[data-mrr-mark-space-free-open]')
+    : null;
+
+const hintEditLauncher = event.target instanceof Element
+    ? event.target.closest('[data-mrr-hint-edit-open]')
+    : null;
 
                     if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
                         event.preventDefault();
@@ -6075,9 +6362,9 @@
                         return;
                     }
 
-                    if (confirmFreeLauncher && confirmFreeLauncher instanceof HTMLElement) {
+                    if (identityFixLauncher && identityFixLauncher instanceof HTMLElement) {
                         event.preventDefault();
-                        openConfirmFreeModal(confirmFreeLauncher);
+                        openIdentityFixModal(identityFixLauncher);
                         return;
                     }
 
@@ -6105,28 +6392,27 @@
                         return;
                     }
 
-                    if (identityFixLauncher && identityFixLauncher instanceof HTMLElement) {
-                        event.preventDefault();
-                        openIdentityFixModal(identityFixLauncher);
-                        return;
-                    }
+if (confirmFreeLauncher && confirmFreeLauncher instanceof HTMLElement) {
+    event.preventDefault();
+    openConfirmFreeModal(confirmFreeLauncher);
+    return;
+}
 
-                    if (launcher && launcher instanceof HTMLElement) {
-                        event.preventDefault();
-                        openQuickReviewModal(launcher);
-                        return;
-                    }
+if (markSpaceFreeLauncher && markSpaceFreeLauncher instanceof HTMLElement) {
+    event.preventDefault();
+    openMarkSpaceFreeModal(markSpaceFreeLauncher);
+    return;
+}
 
-                    const button = event.target instanceof Element
-                        ? event.target.closest('[data-mrr-quick-review-choice]')
-                        : null;
-
-                    if (!button || !(button instanceof HTMLElement)) {
+                    if (!launcher || !(launcher instanceof HTMLElement)) {
                         return;
                     }
 
                     event.preventDefault();
-                    applyQuickReviewChoice(button);
+
+                    // Кнопка "Закрыть без изменений" имеет data-mrr-quick-review-launcher без decision
+                    // Открываем модалку с decision='matched'
+                    openQuickReviewModal(launcher);
                 });
 
                 window.addEventListener('keydown', (event) => {
@@ -6494,5 +6780,4 @@
             })();
         </script>
     </div>
-</div>
 </x-filament-panels::page>

@@ -315,34 +315,37 @@ final class SpaceReviewActionService
         $now = now();
         $operationEffectiveAt = $now;
 
-        if ($decision === 'matched') {
-            $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
-            $payload = [
-                'market_space_id' => (int) $space->id,
-                'decision' => 'matched',
-            ];
+if ($decision === 'matched') {
+    $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
+    $payload = [
+        'market_space_id' => (int) $space->id,
+        'decision' => 'matched',
+    ];
 
-            if ($reason !== '') {
-                $payload['reason'] = $reason;
-            }
+    if ($reason !== '') {
+        $payload['reason'] = $reason;
+    }
 
-            $this->createSpaceReviewOperation(
-                (int) $market->id,
-                (int) $space->id,
-                $payload,
-                'observed',
-                $reason !== '' ? $reason : null,
-                $operationEffectiveAt,
-                $userId,
-            );
+    $this->createSpaceReviewOperation(
+        (int) $market->id,
+        (int) $space->id,
+        $payload,
+        'observed',
+        $reason !== '' ? $reason : null,
+        $operationEffectiveAt,
+        $userId,
+    );
 
-            $space->refresh();
+    // Обновляем статус ревизии места
+    $this->markSpaceReviewed($space, 'matched', $userId, $now);
 
-            return [
-                'ok' => true,
-                'mode' => 'lightweight',
-            ];
-        }
+    $space->refresh();
+
+    return [
+        'ok' => true,
+        'mode' => 'lightweight',
+    ];
+}
 
         if (! in_array($decision, SpaceReviewDecision::values(), true)) {
             return [

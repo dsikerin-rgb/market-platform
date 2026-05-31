@@ -2640,10 +2640,10 @@ class SpaceReviewFlowTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('mode', 'operation')
-            ->assertJsonPath('operation.status', 'applied')
-            ->assertJsonPath('item.market_space_id', $space->id)
-            ->assertJsonPath('item.review_status', 'changed')
-            ->assertJsonPath('item.review_status_label', 'Есть безопасное изменение');
+->assertJsonPath('operation.status', 'applied')
+->assertJsonPath('item.market_space_id', $space->id)
+->assertJsonPath('item.review_status', 'matched')
+->assertJsonPath('item.review_status_label', 'Совпало');
 
         $operation = Operation::query()
             ->where('market_id', $market->id)
@@ -2660,17 +2660,17 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertNull($operation->comment);
         $this->assertSame($user->id, $operation->created_by);
 
-        $space->refresh();
-        $this->assertSame('vacant', $space->status);
-        $this->assertSame('changed', $space->map_review_status);
-        $this->assertNotNull($space->map_reviewed_at);
-        $this->assertSame($user->id, $space->map_reviewed_by);
+$space->refresh();
+$this->assertSame('vacant', $space->status);
+$this->assertSame('matched', $space->map_review_status);
+$this->assertNotNull($space->map_reviewed_at);
+$this->assertSame($user->id, $space->map_reviewed_by);
 
-        Livewire::withQueryParams(['tab' => 'review'])
-            ->test(MapReviewResults::class)
-            ->assertSee('Применено', false)
-            ->assertSee('Отметить место как свободное', false)
-            ->assertSee('Есть безопасное изменение', false);
+Livewire::withQueryParams(['tab' => 'review'])
+->test(MapReviewResults::class)
+->assertSee('Применено', false)
+->assertSee('Отметить место как свободное', false)
+->assertSee('Совпало', false);
     }
 
     public function test_review_decision_endpoint_applies_mark_space_free_and_closes_only_snapshot_binding(): void
@@ -2745,26 +2745,26 @@ class SpaceReviewFlowTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('mode', 'operation')
-            ->assertJsonPath('operation.status', 'applied')
-            ->assertJsonPath('item.review_status', 'changed')
-            ->assertJsonPath('item.review_status_label', 'Есть безопасное изменение');
+->assertJsonPath('operation.status', 'applied')
+->assertJsonPath('item.review_status', 'matched')
+->assertJsonPath('item.review_status_label', 'Совпало');
 
-        $operation = Operation::query()
-            ->where('market_id', $market->id)
-            ->where('entity_type', 'market_space')
-            ->where('entity_id', $space->id)
-            ->where('type', OperationType::SPACE_REVIEW)
-            ->latest('id')
-            ->first();
+$operation = Operation::query()
+->where('market_id', $market->id)
+->where('entity_type', 'market_space')
+->where('entity_id', $space->id)
+->where('type', OperationType::SPACE_REVIEW)
+->latest('id')
+->first();
 
-        $this->assertNotNull($operation);
-        $this->assertSame('applied', $operation->status);
-        $this->assertSame(SpaceReviewDecision::MARK_SPACE_FREE, $operation->payload['decision'] ?? null);
-        $this->assertSame($space->id, $operation->payload['market_space_id'] ?? null);
+$this->assertNotNull($operation);
+$this->assertSame('applied', $operation->status);
+$this->assertSame(SpaceReviewDecision::MARK_SPACE_FREE, $operation->payload['decision'] ?? null);
+$this->assertSame($space->id, $operation->payload['market_space_id'] ?? null);
 
-        $space->refresh();
-        $this->assertSame('vacant', $space->status);
-        $this->assertSame('changed', $space->map_review_status);
+$space->refresh();
+$this->assertSame('vacant', $space->status);
+$this->assertSame('matched', $space->map_review_status);
 
         $snapshotBinding = DB::table('market_space_tenant_bindings')
             ->where('market_space_id', $space->id)
@@ -2858,27 +2858,27 @@ class SpaceReviewFlowTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('ok', true)
             ->assertJsonPath('mode', 'operation')
-            ->assertJsonPath('operation.status', 'applied')
-            ->assertJsonPath('item.review_status', 'changed')
-            ->assertJsonPath('item.review_status_label', 'Есть безопасное изменение');
+->assertJsonPath('operation.status', 'applied')
+->assertJsonPath('item.review_status', 'matched')
+->assertJsonPath('item.review_status_label', 'Совпало');
 
-        $operation = Operation::query()
-            ->where('market_id', $market->id)
-            ->where('entity_type', 'market_space')
-            ->where('entity_id', $space->id)
-            ->where('type', OperationType::SPACE_REVIEW)
-            ->latest('id')
-            ->first();
+$operation = Operation::query()
+->where('market_id', $market->id)
+->where('entity_type', 'market_space')
+->where('entity_id', $space->id)
+->where('type', OperationType::SPACE_REVIEW)
+->latest('id')
+->first();
 
-        $this->assertNotNull($operation);
-        $this->assertSame('applied', $operation->status);
-        $this->assertSame(SpaceReviewDecision::MARK_SPACE_SERVICE, $operation->payload['decision'] ?? null);
-        $this->assertSame($space->id, $operation->payload['market_space_id'] ?? null);
-        $this->assertNull($operation->comment);
+$this->assertNotNull($operation);
+$this->assertSame('applied', $operation->status);
+$this->assertSame(SpaceReviewDecision::MARK_SPACE_SERVICE, $operation->payload['decision'] ?? null);
+$this->assertSame($space->id, $operation->payload['market_space_id'] ?? null);
+$this->assertNull($operation->comment);
 
-        $space->refresh();
-        $this->assertSame('maintenance', $space->status);
-        $this->assertSame('changed', $space->map_review_status);
+$space->refresh();
+$this->assertSame('maintenance', $space->status);
+$this->assertSame('matched', $space->map_review_status);
 
         $snapshotBinding = DB::table('market_space_tenant_bindings')
             ->where('market_space_id', $space->id)
