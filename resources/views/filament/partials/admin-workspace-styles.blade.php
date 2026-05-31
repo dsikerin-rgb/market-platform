@@ -1002,9 +1002,9 @@
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
-        flex: 1 1 42rem;
-        width: min(100%, 42rem);
-        min-width: min(100%, 34rem);
+        flex: 1 1 56rem;
+        width: min(100%, 56rem);
+        min-width: min(100%, 48rem);
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac{
@@ -1017,14 +1017,14 @@
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac > *{
-        flex: 1 1 8.75rem;
-        min-width: 8.75rem;
-        max-width: 10rem;
+        flex: 1 1 7rem;
+        min-width: 7rem;
+        max-width: 8.5rem;
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .fi-ac > *:first-child{
-        flex: 1 1 10rem;
-        max-width: 10.5rem;
+        flex: 1 1 8rem;
+        max-width: 9rem;
     }
 
     html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions .market-space-card-action.fi-btn{
