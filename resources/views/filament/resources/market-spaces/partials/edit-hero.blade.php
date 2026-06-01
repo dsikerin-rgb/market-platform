@@ -26,16 +26,16 @@
                         {{ $statusLabel }}
                     </span>
                 @endif
+
+                @if ($actions)
+                    <div class="market-space-edit-hero__actions">
+                        <x-filament::actions
+                            :actions="$actions"
+                            :alignment="$actionsAlignment"
+                        />
+                    </div>
+                @endif
             </div>
         </div>
-
-        @if ($actions)
-            <div class="market-space-edit-hero__actions">
-                <x-filament::actions
-                    :actions="$actions"
-                    :alignment="$actionsAlignment"
-                />
-            </div>
-        @endif
     </div>
 </header>
