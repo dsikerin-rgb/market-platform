@@ -2831,7 +2831,7 @@
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
 $looksFreeCase = $isConflictCase
     && preg_match('/(свобод|съех|не стоит|нет арендатора|пуст)/iu', (string) ($row['reason'] ?? '')) === 1;
-$canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase && ! $hasCandidates;
+$canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase;
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
