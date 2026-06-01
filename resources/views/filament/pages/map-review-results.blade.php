@@ -6399,7 +6399,7 @@ if (confirmFreeLauncher && confirmFreeLauncher instanceof HTMLElement) {
 }
 
 if (markSpaceFreeLauncher && markSpaceFreeLauncher instanceof HTMLElement) {
-    event.preventDefault();
+    event.preventDssh my_projects "cd /var/www/market/current && git fetch origin && git status --short && git rev-parse --short HEAD && git rev-parse --short origin/main"efault();
     openMarkSpaceFreeModal(markSpaceFreeLauncher);
     return;
 }
