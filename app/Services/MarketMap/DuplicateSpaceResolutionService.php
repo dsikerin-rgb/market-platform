@@ -70,7 +70,6 @@ final class DuplicateSpaceResolutionService
         $this->throwIfClassifiedAsBlocked($linkClassification);
 
         $classification = $this->classifyDuplicateCase($linkClassification);
-        $this->throwIfClassificationIsAmbiguous($classification);
 
         $result = [
             'duplicate_market_space_id' => $duplicateSpaceId,
@@ -104,7 +103,6 @@ final class DuplicateSpaceResolutionService
             $this->throwIfClassifiedAsBlocked($linkClassification);
 
             $classification = $this->classifyDuplicateCase($linkClassification);
-            $this->throwIfClassificationIsAmbiguous($classification);
 
             $now = now();
             $shapeSummary = $this->transferMapShapes($marketId, $duplicateSpaceId, $canonicalSpaceId, $now);
@@ -700,8 +698,9 @@ final class DuplicateSpaceResolutionService
             if ($hasSafeLinks) {
                 return 'duplicate_with_historical_financial_tail';
             }
-            // No safe links means the candidate is ambiguous.
-            return 'ambiguous_canonical_candidate';
+            // Financial history itself is a valid anchor — the duplicate is the same physical place.
+            // Allow resolution even without map_shapes or other safe links.
+            return 'duplicate_with_historical_financial_tail';
         }
 
         // No financial links means the duplicate is safe.
@@ -769,18 +768,6 @@ final class DuplicateSpaceResolutionService
             // Fresh accruals conflict
             throw ValidationException::withMessages([
                 'market_space_id' => 'Duplicate space has fresh accruals that conflict with canonical: duplicate latest=' . ($accrualClassification['duplicate_latest_accrual_period'] ?? 'null') . ', canonical latest=' . ($accrualClassification['canonical_latest_accrual_period'] ?? 'null') . '.',
-            ]);
-        }
-    }
-
-    /**
-     * Reject ambiguous classifications with no safe links to transfer.
-     */
-    private function throwIfClassificationIsAmbiguous(string $classification): void
-    {
-        if ($classification === 'ambiguous_canonical_candidate') {
-            throw ValidationException::withMessages([
-                'market_space_id' => 'Cannot resolve duplicate: no safe transfer links found. The duplicate has historical financial tail but no map_shapes or other safe links to justify the merge.',
             ]);
         }
     }
