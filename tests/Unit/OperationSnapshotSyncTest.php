@@ -244,4 +244,88 @@ class OperationSnapshotSyncTest extends TestCase
 
         $this->assertSame('changed', $space->map_review_status);
     }
+
+    public function test_rebuild_closes_free_occupancy_observation_when_space_is_already_vacant(): void
+    {
+        $market = Market::create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => null,
+            'number' => 'A-5',
+            'status' => 'vacant',
+            'is_active' => true,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => CarbonImmutable::parse('2026-05-22 11:19:04', 'UTC'),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2026-05-22 11:19:04', 'UTC'),
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Место свободно',
+            ],
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('matched', $space->map_review_status);
+        $this->assertSame('vacant', $space->status);
+        $this->assertNull($space->tenant_id);
+    }
+
+    public function test_rebuild_closes_attention_observation_for_inactive_space(): void
+    {
+        $market = Market::create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant One',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'A-6',
+            'status' => 'occupied',
+            'is_active' => false,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => CarbonImmutable::parse('2026-05-28 08:15:16', 'UTC'),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2026-05-28 08:15:16', 'UTC'),
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Observed tenant mismatch',
+            ],
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('matched', $space->map_review_status);
+        $this->assertFalse((bool) $space->is_active);
+    }
 }

@@ -270,6 +270,12 @@ class Operation extends Model
             if ((string) $latestReviewStatusCarrier->type === OperationType::TENANT_SWITCH) {
                 $space->map_review_status = 'matched';
                 $space->map_reviewed_at = $latestReviewStatusCarrier->effective_at;
+            } elseif (
+                self::isStaleFreeOccupancyObservation($latestReviewStatusCarrier, $space)
+                || self::isInactiveAttentionObservation($latestReviewStatusCarrier, $space)
+            ) {
+                $space->map_review_status = 'matched';
+                $space->map_reviewed_at = $latestReviewStatusCarrier->effective_at;
             } elseif ($decision !== '') {
                 $space->map_review_status = SpaceReviewStateMachine::reviewStatusForDecision($decision);
                 $space->map_reviewed_at = $latestReviewStatusCarrier->effective_at;
@@ -540,6 +546,45 @@ class Operation extends Model
             });
 
         return $operation;
+    }
+
+    private static function isStaleFreeOccupancyObservation(self $operation, MarketSpace $space): bool
+    {
+        if ((string) $operation->type !== OperationType::SPACE_REVIEW || (string) $operation->status !== 'observed') {
+            return false;
+        }
+
+        $payload = is_array($operation->payload) ? $operation->payload : [];
+
+        if ((string) ($payload['decision'] ?? '') !== SpaceReviewDecision::OCCUPANCY_CONFLICT) {
+            return false;
+        }
+
+        if ((string) ($space->status ?? '') !== 'vacant' || filled($space->tenant_id)) {
+            return false;
+        }
+
+        $reason = mb_strtolower(trim((string) ($payload['reason'] ?? '')), 'UTF-8');
+
+        return $reason !== '' && preg_match('/свободн/u', $reason) === 1;
+    }
+
+    private static function isInactiveAttentionObservation(self $operation, MarketSpace $space): bool
+    {
+        if ((string) $operation->type !== OperationType::SPACE_REVIEW || (string) $operation->status !== 'observed') {
+            return false;
+        }
+
+        if ((bool) ($space->is_active ?? true)) {
+            return false;
+        }
+
+        $payload = is_array($operation->payload) ? $operation->payload : [];
+        $decision = (string) ($payload['decision'] ?? '');
+
+        return SpaceReviewStateMachine::isAttentionReviewStatus(
+            SpaceReviewStateMachine::reviewStatusForDecision($decision)
+        );
     }
 
     private static function latestSpaceAttrsOperationAffectingField(
