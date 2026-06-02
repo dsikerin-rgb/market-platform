@@ -560,13 +560,7 @@ class Operation extends Model
             return false;
         }
 
-        if ((string) ($space->status ?? '') !== 'vacant' || filled($space->tenant_id)) {
-            return false;
-        }
-
-        $reason = mb_strtolower(trim((string) ($payload['reason'] ?? '')), 'UTF-8');
-
-        return $reason !== '' && preg_match('/свободн/u', $reason) === 1;
+        return (string) ($space->status ?? '') === 'vacant' && ! filled($space->tenant_id);
     }
 
     private static function isInactiveAttentionObservation(self $operation, MarketSpace $space): bool
