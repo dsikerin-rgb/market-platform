@@ -286,33 +286,63 @@ class Operation extends Model
                         $space->map_reviewed_by = (int) $latestSpaceReviewOp->created_by;
                     }
                 }
+            }
+        }
 
-                if ($latestSpaceReviewOp->status === 'applied') {
+        $latestAppliedSpaceReviewOp = self::query()
+            ->where('market_id', $marketId)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $spaceId)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->where('status', 'applied')
+            ->where('effective_at', '<=', $nowUtc)
+            ->orderByDesc('effective_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($latestAppliedSpaceReviewOp) {
+            $payload = is_array($latestAppliedSpaceReviewOp->payload) ? $latestAppliedSpaceReviewOp->payload : [];
+            $decision = (string) ($payload['decision'] ?? '');
+
+            if ($decision !== '') {
+                $latestStatusAttrsOp = self::latestSpaceAttrsOperationAffectingField($marketId, $spaceId, $nowUtc, 'status');
+                $latestNumberAttrsOp = self::latestSpaceAttrsOperationAffectingField($marketId, $spaceId, $nowUtc, 'number');
+                $latestDisplayNameAttrsOp = self::latestSpaceAttrsOperationAffectingField($marketId, $spaceId, $nowUtc, 'display_name');
+
+                if (
+                    $decision === SpaceReviewDecision::MARK_SPACE_FREE
+                    && self::isOperationNewerThan($latestAppliedSpaceReviewOp, $latestTenantOp)
+                ) {
+                    $space->tenant_id = null;
+                }
+
+                if (
+                    $decision === SpaceReviewDecision::MARK_SPACE_FREE
+                    && self::isOperationNewerThan($latestAppliedSpaceReviewOp, $latestStatusAttrsOp)
+                ) {
+                    $space->status = 'vacant';
+                }
+
+                if (
+                    $decision === SpaceReviewDecision::MARK_SPACE_SERVICE
+                    && self::isOperationNewerThan($latestAppliedSpaceReviewOp, $latestStatusAttrsOp)
+                ) {
+                    $space->status = 'maintenance';
+                }
+
+                if ($decision === SpaceReviewDecision::FIX_SPACE_IDENTITY) {
                     if (
-                        $decision === SpaceReviewDecision::MARK_SPACE_FREE
-                        && self::isOperationNewerThan($latestSpaceReviewOp, $latestTenantOp)
+                        array_key_exists('number', $payload)
+                        && self::isOperationNewerThan($latestAppliedSpaceReviewOp, $latestNumberAttrsOp)
                     ) {
-                        $space->tenant_id = null;
+                        $space->number = $payload['number'];
                     }
 
-                    if (self::isOperationNewerThan($latestSpaceReviewOp, $latestAttrsOp)) {
-                        if ($decision === SpaceReviewDecision::MARK_SPACE_FREE) {
-                            $space->status = 'vacant';
-                        }
-
-                        if ($decision === SpaceReviewDecision::MARK_SPACE_SERVICE) {
-                            $space->status = 'maintenance';
-                        }
-
-                        if ($decision === SpaceReviewDecision::FIX_SPACE_IDENTITY) {
-                            if (array_key_exists('number', $payload)) {
-                                $space->number = $payload['number'];
-                            }
-
-                            if (array_key_exists('display_name', $payload)) {
-                                $space->display_name = $payload['display_name'];
-                            }
-                        }
+                    if (
+                        array_key_exists('display_name', $payload)
+                        && self::isOperationNewerThan($latestAppliedSpaceReviewOp, $latestDisplayNameAttrsOp)
+                    ) {
+                        $space->display_name = $payload['display_name'];
                     }
                 }
             }
@@ -480,6 +510,32 @@ class Operation extends Model
                 $payload = is_array($operation->payload) ? $operation->payload : [];
 
                 return (bool) ($payload['review_close_on_effective_at'] ?? false);
+            });
+
+        return $operation;
+    }
+
+    private static function latestSpaceAttrsOperationAffectingField(
+        int $marketId,
+        int $spaceId,
+        CarbonImmutable $nowUtc,
+        string $field
+    ): ?self {
+        /** @var self|null $operation */
+        $operation = self::query()
+            ->where('market_id', $marketId)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $spaceId)
+            ->where('type', OperationType::SPACE_ATTRS_CHANGE)
+            ->where('status', 'applied')
+            ->where('effective_at', '<=', $nowUtc)
+            ->orderByDesc('effective_at')
+            ->orderByDesc('id')
+            ->get()
+            ->first(function (self $operation) use ($field): bool {
+                $payload = is_array($operation->payload) ? $operation->payload : [];
+
+                return array_key_exists($field, $payload);
             });
 
         return $operation;
