@@ -28,6 +28,7 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
                 OperationType::TENANT_SWITCH,
                 OperationType::RENT_RATE_CHANGE,
                 OperationType::SPACE_ATTRS_CHANGE,
+                OperationType::SPACE_REVIEW,
             ]);
 
         if ($marketId !== null && $marketId > 0) {
@@ -88,4 +89,3 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
         return self::SUCCESS;
     }
 }
-

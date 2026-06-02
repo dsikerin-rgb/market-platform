@@ -10,6 +10,7 @@ use App\Models\MarketSpace;
 use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -174,5 +175,340 @@ class SpaceReviewMarkSpaceFreeTest extends TestCase
         $this->assertSame(SpaceReviewDecision::MARK_SPACE_FREE, $operation->payload['decision'] ?? null);
         // В payload не должно быть отката к старому tenant_id
         $this->assertNull($operation->payload['to_tenant_id'] ?? null, 'payload не должен содержать to_tenant_id');
+    }
+
+    public function test_rebuild_snapshot_keeps_space_free_when_mark_space_free_is_newer_than_tenant_switch(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Before Review',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+        ]);
+
+        $tenantSwitchAt = CarbonImmutable::parse('2026-01-10 10:00:00', 'UTC');
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'effective_at' => $tenantSwitchAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'to_tenant_id' => $tenant->id,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $tenantSwitchAt->addHour(),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('vacant', $space->status);
+        $this->assertNull($space->tenant_id);
+        $this->assertSame('matched', $space->map_review_status);
+    }
+
+    public function test_rebuild_snapshot_keeps_space_free_when_mark_space_free_is_newer_than_status_attrs_change(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant With Old Attrs',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+        ]);
+
+        $attrsAt = CarbonImmutable::parse('2026-01-10 09:00:00', 'UTC');
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_ATTRS_CHANGE,
+            'effective_at' => $attrsAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'status' => 'occupied',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $attrsAt->addHour(),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('vacant', $space->status);
+        $this->assertNull($space->tenant_id);
+    }
+
+    public function test_rebuild_snapshot_keeps_space_free_when_later_attrs_change_does_not_touch_status(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant With Unrelated Attrs',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+        ]);
+
+        $reviewAt = CarbonImmutable::parse('2026-01-10 09:00:00', 'UTC');
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $reviewAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_ATTRS_CHANGE,
+            'effective_at' => $reviewAt->addHour(),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'number' => 'RENAMED-SPACE',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $space->forceFill([
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ])->save();
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('vacant', $space->status);
+        $this->assertNull($space->tenant_id);
+        $this->assertSame('RENAMED-SPACE', $space->number);
+    }
+
+    public function test_rebuild_snapshot_uses_latest_applied_review_for_live_fields_even_if_newer_review_is_observed(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Before Observed Review',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $tenant->id,
+            'status' => 'occupied',
+            'map_review_status' => 'matched',
+        ]);
+
+        $appliedAt = CarbonImmutable::parse('2026-01-10 09:00:00', 'UTC');
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $appliedAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $appliedAt->addHour(),
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Observed later on site',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $space->forceFill([
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ])->save();
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('vacant', $space->status);
+        $this->assertNull($space->tenant_id);
+        $this->assertSame('conflict', $space->map_review_status);
+    }
+
+    public function test_rebuild_snapshot_keeps_later_tenant_switch_over_older_mark_space_free(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $oldTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Old Tenant',
+            'is_active' => true,
+        ]);
+
+        $newTenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'New Tenant',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'tenant_id' => $oldTenant->id,
+            'status' => 'occupied',
+        ]);
+
+        $reviewAt = CarbonImmutable::parse('2026-01-10 09:00:00', 'UTC');
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => $reviewAt,
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'effective_at' => $reviewAt->addHour(),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'to_tenant_id' => $newTenant->id,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame($newTenant->id, $space->tenant_id);
+    }
+
+    public function test_rebuild_command_includes_spaces_with_only_space_review_operations(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Drifted Tenant',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2026-01-10 09:00:00', 'UTC'),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::MARK_SPACE_FREE,
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        $space->forceFill([
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+        ])->save();
+
+        $this->artisan('operations:rebuild-space-snapshots', [
+            '--market-id' => (int) $market->id,
+        ])->assertExitCode(0);
+
+        $space->refresh();
+
+        $this->assertSame('vacant', $space->status);
+        $this->assertNull($space->tenant_id);
     }
 }
