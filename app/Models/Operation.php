@@ -261,6 +261,63 @@ class Operation extends Model
             }
         }
 
+        $latestSpaceReviewOp = self::query()
+            ->where('market_id', $marketId)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $spaceId)
+            ->where('type', OperationType::SPACE_REVIEW)
+            ->where('effective_at', '<=', $nowUtc)
+            ->orderByDesc('effective_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($latestSpaceReviewOp) {
+            $payload = is_array($latestSpaceReviewOp->payload) ? $latestSpaceReviewOp->payload : [];
+            $decision = (string) ($payload['decision'] ?? '');
+
+            if ($decision !== '') {
+                $latestTenantReviewCloseOp = self::latestReviewClosingTenantSwitch($marketId, $spaceId, $nowUtc);
+
+                if (self::isOperationNewerThan($latestSpaceReviewOp, $latestTenantReviewCloseOp)) {
+                    $space->map_review_status = SpaceReviewStateMachine::reviewStatusForDecision($decision);
+                    $space->map_reviewed_at = $latestSpaceReviewOp->effective_at;
+
+                    if ((int) ($latestSpaceReviewOp->created_by ?? 0) > 0) {
+                        $space->map_reviewed_by = (int) $latestSpaceReviewOp->created_by;
+                    }
+                }
+
+                if ($latestSpaceReviewOp->status === 'applied') {
+                    if (
+                        $decision === SpaceReviewDecision::MARK_SPACE_FREE
+                        && self::isOperationNewerThan($latestSpaceReviewOp, $latestTenantOp)
+                    ) {
+                        $space->tenant_id = null;
+                    }
+
+                    if (self::isOperationNewerThan($latestSpaceReviewOp, $latestAttrsOp)) {
+                        if ($decision === SpaceReviewDecision::MARK_SPACE_FREE) {
+                            $space->status = 'vacant';
+                        }
+
+                        if ($decision === SpaceReviewDecision::MARK_SPACE_SERVICE) {
+                            $space->status = 'maintenance';
+                        }
+
+                        if ($decision === SpaceReviewDecision::FIX_SPACE_IDENTITY) {
+                            if (array_key_exists('number', $payload)) {
+                                $space->number = $payload['number'];
+                            }
+
+                            if (array_key_exists('display_name', $payload)) {
+                                $space->display_name = $payload['display_name'];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if ($space->isDirty()) {
             $space->save();
         }
@@ -404,6 +461,48 @@ class Operation extends Model
     public static function rebuildMarketSpaceSnapshot(int $marketId, int $spaceId): void
     {
         static::syncMarketSpaceSnapshotFromOperations($marketId, $spaceId);
+    }
+
+    private static function latestReviewClosingTenantSwitch(int $marketId, int $spaceId, CarbonImmutable $nowUtc): ?self
+    {
+        /** @var self|null $operation */
+        $operation = self::query()
+            ->where('market_id', $marketId)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $spaceId)
+            ->where('type', OperationType::TENANT_SWITCH)
+            ->where('status', 'applied')
+            ->where('effective_at', '<=', $nowUtc)
+            ->orderByDesc('effective_at')
+            ->orderByDesc('id')
+            ->get()
+            ->first(function (self $operation): bool {
+                $payload = is_array($operation->payload) ? $operation->payload : [];
+
+                return (bool) ($payload['review_close_on_effective_at'] ?? false);
+            });
+
+        return $operation;
+    }
+
+    private static function isOperationNewerThan(?self $candidate, ?self $reference): bool
+    {
+        if (! $candidate) {
+            return false;
+        }
+
+        if (! $reference) {
+            return true;
+        }
+
+        $candidateAt = CarbonImmutable::parse($candidate->effective_at);
+        $referenceAt = CarbonImmutable::parse($reference->effective_at);
+
+        if ($candidateAt->equalTo($referenceAt)) {
+            return (int) $candidate->id > (int) $reference->id;
+        }
+
+        return $candidateAt->greaterThan($referenceAt);
     }
 
     private static function isSpaceSnapshotAffectingType(string $type): bool
