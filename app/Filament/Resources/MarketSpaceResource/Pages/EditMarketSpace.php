@@ -1152,6 +1152,7 @@ class EditMarketSpace extends BaseEditRecord
             return;
         }
 
+        $affectedChildren = $this->parentStatusChangeAffectedChildren();
         $precheck = $this->buildMarkSpaceFreePrecheckData();
 
         if (! $precheck['canMarkFree']) {
@@ -1212,11 +1213,10 @@ class EditMarketSpace extends BaseEditRecord
         Notification::make()
             ->success()
             ->title('Место отмечено как свободное')
-            ->body(
-                ($confirmContractsClose && count($precheck['contracts']) > 0)
-                    ? 'Место переведено в свободные. Завершено договоров: ' . count($precheck['contracts']) . '.'
-                    : 'Место переведено в свободные.'
-            )
+            ->body((($confirmContractsClose && count($precheck['contracts']) > 0)
+                ? 'Место переведено в свободные. Завершено договоров: ' . count($precheck['contracts']) . '.'
+                : 'Место переведено в свободные.')
+                . $this->buildParentStatusChangeNotificationSuffix($affectedChildren))
             ->send();
     }
 
@@ -1531,7 +1531,10 @@ class EditMarketSpace extends BaseEditRecord
             ->outlined()
             ->color($isMaintenance ? 'gray' : 'warning')
             ->visible(fn (): bool => $this->record instanceof MarketSpace)
-            ->disabled(fn (): bool => ! $isMaintenance && $this->isGroupedSpace($this->record))
+            ->disabled(fn (): bool => ! $isMaintenance
+                && $this->record instanceof MarketSpace
+                && $this->isGroupedSpace($this->record)
+                && (string) ($this->record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT)
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--secondary',
             ])
@@ -1542,12 +1545,22 @@ class EditMarketSpace extends BaseEditRecord
                 : 'Место станет служебным. Активные привязки арендаторов и совместного использования будут закрыты.')
             ->modalSubmitActionLabel($isMaintenance ? 'Снять статус' : 'Перевести в служебное')
             ->modalCancelActionLabel('Отмена')
+            ->form([
+                \Filament\Forms\Components\Placeholder::make('parent_status_change_warning')
+                    ->hiddenLabel()
+                    ->content(fn (): ?HtmlString => $this->buildParentStatusChangeWarningHtml())
+                    ->visible(fn (): bool => $this->buildParentStatusChangeWarningHtml() instanceof HtmlString),
+            ])
             ->action(function () use ($isMaintenance): void {
                 if (! $this->record instanceof MarketSpace) {
                     return;
                 }
 
-                if (! $isMaintenance && $this->isGroupedSpace($this->record)) {
+                if (
+                    ! $isMaintenance
+                    && $this->isGroupedSpace($this->record)
+                    && (string) ($this->record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT
+                ) {
                     Notification::make()
                         ->danger()
                         ->title('Служебное место не может состоять в группе')
@@ -2373,6 +2386,10 @@ class EditMarketSpace extends BaseEditRecord
                 \Filament\Forms\Components\Placeholder::make('mark_space_free_notice')
                     ->hiddenLabel()
                     ->content(fn (): HtmlString => $this->buildMarkSpaceFreePrecheckModalContent()),
+                \Filament\Forms\Components\Placeholder::make('mark_space_free_parent_status_warning')
+                    ->hiddenLabel()
+                    ->content(fn (): ?HtmlString => $this->buildParentStatusChangeWarningHtml())
+                    ->visible(fn (): bool => $this->buildParentStatusChangeWarningHtml() instanceof HtmlString),
                 \Filament\Forms\Components\Textarea::make('reason')
                     ->label('Причина')
                     ->rows(2)
@@ -2584,6 +2601,7 @@ class EditMarketSpace extends BaseEditRecord
             return;
         }
 
+        $affectedChildren = $this->parentStatusChangeAffectedChildren();
         $spaceId = (int) $this->record->id;
         $marketId = (int) $this->record->market_id;
         $now = now();
@@ -2599,13 +2617,14 @@ class EditMarketSpace extends BaseEditRecord
                     'resolution_reason' => 'maintenance_space_reconciled',
                 ]);
 
-            DB::table('market_spaces')
-                ->where('id', $spaceId)
-                ->update([
+            $space = MarketSpace::query()->whereKey($spaceId)->first();
+            if ($space instanceof MarketSpace) {
+                $space->forceFill([
                     'status' => 'maintenance',
                     'tenant_id' => null,
                     'updated_at' => $now,
-                ]);
+                ])->save();
+            }
         });
 
         $this->record->refresh();
@@ -2614,7 +2633,7 @@ class EditMarketSpace extends BaseEditRecord
         Notification::make()
             ->success()
             ->title('Место отмечено как служебное')
-            ->body('Активные арендные связи закрыты.')
+            ->body('Активные арендные связи закрыты.' . $this->buildParentStatusChangeNotificationSuffix($affectedChildren))
             ->send();
     }
 
@@ -2624,13 +2643,13 @@ class EditMarketSpace extends BaseEditRecord
             return;
         }
 
-        DB::table('market_spaces')
-            ->where('id', (int) $this->record->id)
-            ->update([
-                'status' => 'vacant',
-                'tenant_id' => null,
-                'updated_at' => now(),
-            ]);
+        $affectedChildren = $this->parentStatusChangeAffectedChildren();
+
+        $this->record->forceFill([
+            'status' => 'vacant',
+            'tenant_id' => null,
+            'updated_at' => now(),
+        ])->save();
 
         $this->record->refresh();
         $this->fillForm();
@@ -2638,8 +2657,72 @@ class EditMarketSpace extends BaseEditRecord
         Notification::make()
             ->success()
             ->title('Служебный статус снят')
-            ->body('Место переведено в статус «Свободно».')
+            ->body('Место переведено в статус «Свободно».' . $this->buildParentStatusChangeNotificationSuffix($affectedChildren))
             ->send();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parentStatusChangeAffectedChildren(): array
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return [];
+        }
+
+        if ((string) ($this->record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            return [];
+        }
+
+        return MarketSpace::query()
+            ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+            ->where('space_group_parent_id', (int) $this->record->id)
+            ->orderByRaw('COALESCE(space_group_slot, number, display_name, id::text)')
+            ->get(['id', 'number', 'display_name'])
+            ->map(static function (MarketSpace $space): string {
+                $number = trim((string) ($space->number ?? ''));
+                $displayName = trim((string) ($space->display_name ?? ''));
+
+                if ($number !== '' && $displayName !== '' && $displayName !== $number) {
+                    return $number . ' (' . $displayName . ')';
+                }
+
+                return $number !== '' ? $number : ($displayName !== '' ? $displayName : ('#' . (int) $space->id));
+            })
+            ->values()
+            ->all();
+    }
+
+    private function buildParentStatusChangeWarningHtml(): ?HtmlString
+    {
+        $children = $this->parentStatusChangeAffectedChildren();
+        if ($children === []) {
+            return null;
+        }
+
+        $items = implode('', array_map(
+            static fn (string $label): string => '<li>' . e($label) . '</li>',
+            $children,
+        ));
+
+        return new HtmlString(
+            '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #f59e0b;border-radius:12px;background:#fff7ed;">'
+            . '<div style="font-size:13px;line-height:1.45;color:#9a3412;"><strong>Предупреждение.</strong> При смене статуса parent-группы child-места будут разгруппированы и станут обычными местами.</div>'
+            . '<div style="font-size:12px;line-height:1.5;color:#7c2d12;"><strong>Будут разгруппированы:</strong><ul style="margin:6px 0 0 18px;padding:0;">' . $items . '</ul></div>'
+            . '</div>'
+        );
+    }
+
+    /**
+     * @param  list<string>  $children
+     */
+    private function buildParentStatusChangeNotificationSuffix(array $children): string
+    {
+        if ($children === []) {
+            return '';
+        }
+
+        return ' Разгруппированы child-места: ' . implode(', ', $children) . '.';
     }
 
 }

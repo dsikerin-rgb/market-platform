@@ -16,6 +16,30 @@ final class MarketSpaceGroupSharedUseObserver
     {
         $role = (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
 
+        if (
+            $role === MarketSpace::SPACE_GROUP_ROLE_CHILD
+            && blank($space->space_group_parent_id)
+            && (! $space->exists || $space->isDirty('space_group_role') || $space->isDirty('space_group_parent_id'))
+        ) {
+            throw ValidationException::withMessages([
+                'space_group_parent_id' => 'Для места в группе нужно выбрать родительскую группу.',
+            ]);
+        }
+
+        if (
+            $role === MarketSpace::SPACE_GROUP_ROLE_CHILD
+            && filled($space->space_group_parent_id)
+            && (! $space->exists || $space->isDirty('space_group_role') || $space->isDirty('space_group_parent_id'))
+        ) {
+            $parent = MarketSpace::query()->find((int) $space->space_group_parent_id);
+
+            if (! $parent instanceof MarketSpace || (string) ($parent->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+                throw ValidationException::withMessages([
+                    'space_group_parent_id' => 'Родительская группа не найдена или больше не является группой.',
+                ]);
+            }
+        }
+
         if ($role === MarketSpace::SPACE_GROUP_ROLE_NONE) {
             return;
         }
