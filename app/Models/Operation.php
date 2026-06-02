@@ -261,31 +261,22 @@ class Operation extends Model
             }
         }
 
-        $latestSpaceReviewOp = self::query()
-            ->where('market_id', $marketId)
-            ->where('entity_type', 'market_space')
-            ->where('entity_id', $spaceId)
-            ->where('type', OperationType::SPACE_REVIEW)
-            ->where('effective_at', '<=', $nowUtc)
-            ->orderByDesc('effective_at')
-            ->orderByDesc('id')
-            ->first();
+        $latestReviewStatusCarrier = self::latestReviewStatusCarrier($marketId, $spaceId, $nowUtc);
 
-        if ($latestSpaceReviewOp) {
-            $payload = is_array($latestSpaceReviewOp->payload) ? $latestSpaceReviewOp->payload : [];
+        if ($latestReviewStatusCarrier instanceof self) {
+            $payload = is_array($latestReviewStatusCarrier->payload) ? $latestReviewStatusCarrier->payload : [];
             $decision = (string) ($payload['decision'] ?? '');
 
-            if ($decision !== '') {
-                $latestTenantReviewCloseOp = self::latestReviewClosingTenantSwitch($marketId, $spaceId, $nowUtc);
+            if ((string) $latestReviewStatusCarrier->type === OperationType::TENANT_SWITCH) {
+                $space->map_review_status = 'matched';
+                $space->map_reviewed_at = $latestReviewStatusCarrier->effective_at;
+            } elseif ($decision !== '') {
+                $space->map_review_status = SpaceReviewStateMachine::reviewStatusForDecision($decision);
+                $space->map_reviewed_at = $latestReviewStatusCarrier->effective_at;
+            }
 
-                if (self::isOperationNewerThan($latestSpaceReviewOp, $latestTenantReviewCloseOp)) {
-                    $space->map_review_status = SpaceReviewStateMachine::reviewStatusForDecision($decision);
-                    $space->map_reviewed_at = $latestSpaceReviewOp->effective_at;
-
-                    if ((int) ($latestSpaceReviewOp->created_by ?? 0) > 0) {
-                        $space->map_reviewed_by = (int) $latestSpaceReviewOp->created_by;
-                    }
-                }
+            if ((int) ($latestReviewStatusCarrier->created_by ?? 0) > 0) {
+                $space->map_reviewed_by = (int) $latestReviewStatusCarrier->created_by;
             }
         }
 
@@ -507,6 +498,42 @@ class Operation extends Model
             ->orderByDesc('id')
             ->get()
             ->first(function (self $operation): bool {
+                $payload = is_array($operation->payload) ? $operation->payload : [];
+
+                return (bool) ($payload['review_close_on_effective_at'] ?? false);
+            });
+
+        return $operation;
+    }
+
+    private static function latestReviewStatusCarrier(int $marketId, int $spaceId, CarbonImmutable $nowUtc): ?self
+    {
+        /** @var self|null $operation */
+        $operation = self::query()
+            ->where('market_id', $marketId)
+            ->where('entity_type', 'market_space')
+            ->where('entity_id', $spaceId)
+            ->where('effective_at', '<=', $nowUtc)
+            ->where(function ($query) {
+                $query->where('type', OperationType::SPACE_REVIEW)
+                    ->orWhere(function ($tenantSwitchQuery) {
+                        $tenantSwitchQuery->where('type', OperationType::TENANT_SWITCH)
+                            ->where('status', 'applied');
+                    });
+            })
+            ->orderByDesc('id')
+            ->get()
+            ->first(function (self $operation): bool {
+                if ((string) $operation->type === OperationType::SPACE_REVIEW) {
+                    $payload = is_array($operation->payload) ? $operation->payload : [];
+
+                    return trim((string) ($payload['decision'] ?? '')) !== '';
+                }
+
+                if ((string) $operation->type !== OperationType::TENANT_SWITCH) {
+                    return false;
+                }
+
                 $payload = is_array($operation->payload) ? $operation->payload : [];
 
                 return (bool) ($payload['review_close_on_effective_at'] ?? false);
