@@ -1284,8 +1284,8 @@
         }
 
         .requests-message.is-own {
-            background: linear-gradient(180deg, #2563eb, #1d4ed8);
-            border-color: rgba(96, 165, 250, 0.32);
+            background: linear-gradient(180deg, #f0f5ff, #e6efff);
+            border-color: rgba(96, 165, 250, 0.25);
         }
 
         .requests-message-meta {
@@ -1298,13 +1298,11 @@
         }
 
         .requests-message.is-own .requests-message-meta {
-            color: rgba(255, 255, 255, 0.78);
+            color: rgba(15, 23, 42, 0.65);
         }
 
-        .requests-message-body {
-            white-space: pre-wrap;
-            font-size: 0.93rem;
-            line-height: 1.65;
+        .requests-message.is-own .requests-message-body {
+            color: rgba(15, 23, 42, 0.92);
         }
 
         .requests-composer {
