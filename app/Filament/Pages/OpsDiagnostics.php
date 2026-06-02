@@ -6,9 +6,14 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Jobs\PostgresBackupJob;
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\TenantResource;
 use App\Filament\Resources\IntegrationExchangeResource;
+use App\Models\Market;
+use App\Services\MarketSpaces\MarketSpaceDuplicateSignalService;
 use App\Support\AdminPanelImpersonation;
 use App\Services\PostgresBackupService;
+use App\Services\Tenants\TenantDuplicateSignalService;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -246,6 +251,16 @@ class OpsDiagnostics extends Page
             && $telescopeEnabledUntil->isFuture();
 
         $git = $this->getGitInfo();
+        $selectedMarketId = $this->selectedMarketId();
+        $selectedMarketName = $selectedMarketId > 0
+            ? (string) (Market::query()->whereKey($selectedMarketId)->value('name') ?? '')
+            : '';
+        $tenantDuplicateSignals = $selectedMarketId > 0
+            ? $this->withTenantUrls(app(TenantDuplicateSignalService::class)->signalsForMarket($selectedMarketId, 8))
+            : [];
+        $spaceDuplicateSignals = $selectedMarketId > 0
+            ? $this->withSpaceUrls(app(MarketSpaceDuplicateSignalService::class)->signalsForMarket($selectedMarketId, 8))
+            : [];
 
         // Небольшая диагностика для карты (не ломает страницу, даже если таблицы нет)
         $mapStats = $this->getMapShapesStatsBestEffort();
@@ -268,6 +283,10 @@ class OpsDiagnostics extends Page
             'gitBranch' => $git['branch'],
             'gitPrNumber' => $git['prNumber'],
             'gitVersionLabel' => $git['versionLabel'],
+            'selectedMarketId' => $selectedMarketId,
+            'selectedMarketName' => $selectedMarketName,
+            'tenantDuplicateSignals' => $tenantDuplicateSignals,
+            'spaceDuplicateSignals' => $spaceDuplicateSignals,
 
             'telescopeInstalled' => $telescopeInstalled,
 
@@ -1182,6 +1201,58 @@ class OpsDiagnostics extends Page
         } catch (Throwable) {
             return null;
         }
+    }
+
+    private function selectedMarketId(): int
+    {
+        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+
+        $value = session('dashboard_market_id')
+            ?? session("filament.{$panelId}.selected_market_id")
+            ?? session("filament_{$panelId}_market_id")
+            ?? session('filament.admin.selected_market_id')
+            ?? Filament::auth()->user()?->market_id;
+
+        return filled($value) ? (int) $value : 0;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $signals
+     * @return list<array<string, mixed>>
+     */
+    private function withTenantUrls(array $signals): array
+    {
+        return array_map(function (array $signal): array {
+            foreach (['candidate_a', 'candidate_b'] as $key) {
+                $tenantId = (int) data_get($signal, $key . '.id', 0);
+
+                data_set($signal, $key . '.url', $tenantId > 0
+                    ? TenantResource::getUrl('edit', ['record' => $tenantId])
+                    : null);
+            }
+
+            return $signal;
+        }, $signals);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $signals
+     * @return list<array<string, mixed>>
+     */
+    private function withSpaceUrls(array $signals): array
+    {
+        return array_map(function (array $signal): array {
+            $signal['spaces'] = array_map(function (array $space): array {
+                $spaceId = (int) ($space['id'] ?? 0);
+                $space['url'] = $spaceId > 0
+                    ? MarketSpaceResource::getUrl('edit', ['record' => $spaceId])
+                    : null;
+
+                return $space;
+            }, $signal['spaces'] ?? []);
+
+            return $signal;
+        }, $signals);
     }
 
     private function tryExtractPrNumberFromLastCommitMessage(): ?int

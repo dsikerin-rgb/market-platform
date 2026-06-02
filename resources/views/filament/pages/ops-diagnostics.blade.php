@@ -111,6 +111,271 @@
             gap: 2rem;
         }
 
+        .ops-sidebar-sticky {
+            display: grid;
+            gap: 1rem;
+        }
+
+        @media (min-width: 1024px) {
+            .ops-sidebar-sticky {
+                position: sticky;
+                top: 1.5rem;
+            }
+        }
+
+        .ops-hero {
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: 1.25rem;
+            background:
+                radial-gradient(circle at top left, rgba(14, 165, 233, .18), transparent 36%),
+                radial-gradient(circle at bottom right, rgba(16, 185, 129, .14), transparent 34%),
+                linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,250,252,.96));
+            padding: 1.25rem;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, .05);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-hero {
+                border-color: rgba(255, 255, 255, .10);
+                background:
+                    radial-gradient(circle at top left, rgba(14, 165, 233, .20), transparent 32%),
+                    radial-gradient(circle at bottom right, rgba(16, 185, 129, .16), transparent 30%),
+                    linear-gradient(135deg, rgba(15,23,42,.96), rgba(17,24,39,.92));
+                box-shadow: none;
+            }
+        }
+
+        .ops-hero-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
+        }
+
+        @media (max-width: 1100px) {
+            .ops-hero-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ops-hero-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .3rem .65rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, .06);
+            color: #0f172a;
+            font-size: .6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-hero-kicker {
+                background: rgba(255,255,255,.08);
+                color: #e5e7eb;
+            }
+        }
+
+        .ops-hero-title {
+            margin-top: .9rem;
+            font-size: 1.4rem;
+            line-height: 1.15;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-hero-title {
+                color: #f8fafc;
+            }
+        }
+
+        .ops-hero-copy {
+            margin-top: .55rem;
+            max-width: 54rem;
+            font-size: .875rem;
+            line-height: 1.6;
+            color: #475569;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-hero-copy {
+                color: #cbd5e1;
+            }
+        }
+
+        .ops-hero-meta {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+        }
+
+        .ops-hero-card {
+            border: 1px solid rgba(15, 23, 42, .08);
+            border-radius: 1rem;
+            background: rgba(255,255,255,.7);
+            padding: 1rem;
+            min-height: 100%;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-hero-card {
+                border-color: rgba(255,255,255,.1);
+                background: rgba(15,23,42,.52);
+            }
+        }
+
+        .ops-hero-card-label {
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .ops-hero-card-value {
+            margin-top: .35rem;
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .ops-hero-card-note {
+            margin-top: .35rem;
+            font-size: .78rem;
+            line-height: 1.45;
+            color: #64748b;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-hero-card-value {
+                color: #f8fafc;
+            }
+
+            .ops-hero-card-note,
+            .ops-hero-card-label {
+                color: #94a3b8;
+            }
+        }
+
+        .ops-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 1100px) {
+            .ops-overview-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .ops-overview-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .ops-overview-card {
+            border: 1px solid rgba(0, 0, 0, .08);
+            border-radius: 1rem;
+            background: rgba(248, 250, 252, .9);
+            padding: 1rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-overview-card {
+                border-color: rgba(255,255,255,.1);
+                background: rgba(15,23,42,.45);
+            }
+        }
+
+        .ops-overview-label {
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .ops-overview-value {
+            margin-top: .4rem;
+            font-size: 1rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .ops-overview-note {
+            margin-top: .3rem;
+            font-size: .76rem;
+            line-height: 1.45;
+            color: #64748b;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-overview-value {
+                color: #f8fafc;
+            }
+
+            .ops-overview-label,
+            .ops-overview-note {
+                color: #94a3b8;
+            }
+        }
+
+        .ops-actions-grid {
+            display: grid;
+            gap: .75rem;
+            grid-template-columns: 1fr;
+        }
+
+        .ops-actions-note {
+            font-size: .78rem;
+            line-height: 1.5;
+            color: #64748b;
+        }
+
+        .ops-signal-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .ops-signal-group {
+            display: grid;
+            gap: .75rem;
+        }
+
+        .ops-signal-card {
+            border: 1px solid rgba(0,0,0,.08);
+            border-radius: 1rem;
+            background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.94));
+            padding: 1rem;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-signal-card {
+                border-color: rgba(255,255,255,.1);
+                background: linear-gradient(180deg, rgba(17,24,39,.96), rgba(15,23,42,.9));
+            }
+        }
+
+        .ops-signal-list {
+            display: grid;
+            gap: .45rem;
+        }
+
+        .ops-signal-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .45rem;
+            align-items: center;
+            font-size: .75rem;
+        }
+
         .ops-info-stack {
             display: grid;
             gap: .75rem;
@@ -576,6 +841,76 @@
                 background: rgba(255, 255, 255, .06);
             }
         }
+
+        .ops-tabs-shell {
+            grid-column: 1 / -1;
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .ops-tablist {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .6rem;
+            padding: .35rem;
+            border: 1px solid rgba(0, 0, 0, .08);
+            border-radius: 1rem;
+            background: rgba(248, 250, 252, .92);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-tablist {
+                border-color: rgba(255,255,255,.1);
+                background: rgba(15, 23, 42, .55);
+            }
+        }
+
+        .ops-tabbutton {
+            appearance: none;
+            border: 0;
+            border-radius: .8rem;
+            background: transparent;
+            color: #475569;
+            cursor: pointer;
+            font-size: .82rem;
+            font-weight: 700;
+            letter-spacing: .01em;
+            padding: .8rem 1rem;
+            transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
+        }
+
+        .ops-tabbutton:hover {
+            background: rgba(15, 23, 42, .05);
+            color: #0f172a;
+        }
+
+        .ops-tabbutton[data-active="true"] {
+            background: linear-gradient(135deg, rgba(14, 165, 233, .12), rgba(16, 185, 129, .10));
+            box-shadow: inset 0 0 0 1px rgba(14, 165, 233, .16);
+            color: #0f172a;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .ops-tabbutton {
+                color: #cbd5e1;
+            }
+
+            .ops-tabbutton:hover {
+                background: rgba(255,255,255,.06);
+                color: #f8fafc;
+            }
+
+            .ops-tabbutton[data-active="true"] {
+                background: linear-gradient(135deg, rgba(14, 165, 233, .22), rgba(16, 185, 129, .18));
+                box-shadow: inset 0 0 0 1px rgba(125, 211, 252, .18);
+                color: #f8fafc;
+            }
+        }
+
+        .ops-tabpanel {
+            display: grid;
+            gap: 1.5rem;
+        }
     </style>
 
     @php
@@ -603,6 +938,10 @@
             'deleteArchives' => [],
         ]);
         $pgBackupLogLocal = $this->pgBackupLog ?: ($pgBackupLog ?? []);
+        $selectedMarketIdLocal = (int) ($selectedMarketId ?? 0);
+        $selectedMarketNameLocal = (string) ($selectedMarketName ?? '');
+        $tenantDuplicateSignalsLocal = is_array($tenantDuplicateSignals ?? null) ? $tenantDuplicateSignals : [];
+        $spaceDuplicateSignalsLocal = is_array($spaceDuplicateSignals ?? null) ? $spaceDuplicateSignals : [];
     @endphp
 
     @if ($canViewIntegrationJournal && ! $canUseOpsTools)
@@ -635,211 +974,418 @@
 
     @if ($canUseOpsTools)
     <div class="ops-page-grid">
-        {{-- Левая колонка: Состояние + Действия --}}
-        <div class="ops-main" style="display: grid; gap: 2rem;">
-            @if ($canViewIntegrationJournal)
+        <div class="ops-hero" style="grid-column: 1 / -1;">
+            <div class="ops-hero-grid">
+                <div>
+                    <span class="ops-hero-kicker">Ops Diagnostics</span>
+                    <div class="ops-hero-title">Операционная диагностика и контроль качества данных</div>
+                    <div class="ops-hero-copy">
+                        Здесь должны быть быстрый обзор состояния, проблемные сигналы и инструменты обслуживания. Всё, что требует чтения и анализа, остаётся в основной колонке. Всё, что запускает действия или служит шпаргалкой, уходит в правую колонку.
+                    </div>
+                    <div class="ops-hero-meta">
+                        <x-filament::badge color="gray">окружение: {{ $appEnv }}</x-filament::badge>
+                        <x-filament::badge color="gray">коммит: {{ $gitCommitShort ?: '—' }}</x-filament::badge>
+                        @if ($selectedMarketIdLocal > 0)
+                            <x-filament::badge color="success">рынок: {{ $selectedMarketIdLocal }}</x-filament::badge>
+                        @else
+                            <x-filament::badge color="warning">рынок не выбран</x-filament::badge>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="ops-hero-card">
+                    <div class="ops-hero-card-label">Текущий рынок</div>
+                    <div class="ops-hero-card-value">{{ $selectedMarketNameLocal !== '' ? $selectedMarketNameLocal : 'Не выбран' }}</div>
+                    <div class="ops-hero-card-note">
+                        @if ($selectedMarketIdLocal > 0)
+                            ID рынка: {{ $selectedMarketIdLocal }}
+                        @else
+                            Сигналы дублей и часть диагностики зависят от выбранного рынка.
+                        @endif
+                    </div>
+                </div>
+
+                <div class="ops-hero-card">
+                    <div class="ops-hero-card-label">Сигналы сейчас</div>
+                    <div class="ops-hero-card-value">{{ count($spaceDuplicateSignalsLocal) + count($tenantDuplicateSignalsLocal) }}</div>
+                    <div class="ops-hero-card-note">
+                        {{ count($spaceDuplicateSignalsLocal) }} групп дублей мест · {{ count($tenantDuplicateSignalsLocal) }} сигналов дублей арендаторов
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ops-tabs-shell" x-data="{ tab: 'overview' }">
+            <div class="ops-tablist" role="tablist" aria-label="Разделы диагностики">
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'overview'" @click="tab = 'overview'">Обзор</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'signals'" @click="tab = 'signals'">Сигналы</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'maintenance'" @click="tab = 'maintenance'">Обслуживание</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'backups'" @click="tab = 'backups'">Бэкапы</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'commands'" @click="tab = 'commands'">Команды</button>
+            </div>
+
+            <div class="ops-tabpanel" x-show="tab === 'overview'">
+                @if ($canViewIntegrationJournal)
+                    <x-filament::section
+                        heading="Журнал интеграций"
+                        description="Отдельный вход в журнал обменов. Не смешивается с ops-инструментами."
+                    >
+                        <div style="display: grid; gap: 1rem;">
+                            <div class="ops-muted" style="font-size: .875rem; line-height: 1.5;">
+                                Быстрый переход в журнал входящих и исходящих обменов с 1С и другими интеграциями.
+                            </div>
+
+                            <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                                <x-filament::badge color="success">
+                                    Доступ открыт
+                                </x-filament::badge>
+
+                                <x-filament::button
+                                    tag="a"
+                                    href="{{ $integrationExchangesUrl }}"
+                                    icon="heroicon-m-arrow-top-right-on-square"
+                                >
+                                    Открыть журнал интеграций
+                                </x-filament::button>
+                            </div>
+                        </div>
+                    </x-filament::section>
+                @endif
+
                 <x-filament::section
-                    heading="Журнал интеграций"
-                    description="Просмотр входящих и исходящих обменов с 1С и другими интеграциями."
+                    heading="Диагностика системы"
+                    description="Короткий обзор окружения, версии и состояния Telescope."
                 >
-                    <div style="display: grid; gap: 1rem;">
-                        <div class="ops-muted" style="font-size: .875rem; line-height: 1.5;">
-                            Для <span class="ops-inline-code">market-operator</span> этот раздел является основным режимом страницы
-                            диагностики. Открывается журнал обменов по вашему рынку без доступа к ops-инструментам.
+                    <div class="ops-overview-grid">
+                        <div class="ops-overview-card">
+                            <div class="ops-overview-label">Окружение</div>
+                            <div class="ops-overview-value">{{ $appEnv }}</div>
+                            <div class="ops-overview-note">Текущее окружение приложения</div>
                         </div>
 
-                        <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
-                            <x-filament::badge color="success">
-                                Доступ открыт
-                            </x-filament::badge>
+                        <div class="ops-overview-card">
+                            <div class="ops-overview-label">Telescope</div>
+                            <div class="ops-overview-value">{{ $telescopeInstalled ? 'Установлен' : 'Отсутствует' }}</div>
+                            <div class="ops-overview-note">{{ $telescopeRecordingEnabledLocal ? 'Запись включена' : 'Запись выключена' }}</div>
+                        </div>
 
-                            <x-filament::button
-                                tag="a"
-                                href="{{ $integrationExchangesUrl }}"
-                                icon="heroicon-m-arrow-top-right-on-square"
-                            >
-                                Открыть журнал интеграций
-                            </x-filament::button>
+                        <div class="ops-overview-card">
+                            <div class="ops-overview-label">Ветка</div>
+                            <div class="ops-overview-value">{{ $gitBranch ?: '—' }}</div>
+                            <div class="ops-overview-note">PR: {{ $gitVersionLabel ?: '—' }}</div>
+                        </div>
+
+                        <div class="ops-overview-card">
+                            <div class="ops-overview-label">Путь</div>
+                            <div class="ops-overview-value">{{ $gitCommitShort ?: '—' }}</div>
+                            <div class="ops-overview-note">{{ $appPath ?? '—' }}</div>
+                        </div>
+                    </div>
+
+                    <div class="ops-kv-wrap">
+                        <div class="ops-kv">
+                            <div class="ops-kv-row ops-kv-head">
+                                <div>Параметр</div>
+                                <div>Значение</div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Окружение</div>
+                                <div class="ops-kv-val">
+                                    <div style="display:flex; align-items:center; gap: 1rem;">
+                                        <x-filament::badge color="success">
+                                            {{ $appEnv }}
+                                        </x-filament::badge>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row" style="align-items: start;">
+                                <div class="ops-kv-key">Telescope</div>
+                                <div class="ops-kv-val">
+                                    <div style="display:flex; flex-wrap:wrap; gap: .75rem; align-items:center;">
+                                        <x-filament::badge :color="$telescopeInstalled ? 'success' : 'gray'">
+                                            {{ $telescopeInstalled ? 'Установлен' : 'Не установлен' }}
+                                        </x-filament::badge>
+
+                                        @if ($telescopeInstalled)
+                                            <x-filament::badge :color="$telescopeConfigEnabledLocal ? 'success' : 'warning'">
+                                                {{ $telescopeConfigEnabledLocal ? 'Интерфейс доступен' : 'Интерфейс выключен в конфиге' }}
+                                            </x-filament::badge>
+
+                                            <x-filament::badge :color="$telescopeRecordingEnabledLocal ? 'success' : 'warning'">
+                                                {{ $telescopeRecordingEnabledLocal ? 'Запись включена' : 'Запись выключена' }}
+                                            </x-filament::badge>
+                                        @endif
+                                    </div>
+
+                                    @if ($telescopeInstalled)
+                                        <div class="ops-muted" style="font-size: .75rem; margin-top: .35rem;">
+                                            @if ($telescopeRecordingEnabledLocal)
+                                                Авто-выключение:
+                                                <span class="ops-inline-code">{{ $telescopeEnabledUntilLocal ?? '—' }}</span>
+                                                @if (! empty($telescopeEnabledUntilHumanLocal))
+                                                    ({{ $telescopeEnabledUntilHumanLocal }})
+                                                @endif
+                                            @else
+                                                Запись по умолчанию выключена вне локального окружения. Можно включить временно на 30 минут.
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Доступ</div>
+                                <div class="ops-kv-val">
+                                    <x-filament::badge color="warning">
+                                        Только суперадмин
+                                    </x-filament::badge>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row" style="align-items: start;">
+                                <div class="ops-kv-key">Путь приложения</div>
+                                <div class="ops-kv-val">
+                                    <span class="ops-inline-code">{{ $appPath ?? '—' }}</span>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Ветка</div>
+                                <div class="ops-kv-val">
+                                    <x-filament::badge color="gray">
+                                        {{ $gitBranch ?: '—' }}
+                                    </x-filament::badge>
+                                </div>
+                            </div>
+
+                            <div class="ops-kv-row">
+                                <div class="ops-kv-key">Коммит</div>
+                                <div class="ops-kv-val">
+                                    <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
+                                        <x-filament::badge color="gray">
+                                            {{ $gitCommitShort ?: '—' }}
+                                        </x-filament::badge>
+
+                                        @if (! empty($gitVersionLabel))
+                                            <x-filament::badge color="gray">
+                                                PR: {{ $gitVersionLabel }}
+                                            </x-filament::badge>
+                                        @endif
+                                    </div>
+
+                                    <div class="ops-muted" style="font-size: .75rem; margin-top: .25rem;">
+                                        Номер PR берётся из сообщения последнего коммита merge/squash, чтобы проще сравнивать, что новее.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </x-filament::section>
-            @endif
+            </div>
 
-            {{-- Состояние системы --}}
-            <x-filament::section
-                heading="Диагностика системы"
-                description="Окружение, статус Telescope и быстрые операции обслуживания."
-            >
-                <div class="ops-kv-wrap">
-                    <div class="ops-kv">
-                        <div class="ops-kv-row ops-kv-head">
-                            <div>Параметр</div>
-                            <div>Значение</div>
+            <div class="ops-tabpanel" x-show="tab === 'signals'">
+                <x-filament::section
+                    heading="Сигналы дублей"
+                    description="Сигналы только для чтения по возможным дублям торговых мест и арендаторов для выбранного рынка."
+                >
+                    <div class="ops-signal-grid">
+                        <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                            <x-filament::badge :color="$selectedMarketIdLocal > 0 ? 'success' : 'warning'">
+                                {{ $selectedMarketIdLocal > 0 ? 'ID рынка: ' . $selectedMarketIdLocal : 'Рынок не выбран' }}
+                            </x-filament::badge>
+
+                            @if ($selectedMarketNameLocal !== '')
+                                <span class="ops-muted" style="font-size:.8125rem;">{{ $selectedMarketNameLocal }}</span>
+                            @endif
                         </div>
 
-                        <div class="ops-kv-row">
-                            <div class="ops-kv-key">Окружение</div>
-                            <div class="ops-kv-val">
-                                <div style="display:flex; align-items:center; gap: 1rem;">
-                                    <x-filament::badge color="success">
-                                        {{ $appEnv }}
-                                    </x-filament::badge>
+                        <div style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(18rem, 1fr));">
+                            <div class="ops-stat-card">
+                                <p class="ops-stat-label">Дубли мест</p>
+                                <p class="ops-stat-value">{{ count($spaceDuplicateSignalsLocal) }}</p>
+                                <p class="ops-stat-subtext">Группы с одинаковым нормализованным номером</p>
+                            </div>
+
+                            <div class="ops-stat-card">
+                                <p class="ops-stat-label">Дубли арендаторов</p>
+                                <p class="ops-stat-value">{{ count($tenantDuplicateSignalsLocal) }}</p>
+                                <p class="ops-stat-subtext">Сигналы по похожим или конфликтующим карточкам</p>
+                            </div>
+                        </div>
+
+                        @if ($spaceDuplicateSignalsLocal === [] && $tenantDuplicateSignalsLocal === [])
+                            <div class="ops-empty-state">
+                                <p style="font-size:.8125rem; color:#6b7280;">Для выбранного рынка явных сигналов дублей сейчас нет.</p>
+                            </div>
+                        @else
+                            @if ($spaceDuplicateSignalsLocal !== [])
+                                <div class="ops-signal-group">
+                                    <p class="ops-backup-files-title">Торговые места</p>
+                                    @foreach ($spaceDuplicateSignalsLocal as $signal)
+                                        <div class="ops-signal-card">
+                                            <div style="display:grid; gap:.4rem;">
+                                                <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
+                                                    <x-filament::badge :color="$signal['severity'] === 'high' ? 'danger' : 'warning'" size="sm">
+                                                        {{ ($signal['severity'] ?? '') === 'high' ? 'Высокий риск' : 'Средний риск' }}
+                                                    </x-filament::badge>
+                                                    <span style="font-size:.875rem; font-weight:700;">{{ $signal['normalized_number'] }}</span>
+                                                    <span class="ops-muted" style="font-size:.75rem;">{{ $signal['count'] }} шт.</span>
+                                                </div>
+
+                                                @if (! empty($signal['reasons']))
+                                                    <div class="ops-muted" style="font-size:.75rem; line-height:1.45;">
+                                                        {{ implode(' · ', $signal['reasons']) }}
+                                                    </div>
+                                                @endif
+
+                                                <div class="ops-signal-list">
+                                                    @foreach (($signal['spaces'] ?? []) as $space)
+                                                        <div class="ops-signal-row">
+                                                            @if (! empty($space['url']))
+                                                                <a href="{{ $space['url'] }}" style="font-weight:700; color:inherit; text-decoration:underline;">
+                                                                    #{{ $space['id'] ?? '—' }} · {{ ($space['number'] ?? '') !== '' ? $space['number'] : 'без номера' }}
+                                                                </a>
+                                                            @else
+                                                                <span style="font-weight:700;">#{{ $space['id'] ?? '—' }} · {{ ($space['number'] ?? '') !== '' ? $space['number'] : 'без номера' }}</span>
+                                                            @endif
+                                                            <span class="ops-muted">{{ ($space['display_name'] ?? '') !== '' ? $space['display_name'] : '—' }}</span>
+                                                            <span class="ops-muted">ID арендатора: {{ $space['tenant_id'] ?? 'нет' }}</span>
+                                                            <span class="ops-muted">Статус: {{ ($space['status'] ?? '') !== '' ? $space['status'] : '—' }}</span>
+                                                            <span class="ops-muted">Роль в группе: {{ ($space['space_group_role'] ?? '') !== '' ? $space['space_group_role'] : '—' }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+
+                                                <div class="ops-muted" style="font-size:.75rem; line-height:1.45;">
+                                                    {{ $signal['recommendation'] }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
-                            </div>
-                        </div>
+                            @endif
 
-                        <div class="ops-kv-row" style="align-items: start;">
-                            <div class="ops-kv-key">Telescope</div>
-                            <div class="ops-kv-val">
-                                <div style="display:flex; flex-wrap:wrap; gap: .75rem; align-items:center;">
-                                    <x-filament::badge :color="$telescopeInstalled ? 'success' : 'gray'">
-                                        {{ $telescopeInstalled ? 'Установлен' : 'Не установлен' }}
-                                    </x-filament::badge>
+                            @if ($tenantDuplicateSignalsLocal !== [])
+                                <div class="ops-signal-group">
+                                    <p class="ops-backup-files-title">Арендаторы</p>
+                                    @foreach ($tenantDuplicateSignalsLocal as $signal)
+                                        <div class="ops-signal-card">
+                                            <div style="display:grid; gap:.4rem;">
+                                                <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
+                                                    <x-filament::badge :color="($signal['severity'] ?? '') === 'high' ? 'danger' : 'warning'" size="sm">
+                                                        {{ ($signal['severity'] ?? '') === 'high' ? 'Высокий риск' : 'Средний риск' }}
+                                                    </x-filament::badge>
+                                                    <span style="font-size:.875rem; font-weight:700;">{{ $signal['title'] ?? 'Возможный дубль арендатора' }}</span>
+                                                    <span class="ops-muted" style="font-size:.75rem;">оценка {{ $signal['score'] ?? '—' }}</span>
+                                                </div>
 
-                                    @if ($telescopeInstalled)
-                                        {{-- Маршруты/UI (config) --}}
-                                        <x-filament::badge :color="$telescopeConfigEnabledLocal ? 'success' : 'warning'">
-                                            {{ $telescopeConfigEnabledLocal ? 'UI доступен' : 'UI выключен (config)' }}
-                                        </x-filament::badge>
+                                                <div class="ops-signal-list">
+                                                    @foreach (['candidate_a', 'candidate_b'] as $key)
+                                                        @php $tenant = $signal[$key] ?? []; @endphp
+                                                        <div class="ops-signal-row">
+                                                            @if (! empty($tenant['url']))
+                                                                <a href="{{ $tenant['url'] }}" style="font-weight:700; color:inherit; text-decoration:underline;">
+                                                                    #{{ $tenant['id'] ?? '—' }} · {{ $tenant['name'] ?? '—' }}
+                                                                </a>
+                                                            @else
+                                                                <span style="font-weight:700;">#{{ $tenant['id'] ?? '—' }} · {{ $tenant['name'] ?? '—' }}</span>
+                                                            @endif
+                                                            <span class="ops-muted">ИНН {{ ($tenant['inn'] ?? '') !== '' ? $tenant['inn'] : '—' }}</span>
+                                                            <span class="ops-muted">внешний ID {{ ($tenant['external_id'] ?? '') !== '' ? $tenant['external_id'] : '—' }}</span>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
 
-                                        {{-- Запись (recording) --}}
-                                        <x-filament::badge :color="$telescopeRecordingEnabledLocal ? 'success' : 'warning'">
-                                            {{ $telescopeRecordingEnabledLocal ? 'Запись включена' : 'Запись выключена' }}
-                                        </x-filament::badge>
-                                    @endif
+                                                @if (! empty($signal['reasons']))
+                                                    <div class="ops-muted" style="font-size:.75rem; line-height:1.45;">
+                                                        {{ implode(' · ', $signal['reasons']) }}
+                                                    </div>
+                                                @endif
+
+                                                <div class="ops-muted" style="font-size:.75rem; line-height:1.45;">
+                                                    {{ $signal['recommendation'] ?? '' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
-
-                                @if ($telescopeInstalled)
-                                    <div class="ops-muted" style="font-size: .75rem; margin-top: .35rem;">
-                                        @if ($telescopeRecordingEnabledLocal)
-                                            Авто-выключение:
-                                            <span class="ops-inline-code">{{ $telescopeEnabledUntilLocal ?? '—' }}</span>
-                                            @if (! empty($telescopeEnabledUntilHumanLocal))
-                                                ({{ $telescopeEnabledUntilHumanLocal }})
-                                            @endif
-                                        @else
-                                            Запись по умолчанию выключена на non-local окружениях. Можно включить временно на 30 минут.
-                                        @endif
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="ops-kv-row">
-                            <div class="ops-kv-key">Доступ</div>
-                            <div class="ops-kv-val">
-                                <x-filament::badge color="warning">
-                                    Только super-admin
-                                </x-filament::badge>
-                            </div>
-                        </div>
-
-                        {{-- Версия / Деплой --}}
-                        <div class="ops-kv-row" style="align-items: start;">
-                            <div class="ops-kv-key">Путь (base_path)</div>
-                            <div class="ops-kv-val">
-                                <span class="ops-inline-code">{{ $appPath ?? '—' }}</span>
-                            </div>
-                        </div>
-
-                        <div class="ops-kv-row">
-                            <div class="ops-kv-key">Ветка</div>
-                            <div class="ops-kv-val">
-                                <x-filament::badge color="gray">
-                                    {{ $gitBranch ?: '—' }}
-                                </x-filament::badge>
-                            </div>
-                        </div>
-
-                        <div class="ops-kv-row">
-                            <div class="ops-kv-key">Коммит</div>
-                            <div class="ops-kv-val">
-                                <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
-                                    <x-filament::badge color="gray">
-                                        {{ $gitCommitShort ?: '—' }}
-                                    </x-filament::badge>
-
-                                    @if (! empty($gitVersionLabel))
-                                        <x-filament::badge color="gray">
-                                            PR {{ $gitVersionLabel }}
-                                        </x-filament::badge>
-                                    @endif
-                                </div>
-
-                                <div class="ops-muted" style="font-size: .75rem; margin-top: .25rem;">
-                                    “PR #…” берётся из сообщения последнего коммита (merge/squash), чтобы проще сравнивать, что новее.
-                                </div>
-                            </div>
-                        </div>
+                            @endif
+                        @endif
                     </div>
-                </div>
-            </x-filament::section>
+                </x-filament::section>
+            </div>
 
-            {{-- Действия --}}
-            <x-filament::section
-                heading="Действия"
-                description="Команды обслуживания выполняются на сервере. Доступны только роли super-admin."
-            >
-                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:.75rem;">
-                    <x-filament::button
-                        icon="heroicon-m-arrow-path"
-                        wire:click="clearCaches"
-                        title="Выполняет php artisan optimize:clear."
-                    >
-                        Очистить кэши
-                    </x-filament::button>
+            <div class="ops-tabpanel" x-show="tab === 'maintenance'">
+                <x-filament::section
+                    heading="Быстрые действия"
+                    description="Опасные и технические действия отделены от аналитических блоков."
+                >
+                    <div class="ops-actions-grid">
+                        <x-filament::button
+                            icon="heroicon-m-arrow-path"
+                            wire:click="clearCaches"
+                            title="Выполняет php artisan optimize:clear."
+                        >
+                            Очистить кэши
+                        </x-filament::button>
 
-                    {{-- Telescope controls (TTL) --}}
-                    <x-filament::button
-                        color="success"
-                        icon="heroicon-m-play"
-                        wire:click="enableTelescope30m"
-                        :disabled="! $telescopeInstalled || $telescopeRecordingEnabledLocal"
-                        title="Включает запись Telescope на 30 минут и автоматически выключает её по TTL. Доступ только super-admin."
-                    >
-                        Включить Telescope (30 мин)
-                    </x-filament::button>
+                        <x-filament::button
+                            color="success"
+                            icon="heroicon-m-play"
+                            wire:click="enableTelescope30m"
+                            :disabled="! $telescopeInstalled || $telescopeRecordingEnabledLocal"
+                            title="Включает запись Telescope на 30 минут и автоматически выключает её по TTL. Доступ только для суперадмина."
+                        >
+                            Включить Telescope (30 мин)
+                        </x-filament::button>
 
-                    <x-filament::button
-                        color="gray"
-                        icon="heroicon-m-stop"
-                        wire:click="disableTelescope"
-                        :disabled="! $telescopeInstalled || ! $telescopeRecordingEnabledLocal"
-                    >
-                        Выключить Telescope
-                    </x-filament::button>
-
-                    @if ($telescopeInstalled && $telescopeConfigEnabledLocal)
                         <x-filament::button
                             color="gray"
-                            icon="heroicon-m-arrow-top-right-on-square"
-                            tag="a"
-                            href="{{ url('/telescope') }}"
-                            target="_blank"
-                            rel="noopener"
+                            icon="heroicon-m-stop"
+                            wire:click="disableTelescope"
+                            :disabled="! $telescopeInstalled || ! $telescopeRecordingEnabledLocal"
                         >
-                            Открыть Telescope
+                            Выключить Telescope
                         </x-filament::button>
-                    @endif
 
-                    <x-filament::button
-                        color="warning"
-                        icon="heroicon-m-trash"
-                        wire:click="pruneTelescope"
-                        :disabled="! $telescopeInstalled"
-                        title="Удаляет записи Telescope старше 48 часов, если Telescope установлен и таблицы доступны."
+                        @if ($telescopeInstalled && $telescopeConfigEnabledLocal)
+                            <x-filament::button
+                                color="gray"
+                                icon="heroicon-m-arrow-top-right-on-square"
+                                tag="a"
+                                href="{{ url('/telescope') }}"
+                                target="_blank"
+                                rel="noopener"
+                            >
+                                Открыть Telescope
+                            </x-filament::button>
+                        @endif
+
+                        <x-filament::button
+                            color="warning"
+                            icon="heroicon-m-trash"
+                            wire:click="pruneTelescope"
+                            :disabled="! $telescopeInstalled"
+                            title="Удаляет записи Telescope старше 48 часов, если Telescope установлен и таблицы доступны."
+                        >
+                            Очистить Telescope (48ч)
+                        </x-filament::button>
+
+                        <div class="ops-actions-note">
+                            Эти действия запускаются на сервере. Они вынесены в отдельную вкладку, чтобы не конкурировать визуально с диагностическими данными и не провоцировать случайные нажатия во время анализа.
+                        </div>
+                    </div>
+                </x-filament::section>
+            </div>
+
+            <div class="ops-tabpanel" x-show="tab === 'backups'">
+                <div wire:poll.visible.15s="refreshPgBackupState">
+                    <x-filament::section
+                        heading="Бэкапы PostgreSQL"
+                        description="Управление дампами базы данных и ротация архивов."
                     >
-                        Очистить Telescope (48ч)
-                    </x-filament::button>
-                </div>
-            </x-filament::section>
-
-            {{-- Бэкапы PostgreSQL --}}
-            <div wire:poll.visible.15s="refreshPgBackupState">
-                <x-filament::section
-                    heading="Бэкапы PostgreSQL"
-                    description="Управление дампами базы данных и ротация архивов."
-                >
                 {{-- Статистика: 4 карточки в ряд --}}
                 <div class="ops-stat-grid">
                     <div class="ops-stat-card">
@@ -1102,13 +1648,11 @@
                         </div>
                     </div>
                 </div>
-                </x-filament::section>
+                    </x-filament::section>
+                </div>
             </div>
-        </div>
 
-        {{-- Правая колонка: Примечания + Команды --}}
-        <div class="ops-notes">
-            <div class="ops-side-stack">
+            <div class="ops-tabpanel" x-show="tab === 'commands'">
                 <x-filament::section
                     heading="Полезные команды"
                     description="Шпаргалка для сервера. Выполнять в терминале, не в браузере."

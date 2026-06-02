@@ -40,9 +40,7 @@ class AuditMarketSpaceDuplicatesCommandTest extends TestCase
             'code' => 'os1-13-a',
             'display_name' => 'OS1 13 A',
             'status' => 'occupied',
-            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
-            'space_group_token' => 'OS1',
-            'space_group_slot' => '13',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
             'is_active' => true,
         ]);
 
@@ -53,9 +51,7 @@ class AuditMarketSpaceDuplicatesCommandTest extends TestCase
             'code' => 'os1-13-b',
             'display_name' => 'OS1 13 B',
             'status' => 'vacant',
-            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
-            'space_group_token' => 'OS1',
-            'space_group_slot' => '5,13',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
             'is_active' => true,
         ]);
 
