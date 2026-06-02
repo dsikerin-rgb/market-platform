@@ -278,7 +278,7 @@ $creatorDisplay = $readonlyText(
                 ->required()
                 ->maxLength(255)
                 ->columnSpanFull()
-                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+                ->visible(fn (string $operation): bool => $operation === 'create' || $canUpdateCore(null, $operation))
         );
 
         $titleReadonly = $readonlyText(
@@ -296,7 +296,7 @@ $creatorDisplay = $readonlyText(
                 ->rows(6)
                 ->autosize()
                 ->columnSpanFull()
-                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+                ->visible(fn (string $operation): bool => $operation === 'create' || $canUpdateCore(null, $operation))
         );
 
         $descriptionReadonly = $readonlyMultiline(
@@ -373,7 +373,7 @@ $creatorDisplay = $readonlyText(
                     'default' => 12,
                     'lg' => 6,
                 ])
-                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+                ->visible(fn (string $operation): bool => $operation === 'create' || $canUpdateCore(null, $operation))
         );
 
         $priorityReadonly = $readonlyText(
@@ -397,7 +397,7 @@ $creatorDisplay = $readonlyText(
                     'default' => 12,
                     'lg' => 6,
                 ])
-                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+                ->visible(fn (string $operation): bool => $operation === 'create' || $canUpdateCore(null, $operation))
         );
 
         $dueAtReadonly = $readonlyText(
@@ -596,7 +596,7 @@ $creatorDisplay = $readonlyText(
                     'default' => 12,
                     'lg' => 12,
                 ])
-                ->visible(fn (?Task $record, string $operation): bool => $canUpdateCore($record, $operation))
+                ->visible(fn (string $operation): bool => $operation === 'create' || $canUpdateCore(null, $operation))
         );
 
         $assigneeReadonly = $readonlyText(
@@ -678,28 +678,20 @@ $creatorDisplay = $readonlyText(
                 ->description('Соисполнители и наблюдатели')
                 ->schema([
                     Section::make('Участники')
-                ->schema([
-                    $assigneeEditable,
-                    $assigneeReadonly,
-                    $coexecutorsField,
-                    $coexecutorsReadonly,
-                    $observersField,
-                    $observersReadonly,
-                ])
-                ->columns(12)
-                ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
-        ]),
+                        ->schema([
+                            $assigneeEditable,
+                            $assigneeReadonly,
+                            $coexecutorsField,
+                            $coexecutorsReadonly,
+                            $observersField,
+                            $observersReadonly,
+                        ])
+                        ->columns(12)
+                        ->extraAttributes(['class' => 'max-w-6xl mx-auto']),
+                ]),
         ])->skippable(false);
 
-        $isCreateTaskRoute = request()->routeIs('filament.admin.resources.tasks.create');
-
-        if (! $isCreateTaskRoute) {
-            $createWizard = null;
-        } elseif (method_exists($createWizard, 'visible')) {
-            $createWizard->visible(fn (string $operation): bool => $operation === 'create');
-        }
-
-        if ($createWizard && method_exists($createWizard, 'columnSpanFull')) {
+        if (method_exists($createWizard, 'columnSpanFull')) {
             $createWizard->columnSpanFull();
         }
 
