@@ -116,4 +116,89 @@ class ContractDebtCurrentStateQueryTest extends TestCase
             ->distinct()
             ->count('cd.tenant_id'));
     }
+
+    public function test_latest_contract_state_does_not_sum_accumulated_balances_across_periods(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test market',
+            'slug' => 'test-market',
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Accumulated debt tenant',
+            'external_id' => 'tenant-accumulated',
+            'is_active' => true,
+        ]);
+
+        $snapshot = Carbon::create(2026, 6, 1, 8, 50, 0);
+
+        DB::table('contract_debts')->insert([
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-accumulated',
+                'period' => '2026-03',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1000,
+                'calculated_at' => $snapshot->copy()->subMonths(3),
+                'created_at' => $snapshot->copy()->subMonths(3),
+                'hash' => sha1('contract-accumulated-2026-03'),
+            ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-accumulated',
+                'period' => '2026-04',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1000,
+                'calculated_at' => $snapshot->copy()->subMonths(2),
+                'created_at' => $snapshot->copy()->subMonths(2),
+                'hash' => sha1('contract-accumulated-2026-04'),
+            ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-accumulated',
+                'period' => '2026-05',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1000,
+                'calculated_at' => $snapshot->copy()->subMonth(),
+                'created_at' => $snapshot->copy()->subMonth(),
+                'hash' => sha1('contract-accumulated-2026-05'),
+            ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-accumulated',
+                'period' => '2026-06',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1300,
+                'calculated_at' => $snapshot,
+                'created_at' => $snapshot,
+                'hash' => sha1('contract-accumulated-2026-06'),
+            ],
+        ]);
+
+        $periodStateDebt = (float) DB::query()
+            ->fromSub(ContractDebt::currentStateQuery((int) $market->id), 'cd')
+            ->where('cd.tenant_id', (int) $tenant->id)
+            ->sum('cd.debt_amount');
+
+        $latestContractDebt = (float) DB::query()
+            ->fromSub(ContractDebt::latestContractStateQuery((int) $market->id), 'cd')
+            ->where('cd.tenant_id', (int) $tenant->id)
+            ->sum('cd.debt_amount');
+
+        $this->assertSame(4300.0, $periodStateDebt);
+        $this->assertSame(1300.0, $latestContractDebt);
+    }
 }

@@ -730,7 +730,7 @@ class AiContextPackBuilder
             ->mapWithKeys(fn ($row): array => [(string) $row->external_id => (int) $row->market_space_id])
             ->all();
 
-        $debtRows = ContractDebt::currentStateQuery($marketId)
+        $debtRows = ContractDebt::latestContractStateQuery($marketId)
             ->whereIn('cd.contract_external_id', array_keys($spaceByExternalId))
             ->get(['cd.contract_external_id', 'cd.debt_amount']);
 
@@ -793,7 +793,7 @@ class AiContextPackBuilder
             return null;
         }
 
-        $total = ContractDebt::currentStateQuery($marketId)
+        $total = ContractDebt::latestContractStateQuery($marketId)
             ->whereIn('cd.contract_external_id', $contractExternalIds->all())
             ->sum('cd.debt_amount');
 

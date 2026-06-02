@@ -198,6 +198,30 @@ class TenantResourceDashboardTest extends TestCase
         }
 
         if ($withDebt) {
+            if ($withOffsettingCredit) {
+                TenantContract::query()->create([
+                    'market_id' => (int) $market->id,
+                    'tenant_id' => (int) $tenant->id,
+                    'number' => 'Contract-Credit',
+                    'status' => 'active',
+                    'starts_at' => '2026-03-01',
+                    'external_id' => 'contract-credit',
+                    'is_active' => true,
+                ]);
+            }
+
+            if ($withFuturePositiveDebt) {
+                TenantContract::query()->create([
+                    'market_id' => (int) $market->id,
+                    'tenant_id' => (int) $tenant->id,
+                    'number' => 'Contract-Future',
+                    'status' => 'active',
+                    'starts_at' => '2026-05-01',
+                    'external_id' => 'contract-future',
+                    'is_active' => true,
+                ]);
+            }
+
             DB::table('contract_debts')->insert([
                 'market_id' => (int) $market->id,
                 'tenant_id' => (int) $tenant->id,
@@ -223,7 +247,7 @@ class TenantResourceDashboardTest extends TestCase
                     'market_id' => (int) $market->id,
                     'tenant_id' => (int) $tenant->id,
                     'tenant_external_id' => 'tenant-101',
-                    'contract_external_id' => 'contract-101',
+                    'contract_external_id' => 'contract-credit',
                     'period' => '2026-03',
                     'accrued_amount' => 0.00,
                     'paid_amount' => 1200.00,
@@ -245,7 +269,7 @@ class TenantResourceDashboardTest extends TestCase
                     'market_id' => (int) $market->id,
                     'tenant_id' => (int) $tenant->id,
                     'tenant_external_id' => 'tenant-101',
-                    'contract_external_id' => 'contract-101',
+                    'contract_external_id' => 'contract-future',
                     'period' => '2026-05',
                     'accrued_amount' => 1500.00,
                     'paid_amount' => 600.00,

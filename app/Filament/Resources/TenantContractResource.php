@@ -1056,7 +1056,7 @@ class TenantContractResource extends BaseResource
         }
 
         $externalIds = \Illuminate\Support\Facades\DB::query()
-            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->fromSub(ContractDebt::latestContractStateQuery($marketId), 'cd')
             ->whereNotNull('contract_external_id')
             ->pluck('contract_external_id')
             ->map(static fn (mixed $value): string => trim((string) $value))

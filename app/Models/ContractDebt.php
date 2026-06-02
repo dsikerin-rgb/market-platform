@@ -94,6 +94,27 @@ class ContractDebt extends Model
 
     public static function currentStateQuery(?int $marketId = null, string $alias = 'cd'): QueryBuilder
     {
+        return static::latestStateQuery(
+            marketId: $marketId,
+            alias: $alias,
+            identityColumns: static::currentStateIdentityColumns((new static())->getTable()),
+        );
+    }
+
+    public static function latestContractStateQuery(?int $marketId = null, string $alias = 'cd'): QueryBuilder
+    {
+        return static::latestStateQuery(
+            marketId: $marketId,
+            alias: $alias,
+            identityColumns: static::latestContractStateIdentityColumns((new static())->getTable()),
+        );
+    }
+
+    /**
+     * @param list<string> $identityColumns
+     */
+    private static function latestStateQuery(?int $marketId, string $alias, array $identityColumns): QueryBuilder
+    {
         $table = (new static())->getTable();
         $base = DB::table("{$table} as {$alias}")->select("{$alias}.*");
 
@@ -102,7 +123,6 @@ class ContractDebt extends Model
         }
 
         $versionColumn = static::currentStateVersionColumn($table);
-        $identityColumns = static::currentStateIdentityColumns($table);
 
         if ($versionColumn === null || $identityColumns === []) {
             return $base;
@@ -144,6 +164,23 @@ class ContractDebt extends Model
             'tenant_external_id',
             'contract_external_id',
             'period',
+        ];
+
+        return array_values(array_filter(
+            $columns,
+            static fn (string $column): bool => Schema::hasColumn($table, $column),
+        ));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function latestContractStateIdentityColumns(string $table): array
+    {
+        $columns = [
+            'market_id',
+            'tenant_external_id',
+            'contract_external_id',
         ];
 
         return array_values(array_filter(
