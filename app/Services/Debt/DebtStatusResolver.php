@@ -191,7 +191,7 @@ class DebtStatusResolver
         }
 
         // Запрашиваем долги по contract_external_id через модель
-        $query = ContractDebt::currentStateQuery($marketId)
+        $query = ContractDebt::latestContractStateQuery($marketId)
             ->whereIn('cd.contract_external_id', $contractExternalIds->all());
 
         // Определяем последний snapshot
@@ -665,7 +665,7 @@ class DebtStatusResolver
             return null;
         }
 
-        $query = ContractDebt::currentStateQuery((int) $tenant->market_id);
+        $query = ContractDebt::latestContractStateQuery((int) $tenant->market_id);
 
         // Prioritise the same contour as space-level:
         // 1) Get contract external_ids from tenant_contracts for this tenant

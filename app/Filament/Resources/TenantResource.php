@@ -984,7 +984,7 @@ class TenantResource extends BaseResource
         $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
         $hasAccruedAmount = static::hasColumn('contract_debts', 'accrued_amount');
         $hasDebtAmount = static::hasColumn('contract_debts', 'debt_amount');
-        $currentDebts = ContractDebt::currentStateQuery(null);
+        $currentDebts = ContractDebt::latestContractStateQuery(null);
 
         $snapshotSubquery = DB::query()
             ->fromSub($currentDebts, 'cd')
@@ -1049,7 +1049,7 @@ class TenantResource extends BaseResource
         $tenantTable = $query->getModel()->getTable();
 
         $existsQuery = DB::query()
-            ->fromSub(ContractDebt::currentStateQuery(null), 'cd')
+            ->fromSub(ContractDebt::latestContractStateQuery(null), 'cd')
             ->selectRaw('1')
             ->whereColumn('cd.tenant_id', "{$tenantTable}.id")
             ->where('cd.debt_amount', '>', 0);
@@ -1130,7 +1130,7 @@ class TenantResource extends BaseResource
         $now = Carbon::now();
 
         $aggregateQuery = DB::query()
-            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->fromSub(ContractDebt::latestContractStateQuery($marketId), 'cd')
             ->selectRaw('cd.tenant_id, cd.market_id, COALESCE(SUM(cd.debt_amount), 0) as total_debt')
             ->whereNotNull('cd.tenant_id')
             ->groupBy('cd.tenant_id', 'cd.market_id');
@@ -1535,7 +1535,7 @@ class TenantResource extends BaseResource
             $cdHasDebt = static::hasColumn('contract_debts', 'debt_amount');
 
             $debtsBase = DB::query()
-                ->fromSub(ContractDebt::currentStateQuery((int) $record->market_id), 'cd')
+                ->fromSub(ContractDebt::latestContractStateQuery((int) $record->market_id), 'cd')
                 ->where('cd.tenant_id', (int) $record->id);
 
             if ($cdHasCalculatedAt) {
@@ -2888,7 +2888,7 @@ class TenantResource extends BaseResource
         $hasPeriod = static::hasColumn('contract_debts', 'period');
 
         $base = DB::query()
-            ->fromSub(ContractDebt::currentStateQuery((int) $record->market_id), 'cd')
+            ->fromSub(ContractDebt::latestContractStateQuery((int) $record->market_id), 'cd')
             ->where('cd.tenant_id', (int) $record->id);
 
         $snapshotLabel = null;
@@ -2996,7 +2996,7 @@ class TenantResource extends BaseResource
         $hasPeriod = static::hasColumn('contract_debts', 'period');
         $hasDueDate = static::hasColumn('contract_debts', 'due_date');
 
-        $query = ContractDebt::currentStateQuery((int) $record->market_id);
+        $query = ContractDebt::latestContractStateQuery((int) $record->market_id);
 
         if ($hasMarketId) {
             $query->where('cd.market_id', (int) $record->market_id);
