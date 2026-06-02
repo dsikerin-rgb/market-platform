@@ -218,6 +218,22 @@ final class OperationPayloadValidator
             $normalized['auto_close_binding_id'] = self::intOrNull($payload['auto_close_binding_id'] ?? null);
         }
 
+        if (array_key_exists('source_review_operation_id', $payload)) {
+            $normalized['source_review_operation_id'] = self::intOrNull($payload['source_review_operation_id'] ?? null);
+        }
+
+        if (array_key_exists('source_review_decision', $payload)) {
+            $normalized['source_review_decision'] = self::stringOrNull($payload['source_review_decision'] ?? null);
+        }
+
+        if (array_key_exists('source_review_reason', $payload)) {
+            $normalized['source_review_reason'] = self::stringOrNull($payload['source_review_reason'] ?? null);
+        }
+
+        if (array_key_exists('auto_closed_by_positive_conflict_audit', $payload)) {
+            $normalized['auto_closed_by_positive_conflict_audit'] = (bool) $payload['auto_closed_by_positive_conflict_audit'];
+        }
+
         return $normalized;
     }
 
