@@ -18,6 +18,8 @@ class MarketSpace extends Model
 {
     use HasFactory;
 
+    private static bool $syncingOccupancyConsistency = false;
+
     public const SPACE_GROUP_ROLE_NONE = 'none';
     public const SPACE_GROUP_ROLE_PARENT = 'parent';
     public const SPACE_GROUP_ROLE_CHILD = 'child';
@@ -122,11 +124,15 @@ class MarketSpace extends Model
         });
 
         static::saved(function (self $space): void {
+            static::detachChildrenAfterStatusChange($space);
+
             if (! Schema::hasTable('market_space_tenant_bindings')) {
+                static::syncOccupancyConsistency($space);
                 return;
             }
 
             app(MarketSpaceTenantBindingRecorder::class)->syncFromSpaceSnapshot($space);
+            static::syncOccupancyConsistency($space);
         });
     }
 
@@ -212,7 +218,7 @@ class MarketSpace extends Model
     public function effectiveOccupancySourceSpace(): ?self
     {
         if ($this->space_group_role === self::SPACE_GROUP_ROLE_CHILD && filled($this->space_group_parent_id)) {
-            $parent = $this->spaceGroupParent;
+            $parent = $this->resolvedValidParentGroup();
 
             return $parent instanceof self && filled($parent->tenant_id) ? $parent : null;
         }
@@ -270,6 +276,150 @@ class MarketSpace extends Model
     public function isEffectivelyOccupied(): bool
     {
         return $this->effectiveOccupancySource() !== 'none';
+    }
+
+    public function isChildWithoutParent(): bool
+    {
+        return (string) ($this->space_group_role ?? self::SPACE_GROUP_ROLE_NONE) === self::SPACE_GROUP_ROLE_CHILD
+            && ! filled($this->space_group_parent_id);
+    }
+
+    public function hasLostParentGroup(): bool
+    {
+        return (string) ($this->space_group_role ?? self::SPACE_GROUP_ROLE_NONE) === self::SPACE_GROUP_ROLE_CHILD
+            && ! ($this->resolvedValidParentGroup() instanceof self);
+    }
+
+    public function normalizedOccupancyStatus(): ?string
+    {
+        $status = trim((string) ($this->status ?? ''));
+        $normalizedStatus = $status === 'free' ? 'vacant' : $status;
+
+        if ($normalizedStatus !== '' && ! in_array($normalizedStatus, ['occupied', 'vacant'], true)) {
+            return null;
+        }
+
+        return $this->isEffectivelyOccupied() ? 'occupied' : 'vacant';
+    }
+
+    public function occupancyConsistencyUpdates(): array
+    {
+        $updates = [];
+
+        if ($this->hasLostParentGroup()) {
+            $updates = self::ordinaryGroupFields();
+        }
+
+        $candidate = $this->replicate();
+        $candidate->exists = true;
+        $candidate->setAttribute($this->getKeyName(), $this->getKey());
+
+        foreach ($updates as $key => $value) {
+            $candidate->setAttribute($key, $value);
+        }
+
+        $normalizedStatus = $candidate->normalizedOccupancyStatus();
+        if ($normalizedStatus !== null && $normalizedStatus !== (string) ($this->status ?? '')) {
+            $updates['status'] = $normalizedStatus;
+        }
+
+        return $updates;
+    }
+
+    private static function syncOccupancyConsistency(self $space): void
+    {
+        if (self::$syncingOccupancyConsistency) {
+            return;
+        }
+
+        self::$syncingOccupancyConsistency = true;
+
+        try {
+            $space->refresh();
+            self::applyOccupancyConsistencyUpdates($space);
+
+            $children = self::query()
+                ->with('spaceGroupParent')
+                ->where('space_group_role', self::SPACE_GROUP_ROLE_CHILD)
+                ->where('space_group_parent_id', $space->getKey())
+                ->get();
+
+            foreach ($children as $child) {
+                if (! $child instanceof self) {
+                    continue;
+                }
+
+                self::applyOccupancyConsistencyUpdates($child);
+            }
+        } finally {
+            self::$syncingOccupancyConsistency = false;
+        }
+    }
+
+    private static function applyOccupancyConsistencyUpdates(self $space): void
+    {
+        $updates = $space->occupancyConsistencyUpdates();
+        if ($updates === []) {
+            return;
+        }
+
+        $space->forceFill($updates)->saveQuietly();
+    }
+
+    private static function detachChildrenAfterStatusChange(self $space): void
+    {
+        if (! $space->wasChanged('status') || ! $space->exists) {
+            return;
+        }
+
+        $children = self::query()
+            ->with('spaceGroupParent')
+            ->where('space_group_role', self::SPACE_GROUP_ROLE_CHILD)
+            ->where('space_group_parent_id', $space->getKey())
+            ->get();
+
+        foreach ($children as $child) {
+            if (! $child instanceof self) {
+                continue;
+            }
+
+            $child->forceFill(self::ordinaryGroupFields());
+            $child->forceFill($child->occupancyConsistencyUpdates());
+            $child->saveQuietly();
+        }
+    }
+
+    private static function ordinaryGroupFields(): array
+    {
+        return [
+            'space_group_role' => self::SPACE_GROUP_ROLE_NONE,
+            'space_group_parent_id' => null,
+            'space_group_slot' => null,
+            'space_group_token' => null,
+        ];
+    }
+
+    private function resolvedValidParentGroup(): ?self
+    {
+        if ((string) ($this->space_group_role ?? self::SPACE_GROUP_ROLE_NONE) !== self::SPACE_GROUP_ROLE_CHILD) {
+            return null;
+        }
+
+        if (! filled($this->space_group_parent_id)) {
+            return null;
+        }
+
+        $parent = $this->relationLoaded('spaceGroupParent')
+            ? $this->getRelation('spaceGroupParent')
+            : $this->spaceGroupParent()->first();
+
+        if (! $parent instanceof self) {
+            return null;
+        }
+
+        return (string) ($parent->space_group_role ?? self::SPACE_GROUP_ROLE_NONE) === self::SPACE_GROUP_ROLE_PARENT
+            ? $parent
+            : null;
     }
 
     public function market(): BelongsTo
