@@ -345,6 +345,17 @@ class Operation extends Model
             }
         }
 
+        if (
+            $latestReviewStatusCarrier instanceof self
+            && (
+                self::isStaleFreeOccupancyObservation($latestReviewStatusCarrier, $space)
+                || self::isInactiveAttentionObservation($latestReviewStatusCarrier, $space)
+            )
+        ) {
+            $space->map_review_status = 'matched';
+            $space->map_reviewed_at = $latestReviewStatusCarrier->effective_at;
+        }
+
         if ($space->isDirty()) {
             $space->save();
         }
