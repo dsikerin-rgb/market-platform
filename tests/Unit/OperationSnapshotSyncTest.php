@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Domain\Operations\OperationType;
+use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Operation;
 use App\Models\Tenant;
 use Carbon\CarbonImmutable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class OperationSnapshotSyncTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_applied_operations_update_space_snapshot_and_canceled_do_not_override_it(): void
     {
@@ -101,5 +102,146 @@ class OperationSnapshotSyncTest extends TestCase
         $this->assertSame('Shop A-2', $space->display_name);
         $this->assertSame('maintenance', $space->status);
         $this->assertTrue((bool) $space->is_active);
+    }
+
+    public function test_rebuild_uses_later_created_review_closure_even_if_effective_at_is_backdated(): void
+    {
+        $market = Market::create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $tenantA = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant One',
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Two',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'number' => 'A-3',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'changed_tenant',
+            'map_reviewed_at' => CarbonImmutable::parse('2026-04-22 07:35:48', 'UTC'),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2026-04-22 07:35:48', 'UTC'),
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::TENANT_CHANGED_ON_SITE,
+                'reason' => 'Observed tenant mismatch',
+                'observed_tenant_name' => 'Tenant Two',
+            ],
+        ]);
+
+        $closingTenantSwitch = Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::TENANT_SWITCH,
+            'effective_at' => CarbonImmutable::parse('2026-04-30 18:00:00', 'UTC'),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'from_tenant_id' => $tenantA->id,
+                'to_tenant_id' => $tenantB->id,
+                'reason' => 'Confirmed by review',
+                'review_close_on_effective_at' => true,
+            ],
+        ]);
+
+        $closingMatchedReview = Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2025-12-31 05:00:00', 'UTC'),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => 'matched',
+            ],
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame($tenantB->id, $space->tenant_id);
+        $this->assertSame('matched', $space->map_review_status);
+        $this->assertSame(
+            $closingMatchedReview->effective_at?->toDateTimeString(),
+            $space->map_reviewed_at?->toDateTimeString()
+        );
+    }
+
+    public function test_rebuild_keeps_retired_space_closed_even_if_older_effective_date_is_used(): void
+    {
+        $market = Market::create([
+            'name' => 'Test market',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant One',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'A-4',
+            'status' => 'occupied',
+            'is_active' => true,
+            'map_review_status' => 'conflict',
+            'map_reviewed_at' => CarbonImmutable::parse('2026-05-28 08:19:48', 'UTC'),
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2026-05-28 08:19:48', 'UTC'),
+            'status' => 'observed',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::OCCUPANCY_CONFLICT,
+                'reason' => 'Removed place',
+            ],
+        ]);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => CarbonImmutable::parse('2025-12-31 11:00:00', 'UTC'),
+            'status' => 'applied',
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::RETIRE_SPACE,
+                'reason' => 'Removed place',
+                'effective_date' => '2026-01-01',
+            ],
+        ]);
+
+        Operation::rebuildMarketSpaceSnapshot((int) $market->id, (int) $space->id);
+
+        $space->refresh();
+
+        $this->assertSame('changed', $space->map_review_status);
     }
 }
