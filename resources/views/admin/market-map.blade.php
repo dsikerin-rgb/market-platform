@@ -2288,7 +2288,7 @@
               <span class="legend-label">Нет долга</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" style="background: #0ea5e9;"></span>
+              <span class="legend-color" style="background: #84cc16;"></span>
               <span class="legend-label">К оплате, срок не нарушен</span>
             </div>
             <div class="legend-item">
@@ -4894,7 +4894,7 @@
               // Цвета для debt status
               const debtColors = {
                 green: '#22c55e',
-                pending: '#0ea5e9',
+                pending: '#84cc16',
                 orange: '#f59e0b',
                 red: {
                   space: '#b91c1c',
