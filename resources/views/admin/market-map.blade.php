@@ -2284,11 +2284,11 @@
         <div class="legend toolbar-group toolbar-group--accent" id="legendDebt">
           <div class="legend-items">
             <div class="legend-item">
-              <span class="legend-color" style="background: #22c55e;"></span>
+              <span class="legend-color" style="background: #16a34a;"></span>
               <span class="legend-label">Нет долга</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" style="background: #84cc16;"></span>
+              <span class="legend-color" style="background: #a3e635;"></span>
               <span class="legend-label">К оплате, срок не нарушен</span>
             </div>
             <div class="legend-item">
@@ -4893,8 +4893,8 @@
 
               // Цвета для debt status
               const debtColors = {
-                green: '#22c55e',
-                pending: '#84cc16',
+                green: '#16a34a',
+                pending: '#a3e635',
                 orange: '#f59e0b',
                 red: {
                   space: '#b91c1c',
@@ -4960,6 +4960,7 @@
                 // Debt status: закрашиваем цветом долга
                 fill = debtFill;
                 stroke = BORDER_COLOR;
+                strokeDasharray = null;
                 fo = 1;
               } else if (fillStyle === 'rent' || fillStyle === 'rent-missing') {
                 // Слой ставок: чем выше ставка, тем теплее цвет
