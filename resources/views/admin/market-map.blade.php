@@ -2288,7 +2288,7 @@
               <span class="legend-label">Нет долга</span>
             </div>
             <div class="legend-item">
-              <span class="legend-color" style="background: #a3e635;"></span>
+              <span class="legend-color" style="background: #86efac;"></span>
               <span class="legend-label">К оплате, срок не нарушен</span>
             </div>
             <div class="legend-item">
@@ -2307,7 +2307,7 @@
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #ef4444;"></span>
-              <span class="legend-label">Риск арендатора от {{ $debtRedAfterDays ?? 30 }} дней</span>
+              <span class="legend-label">Просрочка арендатора от {{ $debtRedAfterDays ?? 30 }} дней</span>
             </div>
             <div class="legend-item">
               <span class="legend-color" style="background: #94a3b8;"></span>
@@ -4894,7 +4894,7 @@
               // Цвета для debt status
               const debtColors = {
                 green: '#16a34a',
-                pending: '#a3e635',
+                pending: '#86efac',
                 orange: '#f59e0b',
                 red: {
                   space: '#b91c1c',
