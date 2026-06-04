@@ -66,6 +66,12 @@ class TenantContractResource extends BaseResource
     /** @var array<int, array<int, bool>> */
     private static array $accrualHistoryContractIdsCache = [];
 
+    /** @var array<int, array<string, string>> */
+    private static array $latestDebtOrganizationsCache = [];
+
+    /** @var array<int, array<string, string>> */
+    private static array $latestDebtAccountsCache = [];
+
     /** @var array<string, array<string, list<int>>> */
     private static array $workbenchIdsCache = [];
 
@@ -527,6 +533,22 @@ class TenantContractResource extends BaseResource
                     ->badge()
                     ->color(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'success' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('latest_debt_organization')
+                    ->label('Организация долга 1С')
+                    ->state(fn (TenantContract $record): string => static::latestDebtOrganizationLabel($record))
+                    ->placeholder('—')
+                    ->tooltip('Организация из последнего снимка задолженности 1С.')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn (): bool => static::canViewTechnicalFields()),
+
+                TextColumn::make('latest_debt_account')
+                    ->label('Счет долга 1С')
+                    ->state(fn (TenantContract $record): string => static::latestDebtAccountLabel($record))
+                    ->placeholder('—')
+                    ->tooltip('Счет из последнего снимка задолженности 1С.')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn (): bool => static::canViewTechnicalFields()),
 
                 TextColumn::make('space_mapping_mode')
                     ->label('Режим привязки')
@@ -1049,6 +1071,34 @@ class TenantContractResource extends BaseResource
         return static::$accrualHistoryContractIdsCache[$marketId][$contractId] ?? false;
     }
 
+    private static function latestDebtOrganizationLabel(TenantContract $record): string
+    {
+        $marketId = (int) $record->market_id;
+        $externalId = trim((string) ($record->external_id ?? ''));
+
+        if ($marketId <= 0 || $externalId === '') {
+            return '—';
+        }
+
+        static::warmLatestDebtMetaForMarket($marketId);
+
+        return static::$latestDebtOrganizationsCache[$marketId][$externalId] ?? '—';
+    }
+
+    private static function latestDebtAccountLabel(TenantContract $record): string
+    {
+        $marketId = (int) $record->market_id;
+        $externalId = trim((string) ($record->external_id ?? ''));
+
+        if ($marketId <= 0 || $externalId === '') {
+            return '—';
+        }
+
+        static::warmLatestDebtMetaForMarket($marketId);
+
+        return static::$latestDebtAccountsCache[$marketId][$externalId] ?? '—';
+    }
+
     private static function warmLatestDebtContractIdsForMarket(int $marketId): void
     {
         if ($marketId <= 0 || isset(static::$latestDebtContractIdsCache[$marketId])) {
@@ -1066,6 +1116,56 @@ class TenantContractResource extends BaseResource
             ->all();
 
         static::$latestDebtContractIdsCache[$marketId] = array_fill_keys($externalIds, true);
+    }
+
+    private static function warmLatestDebtMetaForMarket(int $marketId): void
+    {
+        if ($marketId <= 0 || isset(static::$latestDebtOrganizationsCache[$marketId], static::$latestDebtAccountsCache[$marketId])) {
+            return;
+        }
+
+        $rows = DB::query()
+            ->fromSub(ContractDebt::latestContractStateQuery($marketId), 'cd')
+            ->select(['contract_external_id', 'organization_name', 'account'])
+            ->whereNotNull('contract_external_id')
+            ->get();
+
+        $organizationsByContract = [];
+        $accountsByContract = [];
+
+        foreach ($rows as $row) {
+            $externalId = trim((string) ($row->contract_external_id ?? ''));
+
+            if ($externalId === '') {
+                continue;
+            }
+
+            $organizationName = trim((string) ($row->organization_name ?? ''));
+            $account = trim((string) ($row->account ?? ''));
+
+            if ($organizationName !== '') {
+                $organizationsByContract[$externalId][] = $organizationName;
+            }
+
+            if ($account !== '') {
+                $accountsByContract[$externalId][] = $account;
+            }
+        }
+
+        $organizations = [];
+        foreach ($organizationsByContract as $externalId => $names) {
+            $uniqueNames = array_values(array_unique($names));
+            $organizations[$externalId] = $uniqueNames === [] ? '—' : implode(', ', $uniqueNames);
+        }
+
+        $accounts = [];
+        foreach ($accountsByContract as $externalId => $values) {
+            $uniqueAccounts = array_values(array_unique($values));
+            $accounts[$externalId] = $uniqueAccounts === [] ? '—' : implode(', ', $uniqueAccounts);
+        }
+
+        static::$latestDebtOrganizationsCache[$marketId] = $organizations;
+        static::$latestDebtAccountsCache[$marketId] = $accounts;
     }
 
     private static function warmLatestAccrualContractIdsForMarket(int $marketId): void

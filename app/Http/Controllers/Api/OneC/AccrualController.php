@@ -110,6 +110,9 @@ class AccrualController extends Controller
                     'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
                     'items.*.contract_external_id' => ['nullable', 'string', 'max:255'],
                     'items.*.period' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+                    'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
+                    'items.*.organization_name' => ['nullable', 'string', 'max:255'],
+                    'items.*.account' => ['nullable', 'string', 'max:64'],
 
                     'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
                     'items.*.source_place_code' => ['nullable', 'string', 'max:255'],
@@ -201,6 +204,9 @@ class AccrualController extends Controller
                 $contractExternalId = trim((string) ($item['contract_external_id'] ?? ''));
                 $periodYm = trim((string) $item['period']);
                 $periodDate = $periodYm . '-01';
+                $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
+                $organizationName = trim((string) ($item['organization_name'] ?? ''));
+                $account = trim((string) ($item['account'] ?? ''));
                 $spaceKey = trim((string) ($item['market_space_code'] ?? $item['source_place_code'] ?? ''));
                 $sourcePlaceCode = trim((string) ($item['source_place_code'] ?? $spaceKey));
                 $sourcePlaceName = trim((string) ($item['source_place_name'] ?? ''));
@@ -273,6 +279,9 @@ class AccrualController extends Controller
                     $periodYm,
                     $tenantExternalId,
                     $contractExternalId,
+                    $organizationExternalId,
+                    $organizationName,
+                    $account,
                     $spaceKey,
                     $sourcePlaceName,
                     $activityType,
@@ -293,6 +302,9 @@ class AccrualController extends Controller
                     [
                         'tenant_id' => (int) $tenant->id,
                         'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
+                        'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
+                        'organization_name' => $organizationName !== '' ? $organizationName : null,
+                        'account' => $account !== '' ? $account : null,
                         'tenant_contract_id' => $tenantContractId,
                         'contract_link_status' => $match->status,
                         'contract_link_source' => $match->source,
@@ -606,6 +618,9 @@ class AccrualController extends Controller
         string $periodYm,
         string $tenantExternalId,
         string $contractExternalId,
+        string $organizationExternalId,
+        string $organizationName,
+        string $account,
         string $spaceKey,
         string $sourcePlaceName,
         string $activityType,
@@ -615,6 +630,9 @@ class AccrualController extends Controller
             $periodYm,
             $tenantExternalId,
             trim($contractExternalId),
+            trim($organizationExternalId),
+            trim($organizationName),
+            trim($account),
             trim($spaceKey),
             trim($sourcePlaceName),
             trim($activityType),

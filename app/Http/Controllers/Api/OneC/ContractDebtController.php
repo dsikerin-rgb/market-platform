@@ -124,6 +124,9 @@ class ContractDebtController extends Controller
 
                     'items.*.contract_external_id' => ['required', 'string', 'max:255'],
                     'items.*.tenant_external_id'   => ['required', 'string', 'max:255'],
+                    'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
+                    'items.*.organization_name' => ['nullable', 'string', 'max:255'],
+                    'items.*.account' => ['nullable', 'string', 'max:64'],
 
                     // fallback-поля (если external_id в нашей БД ещё не был проставлен)
                     'items.*.inn'         => ['nullable', 'string', 'max:32'],
@@ -193,6 +196,9 @@ class ContractDebtController extends Controller
                 $tenantExternalId = trim((string) $item['tenant_external_id']);
                 $contractExternalId = trim((string) $item['contract_external_id']);
                 $period = trim((string) $item['period']);
+                $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
+                $organizationName = trim((string) ($item['organization_name'] ?? ''));
+                $account = trim((string) ($item['account'] ?? ''));
 
                 $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
                 if ($currency === '') {
@@ -244,6 +250,9 @@ class ContractDebtController extends Controller
                     $tenantExternalId,
                     $contractExternalId,
                     $period,
+                    $organizationExternalId,
+                    $organizationName,
+                    $account,
                     $currency,
                     $accruedAmount,
                     $paidAmount,
@@ -255,6 +264,9 @@ class ContractDebtController extends Controller
                     ->where('tenant_external_id', $tenantExternalId)
                     ->where('contract_external_id', $contractExternalId)
                     ->where('period', $period)
+                    ->where('organization_external_id', $organizationExternalId !== '' ? $organizationExternalId : null)
+                    ->where('organization_name', $organizationName !== '' ? $organizationName : null)
+                    ->where('account', $account !== '' ? $account : null)
                     ->where('currency', $currency)
                     ->where('accrued_amount', $accruedAmount)
                     ->where('paid_amount', $paidAmount)
@@ -272,6 +284,9 @@ class ContractDebtController extends Controller
                     'tenant_external_id' => $tenantExternalId,
                     'contract_external_id' => $contractExternalId,
                     'period' => $period,
+                    'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
+                    'organization_name' => $organizationName !== '' ? $organizationName : null,
+                    'account' => $account !== '' ? $account : null,
                     'accrued_amount' => $accruedAmount,
                     'paid_amount' => $paidAmount,
                     'debt_amount' => $debtAmount,
@@ -432,6 +447,9 @@ class ContractDebtController extends Controller
         string $tenantExternalId,
         string $contractExternalId,
         string $period,
+        string $organizationExternalId,
+        string $organizationName,
+        string $account,
         string $currency,
         string $accruedAmount,
         string $paidAmount,
@@ -442,6 +460,9 @@ class ContractDebtController extends Controller
             $tenantExternalId,
             $contractExternalId,
             $period,
+            $organizationExternalId,
+            $organizationName,
+            $account,
             $currency,
             $accruedAmount,
             $paidAmount,

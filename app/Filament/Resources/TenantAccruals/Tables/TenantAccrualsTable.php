@@ -6,6 +6,7 @@ namespace App\Filament\Resources\TenantAccruals\Tables;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantContractResource;
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Models\MarketLocation;
 use App\Models\TenantAccrual;
 use Carbon\Carbon;
@@ -123,6 +124,28 @@ class TenantAccrualsTable
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->visible(fn (): bool => (bool) Filament::auth()->user()?->isSuperAdmin()),
+
+                TextColumn::make('organization_name')
+                    ->label('Организация 1С')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('organization_name')),
+
+                TextColumn::make('organization_external_id')
+                    ->label('ID организации 1С')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn (): bool => (bool) Filament::auth()->user()?->isSuperAdmin()
+                        && TenantAccrualResource::hasTenantAccrualColumn('organization_external_id')),
+
+                TextColumn::make('account')
+                    ->label('Счет 1С')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('account')),
 
                 TextColumn::make('marketSpace.location.name')
                     ->label('Локация')

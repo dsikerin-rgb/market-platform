@@ -24,6 +24,9 @@ class ContractDebt extends Model
         'tenant_external_id',
         'contract_external_id',
         'period',
+        'organization_external_id',
+        'organization_name',
+        'account',
         'accrued_amount',
         'paid_amount',
         'debt_amount',
@@ -164,6 +167,9 @@ class ContractDebt extends Model
             'tenant_external_id',
             'contract_external_id',
             'period',
+            'organization_external_id',
+            'organization_name',
+            'account',
         ];
 
         return array_values(array_filter(
@@ -181,6 +187,9 @@ class ContractDebt extends Model
             'market_id',
             'tenant_external_id',
             'contract_external_id',
+            'organization_external_id',
+            'organization_name',
+            'account',
         ];
 
         return array_values(array_filter(
