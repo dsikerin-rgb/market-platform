@@ -18,6 +18,11 @@ class ContractDebt extends Model
     /**
      * @var list<string>
      */
+    public const CALCULATION_ACCOUNTS = ['62', '76.07'];
+
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'market_id',
         'tenant_id',
@@ -125,6 +130,10 @@ class ContractDebt extends Model
             $base->where("{$alias}.market_id", $marketId);
         }
 
+        if (Schema::hasColumn($table, 'account')) {
+            $base->whereIn("{$alias}.account", static::CALCULATION_ACCOUNTS);
+        }
+
         $versionColumn = static::currentStateVersionColumn($table);
 
         if ($versionColumn === null || $identityColumns === []) {
@@ -135,6 +144,10 @@ class ContractDebt extends Model
 
         if ($marketId !== null) {
             $latestPerIdentity->where('snap.market_id', $marketId);
+        }
+
+        if (Schema::hasColumn($table, 'account')) {
+            $latestPerIdentity->whereIn('snap.account', static::CALCULATION_ACCOUNTS);
         }
 
         foreach ($identityColumns as $column) {
