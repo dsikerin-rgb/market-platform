@@ -150,6 +150,11 @@ class ContractDebt extends Model
 
         return $base->joinSub($latestPerIdentity, 'latest_current', function ($join) use ($alias, $identityColumns, $versionColumn): void {
             foreach ($identityColumns as $column) {
+                if (in_array($column, ['organization_external_id', 'organization_name', 'account'], true)) {
+                    $join->whereRaw("COALESCE({$alias}.{$column}, '') = COALESCE(latest_current.{$column}, '')");
+                    continue;
+                }
+
                 $join->on("{$alias}.{$column}", '=', "latest_current.{$column}");
             }
 

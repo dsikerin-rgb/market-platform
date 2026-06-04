@@ -222,6 +222,12 @@ class DebtStatusResolver
         }
 
         $fields = ['debt_amount', 'period'];
+        if (Schema::hasColumn('contract_debts', 'accrued_amount')) {
+            $fields[] = 'accrued_amount';
+        }
+        if (Schema::hasColumn('contract_debts', 'paid_amount')) {
+            $fields[] = 'paid_amount';
+        }
         if ($hasCalculatedAt) {
             $fields[] = 'calculated_at';
         }
@@ -230,6 +236,7 @@ class DebtStatusResolver
         }
 
         $rows = $query->get($fields);
+        $dueDateRows = $this->fetchContractDebtAgingRows($marketId, $contractExternalIds->all(), $fields);
 
         if ($rows->isEmpty()) {
             // Нет записей 1С для контрактов этого места — используем tenant-fallback
@@ -281,7 +288,13 @@ class DebtStatusResolver
         $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
         $redAfterDays = $settings['red_after_days'] ?? 30;
 
-        $dueDate = $this->calculateDueDateFromRows($rows, $graceDays, $hasPeriod, $hasCalculatedAt, $hasCreatedAt);
+        $dueDate = $this->calculateDueDateFromRows(
+            $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
+            $graceDays,
+            $hasPeriod,
+            $hasCalculatedAt,
+            $hasCreatedAt
+        );
 
         if ($dueDate === null) {
             return $this->makeResult(
@@ -371,6 +384,15 @@ class DebtStatusResolver
 
         $agingRows = $positiveRows->isNotEmpty() ? $positiveRows : $rows;
 
+        $oldBalanceDueDates = $agingRows
+            ->map(fn ($row): ?Carbon => $this->calculateOldBalanceDueDate($row, $graceDays, $hasPeriod))
+            ->filter()
+            ->values();
+
+        if ($oldBalanceDueDates->isNotEmpty()) {
+            return $oldBalanceDueDates->sortBy(fn (Carbon $date): int => $date->getTimestamp())->first();
+        }
+
         // 1. Для aging берём самую раннюю положительную debt row, а не последний snapshot.
         // Иначе новый snapshot "омолаживает" старую просрочку и скрывает overdue-статусы.
         if ($hasCalculatedAt) {
@@ -421,6 +443,62 @@ class DebtStatusResolver
      *
      * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int,spaces_count:int,debt_spaces_count:int}
      */
+    private function calculateOldBalanceDueDate(object $row, int $graceDays, bool $hasPeriod): ?Carbon
+    {
+        if (!$hasPeriod) {
+            return null;
+        }
+
+        $period = (string) ($row->period ?? '');
+        if (preg_match('/^\d{4}-\d{2}/', $period) !== 1) {
+            return null;
+        }
+
+        if (!property_exists($row, 'accrued_amount') || !property_exists($row, 'paid_amount')) {
+            return null;
+        }
+
+        $debtAmount = (float) ($row->debt_amount ?? 0);
+        $currentPeriodUnpaid = max(0.0, (float) ($row->accrued_amount ?? 0) - (float) ($row->paid_amount ?? 0));
+
+        if ($debtAmount <= $currentPeriodUnpaid + 0.009) {
+            return null;
+        }
+
+        try {
+            return Carbon::createFromFormat('Y-m-d', substr($period, 0, 7) . '-01')
+                ->startOfMonth()
+                ->subMonthNoOverflow()
+                ->addDays($graceDays);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param list<string> $contractExternalIds
+     * @param list<string> $fields
+     */
+    private function fetchContractDebtAgingRows(int $marketId, array $contractExternalIds, array $fields): Collection
+    {
+        $contractExternalIds = array_values(array_filter(array_unique(array_map(
+            static fn (mixed $value): string => trim((string) $value),
+            $contractExternalIds
+        ))));
+
+        if ($contractExternalIds === []) {
+            return collect();
+        }
+
+        return DB::query()
+            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->whereIn('cd.contract_external_id', $contractExternalIds)
+            ->get(array_map(
+                static fn (string $field): string => "cd.{$field}",
+                $fields
+            ));
+    }
+
     public function getAggregateStatusForTenant(Tenant $tenant): array
     {
         $baseResult = $this->resolve($tenant);
@@ -678,8 +756,9 @@ class DebtStatusResolver
             ->unique()
             ->values()
             ->all();
+        $usesContractExternalIds = $hasContractExternalId && $contractExternalIds !== [];
 
-        if ($hasContractExternalId && $contractExternalIds !== []) {
+        if ($usesContractExternalIds) {
             $query->whereIn('cd.contract_external_id', $contractExternalIds);
         } elseif ($hasTenantExternalId) {
             $externalId = trim($tenant->external_id ?? '');
@@ -702,12 +781,21 @@ class DebtStatusResolver
         }
         // Получаем поля
         $fields = ['debt_amount'];
+        if (Schema::hasColumn('contract_debts', 'accrued_amount')) {
+            $fields[] = 'accrued_amount';
+        }
+        if (Schema::hasColumn('contract_debts', 'paid_amount')) {
+            $fields[] = 'paid_amount';
+        }
         if ($hasDueDate) $fields[] = 'due_date';
         if ($hasCalculatedAt) $fields[] = 'calculated_at';
         if ($hasCreatedAt) $fields[] = 'created_at';
         if ($hasPeriod) $fields[] = 'period';
 
         $rows = $query->get($fields);
+        $agingRows = $usesContractExternalIds
+            ? $this->fetchContractDebtAgingRows((int) $tenant->market_id, $contractExternalIds, $fields)
+            : collect();
 
         // Определяем snapshot label
         $snapshotLabel = null;
@@ -724,6 +812,7 @@ class DebtStatusResolver
 
         return [
             'rows' => $rows,
+            'aging_rows' => $agingRows,
             'snapshot_label' => $snapshotLabel,
             'has_due_date' => $hasDueDate,
             'has_calculated_at' => $hasCalculatedAt,
@@ -824,7 +913,9 @@ class DebtStatusResolver
      */
     private function calculateDueDate(array $data, int $graceDays): ?Carbon
     {
-        $rows = $data['rows'];
+        $rows = ($data['aging_rows'] ?? collect())->isNotEmpty()
+            ? $data['aging_rows']
+            : $data['rows'];
 
         // Filter to positive debt rows (same as calculateDueDateFromRows)
         $positiveRows = $rows->filter(static function ($row): bool {
@@ -834,6 +925,15 @@ class DebtStatusResolver
         $agingRows = $positiveRows->isNotEmpty() ? $positiveRows : $rows;
 
         // 1. Если есть due_date - используем самый ранний
+        $oldBalanceDueDates = $agingRows
+            ->map(fn ($row): ?Carbon => $this->calculateOldBalanceDueDate($row, $graceDays, (bool) $data['has_period']))
+            ->filter()
+            ->values();
+
+        if ($oldBalanceDueDates->isNotEmpty()) {
+            return $oldBalanceDueDates->sortBy(fn (Carbon $date): int => $date->getTimestamp())->first();
+        }
+
         if ($data['has_due_date']) {
             $earliestDueDate = null;
             foreach ($agingRows as $row) {
