@@ -187,10 +187,12 @@ class ContractDebtController extends Controller
 
             $rows = [];
             $skipped = 0;
+            $metadataUpdated = 0;
             $notFoundTenants = [];
             $tenantsCreated = 0;
             $tenantsUpdatedByInn = 0;
             $hasActiveSpaceFlag = Schema::hasColumn('market_spaces', 'is_active');
+            $hasUpdatedAtColumn = Schema::hasColumn('contract_debts', 'updated_at');
 
             foreach ($validated['items'] as $item) {
                 $tenantExternalId = trim((string) $item['tenant_external_id']);
@@ -259,26 +261,50 @@ class ContractDebtController extends Controller
                     $debtAmount
                 );
 
-                $alreadyExists = DB::table('contract_debts')
+                $existingNaturalRow = DB::table('contract_debts')
                     ->where('market_id', $marketId)
                     ->where('tenant_external_id', $tenantExternalId)
                     ->where('contract_external_id', $contractExternalId)
                     ->where('period', $period)
-                    ->where('organization_external_id', $organizationExternalId !== '' ? $organizationExternalId : null)
-                    ->where('organization_name', $organizationName !== '' ? $organizationName : null)
-                    ->where('account', $account !== '' ? $account : null)
                     ->where('currency', $currency)
                     ->where('accrued_amount', $accruedAmount)
                     ->where('paid_amount', $paidAmount)
                     ->where('debt_amount', $debtAmount)
-                    ->exists();
+                    ->first(['id', 'organization_external_id', 'organization_name', 'account']);
 
-                if ($alreadyExists) {
+                if ($existingNaturalRow !== null) {
+                    $metadataUpdates = [];
+
+                    if ($organizationExternalId !== '' && (string) ($existingNaturalRow->organization_external_id ?? '') !== $organizationExternalId) {
+                        $metadataUpdates['organization_external_id'] = $organizationExternalId;
+                    }
+
+                    if ($organizationName !== '' && (string) ($existingNaturalRow->organization_name ?? '') !== $organizationName) {
+                        $metadataUpdates['organization_name'] = $organizationName;
+                    }
+
+                    if ($account !== '' && (string) ($existingNaturalRow->account ?? '') !== $account) {
+                        $metadataUpdates['account'] = $account;
+                    }
+
+                    if ($metadataUpdates !== []) {
+                        $metadataUpdates['raw_payload'] = $this->safeJsonEncode($item);
+                        if ($hasUpdatedAtColumn) {
+                            $metadataUpdates['updated_at'] = $now;
+                        }
+
+                        DB::table('contract_debts')
+                            ->where('id', $existingNaturalRow->id)
+                            ->update($metadataUpdates);
+
+                        $metadataUpdated++;
+                    }
+
                     $skipped++;
                     continue;
                 }
 
-                $rows[] = [
+                $row = [
                     'market_id' => $marketId,
                     'tenant_id' => $tenant->id,
                     'tenant_external_id' => $tenantExternalId,
@@ -297,8 +323,13 @@ class ContractDebtController extends Controller
                     'hash' => $hash,
                     'raw_payload' => $this->safeJsonEncode($item),
                     'created_at' => $now,
-                    'updated_at' => $now,
                 ];
+
+                if ($hasUpdatedAtColumn) {
+                    $row['updated_at'] = $now;
+                }
+
+                $rows[] = $row;
             }
 
             $inserted = 0;
@@ -312,6 +343,7 @@ class ContractDebtController extends Controller
                 'received' => count($validated['items']),
                 'inserted' => $inserted,
                 'skipped' => $skipped,
+                'metadata_updated' => $metadataUpdated,
                 'calculated_at' => $calculatedAt,
             ];
 
@@ -336,6 +368,7 @@ class ContractDebtController extends Controller
                 'calculated_at' => $calculatedAt,
                 'duration_ms' => $durationMs,
                 'meta' => [
+                    'metadata_updated' => $metadataUpdated,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
                     'warnings' => $response['warnings'] ?? null,
@@ -355,6 +388,7 @@ class ContractDebtController extends Controller
                     'received' => count($validated['items']),
                     'inserted' => $inserted,
                     'skipped' => $skipped,
+                    'metadata_updated' => $metadataUpdated,
                     'duration_ms' => $durationMs,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
