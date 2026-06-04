@@ -3000,168 +3000,36 @@ class TenantResource extends BaseResource
         if (! $record) {
             return new HtmlString('<div class="tenant-payment-discipline__empty">Данные появятся после сохранения арендатора.</div>');
         }
+        $resolved = app(DebtStatusResolver::class)->resolve($record);
+        $status = (string) ($resolved['status'] ?? 'gray');
+        $label = (string) ($resolved['label'] ?? 'Нет данных');
+        $updatedAtLabel = $resolved['updated_at'] ?? null;
+        $extra = is_array($resolved['extra'] ?? null) ? $resolved['extra'] : [];
 
-        if (
-            ! DbSchema::hasTable('contract_debts')
-            || ! static::hasColumn('contract_debts', 'tenant_id')
-            || ! static::hasColumn('contract_debts', 'debt_amount')
-        ) {
-            return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
+        if ($status === '' || $status === 'gray') {
+            return static::renderPaymentDisciplineCard('Нет данных', null, false, true, null, $updatedAtLabel);
         }
 
-        $hasTenantExternalId = static::hasColumn('contract_debts', 'tenant_external_id');
-        $hasContractExternalId = static::hasColumn('contract_debts', 'contract_external_id');
-        $hasMarketId = static::hasColumn('contract_debts', 'market_id');
-        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
-        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
-        $hasPeriod = static::hasColumn('contract_debts', 'period');
-        $hasDueDate = static::hasColumn('contract_debts', 'due_date');
-
-        $query = ContractDebt::latestContractStateQuery((int) $record->market_id);
-
-        if ($hasMarketId) {
-            $query->where('cd.market_id', (int) $record->market_id);
+        $daysOverdue = null;
+        $overdueDays = $extra['overdue_days'] ?? null;
+        if (is_numeric($overdueDays)) {
+            $daysOverdue = max(1, (int) floor((float) $overdueDays));
         }
 
-        $contractExternalIds = [];
-        if (DbSchema::hasTable('tenant_contracts') && static::hasColumn('tenant_contracts', 'external_id')) {
-            $contractExternalIds = DB::table('tenant_contracts')
-                ->where('market_id', (int) $record->market_id)
-                ->where('tenant_id', (int) $record->id)
-                ->whereNotNull('external_id')
-                ->pluck('external_id')
-                ->map(static fn ($value): string => trim((string) $value))
-                ->filter(static fn (string $value): bool => $value !== '')
-                ->unique()
-                ->values()
-                ->all();
+        $debtAmount = null;
+        $resolvedDebtAmount = $extra['debt_amount'] ?? null;
+        if (is_numeric($resolvedDebtAmount)) {
+            $debtAmount = (float) $resolvedDebtAmount;
         }
 
-        if ($hasContractExternalId && $contractExternalIds !== []) {
-            $query->whereIn('cd.contract_external_id', $contractExternalIds);
-        } elseif ($hasTenantExternalId) {
-            $tenantExternalId = trim((string) ($record->external_id ?? ''));
-            $oneCUid = trim((string) ($record->one_c_uid ?? ''));
-
-            if ($tenantExternalId !== '' || $oneCUid !== '') {
-                $query->where(function ($inner) use ($tenantExternalId, $oneCUid): void {
-                    if ($tenantExternalId !== '') {
-                        $inner->where('cd.tenant_external_id', $tenantExternalId);
-                    }
-
-                    if ($oneCUid !== '') {
-                        if ($tenantExternalId !== '') {
-                            $inner->orWhere('cd.tenant_external_id', $oneCUid);
-                        } else {
-                            $inner->where('cd.tenant_external_id', $oneCUid);
-                        }
-                    }
-                });
-            } else {
-                $query->where('cd.tenant_id', (int) $record->id);
-            }
-        } else {
-            $query->where('cd.tenant_id', (int) $record->id);
-        }
-
-        $fields = ['debt_amount'];
-        if ($hasDueDate) {
-            $fields[] = 'due_date';
-        }
-        if ($hasCalculatedAt) {
-            $fields[] = 'calculated_at';
-        }
-        if ($hasCreatedAt) {
-            $fields[] = 'created_at';
-        }
-        if ($hasPeriod) {
-            $fields[] = 'period';
-        }
-
-        $rows = $query->get($fields);
-        if ($rows->isEmpty()) {
-            $displayStatus = static::resolveDebtStatusForDisplay($record);
-            $displayState = (string) ($displayStatus['status'] ?? 'gray');
-
-            if (in_array($displayState, ['green', 'pending', 'orange', 'red'], true)) {
-                return static::renderPaymentDisciplineCard(
-                    (string) ($displayStatus['label'] ?? 'Нет данных'),
-                    null,
-                    in_array($displayState, ['orange', 'red'], true),
-                    false,
-                    null,
-                    $displayStatus['updated_at'] ?? null,
-                );
-            }
-
-            return static::renderPaymentDisciplineCard('Нет данных', null, false, true);
-        }
-
-        $updatedAtLabel = null;
-        if ($hasCalculatedAt) {
-            $latestUpdatedAt = $rows->max('calculated_at');
-            $updatedAtLabel = static::formatDebtSnapshotLabel($latestUpdatedAt);
-        } elseif ($hasCreatedAt) {
-            $latestUpdatedAt = $rows->max('created_at');
-            $updatedAtLabel = static::formatDebtSnapshotLabel($latestUpdatedAt);
-        } elseif ($hasPeriod) {
-            $latestUpdatedAt = $rows->max('period');
-            $updatedAtLabel = static::formatDebtSnapshotLabel($latestUpdatedAt, true);
-        }
-
-        $positiveDebtRows = $rows->filter(static function ($row): bool {
-            return (float) ($row->debt_amount ?? 0) > 0.009;
-        });
-
-        if ($positiveDebtRows->isEmpty()) {
-            return static::renderPaymentDisciplineCard('Без просрочек', null, false, false, null, $updatedAtLabel);
-        }
-
-        $settings = static::resolveDebtMonitoringSettings((int) $record->market_id);
-        $graceDays = max(0, (int) ($settings['grace_days'] ?? 5));
-        $now = Carbon::now();
-
-        $overdueRows = [];
-        $oldestOverdueDueDate = null;
-        $hasResolvedDueDate = false;
-
-        foreach ($positiveDebtRows as $row) {
-            $rowDueDate = static::resolveDebtSnapshotDueDate(
-                $row,
-                $graceDays,
-                $hasDueDate,
-                $hasCalculatedAt,
-                $hasCreatedAt,
-                $hasPeriod,
-            );
-
-            if ($rowDueDate === null) {
-                continue;
-            }
-
-            $hasResolvedDueDate = true;
-
-            if ($rowDueDate->lte($now)) {
-                $overdueRows[] = (float) ($row->debt_amount ?? 0);
-
-                if ($oldestOverdueDueDate === null || $rowDueDate->lt($oldestOverdueDueDate)) {
-                    $oldestOverdueDueDate = $rowDueDate->copy();
-                }
-            }
-        }
-
-        if ($oldestOverdueDueDate === null) {
-            if (! $hasResolvedDueDate) {
-                return static::renderPaymentDisciplineCard('Нет данных', null, false, true, null, $updatedAtLabel);
-            }
-
-            return static::renderPaymentDisciplineCard('Без просрочек', null, false, false, null, $updatedAtLabel);
-        }
-
-        $daysOverdue = max(1, $oldestOverdueDueDate->diffInDays($now));
-        $overdueAmount = (float) array_sum($overdueRows);
-
-        return static::renderPaymentDisciplineCard('Есть просрочка', $daysOverdue, true, false, $overdueAmount, $updatedAtLabel);
+        return static::renderPaymentDisciplineCard(
+            $label,
+            $daysOverdue,
+            in_array($status, ['orange', 'red'], true),
+            false,
+            $debtAmount,
+            $updatedAtLabel,
+        );
     }
 
     private static function renderPaymentDisciplineCard(string $stateLabel, ?int $daysOverdue, bool $isOverdue, bool $isNeutral = false, ?float $overdueAmount = null, ?string $updatedAtLabel = null): HtmlString
