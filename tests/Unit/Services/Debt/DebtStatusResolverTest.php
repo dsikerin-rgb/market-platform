@@ -224,6 +224,49 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('Просрочка до 89 дн.', $result['label']);
     }
 
+    public function test_auto_status_treats_debt_above_current_accrual_as_old_balance(): void
+    {
+        Carbon::setTestNow('2026-06-04 12:00:00');
+
+        $this->market->settings = [
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+            ],
+        ];
+        $this->market->save();
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with old balance',
+            'external_id' => 'tenant-old-balance-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-old-balance-001',
+            'period' => '2026-06',
+            'accrued_amount' => 93451,
+            'paid_amount' => 0,
+            'debt_amount' => 300536.05,
+            'calculated_at' => Carbon::now(),
+            'created_at' => Carbon::now(),
+            'hash' => sha1($tenant->external_id . '|contract-old-balance-001|2026-06|93451|0|300536.05'),
+        ]);
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('orange', $result['status']);
+        $this->assertGreaterThan(0, $result['severity']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_auto_status_red_overdue_90_days_or_more(): void
     {
         $tenant = Tenant::create([
