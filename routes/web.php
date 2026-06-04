@@ -695,6 +695,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'space_effective_debt_status_updated_at' => null,
             'space_effective_debt_status_source' => null,
             'space_effective_debt_overdue_days' => null,
+            'space_effective_debt_amount' => null,
             'space_effective_debt_status_scope' => 'none',
             'space_financial_source' => 'none',
             'space_financial_source_space_id' => null,
@@ -740,6 +741,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'space_effective_debt_status_updated_at' => $resolvedDebt['updated_at'] ?? null,
             'space_effective_debt_status_source' => $resolvedDebt['source'] ?? null,
             'space_effective_debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
+            'space_effective_debt_amount' => $resolvedDebt['extra']['debt_amount'] ?? null,
             'space_effective_debt_status_scope' => $debtScope,
             'space_financial_source' => $financialSource,
             'space_financial_source_space_id' => (int) $sourceSpace->id,
@@ -1524,6 +1526,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_updated_at' => $resolvedDebt['updated_at'],
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
+                'debt_amount' => $resolvedDebt['extra']['debt_amount'] ?? null,
                 'debt_status_scope' => $debtScope,
                 ...$effectiveFinancial,
 
@@ -2439,6 +2442,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'debt_status_updated_at' => $resolvedDebt['updated_at'],
                 'debt_status_source' => $resolvedDebt['source'] ?? null,
                 'debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
+                'debt_amount' => $resolvedDebt['extra']['debt_amount'] ?? null,
                 'debt_status_scope' => $resolvedDebt['extra']['scope'] ?? 'none',
                 ...$effectiveFinancial,
 
