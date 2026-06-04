@@ -319,7 +319,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 1,
-                extra: ['scope' => 'space']
+                extra: ['overdue_days' => 0, 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
             );
         }
 
@@ -333,7 +333,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 3,
-                extra: ['overdue_days' => $daysOverdue, 'scope' => 'space']
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
             );
         }
 
@@ -345,7 +345,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 2,
-                extra: ['overdue_days' => $daysOverdue, 'scope' => 'space']
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
             );
         }
 
@@ -357,7 +357,7 @@ class DebtStatusResolver
             updatedAt: $snapshotLabel,
             source: 'contract_debts',
             severity: 1,
-            extra: ['overdue_days' => max(0, $daysOverdue), 'scope' => 'space']
+            extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
         );
     }
 
@@ -680,7 +680,8 @@ class DebtStatusResolver
                 label: $labels[self::STATUS_PENDING],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
-                severity: 1
+                severity: 1,
+                extra: ['overdue_days' => 0, 'debt_amount' => (float) $totalDebt]
             );
         }
 
@@ -694,7 +695,8 @@ class DebtStatusResolver
                 label: $labels[self::STATUS_RED],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
-                severity: 3
+                severity: 3,
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt]
             );
         }
 
@@ -705,7 +707,8 @@ class DebtStatusResolver
                 label: $labels[self::STATUS_PENDING],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
-                severity: 1
+                severity: 1,
+                extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => (float) $totalDebt]
             );
         }
 
@@ -715,7 +718,8 @@ class DebtStatusResolver
             label: $labels[self::STATUS_ORANGE],
             updatedAt: $debtsData['snapshot_label'],
             source: 'Источник: contract_debts',
-            severity: 2
+            severity: 2,
+            extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt]
         );
     }
 

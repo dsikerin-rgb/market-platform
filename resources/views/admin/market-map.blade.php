@@ -3454,6 +3454,9 @@
               effectiveDebtOverdueDays: item?.space_effective_debt_overdue_days !== null && item?.space_effective_debt_overdue_days !== undefined
                 ? Number(item.space_effective_debt_overdue_days)
                 : null,
+              effectiveDebtAmount: item?.space_effective_debt_amount !== null && item?.space_effective_debt_amount !== undefined
+                ? Number(item.space_effective_debt_amount)
+                : null,
               effectiveDebtStatusScope: item?.space_effective_debt_status_scope ? String(item.space_effective_debt_status_scope) : 'none',
               financialSource: item?.space_financial_source ? String(item.space_financial_source) : 'none',
               financialSourceSpaceId: item?.space_financial_source_space_id !== null && item?.space_financial_source_space_id !== undefined
@@ -6633,6 +6636,20 @@
                   const overdueDaysLabel = overdueDays !== null && Number.isFinite(overdueDays)
                     ? String(Math.max(0, Math.round(overdueDays)))
                     : null;
+                  const debtAmountRaw = hit.space_effective_debt_amount !== null && hit.space_effective_debt_amount !== undefined
+                    ? hit.space_effective_debt_amount
+                    : hit.debt_amount;
+                  const debtAmount = debtAmountRaw !== null && debtAmountRaw !== undefined ? Number(debtAmountRaw) : null;
+                  const debtAmountLabel = debtAmount !== null && Number.isFinite(debtAmount)
+                    ? formatMoneyRu(debtAmount)
+                    : null;
+                  const debtDetailsSuffix = [
+                    debtAmountLabel !== null ? debtAmountLabel : null,
+                    overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : null,
+                  ].filter(Boolean).join(' · ');
+                  const overdueFallbackLabel = debtStatus === 'red' ? String(debtLabel || 'red') : String(debtLabel || 'yes');
+                  const overduePopupLabel = debtDetailsSuffix !== '' ? debtDetailsSuffix : overdueFallbackLabel;
+                  const pendingPopupLabel = debtAmountLabel !== null ? ('Срок не нарушен: ' + debtAmountLabel) : 'Срок не нарушен';
                   const debtSource = hit.space_effective_debt_status_source || hit.debt_status_source || '';
                   const financialSource = hit.space_financial_source ? String(hit.space_financial_source) : 'none';
                   const financialSourceSpaceLabel = hit.space_financial_source_space_number
@@ -6651,12 +6668,12 @@
                       line4 = 'Финансовый статус группы: Нет задолженности';
                       scopeExplanation = groupSourceText;
                     } else if (debtStatus === 'pending') {
-                      line4 = 'Финансовый статус группы: Срок не нарушен';
+                      line4 = 'Финансовый статус группы: ' + pendingPopupLabel;
                       scopeExplanation = groupSourceText;
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Финансовый статус группы: ' + escapeHtml(debtLabel))
-                        : ('Просрочка группы: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
+                        : ('Просрочка группы: ' + overduePopupLabel);
                       scopeExplanation = groupSourceText;
                     } else if (debtStatus === 'gray') {
                       line4 = 'Финансовый статус группы: Нет данных 1С';
@@ -6671,12 +6688,12 @@
                       line4 = 'Статус по месту: Нет задолженности';
                       scopeExplanation = debtMode === 'manual' ? 'Статус задан вручную' : 'Связь с местом подтверждена в 1С';
                     } else if (debtStatus === 'pending') {
-                      line4 = 'Статус по месту: Срок не нарушен';
+                      line4 = 'Статус по месту: ' + pendingPopupLabel;
                       scopeExplanation = 'Связь с местом подтверждена в 1С';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус по месту: ' + escapeHtml(debtLabel))
-                        : ('Просрочка по месту: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
+                        : ('Просрочка по месту: ' + overduePopupLabel);
                       scopeExplanation = debtMode === 'manual' ? 'Статус задан вручную' : 'Связь с местом подтверждена в 1С';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус по месту: Нет данных 1С';
@@ -6693,14 +6710,14 @@
                         ? 'Финансовая связь группы с 1С не подтверждена'
                         : 'Финансовая связь с местом не подтверждена';
                     } else if (debtStatus === 'pending') {
-                      line4 = 'Статус арендатора: Срок не нарушен';
+                      line4 = 'Статус арендатора: ' + pendingPopupLabel;
                       scopeExplanation = financialSource === 'parent'
                         ? 'Финансовая связь группы с 1С не подтверждена'
                         : 'Финансовая связь с местом не подтверждена';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус арендатора: ' + escapeHtml(debtLabel))
-                        : ('Просрочка арендатора: ' + (overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : (debtStatus === 'red' ? 'длительная' : 'есть')));
+                        : ('Просрочка арендатора: ' + overduePopupLabel);
                       scopeExplanation = financialSource === 'parent'
                         ? 'Финансовая связь группы с 1С не подтверждена'
                         : 'Финансовая связь с местом не подтверждена';

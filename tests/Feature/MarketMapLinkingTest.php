@@ -1353,6 +1353,7 @@ class MarketMapLinkingTest extends TestCase
             'tenant_external_id' => $parentTenant->external_id,
             'contract_external_id' => $contractExternalId,
             'period' => '2026-04',
+            'account' => '62.01',
             'accrued_amount' => 10000,
             'paid_amount' => 0,
             'debt_amount' => 10000,
@@ -1368,6 +1369,7 @@ class MarketMapLinkingTest extends TestCase
         $spaceResponse->assertOk();
         $spaceResponse->assertJsonPath('item.space_effective_debt_status', 'red');
         $spaceResponse->assertJsonPath('item.space_effective_debt_status_scope', 'space');
+        $spaceResponse->assertJsonPath('item.space_effective_debt_amount', 10000);
         $spaceResponse->assertJsonPath('item.space_financial_source', 'parent');
         $spaceResponse->assertJsonPath('item.space_financial_source_space_id', (int) $parent->id);
         $spaceResponse->assertJsonPath('item.space_financial_source_space_number', (string) $parent->number);
@@ -1379,6 +1381,7 @@ class MarketMapLinkingTest extends TestCase
         $spacesResponse->assertOk();
         $spacesResponse->assertJsonCount(1, 'items');
         $spacesResponse->assertJsonPath('items.0.space_effective_debt_status', 'red');
+        $spacesResponse->assertJsonPath('items.0.space_effective_debt_amount', 10000);
         $spacesResponse->assertJsonPath('items.0.space_financial_source', 'parent');
         $spacesResponse->assertJsonPath('items.0.space_financial_source_space_number', (string) $parent->number);
 
@@ -1391,6 +1394,7 @@ class MarketMapLinkingTest extends TestCase
         $shapesResponse->assertJsonCount(1, 'items');
         $shapesResponse->assertJsonPath('items.0.space_effective_debt_status', 'red');
         $shapesResponse->assertJsonPath('items.0.space_effective_debt_status_scope', 'space');
+        $shapesResponse->assertJsonPath('items.0.space_effective_debt_amount', 10000);
         $shapesResponse->assertJsonPath('items.0.space_financial_source', 'parent');
         $shapesResponse->assertJsonPath('items.0.space_financial_source_space_id', (int) $parent->id);
 
@@ -1404,6 +1408,7 @@ class MarketMapLinkingTest extends TestCase
         $hitResponse->assertOk();
         $hitResponse->assertJsonPath('hit.space_effective_debt_status', 'red');
         $hitResponse->assertJsonPath('hit.space_effective_debt_status_scope', 'space');
+        $hitResponse->assertJsonPath('hit.space_effective_debt_amount', 10000);
         $hitResponse->assertJsonPath('hit.space_financial_source', 'parent');
         $hitResponse->assertJsonPath('hit.space_financial_source_space_number', (string) $parent->number);
     }
