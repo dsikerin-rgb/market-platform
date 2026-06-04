@@ -210,7 +210,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
         $this->assertSame(1300.0, $latestContractDebt);
     }
 
-    public function test_current_state_uses_only_allowed_calculation_accounts(): void
+    public function test_current_state_uses_allowed_calculation_accounts_and_62_subaccounts(): void
     {
         $market = Market::query()->create([
             'name' => 'Test market',
@@ -269,6 +269,34 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'created_at' => $snapshot,
                 'hash' => sha1('contract-account-filtered-6201'),
             ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-account-filtered-6202',
+                'period' => '2026-06',
+                'account' => '62.02',
+                'accrued_amount' => 7000,
+                'paid_amount' => 0,
+                'debt_amount' => 7000,
+                'calculated_at' => $snapshot,
+                'created_at' => $snapshot,
+                'hash' => sha1('contract-account-filtered-6202'),
+            ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-account-filtered-7606',
+                'period' => '2026-06',
+                'account' => '76.06',
+                'accrued_amount' => 0,
+                'paid_amount' => 0,
+                'debt_amount' => 3000,
+                'calculated_at' => $snapshot,
+                'created_at' => $snapshot,
+                'hash' => sha1('contract-account-filtered-7606'),
+            ],
         ]);
 
         $currentStateDebt = (float) DB::query()
@@ -281,7 +309,14 @@ class ContractDebtCurrentStateQueryTest extends TestCase
             ->where('cd.tenant_id', (int) $tenant->id)
             ->sum('cd.debt_amount');
 
-        $this->assertSame(1500.0, $currentStateDebt);
-        $this->assertSame(1500.0, $latestContractDebt);
+        $securityDepositAmount = (float) DB::query()
+            ->fromSub(ContractDebt::securityDepositStateQuery((int) $market->id), 'cd')
+            ->where('cd.tenant_id', (int) $tenant->id)
+            ->sum('cd.debt_amount');
+
+        $this->assertSame(17500.0, $currentStateDebt);
+        $this->assertSame(17500.0, $latestContractDebt);
+        $this->assertSame(3000.0, $securityDepositAmount);
+        $this->assertSame(3000.0, ContractDebt::securityDepositAmountForTenant((int) $market->id, (int) $tenant->id));
     }
 }

@@ -29,6 +29,10 @@
             <p class="text-xs text-slate-500">Документы / места</p>
             <p class="mt-1 text-lg font-semibold text-slate-900">{{ (int) $documentsCount }} / {{ (int) $spacesCount }}</p>
         </a>
+        <div class="block rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
+            <p class="text-xs text-slate-500">Обеспечительный платёж (76.06)</p>
+            <p class="mt-1 text-lg font-semibold text-slate-900">{{ number_format((float) ($securityDepositAmount ?? 0), 0, '.', ' ') }} ₽</p>
+        </div>
     </section>
 
     <section class="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">

@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Cabinet;
 
 use App\Http\Controllers\Controller;
+use App\Models\ContractDebt;
 use App\Models\MarketSpace;
-use App\Models\TenantDocument;
 use App\Models\TenantAccrual;
+use App\Models\TenantDocument;
 use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,10 +71,16 @@ class DashboardController extends Controller
             ->when($allowedSpaceIds !== [], fn ($query) => $query->whereIn('id', $allowedSpaceIds))
             ->count();
 
+        $securityDepositAmount = ContractDebt::securityDepositAmountForTenant(
+            (int) $tenant->market_id,
+            (int) $tenant->id,
+        );
+
         return view('cabinet.dashboard', [
             'tenant' => $tenant,
             'totalDebt' => $totalDebt,
             'monthAccruals' => $monthAccruals,
+            'securityDepositAmount' => $securityDepositAmount,
             'latestPeriod' => $latestPeriod,
             'openRequestsCount' => $openRequestsCount,
             'documentsCount' => $documentsCount,

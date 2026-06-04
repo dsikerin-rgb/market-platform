@@ -2891,6 +2891,11 @@ class TenantResource extends BaseResource
             ->fromSub(ContractDebt::latestContractStateQuery((int) $record->market_id), 'cd')
             ->where('cd.tenant_id', (int) $record->id);
 
+        $securityDepositAmount = ContractDebt::securityDepositAmountForTenant(
+            (int) $record->market_id,
+            (int) $record->id,
+        );
+
         $snapshotLabel = null;
         if ($hasCalculatedAt) {
             $latest = (clone $base)->max('calculated_at');
@@ -2919,6 +2924,16 @@ class TenantResource extends BaseResource
 
         $rows = (int) (clone $base)->count();
         if ($rows === 0) {
+            if (abs($securityDepositAmount) > 0.009) {
+                return new HtmlString(
+                    '<div>'
+                        . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">'
+                            . static::renderPaymentsDebtSummaryCard('Обеспечительный платёж (76.06)', static::formatRub($securityDepositAmount))
+                        . '</div>'
+                    . '</div>'
+                );
+            }
+
             return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет данных об оплатах по этому арендатору.</div>');
         }
 
@@ -2943,14 +2958,12 @@ class TenantResource extends BaseResource
             ['title' => 'Начислено', 'value' => $accrued !== null ? static::formatRub($accrued) : '—'],
             ['title' => 'Оплачено', 'value' => $paid !== null ? static::formatRub($paid) : '—'],
             ['title' => 'Долг', 'value' => $debt !== null ? static::formatRub($debt) : '—'],
+            ['title' => 'Обеспечительный платёж (76.06)', 'value' => static::formatRub($securityDepositAmount)],
         ];
 
         $cardsHtml = '';
         foreach ($cards as $card) {
-            $cardsHtml .= '<div style="border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;">'
-                . '<div style="font-size:12px;opacity:.75;line-height:1.2;">' . e($card['title']) . '</div>'
-                . '<div style="margin-top:4px;font-size:24px;font-weight:700;line-height:1.15;">' . e($card['value']) . '</div>'
-                . '</div>';
+            $cardsHtml .= static::renderPaymentsDebtSummaryCard($card['title'], $card['value']);
         }
 
         $meta = [];
@@ -2972,6 +2985,14 @@ class TenantResource extends BaseResource
                 . '</div>'
             . '</div>'
         );
+    }
+
+    private static function renderPaymentsDebtSummaryCard(string $title, string $value): string
+    {
+        return '<div style="border:1px solid rgba(0,0,0,.10);border-radius:12px;padding:10px 12px;">'
+            . '<div style="font-size:12px;opacity:.75;line-height:1.2;">' . e($title) . '</div>'
+            . '<div style="margin-top:4px;font-size:24px;font-weight:700;line-height:1.15;">' . e($value) . '</div>'
+            . '</div>';
     }
 
     private static function renderPaymentDisciplineSummary(?Tenant $record): HtmlString

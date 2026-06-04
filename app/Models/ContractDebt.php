@@ -23,6 +23,16 @@ class ContractDebt extends Model
     /**
      * @var list<string>
      */
+    public const CALCULATION_ACCOUNT_PREFIXES = ['62.'];
+
+    /**
+     * @var list<string>
+     */
+    public const SECURITY_DEPOSIT_ACCOUNTS = ['76.06'];
+
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'market_id',
         'tenant_id',
@@ -106,6 +116,8 @@ class ContractDebt extends Model
             marketId: $marketId,
             alias: $alias,
             identityColumns: static::currentStateIdentityColumns((new static())->getTable()),
+            exactAccounts: static::CALCULATION_ACCOUNTS,
+            accountPrefixes: static::CALCULATION_ACCOUNT_PREFIXES,
         );
     }
 
@@ -115,13 +127,52 @@ class ContractDebt extends Model
             marketId: $marketId,
             alias: $alias,
             identityColumns: static::latestContractStateIdentityColumns((new static())->getTable()),
+            exactAccounts: static::CALCULATION_ACCOUNTS,
+            accountPrefixes: static::CALCULATION_ACCOUNT_PREFIXES,
         );
+    }
+
+    public static function securityDepositStateQuery(?int $marketId = null, string $alias = 'cd'): QueryBuilder
+    {
+        return static::latestStateQuery(
+            marketId: $marketId,
+            alias: $alias,
+            identityColumns: static::latestContractStateIdentityColumns((new static())->getTable()),
+            exactAccounts: static::SECURITY_DEPOSIT_ACCOUNTS,
+        );
+    }
+
+    public static function securityDepositAmountForTenant(int $marketId, int $tenantId): float
+    {
+        $table = (new static())->getTable();
+
+        if (
+            ! Schema::hasTable($table)
+            || ! Schema::hasColumn($table, 'tenant_id')
+            || ! Schema::hasColumn($table, 'debt_amount')
+            || ! Schema::hasColumn($table, 'account')
+        ) {
+            return 0.0;
+        }
+
+        return (float) DB::query()
+            ->fromSub(static::securityDepositStateQuery($marketId), 'cd')
+            ->where('cd.tenant_id', $tenantId)
+            ->sum('cd.debt_amount');
     }
 
     /**
      * @param list<string> $identityColumns
+     * @param list<string>|null $exactAccounts
+     * @param list<string> $accountPrefixes
      */
-    private static function latestStateQuery(?int $marketId, string $alias, array $identityColumns): QueryBuilder
+    private static function latestStateQuery(
+        ?int $marketId,
+        string $alias,
+        array $identityColumns,
+        ?array $exactAccounts = null,
+        array $accountPrefixes = [],
+    ): QueryBuilder
     {
         $table = (new static())->getTable();
         $base = DB::table("{$table} as {$alias}")->select("{$alias}.*");
@@ -130,8 +181,8 @@ class ContractDebt extends Model
             $base->where("{$alias}.market_id", $marketId);
         }
 
-        if (Schema::hasColumn($table, 'account')) {
-            $base->whereIn("{$alias}.account", static::CALCULATION_ACCOUNTS);
+        if (Schema::hasColumn($table, 'account') && $exactAccounts !== null) {
+            static::applyAccountFilter($base, "{$alias}.account", $exactAccounts, $accountPrefixes);
         }
 
         $versionColumn = static::currentStateVersionColumn($table);
@@ -146,8 +197,8 @@ class ContractDebt extends Model
             $latestPerIdentity->where('snap.market_id', $marketId);
         }
 
-        if (Schema::hasColumn($table, 'account')) {
-            $latestPerIdentity->whereIn('snap.account', static::CALCULATION_ACCOUNTS);
+        if (Schema::hasColumn($table, 'account') && $exactAccounts !== null) {
+            static::applyAccountFilter($latestPerIdentity, 'snap.account', $exactAccounts, $accountPrefixes);
         }
 
         foreach ($identityColumns as $column) {
@@ -172,6 +223,24 @@ class ContractDebt extends Model
             }
 
             $join->on("{$alias}.{$versionColumn}", '=', 'latest_current.latest_version_value');
+        });
+    }
+
+    /**
+     * @param list<string> $exactAccounts
+     * @param list<string> $accountPrefixes
+     */
+    private static function applyAccountFilter(QueryBuilder $query, string $column, array $exactAccounts, array $accountPrefixes = []): void
+    {
+        $query->where(function (QueryBuilder $accounts) use ($column, $exactAccounts, $accountPrefixes): void {
+            if ($exactAccounts !== []) {
+                $accounts->whereIn($column, $exactAccounts);
+            }
+
+            foreach ($accountPrefixes as $prefix) {
+                $method = $exactAccounts === [] ? 'where' : 'orWhere';
+                $accounts->{$method}($column, 'like', $prefix . '%');
+            }
         });
     }
 
