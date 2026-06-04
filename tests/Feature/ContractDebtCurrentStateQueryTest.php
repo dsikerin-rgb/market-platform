@@ -54,6 +54,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $olderPositiveTenant->external_id,
                 'contract_external_id' => 'contract-old-positive',
                 'period' => '2026-03',
+                'account' => '62',
                 'accrued_amount' => 1000,
                 'paid_amount' => 0,
                 'debt_amount' => 1000,
@@ -67,6 +68,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $updatedToZeroTenant->external_id,
                 'contract_external_id' => 'contract-updated-zero',
                 'period' => '2026-03',
+                'account' => '62',
                 'accrued_amount' => 500,
                 'paid_amount' => 0,
                 'debt_amount' => 500,
@@ -80,6 +82,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $updatedToZeroTenant->external_id,
                 'contract_external_id' => 'contract-updated-zero',
                 'period' => '2026-03',
+                'account' => '62',
                 'accrued_amount' => 500,
                 'paid_amount' => 500,
                 'debt_amount' => 0,
@@ -93,6 +96,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $latestSnapshotTenant->external_id,
                 'contract_external_id' => 'contract-latest',
                 'period' => '2026-03',
+                'account' => '62',
                 'accrued_amount' => 700,
                 'paid_amount' => 700,
                 'debt_amount' => 0,
@@ -140,6 +144,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $tenant->external_id,
                 'contract_external_id' => 'contract-accumulated',
                 'period' => '2026-03',
+                'account' => '76.07',
                 'accrued_amount' => 1000,
                 'paid_amount' => 0,
                 'debt_amount' => 1000,
@@ -153,6 +158,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $tenant->external_id,
                 'contract_external_id' => 'contract-accumulated',
                 'period' => '2026-04',
+                'account' => '76.07',
                 'accrued_amount' => 1000,
                 'paid_amount' => 0,
                 'debt_amount' => 1000,
@@ -166,6 +172,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $tenant->external_id,
                 'contract_external_id' => 'contract-accumulated',
                 'period' => '2026-05',
+                'account' => '76.07',
                 'accrued_amount' => 1000,
                 'paid_amount' => 0,
                 'debt_amount' => 1000,
@@ -179,6 +186,7 @@ class ContractDebtCurrentStateQueryTest extends TestCase
                 'tenant_external_id' => (string) $tenant->external_id,
                 'contract_external_id' => 'contract-accumulated',
                 'period' => '2026-06',
+                'account' => '76.07',
                 'accrued_amount' => 1000,
                 'paid_amount' => 0,
                 'debt_amount' => 1300,
@@ -200,5 +208,80 @@ class ContractDebtCurrentStateQueryTest extends TestCase
 
         $this->assertSame(4300.0, $periodStateDebt);
         $this->assertSame(1300.0, $latestContractDebt);
+    }
+
+    public function test_current_state_uses_only_allowed_calculation_accounts(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test market',
+            'slug' => 'test-market',
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Account filtered tenant',
+            'external_id' => 'tenant-account-filtered',
+            'is_active' => true,
+        ]);
+
+        $snapshot = Carbon::create(2026, 6, 4, 13, 56, 51);
+
+        DB::table('contract_debts')->insert([
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-account-filtered-62',
+                'period' => '2026-06',
+                'account' => '62',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1000,
+                'calculated_at' => $snapshot,
+                'created_at' => $snapshot,
+                'hash' => sha1('contract-account-filtered-62'),
+            ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-account-filtered-7607',
+                'period' => '2026-06',
+                'account' => '76.07',
+                'accrued_amount' => 500,
+                'paid_amount' => 0,
+                'debt_amount' => 500,
+                'calculated_at' => $snapshot,
+                'created_at' => $snapshot,
+                'hash' => sha1('contract-account-filtered-7607'),
+            ],
+            [
+                'market_id' => (int) $market->id,
+                'tenant_id' => (int) $tenant->id,
+                'tenant_external_id' => (string) $tenant->external_id,
+                'contract_external_id' => 'contract-account-filtered-6201',
+                'period' => '2026-06',
+                'account' => '62.01',
+                'accrued_amount' => 9000,
+                'paid_amount' => 0,
+                'debt_amount' => 9000,
+                'calculated_at' => $snapshot,
+                'created_at' => $snapshot,
+                'hash' => sha1('contract-account-filtered-6201'),
+            ],
+        ]);
+
+        $currentStateDebt = (float) DB::query()
+            ->fromSub(ContractDebt::currentStateQuery((int) $market->id), 'cd')
+            ->where('cd.tenant_id', (int) $tenant->id)
+            ->sum('cd.debt_amount');
+
+        $latestContractDebt = (float) DB::query()
+            ->fromSub(ContractDebt::latestContractStateQuery((int) $market->id), 'cd')
+            ->where('cd.tenant_id', (int) $tenant->id)
+            ->sum('cd.debt_amount');
+
+        $this->assertSame(1500.0, $currentStateDebt);
+        $this->assertSame(1500.0, $latestContractDebt);
     }
 }
