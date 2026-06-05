@@ -1163,6 +1163,7 @@ class DebtStatusResolver
             'grace_days' => $debtMonitoring['grace_days'] ?? 5,
             'yellow_after_days' => $debtMonitoring['yellow_after_days'] ?? $debtMonitoring['orange_after_days'] ?? 1,
             'red_after_days' => $debtMonitoring['red_after_days'] ?? 30,
+            'minimum_debt_amount' => $debtMonitoring['minimum_debt_amount'] ?? 500,
         ];
     }
 
