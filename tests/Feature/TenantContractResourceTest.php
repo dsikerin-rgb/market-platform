@@ -65,6 +65,51 @@ class TenantContractResourceTest extends TestCase
             ->assertSee('02.04.2026');
     }
 
+    public function test_contracts_index_shows_one_c_movement_column(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Зоомир ООО',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'external_id' => 'contract-test-1',
+            'number' => 'Договор аренды П/3 от 02.04.2026',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-02',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'period' => '2026-04-01',
+            'source_row_hash' => sha1('contract-test-1-2026-04'),
+        ]);
+
+        $this->actingAsSuperAdmin();
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $this
+            ->get(route('filament.admin.resources.contracts.index'))
+            ->assertOk()
+            ->assertSee('Движение 1С')
+            ->assertSee('Есть свежее движение');
+    }
+
     private function actingAsSuperAdmin(): User
     {
         Role::findOrCreate('super-admin', 'web');

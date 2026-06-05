@@ -2616,6 +2616,62 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             });
         }
 
+        $latestAccrualContractIds = [];
+        if (Schema::hasTable('tenant_accruals')) {
+            $latestAccrualPeriod = DB::table('tenant_accruals')
+                ->where('market_id', (int) $market->id)
+                ->max('period');
+
+            if ($latestAccrualPeriod) {
+                $latestAccrualContractIds = DB::table('tenant_accruals')
+                    ->where('market_id', (int) $market->id)
+                    ->where('period', $latestAccrualPeriod)
+                    ->whereNotNull('tenant_contract_id')
+                    ->pluck('tenant_contract_id')
+                    ->map(static fn (mixed $value): int => (int) $value)
+                    ->filter(static fn (int $value): bool => $value > 0)
+                    ->unique()
+                    ->flip()
+                    ->all();
+            }
+        }
+
+        $latestDebtExternalIds = [];
+        $debtHistoryExternalIds = [];
+        if (
+            Schema::hasTable('contract_debts')
+            && Schema::hasColumn('contract_debts', 'contract_external_id')
+        ) {
+            $debtHistoryExternalIds = DB::table('contract_debts')
+                ->where('market_id', (int) $market->id)
+                ->whereNotNull('contract_external_id')
+                ->pluck('contract_external_id')
+                ->map(static fn (mixed $value): string => trim((string) $value))
+                ->filter(static fn (string $value): bool => $value !== '')
+                ->unique()
+                ->flip()
+                ->all();
+
+            if (Schema::hasColumn('contract_debts', 'calculated_at')) {
+                $latestDebtCalculatedAt = DB::table('contract_debts')
+                    ->where('market_id', (int) $market->id)
+                    ->max('calculated_at');
+
+                if ($latestDebtCalculatedAt) {
+                    $latestDebtExternalIds = DB::table('contract_debts')
+                        ->where('market_id', (int) $market->id)
+                        ->where('calculated_at', $latestDebtCalculatedAt)
+                        ->whereNotNull('contract_external_id')
+                        ->pluck('contract_external_id')
+                        ->map(static fn (mixed $value): string => trim((string) $value))
+                        ->filter(static fn (string $value): bool => $value !== '')
+                        ->unique()
+                        ->flip()
+                        ->all();
+                }
+            }
+        }
+
         $items = $query->get()
             ->filter(function (TenantContract $contract) use ($classifier): bool {
                 $classified = $classifier->classify((string) ($contract->number ?: $contract->external_id ?: ''));
@@ -2623,12 +2679,28 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 return ($classified['category'] ?? null) === 'primary_contract';
             })
             ->values()
-            ->map(function (TenantContract $contract) use ($classifier, $formatSpaceLabel, $targetSpace): array {
+            ->map(function (TenantContract $contract) use (
+                $classifier,
+                $formatSpaceLabel,
+                $latestAccrualContractIds,
+                $latestDebtExternalIds,
+                $debtHistoryExternalIds,
+                $targetSpace
+            ): array {
                 $boundSpace = $contract->marketSpace;
                 $boundSpaceId = $contract->market_space_id ? (int) $contract->market_space_id : null;
                 $isCurrent = $boundSpaceId !== null && $boundSpaceId === (int) $targetSpace->id;
                 $isBoundElsewhere = $boundSpaceId !== null && $boundSpaceId !== (int) $targetSpace->id;
                 $classified = $classifier->classify((string) ($contract->number ?: $contract->external_id ?: ''));
+                $externalId = trim((string) ($contract->external_id ?? ''));
+                $hasLatestAccrual = array_key_exists((int) $contract->id, $latestAccrualContractIds);
+                $hasLatestDebt = $externalId !== '' && array_key_exists($externalId, $latestDebtExternalIds);
+                $hasDebtHistory = $externalId !== '' && array_key_exists($externalId, $debtHistoryExternalIds);
+                $hasFreshMovement = $hasLatestAccrual || $hasLatestDebt;
+                $movementStatus = $hasFreshMovement
+                    ? 'fresh'
+                    : ($hasDebtHistory ? 'stale' : 'none');
+                $movementRank = $hasFreshMovement ? 0 : ($hasDebtHistory ? 1 : 2);
 
                 return [
                     'id' => (int) $contract->id,
@@ -2645,9 +2717,24 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'is_current' => $isCurrent,
                     'is_bound_elsewhere' => $isBoundElsewhere,
                     'disabled' => $isBoundElsewhere,
+                    'one_c_movement_status' => $movementStatus,
+                    'one_c_movement_label' => match ($movementStatus) {
+                        'fresh' => 'Есть движение 1С в последнем периоде',
+                        'stale' => 'Нет свежего движения 1С',
+                        default => 'Нет данных движения 1С',
+                    },
+                    'one_c_movement_rank' => $movementRank,
                     'url' => TenantContractResource::getUrl('edit', ['record' => (int) $contract->id]),
                 ];
             })
+            ->sortBy(static function (array $item): array {
+                return [
+                    ($item['is_current'] ?? false) ? 0 : (($item['disabled'] ?? false) ? 3 : 1),
+                    (int) ($item['one_c_movement_rank'] ?? 2),
+                    mb_strtolower((string) ($item['number'] ?? ''), 'UTF-8'),
+                ];
+            })
+            ->values()
             ->all();
 
         return response()->json([

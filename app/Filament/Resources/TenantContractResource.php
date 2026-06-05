@@ -534,6 +534,15 @@ class TenantContractResource extends BaseResource
                     ->color(fn (TenantContract $record): string => static::isInLatestDebtSnapshot($record) ? 'success' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
 
+                TextColumn::make('one_c_movement')
+                    ->label('Движение 1С')
+                    ->state(fn (TenantContract $record): string => static::oneCMovementLabel($record))
+                    ->tooltip('Показывает, есть ли по договору начисления или задолженность в последнем срезе 1С. Это не меняет юридический статус договора.')
+                    ->headerTooltip('Показывает, есть ли по договору начисления или задолженность в последнем срезе 1С. Это не меняет юридический статус договора.')
+                    ->badge()
+                    ->color(fn (TenantContract $record): string => static::oneCMovementColor($record))
+                    ->toggleable(),
+
                 TextColumn::make('latest_debt_organization')
                     ->label('Организация долга 1С')
                     ->state(fn (TenantContract $record): string => static::latestDebtOrganizationLabel($record))
@@ -658,6 +667,24 @@ class TenantContractResource extends BaseResource
                         false: fn (Builder $query) => static::applyLatestDebtSnapshotFilter($query, false),
                         blank: fn (Builder $query) => $query,
                     ),
+
+                SelectFilter::make('one_c_movement')
+                    ->label('Движение 1С')
+                    ->options([
+                        'fresh' => 'Есть свежее движение',
+                        'stale' => 'Без свежего движения',
+                        'none' => 'Нет данных 1С',
+                    ])
+                    ->query(static function (Builder $query, array $data): Builder {
+                        $value = trim((string) ($data['value'] ?? ''));
+
+                        return match ($value) {
+                            'fresh' => static::applyOneCMovementFilter($query, 'fresh'),
+                            'stale' => static::applyOneCMovementFilter($query, 'stale'),
+                            'none' => static::applyOneCMovementFilter($query, 'none'),
+                            default => $query,
+                        };
+                    }),
 
                 SelectFilter::make('document_category')
                     ->label('Классификация документа')
@@ -1071,6 +1098,37 @@ class TenantContractResource extends BaseResource
         return static::$accrualHistoryContractIdsCache[$marketId][$contractId] ?? false;
     }
 
+    private static function oneCMovementStatus(TenantContract $record): string
+    {
+        if (static::isInLatestDebtSnapshot($record) || static::isInLatestAccrualSnapshot($record)) {
+            return 'fresh';
+        }
+
+        if (static::isInDebtHistory($record) || static::isInAccrualHistory($record)) {
+            return 'stale';
+        }
+
+        return 'none';
+    }
+
+    private static function oneCMovementLabel(TenantContract $record): string
+    {
+        return match (static::oneCMovementStatus($record)) {
+            'fresh' => 'Есть свежее движение',
+            'stale' => 'Без свежего движения',
+            default => 'Нет данных 1С',
+        };
+    }
+
+    private static function oneCMovementColor(TenantContract $record): string
+    {
+        return match (static::oneCMovementStatus($record)) {
+            'fresh' => 'success',
+            'stale' => 'warning',
+            default => 'gray',
+        };
+    }
+
     private static function latestDebtOrganizationLabel(TenantContract $record): string
     {
         $marketId = (int) $record->market_id;
@@ -1300,6 +1358,39 @@ class TenantContractResource extends BaseResource
                 ->whereColumn('ta.market_id', 'tenant_contracts.market_id')
                 ->whereColumn('ta.tenant_contract_id', 'tenant_contracts.id');
         });
+    }
+
+    private static function applyOneCMovementFilter(Builder $query, string $status): Builder
+    {
+        return match ($status) {
+            'fresh' => $query->where(function (Builder $query): void {
+                static::applyLatestDebtSnapshotFilter($query, true)
+                    ->orWhere(function (Builder $query): void {
+                        static::applyLatestAccrualSnapshotFilter($query, true);
+                    });
+            }),
+            'stale' => $query
+                ->where(function (Builder $query): void {
+                    static::applyDebtHistoryFilter($query, true)
+                        ->orWhere(function (Builder $query): void {
+                            static::applyAccrualHistoryFilter($query, true);
+                        });
+                })
+                ->where(function (Builder $query): void {
+                    static::applyLatestDebtSnapshotFilter($query, false);
+                })
+                ->where(function (Builder $query): void {
+                    static::applyLatestAccrualSnapshotFilter($query, false);
+                }),
+            'none' => $query
+                ->where(function (Builder $query): void {
+                    static::applyDebtHistoryFilter($query, false);
+                })
+                ->where(function (Builder $query): void {
+                    static::applyAccrualHistoryFilter($query, false);
+                }),
+            default => $query,
+        };
     }
 
     public static function applyLatestDebtSnapshotScope(Builder $query, bool $inLatestSnapshot = true): Builder

@@ -858,6 +858,88 @@ class MarketMapDebtBySpaceTest extends TestCase
         $this->assertSame('68', $response->json('items.1.bound_space_label'));
     }
 
+    public function test_contract_binding_options_prioritize_contracts_with_fresh_one_c_movement(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '67',
+            'code' => 'space-67',
+        ]);
+
+        $stale = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'contract-a-67-stale',
+            'number' => 'A/67',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        $fresh = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'contract-a-68-fresh',
+            'number' => 'A/68',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'tenant_external_id' => $this->tenant->external_id,
+            'contract_external_id' => $stale->external_id,
+            'period' => '2026-04',
+            'account' => '62',
+            'accrued_amount' => 1000,
+            'paid_amount' => 0,
+            'debt_amount' => 1000,
+            'calculated_at' => now()->subMonths(2),
+            'created_at' => now()->subMonths(2),
+            'hash' => sha1('stale-contract-debt'),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'tenant_external_id' => $this->tenant->external_id,
+            'contract_external_id' => $fresh->external_id,
+            'period' => '2026-06',
+            'account' => '62',
+            'accrued_amount' => 1000,
+            'paid_amount' => 1000,
+            'debt_amount' => 0,
+            'calculated_at' => now(),
+            'created_at' => now(),
+            'hash' => sha1('fresh-contract-debt'),
+        ]);
+
+        DB::table('tenant_accruals')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'tenant_contract_id' => $fresh->id,
+            'period' => '2026-06-01',
+            'source_row_hash' => sha1('fresh-contract-accrual'),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces.contract-binding-options', [
+            'marketSpace' => $space->id,
+        ]));
+
+        $response->assertOk();
+
+        $this->assertSame([$fresh->id, $stale->id], collect($response->json('items'))->pluck('id')->all());
+        $response->assertJsonPath('items.0.one_c_movement_status', 'fresh');
+        $response->assertJsonPath('items.1.one_c_movement_status', 'stale');
+    }
+
     public function test_market_operator_cannot_bind_contract_from_map(): void
     {
         $space = MarketSpace::create([

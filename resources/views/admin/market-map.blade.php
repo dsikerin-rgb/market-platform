@@ -2084,6 +2084,18 @@
     .contract-binding-modal__status--blocked {
       color: #64748b;
     }
+    .contract-binding-modal__movement {
+      margin-top: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #64748b;
+    }
+    .contract-binding-modal__movement--fresh {
+      color: #15803d;
+    }
+    .contract-binding-modal__movement--stale {
+      color: #b45309;
+    }
     .contract-binding-modal__empty {
       padding: 12px;
       border-radius: 8px;
@@ -3543,6 +3555,11 @@
               status = 'Занят другим местом: ' + String(contract.bound_space_label || contract.market_space_id || '');
               statusClass = ' contract-binding-modal__status--blocked';
             }
+            const movementStatus = String(contract.one_c_movement_status || 'none');
+            const movementClass = movementStatus === 'fresh'
+              ? ' contract-binding-modal__movement--fresh'
+              : (movementStatus === 'stale' ? ' contract-binding-modal__movement--stale' : '');
+            const movementLabel = String(contract.one_c_movement_label || 'Нет данных движения 1С');
 
             item.innerHTML =
               '<input class="contract-binding-modal__radio" type="radio" tabindex="-1" '
@@ -3558,6 +3575,7 @@
                     : '<span>' + escaped + '</span>';
                 }).join('') + '</span>' : '')
                 + '<span class="contract-binding-modal__status' + statusClass + '">' + escapeHtml(status) + '</span>'
+                + '<span class="contract-binding-modal__movement' + movementClass + '">' + escapeHtml(movementLabel) + '</span>'
               + '</span>';
 
             item.addEventListener('click', () => {
