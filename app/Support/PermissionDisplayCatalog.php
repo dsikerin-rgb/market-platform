@@ -64,6 +64,10 @@ class PermissionDisplayCatalog
             'label' => 'Удаление рынка',
             'group' => 'Рынок',
         ],
+        'contracts.update' => [
+            'label' => 'Изменение привязок договоров',
+            'group' => 'Договоры',
+        ],
         'staff.viewAny' => [
             'label' => 'Просмотр списка сотрудников',
             'group' => 'Сотрудники',
@@ -101,6 +105,7 @@ class PermissionDisplayCatalog
 
         return match ($prefix) {
             'marketplace' => 'Маркетплейс',
+            'contracts' => 'Договоры',
             'market-settings', 'markets' => 'Рынок',
             'staff' => 'Сотрудники',
             default => 'Прочее',

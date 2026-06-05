@@ -33,6 +33,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'markets.update',
             'markets.delete',
 
+            'contracts.update',
+
             'staff.viewAny',
             'staff.view',
             'staff.create',
@@ -66,6 +68,8 @@ class RolesAndPermissionsSeeder extends Seeder
                 'staff.create',
                 'staff.update',
                 'staff.delete',
+
+                'contracts.update',
             ],
 
             // Остальные пока пустые/минимальные — чтобы не выдать лишнего автоматически
