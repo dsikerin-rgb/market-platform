@@ -49,6 +49,7 @@ use App\Support\MarketplaceMediaStorage;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\MarketMap\SpaceReviewActionService;
 use App\Services\Marketplace\MarketplaceContextService;
+use App\Services\TenantContracts\ContractDocumentClassifier;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -553,8 +554,17 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 || $user->can('markets.update')
                 || $user->can('markets.viewAny')
             );
+            $canBindContracts = Schema::hasTable('permissions')
+                && DB::table('permissions')
+                    ->where('name', 'contracts.update')
+                    ->where('guard_name', 'web')
+                    ->exists()
+                && (
+                    (method_exists($user, 'can') && $user->can('contracts.update'))
+                    || (method_exists($user, 'hasPermissionTo') && $user->hasPermissionTo('contracts.update'))
+                );
 
-            abort_unless($market && ($hasRoleAccess || $hasPermissionAccess), 403);
+            abort_unless($market && ($hasRoleAccess || $hasPermissionAccess || $canBindContracts), 403);
         }
 
         abort_unless($market, 404);
@@ -921,6 +931,32 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $canByPermission = method_exists($user, 'can') && $user->can('markets.update');
 
         return $isSuperAdmin || $isMarketAdmin || $canByPermission;
+    };
+
+    $canBindContracts = static function (): bool {
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin']);
+        $permissionExists = Schema::hasTable('permissions')
+            && DB::table('permissions')
+                ->where('name', 'contracts.update')
+                ->where('guard_name', 'web')
+                ->exists();
+        $canByPermission = $permissionExists
+            && (
+                (method_exists($user, 'can') && $user->can('contracts.update'))
+                || (method_exists($user, 'hasPermissionTo') && $user->hasPermissionTo('contracts.update'))
+            );
+
+        return $isSuperAdmin || $isMarketAdmin || $canByPermission;
+    };
+
+    $ensureCanBindContracts = static function () use ($canBindContracts): void {
+        abort_unless($canBindContracts(), 403);
     };
 
     $hasMapReviewColumns = static function (): bool {
@@ -2494,6 +2530,271 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     })->name('filament.admin.market-map.hit');
 
     /**
+     * Contract binding from the map popup. A child space uses its parent group as
+     * the accounting target, because debts and contracts are resolved there.
+     */
+    Route::get('/admin/market-map/spaces/{marketSpace}/contract-binding-options', function (Request $request, MarketSpace $marketSpace) use (
+        $resolveMarketForMap,
+        $ensureCanBindContracts,
+    ) {
+        $ensureCanBindContracts();
+        $market = $resolveMarketForMap();
+
+        abort_unless((int) $marketSpace->market_id === (int) $market->id, 403, 'Место не принадлежит этому рынку.');
+        abort_unless(Schema::hasTable('tenant_contracts'), 404, 'Таблица договоров не найдена.');
+
+        $marketSpace->loadMissing(['tenant:id,name', 'spaceGroupParent.tenant:id,name']);
+
+        $targetSpace = $marketSpace;
+        $targetSource = 'self';
+
+        if (
+            (string) ($marketSpace->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_CHILD
+            && $marketSpace->spaceGroupParent
+            && (int) $marketSpace->spaceGroupParent->market_id === (int) $market->id
+        ) {
+            $targetSpace = $marketSpace->spaceGroupParent;
+            $targetSource = 'parent';
+        }
+
+        $formatSpaceLabel = static function (?MarketSpace $space): string {
+            if (! $space) {
+                return '—';
+            }
+
+            $label = trim((string) ($space->display_name ?: $space->number ?: $space->code ?: ''));
+
+            return $label !== '' ? $label : ('ID ' . (string) $space->id);
+        };
+
+        $tenant = $targetSpace->tenant ?: $marketSpace->tenant;
+
+        if (! $tenant) {
+            return response()->json([
+                'ok' => true,
+                'can_bind' => true,
+                'target_space' => [
+                    'id' => (int) $targetSpace->id,
+                    'label' => $formatSpaceLabel($targetSpace),
+                    'source' => $targetSource,
+                    'is_group' => (string) ($targetSpace->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT,
+                ],
+                'clicked_space' => [
+                    'id' => (int) $marketSpace->id,
+                    'label' => $formatSpaceLabel($marketSpace),
+                    'space_group_role' => (string) ($marketSpace->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                ],
+                'tenant' => null,
+                'items' => [],
+                'message' => 'У целевого места нет арендатора.',
+            ]);
+        }
+
+        $classifier = app(ContractDocumentClassifier::class);
+        $hasStatus = Schema::hasColumn('tenant_contracts', 'status');
+        $hasIsActive = Schema::hasColumn('tenant_contracts', 'is_active');
+        $hasSpaceMappingMode = Schema::hasColumn('tenant_contracts', 'space_mapping_mode');
+
+        $query = TenantContract::query()
+            ->with(['marketSpace:id,number,code,display_name'])
+            ->where('market_id', (int) $market->id)
+            ->where('tenant_id', (int) $tenant->id)
+            ->orderByRaw('COALESCE(number, external_id, \'\')');
+
+        if ($hasIsActive) {
+            $query->where('is_active', true);
+        }
+
+        if ($hasStatus) {
+            $query->where('status', 'active');
+        }
+
+        if ($hasSpaceMappingMode) {
+            $query->where(function ($sub): void {
+                $sub->whereNull('space_mapping_mode')
+                    ->orWhere('space_mapping_mode', '!=', TenantContract::SPACE_MAPPING_MODE_EXCLUDED);
+            });
+        }
+
+        $items = $query->get()
+            ->filter(function (TenantContract $contract) use ($classifier): bool {
+                $classified = $classifier->classify((string) ($contract->number ?: $contract->external_id ?: ''));
+
+                return ($classified['category'] ?? null) === 'primary_contract';
+            })
+            ->values()
+            ->map(function (TenantContract $contract) use ($classifier, $formatSpaceLabel, $targetSpace): array {
+                $boundSpace = $contract->marketSpace;
+                $boundSpaceId = $contract->market_space_id ? (int) $contract->market_space_id : null;
+                $isCurrent = $boundSpaceId !== null && $boundSpaceId === (int) $targetSpace->id;
+                $isBoundElsewhere = $boundSpaceId !== null && $boundSpaceId !== (int) $targetSpace->id;
+                $classified = $classifier->classify((string) ($contract->number ?: $contract->external_id ?: ''));
+
+                return [
+                    'id' => (int) $contract->id,
+                    'number' => (string) ($contract->number ?: $contract->external_id ?: ('ID ' . (string) $contract->id)),
+                    'external_id' => $contract->external_id ? (string) $contract->external_id : null,
+                    'starts_at' => $contract->starts_at?->toDateString(),
+                    'ends_at' => $contract->ends_at?->toDateString(),
+                    'signed_at' => $contract->signed_at?->toDateString(),
+                    'monthly_rent' => $contract->monthly_rent !== null ? (float) $contract->monthly_rent : null,
+                    'currency' => $contract->currency ? (string) $contract->currency : null,
+                    'document_label' => (string) ($classified['label'] ?? 'Договор'),
+                    'market_space_id' => $boundSpaceId,
+                    'bound_space_label' => $boundSpace ? $formatSpaceLabel($boundSpace) : null,
+                    'is_current' => $isCurrent,
+                    'is_bound_elsewhere' => $isBoundElsewhere,
+                    'disabled' => $isBoundElsewhere,
+                    'url' => TenantContractResource::getUrl('edit', ['record' => (int) $contract->id]),
+                ];
+            })
+            ->all();
+
+        return response()->json([
+            'ok' => true,
+            'can_bind' => true,
+            'target_space' => [
+                'id' => (int) $targetSpace->id,
+                'label' => $formatSpaceLabel($targetSpace),
+                'source' => $targetSource,
+                'is_group' => (string) ($targetSpace->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            ],
+            'clicked_space' => [
+                'id' => (int) $marketSpace->id,
+                'label' => $formatSpaceLabel($marketSpace),
+                'space_group_role' => (string) ($marketSpace->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+            ],
+            'tenant' => [
+                'id' => (int) $tenant->id,
+                'name' => (string) ($tenant->name ?? ''),
+            ],
+            'items' => $items,
+            'message' => null,
+        ]);
+    })->name('filament.admin.market-map.spaces.contract-binding-options');
+
+    Route::post('/admin/market-map/spaces/{marketSpace}/contract-binding', function (Request $request, MarketSpace $marketSpace) use (
+        $resolveMarketForMap,
+        $ensureCanBindContracts,
+    ) {
+        $ensureCanBindContracts();
+        $market = $resolveMarketForMap();
+
+        abort_unless((int) $marketSpace->market_id === (int) $market->id, 403, 'Место не принадлежит этому рынку.');
+        abort_unless(Schema::hasTable('tenant_contracts'), 404, 'Таблица договоров не найдена.');
+
+        $validated = $request->validate([
+            'tenant_contract_id' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $marketSpace->loadMissing(['tenant:id,name', 'spaceGroupParent.tenant:id,name']);
+
+        $targetSpace = $marketSpace;
+        $targetSource = 'self';
+
+        if (
+            (string) ($marketSpace->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_CHILD
+            && $marketSpace->spaceGroupParent
+            && (int) $marketSpace->spaceGroupParent->market_id === (int) $market->id
+        ) {
+            $targetSpace = $marketSpace->spaceGroupParent;
+            $targetSource = 'parent';
+        }
+
+        $tenant = $targetSpace->tenant ?: $marketSpace->tenant;
+
+        if (! $tenant) {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'У целевого места нет арендатора.',
+            ]);
+        }
+
+        $contract = TenantContract::query()
+            ->where('market_id', (int) $market->id)
+            ->where('tenant_id', (int) $tenant->id)
+            ->whereKey((int) $validated['tenant_contract_id'])
+            ->first();
+
+        if (! $contract) {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Договор не найден у выбранного арендатора.',
+            ]);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active') && ! (bool) $contract->is_active) {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Можно привязать только активный договор.',
+            ]);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status') && (string) $contract->status !== 'active') {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Можно привязать только активный договор.',
+            ]);
+        }
+
+        if (
+            Schema::hasColumn('tenant_contracts', 'space_mapping_mode')
+            && (string) $contract->space_mapping_mode === TenantContract::SPACE_MAPPING_MODE_EXCLUDED
+        ) {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Этот договор исключен из привязки к местам.',
+            ]);
+        }
+
+        $classified = app(ContractDocumentClassifier::class)->classify((string) ($contract->number ?: $contract->external_id ?: ''));
+        if (($classified['category'] ?? null) !== 'primary_contract') {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Можно привязать только основной договор аренды.',
+            ]);
+        }
+
+        if ($contract->market_space_id && (int) $contract->market_space_id !== (int) $targetSpace->id) {
+            $boundSpace = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey((int) $contract->market_space_id)
+                ->first(['id', 'number', 'code', 'display_name']);
+
+            $boundLabel = $boundSpace
+                ? trim((string) ($boundSpace->display_name ?: $boundSpace->number ?: $boundSpace->code ?: ('ID ' . (string) $boundSpace->id)))
+                : ('ID ' . (string) $contract->market_space_id);
+
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Договор уже привязан к месту ' . $boundLabel . '.',
+            ]);
+        }
+
+        $contract->market_space_id = (int) $targetSpace->id;
+
+        if (Schema::hasColumn('tenant_contracts', 'space_mapping_mode')) {
+            $contract->space_mapping_mode = TenantContract::SPACE_MAPPING_MODE_MANUAL;
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'space_mapping_updated_at')) {
+            $contract->space_mapping_updated_at = now();
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'space_mapping_updated_by_user_id')) {
+            $contract->space_mapping_updated_by_user_id = Filament::auth()->id();
+        }
+
+        $contract->save();
+        DebtStatusResolver::clearCache();
+
+        $targetLabel = trim((string) ($targetSpace->display_name ?: $targetSpace->number ?: $targetSpace->code ?: ''));
+
+        return response()->json([
+            'ok' => true,
+            'tenant_contract_id' => (int) $contract->id,
+            'contract_number' => (string) ($contract->number ?: $contract->external_id ?: ('ID ' . (string) $contract->id)),
+            'contract_url' => TenantContractResource::getUrl('edit', ['record' => (int) $contract->id]),
+            'target_space_id' => (int) $targetSpace->id,
+            'target_space_label' => $targetLabel !== '' ? $targetLabel : ('ID ' . (string) $targetSpace->id),
+            'target_source' => $targetSource,
+        ]);
+    })->name('filament.admin.market-map.spaces.contract-binding');
+
+    /**
      * Изменение группировки места (добавить/перенести/убрать из группы).
      */
     Route::post('/admin/market-map/spaces/{marketSpace}/group-membership', function (Request $request, MarketSpace $marketSpace) use (
@@ -3530,6 +3831,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     Route::get('/admin/market-map', function (Request $request) use (
         $resolveMarketForMap,
         $canEditShapes,
+        $canBindContracts,
         $buildMapReviewProgress
     ) {
         $market = $resolveMarketForMap();
@@ -3795,6 +4097,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'marketName' => (string) ($market->name ?? 'Рынок'),
             'hasMap' => $hasMap,
             'canEdit' => (bool) $canEditShapes(),
+            'canBindContracts' => (bool) $canBindContracts(),
             'mapMode' => $mode === 'review' ? 'review' : 'map',
             'canOpenPdf' => $canOpenPdf,
             'mapPage' => $page,

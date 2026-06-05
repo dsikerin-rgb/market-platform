@@ -10,9 +10,11 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
+use App\Models\TenantContract;
 use App\Services\Debt\DebtStatusResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -763,5 +765,255 @@ class MarketMapDebtBySpaceTest extends TestCase
         $response->assertJsonPath('hit.space_effective_tenant_debt_amount', 241740.07);
         $response->assertJsonPath('hit.space_effective_contract_number', 'П/68');
         $this->assertStringContainsString('/admin/contracts/', (string) $response->json('hit.space_effective_contract_url'));
+    }
+
+    public function test_contract_binding_options_returns_active_primary_contracts_for_effective_tenant_only(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '67',
+            'code' => 'space-67',
+        ]);
+
+        $otherTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Other tenant',
+            'external_id' => 'other-tenant',
+        ]);
+
+        $boundElsewhere = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '68',
+            'code' => 'space-68',
+        ]);
+
+        $available = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'contract-a-67',
+            'number' => 'A/67',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        $occupied = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $boundElsewhere->id,
+            'external_id' => 'contract-a-68',
+            'number' => 'A/68',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'inactive-contract',
+            'number' => 'A/69',
+            'status' => 'inactive',
+            'is_active' => false,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $otherTenant->id,
+            'external_id' => 'other-contract',
+            'number' => 'A/70',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'service-contract',
+            'number' => 'OP service',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces.contract-binding-options', [
+            'marketSpace' => $space->id,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('tenant.id', $this->tenant->id);
+        $response->assertJsonPath('target_space.id', $space->id);
+
+        $ids = collect($response->json('items'))->pluck('id')->all();
+        $this->assertSame([$available->id, $occupied->id], $ids);
+        $this->assertFalse((bool) $response->json('items.0.disabled'));
+        $this->assertTrue((bool) $response->json('items.1.disabled'));
+        $this->assertSame('68', $response->json('items.1.bound_space_label'));
+    }
+
+    public function test_market_operator_cannot_bind_contract_from_map(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '67',
+            'code' => 'space-67',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'contract-a-67',
+            'number' => 'A/67',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        Role::findOrCreate('market-operator', 'web');
+        $user = \App\Models\User::factory()->create(['market_id' => $this->market->id]);
+        $user->assignRole('market-operator');
+        $this->actingAs($user, 'web');
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.contract-binding', [
+            'marketSpace' => $space->id,
+        ]), [
+            'tenant_contract_id' => $contract->id,
+        ]);
+
+        $response->assertForbidden();
+        $this->assertNull($contract->fresh()->market_space_id);
+    }
+
+    public function test_contracts_update_permission_can_bind_contract_from_map(): void
+    {
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '67',
+            'code' => 'space-67',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'contract-a-67',
+            'number' => 'A/67',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        Permission::findOrCreate('contracts.update', 'web');
+        $role = Role::findOrCreate('market-accountant', 'web');
+
+        $user = \App\Models\User::factory()->create(['market_id' => $this->market->id]);
+        $user->assignRole($role);
+        $user->givePermissionTo('contracts.update');
+        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        $this->actingAs($user->fresh(), 'web');
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.contract-binding', [
+            'marketSpace' => $space->id,
+        ]), [
+            'tenant_contract_id' => $contract->id,
+        ]);
+
+        $response->assertOk();
+        $this->assertSame($space->id, $contract->fresh()->market_space_id);
+    }
+
+    public function test_contract_binding_sets_manual_mapping_and_uses_parent_for_child_space(): void
+    {
+        $parent = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => 'P67',
+            'code' => 'space-p67',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
+
+        $child = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '67',
+            'code' => 'space-67',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_slot' => '1',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'external_id' => 'contract-a-67',
+            'number' => 'A/67',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        $user = $this->actingAsSuperAdmin();
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.contract-binding', [
+            'marketSpace' => $child->id,
+        ]), [
+            'tenant_contract_id' => $contract->id,
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('target_space_id', $parent->id);
+        $response->assertJsonPath('target_source', 'parent');
+
+        $contract->refresh();
+        $this->assertSame($parent->id, $contract->market_space_id);
+        $this->assertSame(TenantContract::SPACE_MAPPING_MODE_MANUAL, $contract->space_mapping_mode);
+        $this->assertNotNull($contract->space_mapping_updated_at);
+        $this->assertSame($user->id, $contract->space_mapping_updated_by_user_id);
+    }
+
+    public function test_contract_binding_rejects_contract_bound_to_another_space(): void
+    {
+        $target = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '67',
+            'code' => 'space-67',
+        ]);
+
+        $otherSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => '68',
+            'code' => 'space-68',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'market_space_id' => $otherSpace->id,
+            'external_id' => 'contract-a-68',
+            'number' => 'A/68',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => now()->subMonth(),
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->postJson(route('filament.admin.market-map.spaces.contract-binding', [
+            'marketSpace' => $target->id,
+        ]), [
+            'tenant_contract_id' => $contract->id,
+        ]);
+
+        $response->assertUnprocessable();
+        $this->assertSame($otherSpace->id, $contract->fresh()->market_space_id);
     }
 }

@@ -1414,6 +1414,15 @@
       background: rgba(22, 163, 74, .24);
       color: #dcfce7;
     }
+    .popover button.contract-chip {
+      font: inherit;
+      cursor: pointer;
+    }
+    .popover button.contract-chip:hover {
+      border-color: rgba(252, 165, 165, .70);
+      background: rgba(220, 38, 38, .24);
+      color: #fee2e2;
+    }
     .popover .contract-chip--missing {
       border-color: rgba(252, 165, 165, .42);
       background: rgba(220, 38, 38, .14);
@@ -1987,6 +1996,74 @@
       color: #94a3b8;
       text-align: center;
     }
+    .contract-binding-modal__list {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0 0;
+      max-height: min(45vh, 360px);
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .contract-binding-modal__item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, .26);
+      background: rgba(15, 23, 42, .72);
+      color: #e5e7eb;
+      cursor: pointer;
+    }
+    .contract-binding-modal__item:hover {
+      border-color: rgba(96, 165, 250, .58);
+      background: rgba(30, 41, 59, .82);
+    }
+    .contract-binding-modal__item.is-selected {
+      border-color: rgba(96, 165, 250, .82);
+      box-shadow: inset 0 0 0 1px rgba(96, 165, 250, .32);
+    }
+    .contract-binding-modal__item.is-disabled {
+      cursor: not-allowed;
+      opacity: .58;
+    }
+    .contract-binding-modal__radio {
+      margin-top: 2px;
+      accent-color: #60a5fa;
+    }
+    .contract-binding-modal__name {
+      display: block;
+      font-weight: 700;
+      color: #f9fafb;
+      overflow-wrap: anywhere;
+    }
+    .contract-binding-modal__meta {
+      margin-top: 3px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      color: #cbd5e1;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .contract-binding-modal__status {
+      margin-top: 5px;
+      font-size: 12px;
+      color: #93c5fd;
+    }
+    .contract-binding-modal__status--blocked {
+      color: #fca5a5;
+    }
+    .contract-binding-modal__empty {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px dashed rgba(148, 163, 184, .36);
+      color: #cbd5e1;
+      background: rgba(15, 23, 42, .54);
+    }
 
     .toast {
       position: fixed;
@@ -2542,6 +2619,32 @@
         </div>
       </div>
 
+      <div id="contractBindingModal" class="group-membership-modal contract-binding-modal" hidden aria-hidden="true">
+        <div class="group-membership-modal__backdrop" data-action="close"></div>
+        <div
+          class="group-membership-modal__dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contractBindingTitle"
+          aria-describedby="contractBindingDescription"
+        >
+          <button id="contractBindingClose" class="group-membership-modal__close" type="button" data-action="close" aria-label="Закрыть">×</button>
+          <div class="group-membership-modal__eyebrow">Привязка 1С</div>
+          <h2 id="contractBindingTitle" class="group-membership-modal__title">Привязать договор к месту</h2>
+          <p id="contractBindingDescription" class="group-membership-modal__description">
+            Выберите активный основной договор этого арендатора. Уже привязанные к другому месту договоры показаны только для контроля.
+          </p>
+          <div id="contractBindingTarget" class="group-membership-modal__info">—</div>
+          <div id="contractBindingWarning" class="group-membership-modal__warning" style="display:none;"></div>
+          <div id="contractBindingList" class="contract-binding-modal__list"></div>
+          <div id="contractBindingError" class="group-membership-modal__error" style="display:none;"></div>
+          <div class="group-membership-modal__actions">
+            <button type="button" id="contractBindingCancel" class="group-membership-modal__cancel" data-action="close">Отмена</button>
+            <button type="button" id="contractBindingSubmit" class="group-membership-modal__submit" disabled>Привязать</button>
+          </div>
+        </div>
+      </div>
+
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <script type="module">
@@ -2554,6 +2657,7 @@
         const CREATE_SPACE_URL = @json(\App\Filament\Resources\MarketSpaceResource::getUrl('create'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const CAN_EDIT  = @json((bool) $canEdit);
+        const CAN_BIND_CONTRACTS = @json((bool) ($canBindContracts ?? false));
         const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
         const MARKET_ID = @json((int) $marketId);
         const MAP_PAGE = @json((int) ($mapPage ?? 1));
@@ -2636,6 +2740,14 @@
         const groupSlotSection = document.getElementById('groupSlotSection');
         const groupMembershipCancel = document.getElementById('groupMembershipCancel');
         const groupMembershipSubmit = document.getElementById('groupMembershipSubmit');
+        const contractBindingModal = document.getElementById('contractBindingModal');
+        const contractBindingClose = document.getElementById('contractBindingClose');
+        const contractBindingTarget = document.getElementById('contractBindingTarget');
+        const contractBindingWarning = document.getElementById('contractBindingWarning');
+        const contractBindingList = document.getElementById('contractBindingList');
+        const contractBindingError = document.getElementById('contractBindingError');
+        const contractBindingCancel = document.getElementById('contractBindingCancel');
+        const contractBindingSubmit = document.getElementById('contractBindingSubmit');
         const utilityGroup = document.querySelector('.toolbar-row--controls .toolbar-group--utility') || null;
 
         const editHint = document.getElementById('editHint');
@@ -2669,6 +2781,9 @@
         let groupSearchController = null;
         let groupSearchResults = [];
         let groupSelectedParentLabel = '';
+        let contractBindingContext = null;
+        let contractBindingSelectedId = null;
+        let contractBindingItems = [];
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -3293,6 +3408,264 @@
           }
         }
 
+        function closeContractBindingModal() {
+          if (!contractBindingModal) return;
+
+          contractBindingModal.classList.remove('show');
+          contractBindingModal.hidden = true;
+          contractBindingModal.setAttribute('aria-hidden', 'true');
+          contractBindingContext = null;
+          contractBindingSelectedId = null;
+          contractBindingItems = [];
+
+          if (contractBindingList) {
+            contractBindingList.innerHTML = '';
+          }
+
+          if (contractBindingTarget) {
+            contractBindingTarget.textContent = '—';
+          }
+
+          if (contractBindingWarning) {
+            contractBindingWarning.style.display = 'none';
+            contractBindingWarning.textContent = '';
+          }
+
+          clearContractBindingError();
+          updateContractBindingSubmit();
+        }
+
+        function clearContractBindingError() {
+          if (!contractBindingError) return;
+          contractBindingError.style.display = 'none';
+          contractBindingError.textContent = '';
+        }
+
+        function showContractBindingError(message) {
+          if (!contractBindingError) return;
+          contractBindingError.textContent = message;
+          contractBindingError.style.display = 'block';
+        }
+
+        function updateContractBindingSubmit() {
+          if (!contractBindingSubmit) return;
+          const selected = contractBindingItems.find((item) => Number(item.id) === Number(contractBindingSelectedId));
+          contractBindingSubmit.disabled = !selected || selected.disabled || selected.is_current;
+        }
+
+        function formatContractBindingDate(value) {
+          const text = String(value || '').trim();
+          if (!text) return '';
+
+          const parts = text.split('-');
+          if (parts.length === 3) {
+            return parts[2] + '.' + parts[1] + '.' + parts[0];
+          }
+
+          return text;
+        }
+
+        function renderContractBindingList() {
+          if (!contractBindingList) return;
+
+          contractBindingList.innerHTML = '';
+
+          if (!contractBindingItems.length) {
+            contractBindingList.innerHTML = '<div class="contract-binding-modal__empty">Активные основные договоры этого арендатора не найдены.</div>';
+            updateContractBindingSubmit();
+            return;
+          }
+
+          contractBindingItems.forEach((contract) => {
+            const id = Number(contract.id || 0);
+            const disabled = !!contract.disabled;
+            const isSelected = Number(contractBindingSelectedId) === id;
+            const isCurrent = !!contract.is_current;
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'contract-binding-modal__item'
+              + (isSelected ? ' is-selected' : '')
+              + (disabled ? ' is-disabled' : '');
+            item.disabled = disabled;
+            item.dataset.contractId = String(id);
+
+            const meta = [];
+            if (contract.external_id) meta.push('1С: ' + String(contract.external_id));
+            if (contract.starts_at) meta.push('с ' + formatContractBindingDate(contract.starts_at));
+            if (contract.ends_at) meta.push('по ' + formatContractBindingDate(contract.ends_at));
+            if (contract.monthly_rent !== null && contract.monthly_rent !== undefined) {
+              meta.push('ставка ' + formatMoneyRu(contract.monthly_rent));
+            }
+
+            let status = 'Не привязан к месту';
+            let statusClass = '';
+            if (isCurrent) {
+              status = 'Уже привязан к этому месту';
+            } else if (contract.is_bound_elsewhere) {
+              status = 'Уже привязан к месту ' + String(contract.bound_space_label || contract.market_space_id || '');
+              statusClass = ' contract-binding-modal__status--blocked';
+            }
+
+            item.innerHTML =
+              '<input class="contract-binding-modal__radio" type="radio" tabindex="-1" '
+                + (isSelected ? 'checked ' : '')
+                + (disabled ? 'disabled ' : '')
+                + 'aria-hidden="true">'
+              + '<span>'
+                + '<span class="contract-binding-modal__name">' + escapeHtml(contract.number || ('ID ' + String(id))) + '</span>'
+                + (meta.length ? '<span class="contract-binding-modal__meta">' + meta.map((part) => '<span>' + escapeHtml(part) + '</span>').join('') + '</span>' : '')
+                + '<span class="contract-binding-modal__status' + statusClass + '">' + escapeHtml(status) + '</span>'
+              + '</span>';
+
+            item.addEventListener('click', () => {
+              if (disabled || isCurrent) return;
+              contractBindingSelectedId = id;
+              clearContractBindingError();
+              renderContractBindingList();
+              updateContractBindingSubmit();
+            });
+
+            contractBindingList.appendChild(item);
+          });
+
+          updateContractBindingSubmit();
+        }
+
+        async function openContractBindingModalFromHit() {
+          if (!CAN_BIND_CONTRACTS) {
+            toast('Недостаточно прав для привязки договора');
+            return;
+          }
+
+          const spaceId = Number(lastHit?.market_space_id || lastHit?.space?.id || 0);
+          if (!Number.isFinite(spaceId) || spaceId <= 0) {
+            toast('Не выбрано место для привязки договора');
+            return;
+          }
+
+          if (!contractBindingModal || !contractBindingList) return;
+
+          contractBindingModal.hidden = false;
+          contractBindingModal.classList.add('show');
+          contractBindingModal.setAttribute('aria-hidden', 'false');
+          contractBindingList.innerHTML = '<div class="contract-binding-modal__empty">Загружаю договоры...</div>';
+          contractBindingItems = [];
+          contractBindingSelectedId = null;
+          clearContractBindingError();
+          updateContractBindingSubmit();
+
+          try {
+            const res = await apiFetch(`/admin/market-map/spaces/${spaceId}/contract-binding-options`, {
+              headers: { 'Accept': 'application/json' },
+            });
+            const json = await res.json();
+
+            if (!res.ok || !json || json.ok !== true) {
+              throw new Error(json?.message || 'Не удалось получить список договоров');
+            }
+
+            contractBindingContext = json;
+            contractBindingItems = Array.isArray(json.items) ? json.items : [];
+            const firstAvailable = contractBindingItems.find((item) => !item.disabled && !item.is_current);
+            contractBindingSelectedId = firstAvailable ? Number(firstAvailable.id) : null;
+
+            const tenantName = json.tenant?.name ? String(json.tenant.name) : 'арендатор не указан';
+            const clickedLabel = json.clicked_space?.label ? String(json.clicked_space.label) : ('ID ' + String(spaceId));
+            const targetLabel = json.target_space?.label ? String(json.target_space.label) : clickedLabel;
+
+            if (contractBindingTarget) {
+              contractBindingTarget.textContent = json.target_space?.source === 'parent'
+                ? 'Арендатор: ' + tenantName + '. Нажато место ' + clickedLabel + ', договор будет привязан к группе ' + targetLabel + '.'
+                : 'Арендатор: ' + tenantName + '. Место: ' + targetLabel + '.';
+            }
+
+            if (contractBindingWarning) {
+              if (json.target_space?.source === 'parent') {
+                contractBindingWarning.textContent = 'Место входит в группу. Привязка договора сохраняется на родительскую группу, чтобы не раздваивать долг по дочерним местам.';
+                contractBindingWarning.style.display = 'block';
+              } else {
+                contractBindingWarning.style.display = 'none';
+                contractBindingWarning.textContent = '';
+              }
+            }
+
+            if (json.message) {
+              showContractBindingError(String(json.message));
+            }
+
+            renderContractBindingList();
+          } catch (err) {
+            console.error(err);
+            const message = err?.message || 'Не удалось получить список договоров';
+            showContractBindingError(message);
+            contractBindingList.innerHTML = '<div class="contract-binding-modal__empty">' + escapeHtml(message) + '</div>';
+            toast(message);
+          }
+        }
+
+        async function submitContractBinding() {
+          if (!contractBindingSubmit || contractBindingSubmit.disabled) return;
+
+          const spaceId = Number(lastHit?.market_space_id || lastHit?.space?.id || 0);
+          const contractId = Number(contractBindingSelectedId || 0);
+          if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(contractId) || contractId <= 0) {
+            showContractBindingError('Выберите договор для привязки');
+            return;
+          }
+
+          const originalText = contractBindingSubmit.textContent;
+          contractBindingSubmit.disabled = true;
+          contractBindingSubmit.textContent = 'Привязываю...';
+          clearContractBindingError();
+
+          try {
+            const res = await apiFetch(`/admin/market-map/spaces/${spaceId}/contract-binding`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: JSON.stringify({ tenant_contract_id: contractId }),
+            });
+            const json = await res.json();
+
+            if (!res.ok || !json || json.ok !== true) {
+              let message = json?.message || 'Не удалось привязать договор';
+              if (json?.errors) {
+                const firstKey = Object.keys(json.errors)[0];
+                if (firstKey && Array.isArray(json.errors[firstKey]) && json.errors[firstKey][0]) {
+                  message = json.errors[firstKey][0];
+                }
+              }
+              throw new Error(message);
+            }
+
+            if (typeof loadShapesRef === 'function') {
+              await loadShapesRef();
+            }
+            if (typeof redrawShapesRef === 'function') {
+              redrawShapesRef();
+            }
+            if (typeof refreshChosenSpaceFromServer === 'function') {
+              await refreshChosenSpaceFromServer();
+            }
+
+            toast('Договор 1С привязан');
+            closeContractBindingModal();
+            hidePopover();
+          } catch (err) {
+            console.error(err);
+            const message = err?.message || 'Не удалось привязать договор';
+            showContractBindingError(message);
+            toast(message);
+          } finally {
+            if (contractBindingSubmit) {
+              contractBindingSubmit.textContent = originalText;
+              updateContractBindingSubmit();
+            }
+          }
+        }
+
         function showPopoverAt(clientX, clientY, html, isUnboundShape = false) {
           if (!popover || !popoverBody) return;
 
@@ -3401,6 +3774,27 @@
         });
         groupSlot?.addEventListener('input', clearGroupMembershipError);
         groupComment?.addEventListener('input', clearGroupMembershipError);
+
+        contractBindingModal?.addEventListener('click', (e) => {
+          const t = e.target;
+          if (!(t instanceof HTMLElement)) return;
+
+          const action = t.getAttribute('data-action');
+          if (action === 'close') {
+            e.preventDefault();
+            closeContractBindingModal();
+          }
+        });
+        contractBindingCancel?.addEventListener('click', closeContractBindingModal);
+        contractBindingClose?.addEventListener('click', closeContractBindingModal);
+        contractBindingSubmit?.addEventListener('click', (e) => {
+          e.preventDefault();
+          submitContractBinding().catch((err) => {
+            console.error(err);
+            toast(String(err?.message || err));
+          });
+        });
+
         window.addEventListener('keydown', (e) => {
           if (identityFixModal?.classList.contains('show')) {
             if (e.key === 'Escape') {
@@ -3413,6 +3807,13 @@
             if (e.key === 'Escape') {
               e.preventDefault();
               closeGroupMembershipModal();
+            }
+            return;
+          }
+          if (contractBindingModal?.classList.contains('show')) {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeContractBindingModal();
             }
             return;
           }
@@ -3605,6 +4006,10 @@
           const chipLabel = escapeHtml(label || 'Договор 1С');
           if (url) {
             return '<a class="contract-chip" href="' + escapeHtml(url) + '" target="_blank" rel="noopener" onclick="window.open(this.href, \'contract_1c_window\', \'popup=yes,width=1200,height=900,noopener,noreferrer\'); return false;">' + chipLabel + '</a>';
+          }
+
+          if (CAN_BIND_CONTRACTS) {
+            return '<button type="button" class="contract-chip contract-chip--missing" data-action="open-contract-binding" title="Привязать активный договор 1С этого арендатора">' + chipLabel + '</button>';
           }
 
           return '<span class="contract-chip contract-chip--missing">' + chipLabel + '</span>';
@@ -7164,6 +7569,15 @@
               const id = Number(t.getAttribute('data-tenant-id') || 0);
               if (!Number.isFinite(id) || id <= 0) return;
               window.open('/admin/tenants/' + String(Math.trunc(id)) + '/edit', '_blank', 'noopener');
+              return;
+            }
+
+            if (action === 'open-contract-binding') {
+              e.preventDefault();
+              openContractBindingModalFromHit().catch((err) => {
+                console.error(err);
+                toast(String(err?.message || err));
+              });
               return;
             }
 
