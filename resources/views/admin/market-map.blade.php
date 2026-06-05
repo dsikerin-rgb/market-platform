@@ -3495,6 +3495,15 @@
           }).format(num) + ' ₽';
         }
 
+        function formatMoneyRubWithCents(value) {
+          const num = Number(value);
+          if (!Number.isFinite(num)) return '';
+          return new Intl.NumberFormat('ru-RU', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }).format(num) + ' ₽';
+        }
+
         function formatAreaRu(value) {
           const num = Number(value);
           if (!Number.isFinite(num)) return '';
@@ -6634,14 +6643,14 @@
                     : hit.debt_overdue_days;
                   const overdueDays = overdueDaysRaw !== null && overdueDaysRaw !== undefined ? Number(overdueDaysRaw) : null;
                   const overdueDaysLabel = overdueDays !== null && Number.isFinite(overdueDays)
-                    ? String(Math.max(0, Math.round(overdueDays)))
+                    ? String(Math.max(0, Math.floor(overdueDays)))
                     : null;
                   const debtAmountRaw = hit.space_effective_debt_amount !== null && hit.space_effective_debt_amount !== undefined
                     ? hit.space_effective_debt_amount
                     : hit.debt_amount;
                   const debtAmount = debtAmountRaw !== null && debtAmountRaw !== undefined ? Number(debtAmountRaw) : null;
                   const debtAmountLabel = debtAmount !== null && Number.isFinite(debtAmount)
-                    ? formatMoneyRu(debtAmount)
+                    ? formatMoneyRubWithCents(debtAmount)
                     : null;
                   const debtDetailsSuffix = [
                     overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : null,
