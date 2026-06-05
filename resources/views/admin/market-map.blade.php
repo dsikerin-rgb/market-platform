@@ -1948,8 +1948,12 @@
       background: #1e40af;
     }
     .group-membership-modal__submit:disabled {
-      opacity: 0.6;
+      opacity: 1;
       cursor: not-allowed;
+      background: #dbeafe;
+      border-color: #bfdbfe;
+      color: #1e3a8a;
+      -webkit-text-fill-color: #1e3a8a;
     }
     .group-membership-modal__close {
       position: absolute;
@@ -2031,6 +2035,8 @@
       color: #0f172a;
       cursor: pointer;
       box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+      line-height: 1.35;
+      white-space: normal;
     }
     .contract-binding-modal__item:hover {
       border-color: #93c5fd;
@@ -2045,23 +2051,32 @@
       cursor: not-allowed;
       opacity: 1;
       background: #f1f5f9;
-      color: #94a3b8;
+      color: #334155;
       box-shadow: none;
     }
     .contract-binding-modal__item.is-disabled .contract-binding-modal__name,
     .contract-binding-modal__item.is-disabled .contract-binding-modal__meta,
     .contract-binding-modal__item.is-disabled .contract-binding-modal__status {
-      color: #94a3b8;
+      color: #475569;
+    }
+    .contract-binding-modal__item.is-disabled .contract-binding-modal__movement {
+      color: #64748b;
     }
     .contract-binding-modal__radio {
       margin-top: 2px;
       accent-color: #2563eb;
+      flex: 0 0 auto;
+    }
+    .contract-binding-modal__item > span {
+      min-width: 0;
+      display: block;
     }
     .contract-binding-modal__name {
       display: block;
       font-weight: 700;
       color: #0f172a;
       overflow-wrap: anywhere;
+      word-break: normal;
     }
     .contract-binding-modal__meta {
       margin-top: 6px;
@@ -2070,16 +2085,20 @@
       color: #475569;
       font-size: 12px;
       line-height: 1.35;
+      overflow-wrap: anywhere;
     }
     .contract-binding-modal__tech {
       color: #64748b;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .contract-binding-modal__status {
       margin-top: 6px;
       font-size: 12px;
       color: #2563eb;
+      display: block;
+      overflow-wrap: anywhere;
     }
     .contract-binding-modal__status--blocked {
       color: #64748b;
@@ -2089,6 +2108,8 @@
       font-size: 12px;
       font-weight: 700;
       color: #64748b;
+      display: block;
+      overflow-wrap: anywhere;
     }
     .contract-binding-modal__movement--fresh {
       color: #15803d;
