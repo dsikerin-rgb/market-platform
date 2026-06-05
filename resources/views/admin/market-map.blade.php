@@ -3583,6 +3583,10 @@
             ? ' <span class="row-help" title="' + escapeHtml(helpText) + '" aria-label="' + escapeHtml(helpText) + '">?</span>'
             : '';
 
+          if (String(text).includes('contract-chip')) {
+            return '<div class="' + rowClass + '"><span class="row-value">' + text + '</span>' + helpHtml + '</div>';
+          }
+
           if (separatorIndex === -1) {
             return '<div class="' + rowClass + '"><span class="row-value">' + text + '</span>' + helpHtml + '</div>';
           }
