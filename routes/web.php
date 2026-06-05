@@ -3,6 +3,7 @@
 
 declare(strict_types=1);
 
+use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Http\Controllers\Auth\MarketRegistrationController;
 use App\Http\Controllers\Admin\TenantCabinetImpersonationController;
@@ -697,6 +698,12 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'space_effective_debt_overdue_days' => null,
             'space_effective_debt_amount' => null,
             'space_effective_debt_status_scope' => 'none',
+            'space_effective_tenant_debt_amount' => null,
+            'space_effective_tenant_debt_status' => null,
+            'space_effective_tenant_debt_updated_at' => null,
+            'space_effective_contract_id' => null,
+            'space_effective_contract_number' => null,
+            'space_effective_contract_url' => null,
             'space_financial_source' => 'none',
             'space_financial_source_space_id' => null,
             'space_financial_source_space_number' => null,
@@ -732,7 +739,28 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $resolvedDebt = app(DebtStatusResolver::class)->resolveForMarketSpace((int) $sourceSpace->id, (int) $sourceTenant->market_id);
+        $resolvedTenantDebt = app(DebtStatusResolver::class)->resolve($sourceTenant);
         $debtScope = (string) ($resolvedDebt['extra']['scope'] ?? 'none');
+        $linkedContract = null;
+
+        if ($debtScope === 'space' && Schema::hasTable('tenant_contracts')) {
+            $linkedContractQuery = TenantContract::query()
+                ->where('market_id', (int) $sourceSpace->market_id)
+                ->where('tenant_id', (int) $sourceTenant->id)
+                ->where('market_space_id', (int) $sourceSpace->id);
+
+            if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+                $linkedContractQuery->orderByDesc('is_active');
+            }
+
+            if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
+                $linkedContractQuery->orderByDesc('starts_at');
+            }
+
+            $linkedContract = $linkedContractQuery
+                ->orderByDesc('id')
+                ->first(['id', 'number', 'external_id']);
+        }
 
         return [
             'space_effective_debt_status' => $resolvedDebt['status'] ?? null,
@@ -743,6 +771,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'space_effective_debt_overdue_days' => $resolvedDebt['extra']['overdue_days'] ?? null,
             'space_effective_debt_amount' => $resolvedDebt['extra']['debt_amount'] ?? null,
             'space_effective_debt_status_scope' => $debtScope,
+            'space_effective_tenant_debt_amount' => $resolvedTenantDebt['extra']['debt_amount'] ?? null,
+            'space_effective_tenant_debt_status' => $resolvedTenantDebt['status'] ?? null,
+            'space_effective_tenant_debt_updated_at' => $resolvedTenantDebt['updated_at'] ?? null,
+            'space_effective_contract_id' => $linkedContract?->id ? (int) $linkedContract->id : null,
+            'space_effective_contract_number' => $linkedContract
+                ? (string) (($linkedContract->number ?? '') !== '' ? $linkedContract->number : ($linkedContract->external_id ?? ''))
+                : null,
+            'space_effective_contract_url' => $linkedContract?->id
+                ? TenantContractResource::getUrl('edit', ['record' => (int) $linkedContract->id])
+                : null,
             'space_financial_source' => $financialSource,
             'space_financial_source_space_id' => (int) $sourceSpace->id,
             'space_financial_source_space_number' => $sourceSpaceLabel,

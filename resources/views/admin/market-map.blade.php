@@ -1396,6 +1396,29 @@
       color: #86efac;
       font-weight: 700;
     }
+    .popover .contract-chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(134, 239, 172, .42);
+      background: rgba(22, 163, 74, .14);
+      color: #bbf7d0;
+      font-weight: 700;
+      text-decoration: none;
+      vertical-align: middle;
+    }
+    .popover a.contract-chip:hover {
+      border-color: rgba(187, 247, 208, .70);
+      background: rgba(22, 163, 74, .24);
+      color: #dcfce7;
+    }
+    .popover .contract-chip--missing {
+      border-color: rgba(252, 165, 165, .42);
+      background: rgba(220, 38, 38, .14);
+      color: #fecaca;
+    }
     .popover .row-review-note {
       margin-top: 10px;
       padding: 8px 10px;
@@ -3486,6 +3509,16 @@
                 ? Number(item.space_effective_debt_amount)
                 : null,
               effectiveDebtStatusScope: item?.space_effective_debt_status_scope ? String(item.space_effective_debt_status_scope) : 'none',
+              effectiveTenantDebtAmount: item?.space_effective_tenant_debt_amount !== null && item?.space_effective_tenant_debt_amount !== undefined
+                ? Number(item.space_effective_tenant_debt_amount)
+                : null,
+              effectiveTenantDebtStatus: item?.space_effective_tenant_debt_status ? String(item.space_effective_tenant_debt_status) : null,
+              effectiveTenantDebtUpdatedAt: item?.space_effective_tenant_debt_updated_at ? String(item.space_effective_tenant_debt_updated_at) : null,
+              effectiveContractId: item?.space_effective_contract_id !== null && item?.space_effective_contract_id !== undefined
+                ? Number(item.space_effective_contract_id)
+                : null,
+              effectiveContractNumber: item?.space_effective_contract_number ? String(item.space_effective_contract_number) : null,
+              effectiveContractUrl: item?.space_effective_contract_url ? String(item.space_effective_contract_url) : null,
               financialSource: item?.space_financial_source ? String(item.space_financial_source) : 'none',
               financialSourceSpaceId: item?.space_financial_source_space_id !== null && item?.space_financial_source_space_id !== undefined
                 ? Number(item.space_financial_source_space_id)
@@ -3562,6 +3595,15 @@
           }
 
           return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span> <span class="row-value">' + value + '</span>' + helpHtml + '</div>';
+        }
+
+        function buildContractChip(label, url = '') {
+          const chipLabel = escapeHtml(label || 'Договор 1С');
+          if (url) {
+            return '<a class="contract-chip" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">' + chipLabel + '</a>';
+          }
+
+          return '<span class="contract-chip contract-chip--missing">' + chipLabel + '</span>';
         }
 
         function rentRateUnitLabel(unit) {
@@ -4203,7 +4245,14 @@
                   space_effective_debt_status_mode: shape?.space_effective_debt_status_mode ?? 'auto',
                   space_effective_debt_status_source: shape?.space_effective_debt_status_source ?? null,
                   space_effective_debt_overdue_days: shape?.space_effective_debt_overdue_days ?? null,
+                  space_effective_debt_amount: shape?.space_effective_debt_amount ?? null,
                   space_effective_debt_status_scope: shape?.space_effective_debt_status_scope ?? 'none',
+                  space_effective_tenant_debt_amount: shape?.space_effective_tenant_debt_amount ?? null,
+                  space_effective_tenant_debt_status: shape?.space_effective_tenant_debt_status ?? null,
+                  space_effective_tenant_debt_updated_at: shape?.space_effective_tenant_debt_updated_at ?? null,
+                  space_effective_contract_id: shape?.space_effective_contract_id ?? null,
+                  space_effective_contract_number: shape?.space_effective_contract_number ?? null,
+                  space_effective_contract_url: shape?.space_effective_contract_url ?? null,
                   space_financial_source: shape?.space_financial_source ?? 'none',
                   space_financial_source_space_id: shape?.space_financial_source_space_id ?? null,
                   space_financial_source_space_number: shape?.space_financial_source_space_number ?? null,
@@ -6542,7 +6591,14 @@
                       space_effective_debt_status_mode: hit.space_effective_debt_status_mode ?? 'auto',
                       space_effective_debt_status_source: hit.space_effective_debt_status_source ?? null,
                       space_effective_debt_overdue_days: hit.space_effective_debt_overdue_days ?? null,
+                      space_effective_debt_amount: hit.space_effective_debt_amount ?? null,
                       space_effective_debt_status_scope: hit.space_effective_debt_status_scope ?? 'none',
+                      space_effective_tenant_debt_amount: hit.space_effective_tenant_debt_amount ?? null,
+                      space_effective_tenant_debt_status: hit.space_effective_tenant_debt_status ?? null,
+                      space_effective_tenant_debt_updated_at: hit.space_effective_tenant_debt_updated_at ?? null,
+                      space_effective_contract_id: hit.space_effective_contract_id ?? null,
+                      space_effective_contract_number: hit.space_effective_contract_number ?? null,
+                      space_effective_contract_url: hit.space_effective_contract_url ?? null,
                       space_financial_source: hit.space_financial_source ?? 'none',
                       space_financial_source_space_id: hit.space_financial_source_space_id ?? null,
                       space_financial_source_space_number: hit.space_financial_source_space_number ?? null,
@@ -6568,10 +6624,13 @@
               let line5 = '';
               let line6 = '';
               let line7 = '';
+              let line8 = '';
               let line4Class = '';
               let line5Class = '';
+              let line6Class = '';
               let line4HelpText = '';
               let line5HelpText = '';
+              let line6HelpText = '';
               let groupParentId = 0;
               let isChildInGroup = false;
               let needsGroupTenantAssignment = false;
@@ -6687,6 +6746,16 @@
                   const debtAmountLabel = debtAmount !== null && Number.isFinite(debtAmount)
                     ? formatMoneyRubWithCents(debtAmount)
                     : null;
+                  const tenantDebtAmountRaw = hit.space_effective_tenant_debt_amount !== null && hit.space_effective_tenant_debt_amount !== undefined
+                    ? hit.space_effective_tenant_debt_amount
+                    : null;
+                  const tenantDebtAmount = tenantDebtAmountRaw !== null && tenantDebtAmountRaw !== undefined ? Number(tenantDebtAmountRaw) : null;
+                  const shouldShowTenantDebtAmount = tenantDebtAmount !== null
+                    && Number.isFinite(tenantDebtAmount)
+                    && (debtAmount === null || !Number.isFinite(debtAmount) || Math.abs(tenantDebtAmount - debtAmount) > 0.009);
+                  const tenantDebtAmountLabel = tenantDebtAmount !== null && Number.isFinite(tenantDebtAmount)
+                    ? formatMoneyRubWithCents(Math.abs(tenantDebtAmount))
+                    : null;
                   const debtDetailsSuffix = [
                     overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : null,
                     debtAmountLabel !== null ? debtAmountLabel : null,
@@ -6699,6 +6768,8 @@
                   const financialSourceSpaceLabel = hit.space_financial_source_space_number
                     ? String(hit.space_financial_source_space_number)
                     : sourceSpaceLabel;
+                  const effectiveContractNumber = hit.space_effective_contract_number ? String(hit.space_effective_contract_number) : '';
+                  const effectiveContractUrl = hit.space_effective_contract_url ? String(hit.space_effective_contract_url) : '';
                   const hasOverdueDebt = debtStatus === 'orange' || debtStatus === 'red';
                   const hasCurrentDebtWithoutOverdue = debtStatus === 'green' || debtStatus === 'pending';
 
@@ -6806,21 +6877,42 @@
                   }
 
                   // line5 — объяснение режима (если есть)
-                  line5 = scopeExplanation;
-
-                  // line6 — ставка аренды (если есть)
-                  if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
-                    line6 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
+                  if (scopeExplanation === 'Связь с местом подтверждена в 1С') {
+                    line5 = buildContractChip(
+                      effectiveContractNumber ? ('Договор 1С ' + effectiveContractNumber) : 'Договор 1С найден',
+                      effectiveContractUrl
+                    );
+                  } else if (scopeExplanation === 'К этому месту не привязан договор' || scopeExplanation === 'К этой группе не привязан договор') {
+                    line5 = buildContractChip('Договор 1С не привязан', '');
                   } else {
-                    line6 = '';
+                    line5 = scopeExplanation;
                   }
 
-                  // line7 — начисления (если есть)
-                  if (currentAccrualTotal !== null && Number.isFinite(currentAccrualTotal)) {
-                    const accrualSuffix = currentAccrualMode === 'latest' ? 'последний период' : currentAccrualPeriod;
-                    line7 = 'Начислено' + (accrualSuffix ? ' (' + escapeHtml(accrualSuffix) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
+                  // line6 — общее сальдо арендатора, если отличается от долга по месту
+                  if (shouldShowTenantDebtAmount && tenantDebtAmountLabel !== null) {
+                    if (tenantDebtAmount < -0.009) {
+                      line6 = 'Переплата арендатора: ' + tenantDebtAmountLabel;
+                      line6Class = 'row-debt-ok';
+                    } else {
+                      line6 = 'Общий долг арендатора: ' + tenantDebtAmountLabel;
+                      line6Class = tenantDebtAmount > 0.009 ? 'row-debt-overdue' : 'row-debt-ok';
+                    }
+                    line6HelpText = 'Общее сальдо арендатора по всем договорам 1С: долги минус переплаты. Может отличаться от долга по конкретному месту.';
+                  }
+
+                  // line7 — ставка аренды (если есть)
+                  if (rentRateValue !== null && Number.isFinite(rentRateValue)) {
+                    line7 = 'Ставка аренды: ' + formatMoneyRu(rentRateValue) + (rentRateUnit ? ' ' + escapeHtml(rentRateUnit) : '');
                   } else {
                     line7 = '';
+                  }
+
+                  // line8 — начисления (если есть)
+                  if (currentAccrualTotal !== null && Number.isFinite(currentAccrualTotal)) {
+                    const accrualSuffix = currentAccrualMode === 'latest' ? 'последний период' : currentAccrualPeriod;
+                    line8 = 'Начислено' + (accrualSuffix ? ' (' + escapeHtml(accrualSuffix) + ')' : '') + ': ' + formatMoneyRu(currentAccrualTotal);
+                  } else {
+                    line8 = '';
                   }
                 }
               } else {
@@ -6831,6 +6923,8 @@
                 line4 = '';
                 line5 = '';
                 line6 = '';
+                line7 = '';
+                line8 = '';
               }
 
               let actions = '';
@@ -6984,8 +7078,9 @@
                   buildPopoverRow(line3) +
                   buildPopoverRow(line4, line4Class, line4HelpText) +
                   buildPopoverRow(line5, line5ExtraClass, line5HelpText) +
-                  buildPopoverRow(line6) +
+                  buildPopoverRow(line6, line6Class, line6HelpText) +
                   buildPopoverRow(line7) +
+                  buildPopoverRow(line8) +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
                   reviewNotice +
                   bindShapeHtml +
@@ -7098,7 +7193,14 @@
                   space_effective_debt_status_mode: lastHit?.space_effective_debt_status_mode ?? 'auto',
                   space_effective_debt_status_source: lastHit?.space_effective_debt_status_source ?? null,
                   space_effective_debt_overdue_days: lastHit?.space_effective_debt_overdue_days ?? null,
+                  space_effective_debt_amount: lastHit?.space_effective_debt_amount ?? null,
                   space_effective_debt_status_scope: lastHit?.space_effective_debt_status_scope ?? 'none',
+                  space_effective_tenant_debt_amount: lastHit?.space_effective_tenant_debt_amount ?? null,
+                  space_effective_tenant_debt_status: lastHit?.space_effective_tenant_debt_status ?? null,
+                  space_effective_tenant_debt_updated_at: lastHit?.space_effective_tenant_debt_updated_at ?? null,
+                  space_effective_contract_id: lastHit?.space_effective_contract_id ?? null,
+                  space_effective_contract_number: lastHit?.space_effective_contract_number ?? null,
+                  space_effective_contract_url: lastHit?.space_effective_contract_url ?? null,
                   space_financial_source: lastHit?.space_financial_source ?? 'none',
                   space_financial_source_space_id: lastHit?.space_financial_source_space_id ?? null,
                   space_financial_source_space_number: lastHit?.space_financial_source_space_number ?? null,
@@ -7135,7 +7237,14 @@
                 space_effective_debt_status_mode: lastHit?.space_effective_debt_status_mode ?? 'auto',
                 space_effective_debt_status_source: lastHit?.space_effective_debt_status_source ?? null,
                 space_effective_debt_overdue_days: lastHit?.space_effective_debt_overdue_days ?? null,
+                space_effective_debt_amount: lastHit?.space_effective_debt_amount ?? null,
                 space_effective_debt_status_scope: lastHit?.space_effective_debt_status_scope ?? 'none',
+                space_effective_tenant_debt_amount: lastHit?.space_effective_tenant_debt_amount ?? null,
+                space_effective_tenant_debt_status: lastHit?.space_effective_tenant_debt_status ?? null,
+                space_effective_tenant_debt_updated_at: lastHit?.space_effective_tenant_debt_updated_at ?? null,
+                space_effective_contract_id: lastHit?.space_effective_contract_id ?? null,
+                space_effective_contract_number: lastHit?.space_effective_contract_number ?? null,
+                space_effective_contract_url: lastHit?.space_effective_contract_url ?? null,
                 space_financial_source: lastHit?.space_financial_source ?? 'none',
                 space_financial_source_space_id: lastHit?.space_financial_source_space_id ?? null,
                 space_financial_source_space_number: lastHit?.space_financial_source_space_number ?? null,

@@ -655,4 +655,113 @@ class MarketMapDebtBySpaceTest extends TestCase
         $this->assertSame('space', $shape['debt_status_scope']);
         $this->assertGreaterThanOrEqual(1, (int) $shape['debt_overdue_days']);
     }
+
+    public function test_hit_payload_includes_tenant_net_debt_alongside_space_debt(): void
+    {
+        $spaceWithDebt = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => 'П68',
+            'code' => 'p68',
+        ]);
+
+        $spaceWithCredit = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $this->tenant->id,
+            'number' => 'П65/2',
+            'code' => 'p65-2',
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $this->market->id,
+            'market_space_id' => $spaceWithDebt->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 40, 'y' => 10],
+                ['x' => 40, 'y' => 40],
+                ['x' => 10, 'y' => 40],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 40,
+            'bbox_y2' => 40,
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'market_space_id' => $spaceWithDebt->id,
+                'external_id' => 'contract-p68',
+                'number' => 'П/68',
+                'status' => 'active',
+                'is_active' => true,
+                'starts_at' => now()->subMonth(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'market_space_id' => $spaceWithCredit->id,
+                'external_id' => 'contract-p65-2',
+                'number' => 'П/65/2',
+                'status' => 'active',
+                'is_active' => true,
+                'starts_at' => now()->subMonth(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        DB::table('contract_debts')->insert([
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'tenant_external_id' => $this->tenant->external_id,
+                'contract_external_id' => 'contract-p68',
+                'period' => now()->subMonth()->format('Y-m'),
+                'account' => '62',
+                'accrued_amount' => 373837.50,
+                'paid_amount' => 0,
+                'debt_amount' => 373837.50,
+                'calculated_at' => now()->subDays(40),
+                'created_at' => now()->subDays(40),
+                'hash' => sha1('contract-p68'),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $this->tenant->id,
+                'tenant_external_id' => $this->tenant->external_id,
+                'contract_external_id' => 'contract-p65-2',
+                'period' => now()->subMonth()->format('Y-m'),
+                'account' => '62',
+                'accrued_amount' => 0,
+                'paid_amount' => 132097.43,
+                'debt_amount' => -132097.43,
+                'calculated_at' => now()->subDays(40),
+                'created_at' => now()->subDays(40),
+                'hash' => sha1('contract-p65-2'),
+            ],
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        $response = $this->getJson(route('filament.admin.market-map.hit', [
+            'x' => 20,
+            'y' => 20,
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('hit.space_effective_debt_status_scope', 'space');
+        $response->assertJsonPath('hit.space_effective_debt_amount', 373837.50);
+        $response->assertJsonPath('hit.space_effective_tenant_debt_amount', 241740.07);
+        $response->assertJsonPath('hit.space_effective_contract_number', 'П/68');
+        $this->assertStringContainsString('/admin/contracts/', (string) $response->json('hit.space_effective_contract_url'));
+    }
 }
