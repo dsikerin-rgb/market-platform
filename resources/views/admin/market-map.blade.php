@@ -6627,9 +6627,9 @@
                   }
                 } else {
                   if (occupancySource === 'parent' && sourceSpaceLabel) {
-                    line2 = 'Занято через группу: ' + escapeHtml(sourceSpaceLabel);
+                    line2 = '';
                   } else {
-                    line2 = 'Занято';
+                    line2 = '';
                   }
                   line3 = tenant?.name ? ('Арендатор: ' + escapeHtml(tenant.name)) : (hit.space_effective_tenant_name ? ('Арендатор: ' + escapeHtml(String(hit.space_effective_tenant_name))) : 'Арендатор: —');
 
