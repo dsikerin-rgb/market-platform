@@ -1384,6 +1384,15 @@
       color: #e0f2fe;
       font-weight: 700;
     }
+    .popover .row-contract-chip {
+      margin-top: 8px;
+    }
+    .popover .row-contract-chip.row-warning {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
     .popover .row-link-missing,
     .popover .row-debt-overdue .row-value,
     .popover .row-link-missing .row-value {
@@ -4021,7 +4030,7 @@
             : '';
 
           if (String(text).includes('contract-chip')) {
-            return '<div class="' + rowClass + '"><span class="row-value">' + text + '</span>' + helpHtml + '</div>';
+            return '<div class="' + rowClass + ' row-contract-chip"><span class="row-value">' + text + '</span>' + helpHtml + '</div>';
           }
 
           if (separatorIndex === -1) {
