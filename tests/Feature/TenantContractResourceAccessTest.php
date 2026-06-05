@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\TenantContractResource\Pages\EditTenantContract;
 use App\Filament\Resources\TenantContractResource;
+use App\Filament\Resources\TenantContractResource\Pages\EditTenantContract;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
@@ -93,9 +93,9 @@ class TenantContractResourceAccessTest extends TestCase
             ->assertSee('Рабочий контур')
             ->assertSee('Без привязки к месту')
             ->assertSee('Все договоры')
-            ->assertDontSee('Последняя задолженность')
-            ->assertDontSee('Договоры из начислений')
-            ->assertDontSee('Основные кандидаты на привязку')
+            ->assertDontSee('Есть в последней выгрузке долга')
+            ->assertDontSee('Найдены по начислениям')
+            ->assertDontSee('Кандидаты на привязку')
             ->assertDontSee('С наложением')
             ->assertDontSee('Требуют разбора');
     }
@@ -121,9 +121,9 @@ class TenantContractResourceAccessTest extends TestCase
         $this->get(TenantContractResource::getUrl('index'))
             ->assertOk()
             ->assertSee('Рабочий контур')
-            ->assertSee('Последняя задолженность')
-            ->assertSee('Договоры из начислений')
-            ->assertSee('Основные кандидаты на привязку')
+            ->assertSee('Есть в последней выгрузке долга')
+            ->assertSee('Найдены по начислениям')
+            ->assertSee('Кандидаты на привязку')
             ->assertSee('С наложением')
             ->assertSee('Требуют разбора');
     }
@@ -164,7 +164,11 @@ class TenantContractResourceAccessTest extends TestCase
         self::assertTrue(TenantContractResource::canEdit($contract));
 
         $this->get(TenantContractResource::getUrl('edit', ['record' => $contract]))
-            ->assertOk();
+            ->assertOk()
+            ->assertSee('Паспорт договора')
+            ->assertSee('Финансы и движение 1С')
+            ->assertSee('Связь с местом')
+            ->assertSee('П/59У от 01.05.2024');
     }
 
     public function test_market_admin_space_change_switches_contract_to_manual_mapping_mode(): void
