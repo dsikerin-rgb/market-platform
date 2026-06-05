@@ -2055,16 +2055,20 @@
       overflow-wrap: anywhere;
     }
     .contract-binding-modal__meta {
-      margin-top: 3px;
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
+      margin-top: 6px;
+      display: grid;
+      gap: 3px;
       color: #475569;
       font-size: 12px;
       line-height: 1.35;
     }
+    .contract-binding-modal__tech {
+      color: #64748b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-wrap: anywhere;
+    }
     .contract-binding-modal__status {
-      margin-top: 5px;
+      margin-top: 6px;
       font-size: 12px;
       color: #2563eb;
     }
@@ -3497,6 +3501,7 @@
             const disabled = !!contract.disabled;
             const isSelected = Number(contractBindingSelectedId) === id;
             const isCurrent = !!contract.is_current;
+            const targetIsParent = contractBindingContext?.target_space?.source === 'parent';
             const item = document.createElement('button');
             item.type = 'button';
             item.className = 'contract-binding-modal__item'
@@ -3505,20 +3510,28 @@
             item.disabled = disabled;
             item.dataset.contractId = String(id);
 
+            const title = String(contract.number || ('ID ' + String(id)));
             const meta = [];
-            if (contract.external_id) meta.push('1С: ' + String(contract.external_id));
-            if (contract.starts_at) meta.push('с ' + formatContractBindingDate(contract.starts_at));
-            if (contract.ends_at) meta.push('по ' + formatContractBindingDate(contract.ends_at));
-            if (contract.monthly_rent !== null && contract.monthly_rent !== undefined) {
-              meta.push('ставка ' + formatMoneyRu(contract.monthly_rent));
+            if (contract.starts_at && contract.ends_at) {
+              meta.push('Период действия: с ' + formatContractBindingDate(contract.starts_at) + ' по ' + formatContractBindingDate(contract.ends_at));
+            } else if (contract.starts_at) {
+              meta.push('Действует с ' + formatContractBindingDate(contract.starts_at));
+            } else if (contract.ends_at) {
+              meta.push('Действует по ' + formatContractBindingDate(contract.ends_at));
             }
+            if (contract.monthly_rent !== null && contract.monthly_rent !== undefined) {
+              meta.push('Ставка аренды: ' + formatMoneyRu(contract.monthly_rent));
+            }
+            if (contract.external_id) meta.push('Код договора в 1С: ' + String(contract.external_id));
 
             let status = 'Не привязан к месту';
             let statusClass = '';
             if (isCurrent) {
-              status = 'Уже привязан к этому месту';
+              status = targetIsParent
+                ? 'Текущая привязка: группа'
+                : 'Текущая привязка: выбранное место';
             } else if (contract.is_bound_elsewhere) {
-              status = 'Уже привязан к месту ' + String(contract.bound_space_label || contract.market_space_id || '');
+              status = 'Занят другим местом: ' + String(contract.bound_space_label || contract.market_space_id || '');
               statusClass = ' contract-binding-modal__status--blocked';
             }
 
@@ -3528,8 +3541,13 @@
                 + (disabled ? 'disabled ' : '')
                 + 'aria-hidden="true">'
               + '<span>'
-                + '<span class="contract-binding-modal__name">' + escapeHtml(contract.number || ('ID ' + String(id))) + '</span>'
-                + (meta.length ? '<span class="contract-binding-modal__meta">' + meta.map((part) => '<span>' + escapeHtml(part) + '</span>').join('') + '</span>' : '')
+                + '<span class="contract-binding-modal__name">Договор: ' + escapeHtml(title) + '</span>'
+                + (meta.length ? '<span class="contract-binding-modal__meta">' + meta.map((part) => {
+                  const escaped = escapeHtml(part);
+                  return part.startsWith('Код договора в 1С: ')
+                    ? '<span class="contract-binding-modal__tech">' + escaped + '</span>'
+                    : '<span>' + escaped + '</span>';
+                }).join('') + '</span>' : '')
                 + '<span class="contract-binding-modal__status' + statusClass + '">' + escapeHtml(status) + '</span>'
               + '</span>';
 

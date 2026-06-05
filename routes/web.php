@@ -753,7 +753,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $debtScope = (string) ($resolvedDebt['extra']['scope'] ?? 'none');
         $linkedContract = null;
 
-        if ($debtScope === 'space' && Schema::hasTable('tenant_contracts')) {
+        if (Schema::hasTable('tenant_contracts')) {
             $linkedContractQuery = TenantContract::query()
                 ->where('market_id', (int) $sourceSpace->market_id)
                 ->where('tenant_id', (int) $sourceTenant->id)
@@ -1487,7 +1487,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ])
                 ->where('market_id', (int) $market->id)
                 ->whereIn('id', $spaceIds)
-                ->get(['id', 'tenant_id', 'number', 'code', 'display_name', 'status', 'rent_rate_value', 'rent_rate_unit', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id', 'space_group_token'])
+                ->get(['id', 'market_id', 'tenant_id', 'number', 'code', 'display_name', 'status', 'rent_rate_value', 'rent_rate_unit', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id', 'space_group_token'])
                 ->keyBy('id')
             : collect();
 
