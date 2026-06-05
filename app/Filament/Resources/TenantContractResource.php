@@ -14,6 +14,8 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\Placeholder;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -21,7 +23,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -37,8 +38,11 @@ class TenantContractResource extends BaseResource
     protected static ?string $recordTitleAttribute = 'number';
 
     protected static ?string $modelLabel = 'Договор';
+
     protected static ?string $pluralModelLabel = 'Договоры';
+
     protected static ?string $navigationLabel = 'Договоры';
+
     protected static ?string $slug = 'contracts';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
@@ -163,255 +167,713 @@ class TenantContractResource extends BaseResource
 
     public static function form(Schema $schema): Schema
     {
+        $tabs = Tabs::make('tenant_contract_tabs')
+            ->columnSpanFull();
+
+        if (method_exists($tabs, 'persistTabInQueryString')) {
+            $tabs->persistTabInQueryString();
+        }
+
         return $schema->components([
-            Section::make('Документ из 1С')
-                ->description('Поля ниже приходят из 1С и доступны только для просмотра.')
-                ->schema([
-                    Forms\Components\TextInput::make('tenant_display')
-                        ->label('Арендатор')
-                        ->formatStateUsing(fn (?TenantContract $record): string => static::tenantLabel($record))
-                        ->disabled()
-                        ->dehydrated(false),
+            $tabs->tabs([
+                Tab::make('Сводка')
+                    ->schema([
+                        Section::make('Паспорт договора')
+                            ->description('Ключевые признаки договора, связь с местом и свежесть данных 1С.')
+                            ->schema([
+                                Placeholder::make('contract_card_overview')
+                                    ->hiddenLabel()
+                                    ->content(fn (?TenantContract $record): HtmlString => static::renderContractCardOverview($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1)
+                            ->columnSpanFull(),
+                    ]),
 
-                    Forms\Components\TextInput::make('number')
-                        ->label('Номер документа')
-                        ->disabled()
-                        ->dehydrated(false),
+                Tab::make('1С')
+                    ->schema([
+                        Section::make('Документ из 1С')
+                            ->description('Поля ниже приходят из 1С и доступны только для просмотра.')
+                            ->schema([
+                                Forms\Components\TextInput::make('tenant_display')
+                                    ->label('Арендатор')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => static::tenantLabel($record))
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('document_type_display')
-                        ->label('Тип документа')
-                        ->formatStateUsing(fn (?TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('number')
+                                    ->label('Номер документа')
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('place_token_display')
-                        ->label('Токен места')
-                        ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
-                        ->visible(fn (): bool => static::canViewTechnicalFields())
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('document_type_display')
+                                    ->label('Тип документа')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => (string) static::classificationForRecord($record)['label'])
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('space_group_display')
-                        ->label('Группа мест')
-                        ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_token'] ?: '—'))
-                        ->visible(fn (): bool => static::canViewTechnicalFields())
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('place_token_display')
+                                    ->label('Токен места')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::classificationForRecord($record)['place_token'] ?: '—'))
+                                    ->visible(fn (): bool => static::canViewTechnicalFields())
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('space_group_segments_display')
-                        ->label('Сегменты в группе')
-                        ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_segments'] ?: '—'))
-                        ->visible(fn (): bool => static::canViewTechnicalFields())
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('space_group_display')
+                                    ->label('Группа мест')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_token'] ?: '—'))
+                                    ->visible(fn (): bool => static::canViewTechnicalFields())
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('document_date_display')
-                        ->label('Дата из номера')
-                        ->formatStateUsing(fn (?TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('space_group_segments_display')
+                                    ->label('Сегменты в группе')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => (string) (static::spaceGroupMetaForRecord($record)['group_segments'] ?: '—'))
+                                    ->visible(fn (): bool => static::canViewTechnicalFields())
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('signed_at')
-                        ->label('Дата подписания из 1С')
-                        ->formatStateUsing(fn (?TenantContract $record): string => $record?->signed_at?->format('d.m.Y') ?: '—')
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('document_date_display')
+                                    ->label('Дата из номера')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => static::formatClassifierDate(static::classificationForRecord($record)['document_date'] ?? null))
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('starts_at')
-                        ->label('Техническая дата 1С')
-                        ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('Не используется как основная дата договора. Для истории приоритет у даты из номера договора.')
-                        ->formatStateUsing(fn (?TenantContract $record): string => $record?->starts_at?->format('d.m.Y') ?: '—')
-                        ->visible(fn (): bool => static::canViewTechnicalFields())
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('signed_at')
+                                    ->label('Дата подписания из 1С')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => $record?->signed_at?->format('d.m.Y') ?: '—')
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('ends_at')
-                        ->label('Окончание')
-                        ->formatStateUsing(fn (?TenantContract $record): string => $record?->ends_at?->format('d.m.Y') ?: '—')
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('starts_at')
+                                    ->label('Техническая дата 1С')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Не используется как основная дата договора. Для истории приоритет у даты из номера договора.')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => $record?->starts_at?->format('d.m.Y') ?: '—')
+                                    ->visible(fn (): bool => static::canViewTechnicalFields())
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('status_display')
-                        ->label('Статус договора')
-                        ->formatStateUsing(fn (?TenantContract $record): string => static::contractStatusLabel($record?->status))
-                        ->visible(fn (): bool => static::canViewTechnicalFields())
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('ends_at')
+                                    ->label('Окончание')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => $record?->ends_at?->format('d.m.Y') ?: '—')
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('is_active_display')
-                        ->label('Активность из 1С')
-                        ->formatStateUsing(fn (?TenantContract $record): string => match (true) {
-                            ! $record => '—',
-                            (bool) $record->is_active => 'Активен',
-                            default => 'Неактивен',
-                        })
-                        ->disabled()
-                        ->dehydrated(false),
+                                Forms\Components\TextInput::make('status_display')
+                                    ->label('Статус договора')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => static::contractStatusLabel($record?->status))
+                                    ->visible(fn (): bool => static::canViewTechnicalFields())
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                    Forms\Components\TextInput::make('chain_display')
-                        ->label('Цепочка')
-                        ->formatStateUsing(fn (?TenantContract $record): string => $record ? static::chainDisplay($record) : '—')
-                        ->disabled()
-                        ->dehydrated(false),
-
-                    Forms\Components\TextInput::make('overlap_display')
-                        ->label('Наложение')
-                        ->formatStateUsing(fn (?TenantContract $record): string => $record ? static::overlapDisplay($record) : '—')
-                        ->disabled()
-                        ->dehydrated(false),
-                ])
-                ->columns(2),
-
-            Section::make('Локальная привязка')
-                ->description('Редактируются только локальные поля привязки. Канонические данные договора остаются под управлением 1С.')
-                ->schema([
-                    Forms\Components\Select::make('space_mapping_mode')
-                        ->label('Режим привязки')
-                        ->options([
-                            TenantContract::SPACE_MAPPING_MODE_AUTO => 'Авто (1С может обновить)',
-                            TenantContract::SPACE_MAPPING_MODE_MANUAL => 'Ручная фиксация',
-                            TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует в привязке к месту',
-                        ])
-                        ->default(TenantContract::SPACE_MAPPING_MODE_AUTO)
-                        ->native(false)
-                        ->visible(fn (): bool => static::hasTenantContractColumn('space_mapping_mode'))
-                        ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
-
-                    Forms\Components\Checkbox::make('limit_spaces_to_contract_tenant')
-                        ->label('Только места этого арендатора')
-                        ->default(true)
-                        ->live()
-                        ->dehydrated(false)
-                        ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('По умолчанию список мест ограничен арендатором договора. Снимите галочку, если раньше у этого места был другой арендатор и нужен поиск по всему рынку.'),
-
-                    Forms\Components\Checkbox::make('limit_spaces_to_place_group')
-                        ->label('Только места этой группы')
-                        ->default(true)
-                        ->live()
-                        ->dehydrated(false)
-                        ->visible(fn (?TenantContract $record): bool => filled(static::spaceGroupMetaForRecord($record)['group_token'] ?? null))
-                        ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('Если система распознала группу мест из номера договора, список мест будет ограничен этой группой. Снимите галочку, если нужно искать место по всему рынку.'),
-
-                    Forms\Components\Select::make('market_space_id')
-                        ->label('Торговое место')
-                        ->options(function (Get $get, ?TenantContract $record): array {
-                            if (! $record) {
-                                return [];
-                            }
-
-                            $currentSpaceId = (int) ($get('market_space_id') ?: $record->market_space_id ?: 0);
-                            $restrictToTenant = (bool) ($get('limit_spaces_to_contract_tenant') ?? true);
-                            $spaceGroupMeta = static::spaceGroupMetaForRecord($record);
-                            $restrictToGroup = (bool) ($get('limit_spaces_to_place_group') ?? true);
-                            $groupToken = trim((string) ($spaceGroupMeta['group_token'] ?? ''));
-                            $groupSegments = static::explodeGroupSegments($spaceGroupMeta['group_segments'] ?? null);
-
-                            $spaces = MarketSpace::query()
-                                ->where('market_id', (int) $record->market_id)
-                                ->when(
-                                    $restrictToTenant && filled($record->tenant_id),
-                                    fn (Builder $query) => $query->where(function (Builder $query) use ($record, $currentSpaceId): void {
-                                            $query->where('tenant_id', (int) $record->tenant_id);
-
-                                            if ($currentSpaceId > 0) {
-                                                $query->orWhere('id', $currentSpaceId);
-                                            }
-                                        })
-                                    )
-                                ->when(
-                                    $restrictToGroup && $groupToken !== '',
-                                    fn (Builder $query) => $query->where(function (Builder $query) use ($groupToken, $currentSpaceId): void {
-                                        $query->where('space_group_token', $groupToken);
-
-                                        if ($currentSpaceId > 0) {
-                                            $query->orWhere('id', $currentSpaceId);
-                                        }
+                                Forms\Components\TextInput::make('is_active_display')
+                                    ->label('Активность из 1С')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => match (true) {
+                                        ! $record => '—',
+                                        (bool) $record->is_active => 'Активен',
+                                        default => 'Неактивен',
                                     })
-                                )
-                                ->orderByRaw('COALESCE(display_name, number, code)')
-                                ->get(['id', 'display_name', 'number', 'code', 'space_group_token', 'space_group_slot']);
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                            if ($groupSegments !== []) {
-                                $spaces = $spaces->sort(function (MarketSpace $left, MarketSpace $right) use ($groupSegments): int {
-                                    $leftPriority = in_array(static::normalizeGroupSlot($left->space_group_slot), $groupSegments, true) ? 0 : 1;
-                                    $rightPriority = in_array(static::normalizeGroupSlot($right->space_group_slot), $groupSegments, true) ? 0 : 1;
+                                Forms\Components\TextInput::make('chain_display')
+                                    ->label('Документов по этому месту')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => $record ? static::chainDisplay($record) : '—')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Сколько договоров найдено по тому же токену места из номера договора. Формат 1/2 означает: текущий договор первый из двух в истории этого места.')
+                                    ->disabled()
+                                    ->dehydrated(false),
 
-                                    if ($leftPriority !== $rightPriority) {
-                                        return $leftPriority <=> $rightPriority;
-                                    }
+                                Forms\Components\TextInput::make('overlap_display')
+                                    ->label('Пересечения периодов')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => $record ? static::overlapDisplay($record) : '—')
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Показывает, есть ли у договоров по этому месту пересекающиеся периоды действия. Если есть пересечение, историю нужно проверить вручную.')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                            ])
+                            ->columns(2),
 
-                                    $leftLabel = mb_strtolower(
-                                        static::spaceOptionLabel(
-                                            $left->display_name,
-                                            $left->number,
-                                            $left->code,
-                                            $left->space_group_token,
-                                            $left->space_group_slot,
-                                        ),
-                                        'UTF-8'
-                                    );
+                    ]),
 
-                                    $rightLabel = mb_strtolower(
-                                        static::spaceOptionLabel(
-                                            $right->display_name,
-                                            $right->number,
-                                            $right->code,
-                                            $right->space_group_token,
-                                            $right->space_group_slot,
-                                        ),
-                                        'UTF-8'
-                                    );
+                Tab::make('Привязка')
+                    ->schema([
+                        Section::make('Связь с местом')
+                            ->description('Редактируются только локальные поля привязки. Канонические данные договора остаются под управлением 1С.')
+                            ->schema([
+                                Forms\Components\Select::make('space_mapping_mode')
+                                    ->label('Режим привязки')
+                                    ->options([
+                                        TenantContract::SPACE_MAPPING_MODE_AUTO => 'Авто (1С может обновить)',
+                                        TenantContract::SPACE_MAPPING_MODE_MANUAL => 'Ручная фиксация',
+                                        TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'Не участвует в привязке к месту',
+                                    ])
+                                    ->default(TenantContract::SPACE_MAPPING_MODE_AUTO)
+                                    ->native(false)
+                                    ->visible(fn (): bool => static::hasTenantContractColumn('space_mapping_mode'))
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('При изменении места режим станет ручным автоматически. В авто-режиме 1С может перезаписать привязку. Режим "Не участвует" исключает договор из привязки и очищает место.'),
 
-                                    return $leftLabel <=> $rightLabel;
-                                })->values();
-                            }
+                                Forms\Components\Select::make('market_space_id')
+                                    ->label('Торговое место')
+                                    ->options(function (Get $get, ?TenantContract $record): array {
+                                        if (! $record) {
+                                            return [];
+                                        }
 
-                            $options = [];
-                            foreach ($spaces as $space) {
-                                $options[(int) $space->id] = static::spaceOptionLabel(
-                                    $space->display_name,
-                                    $space->number,
-                                    $space->code,
-                                    $space->space_group_token,
-                                    $space->space_group_slot,
-                                );
-                            }
+                                        $currentSpaceId = (int) ($get('market_space_id') ?: $record->market_space_id ?: 0);
+                                        $restrictToTenant = (bool) ($get('limit_spaces_to_contract_tenant') ?? true);
+                                        $spaceGroupMeta = static::spaceGroupMetaForRecord($record);
+                                        $restrictToGroup = (bool) ($get('limit_spaces_to_place_group') ?? true);
+                                        $groupToken = trim((string) ($spaceGroupMeta['group_token'] ?? ''));
+                                        $groupSegments = static::explodeGroupSegments($spaceGroupMeta['group_segments'] ?? null);
 
-                            return $options;
-                        })
-                        ->searchable()
-                        ->preload()
-                        ->nullable()
-                        ->hintIcon('heroicon-m-question-mark-circle')
-                        ->hintIconTooltip('Здесь задаётся только локальная привязка договора к торговому месту. Список можно ограничить арендатором договора и, если договор составной, его группой мест.'),
+                                        $spaces = MarketSpace::query()
+                                            ->where('market_id', (int) $record->market_id)
+                                            ->when(
+                                                $restrictToTenant && filled($record->tenant_id),
+                                                fn (Builder $query) => $query->where(function (Builder $query) use ($record, $currentSpaceId): void {
+                                                    $query->where('tenant_id', (int) $record->tenant_id);
 
-                    Forms\Components\TextInput::make('space_mapping_updated_display')
-                        ->label('Последняя локальная фиксация')
-                        ->formatStateUsing(fn (?TenantContract $record): string => static::spaceMappingAuditLabel($record))
-                        ->disabled()
-                        ->dehydrated(false),
+                                                    if ($currentSpaceId > 0) {
+                                                        $query->orWhere('id', $currentSpaceId);
+                                                    }
+                                                })
+                                            )
+                                            ->when(
+                                                $restrictToGroup && $groupToken !== '',
+                                                fn (Builder $query) => $query->where(function (Builder $query) use ($groupToken, $currentSpaceId): void {
+                                                    $query->where('space_group_token', $groupToken);
 
-                    Forms\Components\Textarea::make('notes')
-                        ->label('Заметки по привязке')
-                        ->rows(5)
-                        ->columnSpanFull(),
-                ])
-                ->columns(2),
+                                                    if ($currentSpaceId > 0) {
+                                                        $query->orWhere('id', $currentSpaceId);
+                                                    }
+                                                })
+                                            )
+                                            ->orderByRaw('COALESCE(display_name, number, code)')
+                                            ->get(['id', 'display_name', 'number', 'code', 'space_group_token', 'space_group_slot']);
 
-            Section::make('Историческая цепочка по месту')
-                ->description('Показывает документы по тому же токену места в порядке даты из номера договора. Именно эта дата считается основной для истории.')
-                ->schema([
-                    Placeholder::make('history_chain_display')
-                        ->label('Договоры по этому месту')
-                        ->content(fn (?TenantContract $record): HtmlString => static::historyChainPreview($record))
-                        ->columnSpanFull(),
-                ])
-                ->columns(1),
+                                        if ($groupSegments !== []) {
+                                            $spaces = $spaces->sort(function (MarketSpace $left, MarketSpace $right) use ($groupSegments): int {
+                                                $leftPriority = in_array(static::normalizeGroupSlot($left->space_group_slot), $groupSegments, true) ? 0 : 1;
+                                                $rightPriority = in_array(static::normalizeGroupSlot($right->space_group_slot), $groupSegments, true) ? 0 : 1;
+
+                                                if ($leftPriority !== $rightPriority) {
+                                                    return $leftPriority <=> $rightPriority;
+                                                }
+
+                                                $leftLabel = mb_strtolower(
+                                                    static::spaceOptionLabel(
+                                                        $left->display_name,
+                                                        $left->number,
+                                                        $left->code,
+                                                        $left->space_group_token,
+                                                        $left->space_group_slot,
+                                                    ),
+                                                    'UTF-8'
+                                                );
+
+                                                $rightLabel = mb_strtolower(
+                                                    static::spaceOptionLabel(
+                                                        $right->display_name,
+                                                        $right->number,
+                                                        $right->code,
+                                                        $right->space_group_token,
+                                                        $right->space_group_slot,
+                                                    ),
+                                                    'UTF-8'
+                                                );
+
+                                                return $leftLabel <=> $rightLabel;
+                                            })->values();
+                                        }
+
+                                        $options = [];
+                                        foreach ($spaces as $space) {
+                                            $options[(int) $space->id] = static::spaceOptionLabel(
+                                                $space->display_name,
+                                                $space->number,
+                                                $space->code,
+                                                $space->space_group_token,
+                                                $space->space_group_slot,
+                                            );
+                                        }
+
+                                        return $options;
+                                    })
+                                    ->searchable()
+                                    ->preload()
+                                    ->nullable()
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Здесь задаётся только локальная привязка договора к торговому месту. Список можно ограничить арендатором договора и, если договор составной, его группой мест.'),
+
+                                Forms\Components\Checkbox::make('limit_spaces_to_contract_tenant')
+                                    ->label('Только места этого арендатора')
+                                    ->default(true)
+                                    ->live()
+                                    ->dehydrated(false)
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Фильтр списка "Торговое место". По умолчанию список ограничен арендатором договора. Снимите галочку, если раньше у этого места был другой арендатор и нужен поиск по всему рынку.'),
+
+                                Forms\Components\Checkbox::make('limit_spaces_to_place_group')
+                                    ->label('Только места этой группы')
+                                    ->default(true)
+                                    ->live()
+                                    ->dehydrated(false)
+                                    ->visible(fn (?TenantContract $record): bool => filled(static::spaceGroupMetaForRecord($record)['group_token'] ?? null))
+                                    ->hintIcon('heroicon-m-question-mark-circle')
+                                    ->hintIconTooltip('Фильтр списка "Торговое место". Если система распознала группу мест из номера договора, список будет ограничен этой группой. Снимите галочку, если нужно искать место по всему рынку.'),
+
+                                Forms\Components\TextInput::make('space_mapping_updated_display')
+                                    ->label('Последняя локальная фиксация')
+                                    ->formatStateUsing(fn (?TenantContract $record): string => static::spaceMappingAuditLabel($record))
+                                    ->disabled()
+                                    ->dehydrated(false),
+
+                                Forms\Components\Textarea::make('notes')
+                                    ->label('Заметки по привязке')
+                                    ->rows(5)
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(2),
+
+                    ]),
+
+                Tab::make('История')
+                    ->schema([
+                        Section::make('Историческая цепочка по месту')
+                            ->description('Показывает документы по тому же токену места в порядке даты из номера договора. Именно эта дата считается основной для истории.')
+                            ->schema([
+                                Placeholder::make('history_chain_display')
+                                    ->label('Договоры по этому месту')
+                                    ->content(fn (?TenantContract $record): HtmlString => static::historyChainPreview($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1),
+                    ]),
+            ]),
         ]);
+    }
+
+    private static function renderContractCardOverview(?TenantContract $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div class="text-sm text-gray-500">Данные появятся после сохранения договора.</div>');
+        }
+
+        $classified = static::classificationForRecord($record);
+        $debtSummary = static::latestDebtSummaryForRecord($record);
+        $accrualSummary = static::latestAccrualSummaryForRecord($record);
+
+        $number = trim((string) ($record->number ?? ''));
+        $documentTitle = $number !== '' ? $number : ('Договор #'.(int) $record->id);
+        $externalId = trim((string) ($record->external_id ?? ''));
+        $tenantLabel = static::tenantLabel($record);
+        $tenantUrl = $record->tenant_id ? TenantResource::getUrl('edit', ['record' => (int) $record->tenant_id]) : null;
+        $spaceInfo = static::contractSpaceOverview($record);
+        $spaceUrl = $record->market_space_id ? MarketSpaceResource::getUrl('edit', ['record' => (int) $record->market_space_id]) : null;
+        $movementStatus = static::oneCMovementStatus($record);
+        $movementLabel = static::oneCMovementLabel($record);
+
+        $movementClass = match ($movementStatus) {
+            'fresh' => 'tenant-contract-card__chip--success',
+            'stale' => 'tenant-contract-card__chip--warning',
+            default => 'tenant-contract-card__chip--muted',
+        };
+        $statusClass = match (trim((string) $record->status)) {
+            'active' => 'tenant-contract-card__chip--success',
+            'paused' => 'tenant-contract-card__chip--warning',
+            'terminated' => 'tenant-contract-card__chip--danger',
+            default => 'tenant-contract-card__chip--muted',
+        };
+        $mappingClass = match (trim((string) $record->space_mapping_mode)) {
+            TenantContract::SPACE_MAPPING_MODE_MANUAL => 'tenant-contract-card__chip--warning',
+            TenantContract::SPACE_MAPPING_MODE_EXCLUDED => 'tenant-contract-card__chip--muted',
+            default => 'tenant-contract-card__chip--neutral',
+        };
+        $documentClass = static::documentTypeColor((string) ($classified['category'] ?? ''));
+        $documentChipClass = match ($documentClass) {
+            'success' => 'tenant-contract-card__chip--success',
+            'warning' => 'tenant-contract-card__chip--warning',
+            'danger' => 'tenant-contract-card__chip--danger',
+            default => 'tenant-contract-card__chip--muted',
+        };
+
+        $debtAmount = $debtSummary['debt'] ?? null;
+        $debtClass = is_numeric($debtAmount) && (float) $debtAmount > 0.009
+            ? 'tenant-contract-card__metric-value--debt'
+            : (is_numeric($debtAmount) && (float) $debtAmount < -0.009 ? 'tenant-contract-card__metric-value--credit' : '');
+        $debtLabel = is_numeric($debtAmount) && (float) $debtAmount < -0.009
+            ? 'Переплата '.static::formatRubForContractCard(abs((float) $debtAmount))
+            : (is_numeric($debtAmount) ? static::formatRubForContractCard((float) $debtAmount) : '—');
+
+        $tenantHtml = $tenantUrl
+            ? '<a class="tenant-contract-card__link" href="'.e($tenantUrl).'">'.e($tenantLabel).'</a>'
+            : e($tenantLabel);
+        $spaceHtml = $spaceUrl
+            ? '<a class="tenant-contract-card__link" href="'.e($spaceUrl).'">'.e($spaceInfo['label']).'</a>'
+            : e($spaceInfo['label']);
+
+        $facts = [
+            ['label' => 'Арендатор', 'value' => $tenantHtml],
+            ['label' => 'Место', 'value' => $spaceHtml.($spaceInfo['parent_label'] !== null ? '<div class="tenant-contract-card__subtext">Основное место: '.e($spaceInfo['parent_label']).'</div>' : '')],
+            ['label' => 'Код 1С', 'value' => e($externalId !== '' ? $externalId : '—')],
+            ['label' => 'Период', 'value' => e(static::contractDateRangeLabel($record, $classified))],
+        ];
+
+        $factsHtml = '';
+        foreach ($facts as $fact) {
+            $factsHtml .= '<div class="tenant-contract-card__fact">'
+                .'<div class="tenant-contract-card__fact-label">'.e($fact['label']).'</div>'
+                .'<div class="tenant-contract-card__fact-value">'.$fact['value'].'</div>'
+                .'</div>';
+        }
+
+        $metrics = [
+            ['label' => 'Начислено 1С', 'value' => is_numeric($debtSummary['accrued'] ?? null) ? static::formatRubForContractCard((float) $debtSummary['accrued']) : '—', 'class' => ''],
+            ['label' => 'Оплачено 1С', 'value' => is_numeric($debtSummary['paid'] ?? null) ? static::formatRubForContractCard((float) $debtSummary['paid']) : '—', 'class' => ''],
+            ['label' => 'Долг / переплата', 'value' => $debtLabel, 'class' => $debtClass],
+            ['label' => 'Последнее начисление', 'value' => static::latestAccrualMetricLabel($accrualSummary), 'class' => ''],
+        ];
+
+        $metricsHtml = '';
+        foreach ($metrics as $metric) {
+            $metricsHtml .= '<div class="tenant-contract-card__metric">'
+                .'<div class="tenant-contract-card__metric-label">'.e($metric['label']).'</div>'
+                .'<div class="tenant-contract-card__metric-value '.e($metric['class']).'">'.e($metric['value']).'</div>'
+                .'</div>';
+        }
+
+        $snapshotParts = array_filter([
+            $debtSummary['snapshot_label'] ?? null ? 'долг: '.$debtSummary['snapshot_label'] : null,
+            $accrualSummary['period_label'] ?? null ? 'начисления: '.$accrualSummary['period_label'] : null,
+            $debtSummary['organization_label'] ?? null ? 'организация: '.$debtSummary['organization_label'] : null,
+            $debtSummary['account_label'] ?? null ? 'счёт: '.$debtSummary['account_label'] : null,
+        ]);
+
+        return new HtmlString(
+            '<style>
+                .tenant-contract-card{display:grid;gap:14px}
+                .tenant-contract-card__top{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(420px,1.6fr);gap:18px;align-items:start}
+                .tenant-contract-card__eyebrow{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0;color:#64748b}
+                .tenant-contract-card__title{margin-top:6px;font-size:20px;font-weight:750;line-height:1.25;color:#0f172a;overflow-wrap:anywhere}
+                .dark .tenant-contract-card__title{color:#f8fafc}
+                .tenant-contract-card__chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+                .tenant-contract-card__chip{display:inline-flex;align-items:center;border-radius:999px;border:1px solid transparent;padding:4px 9px;font-size:12px;font-weight:700;line-height:1.2}
+                .tenant-contract-card__chip--success{border-color:#bbf7d0;background:#dcfce7;color:#166534}
+                .tenant-contract-card__chip--warning{border-color:#fde68a;background:#fef3c7;color:#92400e}
+                .tenant-contract-card__chip--danger{border-color:#fecaca;background:#fee2e2;color:#991b1b}
+                .tenant-contract-card__chip--neutral{border-color:#bfdbfe;background:#dbeafe;color:#1e40af}
+                .tenant-contract-card__chip--muted{border-color:#e2e8f0;background:#f1f5f9;color:#475569}
+                .tenant-contract-card__body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+                .tenant-contract-card__fact{min-width:0;border:1px solid rgba(148,163,184,.24);border-radius:8px;padding:10px;background:#fff}
+                .dark .tenant-contract-card__fact{background:rgba(255,255,255,.04);border-color:rgba(148,163,184,.2)}
+                .tenant-contract-card__fact-label,.tenant-contract-card__metric-label{font-size:12px;color:#64748b;line-height:1.2}
+                .tenant-contract-card__fact-value{margin-top:4px;font-size:14px;font-weight:650;color:#0f172a;line-height:1.35;overflow-wrap:anywhere}
+                .dark .tenant-contract-card__fact-value{color:#e5e7eb}
+                .tenant-contract-card__link{color:#1d4ed8;text-decoration:underline;text-underline-offset:2px}
+                .dark .tenant-contract-card__link{color:#93c5fd}
+                .tenant-contract-card__subtext{margin-top:3px;font-size:12px;font-weight:500;color:#64748b}
+                .tenant-contract-card__metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+                .tenant-contract-card__metric{min-width:0;border:1px solid rgba(148,163,184,.25);border-radius:8px;padding:10px;background:#f8fafc}
+                .dark .tenant-contract-card__metric{background:rgba(255,255,255,.04);border-color:rgba(148,163,184,.2)}
+                .tenant-contract-card__metric-value{margin-top:5px;font-size:17px;font-weight:750;line-height:1.2;color:#0f172a;overflow-wrap:anywhere}
+                .dark .tenant-contract-card__metric-value{color:#f8fafc}
+                .tenant-contract-card__metric-value--debt{color:#b91c1c}
+                .tenant-contract-card__metric-value--credit{color:#15803d}
+                .tenant-contract-card__snapshot{font-size:12px;line-height:1.45;color:#64748b}
+                @media (max-width:1200px){.tenant-contract-card__top{grid-template-columns:1fr}.tenant-contract-card__metrics,.tenant-contract-card__body{grid-template-columns:repeat(2,minmax(0,1fr))}}
+                @media (max-width:700px){.tenant-contract-card__metrics,.tenant-contract-card__body{grid-template-columns:1fr}}
+            </style>
+            <div class="tenant-contract-card">
+                <div class="tenant-contract-card__top">
+                    <div>
+                        <div class="tenant-contract-card__eyebrow">Договор 1С</div>
+                        <div class="tenant-contract-card__title">'.e($documentTitle).'</div>
+                        <div class="tenant-contract-card__chips">
+                            <span class="tenant-contract-card__chip '.e($documentChipClass).'">'.e((string) ($classified['label'] ?? 'Договор')).'</span>
+                            <span class="tenant-contract-card__chip '.e($statusClass).'">'.e(static::contractStatusLabel($record->status)).'</span>
+                            <span class="tenant-contract-card__chip '.e($movementClass).'">'.e($movementLabel).'</span>
+                            <span class="tenant-contract-card__chip '.e($mappingClass).'">Привязка: '.e(static::spaceMappingModeLabel($record->space_mapping_mode)).'</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="tenant-contract-card__eyebrow">Финансы и движение 1С</div>
+                        <div class="tenant-contract-card__metrics">'.$metricsHtml.'</div>
+                    </div>
+                </div>
+                <div class="tenant-contract-card__body">'.$factsHtml.'</div>
+                <div class="tenant-contract-card__snapshot">'.e($snapshotParts !== [] ? implode(' · ', $snapshotParts) : 'Свежих финансовых данных 1С по договору нет.').'</div>
+            </div>'
+        );
+    }
+
+    /**
+     * @return array{label:string,parent_label:?string}
+     */
+    private static function contractSpaceOverview(TenantContract $record): array
+    {
+        $space = $record->marketSpace;
+        if (! $space) {
+            return [
+                'label' => 'Не привязан',
+                'parent_label' => null,
+            ];
+        }
+
+        $label = static::spaceLabel($record);
+        $parentLabel = null;
+
+        $parentId = (int) ($space->space_group_parent_id ?? 0);
+        if ($parentId > 0 && $parentId !== (int) $space->id) {
+            $parent = MarketSpace::query()
+                ->whereKey($parentId)
+                ->first(['id', 'number', 'code', 'display_name']);
+
+            if ($parent) {
+                $parentLabel = static::spaceOptionLabel(
+                    $parent->display_name,
+                    $parent->number,
+                    $parent->code,
+                );
+            }
+        }
+
+        return [
+            'label' => $label,
+            'parent_label' => $parentLabel,
+        ];
+    }
+
+    /**
+     * @return array{accrued:?float,paid:?float,debt:?float,snapshot_label:?string,organization_label:?string,account_label:?string}
+     */
+    private static function latestDebtSummaryForRecord(TenantContract $record): array
+    {
+        $empty = [
+            'accrued' => null,
+            'paid' => null,
+            'debt' => null,
+            'snapshot_label' => null,
+            'organization_label' => null,
+            'account_label' => null,
+        ];
+
+        $externalId = trim((string) ($record->external_id ?? ''));
+        if ($externalId === '' || ! DbSchema::hasTable('contract_debts') || ! static::hasTableColumn('contract_debts', 'contract_external_id')) {
+            return $empty;
+        }
+
+        $hasAccrued = static::hasTableColumn('contract_debts', 'accrued_amount');
+        $hasPaid = static::hasTableColumn('contract_debts', 'paid_amount');
+        $hasDebt = static::hasTableColumn('contract_debts', 'debt_amount');
+        $hasCalculatedAt = static::hasTableColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasTableColumn('contract_debts', 'created_at');
+        $hasOrganizationName = static::hasTableColumn('contract_debts', 'organization_name');
+        $hasOrganizationExternalId = static::hasTableColumn('contract_debts', 'organization_external_id');
+        $hasAccount = static::hasTableColumn('contract_debts', 'account');
+
+        $base = DB::query()
+            ->fromSub(ContractDebt::latestContractStateQuery((int) $record->market_id), 'cd')
+            ->where('cd.contract_external_id', $externalId);
+
+        if ((int) ($record->tenant_id ?? 0) > 0 && static::hasTableColumn('contract_debts', 'tenant_id')) {
+            $base->where('cd.tenant_id', (int) $record->tenant_id);
+        }
+
+        $rows = (clone $base)->get([
+            $hasAccrued ? 'cd.accrued_amount' : DB::raw('NULL as accrued_amount'),
+            $hasPaid ? 'cd.paid_amount' : DB::raw('NULL as paid_amount'),
+            $hasDebt ? 'cd.debt_amount' : DB::raw('NULL as debt_amount'),
+            $hasCalculatedAt ? 'cd.calculated_at' : DB::raw('NULL as calculated_at'),
+            $hasCreatedAt ? 'cd.created_at' : DB::raw('NULL as created_at'),
+            $hasOrganizationName ? 'cd.organization_name' : DB::raw('NULL as organization_name'),
+            $hasOrganizationExternalId ? 'cd.organization_external_id' : DB::raw('NULL as organization_external_id'),
+            $hasAccount ? 'cd.account' : DB::raw('NULL as account'),
+        ]);
+
+        if ($rows->isEmpty()) {
+            return $empty;
+        }
+
+        $accrued = $hasAccrued ? (float) $rows->sum(fn ($row): float => is_numeric($row->accrued_amount ?? null) ? (float) $row->accrued_amount : 0.0) : null;
+        $paid = $hasPaid ? (float) $rows->sum(fn ($row): float => is_numeric($row->paid_amount ?? null) ? (float) $row->paid_amount : 0.0) : null;
+        $debt = $hasDebt ? (float) $rows->sum(fn ($row): float => is_numeric($row->debt_amount ?? null) ? (float) $row->debt_amount : 0.0) : null;
+
+        if ($debt === null && $accrued !== null && $paid !== null) {
+            $debt = $accrued - $paid;
+        }
+
+        $snapshotValue = $rows
+            ->map(fn ($row) => $row->calculated_at ?? $row->created_at ?? null)
+            ->filter()
+            ->sort()
+            ->last();
+
+        $organizations = $rows
+            ->map(fn ($row): string => trim((string) ($row->organization_name ?? $row->organization_external_id ?? '')))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $accounts = $rows
+            ->map(fn ($row): string => trim((string) ($row->account ?? '')))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'accrued' => $accrued,
+            'paid' => $paid,
+            'debt' => $debt,
+            'snapshot_label' => static::formatContractCardDateTime($snapshotValue),
+            'organization_label' => $organizations !== [] ? implode(', ', array_slice($organizations, 0, 3)) : null,
+            'account_label' => $accounts !== [] ? implode(', ', array_slice($accounts, 0, 3)) : null,
+        ];
+    }
+
+    /**
+     * @return array{amount_label:?string,period_label:?string}
+     */
+    private static function latestAccrualSummaryForRecord(TenantContract $record): array
+    {
+        if (! DbSchema::hasTable('tenant_accruals') || ! static::hasTableColumn('tenant_accruals', 'tenant_contract_id')) {
+            return [
+                'amount_label' => null,
+                'period_label' => null,
+            ];
+        }
+
+        $hasPeriod = static::hasTableColumn('tenant_accruals', 'period');
+        $hasAccrualDate = static::hasTableColumn('tenant_accruals', 'accrual_date');
+        $hasTotalWithVat = static::hasTableColumn('tenant_accruals', 'total_with_vat');
+        $hasTotalNoVat = static::hasTableColumn('tenant_accruals', 'total_no_vat');
+        $hasAmount = static::hasTableColumn('tenant_accruals', 'amount');
+
+        $base = DB::table('tenant_accruals')
+            ->where('market_id', (int) $record->market_id)
+            ->where('tenant_contract_id', (int) $record->id);
+
+        $periodColumn = $hasPeriod ? 'period' : ($hasAccrualDate ? 'accrual_date' : null);
+        $latestPeriod = $periodColumn ? (clone $base)->max($periodColumn) : null;
+
+        if ($latestPeriod !== null && $periodColumn !== null) {
+            $base->where($periodColumn, $latestPeriod);
+        }
+
+        $amountExpression = match (true) {
+            $hasTotalWithVat && $hasTotalNoVat => 'COALESCE(total_with_vat, total_no_vat, 0)',
+            $hasTotalWithVat => 'COALESCE(total_with_vat, 0)',
+            $hasTotalNoVat => 'COALESCE(total_no_vat, 0)',
+            $hasAmount => 'COALESCE(amount, 0)',
+            default => '0',
+        };
+
+        $amount = (float) ((clone $base)->sum(DB::raw($amountExpression)) ?? 0);
+
+        return [
+            'amount_label' => static::formatRubForContractCard($amount),
+            'period_label' => $latestPeriod !== null ? static::formatContractCardPeriod((string) $latestPeriod) : null,
+        ];
+    }
+
+    private static function contractDateRangeLabel(TenantContract $record, array $classified): string
+    {
+        $parts = [];
+        $documentDate = static::formatClassifierDate($classified['document_date'] ?? null);
+        if ($documentDate !== '—') {
+            $parts[] = 'дата договора '.$documentDate;
+        }
+
+        if ($record->starts_at instanceof Carbon) {
+            $parts[] = 'с '.$record->starts_at->format('d.m.Y');
+        }
+
+        if ($record->ends_at instanceof Carbon) {
+            $parts[] = 'до '.$record->ends_at->format('d.m.Y');
+        }
+
+        if ($record->signed_at instanceof Carbon) {
+            $parts[] = 'подписан '.$record->signed_at->format('d.m.Y');
+        }
+
+        return $parts !== [] ? implode(' · ', $parts) : '—';
+    }
+
+    private static function formatRubForContractCard(float $value): string
+    {
+        return number_format($value, 2, ',', ' ').' ₽';
+    }
+
+    /**
+     * @param  array{amount_label:?string,period_label:?string}  $summary
+     */
+    private static function latestAccrualMetricLabel(array $summary): string
+    {
+        $amount = trim((string) ($summary['amount_label'] ?? ''));
+        $period = trim((string) ($summary['period_label'] ?? ''));
+
+        if ($amount === '' && $period === '') {
+            return '—';
+        }
+
+        if ($amount !== '' && $period !== '') {
+            return "{$amount} · {$period}";
+        }
+
+        return $amount !== '' ? $amount : $period;
+    }
+
+    private static function formatContractCardDateTime(mixed $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('d.m.Y H:i');
+        } catch (Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private static function formatContractCardPeriod(string $value): string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $value) === 1) {
+            try {
+                return Carbon::parse($value)->format('m.Y');
+            } catch (Throwable) {
+                return $value;
+            }
+        }
+
+        if (preg_match('/^\d{4}-\d{2}$/', $value) === 1) {
+            return substr($value, 5, 2).'.'.substr($value, 0, 4);
+        }
+
+        return $value;
+    }
+
+    private static function hasTableColumn(string $table, string $column): bool
+    {
+        try {
+            if (! DbSchema::hasTable($table)) {
+                return false;
+            }
+
+            $columns = static::$tableColumnsCache[$table] ?? null;
+            if ($columns === null) {
+                $columns = DbSchema::getColumnListing($table);
+                static::$tableColumnsCache[$table] = $columns;
+            }
+
+            return in_array($column, $columns, true);
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public static function table(Table $table): Table
@@ -924,7 +1386,7 @@ class TenantContractResource extends BaseResource
 
         return $query
             ->orderByRaw(
-                'COALESCE(' . $documentDateExpression . ', tenant_contracts.signed_at) ' . $direction . ' NULLS LAST'
+                'COALESCE('.$documentDateExpression.', tenant_contracts.signed_at) '.$direction.' NULLS LAST'
             )
             ->orderBy('tenant_contracts.id', $direction);
     }
@@ -1489,7 +1951,7 @@ class TenantContractResource extends BaseResource
      */
     private static function workbenchIdsFor(?int $marketId): array
     {
-        $cacheKey = $marketId !== null ? 'market:' . $marketId : 'all';
+        $cacheKey = $marketId !== null ? 'market:'.$marketId : 'all';
 
         if (isset(static::$workbenchIdsCache[$cacheKey])) {
             return static::$workbenchIdsCache[$cacheKey];
@@ -1862,7 +2324,7 @@ class TenantContractResource extends BaseResource
         $number = trim((string) ($record->marketSpace?->number ?? ''));
 
         if ($displayName !== '' && $number !== '' && $displayName !== $number) {
-            return $displayName . ' · ' . $number;
+            return $displayName.' · '.$number;
         }
 
         if ($displayName !== '') {
@@ -1886,7 +2348,7 @@ class TenantContractResource extends BaseResource
         $name = trim((string) ($record->tenant?->name ?? ''));
 
         if ($short !== '' && $name !== '' && $short !== $name) {
-            return $short . ' · ' . $name;
+            return $short.' · '.$name;
         }
 
         return $short !== '' ? $short : ($name !== '' ? $name : '—');
@@ -1955,23 +2417,27 @@ class TenantContractResource extends BaseResource
             return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Цепочка не найдена.</div>');
         }
 
-        $html = '<div class="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">';
-        $html .= '<table class="min-w-[860px] w-full table-fixed border-collapse text-sm">';
-        $html .= '<colgroup>';
-        $html .= '<col class="w-12">';
-        $html .= '<col class="w-[32%]">';
-        $html .= '<col class="w-[36%]">';
-        $html .= '<col class="w-[32%]">';
-        $html .= '</colgroup>';
-        $html .= '<thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">';
-        $html .= '<tr>';
-        $html .= '<th class="px-4 py-3">#</th>';
-        $html .= '<th class="px-4 py-3">Договор</th>';
-        $html .= '<th class="px-4 py-3">Арендатор и место</th>';
-        $html .= '<th class="px-4 py-3">Статусы</th>';
-        $html .= '</tr>';
-        $html .= '</thead>';
-        $html .= '<tbody class="divide-y divide-gray-200">';
+        $html = '<style>
+            .contract-history{display:grid;gap:10px}
+            .contract-history__item{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(190px,.7fr);gap:14px;align-items:start;border:1px solid #e2e8f0;border-radius:8px;background:#fff;padding:12px 14px}
+            .contract-history__item--current{border-color:#bae6fd;background:#f0f9ff}
+            .contract-history__number{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#0f172a;line-height:1.35;overflow-wrap:anywhere}
+            .contract-history__index{font-size:12px;font-weight:700;color:#64748b}
+            .contract-history__meta{margin-top:4px;font-size:12px;color:#64748b;line-height:1.4}
+            .contract-history__tenant{font-size:14px;font-weight:650;color:#111827;line-height:1.35;overflow-wrap:anywhere}
+            .contract-history__space{margin-top:4px;font-size:12px;color:#64748b;line-height:1.4;overflow-wrap:anywhere}
+            .contract-history__chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+            .contract-history__chip{display:inline-flex;align-items:center;border-radius:999px;border:1px solid #e2e8f0;background:#f8fafc;color:#334155;padding:4px 8px;font-size:12px;font-weight:650;line-height:1.2}
+            .contract-history__chip--sky{border-color:#bae6fd;background:#e0f2fe;color:#075985}
+            .contract-history__chip--emerald{border-color:#bbf7d0;background:#dcfce7;color:#166534}
+            .contract-history__chip--violet{border-color:#ddd6fe;background:#ede9fe;color:#5b21b6}
+            .contract-history__chip--amber{border-color:#fde68a;background:#fef3c7;color:#92400e}
+            .contract-history__chip--gray{border-color:#e2e8f0;background:#f8fafc;color:#475569}
+            .dark .contract-history__item{background:rgba(15,23,42,.72);border-color:rgba(148,163,184,.24)}
+            .dark .contract-history__item--current{background:rgba(8,47,73,.35);border-color:rgba(125,211,252,.35)}
+            .dark .contract-history__number,.dark .contract-history__tenant{color:#f8fafc}
+            @media (max-width:900px){.contract-history__item{grid-template-columns:1fr}.contract-history__chips{justify-content:flex-start}}
+        </style><div class="contract-history">';
 
         foreach ($items as $index => $item) {
             /** @var TenantContract $chainRecord */
@@ -1988,6 +2454,11 @@ class TenantContractResource extends BaseResource
                 $statusParts[] = static::historyChainChip('В последней задолженности', 'violet');
             }
 
+            $statusParts[] = static::historyChainChip(
+                static::contractStatusLabel($chainRecord->status),
+                trim((string) $chainRecord->status) === 'active' ? 'emerald' : 'gray'
+            );
+
             if ($isCurrent) {
                 $statusParts[] = static::historyChainChip('Текущий', 'sky');
             }
@@ -1996,41 +2467,25 @@ class TenantContractResource extends BaseResource
                 $statusParts[] = static::historyChainChip('—', 'gray');
             }
 
-            $html .= '<tr class="align-top' . ($isCurrent ? ' bg-sky-50/60' : '') . '">';
-            $html .= '<td class="whitespace-nowrap px-4 py-4 font-semibold text-gray-900">' . e((string) ($index + 1)) . '</td>';
-            $html .= '<td class="px-4 py-4 text-gray-900">';
-            $html .= '<div class="space-y-1">';
-            $html .= '<div class="flex flex-wrap items-center gap-2 leading-5">';
-            $html .= '<div class="min-w-0 font-semibold break-words">' . e($number) . '</div>';
-            $html .= '<span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">' . e(static::formatClassifierDate($item['document_date'])) . '</span>';
-            $html .= '</div>';
-            $html .= '<div class="text-xs text-gray-500">Начало: ' . e($chainRecord->starts_at?->format('d.m.Y') ?? '—') . '</div>';
-            $html .= '</div>';
-            $html .= '</td>';
-            $html .= '<td class="px-4 py-4 text-gray-700">';
-            $html .= '<div class="space-y-2">';
+            $html .= '<div class="contract-history__item'.($isCurrent ? ' contract-history__item--current' : '').'">';
             $html .= '<div>';
-            $html .= '<div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Арендатор</div>';
-            $html .= '<div class="mt-1 font-medium text-gray-900 break-words">' . e($tenantName !== '' ? $tenantName : '—') . '</div>';
+            $html .= '<div class="contract-history__number">';
+            $html .= '<span class="contract-history__index">#'.e((string) ($index + 1)).'</span>';
+            $html .= '<span>'.e($number).'</span>';
+            $html .= '</div>';
+            $html .= '<div class="contract-history__meta">Дата документа: '.e(static::formatClassifierDate($item['document_date'])).' · начало: '.e($chainRecord->starts_at?->format('d.m.Y') ?? '—').' · окончание: '.e($chainRecord->ends_at?->format('d.m.Y') ?? '—').'</div>';
+            $html .= '</div>';
+            $html .= '<div>';
+            $html .= '<div class="contract-history__tenant">'.e($tenantName !== '' ? $tenantName : '—').'</div>';
             if ($tenantShort !== '' && $tenantShort !== $tenantName) {
-                $html .= '<div class="mt-1 text-xs text-gray-500 break-words">' . e($tenantShort) . '</div>';
+                $html .= '<div class="contract-history__space">'.e($tenantShort).'</div>';
             }
+            $html .= '<div class="contract-history__space">Место: '.e($spaceLabel).' · режим: '.e(static::spaceMappingModeLabel($chainRecord->space_mapping_mode)).'</div>';
             $html .= '</div>';
-            $html .= '<div>';
-            $html .= '<div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Место</div>';
-            $html .= '<div class="mt-1 font-medium text-gray-900 break-words">' . e($spaceLabel) . '</div>';
-            $html .= '<div class="mt-1 text-xs text-gray-500">Режим: ' . e(static::spaceMappingModeLabel($chainRecord->space_mapping_mode)) . '</div>';
+            $html .= '<div class="contract-history__chips">'.implode('', $statusParts).'</div>';
             $html .= '</div>';
-            $html .= '</div>';
-            $html .= '</td>';
-            $html .= '<td class="px-4 py-4">';
-            $html .= '<div class="flex flex-wrap gap-2 leading-5">' . implode('', $statusParts) . '</div>';
-            $html .= '</td>';
-            $html .= '</tr>';
         }
 
-        $html .= '</tbody>';
-        $html .= '</table>';
         $html .= '</div>';
 
         return new HtmlString($html);
@@ -2038,15 +2493,7 @@ class TenantContractResource extends BaseResource
 
     private static function historyChainChip(string $label, string $variant = 'gray'): string
     {
-        $classes = match ($variant) {
-            'sky' => 'border-sky-200 bg-sky-50 text-sky-700',
-            'emerald' => 'border-emerald-200 bg-emerald-50 text-emerald-700',
-            'violet' => 'border-violet-200 bg-violet-50 text-violet-700',
-            'amber' => 'border-amber-200 bg-amber-50 text-amber-800',
-            default => 'border-gray-200 bg-gray-50 text-gray-700',
-        };
-
-        return '<span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ' . $classes . '">' . e($label) . '</span>';
+        return '<span class="contract-history__chip contract-history__chip--'.e($variant).'">'.e($label).'</span>';
     }
 
     private static function chainDisplay(TenantContract $record): string
@@ -2057,7 +2504,7 @@ class TenantContractResource extends BaseResource
             return '—';
         }
 
-        return $stats['chain_position'] . '/' . $stats['chain_count'];
+        return $stats['chain_position'].' из '.$stats['chain_count'];
     }
 
     private static function chainColor(TenantContract $record): string
@@ -2140,8 +2587,7 @@ class TenantContractResource extends BaseResource
         ?string $code,
         ?string $groupToken = null,
         ?string $groupSlot = null
-    ): string
-    {
+    ): string {
         $parts = array_values(array_filter([
             trim((string) $displayName),
             trim((string) $number),
@@ -2152,9 +2598,9 @@ class TenantContractResource extends BaseResource
         $normalizedGroupSlot = trim((string) $groupSlot);
 
         if ($normalizedGroupToken !== '' || $normalizedGroupSlot !== '') {
-            $groupLabel = trim($normalizedGroupToken . ($normalizedGroupSlot !== '' ? ' / ' . $normalizedGroupSlot : ''));
+            $groupLabel = trim($normalizedGroupToken.($normalizedGroupSlot !== '' ? ' / '.$normalizedGroupSlot : ''));
             if ($groupLabel !== '') {
-                $parts[] = 'Группа ' . $groupLabel;
+                $parts[] = 'Группа '.$groupLabel;
             }
         }
 
