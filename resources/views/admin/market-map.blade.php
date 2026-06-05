@@ -1405,6 +1405,7 @@
       border: 1px solid rgba(134, 239, 172, .42);
       background: rgba(22, 163, 74, .14);
       color: #bbf7d0;
+      -webkit-text-fill-color: #bbf7d0;
       font-weight: 700;
       text-decoration: none;
       vertical-align: middle;
@@ -1413,6 +1414,7 @@
       border-color: rgba(187, 247, 208, .70);
       background: rgba(22, 163, 74, .24);
       color: #dcfce7;
+      -webkit-text-fill-color: #dcfce7;
     }
     .popover button.contract-chip {
       font: inherit;
@@ -1422,11 +1424,13 @@
       border-color: rgba(252, 165, 165, .70);
       background: rgba(220, 38, 38, .24);
       color: #fee2e2;
+      -webkit-text-fill-color: #fee2e2;
     }
     .popover .contract-chip--missing {
       border-color: rgba(252, 165, 165, .42);
       background: rgba(220, 38, 38, .14);
       color: #fecaca;
+      -webkit-text-fill-color: #fecaca;
     }
     .popover .row-review-note {
       margin-top: 10px;
@@ -2784,6 +2788,7 @@
         let contractBindingContext = null;
         let contractBindingSelectedId = null;
         let contractBindingItems = [];
+        let currentPopoverHit = null;
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -2960,6 +2965,7 @@
         function hidePopover() {
           if (!popover) return;
           popover.classList.remove('show');
+          currentPopoverHit = null;
         }
 
         function getIdentityFixPrefill(context = {}) {
@@ -3537,7 +3543,8 @@
             return;
           }
 
-          const spaceId = Number(lastHit?.market_space_id || lastHit?.space?.id || 0);
+          const hit = currentPopoverHit || null;
+          const spaceId = Number(hit?.market_space_id || hit?.space?.id || 0);
           if (!Number.isFinite(spaceId) || spaceId <= 0) {
             toast('Не выбрано место для привязки договора');
             return;
@@ -3606,7 +3613,8 @@
         async function submitContractBinding() {
           if (!contractBindingSubmit || contractBindingSubmit.disabled) return;
 
-          const spaceId = Number(lastHit?.market_space_id || lastHit?.space?.id || 0);
+          const hit = currentPopoverHit || null;
+          const spaceId = Number(hit?.market_space_id || hit?.space?.id || 0);
           const contractId = Number(contractBindingSelectedId || 0);
           if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(contractId) || contractId <= 0) {
             showContractBindingError('Выберите договор для привязки');
@@ -6961,6 +6969,7 @@
 
               if (!json.hit) {
                 lastHit = null;
+                currentPopoverHit = null;
                 if (CAN_EDIT && editMode && tool === 'select') {
                   setSelectedShape(null);
                   clearHandles();
@@ -6979,6 +6988,7 @@
 
               const hit = json.hit;
               lastHit = hit;
+              currentPopoverHit = hit;
               const space = hit.space || null;
               const tenant = hit.tenant || null;
 
@@ -7295,6 +7305,17 @@
                     line5 = buildContractChip('Договор 1С не привязан', '');
                   } else {
                     line5 = scopeExplanation;
+                  }
+
+                  if (effectiveContractNumber || effectiveContractUrl) {
+                    line5Class = 'row-link-confirmed';
+                    line5HelpText = financialSource === 'parent'
+                      ? 'Договор 1С привязан к родительской группе этого child-места.'
+                      : 'Договор 1С сопоставлен с этим торговым местом.';
+                    line5 = buildContractChip(
+                      effectiveContractNumber ? ('Договор 1С ' + effectiveContractNumber) : 'Договор 1С найден',
+                      effectiveContractUrl
+                    );
                   }
 
                   // line6 — общее сальдо арендатора, если отличается от долга по месту
