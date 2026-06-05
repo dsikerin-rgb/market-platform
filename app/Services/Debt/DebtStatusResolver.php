@@ -382,6 +382,7 @@ class DebtStatusResolver
         }
 
         $daysOverdue = $dueDate->diffInDays($now);
+        $totalDebtAmount = $displayDebtAmount;
         $overdueAmount = $this->calculateOverdueAmountFromRows(
             $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
             $graceDays,
@@ -390,6 +391,24 @@ class DebtStatusResolver
             $hasCreatedAt,
         );
         $displayDebtAmount = $overdueAmount > 0.009 ? $overdueAmount : $displayDebtAmount;
+
+        if ($overdueAmount > 0.009 && $overdueAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: overdue debt below threshold',
+                severity: 1,
+                extra: [
+                    'overdue_days' => max(0, $daysOverdue),
+                    'debt_amount' => $totalDebtAmount,
+                    'overdue_debt_amount' => $overdueAmount,
+                    'minimum_debt_amount' => $minimumDebtAmount,
+                    'scope' => 'space',
+                ]
+            );
+        }
 
         if ($daysOverdue >= $redAfterDays) {
             return $this->makeResult(
@@ -853,6 +872,7 @@ class DebtStatusResolver
 
         // Просрочка - считаем дни
         $daysOverdue = $dueDate->diffInDays($now);
+        $totalDebtAmount = $displayDebtAmount;
         $overdueAmount = $this->calculateOverdueAmountFromRows(
             ($debtsData['aging_rows'] ?? collect())->isNotEmpty() ? $debtsData['aging_rows'] : $debtsData['rows'],
             $graceDays,
@@ -861,6 +881,23 @@ class DebtStatusResolver
             (bool) ($debtsData['has_created_at'] ?? false),
         );
         $displayDebtAmount = $overdueAmount > 0.009 ? $overdueAmount : $displayDebtAmount;
+
+        if ($overdueAmount > 0.009 && $overdueAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $debtsData['snapshot_label'],
+                source: 'contract_debts: overdue debt below threshold',
+                severity: 1,
+                extra: [
+                    'overdue_days' => max(0, $daysOverdue),
+                    'debt_amount' => $totalDebtAmount,
+                    'overdue_debt_amount' => $overdueAmount,
+                    'minimum_debt_amount' => $minimumDebtAmount,
+                ]
+            );
+        }
 
         if ($daysOverdue >= $redAfterDays) {
             return $this->makeResult(
