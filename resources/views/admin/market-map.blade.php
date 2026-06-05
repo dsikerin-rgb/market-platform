@@ -2017,31 +2017,41 @@
       text-align: left;
       padding: 10px 12px;
       border-radius: 8px;
-      border: 1px solid rgba(148, 163, 184, .26);
-      background: rgba(15, 23, 42, .72);
-      color: #e5e7eb;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      color: #0f172a;
       cursor: pointer;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
     }
     .contract-binding-modal__item:hover {
-      border-color: rgba(96, 165, 250, .58);
-      background: rgba(30, 41, 59, .82);
+      border-color: #93c5fd;
+      background: #f8fafc;
     }
     .contract-binding-modal__item.is-selected {
-      border-color: rgba(96, 165, 250, .82);
-      box-shadow: inset 0 0 0 1px rgba(96, 165, 250, .32);
+      border-color: #2563eb;
+      background: #eff6ff;
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .28);
     }
     .contract-binding-modal__item.is-disabled {
       cursor: not-allowed;
-      opacity: .58;
+      opacity: 1;
+      background: #f1f5f9;
+      color: #94a3b8;
+      box-shadow: none;
+    }
+    .contract-binding-modal__item.is-disabled .contract-binding-modal__name,
+    .contract-binding-modal__item.is-disabled .contract-binding-modal__meta,
+    .contract-binding-modal__item.is-disabled .contract-binding-modal__status {
+      color: #94a3b8;
     }
     .contract-binding-modal__radio {
       margin-top: 2px;
-      accent-color: #60a5fa;
+      accent-color: #2563eb;
     }
     .contract-binding-modal__name {
       display: block;
       font-weight: 700;
-      color: #f9fafb;
+      color: #0f172a;
       overflow-wrap: anywhere;
     }
     .contract-binding-modal__meta {
@@ -2049,24 +2059,24 @@
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
-      color: #cbd5e1;
+      color: #475569;
       font-size: 12px;
       line-height: 1.35;
     }
     .contract-binding-modal__status {
       margin-top: 5px;
       font-size: 12px;
-      color: #93c5fd;
+      color: #2563eb;
     }
     .contract-binding-modal__status--blocked {
-      color: #fca5a5;
+      color: #64748b;
     }
     .contract-binding-modal__empty {
       padding: 12px;
       border-radius: 8px;
-      border: 1px dashed rgba(148, 163, 184, .36);
-      color: #cbd5e1;
-      background: rgba(15, 23, 42, .54);
+      border: 1px dashed #cbd5e1;
+      color: #475569;
+      background: #f8fafc;
     }
 
     .toast {
@@ -7301,10 +7311,20 @@
                       effectiveContractNumber ? ('Договор 1С ' + effectiveContractNumber) : 'Договор 1С найден',
                       effectiveContractUrl
                     );
-                  } else if (scopeExplanation === 'К этому месту не привязан договор' || scopeExplanation === 'К этой группе не привязан договор') {
+                  } else if (scopeExplanation === 'К этой группе не привязан договор') {
+                    line5 = buildContractChip('Договор группы 1С не привязан', '');
+                  } else if (scopeExplanation === 'К этому месту не привязан договор') {
                     line5 = buildContractChip('Договор 1С не привязан', '');
                   } else {
                     line5 = scopeExplanation;
+                  }
+
+                  if (financialSource === 'parent' && !effectiveContractNumber && !effectiveContractUrl) {
+                    line5Class = 'row-link-missing';
+                    line5HelpText = financialSourceSpaceLabel
+                      ? 'Договор 1С должен быть привязан к родительской группе ' + financialSourceSpaceLabel + '. Child-место отдельный договор не хранит.'
+                      : 'Договор 1С должен быть привязан к родительской группе. Child-место отдельный договор не хранит.';
+                    line5 = buildContractChip('Договор группы 1С не привязан', '');
                   }
 
                   if (effectiveContractNumber || effectiveContractUrl) {
@@ -7313,7 +7333,9 @@
                       ? 'Договор 1С привязан к родительской группе этого child-места.'
                       : 'Договор 1С сопоставлен с этим торговым местом.';
                     line5 = buildContractChip(
-                      effectiveContractNumber ? ('Договор 1С ' + effectiveContractNumber) : 'Договор 1С найден',
+                      financialSource === 'parent'
+                        ? (effectiveContractNumber ? ('Договор группы 1С ' + effectiveContractNumber) : 'Договор группы 1С найден')
+                        : (effectiveContractNumber ? ('Договор 1С ' + effectiveContractNumber) : 'Договор 1С найден'),
                       effectiveContractUrl
                     );
                   }
