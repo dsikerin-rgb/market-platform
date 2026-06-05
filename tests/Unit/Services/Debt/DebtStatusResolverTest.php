@@ -5,6 +5,7 @@ namespace Tests\Unit\Services\Debt;
 
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\TenantContract;
 use App\Models\Tenant;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
@@ -686,6 +687,181 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals(10000.0, $result['extra']['debt_amount'] ?? null);
         $this->assertArrayHasKey('overdue_days', $result['extra']);
         $this->assertGreaterThan(0, $result['extra']['overdue_days']);
+    }
+
+    public function test_resolve_for_market_space_includes_direct_space_contracts_when_binding_exists(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with mixed space contracts',
+            'external_id' => 'tenant-mixed-space-contracts-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'mixed-101',
+            'code' => 'mixed-space-101',
+            'is_active' => true,
+        ]);
+
+        [$bindingContract, $directDebtContract] = TenantContract::withoutEvents(fn (): array => [
+            TenantContract::create([
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'market_space_id' => $space->id,
+                'external_id' => 'contract-binding-paid-001',
+                'number' => 'Binding paid',
+                'status' => 'active',
+                'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+                'is_active' => true,
+            ]),
+            TenantContract::create([
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'market_space_id' => $space->id,
+                'external_id' => 'contract-direct-debt-001',
+                'number' => 'Direct debt',
+                'status' => 'active',
+                'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+                'is_active' => true,
+            ]),
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $this->market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $bindingContract->id,
+            'started_at' => Carbon::now()->subMonth(),
+            'ended_at' => null,
+            'binding_type' => 'contract',
+            'confidence' => 'high',
+            'source' => 'test',
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => $bindingContract->external_id,
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 0,
+                'paid_amount' => 0,
+                'debt_amount' => -1000,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|' . $bindingContract->external_id . '|2026-03|0|0|-1000'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => $directDebtContract->external_id,
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 10000,
+                'paid_amount' => 0,
+                'debt_amount' => 10000,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|' . $directDebtContract->external_id . '|2026-03|10000|0|10000'),
+            ],
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('orange', $result['status']);
+        $this->assertEquals('space', $result['extra']['scope'] ?? null);
+        $this->assertEquals(10000.0, $result['extra']['debt_amount'] ?? null);
+    }
+
+    public function test_resolve_for_market_space_uses_tenant_fallback_when_space_has_no_positive_debt(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with paid space but other debt',
+            'external_id' => 'tenant-paid-space-other-debt-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'paid-101',
+            'code' => 'paid-space-101',
+            'is_active' => true,
+        ]);
+
+        $spaceContract = TenantContract::withoutEvents(fn (): TenantContract => TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-paid-space-001',
+            'number' => 'Paid space',
+            'status' => 'active',
+            'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+            'is_active' => true,
+        ]));
+
+        $unboundContract = TenantContract::withoutEvents(fn (): TenantContract => TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => null,
+            'external_id' => 'contract-unbound-debt-001',
+            'number' => 'Unbound debt',
+            'status' => 'active',
+            'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+            'is_active' => true,
+        ]));
+
+        DB::table('contract_debts')->insert([
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => $spaceContract->external_id,
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 10000,
+                'paid_amount' => 10000,
+                'debt_amount' => 0,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|' . $spaceContract->external_id . '|2026-03|10000|10000|0'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => $unboundContract->external_id,
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 15000,
+                'paid_amount' => 0,
+                'debt_amount' => 15000,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|contract-unbound-debt-001|2026-03|15000|0|15000'),
+            ],
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('orange', $result['status']);
+        $this->assertEquals('tenant_fallback', $result['extra']['scope'] ?? null);
+        $this->assertEquals(15000.0, $result['extra']['debt_amount'] ?? null);
     }
 
     /**

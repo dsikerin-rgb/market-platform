@@ -134,6 +134,15 @@ class DebtStatusResolver
 
         // Точной связи с местом нет — используем tenant-fallback
         if ($contractExternalIds->isEmpty()) {
+            $fallbackResult = $this->makeTenantFallbackResult(
+                $tenant,
+                'tenant-fallback: no financial link to space'
+            );
+
+            if ($fallbackResult !== null) {
+                return $fallbackResult;
+            }
+
             $tenantResolved = $this->resolve($tenant);
             $tenantStatus = $tenantResolved['status'] ?? null;
 
@@ -278,6 +287,15 @@ class DebtStatusResolver
         });
 
         if ($positiveDebtRows->isEmpty()) {
+            $fallbackResult = $this->makeTenantFallbackResult(
+                $tenant,
+                'tenant-fallback: no space debt'
+            );
+
+            if ($fallbackResult !== null && $this->isTenantFallbackDebtStatus($fallbackResult['status'] ?? null)) {
+                return $fallbackResult;
+            }
+
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GREEN,
@@ -299,6 +317,15 @@ class DebtStatusResolver
         $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
 
         if ($displayDebtAmount < $minimumDebtAmount) {
+            $fallbackResult = $this->makeTenantFallbackResult(
+                $tenant,
+                'tenant-fallback: space debt below threshold'
+            );
+
+            if ($fallbackResult !== null && $this->isTenantFallbackDebtStatus($fallbackResult['status'] ?? null)) {
+                return $fallbackResult;
+            }
+
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GREEN,
@@ -334,6 +361,15 @@ class DebtStatusResolver
         $isOverdue = $now->gt($dueDate);
 
         if (!$isOverdue) {
+            $fallbackResult = $this->makeTenantFallbackResult(
+                $tenant,
+                'tenant-fallback: space debt not due'
+            );
+
+            if ($fallbackResult !== null && $this->isTenantFallbackDebtStatus($fallbackResult['status'] ?? null)) {
+                return $fallbackResult;
+            }
+
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_PENDING,
@@ -1153,6 +1189,7 @@ class DebtStatusResolver
                 'grace_days' => 5,
                 'yellow_after_days' => 1,
                 'red_after_days' => 30,
+                'minimum_debt_amount' => 500,
             ];
         }
 
@@ -1167,18 +1204,48 @@ class DebtStatusResolver
         ];
     }
 
+    private function makeTenantFallbackResult(Tenant $tenant, string $source): ?array
+    {
+        $tenantResolved = $this->resolve($tenant);
+        $tenantStatus = $tenantResolved['status'] ?? null;
+
+        if (!in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
+            return null;
+        }
+
+        $tenantExtra = is_array($tenantResolved['extra'] ?? null) ? $tenantResolved['extra'] : [];
+        $tenantExtra['scope'] = 'tenant_fallback';
+
+        return $this->makeResult(
+            mode: $tenantResolved['mode'],
+            status: $tenantResolved['status'],
+            label: $tenantResolved['label'],
+            updatedAt: $tenantResolved['updated_at'],
+            source: $source,
+            severity: $tenantResolved['severity'],
+            extra: $tenantExtra
+        );
+    }
+
+    private function isTenantFallbackDebtStatus(?string $status): bool
+    {
+        return in_array($status, [self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true);
+    }
+
     private function resolveActiveContractExternalIdsForMarketSpace(
         int $marketSpaceId,
         int $marketId,
         int $tenantId,
     ): Collection {
+        $contractIds = collect();
+
         if (
             Schema::hasTable('market_space_tenant_bindings')
             && Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')
         ) {
             $now = now();
 
-            $bindingIds = DB::table('market_space_tenant_bindings as mstb')
+            $contractIds = $contractIds->merge(DB::table('market_space_tenant_bindings as mstb')
                 ->join('tenant_contracts as tc', 'tc.id', '=', 'mstb.tenant_contract_id')
                 ->where('mstb.market_space_id', $marketSpaceId)
                 ->where('mstb.market_id', $marketId)
@@ -1197,21 +1264,19 @@ class DebtStatusResolver
                     $query->whereNull('mstb.ended_at')
                         ->orWhere('mstb.ended_at', '>', $now);
                 })
-                ->pluck('tc.external_id');
-
-            if ($bindingIds->isNotEmpty()) {
-                return $bindingIds->unique()->values();
-            }
+                ->pluck('tc.external_id'));
         }
 
-        return DB::table('tenant_contracts')
+        $contractIds = $contractIds->merge(DB::table('tenant_contracts')
             ->where('market_space_id', $marketSpaceId)
             ->where('market_id', $marketId)
             ->where('tenant_id', $tenantId)
             ->where('is_active', true)
             ->whereNotIn('status', ['terminated', 'archived'])
             ->whereNotNull('external_id')
-            ->pluck('external_id')
+            ->pluck('external_id'));
+
+        return $contractIds
             ->unique()
             ->values();
     }
