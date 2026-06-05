@@ -152,6 +152,69 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals(500.0, $result['extra']['minimum_debt_amount'] ?? null);
     }
 
+    public function test_auto_status_does_not_mark_tiny_overdue_tail_as_overdue(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with tiny overdue tail',
+            'external_id' => 'test-small-overdue-tail-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => null,
+            'external_id' => 'contract-small-overdue-tail-001',
+            'number' => 'TAIL-TENANT-001',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => Carbon::now()->subMonths(4),
+            'ends_at' => null,
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-small-overdue-tail-001',
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 2,
+                'paid_amount' => 0,
+                'debt_amount' => 2,
+                'calculated_at' => Carbon::now()->subDays(120),
+                'created_at' => Carbon::now()->subDays(120),
+                'hash' => sha1($tenant->external_id . '|contract-small-overdue-tail-001|2026-03|2|0|2'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-small-overdue-tail-001',
+                'period' => '2026-06',
+                'account' => '62',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1000,
+                'calculated_at' => Carbon::now(),
+                'created_at' => Carbon::now(),
+                'hash' => sha1($tenant->external_id . '|contract-small-overdue-tail-001|2026-06|1000|0|1000'),
+            ],
+        ]);
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('pending', $result['status']);
+        $this->assertEquals(1000.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertEquals(2.0, $result['extra']['overdue_debt_amount'] ?? null);
+        $this->assertEquals(500.0, $result['extra']['minimum_debt_amount'] ?? null);
+    }
+
     public function test_auto_status_uses_latest_debt_version_per_contract_identity(): void
     {
         $tenant = Tenant::create([
@@ -642,6 +705,80 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('green', $result['status']);
         $this->assertEquals('space', $result['extra']['scope'] ?? null);
         $this->assertEquals(2.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertEquals(500.0, $result['extra']['minimum_debt_amount'] ?? null);
+    }
+
+    public function test_resolve_for_market_space_does_not_mark_tiny_overdue_tail_as_overdue(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with tiny space overdue tail',
+            'external_id' => 'tenant-space-small-overdue-tail-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'tiny-tail-101',
+            'code' => 'tiny-tail-space-101',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-space-small-overdue-tail-001',
+            'number' => 'TAIL-001',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => Carbon::now()->subMonths(4),
+            'ends_at' => null,
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-space-small-overdue-tail-001',
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 2,
+                'paid_amount' => 0,
+                'debt_amount' => 2,
+                'calculated_at' => Carbon::now()->subDays(120),
+                'created_at' => Carbon::now()->subDays(120),
+                'hash' => sha1($tenant->external_id . '|contract-space-small-overdue-tail-001|2026-03|2|0|2'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-space-small-overdue-tail-001',
+                'period' => '2026-06',
+                'account' => '62',
+                'accrued_amount' => 1000,
+                'paid_amount' => 0,
+                'debt_amount' => 1000,
+                'calculated_at' => Carbon::now(),
+                'created_at' => Carbon::now(),
+                'hash' => sha1($tenant->external_id . '|contract-space-small-overdue-tail-001|2026-06|1000|0|1000'),
+            ],
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('pending', $result['status']);
+        $this->assertEquals('space', $result['extra']['scope'] ?? null);
+        $this->assertEquals(1000.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertEquals(2.0, $result['extra']['overdue_debt_amount'] ?? null);
         $this->assertEquals(500.0, $result['extra']['minimum_debt_amount'] ?? null);
     }
 
