@@ -322,6 +322,9 @@ class MarketSettings extends Page
             'debt_monitoring_red_after_days' => is_numeric($settings['debt_monitoring']['red_after_days'] ?? null)
                 ? (int) $settings['debt_monitoring']['red_after_days']
                 : 30,
+            'debt_monitoring_minimum_debt_amount' => is_numeric($settings['debt_monitoring']['minimum_debt_amount'] ?? null)
+                ? (float) $settings['debt_monitoring']['minimum_debt_amount']
+                : 500,
             'debt_monitoring_tenant_aggregate_mode' => in_array($settings['debt_monitoring']['tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $settings['debt_monitoring']['tenant_aggregate_mode']
                 : 'worst',
@@ -807,6 +810,19 @@ class MarketSettings extends Page
                                 'default' => 12,
                                 'lg' => 3,
                             ]),
+
+                        Forms\Components\TextInput::make('debt_monitoring_minimum_debt_amount')
+                            ->label('Минимальная сумма долга, ₽')
+                            ->helperText('Долги ниже этой суммы считаются техническим остатком и не влияют на цвет карты и статус просрочки.')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100000)
+                            ->default(500)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 3,
+                            ]),
                     ])
                     ->columns(12)
                     ->collapsible()
@@ -916,6 +932,9 @@ class MarketSettings extends Page
                 : 5,
             'yellow_after_days' => $yellowAfterDays,
             'red_after_days' => $redAfterDays,
+            'minimum_debt_amount' => is_numeric($state['debt_monitoring_minimum_debt_amount'] ?? null)
+                ? max(0, min(100000, (float) $state['debt_monitoring_minimum_debt_amount']))
+                : 500,
             'tenant_aggregate_mode' => in_array($state['debt_monitoring_tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $state['debt_monitoring_tenant_aggregate_mode']
                 : 'worst',

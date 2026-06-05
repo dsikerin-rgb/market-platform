@@ -118,6 +118,39 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('Нет задолженности', $result['label']);
     }
 
+    public function test_auto_status_ignores_debt_below_minimum_amount(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with tiny remainder',
+            'external_id' => 'test-small-debt-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-small-debt-001',
+            'period' => '2026-03',
+            'account' => '62',
+            'accrued_amount' => 2,
+            'paid_amount' => 0,
+            'debt_amount' => 2,
+            'calculated_at' => Carbon::now()->subDays(60),
+            'created_at' => Carbon::now()->subDays(60),
+            'hash' => sha1($tenant->external_id . '|contract-small-debt-001|2026-03|2|0|2'),
+        ]);
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('green', $result['status']);
+        $this->assertEquals('Нет задолженности', $result['label']);
+        $this->assertEquals(2.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertEquals(500.0, $result['extra']['minimum_debt_amount'] ?? null);
+    }
+
     public function test_auto_status_uses_latest_debt_version_per_contract_identity(): void
     {
         $tenant = Tenant::create([
@@ -552,6 +585,107 @@ class DebtStatusResolverTest extends TestCase
         $this->assertSame('auto', $result['mode']);
         $this->assertSame('gray', $result['status']);
         $this->assertSame('none', $result['extra']['scope'] ?? null);
+    }
+
+    public function test_resolve_for_market_space_ignores_exact_debt_below_minimum_amount(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with tiny space debt',
+            'external_id' => 'tenant-space-small-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'tiny-101',
+            'code' => 'tiny-space-101',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-space-small-001',
+            'number' => 'SMALL-001',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => Carbon::now()->subMonths(2),
+            'ends_at' => null,
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-space-small-001',
+            'period' => '2026-03',
+            'account' => '62',
+            'accrued_amount' => 2,
+            'paid_amount' => 0,
+            'debt_amount' => 2,
+            'calculated_at' => Carbon::now()->subDays(60),
+            'created_at' => Carbon::now()->subDays(60),
+            'hash' => sha1($tenant->external_id . '|contract-space-small-001|2026-03|2|0|2'),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('green', $result['status']);
+        $this->assertEquals('space', $result['extra']['scope'] ?? null);
+        $this->assertEquals(2.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertEquals(500.0, $result['extra']['minimum_debt_amount'] ?? null);
+    }
+
+    public function test_resolve_for_market_space_preserves_tenant_fallback_debt_details(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with fallback debt',
+            'external_id' => 'tenant-fallback-debt-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'fallback-101',
+            'code' => 'fallback-space-101',
+            'is_active' => true,
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'contract-fallback-debt-001',
+            'period' => '2026-03',
+            'account' => '62',
+            'accrued_amount' => 10000,
+            'paid_amount' => 0,
+            'debt_amount' => 10000,
+            'calculated_at' => Carbon::now()->subDays(40),
+            'created_at' => Carbon::now()->subDays(40),
+            'hash' => sha1($tenant->external_id . '|contract-fallback-debt-001|2026-03|10000|0|10000'),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('orange', $result['status']);
+        $this->assertEquals('tenant_fallback', $result['extra']['scope'] ?? null);
+        $this->assertEquals(10000.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertArrayHasKey('overdue_days', $result['extra']);
+        $this->assertGreaterThan(0, $result['extra']['overdue_days']);
     }
 
     /**

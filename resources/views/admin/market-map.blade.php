@@ -6644,8 +6644,8 @@
                     ? formatMoneyRu(debtAmount)
                     : null;
                   const debtDetailsSuffix = [
-                    debtAmountLabel !== null ? debtAmountLabel : null,
                     overdueDaysLabel !== null ? overdueDaysLabel + ' дн.' : null,
+                    debtAmountLabel !== null ? debtAmountLabel : null,
                   ].filter(Boolean).join(' · ');
                   const overdueFallbackLabel = debtStatus === 'red' ? String(debtLabel || 'red') : String(debtLabel || 'yes');
                   const overduePopupLabel = debtDetailsSuffix !== '' ? debtDetailsSuffix : overdueFallbackLabel;
@@ -6707,30 +6707,30 @@
                     if (debtStatus === 'green') {
                       line4 = 'Статус арендатора: Нет задолженности';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Финансовая связь группы с 1С не подтверждена'
-                        : 'Финансовая связь с местом не подтверждена';
+                        ? 'К этой группе не привязан договор'
+                        : 'К этому месту не привязан договор';
                     } else if (debtStatus === 'pending') {
                       line4 = 'Статус арендатора: ' + pendingPopupLabel;
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Финансовая связь группы с 1С не подтверждена'
-                        : 'Финансовая связь с местом не подтверждена';
+                        ? 'К этой группе не привязан договор'
+                        : 'К этому месту не привязан договор';
                     } else if (debtStatus === 'orange' || debtStatus === 'red') {
                       line4 = debtMode === 'manual'
                         ? ('Статус арендатора: ' + escapeHtml(debtLabel))
                         : ('Просрочка арендатора: ' + overduePopupLabel);
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Финансовая связь группы с 1С не подтверждена'
-                        : 'Финансовая связь с местом не подтверждена';
+                        ? 'К этой группе не привязан договор'
+                        : 'К этому месту не привязан договор';
                     } else if (debtStatus === 'gray') {
                       line4 = 'Статус арендатора: Нет данных 1С';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Финансовая связь группы с 1С не подтверждена'
-                        : 'Финансовая связь с местом не подтверждена';
+                        ? 'К этой группе не привязан договор'
+                        : 'К этому месту не привязан договор';
                     } else {
                       line4 = debtLabel ? ('Задолженность арендатора: ' + escapeHtml(debtLabel)) : 'Задолженность арендатора: —';
                       scopeExplanation = financialSource === 'parent'
-                        ? 'Финансовая связь группы с 1С не подтверждена'
-                        : 'Финансовая связь с местом не подтверждена';
+                        ? 'К этой группе не привязан договор'
+                        : 'К этому месту не привязан договор';
                     }
                   } else {
                     // scope=none или неизвестный
