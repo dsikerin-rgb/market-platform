@@ -327,6 +327,68 @@ class TenantContractResourceAccessTest extends TestCase
             ->assertOk();
     }
 
+    public function test_shared_place_contract_history_stays_scoped_to_current_tenant(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => '109',
+            'code' => '109',
+            'display_name' => 'Shared place 109',
+            'is_active' => true,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $otherTenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Other Tenant',
+            'is_active' => true,
+        ]);
+
+        $currentContract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $currentTenant->id,
+            'market_space_id' => (int) $space->id,
+            'number' => 'A/109 от 01.05.2026',
+            'status' => 'active',
+            'starts_at' => '2026-05-01',
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $otherTenant->id,
+            'market_space_id' => (int) $space->id,
+            'number' => 'A/109 от 01.05.2026',
+            'status' => 'active',
+            'starts_at' => '2026-05-01',
+            'is_active' => true,
+        ]);
+
+        $historyMethod = new \ReflectionMethod(TenantContractResource::class, 'historyChainPreview');
+        $historyMethod->setAccessible(true);
+
+        $html = (string) $historyMethod->invoke(null, $currentContract);
+
+        $this->assertStringContainsString('Current Tenant', $html);
+        $this->assertStringNotContainsString('Other Tenant', $html);
+
+        $chainMethod = new \ReflectionMethod(TenantContractResource::class, 'chainDisplay');
+        $chainMethod->setAccessible(true);
+
+        $this->assertSame('1 из 1', $chainMethod->invoke(null, $currentContract));
+    }
+
     public function test_market_operator_cannot_open_contracts_index(): void
     {
         $market = Market::query()->create([
