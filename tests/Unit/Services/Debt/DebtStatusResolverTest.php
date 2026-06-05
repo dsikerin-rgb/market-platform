@@ -1058,4 +1058,81 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('auto', $result['mode']);
         $this->assertEquals('orange', $result['status']);
     }
+
+    public function test_auto_status_uses_tenant_net_balance_for_overdue_amount(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with cross-contract credit',
+            'external_id' => 'test-net-balance-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('contract_debts')->insert([
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-credit',
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 0,
+                'paid_amount' => 132097.43,
+                'debt_amount' => -132097.43,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|contract-credit|2026-03|0|132097.43|-132097.43'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-current',
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 373837.50,
+                'paid_amount' => 0,
+                'debt_amount' => 373837.50,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|contract-current|2026-03|373837.50|0|373837.50'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-other-1',
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 18502.00,
+                'paid_amount' => 0,
+                'debt_amount' => 18502.00,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|contract-other-1|2026-03|18502|0|18502'),
+            ],
+            [
+                'tenant_id' => $tenant->id,
+                'market_id' => $this->market->id,
+                'tenant_external_id' => $tenant->external_id,
+                'contract_external_id' => 'contract-other-2',
+                'period' => '2026-03',
+                'account' => '62',
+                'accrued_amount' => 51868.18,
+                'paid_amount' => 0,
+                'debt_amount' => 51868.18,
+                'calculated_at' => Carbon::now()->subDays(40),
+                'created_at' => Carbon::now()->subDays(40),
+                'hash' => sha1($tenant->external_id . '|contract-other-2|2026-03|51868.18|0|51868.18'),
+            ],
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('orange', $result['status']);
+        $this->assertEqualsWithDelta(312110.25, (float) ($result['extra']['debt_amount'] ?? 0), 0.01);
+    }
 }

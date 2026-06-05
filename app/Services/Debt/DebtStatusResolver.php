@@ -809,11 +809,13 @@ class DebtStatusResolver
             );
         }
 
+        $netDebtAmount = (float) $debtsData['rows']->sum('debt_amount');
+
         $positiveDebtRows = $debtsData['rows']->filter(static function ($row): bool {
             return (float) ($row->debt_amount ?? 0) > 0.009;
         });
 
-        if ($positiveDebtRows->isEmpty()) {
+        if ($positiveDebtRows->isEmpty() || $netDebtAmount <= 0.009) {
             // Записи есть, долг нулевой — это green
             return $this->makeResult(
                 mode: 'auto',
@@ -821,11 +823,12 @@ class DebtStatusResolver
                 label: $labels[self::STATUS_GREEN],
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
-                severity: 0
+                severity: 0,
+                extra: ['debt_amount' => $netDebtAmount]
             );
         }
 
-        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
+        $displayDebtAmount = $netDebtAmount;
 
         if ($displayDebtAmount < $minimumDebtAmount) {
             return $this->makeResult(
@@ -880,6 +883,9 @@ class DebtStatusResolver
             (bool) ($debtsData['has_calculated_at'] ?? false),
             (bool) ($debtsData['has_created_at'] ?? false),
         );
+        if ($overdueAmount > $netDebtAmount) {
+            $overdueAmount = $netDebtAmount;
+        }
         $displayDebtAmount = $overdueAmount > 0.009 ? $overdueAmount : $displayDebtAmount;
 
         if ($overdueAmount > 0.009 && $overdueAmount < $minimumDebtAmount) {

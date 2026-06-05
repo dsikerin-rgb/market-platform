@@ -229,6 +229,12 @@ class TenantResource extends BaseResource
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record): HtmlString => static::renderPaymentsDebtSummary($record))
                                     ->columnSpanFull(),
+
+                                Forms\Components\Placeholder::make('one_c_settlements')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderOneCSettlements($record))
+                                    ->columnSpanFull(),
                             ]),
 
                         Section::make('История аренды мест')
@@ -2995,6 +3001,171 @@ class TenantResource extends BaseResource
             . '</div>';
     }
 
+    private static function renderOneCSettlements(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Данные появятся после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('contract_debts') || ! static::hasColumn('contract_debts', 'tenant_id')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет таблицы contract_debts — взаиморасчёты 1С недоступны.</div>');
+        }
+
+        $hasContractExternalId = static::hasColumn('contract_debts', 'contract_external_id');
+        $hasOrganizationName = static::hasColumn('contract_debts', 'organization_name');
+        $hasOrganizationExternalId = static::hasColumn('contract_debts', 'organization_external_id');
+        $hasAccount = static::hasColumn('contract_debts', 'account');
+        $hasAccrued = static::hasColumn('contract_debts', 'accrued_amount');
+        $hasPaid = static::hasColumn('contract_debts', 'paid_amount');
+        $hasDebt = static::hasColumn('contract_debts', 'debt_amount');
+        $hasCalculatedAt = static::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = static::hasColumn('contract_debts', 'created_at');
+
+        $query = DB::query()
+            ->fromSub(ContractDebt::latestContractStateQuery((int) $record->market_id), 'cd')
+            ->leftJoin('tenant_contracts as tc', function ($join) use ($record, $hasContractExternalId): void {
+                $join->on('tc.market_id', '=', 'cd.market_id')
+                    ->where('tc.tenant_id', (int) $record->id);
+
+                if ($hasContractExternalId && static::hasColumn('tenant_contracts', 'external_id')) {
+                    $join->on('tc.external_id', '=', 'cd.contract_external_id');
+                } else {
+                    $join->whereRaw('1 = 0');
+                }
+            })
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('cd.tenant_id', (int) $record->id)
+            ->select([
+                $hasContractExternalId ? 'cd.contract_external_id' : DB::raw('NULL as contract_external_id'),
+                'tc.number as contract_number',
+                'ms.number as space_number',
+                'ms.code as space_code',
+                'ms.display_name as space_display_name',
+                $hasOrganizationName ? 'cd.organization_name' : DB::raw('NULL as organization_name'),
+                $hasOrganizationExternalId ? 'cd.organization_external_id' : DB::raw('NULL as organization_external_id'),
+                $hasAccount ? 'cd.account' : DB::raw('NULL as account'),
+                $hasAccrued ? 'cd.accrued_amount' : DB::raw('NULL as accrued_amount'),
+                $hasPaid ? 'cd.paid_amount' : DB::raw('NULL as paid_amount'),
+                $hasDebt ? 'cd.debt_amount' : DB::raw('NULL as debt_amount'),
+                $hasCalculatedAt ? 'cd.calculated_at' : DB::raw('NULL as calculated_at'),
+                $hasCreatedAt ? 'cd.created_at' : DB::raw('NULL as created_at'),
+            ])
+            ->orderByRaw('COALESCE(tc.number, cd.contract_external_id, \'\')')
+            ->orderByRaw('COALESCE(ms.display_name, ms.number, ms.code, \'\')');
+
+        if ($hasOrganizationName || $hasOrganizationExternalId) {
+            $organizationOrderParts = [];
+            if ($hasOrganizationName) {
+                $organizationOrderParts[] = 'cd.organization_name';
+            }
+            if ($hasOrganizationExternalId) {
+                $organizationOrderParts[] = 'cd.organization_external_id';
+            }
+
+            $query->orderByRaw('COALESCE(' . implode(', ', $organizationOrderParts) . ', \'\')');
+        }
+
+        if ($hasAccount) {
+            $query->orderByRaw('COALESCE(cd.account, \'\')');
+        }
+
+        $query->limit(200);
+
+        $rows = $query->get();
+
+        if ($rows->isEmpty()) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет данных 1С по взаиморасчётам для этого арендатора.</div>');
+        }
+
+        $body = '';
+        foreach ($rows as $row) {
+            $contractLabel = trim((string) ($row->contract_number ?? ''));
+            if ($contractLabel === '') {
+                $contractLabel = trim((string) ($row->contract_external_id ?? ''));
+            }
+            if ($contractLabel === '') {
+                $contractLabel = '—';
+            }
+
+            $spaceLabel = trim((string) ($row->space_display_name ?? ''));
+            if ($spaceLabel === '') {
+                $spaceLabel = trim((string) ($row->space_number ?? ''));
+            }
+            if ($spaceLabel === '') {
+                $spaceLabel = trim((string) ($row->space_code ?? ''));
+            }
+            if ($spaceLabel === '') {
+                $spaceLabel = '—';
+            }
+
+            $organizationLabel = trim((string) ($row->organization_name ?? ''));
+            if ($organizationLabel === '') {
+                $organizationLabel = trim((string) ($row->organization_external_id ?? ''));
+            }
+            if ($organizationLabel === '') {
+                $organizationLabel = '—';
+            }
+
+            $updatedAt = $row->calculated_at ?? $row->created_at ?? null;
+            $updatedAtLabel = $updatedAt ? static::formatDebtSnapshotLabel($updatedAt) : null;
+
+            $debtAmount = is_numeric($row->debt_amount ?? null) ? (float) $row->debt_amount : null;
+            $balanceClass = $debtAmount !== null && $debtAmount < -0.009
+                ? ' tenant-one-c-settlements__amount--credit'
+                : ($debtAmount !== null && $debtAmount > 0.009 ? ' tenant-one-c-settlements__amount--debt' : '');
+            $balanceLabel = $debtAmount !== null && $debtAmount < -0.009 ? 'Переплата ' : '';
+
+            $body .= '<tr>'
+                . '<td>' . e($contractLabel) . '</td>'
+                . '<td>' . e($spaceLabel) . '</td>'
+                . '<td>' . e($organizationLabel) . '</td>'
+                . '<td>' . e(trim((string) ($row->account ?? '')) !== '' ? (string) $row->account : '—') . '</td>'
+                . '<td class="tenant-one-c-settlements__amount">' . e(is_numeric($row->accrued_amount ?? null) ? static::formatRub((float) $row->accrued_amount) : '—') . '</td>'
+                . '<td class="tenant-one-c-settlements__amount">' . e(is_numeric($row->paid_amount ?? null) ? static::formatRub((float) $row->paid_amount) : '—') . '</td>'
+                . '<td class="tenant-one-c-settlements__amount' . $balanceClass . '">' . e($debtAmount !== null ? $balanceLabel . static::formatRub(abs($debtAmount)) : '—') . '</td>'
+                . '<td>' . e($updatedAtLabel ?? '—') . '</td>'
+                . '</tr>';
+        }
+
+        return new HtmlString(
+            '<style>
+                .tenant-one-c-settlements{margin-top:14px}
+                .tenant-one-c-settlements__title{margin-bottom:8px;font-size:14px;font-weight:700;line-height:1.25}
+                .tenant-one-c-settlements__table-wrap{overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px}
+                .tenant-one-c-settlements table{width:100%;min-width:920px;border-collapse:collapse;font-size:12px;line-height:1.35}
+                .tenant-one-c-settlements th{position:sticky;top:0;background:#f8fafc;color:#475569;font-weight:700;text-align:left}
+                .dark .tenant-one-c-settlements th{background:#111827;color:#cbd5e1}
+                .tenant-one-c-settlements th,.tenant-one-c-settlements td{padding:9px 10px;border-bottom:1px solid rgba(148,163,184,.25);vertical-align:top}
+                .tenant-one-c-settlements tr:last-child td{border-bottom:0}
+                .tenant-one-c-settlements__amount{text-align:right;white-space:nowrap}
+                .tenant-one-c-settlements__amount--debt{color:#b91c1c;font-weight:700}
+                .tenant-one-c-settlements__amount--credit{color:#15803d;font-weight:700}
+                .dark .tenant-one-c-settlements__amount--debt{color:#f87171}
+                .dark .tenant-one-c-settlements__amount--credit{color:#4ade80}
+            </style>
+            <div class="tenant-one-c-settlements">
+                <div class="tenant-one-c-settlements__title">Взаиморасчёты 1С</div>
+                <div class="tenant-one-c-settlements__table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Договор</th>
+                                <th>Место</th>
+                                <th>Организация</th>
+                                <th>Счёт</th>
+                                <th class="tenant-one-c-settlements__amount">Начислено</th>
+                                <th class="tenant-one-c-settlements__amount">Оплачено</th>
+                                <th class="tenant-one-c-settlements__amount">Долг / переплата</th>
+                                <th>Дата обновления</th>
+                            </tr>
+                        </thead>
+                        <tbody>' . $body . '</tbody>
+                    </table>
+                </div>
+            </div>'
+        );
+    }
+
     private static function renderPaymentDisciplineSummary(?Tenant $record): HtmlString
     {
         if (! $record) {
@@ -3039,7 +3210,7 @@ class TenantResource extends BaseResource
             $detailsParts[] = '<span class="tenant-payment-discipline__detail">Просрочка: <strong>' . e((string) $daysOverdue) . '</strong> дней</span>';
         }
         if ($isOverdue && $overdueAmount !== null && $overdueAmount > 0) {
-            $detailsParts[] = '<span class="tenant-payment-discipline__detail">Сумма просрочки: <strong>' . e(static::formatRub($overdueAmount)) . '</strong></span>';
+            $detailsParts[] = '<span class="tenant-payment-discipline__detail">Общий долг арендатора: <strong>' . e(static::formatRub($overdueAmount)) . '</strong></span>';
         }
         $details = $detailsParts !== []
             ? '<div class="tenant-payment-discipline__details">' . implode('&nbsp;•&nbsp;', $detailsParts) . '</div>'
