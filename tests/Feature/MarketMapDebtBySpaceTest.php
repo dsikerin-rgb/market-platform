@@ -213,6 +213,7 @@ class MarketMapDebtBySpaceTest extends TestCase
 
         $shape = $items[0];
         $this->assertEquals('gray', $shape['debt_status']);
+        $this->assertSame('1', $shape['space_effective_contract_number']);
     }
 
     /**
