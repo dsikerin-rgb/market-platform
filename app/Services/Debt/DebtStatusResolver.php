@@ -139,6 +139,9 @@ class DebtStatusResolver
 
             // Проверяем валидность tenant-level статуса
             if (in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
+                $tenantExtra = is_array($tenantResolved['extra'] ?? null) ? $tenantResolved['extra'] : [];
+                $tenantExtra['scope'] = 'tenant_fallback';
+
                 return $this->makeResult(
                     mode: $tenantResolved['mode'],
                     status: $tenantResolved['status'],
@@ -146,7 +149,7 @@ class DebtStatusResolver
                     updatedAt: $tenantResolved['updated_at'],
                     source: 'tenant-fallback: нет финансовой связи с местом',
                     severity: $tenantResolved['severity'],
-                    extra: ['scope' => 'tenant_fallback']
+                    extra: $tenantExtra
                 );
             }
 
@@ -245,6 +248,9 @@ class DebtStatusResolver
 
             // Проверяем валидность tenant-level статуса
             if (in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
+                $tenantExtra = is_array($tenantResolved['extra'] ?? null) ? $tenantResolved['extra'] : [];
+                $tenantExtra['scope'] = 'tenant_fallback';
+
                 return $this->makeResult(
                     mode: $tenantResolved['mode'],
                     status: $tenantResolved['status'],
@@ -252,7 +258,7 @@ class DebtStatusResolver
                     updatedAt: $tenantResolved['updated_at'],
                     source: 'tenant-fallback: нет финансовых данных по месту',
                     severity: $tenantResolved['severity'],
-                    extra: ['scope' => 'tenant_fallback']
+                    extra: $tenantExtra
                 );
             }
 
@@ -287,6 +293,11 @@ class DebtStatusResolver
         $graceDays = $settings['grace_days'] ?? 5;
         $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
         $redAfterDays = $settings['red_after_days'] ?? 30;
+        $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
+        $positiveDebtRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
         $dueDate = $this->calculateDueDateFromRows(
             $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
@@ -312,6 +323,18 @@ class DebtStatusResolver
         $isOverdue = $now->gt($dueDate);
 
         if (!$isOverdue) {
+            if ($displayDebtAmount < $minimumDebtAmount) {
+                return $this->makeResult(
+                    mode: 'auto',
+                    status: self::STATUS_GREEN,
+                    label: $labels[self::STATUS_GREEN],
+                    updatedAt: $snapshotLabel,
+                    source: 'contract_debts: долг ниже порога',
+                    severity: 0,
+                    extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount, 'scope' => 'space']
+                );
+            }
+
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_PENDING,
@@ -324,6 +347,18 @@ class DebtStatusResolver
         }
 
         $daysOverdue = $dueDate->diffInDays($now);
+
+        if ($displayDebtAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: просрочка ниже порога',
+                severity: 1,
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount, 'scope' => 'space']
+            );
+        }
 
         if ($daysOverdue >= $redAfterDays) {
             return $this->makeResult(
@@ -641,6 +676,10 @@ class DebtStatusResolver
 
         // Считаем общую задолженность
         $totalDebt = $debtsData['rows']->sum('debt_amount');
+        $positiveDebtRows = $debtsData['rows']->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
         if ($totalDebt <= 0.009) {
             // Записи есть, долг нулевой — это green
@@ -673,6 +712,18 @@ class DebtStatusResolver
         $isOverdue = $now->gt($dueDate);
 
         if (!$isOverdue) {
+            if ($displayDebtAmount < $minimumDebtAmount) {
+                return $this->makeResult(
+                    mode: 'auto',
+                    status: self::STATUS_GREEN,
+                    label: $labels[self::STATUS_GREEN],
+                    updatedAt: $debtsData['snapshot_label'],
+                    source: 'Источник: contract_debts, долг ниже порога',
+                    severity: 0,
+                    extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount]
+                );
+            }
+
             // Срок ещё не наступил
             return $this->makeResult(
                 mode: 'auto',
@@ -687,6 +738,18 @@ class DebtStatusResolver
 
         // Просрочка - считаем дни
         $daysOverdue = $dueDate->diffInDays($now);
+
+        if ($displayDebtAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $debtsData['snapshot_label'],
+                source: 'Источник: contract_debts, просрочка ниже порога',
+                severity: 1,
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount]
+            );
+        }
 
         if ($daysOverdue >= $redAfterDays) {
             return $this->makeResult(
