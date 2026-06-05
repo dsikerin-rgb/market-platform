@@ -2418,7 +2418,7 @@ class TenantContractResource extends BaseResource
         }
 
         $html = '<style>
-            .contract-history{display:grid;gap:10px}
+            .contract-history{display:grid;gap:10px;padding-bottom:72px}
             .contract-history__item{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(190px,.7fr);gap:14px;align-items:start;border:1px solid #e2e8f0;border-radius:8px;background:#fff;padding:12px 14px}
             .contract-history__item--current{border-color:#bae6fd;background:#f0f9ff}
             .contract-history__number{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px;font-weight:700;color:#0f172a;line-height:1.35;overflow-wrap:anywhere}
