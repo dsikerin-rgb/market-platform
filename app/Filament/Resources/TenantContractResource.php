@@ -2071,7 +2071,7 @@ class TenantContractResource extends BaseResource
 
         $records = TenantContract::query()
             ->where('market_id', $marketId)
-            ->get(['id', 'market_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active']);
+            ->get(['id', 'market_id', 'tenant_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active']);
 
         $grouped = [];
         foreach ($records as $contract) {
@@ -2082,7 +2082,12 @@ class TenantContractResource extends BaseResource
                 continue;
             }
 
-            $grouped[$token][] = [
+            $chainKey = static::contractPlaceTenantChainKey($contract, $token);
+            if ($chainKey === null) {
+                continue;
+            }
+
+            $grouped[$chainKey][] = [
                 'id' => (int) $contract->id,
                 'order_date' => static::resolveOrderDate($contract, $classified['document_date'] ?? null),
                 'range_start' => static::resolveRangeStart($contract, $classified['document_date'] ?? null),
@@ -2362,12 +2367,13 @@ class TenantContractResource extends BaseResource
 
         $classified = static::classificationForRecord($record);
         $token = trim((string) ($classified['place_token'] ?? ''));
+        $chainKey = static::contractPlaceTenantChainKey($record, $token);
 
         if ($record->excludesFromSpaceMapping()) {
             return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Договор явно исключен из привязки к месту и не участвует в исторической цепочке по месту.</div>');
         }
 
-        if (! ($classified['actionable'] ?? false) || $token === '') {
+        if (! ($classified['actionable'] ?? false) || $token === '' || $chainKey === null) {
             return new HtmlString('<div class="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">Для этого документа цепочка по месту не строится: нет надежного токена места.</div>');
         }
 
@@ -2388,7 +2394,7 @@ class TenantContractResource extends BaseResource
                 continue;
             }
 
-            if (trim((string) ($candidateClassification['place_token'] ?? '')) !== $token) {
+            if (static::contractPlaceTenantChainKey($candidate, trim((string) ($candidateClassification['place_token'] ?? ''))) !== $chainKey) {
                 continue;
             }
 
@@ -2494,6 +2500,20 @@ class TenantContractResource extends BaseResource
     private static function historyChainChip(string $label, string $variant = 'gray'): string
     {
         return '<span class="contract-history__chip contract-history__chip--'.e($variant).'">'.e($label).'</span>';
+    }
+
+    private static function contractPlaceTenantChainKey(TenantContract $record, ?string $placeToken = null): ?string
+    {
+        $token = trim((string) ($placeToken ?? static::classificationForRecord($record)['place_token'] ?? ''));
+        if ($token === '') {
+            return null;
+        }
+
+        // Shared-use spaces can have several tenants on the same physical place.
+        // Contract history must stay tenant-specific instead of merging all tenants by place token.
+        $tenantId = (int) ($record->tenant_id ?? 0);
+
+        return $token.'|tenant:'.$tenantId;
     }
 
     private static function chainDisplay(TenantContract $record): string
