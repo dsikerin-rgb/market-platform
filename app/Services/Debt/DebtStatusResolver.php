@@ -299,6 +299,18 @@ class DebtStatusResolver
         });
         $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
+        if ($displayDebtAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: $labels[self::STATUS_GREEN],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: долг ниже порога',
+                severity: 0,
+                extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount, 'scope' => 'space']
+            );
+        }
+
         $dueDate = $this->calculateDueDateFromRows(
             $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
             $graceDays,
@@ -609,6 +621,7 @@ class DebtStatusResolver
         $graceDays = $settings['grace_days'] ?? 5;
         $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
         $redAfterDays = $settings['red_after_days'] ?? 30;
+        $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
 
         // Получаем данные из contract_debts
         $debtsData = $this->fetchDebtsData($tenant);
@@ -690,6 +703,18 @@ class DebtStatusResolver
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 0
+            );
+        }
+
+        if ($displayDebtAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: $labels[self::STATUS_GREEN],
+                updatedAt: $debtsData['snapshot_label'],
+                source: 'Источник: contract_debts, долг ниже порога',
+                severity: 0,
+                extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount]
             );
         }
 
