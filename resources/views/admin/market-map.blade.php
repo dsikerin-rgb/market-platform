@@ -1350,6 +1350,22 @@
       color: #fff;
       font-weight: 600;
     }
+    .popover .row-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      margin-left: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.30);
+      color: rgba(255,255,255,.68);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      vertical-align: text-bottom;
+      cursor: help;
+    }
     .popover .muted { opacity: .72; }
     .popover .row-meta {
       margin-top: 10px;
@@ -1366,6 +1382,18 @@
     }
     .popover .row-warning .row-value {
       color: #e0f2fe;
+      font-weight: 700;
+    }
+    .popover .row-link-missing,
+    .popover .row-debt-overdue .row-value,
+    .popover .row-link-missing .row-value {
+      color: #fca5a5;
+      font-weight: 700;
+    }
+    .popover .row-link-confirmed,
+    .popover .row-debt-ok .row-value,
+    .popover .row-link-confirmed .row-value {
+      color: #86efac;
       font-weight: 700;
     }
     .popover .row-review-note {
@@ -3513,24 +3541,27 @@
           }).format(num);
         }
 
-        function buildPopoverRow(text, extraClass = '') {
+        function buildPopoverRow(text, extraClass = '', helpText = '') {
           if (!text) return '';
 
           const rowClass = extraClass ? ('row ' + extraClass) : 'row';
           const separatorIndex = text.indexOf(':');
+          const helpHtml = helpText
+            ? ' <span class="row-help" title="' + escapeHtml(helpText) + '" aria-label="' + escapeHtml(helpText) + '">?</span>'
+            : '';
 
           if (separatorIndex === -1) {
-            return '<div class="' + rowClass + '"><span class="row-value">' + text + '</span></div>';
+            return '<div class="' + rowClass + '"><span class="row-value">' + text + '</span>' + helpHtml + '</div>';
           }
 
           const label = text.slice(0, separatorIndex + 1).trim();
           const value = text.slice(separatorIndex + 1).trim();
 
           if (!value) {
-            return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span></div>';
+            return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span>' + helpHtml + '</div>';
           }
 
-          return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span> <span class="row-value">' + value + '</span></div>';
+          return '<div class="' + rowClass + '"><span class="row-label">' + label + '</span> <span class="row-value">' + value + '</span>' + helpHtml + '</div>';
         }
 
         function rentRateUnitLabel(unit) {
@@ -6537,6 +6568,10 @@
               let line5 = '';
               let line6 = '';
               let line7 = '';
+              let line4Class = '';
+              let line5Class = '';
+              let line4HelpText = '';
+              let line5HelpText = '';
               let groupParentId = 0;
               let isChildInGroup = false;
               let needsGroupTenantAssignment = false;
@@ -6664,6 +6699,8 @@
                   const financialSourceSpaceLabel = hit.space_financial_source_space_number
                     ? String(hit.space_financial_source_space_number)
                     : sourceSpaceLabel;
+                  const hasOverdueDebt = debtStatus === 'orange' || debtStatus === 'red';
+                  const hasCurrentDebtWithoutOverdue = debtStatus === 'green' || debtStatus === 'pending';
 
                   // Объяснение режима (отдельная строка, не затирается)
                   let scopeExplanation = '';
@@ -6750,6 +6787,22 @@
                       line4 = debtLabel ? ('Статус: ' + escapeHtml(debtLabel)) : 'Статус: —';
                       scopeExplanation = '';
                     }
+                  }
+                  if (hasOverdueDebt) {
+                    line4Class = 'row-debt-overdue';
+                    line4HelpText = debtScope === 'space'
+                      ? 'Просрочка рассчитана по договору 1С, который точно привязан к этому месту.'
+                      : 'Просрочка рассчитана по данным 1С для арендатора или группы.';
+                  } else if (hasCurrentDebtWithoutOverdue) {
+                    line4Class = 'row-debt-ok';
+                    line4HelpText = 'По данным 1С просроченной задолженности для этого статуса нет.';
+                  }
+                  if (scopeExplanation === 'Связь с местом подтверждена в 1С') {
+                    line5Class = 'row-link-confirmed';
+                    line5HelpText = 'Договор 1С сопоставлен именно с этим торговым местом.';
+                  } else if (scopeExplanation === 'К этому месту не привязан договор' || scopeExplanation === 'К этой группе не привязан договор') {
+                    line5Class = 'row-link-missing';
+                    line5HelpText = 'Для этого места нет точной привязки договора 1С, поэтому статус может быть рассчитан по арендатору.';
                   }
 
                   // line5 — объяснение режима (если есть)
@@ -6908,9 +6961,9 @@
                 if (spaceGroupRole === 'parent') {
                   btns.push('<button type="button" disabled title="Состав группы меняется через обычные или дочерние места">Состав группы</button>');
                 } else if (spaceGroupRole === 'child') {
-                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Состав группы</button>');
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '" title="Открыть управление составом группы" aria-label="Открыть управление составом группы">Состав группы</button>');
                 } else {
-                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '">Добавить в группу</button>');
+                  btns.push('<button type="button" data-action="open-group-membership" data-space-id="' + String(groupMembershipSpaceId) + '" title="Добавить это место в группу или выбрать родительскую группу" aria-label="Добавить это место в группу или выбрать родительскую группу">Добавить в группу</button>');
                 }
               }
 
@@ -6921,6 +6974,7 @@
               if (btns.length) {
                 actions = '<div class="act">' + btns.join('') + '</div>';
               }
+              const line5ExtraClass = [line5Class, isTenantFallback ? 'row-warning' : ''].filter(Boolean).join(' ');
 
               showPopoverAt(
                 e.clientX, e.clientY,
@@ -6928,8 +6982,8 @@
                   '<div class="t">' + title + '</div>' +
                   buildPopoverRow(line2) +
                   buildPopoverRow(line3) +
-                  buildPopoverRow(line4) +
-                  buildPopoverRow(line5, isTenantFallback ? 'row-warning' : '') +
+                  buildPopoverRow(line4, line4Class, line4HelpText) +
+                  buildPopoverRow(line5, line5ExtraClass, line5HelpText) +
                   buildPopoverRow(line6) +
                   buildPopoverRow(line7) +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
