@@ -3604,7 +3604,7 @@
         function buildContractChip(label, url = '') {
           const chipLabel = escapeHtml(label || 'Договор 1С');
           if (url) {
-            return '<a class="contract-chip" href="' + escapeHtml(url) + '" target="_blank" rel="noopener" onclick="window.open(this.href, \'_blank\', \'noopener\'); return false;">' + chipLabel + '</a>';
+            return '<a class="contract-chip" href="' + escapeHtml(url) + '" target="_blank" rel="noopener" onclick="window.open(this.href, \'contract_1c_window\', \'popup=yes,width=1200,height=900,noopener,noreferrer\'); return false;">' + chipLabel + '</a>';
           }
 
           return '<span class="contract-chip contract-chip--missing">' + chipLabel + '</span>';
