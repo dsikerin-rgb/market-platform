@@ -273,10 +273,11 @@ class DebtStatusResolver
             );
         }
 
-        // Считаем общий долг по месту
-        $totalDebt = $rows->sum('debt_amount');
+        $positiveDebtRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
 
-        if ($totalDebt <= 0.009) {
+        if ($positiveDebtRows->isEmpty()) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GREEN,
@@ -288,16 +289,14 @@ class DebtStatusResolver
             );
         }
 
+        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
+
         // Есть долг - определяем статус по просрочке
         $settings = $this->getMarketSettings($marketId);
         $graceDays = $settings['grace_days'] ?? 5;
         $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
         $redAfterDays = $settings['red_after_days'] ?? 30;
         $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
-        $positiveDebtRows = $rows->filter(static function ($row): bool {
-            return (float) ($row->debt_amount ?? 0) > 0.009;
-        });
-        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
         if ($displayDebtAmount < $minimumDebtAmount) {
             return $this->makeResult(
@@ -335,18 +334,6 @@ class DebtStatusResolver
         $isOverdue = $now->gt($dueDate);
 
         if (!$isOverdue) {
-            if ($displayDebtAmount < $minimumDebtAmount) {
-                return $this->makeResult(
-                    mode: 'auto',
-                    status: self::STATUS_GREEN,
-                    label: $labels[self::STATUS_GREEN],
-                    updatedAt: $snapshotLabel,
-                    source: 'contract_debts: долг ниже порога',
-                    severity: 0,
-                    extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount, 'scope' => 'space']
-                );
-            }
-
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_PENDING,
@@ -354,23 +341,19 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 1,
-                extra: ['overdue_days' => 0, 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
+                extra: ['overdue_days' => 0, 'debt_amount' => $displayDebtAmount, 'scope' => 'space']
             );
         }
 
         $daysOverdue = $dueDate->diffInDays($now);
-
-        if ($displayDebtAmount < $minimumDebtAmount) {
-            return $this->makeResult(
-                mode: 'auto',
-                status: self::STATUS_PENDING,
-                label: $labels[self::STATUS_PENDING],
-                updatedAt: $snapshotLabel,
-                source: 'contract_debts: просрочка ниже порога',
-                severity: 1,
-                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount, 'scope' => 'space']
-            );
-        }
+        $overdueAmount = $this->calculateOverdueAmountFromRows(
+            $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
+            $graceDays,
+            $hasPeriod,
+            $hasCalculatedAt,
+            $hasCreatedAt,
+        );
+        $displayDebtAmount = $overdueAmount > 0.009 ? $overdueAmount : $displayDebtAmount;
 
         if ($daysOverdue >= $redAfterDays) {
             return $this->makeResult(
@@ -380,7 +363,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 3,
-                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'scope' => 'space']
             );
         }
 
@@ -392,7 +375,7 @@ class DebtStatusResolver
                 updatedAt: $snapshotLabel,
                 source: 'contract_debts',
                 severity: 2,
-                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'scope' => 'space']
             );
         }
 
@@ -404,7 +387,7 @@ class DebtStatusResolver
             updatedAt: $snapshotLabel,
             source: 'contract_debts',
             severity: 1,
-            extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => (float) $totalDebt, 'scope' => 'space']
+            extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => $displayDebtAmount, 'scope' => 'space']
         );
     }
 
@@ -476,6 +459,90 @@ class DebtStatusResolver
                             ->startOfMonth()
                             ->addDays($graceDays);
                     }
+                } catch (\Throwable) {
+                    // continue
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function calculateOverdueAmountFromRows(
+        Collection $rows,
+        int $graceDays,
+        bool $hasPeriod,
+        bool $hasCalculatedAt,
+        bool $hasCreatedAt
+    ): float {
+        $now = Carbon::now();
+        $overdueAmount = 0.0;
+
+        foreach ($rows as $row) {
+            $debtAmount = (float) ($row->debt_amount ?? 0);
+            if ($debtAmount <= 0.009) {
+                continue;
+            }
+
+            $rowDueDate = $this->resolveRowDueDate(
+                $row,
+                $graceDays,
+                $hasPeriod,
+                $hasCalculatedAt,
+                $hasCreatedAt,
+            );
+
+            if ($rowDueDate !== null && $rowDueDate->lte($now)) {
+                $overdueAmount += $debtAmount;
+            }
+        }
+
+        return $overdueAmount;
+    }
+
+    private function resolveRowDueDate(
+        object $row,
+        int $graceDays,
+        bool $hasPeriod,
+        bool $hasCalculatedAt,
+        bool $hasCreatedAt
+    ): ?Carbon {
+        $oldBalanceDueDate = $this->calculateOldBalanceDueDate($row, $graceDays, $hasPeriod);
+        if ($oldBalanceDueDate !== null) {
+            return $oldBalanceDueDate;
+        }
+
+        if (property_exists($row, 'due_date') && !empty($row->due_date)) {
+            try {
+                return Carbon::parse($row->due_date);
+            } catch (\Throwable) {
+                // continue
+            }
+        }
+
+        if ($hasCalculatedAt && !empty($row->calculated_at)) {
+            try {
+                return Carbon::parse($row->calculated_at)->addDays($graceDays);
+            } catch (\Throwable) {
+                // continue
+            }
+        }
+
+        if ($hasCreatedAt && !empty($row->created_at)) {
+            try {
+                return Carbon::parse($row->created_at)->addDays($graceDays);
+            } catch (\Throwable) {
+                // continue
+            }
+        }
+
+        if ($hasPeriod) {
+            $period = (string) ($row->period ?? '');
+            if (preg_match('/^\d{4}-\d{2}/', $period) === 1) {
+                try {
+                    return Carbon::createFromFormat('Y-m-d', substr($period, 0, 7) . '-01')
+                        ->startOfMonth()
+                        ->addDays($graceDays);
                 } catch (\Throwable) {
                     // continue
                 }
@@ -687,14 +754,11 @@ class DebtStatusResolver
             );
         }
 
-        // Считаем общую задолженность
-        $totalDebt = $debtsData['rows']->sum('debt_amount');
         $positiveDebtRows = $debtsData['rows']->filter(static function ($row): bool {
             return (float) ($row->debt_amount ?? 0) > 0.009;
         });
-        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
-        if ($totalDebt <= 0.009) {
+        if ($positiveDebtRows->isEmpty()) {
             // Записи есть, долг нулевой — это green
             return $this->makeResult(
                 mode: 'auto',
@@ -705,6 +769,8 @@ class DebtStatusResolver
                 severity: 0
             );
         }
+
+        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
 
         if ($displayDebtAmount < $minimumDebtAmount) {
             return $this->makeResult(
@@ -737,18 +803,6 @@ class DebtStatusResolver
         $isOverdue = $now->gt($dueDate);
 
         if (!$isOverdue) {
-            if ($displayDebtAmount < $minimumDebtAmount) {
-                return $this->makeResult(
-                    mode: 'auto',
-                    status: self::STATUS_GREEN,
-                    label: $labels[self::STATUS_GREEN],
-                    updatedAt: $debtsData['snapshot_label'],
-                    source: 'Источник: contract_debts, долг ниже порога',
-                    severity: 0,
-                    extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount]
-                );
-            }
-
             // Срок ещё не наступил
             return $this->makeResult(
                 mode: 'auto',
@@ -757,24 +811,20 @@ class DebtStatusResolver
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 1,
-                extra: ['overdue_days' => 0, 'debt_amount' => (float) $totalDebt]
+                extra: ['overdue_days' => 0, 'debt_amount' => $displayDebtAmount]
             );
         }
 
         // Просрочка - считаем дни
         $daysOverdue = $dueDate->diffInDays($now);
-
-        if ($displayDebtAmount < $minimumDebtAmount) {
-            return $this->makeResult(
-                mode: 'auto',
-                status: self::STATUS_PENDING,
-                label: $labels[self::STATUS_PENDING],
-                updatedAt: $debtsData['snapshot_label'],
-                source: 'Источник: contract_debts, просрочка ниже порога',
-                severity: 1,
-                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount]
-            );
-        }
+        $overdueAmount = $this->calculateOverdueAmountFromRows(
+            ($debtsData['aging_rows'] ?? collect())->isNotEmpty() ? $debtsData['aging_rows'] : $debtsData['rows'],
+            $graceDays,
+            (bool) ($debtsData['has_period'] ?? false),
+            (bool) ($debtsData['has_calculated_at'] ?? false),
+            (bool) ($debtsData['has_created_at'] ?? false),
+        );
+        $displayDebtAmount = $overdueAmount > 0.009 ? $overdueAmount : $displayDebtAmount;
 
         if ($daysOverdue >= $redAfterDays) {
             return $this->makeResult(
@@ -784,7 +834,7 @@ class DebtStatusResolver
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 3,
-                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt]
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount]
             );
         }
 
@@ -796,7 +846,7 @@ class DebtStatusResolver
                 updatedAt: $debtsData['snapshot_label'],
                 source: 'Источник: contract_debts',
                 severity: 1,
-                extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => (float) $totalDebt]
+                extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => $displayDebtAmount]
             );
         }
 
@@ -807,7 +857,7 @@ class DebtStatusResolver
             updatedAt: $debtsData['snapshot_label'],
             source: 'Источник: contract_debts',
             severity: 2,
-            extra: ['overdue_days' => $daysOverdue, 'debt_amount' => (float) $totalDebt]
+            extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount]
         );
     }
 

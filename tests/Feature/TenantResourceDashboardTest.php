@@ -40,7 +40,7 @@ class TenantResourceDashboardTest extends TestCase
                 '/Обновлено:\s*\d{2}\.\d{2}\.\d{4}\s\d{2}:\d{2}/u',
                 $paymentCardText,
             );
-            $this->assertStringContainsString('Есть просрочка', $paymentCardText);
+            $this->assertStringContainsString('Просрочка до 29 дн.', $paymentCardText);
             $this->assertStringContainsString('Просрочка: 4 дней', $paymentCardText);
             $this->assertStringContainsString('Сумма просрочки: 1 200,00 ₽', $paymentCardText);
             $this->assertStringNotContainsString('Оплачено', $paymentCardText);
@@ -67,7 +67,7 @@ class TenantResourceDashboardTest extends TestCase
 
             $this->assertStringNotContainsString('tenant-debt-status__card', $html);
             $this->assertStringContainsString('tenant-payment-discipline__card--overdue', $html);
-            $this->assertStringContainsString('Есть просрочка', $paymentCardText);
+            $this->assertStringContainsString('Просрочка до 29 дн.', $paymentCardText);
             $this->assertStringContainsString('Просрочка: 4 дней', $paymentCardText);
             $this->assertStringContainsString('Сумма просрочки: 1 200,00 ₽', $paymentCardText);
             $this->assertStringNotContainsString('Без просрочек', $paymentCardText);
@@ -114,7 +114,7 @@ class TenantResourceDashboardTest extends TestCase
         $this->assertStringContainsString('Платёжная дисциплина', $html);
         $this->assertStringContainsString('tenant-payment-discipline__state--neutral', $html);
         $this->assertStringContainsString('Нет данных', $paymentCardText);
-        $this->assertStringNotContainsString('Есть просрочка', $paymentCardText);
+        $this->assertStringNotContainsString('Просрочка до 29 дн.', $paymentCardText);
         $this->assertStringNotContainsString('Просрочка:', $paymentCardText);
         $this->assertStringNotContainsString('Оплачено', $paymentCardText);
         $this->assertStringNotContainsString('Долг', $paymentCardText);
