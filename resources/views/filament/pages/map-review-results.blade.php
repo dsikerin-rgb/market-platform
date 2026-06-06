@@ -2681,6 +2681,12 @@
                                     >
                                         Связь с финансами не подтверждена
                                     </a>
+                                    <a
+                                        class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links_rejected' ? 'is-active' : '' }}"
+                                        href="{{ $attentionRejectedUnconfirmedUrl }}"
+                                    >
+                                        Отклонённые связи
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -2772,7 +2778,8 @@
                                             $hasNameDuplicateCandidates = collect($candidateSpaces)
                                                 ->contains(fn (array $candidate): bool => in_array('name', (array) ($candidate['match_sources'] ?? []), true)
                                                     || ($candidate['match_source'] ?? null) === 'name');
-                                            $hasDuplicateResolutionAction = $attentionTab !== 'unconfirmed_links' && $primaryCandidate !== null;
+                                            $isUnconfirmedWorkflowTab = in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true);
+                                            $hasDuplicateResolutionAction = ! $isUnconfirmedWorkflowTab && $primaryCandidate !== null;
                                             $canApplyDuplicateResolution = $hasDuplicateResolutionAction && ($primaryCandidate['can_apply_duplicate_resolution'] ?? true);
                                             $duplicateResolutionBlockReason = $primaryCandidate['duplicate_resolution_block_reason'] ?? null;
                                             $hasRelationDetails = $relationDetails !== [];
@@ -2831,7 +2838,7 @@
                                             $isConflictCase = $decision === 'occupancy_conflict' || $reviewStatus === 'conflict';
 $looksFreeCase = $isConflictCase
     && preg_match('/(свобод|съех|не стоит|нет арендатора|пуст)/iu', (string) ($row['reason'] ?? '')) === 1;
-$canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase;
+$canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                             $isMergeRetirementCase = $decision === 'merge_space_into_canonical'
                                                 || ($isConflictCase && preg_match('/(удал|упраздн|прибав|объедин)/iu', (string) ($row['reason'] ?? '')) === 1);
                                             $suggestedTargetTenantId = (int) ($row['suggested_target_tenant_id'] ?? 0);
@@ -2849,7 +2856,7 @@ $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase;
                                             // приоритет у "Разобрать дубль". Tenant-switch показывается только как secondary warning.
                                             $hasExplicitDuplicateIndicators = $hasCandidates
                                                 && collect($candidateSpaces)->contains(fn ($c): bool => ($c['is_explicit_duplicate_scenario'] ?? false));
-                                            $canManualTenantSwitch = $attentionTab !== 'unconfirmed_links'
+                                            $canManualTenantSwitch = ! $isUnconfirmedWorkflowTab
                                                 && ! $financialRequiresTenantResolution
                                                 && ! $hasExplicitDuplicateIndicators
                                                 && (
@@ -2863,10 +2870,10 @@ $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase;
                                                     || $hasContractTenantMismatch
                                                     || preg_match('/(арендатор|смен)/iu', (string) ($row['reason'] ?? '')) === 1
                                                 );
-                                            $canResolveFinancialTenant = $attentionTab !== 'unconfirmed_links'
+                                            $canResolveFinancialTenant = ! $isUnconfirmedWorkflowTab
                                                 && $isFinancialSignalCase
                                                 && $financialRequiresTenantResolution;
-                                            $hasPrimaryResolutionAction = $attentionTab !== 'unconfirmed_links'
+                                            $hasPrimaryResolutionAction = ! $isUnconfirmedWorkflowTab
                                                 && ($isIdentityCase || $isMergeRetirementCase || $isContractTenantOverride || $hasDuplicateResolutionAction || $canConfirmFree || $canManualTenantSwitch || $canResolveFinancialTenant);
                                             $showRelationAssessment = $contractOverride || $hasCandidates;
                                             $tenantChangeDetails = is_array($row['tenant_change_details'] ?? null) ? $row['tenant_change_details'] : [];
@@ -3064,7 +3071,7 @@ $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase;
                                                                 @endif
                                                             </div>
                                                         @endif
-                                                        @if ($attentionTab !== 'unconfirmed_links')
+                                                        @if (! $isUnconfirmedWorkflowTab)
                                                             <div class="mrr-place__decision">
                                                                 <div class="mrr-place__decision-label">{{ $workflowTitle }}</div>
                                                                 <div class="mrr-place__decision-reason">{{ $workflowText }}</div>
@@ -3288,7 +3295,55 @@ $canConfirmFree = $attentionTab !== 'unconfirmed_links' && $isConflictCase;
                                                                 </div>
                                                             @endif
 
-                                                            @if ($attentionTab !== 'unconfirmed_links')
+                                                            @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
+                                                                <div class="mrr-card-actions__group">
+                                                                    <div class="mrr-card-actions__label">Решение по финансовой связи</div>
+                                                                    <div class="mrr-card-actions__hint">
+                                                                        {{ $attentionTab === 'unconfirmed_links_rejected'
+                                                                            ? 'Связь скрыта из активной проверки. Верните её, если отклонение было ошибочным.'
+                                                                            : 'Подтвердите связь, если долг арендатора можно использовать для этого места, или отклоните, если связь неверная.' }}
+                                                                    </div>
+                                                                    <div class="mrr-card-actions__row">
+                                                                        @if ($attentionTab === 'unconfirmed_links_rejected')
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button mrr-link--primary"
+                                                                                data-mrr-unconfirmed-link-action
+                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                                data-mrr-decision="reopen_unconfirmed_financial_link"
+                                                                                data-mrr-confirm="Вернуть связь по месту {{ $currentSpaceLabel }} в активную проверку?"
+                                                                            >
+                                                                                Вернуть в проверку
+                                                                            </button>
+                                                                        @else
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button mrr-link--success"
+                                                                                data-mrr-unconfirmed-link-action
+                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                                data-mrr-decision="confirm_unconfirmed_financial_link"
+                                                                                data-mrr-reason="Оператор подтвердил, что финансовый статус арендатора применим к этому месту."
+                                                                                data-mrr-confirm="Подтвердить финансовую связь по месту {{ $currentSpaceLabel }}?"
+                                                                            >
+                                                                                Подтвердить связь
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button"
+                                                                                data-mrr-unconfirmed-link-action
+                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                                data-mrr-decision="reject_unconfirmed_financial_link"
+                                                                                data-mrr-reason-required="1"
+                                                                                data-mrr-prompt="Почему связь по месту {{ $currentSpaceLabel }} отклоняется?"
+                                                                            >
+                                                                                Отклонить
+                                                                            </button>
+                                                                        @endif
+                                                                    </div>
+                                                                </div>
+                                                            @endif
+
+                                                            @if (! in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
                                                                 <div class="mrr-card-actions__group">
                                                                     <div class="mrr-card-actions__label">Закрытие</div>
                                                                     <div class="mrr-card-actions__hint">Только если после проверки данные места менять не нужно.</div>
@@ -6233,6 +6288,62 @@ const markSpaceFreeState = {
                     window.location.reload();
                 };
 
+                const applyUnconfirmedLinkAction = async (button) => {
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+                    const decision = String(button.dataset.mrrDecision || '').trim();
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0 || decision === '') {
+                        return;
+                    }
+
+                    const confirmText = String(button.dataset.mrrConfirm || '').trim();
+                    if (confirmText !== '' && !window.confirm(confirmText)) {
+                        return;
+                    }
+
+                    let reason = String(button.dataset.mrrReason || '').trim();
+                    const reasonRequired = String(button.dataset.mrrReasonRequired || '0') === '1';
+
+                    if (reasonRequired) {
+                        reason = window.prompt(String(button.dataset.mrrPrompt || 'Укажите причину отклонения связи.'), reason) || '';
+                        reason = reason.trim();
+
+                        if (reason === '') {
+                            window.alert('Для отклонения связи нужен комментарий.');
+                            return;
+                        }
+                    }
+
+                    const originalText = button.textContent;
+                    button.setAttribute('disabled', 'disabled');
+                    button.textContent = 'Сохраняем...';
+
+                    const response = await fetch(reviewDecisionUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            decision,
+                            market_space_id: spaceId,
+                            ...(reason !== '' ? { reason } : {}),
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        button.removeAttribute('disabled');
+                        button.textContent = originalText;
+                        window.alert(String(data?.message || 'Не удалось сохранить решение по связи.'));
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
                 document.addEventListener('click', (event) => {
                     const button = event.target instanceof Element
                         ? event.target.closest('[data-mrr-duplicate-plan="open"]')
@@ -6329,6 +6440,10 @@ const hintEditLauncher = event.target instanceof Element
     ? event.target.closest('[data-mrr-hint-edit-open]')
     : null;
 
+                    const unconfirmedLinkAction = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-unconfirmed-link-action]')
+                        : null;
+
                     if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
                         event.preventDefault();
                         loadAiReview(aiReviewButton.dataset.mrrSpaceId, aiReviewButton).catch(() => {});
@@ -6403,6 +6518,14 @@ if (markSpaceFreeLauncher && markSpaceFreeLauncher instanceof HTMLElement) {
     openMarkSpaceFreeModal(markSpaceFreeLauncher);
     return;
 }
+
+                    if (unconfirmedLinkAction && unconfirmedLinkAction instanceof HTMLElement) {
+                        event.preventDefault();
+                        applyUnconfirmedLinkAction(unconfirmedLinkAction).catch((errorInstance) => {
+                            window.alert(String(errorInstance?.message || errorInstance || 'Не удалось сохранить решение по связи.'));
+                        });
+                        return;
+                    }
 
                     if (!launcher || !(launcher instanceof HTMLElement)) {
                         return;

@@ -1,5 +1,6 @@
 <?php
-# app/Services/MarketMap/SpaceReviewActionService.php
+
+// app/Services/MarketMap/SpaceReviewActionService.php
 
 declare(strict_types=1);
 
@@ -24,8 +25,7 @@ final class SpaceReviewActionService
 {
     public function __construct(
         private readonly DuplicateSpaceResolutionService $duplicateSpaceResolutionService,
-    ) {
-    }
+    ) {}
 
     public function latestSpaceReviewOperation(int $marketId, int $spaceId): ?Operation
     {
@@ -116,7 +116,7 @@ final class SpaceReviewActionService
         $contractNumber = trim((string) ($contract->number ?? ''));
         $reason = trim((string) ($validated['reason'] ?? ''));
         $reasonParts = [
-            'Смена арендатора подтверждена договором' . ($contractNumber !== '' ? ' ' . $contractNumber : ''),
+            'Смена арендатора подтверждена договором'.($contractNumber !== '' ? ' '.$contractNumber : ''),
         ];
 
         if ($reason !== '') {
@@ -315,37 +315,45 @@ final class SpaceReviewActionService
         $now = now();
         $operationEffectiveAt = $now;
 
-if ($decision === 'matched') {
-    $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
-    $payload = [
-        'market_space_id' => (int) $space->id,
-        'decision' => 'matched',
-    ];
+        if ($decision === 'matched') {
+            $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
+            $payload = [
+                'market_space_id' => (int) $space->id,
+                'decision' => 'matched',
+            ];
 
-    if ($reason !== '') {
-        $payload['reason'] = $reason;
-    }
+            if ($reason !== '') {
+                $payload['reason'] = $reason;
+            }
 
-    $this->createSpaceReviewOperation(
-        (int) $market->id,
-        (int) $space->id,
-        $payload,
-        'observed',
-        $reason !== '' ? $reason : null,
-        $operationEffectiveAt,
-        $userId,
-    );
+            $this->createSpaceReviewOperation(
+                (int) $market->id,
+                (int) $space->id,
+                $payload,
+                'observed',
+                $reason !== '' ? $reason : null,
+                $operationEffectiveAt,
+                $userId,
+            );
 
-    // Обновляем статус ревизии места
-    $this->markSpaceReviewed($space, 'matched', $userId, $now);
+            // Обновляем статус ревизии места
+            $this->markSpaceReviewed($space, 'matched', $userId, $now);
 
-    $space->refresh();
+            $space->refresh();
 
-    return [
-        'ok' => true,
-        'mode' => 'lightweight',
-    ];
-}
+            return [
+                'ok' => true,
+                'mode' => 'lightweight',
+            ];
+        }
+
+        if (in_array($decision, [
+            SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK,
+            SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK,
+            SpaceReviewDecision::REOPEN_UNCONFIRMED_FINANCIAL_LINK,
+        ], true)) {
+            return $this->reviewUnconfirmedFinancialLink($market, $space, $validated, $userId, $now);
+        }
 
         if (! in_array($decision, SpaceReviewDecision::values(), true)) {
             return [
@@ -543,6 +551,72 @@ if ($decision === 'matched') {
                 'decision' => $decision,
             ],
             'resolution' => $duplicateResolutionPreview,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function reviewUnconfirmedFinancialLink(
+        Market $market,
+        MarketSpace $space,
+        array $validated,
+        ?int $userId,
+        mixed $now,
+    ): array {
+        $decision = (string) $validated['decision'];
+        $reason = isset($validated['reason']) ? trim((string) $validated['reason']) : '';
+
+        if ($decision === SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK && $reason === '') {
+            return [
+                'ok' => false,
+                'status_code' => 422,
+                'message' => 'Для отклонения связи нужен комментарий.',
+            ];
+        }
+
+        $payload = [
+            'market_space_id' => (int) $space->id,
+            'decision' => $decision,
+        ];
+
+        if ($reason !== '') {
+            $payload['reason'] = $reason;
+        }
+
+        $operation = $this->createSpaceReviewOperation(
+            (int) $market->id,
+            (int) $space->id,
+            $payload,
+            SpaceReviewDecision::defaultOperationStatus($decision),
+            $reason !== '' ? $reason : null,
+            $now,
+            $userId,
+        );
+
+        if ($decision === SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK) {
+            $this->markSpaceReviewed($space, 'matched', $userId, $now);
+        } elseif ($decision === SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK) {
+            $this->markSpaceReviewed($space, 'unconfirmed_link_rejected', $userId, $now);
+        } else {
+            $space->forceFill([
+                'map_review_status' => null,
+                'map_reviewed_at' => null,
+                'map_reviewed_by' => null,
+            ])->save();
+        }
+
+        $space->refresh();
+
+        return [
+            'ok' => true,
+            'mode' => 'unconfirmed_financial_link',
+            'operation' => [
+                'id' => (int) $operation->id,
+                'status' => (string) $operation->status,
+                'decision' => $decision,
+            ],
         ];
     }
 

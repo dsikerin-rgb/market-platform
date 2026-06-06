@@ -1,5 +1,6 @@
 <?php
-# app/Filament/Pages/MapReviewResults.php
+
+// app/Filament/Pages/MapReviewResults.php
 
 declare(strict_types=1);
 
@@ -21,11 +22,15 @@ use Illuminate\Support\Str;
 class MapReviewResults extends Page
 {
     protected static ?string $title = 'Результаты ревизии';
+
     protected static ?string $navigationLabel = 'Результаты ревизии';
+
     protected static ?string $slug = 'map-review-results';
 
     protected static \UnitEnum|string|null $navigationGroup = null;
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-list';
+
     protected static ?int $navigationSort = 95;
 
     protected string $view = 'filament.pages.map-review-results';
@@ -57,8 +62,8 @@ class MapReviewResults extends Page
         $attentionTab = $this->attentionTab();
         $aiLoadSpaceId = (int) request()->query('ai_load_space_id', 0);
         $needsAttention = $marketId
-            ? ($attentionTab === 'unconfirmed_links'
-                ? $service->unconfirmedLinks($marketId, 50)
+            ? (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true)
+                ? $service->unconfirmedLinks($marketId, 50, $attentionTab === 'unconfirmed_links_rejected')
                 : $service->needsAttention($marketId, 50))
             : [];
         $appliedChanges = $marketId ? $service->appliedChanges($marketId, 50) : [];
@@ -116,6 +121,7 @@ class MapReviewResults extends Page
             'attentionTab' => $attentionTab,
             'attentionReviewUrl' => request()->fullUrlWithQuery(['tab' => 'review']),
             'attentionUnconfirmedUrl' => request()->fullUrlWithQuery(['tab' => 'unconfirmed_links']),
+            'attentionRejectedUnconfirmedUrl' => request()->fullUrlWithQuery(['tab' => 'unconfirmed_links_rejected']),
             'appliedChanges' => array_map(
                 fn (array $row): array => $row + [
                     'map_url' => $this->mapUrl((int) $row['space_id']),
@@ -251,7 +257,7 @@ class MapReviewResults extends Page
     {
         $tab = (string) request()->query('tab', 'review');
 
-        return in_array($tab, ['review', 'unconfirmed_links'], true) ? $tab : 'review';
+        return in_array($tab, ['review', 'unconfirmed_links', 'unconfirmed_links_rejected'], true) ? $tab : 'review';
     }
 
     /**
@@ -369,7 +375,7 @@ class MapReviewResults extends Page
 
     protected function connectivityCooldownKey(int $marketId): string
     {
-        return 'gigachat_connectivity_down:market:' . $marketId;
+        return 'gigachat_connectivity_down:market:'.$marketId;
     }
 
     /**
@@ -598,9 +604,9 @@ class MapReviewResults extends Page
         $reasonParts = [];
 
         if ($reviewStatusLabel !== '') {
-            $reasonParts[] = 'По статусу: ' . $reviewStatusLabel;
+            $reasonParts[] = 'По статусу: '.$reviewStatusLabel;
         } elseif ($decisionLabel !== '') {
-            $reasonParts[] = 'По последнему решению: ' . $decisionLabel;
+            $reasonParts[] = 'По последнему решению: '.$decisionLabel;
         } else {
             $reasonParts[] = 'По текущему состоянию места';
         }
@@ -613,14 +619,14 @@ class MapReviewResults extends Page
             $contractReason = 'Текущее место подтверждено активным договором';
 
             if ($contractTenant !== '') {
-                $contractReason .= ' для арендатора ' . $contractTenant;
+                $contractReason .= ' для арендатора '.$contractTenant;
             }
 
             if ($contractDate !== '') {
-                $contractReason .= ' с ' . $contractDate;
+                $contractReason .= ' с '.$contractDate;
             }
 
-            $reasonParts[] = $contractReason . '.';
+            $reasonParts[] = $contractReason.'.';
         }
 
         if ($aiSummary && filled($aiSummary['summary'] ?? null)) {
@@ -635,7 +641,7 @@ class MapReviewResults extends Page
             }
 
             if ($aiReason !== '') {
-                $reasonParts[] = 'AI отмечает: ' . $this->trimPriorityText($aiReason, 110);
+                $reasonParts[] = 'AI отмечает: '.$this->trimPriorityText($aiReason, 110);
             }
         } else {
             $reasonParts[] = 'AI-сводка недоступна, приоритет рассчитан только по статусу.';
