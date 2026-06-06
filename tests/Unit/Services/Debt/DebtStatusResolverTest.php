@@ -1,12 +1,13 @@
 <?php
-# tests/Unit/Services/Debt/DebtStatusResolverTest.php
+
+// tests/Unit/Services/Debt/DebtStatusResolverTest.php
 
 namespace Tests\Unit\Services\Debt;
 
 use App\Models\Market;
 use App\Models\MarketSpace;
-use App\Models\TenantContract;
 use App\Models\Tenant;
+use App\Models\TenantContract;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,14 +19,15 @@ class DebtStatusResolverTest extends TestCase
     use RefreshDatabase;
 
     private DebtStatusResolver $resolver;
+
     private Market $market;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->resolver = app(DebtStatusResolver::class);
-        
+
         $this->market = Market::create([
             'name' => 'Тестовый рынок',
             'slug' => 'test-market',
@@ -96,12 +98,12 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись в contract_debts с нулевым долгом
-        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|10000|0');
+        $hash = sha1($tenant->external_id.'|contract-'.$tenant->external_id.'|2026-03|10000|10000|0');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '2026-03',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -140,7 +142,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 2,
             'calculated_at' => Carbon::now()->subDays(60),
             'created_at' => Carbon::now()->subDays(60),
-            'hash' => sha1($tenant->external_id . '|contract-small-debt-001|2026-03|2|0|2'),
+            'hash' => sha1($tenant->external_id.'|contract-small-debt-001|2026-03|2|0|2'),
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -188,7 +190,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 2,
                 'calculated_at' => Carbon::now()->subDays(120),
                 'created_at' => Carbon::now()->subDays(120),
-                'hash' => sha1($tenant->external_id . '|contract-small-overdue-tail-001|2026-03|2|0|2'),
+                'hash' => sha1($tenant->external_id.'|contract-small-overdue-tail-001|2026-03|2|0|2'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -202,7 +204,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 1000,
                 'calculated_at' => Carbon::now(),
                 'created_at' => Carbon::now(),
-                'hash' => sha1($tenant->external_id . '|contract-small-overdue-tail-001|2026-06|1000|0|1000'),
+                'hash' => sha1($tenant->external_id.'|contract-small-overdue-tail-001|2026-06|1000|0|1000'),
             ],
         ]);
 
@@ -228,7 +230,7 @@ class DebtStatusResolverTest extends TestCase
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '2026-03',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -236,14 +238,14 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(35),
             'created_at' => Carbon::now()->subDays(35),
-            'hash' => sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|0|10000'),
+            'hash' => sha1($tenant->external_id.'|contract-'.$tenant->external_id.'|2026-03|10000|0|10000'),
         ]);
 
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '2026-03',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -251,7 +253,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 0,
             'calculated_at' => Carbon::now()->subDay(),
             'created_at' => Carbon::now()->subDay(),
-            'hash' => sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|10000|0'),
+            'hash' => sha1($tenant->external_id.'|contract-'.$tenant->external_id.'|2026-03|10000|10000|0'),
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -270,12 +272,12 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись с долгом, но срок оплаты ещё не наступил (calculated_at + 3 дня)
-        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-03|10000|0|10000');
+        $hash = sha1($tenant->external_id.'|contract-'.$tenant->external_id.'|2026-03|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '2026-03',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -303,12 +305,12 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись с долгом, просрочка 30 дней
-        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2026-02|10000|0|10000');
+        $hash = sha1($tenant->external_id.'|contract-'.$tenant->external_id.'|2026-02|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '2026-02',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -358,7 +360,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 300536.05,
             'calculated_at' => Carbon::now(),
             'created_at' => Carbon::now(),
-            'hash' => sha1($tenant->external_id . '|contract-old-balance-001|2026-06|93451|0|300536.05'),
+            'hash' => sha1($tenant->external_id.'|contract-old-balance-001|2026-06|93451|0|300536.05'),
         ]);
 
         $result = $this->resolver->resolve($tenant);
@@ -380,12 +382,12 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Создаём запись с долгом, просрочка 100 дней
-        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '|2025-11|10000|0|10000');
+        $hash = sha1($tenant->external_id.'|contract-'.$tenant->external_id.'|2025-11|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '2025-11',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -437,12 +439,12 @@ class DebtStatusResolverTest extends TestCase
         // В текущей реализации сервис всегда вернёт статус при наличии calculated_at
         // Поэтому этот тест проверяет сценарий: calculated_at в прошлом, period пустой
         // Ожидаем orange (просрочка < 90 дней)
-        $hash = sha1($tenant->external_id . '|contract-' . $tenant->external_id . '||10000|0|10000');
+        $hash = sha1($tenant->external_id.'|contract-'.$tenant->external_id.'||10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenant->external_id,
-            'contract_external_id' => 'contract-' . $tenant->external_id,
+            'contract_external_id' => 'contract-'.$tenant->external_id,
             'period' => '',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -479,12 +481,12 @@ class DebtStatusResolverTest extends TestCase
             'external_id' => 'test-011',
             'debt_status' => null,
         ]);
-        $hashPending = sha1($tenantPending->external_id . '|contract-' . $tenantPending->external_id . '|2026-03|10000|0|10000');
+        $hashPending = sha1($tenantPending->external_id.'|contract-'.$tenantPending->external_id.'|2026-03|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenantPending->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenantPending->external_id,
-            'contract_external_id' => 'contract-' . $tenantPending->external_id,
+            'contract_external_id' => 'contract-'.$tenantPending->external_id,
             'period' => '2026-03',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -504,12 +506,12 @@ class DebtStatusResolverTest extends TestCase
             'external_id' => 'test-012',
             'debt_status' => null,
         ]);
-        $hashOrange = sha1($tenantOrange->external_id . '|contract-' . $tenantOrange->external_id . '|2026-02|10000|0|10000');
+        $hashOrange = sha1($tenantOrange->external_id.'|contract-'.$tenantOrange->external_id.'|2026-02|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenantOrange->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenantOrange->external_id,
-            'contract_external_id' => 'contract-' . $tenantOrange->external_id,
+            'contract_external_id' => 'contract-'.$tenantOrange->external_id,
             'period' => '2026-02',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -529,12 +531,12 @@ class DebtStatusResolverTest extends TestCase
             'external_id' => 'test-013',
             'debt_status' => null,
         ]);
-        $hashRed = sha1($tenantRed->external_id . '|contract-' . $tenantRed->external_id . '|2025-11|10000|0|10000');
+        $hashRed = sha1($tenantRed->external_id.'|contract-'.$tenantRed->external_id.'|2025-11|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenantRed->id,
             'market_id' => $this->market->id,
             'tenant_external_id' => $tenantRed->external_id,
-            'contract_external_id' => 'contract-' . $tenantRed->external_id,
+            'contract_external_id' => 'contract-'.$tenantRed->external_id,
             'period' => '2025-11',
             'account' => '62',
             'accrued_amount' => 10000,
@@ -639,7 +641,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(40),
             'created_at' => Carbon::now()->subDays(40),
-            'hash' => sha1($previousTenant->external_id . '|old-contract-001|2026-03|10000|0|10000'),
+            'hash' => sha1($previousTenant->external_id.'|old-contract-001|2026-03|10000|0|10000'),
         ]);
 
         DebtStatusResolver::clearCache();
@@ -694,7 +696,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 2,
             'calculated_at' => Carbon::now()->subDays(60),
             'created_at' => Carbon::now()->subDays(60),
-            'hash' => sha1($tenant->external_id . '|contract-space-small-001|2026-03|2|0|2'),
+            'hash' => sha1($tenant->external_id.'|contract-space-small-001|2026-03|2|0|2'),
         ]);
 
         DebtStatusResolver::clearCache();
@@ -752,7 +754,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 2,
                 'calculated_at' => Carbon::now()->subDays(120),
                 'created_at' => Carbon::now()->subDays(120),
-                'hash' => sha1($tenant->external_id . '|contract-space-small-overdue-tail-001|2026-03|2|0|2'),
+                'hash' => sha1($tenant->external_id.'|contract-space-small-overdue-tail-001|2026-03|2|0|2'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -766,7 +768,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 1000,
                 'calculated_at' => Carbon::now(),
                 'created_at' => Carbon::now(),
-                'hash' => sha1($tenant->external_id . '|contract-space-small-overdue-tail-001|2026-06|1000|0|1000'),
+                'hash' => sha1($tenant->external_id.'|contract-space-small-overdue-tail-001|2026-06|1000|0|1000'),
             ],
         ]);
 
@@ -811,7 +813,7 @@ class DebtStatusResolverTest extends TestCase
             'debt_amount' => 10000,
             'calculated_at' => Carbon::now()->subDays(40),
             'created_at' => Carbon::now()->subDays(40),
-            'hash' => sha1($tenant->external_id . '|contract-fallback-debt-001|2026-03|10000|0|10000'),
+            'hash' => sha1($tenant->external_id.'|contract-fallback-debt-001|2026-03|10000|0|10000'),
         ]);
 
         DebtStatusResolver::clearCache();
@@ -893,7 +895,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => -1000,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|' . $bindingContract->external_id . '|2026-03|0|0|-1000'),
+                'hash' => sha1($tenant->external_id.'|'.$bindingContract->external_id.'|2026-03|0|0|-1000'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -907,7 +909,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 10000,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|' . $directDebtContract->external_id . '|2026-03|10000|0|10000'),
+                'hash' => sha1($tenant->external_id.'|'.$directDebtContract->external_id.'|2026-03|10000|0|10000'),
             ],
         ]);
 
@@ -973,7 +975,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 0,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|' . $spaceContract->external_id . '|2026-03|10000|10000|0'),
+                'hash' => sha1($tenant->external_id.'|'.$spaceContract->external_id.'|2026-03|10000|10000|0'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -987,7 +989,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 15000,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|contract-unbound-debt-001|2026-03|15000|0|15000'),
+                'hash' => sha1($tenant->external_id.'|contract-unbound-debt-001|2026-03|15000|0|15000'),
             ],
         ]);
 
@@ -999,6 +1001,84 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals('orange', $result['status']);
         $this->assertEquals('tenant_fallback', $result['extra']['scope'] ?? null);
         $this->assertEquals(15000.0, $result['extra']['debt_amount'] ?? null);
+    }
+
+    public function test_resolve_for_market_space_keeps_shared_use_without_exact_financial_links_gray(): void
+    {
+        $primaryTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Primary shared-use tenant',
+            'external_id' => 'shared-primary-001',
+            'debt_status' => null,
+        ]);
+
+        $otherTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Other shared-use tenant',
+            'external_id' => 'shared-other-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $primaryTenant->id,
+            'number' => 'shared-101',
+            'code' => 'shared-space-101',
+            'is_active' => true,
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            [
+                'market_id' => $this->market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $primaryTenant->id,
+                'tenant_contract_id' => null,
+                'started_at' => Carbon::now()->subMonth(),
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'high',
+                'source' => 'test',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $otherTenant->id,
+                'tenant_contract_id' => null,
+                'started_at' => Carbon::now()->subMonth(),
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'high',
+                'source' => 'test',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $primaryTenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $primaryTenant->external_id,
+            'contract_external_id' => 'shared-primary-unbound-contract',
+            'period' => '2026-03',
+            'account' => '62',
+            'accrued_amount' => 15000,
+            'paid_amount' => 0,
+            'debt_amount' => 15000,
+            'calculated_at' => Carbon::now()->subDays(40),
+            'created_at' => Carbon::now()->subDays(40),
+            'hash' => sha1($primaryTenant->external_id.'|shared-primary-unbound-contract|2026-03|15000|0|15000'),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('auto', $result['mode']);
+        $this->assertEquals('gray', $result['status']);
+        $this->assertEquals('shared_use', $result['extra']['scope'] ?? null);
+        $this->assertEquals(2, $result['extra']['active_count'] ?? null);
     }
 
     /**
@@ -1017,7 +1097,7 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // Old contract: debt from 50 days ago
-        $hashOld = sha1($tenant->external_id . '|contract-old|2026-02|10000|0|10000');
+        $hashOld = sha1($tenant->external_id.'|contract-old|2026-02|10000|0|10000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
@@ -1034,7 +1114,7 @@ class DebtStatusResolverTest extends TestCase
         ]);
 
         // New contract: debt from 2 days ago (would "rejuvenate" with max())
-        $hashNew = sha1($tenant->external_id . '|contract-new|2026-04|5000|0|5000');
+        $hashNew = sha1($tenant->external_id.'|contract-new|2026-04|5000|0|5000');
         DB::table('contract_debts')->insert([
             'tenant_id' => $tenant->id,
             'market_id' => $this->market->id,
@@ -1081,7 +1161,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => -132097.43,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|contract-credit|2026-03|0|132097.43|-132097.43'),
+                'hash' => sha1($tenant->external_id.'|contract-credit|2026-03|0|132097.43|-132097.43'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -1095,7 +1175,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 373837.50,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|contract-current|2026-03|373837.50|0|373837.50'),
+                'hash' => sha1($tenant->external_id.'|contract-current|2026-03|373837.50|0|373837.50'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -1109,7 +1189,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 18502.00,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|contract-other-1|2026-03|18502|0|18502'),
+                'hash' => sha1($tenant->external_id.'|contract-other-1|2026-03|18502|0|18502'),
             ],
             [
                 'tenant_id' => $tenant->id,
@@ -1123,7 +1203,7 @@ class DebtStatusResolverTest extends TestCase
                 'debt_amount' => 51868.18,
                 'calculated_at' => Carbon::now()->subDays(40),
                 'created_at' => Carbon::now()->subDays(40),
-                'hash' => sha1($tenant->external_id . '|contract-other-2|2026-03|51868.18|0|51868.18'),
+                'hash' => sha1($tenant->external_id.'|contract-other-2|2026-03|51868.18|0|51868.18'),
             ],
         ]);
 
