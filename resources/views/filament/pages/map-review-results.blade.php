@@ -6345,6 +6345,21 @@ const markSpaceFreeState = {
                 };
 
                 document.addEventListener('click', (event) => {
+                    const unconfirmedLinkAction = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-unconfirmed-link-action]')
+                        : null;
+
+                    if (!unconfirmedLinkAction || !(unconfirmedLinkAction instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    applyUnconfirmedLinkAction(unconfirmedLinkAction).catch((errorInstance) => {
+                        window.alert(String(errorInstance?.message || errorInstance || 'Не удалось сохранить решение по связи.'));
+                    });
+                });
+
+                document.addEventListener('click', (event) => {
                     const button = event.target instanceof Element
                         ? event.target.closest('[data-mrr-duplicate-plan="open"]')
                         : null;
@@ -6440,10 +6455,6 @@ const hintEditLauncher = event.target instanceof Element
     ? event.target.closest('[data-mrr-hint-edit-open]')
     : null;
 
-                    const unconfirmedLinkAction = event.target instanceof Element
-                        ? event.target.closest('[data-mrr-unconfirmed-link-action]')
-                        : null;
-
                     if (aiReviewButton && aiReviewButton instanceof HTMLElement) {
                         event.preventDefault();
                         loadAiReview(aiReviewButton.dataset.mrrSpaceId, aiReviewButton).catch(() => {});
@@ -6518,14 +6529,6 @@ if (markSpaceFreeLauncher && markSpaceFreeLauncher instanceof HTMLElement) {
     openMarkSpaceFreeModal(markSpaceFreeLauncher);
     return;
 }
-
-                    if (unconfirmedLinkAction && unconfirmedLinkAction instanceof HTMLElement) {
-                        event.preventDefault();
-                        applyUnconfirmedLinkAction(unconfirmedLinkAction).catch((errorInstance) => {
-                            window.alert(String(errorInstance?.message || errorInstance || 'Не удалось сохранить решение по связи.'));
-                        });
-                        return;
-                    }
 
                     if (!launcher || !(launcher instanceof HTMLElement)) {
                         return;
