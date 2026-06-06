@@ -1,14 +1,17 @@
 <?php
-# app/Filament/Resources/MarketSpaceResource/Pages/ListMarketSpaces.php
+
+// app/Filament/Resources/MarketSpaceResource/Pages/ListMarketSpaces.php
 
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Widgets\MarketSpacesWorkspaceWidget;
 use App\Models\MarketSpace;
+use App\Models\TenantContract;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class ListMarketSpaces extends ListRecords
@@ -141,7 +144,82 @@ class ListMarketSpaces extends ListRecords
                     });
                 })
             ),
+            'missing-1c-link' => $this->makeTab(
+                $tabClass,
+                'Без точной связи 1С',
+                fn (Builder $query) => $this->applyMissingFinancialLinkScope($query)
+            ),
         ];
+    }
+
+    private function applyMissingFinancialLinkScope(Builder $query): Builder
+    {
+        return $query
+            ->where(function (Builder $query): void {
+                $query->whereNull('status')
+                    ->orWhere('status', '!=', 'maintenance');
+            })
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereIn('id', $this->sharedUseSpaceIdsWithMultipleActiveParticipants())
+                    ->orWhere(function (Builder $query): void {
+                        $query
+                            ->whereNotNull('tenant_id')
+                            ->where(function (Builder $query): void {
+                                $query->where('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->orWhereNull('space_group_role')
+                                    ->orWhereNull('space_group_parent_id');
+                            })
+                            ->whereDoesntHave('tenantContracts', fn (Builder $contractQuery): Builder => $this->activeExactContractQuery($contractQuery));
+                    })
+                    ->orWhere(function (Builder $query): void {
+                        $query
+                            ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                            ->whereNotNull('space_group_parent_id')
+                            ->whereHas('spaceGroupParent', function (Builder $parentQuery): void {
+                                $parentQuery
+                                    ->whereNotNull('tenant_id')
+                                    ->whereDoesntHave('tenantContracts', fn (Builder $contractQuery): Builder => $this->activeExactContractQuery($contractQuery));
+                            });
+                    });
+            });
+    }
+
+    private function activeExactContractQuery(Builder $query): Builder
+    {
+        return $query
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '')
+            ->where(function (Builder $query): void {
+                $query->whereNull('space_mapping_mode')
+                    ->orWhere('space_mapping_mode', '!=', TenantContract::SPACE_MAPPING_MODE_EXCLUDED);
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNull('is_active')
+                    ->orWhere('is_active', true);
+            })
+            ->where(function (Builder $query): void {
+                $query->whereNull('status')
+                    ->orWhereNotIn('status', ['terminated', 'archived']);
+            });
+    }
+
+    private function sharedUseSpaceIdsWithMultipleActiveParticipants(): array
+    {
+        if (! DB::getSchemaBuilder()->hasTable('market_space_tenant_bindings')) {
+            return [];
+        }
+
+        return DB::table('market_space_tenant_bindings')
+            ->select('market_space_id')
+            ->where('binding_type', 'shared_use')
+            ->whereNull('ended_at')
+            ->whereNotNull('tenant_id')
+            ->groupBy('market_space_id')
+            ->havingRaw('COUNT(DISTINCT tenant_id) > 1')
+            ->pluck('market_space_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
     }
 
     protected static function resolveTabClass(): string
