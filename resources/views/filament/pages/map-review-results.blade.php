@@ -6344,7 +6344,32 @@ const markSpaceFreeState = {
                     window.location.reload();
                 };
 
+                const handleUnconfirmedLinkActionClick = (event, button) => {
+                    if (!(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    applyUnconfirmedLinkAction(button).catch((errorInstance) => {
+                        window.alert(String(errorInstance?.message || errorInstance || 'Не удалось сохранить решение по связи.'));
+                    });
+                };
+
+                document.querySelectorAll('[data-mrr-unconfirmed-link-action]').forEach((button) => {
+                    if (!(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    button.addEventListener('click', (event) => {
+                        handleUnconfirmedLinkActionClick(event, button);
+                    });
+                });
+
                 document.addEventListener('click', (event) => {
+                    if (event.defaultPrevented) {
+                        return;
+                    }
+
                     const unconfirmedLinkAction = event.target instanceof Element
                         ? event.target.closest('[data-mrr-unconfirmed-link-action]')
                         : null;
@@ -6353,10 +6378,7 @@ const markSpaceFreeState = {
                         return;
                     }
 
-                    event.preventDefault();
-                    applyUnconfirmedLinkAction(unconfirmedLinkAction).catch((errorInstance) => {
-                        window.alert(String(errorInstance?.message || errorInstance || 'Не удалось сохранить решение по связи.'));
-                    });
+                    handleUnconfirmedLinkActionClick(event, unconfirmedLinkAction);
                 });
 
                 document.addEventListener('click', (event) => {
