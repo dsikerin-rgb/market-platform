@@ -1405,6 +1405,10 @@
       color: #86efac;
       font-weight: 700;
     }
+    .popover .row-financial-unknown .row-value {
+      color: #cbd5e1;
+      font-weight: 700;
+    }
     .popover .contract-chip {
       display: inline-flex;
       align-items: center;
@@ -7191,7 +7195,20 @@
                         return escapeHtml(name) + (area ? ' — ' + area : '');
                       }).join('<br>'))
                     : '';
-                  line6 = '';
+                  const sharedDebtStatus = hit.space_effective_debt_status || hit.debt_status || null;
+                  const sharedDebtScope = hit.space_effective_debt_status_scope || hit.debt_status_scope || 'none';
+                  const sharedDebtLabel = hit.space_effective_debt_status_label || hit.debt_status_label || '';
+                  if (sharedDebtScope === 'shared_use') {
+                    line6 = sharedDebtLabel ? ('Финансовый статус: ' + escapeHtml(sharedDebtLabel)) : 'Финансовый статус: нет точной финансовой связи 1С';
+                    line6Class = 'row-financial-unknown';
+                    line6HelpText = 'Место используется несколькими арендаторами. Пока договоры и задолженность не связаны с конкретными участниками, карта не относит общий долг к одному арендатору и показывает серый статус.';
+                  } else if (sharedDebtStatus === 'gray') {
+                    line6 = sharedDebtLabel ? ('Финансовый статус: ' + escapeHtml(sharedDebtLabel)) : 'Финансовый статус: нет данных 1С';
+                    line6Class = 'row-financial-unknown';
+                    line6HelpText = 'Недостаточно данных для честного расчёта задолженности по этому совместному месту.';
+                  } else {
+                    line6 = '';
+                  }
                   line7 = '';
                 } else if (popupStatus === 'maintenance') {
                   line2 = 'Служебное место';
