@@ -332,6 +332,11 @@
                 color: #92400e;
             }
 
+            .mrr-assessment--success {
+                background: rgba(34, 197, 94, 0.12);
+                color: #15803d;
+            }
+
             .mrr-assessment--neutral {
                 background: rgba(100, 116, 139, 0.12);
                 color: #475569;
@@ -343,6 +348,10 @@
 
             .dark .mrr-assessment--warning {
                 color: #fde68a;
+            }
+
+            .dark .mrr-assessment--success {
+                color: #bbf7d0;
             }
 
             .dark .mrr-assessment--neutral {
@@ -1174,6 +1183,91 @@
                 margin-top: 0.05rem;
                 margin-bottom: 0.05rem;
                 color: #64748b;
+            }
+
+            .mrr-unconfirmed-reason {
+                display: grid;
+                gap: 0.42rem;
+                border-radius: 0.85rem;
+                border: 1px solid rgba(100, 116, 139, 0.18);
+                background: rgba(248, 250, 252, 0.88);
+                padding: 0.72rem 0.82rem;
+            }
+
+            .mrr-unconfirmed-reason--danger {
+                border-color: rgba(239, 68, 68, 0.22);
+                background: rgba(254, 242, 242, 0.9);
+            }
+
+            .mrr-unconfirmed-reason--warning {
+                border-color: rgba(245, 158, 11, 0.26);
+                background: rgba(255, 251, 235, 0.9);
+            }
+
+            .mrr-unconfirmed-reason--success {
+                border-color: rgba(34, 197, 94, 0.22);
+                background: rgba(240, 253, 244, 0.9);
+            }
+
+            .dark .mrr-unconfirmed-reason {
+                border-color: rgba(148, 163, 184, 0.2);
+                background: rgba(15, 23, 42, 0.62);
+            }
+
+            .dark .mrr-unconfirmed-reason--danger {
+                border-color: rgba(248, 113, 113, 0.3);
+                background: rgba(127, 29, 29, 0.18);
+            }
+
+            .dark .mrr-unconfirmed-reason--warning {
+                border-color: rgba(251, 191, 36, 0.3);
+                background: rgba(113, 63, 18, 0.2);
+            }
+
+            .dark .mrr-unconfirmed-reason--success {
+                border-color: rgba(74, 222, 128, 0.28);
+                background: rgba(20, 83, 45, 0.18);
+            }
+
+            .mrr-unconfirmed-reason__kicker {
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                color: #64748b;
+            }
+
+            .dark .mrr-unconfirmed-reason__kicker {
+                color: #94a3b8;
+            }
+
+            .mrr-unconfirmed-reason__title {
+                font-size: 0.9rem;
+                font-weight: 850;
+                color: #0f172a;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-unconfirmed-reason__title {
+                color: #f8fafc;
+            }
+
+            .mrr-unconfirmed-reason__summary,
+            .mrr-unconfirmed-reason__next {
+                font-size: 0.78rem;
+                line-height: 1.42;
+                color: #475569;
+            }
+
+            .dark .mrr-unconfirmed-reason__summary,
+            .dark .mrr-unconfirmed-reason__next {
+                color: #cbd5e1;
+            }
+
+            .mrr-unconfirmed-reason__evidence {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.32rem;
             }
 
             .mrr-diagnostics__candidates {
@@ -2721,6 +2815,15 @@
                                             $relationDetails = is_array($diagnostics['relation_details'] ?? null) ? $diagnostics['relation_details'] : [];
                                             $candidateSpaces = is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : [];
                                             $relationAssessment = trim((string) ($diagnostics['relation_assessment'] ?? ''));
+                                            $unconfirmedClassification = is_array($diagnostics['unconfirmed_link_classification'] ?? null) ? $diagnostics['unconfirmed_link_classification'] : [];
+                                            $unconfirmedClassificationEvidence = is_array($unconfirmedClassification['evidence'] ?? null) ? $unconfirmedClassification['evidence'] : [];
+                                            $unconfirmedClassificationTone = (string) ($unconfirmedClassification['tone'] ?? 'neutral');
+                                            $unconfirmedClassificationTone = in_array($unconfirmedClassificationTone, ['success', 'warning', 'danger', 'neutral'], true)
+                                                ? $unconfirmedClassificationTone
+                                                : 'neutral';
+                                            $unconfirmedClassificationLabel = trim((string) ($unconfirmedClassification['label'] ?? ''));
+                                            $unconfirmedClassificationSummary = trim((string) ($unconfirmedClassification['summary'] ?? ''));
+                                            $unconfirmedClassificationAction = trim((string) ($unconfirmedClassification['recommended_action'] ?? ''));
                                             $hasMapLink = collect($relationCounts)
                                                 ->contains(fn (array $item): bool => ($item['key'] ?? null) === 'map_shapes' && (int) ($item['count'] ?? 0) > 0);
                                             $currentSpaceLabel = trim((string) ($row['number'] ?: ($row['display_name'] ?: ('#' . $row['space_id']))));
@@ -2760,6 +2863,10 @@
                                                 data_get($row, 'tenant_change_details.observed_tenant_name'),
                                                 data_get($row, 'diagnostics.financial_signal.tenant_name'),
                                                 data_get($row, 'diagnostics.financial_signal.latest_period_label'),
+                                                data_get($row, 'diagnostics.unconfirmed_link_classification.label'),
+                                                data_get($row, 'diagnostics.unconfirmed_link_classification.summary'),
+                                                data_get($row, 'diagnostics.unconfirmed_link_classification.recommended_action'),
+                                                implode(' ', $unconfirmedClassificationEvidence),
                                                 $row['reason'] ?? null,
                                                 $row['created_by_name'] ?? null,
                                                 $row['created_at'] ?? null,
@@ -3386,6 +3493,26 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                     {{ $row['assessment_label'] ?? 'Требует проверки' }}
                                                                 </span>
                                                                 <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
+                                                            @endif
+
+                                                            @if ($isUnconfirmedWorkflowTab && $unconfirmedClassificationLabel !== '')
+                                                                <div class="mrr-unconfirmed-reason mrr-unconfirmed-reason--{{ $unconfirmedClassificationTone }}">
+                                                                    <div class="mrr-unconfirmed-reason__kicker">Причина по данным</div>
+                                                                    <div class="mrr-unconfirmed-reason__title">{{ $unconfirmedClassificationLabel }}</div>
+                                                                    @if ($unconfirmedClassificationSummary !== '')
+                                                                        <div class="mrr-unconfirmed-reason__summary">{{ $unconfirmedClassificationSummary }}</div>
+                                                                    @endif
+                                                                    @if ($unconfirmedClassificationAction !== '')
+                                                                        <div class="mrr-unconfirmed-reason__next"><strong>Что делать:</strong> {{ $unconfirmedClassificationAction }}</div>
+                                                                    @endif
+                                                                    @if ($unconfirmedClassificationEvidence !== [])
+                                                                        <div class="mrr-unconfirmed-reason__evidence">
+                                                                            @foreach (array_slice($unconfirmedClassificationEvidence, 0, 5) as $evidenceItem)
+                                                                                <span class="mrr-diagnostics__count">{{ $evidenceItem }}</span>
+                                                                            @endforeach
+                                                                        </div>
+                                                                    @endif
+                                                                </div>
                                                             @endif
 
                                                             @if ($hasCandidates)

@@ -552,6 +552,21 @@ class MapReviewResults extends Page
      */
     private function buildAssessmentMeta(array $diagnostics): array
     {
+        $classification = is_array($diagnostics['unconfirmed_link_classification'] ?? null)
+            ? $diagnostics['unconfirmed_link_classification']
+            : [];
+        $classificationLabel = trim((string) ($classification['label'] ?? ''));
+
+        if ($classificationLabel !== '' && ($classification['code'] ?? null) !== 'unknown') {
+            $tone = (string) ($classification['tone'] ?? 'neutral');
+
+            return [
+                'label' => $classificationLabel,
+                'tone' => in_array($tone, ['success', 'danger', 'warning', 'neutral'], true) ? $tone : 'neutral',
+                'rank' => max(1, (int) ($classification['rank'] ?? 50)),
+            ];
+        }
+
         if ((bool) ($diagnostics['current_place_confirmed_by_contract'] ?? false)) {
             return [
                 'label' => 'Текущее место подтверждено договором',

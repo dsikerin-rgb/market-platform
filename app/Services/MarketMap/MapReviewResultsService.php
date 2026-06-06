@@ -360,17 +360,21 @@ class MapReviewResultsService
             )
             ->orderByRaw('COALESCE(number, display_name, code) asc')
             ->limit($limit * 3)
-            ->get([
-                'id',
-                'location_id',
-                'tenant_id',
-                'number',
-                'display_name',
-                'code',
-                'map_review_status',
-                'map_reviewed_at',
-                'map_reviewed_by',
-            ]);
+            ->get(array_merge(
+                [
+                    'id',
+                    'location_id',
+                    'tenant_id',
+                    'number',
+                    'display_name',
+                    'code',
+                    'map_review_status',
+                    'map_reviewed_at',
+                    'map_reviewed_by',
+                ],
+                Schema::hasColumn('market_spaces', 'space_group_role') ? ['space_group_role'] : [],
+                Schema::hasColumn('market_spaces', 'space_group_parent_id') ? ['space_group_parent_id'] : [],
+            ));
 
         if ($spaces->isEmpty()) {
             return [];
@@ -430,17 +434,21 @@ class MapReviewResultsService
             ->orderByDesc('map_reviewed_at')
             ->orderByRaw('COALESCE(number, display_name, code) asc')
             ->limit($limit)
-            ->get([
-                'id',
-                'location_id',
-                'tenant_id',
-                'number',
-                'display_name',
-                'code',
-                'map_review_status',
-                'map_reviewed_at',
-                'map_reviewed_by',
-            ]);
+            ->get(array_merge(
+                [
+                    'id',
+                    'location_id',
+                    'tenant_id',
+                    'number',
+                    'display_name',
+                    'code',
+                    'map_review_status',
+                    'map_reviewed_at',
+                    'map_reviewed_by',
+                ],
+                Schema::hasColumn('market_spaces', 'space_group_role') ? ['space_group_role'] : [],
+                Schema::hasColumn('market_spaces', 'space_group_parent_id') ? ['space_group_parent_id'] : [],
+            ));
 
         if ($spaces->isEmpty()) {
             return [];
@@ -807,6 +815,13 @@ class MapReviewResultsService
                 ->contains(fn (array $candidate): bool => (bool) ($candidate['is_stronger_than_current'] ?? false));
 
             $resolvedFinancialSignal = $financialSignals[$spaceId] ?? null;
+            $unconfirmedLinkClassification = $this->unconfirmedLinkClassification(
+                $space,
+                $counts,
+                $candidates,
+                $contractOverride,
+                $resolvedFinancialSignal
+            );
 
             // Resolve review case using backend resolver
             $reviewCaseResolver = app(SpaceReviewCaseResolver::class);
@@ -835,6 +850,7 @@ class MapReviewResultsService
                     'contract_details' => $contractDetails[$spaceId] ?? [],
                     'accrual_details' => $accrualDetails[$spaceId] ?? [],
                     'financial_signal' => $resolvedFinancialSignal,
+                    'unconfirmed_link_classification' => $unconfirmedLinkClassification,
                     'review_case' => $reviewCase->toArray(),
                 ],
             ];
@@ -1271,6 +1287,191 @@ class MapReviewResultsService
     }
 
     /**
+     * @param  array<string, int>  $currentCounts
+     * @param  list<array<string, mixed>>  $candidates
+     * @return array{code:string,label:string,tone:string,rank:int,summary:string,recommended_action:string,evidence:list<string>}
+     */
+    private function unconfirmedLinkClassification(
+        MarketSpace $space,
+        array $currentCounts,
+        array $candidates,
+        ?array $contractOverride,
+        ?array $financialSignal
+    ): array {
+        $evidence = $this->unconfirmedLinkEvidence($space, $currentCounts, $candidates, $contractOverride, $financialSignal);
+
+        if ($contractOverride !== null) {
+            return [
+                'code' => 'current_contract_override',
+                'label' => 'Есть активный договор на текущее место',
+                'tone' => 'success',
+                'rank' => 5,
+                'summary' => 'Текущее место уже подтверждается активным договором. Система всё ещё показывает проверку, потому что финансовый статус пришёл как tenant-fallback, а не как точная цепочка contract_debts → contract → место.',
+                'recommended_action' => 'Сверьте номер договора и, если он действительно относится к этому месту, подтвердите финансовую связь.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        $spaceGroupRole = (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
+        if ($spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+            return [
+                'code' => 'child_space_parent_contract',
+                'label' => 'Child-место: договор должен быть у parent',
+                'tone' => 'warning',
+                'rank' => 8,
+                'summary' => 'Это дочернее место группы. Для таких мест точная финансовая связь должна проверяться через родительское место, а не через отдельную child-запись.',
+                'recommended_action' => 'Откройте parent/группу и проверьте, где фактически привязан договор 1С. Не подтверждайте child как exact-связь без этой проверки.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        if ((bool) ($financialSignal['requires_tenant_resolution'] ?? false)) {
+            return [
+                'code' => 'financial_tenant_needs_resolution',
+                'label' => 'Финконтур нашёл арендатора без сопоставления',
+                'tone' => 'danger',
+                'rank' => 10,
+                'summary' => 'В 1С есть финансовый сигнал, но арендатор из начисления ещё не сопоставлен с карточкой арендатора в системе.',
+                'recommended_action' => 'Сначала сопоставьте или активируйте арендатора, затем возвращайтесь к связи места.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        $hasStrongerCandidate = collect($candidates)
+            ->contains(fn (array $candidate): bool => (bool) ($candidate['is_stronger_than_current'] ?? false));
+
+        if ($hasStrongerCandidate) {
+            return [
+                'code' => 'stronger_candidate',
+                'label' => 'Есть более сильный кандидат',
+                'tone' => 'danger',
+                'rank' => 15,
+                'summary' => 'У другого активного места этого арендатора больше подтверждённых связей с договорами, начислениями или картой.',
+                'recommended_action' => 'Сначала проверьте кандидата как возможное основное место. Текущее место подтверждайте только если кандидат не подходит.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        $hasNameCandidate = collect($candidates)
+            ->contains(fn (array $candidate): bool => in_array('name', (array) ($candidate['match_sources'] ?? []), true)
+                || ($candidate['match_source'] ?? null) === 'name');
+
+        if ($hasNameCandidate) {
+            return [
+                'code' => 'name_duplicate_candidate',
+                'label' => 'Похоже на дубль по названию/номеру',
+                'tone' => 'warning',
+                'rank' => 20,
+                'summary' => 'Найдены места с похожим нормализованным номером или названием. Это может быть дубль или соседняя запись той же группы мест.',
+                'recommended_action' => 'Сравните похожие места и выберите каноническое место перед подтверждением финансовой связи.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        if ($candidates !== []) {
+            return [
+                'code' => 'same_tenant_candidates',
+                'label' => 'Есть другие места этого арендатора',
+                'tone' => 'warning',
+                'rank' => 25,
+                'summary' => 'У арендатора есть несколько активных мест, но точная связь договора 1С с текущим местом не найдена.',
+                'recommended_action' => 'Сверьте договор и место в 1С. Подтверждайте только если долг действительно относится к этому месту.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        if ($financialSignal !== null) {
+            return [
+                'code' => 'financial_signal_without_contract',
+                'label' => 'Есть начисление, но договор к месту не найден',
+                'tone' => 'danger',
+                'rank' => 28,
+                'summary' => 'Финансовый контур видит начисление, но цепочка до договора и конкретного места не подтверждена.',
+                'recommended_action' => 'Проверьте договор 1С и привязку договора к месту. До этого долг нельзя считать точным долгом места.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        if (((int) ($currentCounts['contracts'] ?? 0)) === 0 && ((int) ($currentCounts['accruals'] ?? 0)) === 0) {
+            return [
+                'code' => 'no_current_financial_links',
+                'label' => 'У места нет договоров и начислений',
+                'tone' => 'neutral',
+                'rank' => 30,
+                'summary' => 'Место занято на карте, но по нему не найдено договоров или начислений, которые могли бы подтвердить точную финансовую связь.',
+                'recommended_action' => 'Проверьте, есть ли у арендатора договор 1С на это место. Если договора нет, оставьте связь неподтверждённой.',
+                'evidence' => $evidence,
+            ];
+        }
+
+        return [
+            'code' => 'tenant_fallback_only',
+            'label' => 'Только общий статус арендатора',
+            'tone' => 'neutral',
+            'rank' => 35,
+            'summary' => 'На карте используется общий финансовый статус арендатора. Точная цепочка до договора и места не подтверждена.',
+            'recommended_action' => 'Сверьте договор 1С вручную. До подтверждения показывайте это как tenant-fallback, а не как долг места.',
+            'evidence' => $evidence,
+        ];
+    }
+
+    /**
+     * @param  array<string, int>  $currentCounts
+     * @param  list<array<string, mixed>>  $candidates
+     * @return list<string>
+     */
+    private function unconfirmedLinkEvidence(
+        MarketSpace $space,
+        array $currentCounts,
+        array $candidates,
+        ?array $contractOverride,
+        ?array $financialSignal
+    ): array {
+        $evidence = [];
+        $spaceGroupRole = (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
+
+        if ($spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_CHILD) {
+            $parentId = (int) ($space->space_group_parent_id ?? 0);
+            $evidence[] = $parentId > 0
+                ? 'Child-место, parent #'.$parentId
+                : 'Child-место без указанного parent';
+        }
+
+        $contracts = (int) ($currentCounts['contracts'] ?? 0);
+        $accruals = (int) ($currentCounts['accruals'] ?? 0);
+        $shapes = (int) ($currentCounts['map_shapes'] ?? 0);
+        $evidence[] = 'Связи текущего места: договоры '.$contracts.', начисления '.$accruals.', карта '.$shapes;
+
+        if ($contractOverride !== null) {
+            $contractNumber = trim((string) ($contractOverride['contract_number'] ?? ''));
+            $evidence[] = $contractNumber !== ''
+                ? 'Активный договор: '.$contractNumber
+                : 'Есть активный договор на текущее место';
+        }
+
+        if ($financialSignal !== null) {
+            $tenantName = trim((string) ($financialSignal['tenant_name'] ?? ''));
+            $period = trim((string) ($financialSignal['latest_period_label'] ?? ''));
+            $evidence[] = trim('Финансовый сигнал'.($tenantName !== '' ? ': '.$tenantName : '').($period !== '' ? ' · '.$period : ''));
+        }
+
+        if ($candidates !== []) {
+            $bestCandidate = collect($candidates)
+                ->sortByDesc(fn (array $candidate): int => (int) ($candidate['relation_score'] ?? 0))
+                ->first();
+
+            $candidateLabel = trim((string) ($bestCandidate['label'] ?? ''));
+            $candidateScore = (int) ($bestCandidate['relation_score'] ?? 0);
+
+            $evidence[] = $candidateLabel !== ''
+                ? 'Лучший кандидат: '.$candidateLabel.' · score '.$candidateScore
+                : 'Кандидатов: '.count($candidates);
+        }
+
+        return array_values(array_unique(array_filter($evidence, static fn (string $item): bool => trim($item) !== '')));
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function emptyDiagnostics(): array
@@ -1285,6 +1486,15 @@ class MapReviewResultsService
             'contract_details' => [],
             'accrual_details' => [],
             'financial_signal' => null,
+            'unconfirmed_link_classification' => [
+                'code' => 'unknown',
+                'label' => 'Причина не определена',
+                'tone' => 'neutral',
+                'rank' => 99,
+                'summary' => 'Недостаточно данных для машинной классификации.',
+                'recommended_action' => 'Проверьте договор и начисления вручную.',
+                'evidence' => [],
+            ],
             'can_apply_duplicate_resolution' => true,
             'duplicate_resolution_block_reason' => null,
             'review_case' => null,
