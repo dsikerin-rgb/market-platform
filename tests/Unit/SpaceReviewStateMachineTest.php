@@ -1,5 +1,6 @@
 <?php
-# tests/Unit/SpaceReviewStateMachineTest.php
+
+// tests/Unit/SpaceReviewStateMachineTest.php
 
 declare(strict_types=1);
 
@@ -44,19 +45,22 @@ class SpaceReviewStateMachineTest extends TestCase
         $this->assertFalse(SpaceReviewStateMachine::isFinancialOnlyConflict(false, true, 'conflict'));
     }
 
-public function test_maps_review_status_for_decision(): void
-{
-    $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision('matched'));
-    $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::MARK_SPACE_FREE));
-    $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::MARK_SPACE_SERVICE));
-    $this->assertSame('conflict', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION));
-    $this->assertSame('changed', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION));
-    $this->assertSame('changed', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL));
-    $this->assertSame('conflict', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::OCCUPANCY_CONFLICT));
-    $this->assertSame('changed_tenant', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::TENANT_CHANGED_ON_SITE));
-    $this->assertSame('not_found', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::SHAPE_NOT_FOUND));
-    $this->assertSame('changed', SpaceReviewStateMachine::reviewStatusForDecision('unknown_decision'));
-}
+    public function test_maps_review_status_for_decision(): void
+    {
+        $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision('matched'));
+        $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::MARK_SPACE_FREE));
+        $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::MARK_SPACE_SERVICE));
+        $this->assertSame('conflict', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::SPACE_IDENTITY_NEEDS_CLARIFICATION));
+        $this->assertSame('changed', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION));
+        $this->assertSame('changed', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::MERGE_SPACE_INTO_CANONICAL));
+        $this->assertSame('conflict', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::OCCUPANCY_CONFLICT));
+        $this->assertSame('changed_tenant', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::TENANT_CHANGED_ON_SITE));
+        $this->assertSame('not_found', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::SHAPE_NOT_FOUND));
+        $this->assertSame('matched', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK));
+        $this->assertSame('unconfirmed_link_rejected', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK));
+        $this->assertSame('unconfirmed_link', SpaceReviewStateMachine::reviewStatusForDecision(SpaceReviewDecision::REOPEN_UNCONFIRMED_FINANCIAL_LINK));
+        $this->assertSame('changed', SpaceReviewStateMachine::reviewStatusForDecision('unknown_decision'));
+    }
 
     public function test_computes_default_operation_status(): void
     {

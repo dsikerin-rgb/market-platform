@@ -1,5 +1,6 @@
 <?php
-# app/Services/MarketMap/MapReviewResultsService.php
+
+// app/Services/MarketMap/MapReviewResultsService.php
 
 declare(strict_types=1);
 
@@ -36,6 +37,7 @@ class MapReviewResultsService
             'conflict' => 'Конфликт',
             'not_found' => 'Не найдено на карте',
             'unconfirmed_link' => 'Финансовая связь с местом не подтверждена',
+            'unconfirmed_link_rejected' => 'Финансовая связь отклонена',
         ];
     }
 
@@ -57,7 +59,6 @@ class MapReviewResultsService
     }
 
     /**
-     * @param  Market|int  $market
      * @return array{
      *   total:int,
      *   reviewed:int,
@@ -323,10 +324,14 @@ class MapReviewResultsService
      *   diagnostics:array<string,mixed>
      * }>
      */
-    public function unconfirmedLinks(int $marketId, int $limit = 50): array
+    public function unconfirmedLinks(int $marketId, int $limit = 50, bool $rejected = false): array
     {
         if ($marketId <= 0 || ! $this->hasMapReviewColumns()) {
             return [];
+        }
+
+        if ($rejected) {
+            return $this->rejectedUnconfirmedLinks($marketId, $limit);
         }
 
         $spaceIds = MarketSpaceMapShape::query()
@@ -404,6 +409,92 @@ class MapReviewResultsService
                 'decision_label' => 'Системно найдено',
                 'reason' => 'На карте используется статус арендатора, но точная связь с этим местом не подтверждена.',
                 'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
+                'unconfirmed_workflow_state' => 'open',
+            ];
+        })->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function rejectedUnconfirmedLinks(int $marketId, int $limit = 50): array
+    {
+        $spaces = MarketSpace::query()
+            ->with(['location:id,name', 'tenant:id,name'])
+            ->where('market_id', $marketId)
+            ->where('map_review_status', 'unconfirmed_link_rejected')
+            ->when(
+                Schema::hasColumn('market_spaces', 'is_active'),
+                fn ($query) => $query->where('is_active', true)
+            )
+            ->orderByDesc('map_reviewed_at')
+            ->orderByRaw('COALESCE(number, display_name, code) asc')
+            ->limit($limit)
+            ->get([
+                'id',
+                'location_id',
+                'tenant_id',
+                'number',
+                'display_name',
+                'code',
+                'map_review_status',
+                'map_reviewed_at',
+                'map_reviewed_by',
+            ]);
+
+        if ($spaces->isEmpty()) {
+            return [];
+        }
+
+        $spaceIds = $spaces->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $latestOperations = $this->latestSpaceReviewOperationsBySpace($marketId, $spaceIds);
+        $diagnostics = $this->buildSpaceDiagnostics($marketId, $spaces, $latestOperations);
+
+        $reviewerIds = $spaces->pluck('map_reviewed_by')
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id): int => (int) $id)
+            ->merge(
+                $latestOperations->pluck('created_by')
+                    ->filter(fn ($id) => filled($id))
+                    ->map(fn ($id): int => (int) $id)
+            )
+            ->unique()
+            ->values()
+            ->all();
+
+        $reviewers = $reviewerIds !== []
+            ? User::query()->whereIn('id', $reviewerIds)->pluck('name', 'id')
+            : collect();
+
+        return $spaces->map(function (MarketSpace $space) use ($diagnostics, $latestOperations, $reviewers): array {
+            $operation = $latestOperations->get((int) $space->id);
+            $payload = is_array($operation?->payload) ? $operation->payload : [];
+            $reason = filled($payload['reason'] ?? null)
+                ? trim((string) $payload['reason'])
+                : 'Оператор отклонил финансовую связь с этим местом.';
+            $reviewedAt = $space->map_reviewed_at?->format('d.m.Y H:i');
+            $reviewedByName = $space->map_reviewed_by ? (string) ($reviewers[(int) $space->map_reviewed_by] ?? '-') : null;
+
+            return [
+                'space_id' => (int) $space->id,
+                'number' => $space->number,
+                'display_name' => $space->display_name,
+                'current_tenant_name' => $space->tenant?->name,
+                'location_name' => $space->location?->name,
+                'created_at' => $operation?->created_at?->format('d.m.Y H:i') ?? $reviewedAt,
+                'created_by_name' => $operation?->created_by ? (string) ($reviewers[(int) $operation->created_by] ?? '-') : ($reviewedByName ?? 'Система'),
+                'review_status' => 'unconfirmed_link_rejected',
+                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link_rejected') ?? 'Финансовая связь отклонена',
+                'reviewed_at' => $reviewedAt,
+                'reviewed_by_name' => $reviewedByName,
+                'decision' => SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK,
+                'decision_label' => 'Отклонена оператором',
+                'reason' => $reason,
+                'review_operation_id' => $operation?->id ? (int) $operation->id : null,
+                'review_created_by' => $operation?->created_by ? (int) $operation->created_by : null,
+                'can_edit_reason' => false,
+                'diagnostics' => $diagnostics[(int) $space->id] ?? $this->emptyDiagnostics(),
+                'unconfirmed_workflow_state' => 'rejected',
             ];
         })->all();
     }
@@ -449,11 +540,11 @@ class MapReviewResultsService
                     Schema::hasColumn('market_spaces', 'is_active'),
                     fn ($query) => $query->where('is_active', true)
                 )
-            ->orderByRaw('COALESCE(number, display_name, code) asc')
-            ->get(array_merge(
-                ['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code'],
-                Schema::hasColumn('market_spaces', 'space_group_role') ? ['space_group_role'] : []
-            ))
+                ->orderByRaw('COALESCE(number, display_name, code) asc')
+                ->get(array_merge(
+                    ['id', 'location_id', 'tenant_id', 'number', 'display_name', 'code'],
+                    Schema::hasColumn('market_spaces', 'space_group_role') ? ['space_group_role'] : []
+                ))
             : collect();
         $nameCandidateSpaces = $this->nameDuplicateCandidateSpaces($marketId, $spaces);
 
@@ -563,19 +654,19 @@ class MapReviewResultsService
                     $candidate = $item['space'];
                     $candidateId = (int) $candidate->id;
                     $counts = $candidateCounts[$candidateId] ?? [];
-                    
+
                     $candidateIsGroupOrCanonical = in_array((string) ($candidate->space_group_role ?? ''), [
                         MarketSpace::SPACE_GROUP_ROLE_PARENT,
                     ], true);
                     $candidateHasUsableShape = ((int) ($counts['map_shapes'] ?? 0)) > 0;
                     $currentHasNoUsableShape = ((int) ($currentSpaceCounts['map_shapes'] ?? 0)) === 0;
-                    $reasonText = (string) ($currentSpacePayload['reason'] ?? '') . ' ' . (string) ($currentSpaceOperation?->comment ?? '');
+                    $reasonText = (string) ($currentSpacePayload['reason'] ?? '').' '.(string) ($currentSpaceOperation?->comment ?? '');
                     $reasonIndicatesDuplicate = preg_match('/дубль|дублируется|группа\s+мест|связь\s+с\s+местом/iu', $reasonText) === 1;
-                    
+
                     // Проверка: упомянут ли candidate id в reason/comment
-                    $candidateIdInReason = preg_match('/\b(id|№|number)\s*[:#]?\s*' . preg_quote((string) $candidateId, '/') . '\b/iu', $reasonText) === 1
-                        || preg_match('/\b' . preg_quote((string) $candidateId, '/') . '\b/u', $reasonText) === 1;
-                    
+                    $candidateIdInReason = preg_match('/\b(id|№|number)\s*[:#]?\s*'.preg_quote((string) $candidateId, '/').'\b/iu', $reasonText) === 1
+                        || preg_match('/\b'.preg_quote((string) $candidateId, '/').'\b/u', $reasonText) === 1;
+
                     $isExplicitDuplicate = $candidateIsGroupOrCanonical
                         && $candidateHasUsableShape
                         && $currentHasNoUsableShape
@@ -587,12 +678,12 @@ class MapReviewResultsService
                     if ($isExplicitDuplicate) {
                         return 100; // Высокий приоритет
                     }
-                    
+
                     // Обычный приоритет по relation_score
                     return $this->relationStrengthScore($counts);
                 })
                 ->take(5)
-                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $latestOperationsForCandidateMap, $currentCounts, $currentSpacePayload, $currentSpaceOperation, $currentSpaceCounts): array {
+                ->map(function (array $item) use ($space, $tenantId, $candidateCounts, $currentScore, $contractDetails, $accrualDetails, $observedTenantIdsBySpace, $currentSpacePayload, $currentSpaceOperation, $currentSpaceCounts): array {
                     /** @var MarketSpace $candidate */
                     $candidate = $item['space'];
                     $candidateId = (int) $candidate->id;
@@ -654,13 +745,13 @@ class MapReviewResultsService
                     ], true);
                     $candidateHasUsableShape = ((int) ($counts['map_shapes'] ?? 0)) > 0;
                     $currentHasNoUsableShape = ((int) ($currentSpaceCounts['map_shapes'] ?? 0)) === 0;
-                    $reasonText = (string) ($currentSpacePayload['reason'] ?? '') . ' ' . (string) ($currentSpaceOperation?->comment ?? '');
+                    $reasonText = (string) ($currentSpacePayload['reason'] ?? '').' '.(string) ($currentSpaceOperation?->comment ?? '');
                     $reasonIndicatesDuplicate = preg_match('/дубль|дублируется|группа\s+мест|связь\s+с\s+местом/iu', $reasonText) === 1;
-                    
+
                     // Проверка: упомянут ли candidate id в reason/comment
-                    $candidateIdInReason = preg_match('/\b(id|№|number)\s*[:#]?\s*' . preg_quote((string) $candidateId, '/') . '\b/iu', $reasonText) === 1
-                        || preg_match('/\b' . preg_quote((string) $candidateId, '/') . '\b/u', $reasonText) === 1;
-                    
+                    $candidateIdInReason = preg_match('/\b(id|№|number)\s*[:#]?\s*'.preg_quote((string) $candidateId, '/').'\b/iu', $reasonText) === 1
+                        || preg_match('/\b'.preg_quote((string) $candidateId, '/').'\b/u', $reasonText) === 1;
+
                     $isExplicitDuplicateScenario = $candidateIsGroupOrCanonical
                         && $candidateHasUsableShape
                         && $currentHasNoUsableShape
@@ -983,7 +1074,7 @@ class MapReviewResultsService
 
             DB::table($table)
                 ->whereIn($column, $spaceIds)
-                ->selectRaw($column . ' as space_id, count(*) as aggregate')
+                ->selectRaw($column.' as space_id, count(*) as aggregate')
                 ->groupBy($column)
                 ->get()
                 ->each(function ($row) use (&$result, $key): void {
@@ -1046,7 +1137,7 @@ class MapReviewResultsService
     {
         return collect($this->displayRelationCounts($counts))
             ->filter(fn (array $item): bool => (bool) $item['important'] || (int) $item['count'] > 0)
-            ->map(fn (array $item): string => $item['label'] . ': ' . (int) $item['count'])
+            ->map(fn (array $item): string => $item['label'].': '.(int) $item['count'])
             ->values()
             ->all();
     }
@@ -1150,11 +1241,11 @@ class MapReviewResultsService
 
             $parts = [];
             $parts[] = $tenantName !== ''
-                ? 'На текущем месте уже есть активный договор нового арендатора: ' . $tenantName . '.'
+                ? 'На текущем месте уже есть активный договор нового арендатора: '.$tenantName.'.'
                 : 'На текущем месте уже есть активный договор нового арендатора.';
 
             if ($contractNumber !== '') {
-                $parts[] = 'Договор: ' . $contractNumber . '.';
+                $parts[] = 'Договор: '.$contractNumber.'.';
             }
 
             $parts[] = 'Старые начисления и долги прежнего арендатора считаются финансовым хвостом и не отменяют смену текущего арендатора места.';
@@ -1505,22 +1596,22 @@ class MapReviewResultsService
         $reason = 'Финконтур сообщает о новом арендаторе';
 
         if ($tenantName !== '') {
-            $reason .= ': ' . $tenantName;
+            $reason .= ': '.$tenantName;
         }
 
-        $reason .= ' по месту ' . $spaceLabel;
+        $reason .= ' по месту '.$spaceLabel;
 
         if ($period !== '') {
-            $reason .= ' за ' . $period;
+            $reason .= ' за '.$period;
         }
 
         $reason .= '. Договор не найден';
 
         if ($currentTenantName !== '') {
-            $reason .= ', карточка места связана с ' . $currentTenantName;
+            $reason .= ', карточка места связана с '.$currentTenantName;
         }
 
-        return $reason . '.';
+        return $reason.'.';
     }
 
     /**
@@ -1828,10 +1919,10 @@ class MapReviewResultsService
         $name = trim((string) ($space->display_name ?? ''));
 
         if ($number !== '' && $name !== '' && $number !== $name) {
-            return $number . ' / ' . $name;
+            return $number.' / '.$name;
         }
 
-        return $number !== '' ? $number : ($name !== '' ? $name : ('#' . (int) $space->id));
+        return $number !== '' ? $number : ($name !== '' ? $name : ('#'.(int) $space->id));
     }
 
     /**
@@ -2098,16 +2189,18 @@ class MapReviewResultsService
         array $payload,
         ?MarketSpace $space = null,
         ?MarketSpace $candidate = null
-    ): string
-    {
+    ): string {
         return match ($decision) {
             'matched' => $this->matchedReviewSummary($payload),
             SpaceReviewDecision::BIND_SHAPE_TO_SPACE => 'Фигура привязана к месту'
-                . (filled($payload['shape_id'] ?? null) ? ' · shape #' . (int) $payload['shape_id'] : ''),
+                .(filled($payload['shape_id'] ?? null) ? ' · shape #'.(int) $payload['shape_id'] : ''),
             SpaceReviewDecision::UNBIND_SHAPE_FROM_SPACE => 'Фигура отвязана от места'
-                . (filled($payload['shape_id'] ?? null) ? ' · shape #' . (int) $payload['shape_id'] : ''),
+                .(filled($payload['shape_id'] ?? null) ? ' · shape #'.(int) $payload['shape_id'] : ''),
             SpaceReviewDecision::MARK_SPACE_FREE => 'Место отмечено как свободное',
             SpaceReviewDecision::MARK_SPACE_SERVICE => 'Место отмечено как служебное',
+            SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь с местом подтверждена оператором',
+            SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь с местом отклонена оператором',
+            SpaceReviewDecision::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь возвращена в проверку',
             SpaceReviewDecision::FIX_SPACE_IDENTITY => $this->identityFixSummary($payload),
             SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => $this->duplicateResolutionSummary(
                 $payload,
@@ -2146,8 +2239,8 @@ class MapReviewResultsService
             $parts = [];
 
             if ($candidateId > 0) {
-                $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#' . $candidateId);
-                $parts[] = 'Рекомендация: оставить #' . $candidateId . ' основным (' . $candidateLabel . ')';
+                $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#'.$candidateId);
+                $parts[] = 'Рекомендация: оставить #'.$candidateId.' основным ('.$candidateLabel.')';
             }
 
             if ($space) {
@@ -2158,17 +2251,17 @@ class MapReviewResultsService
                 $accrualsCount = (int) $retainedFinancialTail['accruals_count'];
                 $latestPeriod = $retainedFinancialTail['latest_period'] ?? null;
                 $periodText = $latestPeriod
-                    ? ' (последний период: ' . \Carbon\Carbon::parse($latestPeriod)->format('m.Y') . ')'
+                    ? ' (последний период: '.\Carbon\Carbon::parse($latestPeriod)->format('m.Y').')'
                     : '';
-                $parts[] = $accrualsCount . ' несопоставленных начисл. останутся на дубле' . $periodText;
+                $parts[] = $accrualsCount.' несопоставленных начисл. останутся на дубле'.$periodText;
             } else {
                 $parts[] = 'Начисления останутся на дубле как история';
             }
 
             if (is_array($transferCounts) && array_sum($transferCounts) > 0) {
-                $parts[] = 'Переносимые связи: карта ' . (int) ($transferCounts['map_shapes'] ?? 0)
-                    . ', кабинет ' . (int) ($transferCounts['cabinet_links'] ?? 0)
-                    . ', товары ' . (int) ($transferCounts['marketplace_products'] ?? 0);
+                $parts[] = 'Переносимые связи: карта '.(int) ($transferCounts['map_shapes'] ?? 0)
+                    .', кабинет '.(int) ($transferCounts['cabinet_links'] ?? 0)
+                    .', товары '.(int) ($transferCounts['marketplace_products'] ?? 0);
             } else {
                 $parts[] = 'Безопасные связи перенесены согласно плану разбора';
             }
@@ -2182,23 +2275,23 @@ class MapReviewResultsService
             $parts = [];
 
             if ($candidateId > 0) {
-                $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#' . $candidateId);
-                $parts[] = 'Основное: #' . $candidateId . ' · ' . $candidateLabel;
+                $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#'.$candidateId);
+                $parts[] = 'Основное: #'.$candidateId.' · '.$candidateLabel;
             }
 
             if ($space) {
-                $parts[] = 'Дубль выведен из контура: #' . (int) $space->id . ' · ' . $this->spaceLabel($space);
+                $parts[] = 'Дубль выведен из контура: #'.(int) $space->id.' · '.$this->spaceLabel($space);
             }
 
             if (is_array($transferCounts)) {
-                $parts[] = 'Перенесено: карта ' . (int) ($transferCounts['map_shapes'] ?? 0)
-                    . ', кабинет ' . (int) ($transferCounts['cabinet_links'] ?? 0)
-                    . ', товары ' . (int) ($transferCounts['marketplace_products'] ?? 0);
+                $parts[] = 'Перенесено: карта '.(int) ($transferCounts['map_shapes'] ?? 0)
+                    .', кабинет '.(int) ($transferCounts['cabinet_links'] ?? 0)
+                    .', товары '.(int) ($transferCounts['marketplace_products'] ?? 0);
             }
 
             if (is_array($blockingCounts)) {
-                $parts[] = 'Блокирующие связи на дубле: договоры ' . (int) ($blockingCounts['contracts'] ?? 0)
-                    . ', начисления ' . (int) ($blockingCounts['accruals'] ?? 0);
+                $parts[] = 'Блокирующие связи на дубле: договоры '.(int) ($blockingCounts['contracts'] ?? 0)
+                    .', начисления '.(int) ($blockingCounts['accruals'] ?? 0);
             }
 
             $parts[] = 'Финансовых связей на дубле не найдено';
@@ -2225,23 +2318,23 @@ class MapReviewResultsService
         $parts = [];
 
         if ($candidateId > 0) {
-            $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#' . $candidateId);
-            $parts[] = 'Основное: #' . $candidateId . ' · ' . $candidateLabel;
+            $candidateLabel = $candidate ? $this->spaceLabel($candidate) : ('#'.$candidateId);
+            $parts[] = 'Основное: #'.$candidateId.' · '.$candidateLabel;
         }
 
         if ($space) {
-            $parts[] = 'Дубль выведен из контура: #' . (int) $space->id . ' · ' . $this->spaceLabel($space);
+            $parts[] = 'Дубль выведен из контура: #'.(int) $space->id.' · '.$this->spaceLabel($space);
         }
 
         if (is_array($transferCounts)) {
-            $parts[] = 'Перенесено: карта ' . (int) ($transferCounts['map_shapes'] ?? 0)
-                . ', кабинет ' . (int) ($transferCounts['cabinet_links'] ?? 0)
-                . ', товары ' . (int) ($transferCounts['marketplace_products'] ?? 0);
+            $parts[] = 'Перенесено: карта '.(int) ($transferCounts['map_shapes'] ?? 0)
+                .', кабинет '.(int) ($transferCounts['cabinet_links'] ?? 0)
+                .', товары '.(int) ($transferCounts['marketplace_products'] ?? 0);
         }
 
         if (is_array($blockingCounts)) {
-            $parts[] = 'Блокирующие связи на дубле: договоры ' . (int) ($blockingCounts['contracts'] ?? 0)
-                . ', начисления ' . (int) ($blockingCounts['accruals'] ?? 0);
+            $parts[] = 'Блокирующие связи на дубле: договоры '.(int) ($blockingCounts['contracts'] ?? 0)
+                .', начисления '.(int) ($blockingCounts['accruals'] ?? 0);
         }
 
         $parts[] = 'Договоры, начисления и долги не переносились';
@@ -2258,20 +2351,19 @@ class MapReviewResultsService
 
         if (array_key_exists('number', $payload)) {
             $value = trim((string) ($payload['number'] ?? ''));
-            $parts[] = 'Номер: ' . ($value !== '' ? $value : '—');
+            $parts[] = 'Номер: '.($value !== '' ? $value : '—');
         }
 
         if (array_key_exists('display_name', $payload)) {
             $value = trim((string) ($payload['display_name'] ?? ''));
-            $parts[] = 'Название: ' . ($value !== '' ? $value : '—');
+            $parts[] = 'Название: '.($value !== '' ? $value : '—');
         }
 
         return $parts !== [] ? implode(' · ', $parts) : 'Уточнены номер и/или название';
     }
 
     /**
-     * @param  array<int> $spaceIds
-     * @param  int $marketId
+     * @param  array<int>  $spaceIds
      * @return array<int, array<array<string, mixed>>>
      */
     private function contractDetailsForSpaces(array $spaceIds, int $marketId): array
@@ -2362,8 +2454,7 @@ class MapReviewResultsService
     }
 
     /**
-     * @param  array<int> $spaceIds
-     * @param  int $marketId
+     * @param  array<int>  $spaceIds
      * @return array<int, array<array<string, mixed>>>
      */
     private function accrualDetailsForSpaces(array $spaceIds, int $marketId): array
@@ -2389,7 +2480,7 @@ class MapReviewResultsService
         }
 
         if ($amountColumn !== null) {
-            $select[] = 'ta.' . $amountColumn . ' as amount';
+            $select[] = 'ta.'.$amountColumn.' as amount';
         }
 
         if (Schema::hasColumn('tenant_accruals', 'total_with_vat')) {

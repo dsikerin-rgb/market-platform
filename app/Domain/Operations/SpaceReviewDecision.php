@@ -1,5 +1,6 @@
 <?php
-# app/Domain/Operations/SpaceReviewDecision.php
+
+// app/Domain/Operations/SpaceReviewDecision.php
 
 declare(strict_types=1);
 
@@ -8,18 +9,36 @@ namespace App\Domain\Operations;
 final class SpaceReviewDecision
 {
     public const BIND_SHAPE_TO_SPACE = 'bind_shape_to_space';
+
     public const UNBIND_SHAPE_FROM_SPACE = 'unbind_shape_from_space';
+
     public const MARK_SPACE_FREE = 'mark_space_free';
+
     public const MARK_SPACE_SERVICE = 'mark_space_service';
+
     public const FIX_SPACE_IDENTITY = 'fix_space_identity';
+
     public const MERGE_SPACE_INTO_CANONICAL = 'merge_space_into_canonical';
+
     public const RETIRE_SPACE = 'retire_space';
+
     public const SPACE_IDENTITY_NEEDS_CLARIFICATION = 'space_identity_needs_clarification';
+
     public const DUPLICATE_SPACE_NEEDS_RESOLUTION = 'duplicate_space_needs_resolution';
+
     public const HISTORICAL_COMPOSED_SPACE_REVIEWED = 'historical_composed_space_reviewed';
+
     public const OCCUPANCY_CONFLICT = 'occupancy_conflict';
+
     public const TENANT_CHANGED_ON_SITE = 'tenant_changed_on_site';
+
     public const SHAPE_NOT_FOUND = 'shape_not_found';
+
+    public const CONFIRM_UNCONFIRMED_FINANCIAL_LINK = 'confirm_unconfirmed_financial_link';
+
+    public const REJECT_UNCONFIRMED_FINANCIAL_LINK = 'reject_unconfirmed_financial_link';
+
+    public const REOPEN_UNCONFIRMED_FINANCIAL_LINK = 'reopen_unconfirmed_financial_link';
 
     /**
      * @return array<string, string>
@@ -40,6 +59,9 @@ final class SpaceReviewDecision
             self::OCCUPANCY_CONFLICT => 'Конфликт по месту',
             self::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
             self::SHAPE_NOT_FOUND => 'Место не найдено на карте',
+            self::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Подтвердить финансовую связь с местом',
+            self::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Отклонить финансовую связь с местом',
+            self::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Вернуть финансовую связь в проверку',
         ];
     }
 
@@ -66,6 +88,7 @@ final class SpaceReviewDecision
             self::RETIRE_SPACE,
             self::DUPLICATE_SPACE_NEEDS_RESOLUTION,
             self::HISTORICAL_COMPOSED_SPACE_REVIEWED,
+            self::CONFIRM_UNCONFIRMED_FINANCIAL_LINK,
         ];
     }
 
@@ -99,6 +122,7 @@ final class SpaceReviewDecision
             self::OCCUPANCY_CONFLICT,
             self::TENANT_CHANGED_ON_SITE,
             self::SHAPE_NOT_FOUND,
+            self::REJECT_UNCONFIRMED_FINANCIAL_LINK,
         ], true);
     }
 
