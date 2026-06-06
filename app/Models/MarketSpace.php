@@ -1,5 +1,6 @@
 <?php
-# app/Models/MarketSpace.php
+
+// app/Models/MarketSpace.php
 
 namespace App\Models;
 
@@ -21,7 +22,9 @@ class MarketSpace extends Model
     private static bool $syncingOccupancyConsistency = false;
 
     public const SPACE_GROUP_ROLE_NONE = 'none';
+
     public const SPACE_GROUP_ROLE_PARENT = 'parent';
+
     public const SPACE_GROUP_ROLE_CHILD = 'child';
 
     public const SPACE_GROUP_ROLES = [
@@ -128,6 +131,7 @@ class MarketSpace extends Model
 
             if (! Schema::hasTable('market_space_tenant_bindings')) {
                 static::syncOccupancyConsistency($space);
+
                 return;
             }
 
@@ -171,7 +175,7 @@ class MarketSpace extends Model
                 ->exists()
         ) {
             $i++;
-            $code = $base . '-' . $i;
+            $code = $base.'-'.$i;
         }
 
         $this->code = $code;
@@ -483,6 +487,11 @@ class MarketSpace extends Model
     public function mapShapes(): HasMany
     {
         return $this->hasMany(MarketSpaceMapShape::class, 'market_space_id', 'id');
+    }
+
+    public function tenantContracts(): HasMany
+    {
+        return $this->hasMany(TenantContract::class, 'market_space_id', 'id');
     }
 
     public function spaceGroupParent(): BelongsTo
