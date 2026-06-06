@@ -1,11 +1,12 @@
 <?php
-# app/Services/Debt/DebtStatusResolver.php
+
+// app/Services/Debt/DebtStatusResolver.php
 
 namespace App\Services\Debt;
 
 use App\Models\ContractDebt;
-use App\Models\Tenant;
 use App\Models\Market;
+use App\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -30,9 +31,13 @@ class DebtStatusResolver
      * Статусы задолженности.
      */
     private const STATUS_GREEN = 'green';
+
     private const STATUS_PENDING = 'pending';
+
     private const STATUS_ORANGE = 'orange';
+
     private const STATUS_RED = 'red';
+
     private const STATUS_GRAY = 'gray';
 
     /**
@@ -92,7 +97,7 @@ class DebtStatusResolver
             ->first(['tenant_id', 'is_active']);
 
         // Место не найдено или нет арендатора — нейтральный результат (scope=none)
-        if (!$space || !$space->tenant_id) {
+        if (! $space || ! $space->tenant_id) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
@@ -103,7 +108,7 @@ class DebtStatusResolver
         }
 
         // Место не активно — нейтральный результат (scope=none)
-        if (!$space->is_active) {
+        if (! $space->is_active) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
@@ -113,8 +118,23 @@ class DebtStatusResolver
             );
         }
 
+        $sharedUseParticipantCount = $this->activeSharedUseParticipantCount($marketSpaceId, $marketId);
+        if ($sharedUseParticipantCount > 1) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Совместное использование: нет точной финансовой связи 1С',
+                source: 'shared-use: multiple active participants',
+                severity: 0,
+                extra: [
+                    'scope' => 'shared_use',
+                    'active_count' => $sharedUseParticipantCount,
+                ]
+            );
+        }
+
         $tenant = Tenant::find($space->tenant_id);
-        if (!$tenant) {
+        if (! $tenant) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
@@ -174,7 +194,7 @@ class DebtStatusResolver
         }
 
         // Проверяем наличие таблицы contract_debts
-        if (!Schema::hasTable('contract_debts')) {
+        if (! Schema::hasTable('contract_debts')) {
             // Таблица отсутствует — нейтральный результат (scope=none)
             return $this->makeResult(
                 mode: 'auto',
@@ -191,7 +211,7 @@ class DebtStatusResolver
         $hasCreatedAt = Schema::hasColumn('contract_debts', 'created_at');
         $hasPeriod = Schema::hasColumn('contract_debts', 'period');
 
-        if (!$hasDebt) {
+        if (! $hasDebt) {
             // Поле отсутствует — нейтральный результат (scope=none)
             return $this->makeResult(
                 mode: 'auto',
@@ -360,7 +380,7 @@ class DebtStatusResolver
         $now = Carbon::now();
         $isOverdue = $now->gt($dueDate);
 
-        if (!$isOverdue) {
+        if (! $isOverdue) {
             $fallbackResult = $this->makeTenantFallbackResult(
                 $tenant,
                 'tenant-fallback: space debt not due'
@@ -448,13 +468,6 @@ class DebtStatusResolver
 
     /**
      * Рассчитать дату оплаты (due date) из rows.
-     *
-     * @param \Illuminate\Support\Collection $rows
-     * @param int $graceDays
-     * @param bool $hasPeriod
-     * @param bool $hasCalculatedAt
-     * @param bool $hasCreatedAt
-     * @return Carbon|null
      */
     private function calculateDueDateFromRows(
         Collection $rows,
@@ -510,7 +523,7 @@ class DebtStatusResolver
                 try {
                     // period в формате YYYY-MM
                     if (preg_match('/^\d{4}-\d{2}/', $oldestPeriod) === 1) {
-                        return Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01')
+                        return Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7).'-01')
                             ->startOfMonth()
                             ->addDays($graceDays);
                     }
@@ -567,7 +580,7 @@ class DebtStatusResolver
             return $oldBalanceDueDate;
         }
 
-        if (property_exists($row, 'due_date') && !empty($row->due_date)) {
+        if (property_exists($row, 'due_date') && ! empty($row->due_date)) {
             try {
                 return Carbon::parse($row->due_date);
             } catch (\Throwable) {
@@ -575,7 +588,7 @@ class DebtStatusResolver
             }
         }
 
-        if ($hasCalculatedAt && !empty($row->calculated_at)) {
+        if ($hasCalculatedAt && ! empty($row->calculated_at)) {
             try {
                 return Carbon::parse($row->calculated_at)->addDays($graceDays);
             } catch (\Throwable) {
@@ -583,7 +596,7 @@ class DebtStatusResolver
             }
         }
 
-        if ($hasCreatedAt && !empty($row->created_at)) {
+        if ($hasCreatedAt && ! empty($row->created_at)) {
             try {
                 return Carbon::parse($row->created_at)->addDays($graceDays);
             } catch (\Throwable) {
@@ -595,7 +608,7 @@ class DebtStatusResolver
             $period = (string) ($row->period ?? '');
             if (preg_match('/^\d{4}-\d{2}/', $period) === 1) {
                 try {
-                    return Carbon::createFromFormat('Y-m-d', substr($period, 0, 7) . '-01')
+                    return Carbon::createFromFormat('Y-m-d', substr($period, 0, 7).'-01')
                         ->startOfMonth()
                         ->addDays($graceDays);
                 } catch (\Throwable) {
@@ -614,7 +627,7 @@ class DebtStatusResolver
      */
     private function calculateOldBalanceDueDate(object $row, int $graceDays, bool $hasPeriod): ?Carbon
     {
-        if (!$hasPeriod) {
+        if (! $hasPeriod) {
             return null;
         }
 
@@ -623,7 +636,7 @@ class DebtStatusResolver
             return null;
         }
 
-        if (!property_exists($row, 'accrued_amount') || !property_exists($row, 'paid_amount')) {
+        if (! property_exists($row, 'accrued_amount') || ! property_exists($row, 'paid_amount')) {
             return null;
         }
 
@@ -635,7 +648,7 @@ class DebtStatusResolver
         }
 
         try {
-            return Carbon::createFromFormat('Y-m-d', substr($period, 0, 7) . '-01')
+            return Carbon::createFromFormat('Y-m-d', substr($period, 0, 7).'-01')
                 ->startOfMonth()
                 ->subMonthNoOverflow()
                 ->addDays($graceDays);
@@ -645,8 +658,8 @@ class DebtStatusResolver
     }
 
     /**
-     * @param list<string> $contractExternalIds
-     * @param list<string> $fields
+     * @param  list<string>  $contractExternalIds
+     * @param  list<string>  $fields
      */
     private function fetchContractDebtAgingRows(int $marketId, array $contractExternalIds, array $fields): Collection
     {
@@ -710,8 +723,6 @@ class DebtStatusResolver
 
     /**
      * Проверить ручной статус.
-     *
-     * @return array|null
      */
     private function checkManualStatus(Tenant $tenant): ?array
     {
@@ -860,7 +871,7 @@ class DebtStatusResolver
         $now = Carbon::now();
         $isOverdue = $now->gt($dueDate);
 
-        if (!$isOverdue) {
+        if (! $isOverdue) {
             // Срок ещё не наступил
             return $this->makeResult(
                 mode: 'auto',
@@ -947,7 +958,7 @@ class DebtStatusResolver
      */
     private function fetchDebtsData(Tenant $tenant): ?array
     {
-        if (!Schema::hasTable('contract_debts')) {
+        if (! Schema::hasTable('contract_debts')) {
             return null;
         }
 
@@ -960,7 +971,7 @@ class DebtStatusResolver
         $hasDueDate = Schema::hasColumn('contract_debts', 'due_date');
         $hasDebt = Schema::hasColumn('contract_debts', 'debt_amount');
 
-        if (!$hasDebt) {
+        if (! $hasDebt) {
             return null;
         }
 
@@ -1008,10 +1019,18 @@ class DebtStatusResolver
         if (Schema::hasColumn('contract_debts', 'paid_amount')) {
             $fields[] = 'paid_amount';
         }
-        if ($hasDueDate) $fields[] = 'due_date';
-        if ($hasCalculatedAt) $fields[] = 'calculated_at';
-        if ($hasCreatedAt) $fields[] = 'created_at';
-        if ($hasPeriod) $fields[] = 'period';
+        if ($hasDueDate) {
+            $fields[] = 'due_date';
+        }
+        if ($hasCalculatedAt) {
+            $fields[] = 'calculated_at';
+        }
+        if ($hasCreatedAt) {
+            $fields[] = 'created_at';
+        }
+        if ($hasPeriod) {
+            $fields[] = 'period';
+        }
 
         $rows = $query->get($fields);
         $agingRows = $usesContractExternalIds
@@ -1020,7 +1039,7 @@ class DebtStatusResolver
 
         // Определяем snapshot label
         $snapshotLabel = null;
-        if ($hasCalculatedAt && !$rows->isEmpty()) {
+        if ($hasCalculatedAt && ! $rows->isEmpty()) {
             $latest = $rows->max('calculated_at');
             if ($latest) {
                 try {
@@ -1049,7 +1068,7 @@ class DebtStatusResolver
      */
     private function fetchAccrualsFallbackData(Tenant $tenant): ?array
     {
-        if (!Schema::hasTable('tenant_accruals')) {
+        if (! Schema::hasTable('tenant_accruals')) {
             return null;
         }
 
@@ -1090,10 +1109,6 @@ class DebtStatusResolver
 
     /**
      * Рассчитать дату оплаты из accruals.
-     *
-     * @param array $data
-     * @param int $graceDays
-     * @return Carbon|null
      */
     private function calculateDueDateFromAccruals(array $data, int $graceDays): ?Carbon
     {
@@ -1110,7 +1125,7 @@ class DebtStatusResolver
         if ($lastPeriod) {
             try {
                 if (preg_match('/^\d{4}-\d{2}/', (string) $lastPeriod) === 1) {
-                    return Carbon::createFromFormat('Y-m-d', substr((string) $lastPeriod, 0, 7) . '-01')
+                    return Carbon::createFromFormat('Y-m-d', substr((string) $lastPeriod, 0, 7).'-01')
                         ->startOfMonth()
                         ->addDays($graceDays);
                 }
@@ -1127,10 +1142,6 @@ class DebtStatusResolver
      *
      * For positive debt rows, use the OLDEST date to avoid "rejuvenating"
      * old debt with newer snapshots — same principle as calculateDueDateFromRows().
-     *
-     * @param array $data
-     * @param int $graceDays
-     * @return Carbon|null
      */
     private function calculateDueDate(array $data, int $graceDays): ?Carbon
     {
@@ -1158,7 +1169,7 @@ class DebtStatusResolver
         if ($data['has_due_date']) {
             $earliestDueDate = null;
             foreach ($agingRows as $row) {
-                if (!empty($row->due_date)) {
+                if (! empty($row->due_date)) {
                     try {
                         $due = Carbon::parse($row->due_date);
                         if ($earliestDueDate === null || $due->lt($earliestDueDate)) {
@@ -1205,7 +1216,7 @@ class DebtStatusResolver
                 try {
                     // period в формате YYYY-MM
                     if (preg_match('/^\d{4}-\d{2}/', $oldestPeriod) === 1) {
-                        return Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7) . '-01')
+                        return Carbon::createFromFormat('Y-m-d', substr($oldestPeriod, 0, 7).'-01')
                             ->startOfMonth()
                             ->addDays($graceDays);
                     }
@@ -1220,14 +1231,11 @@ class DebtStatusResolver
 
     /**
      * Получить настройки рынка.
-     *
-     * @param int $marketId
-     * @return array
      */
     private function getMarketSettings(int $marketId): array
     {
         $market = Market::find($marketId);
-        if (!$market) {
+        if (! $market) {
             return [
                 'grace_days' => 5,
                 'yellow_after_days' => 1,
@@ -1252,7 +1260,7 @@ class DebtStatusResolver
         $tenantResolved = $this->resolve($tenant);
         $tenantStatus = $tenantResolved['status'] ?? null;
 
-        if (!in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
+        if (! in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
             return null;
         }
 
@@ -1273,6 +1281,32 @@ class DebtStatusResolver
     private function isTenantFallbackDebtStatus(?string $status): bool
     {
         return in_array($status, [self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true);
+    }
+
+    private function activeSharedUseParticipantCount(int $marketSpaceId, int $marketId): int
+    {
+        if (
+            ! Schema::hasTable('market_space_tenant_bindings')
+            || ! Schema::hasColumn('market_space_tenant_bindings', 'binding_type')
+        ) {
+            return 0;
+        }
+
+        $now = now();
+
+        return (int) DB::table('market_space_tenant_bindings')
+            ->where('market_space_id', $marketSpaceId)
+            ->where('market_id', $marketId)
+            ->where('binding_type', 'shared_use')
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('started_at')
+                    ->orWhere('started_at', '<=', $now);
+            })
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('ended_at')
+                    ->orWhere('ended_at', '>', $now);
+            })
+            ->count();
     }
 
     private function resolveActiveContractExternalIdsForMarketSpace(
@@ -1336,14 +1370,14 @@ class DebtStatusResolver
         $redAfterDays = max($yellowAfterDays + 1, (int) ($settings['red_after_days'] ?? 30));
 
         $orangeLabel = $yellowAfterDays <= 1
-            ? 'Просрочка до ' . ($redAfterDays - 1) . ' дн.'
-            : 'Просрочка ' . $yellowAfterDays . '-' . ($redAfterDays - 1) . ' дн.';
+            ? 'Просрочка до '.($redAfterDays - 1).' дн.'
+            : 'Просрочка '.$yellowAfterDays.'-'.($redAfterDays - 1).' дн.';
 
         return [
             self::STATUS_GREEN => 'Нет задолженности',
             self::STATUS_PENDING => 'К оплате / срок не наступил',
             self::STATUS_ORANGE => $orangeLabel,
-            self::STATUS_RED => 'Просрочка от ' . $redAfterDays . ' дн.',
+            self::STATUS_RED => 'Просрочка от '.$redAfterDays.' дн.',
             self::STATUS_GRAY => 'Нет данных',
         ];
     }
@@ -1351,13 +1385,6 @@ class DebtStatusResolver
     /**
      * Создать результат расчёта.
      *
-     * @param string $mode
-     * @param string|null $status
-     * @param string $label
-     * @param string|null $updatedAt
-     * @param string|null $source
-     * @param int $severity
-     * @param array $extra
      * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int,extra:?array}
      */
     private function makeResult(
@@ -1382,9 +1409,6 @@ class DebtStatusResolver
 
     /**
      * Получить severity статуса.
-     *
-     * @param string $status
-     * @return int
      */
     private function getSeverity(string $status): int
     {
@@ -1399,13 +1423,10 @@ class DebtStatusResolver
 
     /**
      * Получить ключ кеша.
-     *
-     * @param Tenant $tenant
-     * @return string
      */
     private function getCacheKey(Tenant $tenant): string
     {
-        return $tenant->market_id . ':' . $tenant->id . ':' . ($tenant->updated_at?->timestamp ?? 0);
+        return $tenant->market_id.':'.$tenant->id.':'.($tenant->updated_at?->timestamp ?? 0);
     }
 
     /**
