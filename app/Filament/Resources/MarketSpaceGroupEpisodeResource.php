@@ -8,6 +8,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketSpaceGroupEpisodeResource\Pages;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
+use App\Models\MarketSpaceGroupEpisodeChild;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -31,7 +32,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-group';
 
-    protected static ?int $navigationSort = 42;
+    protected static ?int $navigationSort = 96;
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -65,7 +66,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
 
     public static function getNavigationGroup(): ?string
     {
-        return null;
+        return 'Ревизия и диагностика';
     }
 
     protected static function selectedMarketIdFromSession(): ?int
@@ -180,9 +181,13 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
                         ->schema([
                             Forms\Components\Select::make('child_market_space_id')
                                 ->label('Место')
-                                ->options(function ($get, ?MarketSpaceGroupEpisode $record) use ($user): array {
-                                    $marketId = $get('../../market_id') ?: $record?->market_id ?: $user?->market_id;
-                                    $parentId = (int) ($get('../../parent_market_space_id') ?: $record?->parent_market_space_id ?: 0);
+                                ->options(function ($get, mixed $record) use ($user): array {
+                                    $episode = $record instanceof MarketSpaceGroupEpisode
+                                        ? $record
+                                        : ($record instanceof MarketSpaceGroupEpisodeChild ? $record->episode : null);
+
+                                    $marketId = $get('../../market_id') ?: $episode?->market_id ?: $user?->market_id;
+                                    $parentId = (int) ($get('../../parent_market_space_id') ?: $episode?->parent_market_space_id ?: 0);
                                     if (! $marketId) {
                                         return [];
                                     }
