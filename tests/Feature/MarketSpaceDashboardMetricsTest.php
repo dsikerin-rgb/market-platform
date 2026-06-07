@@ -11,6 +11,7 @@ use App\Models\MarketSpaceTenantBinding;
 use App\Models\Tenant;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class MarketSpaceDashboardMetricsTest extends TestCase
@@ -100,7 +101,7 @@ class MarketSpaceDashboardMetricsTest extends TestCase
             'market_id' => (int) $market->id,
             'number' => 'B-2',
             'status' => 'vacant',
-            'tenant_id' => (int) $historicalTenant->id,
+            'tenant_id' => null,
             'area_sqm' => 10,
             'is_active' => true,
         ]);
@@ -112,6 +113,16 @@ class MarketSpaceDashboardMetricsTest extends TestCase
             'tenant_id' => (int) $inactiveTenant->id,
             'area_sqm' => 10,
             'is_active' => true,
+        ]);
+
+        DB::table('market_space_tenant_histories')->insert([
+            'market_space_id' => (int) $historicalSpace->id,
+            'old_tenant_id' => (int) $historicalTenant->id,
+            'new_tenant_id' => null,
+            'changed_at' => now()->subDay(),
+            'changed_by_user_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $sharedSpace = MarketSpace::query()->create([
@@ -134,6 +145,7 @@ class MarketSpaceDashboardMetricsTest extends TestCase
             'market_space_id' => (int) $sharedSpace->id,
             'tenant_id' => (int) $currentTenant->id,
             'binding_type' => 'shared_use',
+            'source' => 'test',
             'area_sqm' => 12,
             'started_at' => now(),
             'ended_at' => null,

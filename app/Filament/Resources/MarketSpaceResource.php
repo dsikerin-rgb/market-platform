@@ -14,6 +14,7 @@ use App\Models\Tenant;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
+use App\Support\MarketSpaces\MarketSpaceShapePolicy;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Grid;
@@ -2382,6 +2383,15 @@ class MarketSpaceResource extends BaseResource
         $table = $table
             ->modifyQueryUsing(function (Builder $query): Builder {
                 $state = request()->input('tableFilters.activity_scope.value');
+                if (SchemaFacade::hasTable('market_space_map_shapes')) {
+                    $query->withCount([
+                        'mapShapes as active_map_shapes_count' => function (Builder $shapeQuery): void {
+                            if (SchemaFacade::hasColumn('market_space_map_shapes', 'is_active')) {
+                                $shapeQuery->where('is_active', true);
+                            }
+                        },
+                    ]);
+                }
 
                 return match ($state) {
                     'all' => $query,
@@ -2456,6 +2466,14 @@ class MarketSpaceResource extends BaseResource
                     ->sortable()
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('map_shape_policy')
+                    ->label('Фигура карты')
+                    ->state(fn (MarketSpace $record): string => MarketSpaceShapePolicy::requirementFor($record)['label'])
+                    ->badge()
+                    ->color(fn (MarketSpace $record): string => MarketSpaceShapePolicy::requirementFor($record)['color'])
+                    ->tooltip(fn (MarketSpace $record): string => MarketSpaceShapePolicy::requirementFor($record)['tooltip'])
+                    ->toggleable(),
 
                 TextColumn::make('effective_occupancy')
                     ->label('Фактическая занятость')
