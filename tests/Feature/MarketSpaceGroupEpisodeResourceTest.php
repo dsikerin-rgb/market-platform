@@ -8,6 +8,7 @@ use App\Filament\Resources\MarketSpaceGroupEpisodeResource;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
+use App\Models\MarketSpaceGroupEpisodeChild;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
@@ -36,9 +37,24 @@ class MarketSpaceGroupEpisodeResourceTest extends TestCase
             'valid_to' => '2026-01-31',
             'source' => 'test',
         ]);
+        $child = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'ОС1 6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => (int) $parent->id,
+            'space_group_slot' => '6',
+            'is_active' => true,
+        ]);
+        MarketSpaceGroupEpisodeChild::query()->create([
+            'market_space_group_episode_id' => (int) $episode->id,
+            'child_market_space_id' => (int) $child->id,
+            'slot' => '6',
+            'sort_order' => 1,
+        ]);
 
         $this->assertTrue(MarketSpaceGroupEpisodeResource::canViewAny());
         $this->assertTrue(MarketSpaceGroupEpisodeResource::shouldRegisterNavigation());
+        $this->assertSame('Ревизия и диагностика', MarketSpaceGroupEpisodeResource::getNavigationGroup());
 
         $this->get(MarketSpaceGroupEpisodeResource::getUrl('index'))->assertOk();
         $this->get(MarketSpaceGroupEpisodeResource::getUrl('create'))->assertOk();
