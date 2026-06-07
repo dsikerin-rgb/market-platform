@@ -1409,6 +1409,10 @@
       color: #cbd5e1;
       font-weight: 700;
     }
+    .popover .row-group-context .row-value {
+      color: #bfdbfe;
+      font-weight: 700;
+    }
     .popover .contract-chip {
       display: inline-flex;
       align-items: center;
@@ -7130,6 +7134,7 @@
               let line4HelpText = '';
               let line5HelpText = '';
               let line6HelpText = '';
+              let groupContextLine = '';
               let groupParentId = 0;
               let isChildInGroup = false;
               let needsGroupTenantAssignment = false;
@@ -7169,6 +7174,9 @@
                 const groupParentTenantName = groupParent?.tenant_name ? String(groupParent.tenant_name).trim() : '';
                 isChildInGroup = (space.space_group_role ? String(space.space_group_role) : '') === 'child' && groupParentId > 0;
                 needsGroupTenantAssignment = isChildInGroup && !groupParentTenantName;
+                groupContextLine = isChildInGroup && groupParentLabel
+                  ? ('Входит в группу: ' + escapeHtml(groupParentLabel))
+                  : '';
                 const rentRateValue = space.rent_rate_value !== null && space.rent_rate_value !== undefined ? Number(space.rent_rate_value) : null;
                 const rentRateUnit = rentRateUnitLabel(space.rent_rate_unit || '');
                 const currentAccrualTotal = space.current_accrual_total !== null && space.current_accrual_total !== undefined ? Number(space.current_accrual_total) : null;
@@ -7611,6 +7619,7 @@
                   '<div class="t">' + title + '</div>' +
                   buildPopoverRow(line2) +
                   buildPopoverRow(line3) +
+                  buildPopoverRow(groupContextLine, 'row-group-context', 'Это дочернее место. Договоры 1С, начисления и общий финансовый статус должны проверяться по основной группе.') +
                   buildPopoverRow(line4, line4Class, line4HelpText) +
                   buildPopoverRow(line5, line5ExtraClass, line5HelpText) +
                   buildPopoverRow(line6, line6Class, line6HelpText) +

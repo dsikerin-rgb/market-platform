@@ -3256,6 +3256,16 @@ JS;
         $this->assertStringContainsString('data-decision="mark_space_free"', $blade);
     }
 
+    public function test_market_map_popup_keeps_child_group_context_separate_from_finances(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+
+        $this->assertStringContainsString("let groupContextLine = '';", $blade);
+        $this->assertStringContainsString("('Входит в группу: ' + escapeHtml(groupParentLabel))", $blade);
+        $this->assertStringContainsString("buildPopoverRow(groupContextLine, 'row-group-context'", $blade);
+        $this->assertStringContainsString('Договоры 1С, начисления и общий финансовый статус должны проверяться по основной группе.', $blade);
+    }
+
     public function test_market_map_review_navigation_skips_stale_reviewed_candidate_for_next_pending(): void
     {
         $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
