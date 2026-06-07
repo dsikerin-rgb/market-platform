@@ -503,4 +503,14 @@ class MarketSpace extends Model
     {
         return $this->hasMany(MarketSpace::class, 'space_group_parent_id');
     }
+
+    public function groupEpisodes(): HasMany
+    {
+        return $this->hasMany(MarketSpaceGroupEpisode::class, 'parent_market_space_id');
+    }
+
+    public function groupEpisodeMemberships(): HasMany
+    {
+        return $this->hasMany(MarketSpaceGroupEpisodeChild::class, 'child_market_space_id');
+    }
 }

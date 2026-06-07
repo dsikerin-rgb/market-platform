@@ -442,6 +442,16 @@ class TenantContractResource extends BaseResource
 
                 Tab::make('История')
                     ->schema([
+                        Section::make('Состав группы на дату договора')
+                            ->description('Показывает, из каких физических мест состояла группа на дату документа. Если исторический эпизод ещё не заведен, показывается текущий состав с предупреждением.')
+                            ->schema([
+                                Placeholder::make('group_episode_display')
+                                    ->hiddenLabel()
+                                    ->content(fn (?TenantContract $record): HtmlString => static::groupEpisodePreview($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1),
+
                         Section::make('Историческая цепочка по месту')
                             ->description('Показывает документы по тому же токену места в порядке даты из номера договора. Именно эта дата считается основной для истории.')
                             ->schema([
@@ -2357,6 +2367,135 @@ class TenantContractResource extends BaseResource
         }
 
         return $short !== '' ? $short : ($name !== '' ? $name : '—');
+    }
+
+    private static function groupEpisodePreview(?TenantContract $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div class="text-sm text-gray-500">Нет данных.</div>');
+        }
+
+        $classified = static::classificationForRecord($record);
+        $documentDate = (string) (static::resolveOrderDate($record, $classified['document_date'] ?? null) ?? '');
+        $resolution = app(\App\Support\MarketSpaces\MarketSpaceGroupEpisodeResolver::class)
+            ->forContract($record, $documentDate);
+
+        if (! ($resolution['applies'] ?? false)) {
+            return new HtmlString('<div class="text-sm text-gray-500">'.e((string) ($resolution['message'] ?? 'Договор не относится к группе мест.')).'</div>');
+        }
+
+        /** @var MarketSpace|null $parent */
+        $parent = $resolution['parent'] ?? null;
+        $episode = $resolution['episode'] ?? null;
+        $children = $resolution['children'] ?? collect();
+        $source = (string) ($resolution['source'] ?? 'none');
+        $sourceLabel = match ($source) {
+            'episode' => 'Исторический эпизод',
+            'current' => 'Текущий состав',
+            default => 'Нет данных',
+        };
+        $sourceClass = $source === 'episode'
+            ? 'contract-group-episode__badge--success'
+            : 'contract-group-episode__badge--warning';
+
+        $parentLabel = $parent instanceof MarketSpace
+            ? static::spaceOptionLabel($parent->display_name, $parent->number, $parent->code)
+            : '—';
+        $asOfLabel = static::formatClassifierDate($resolution['as_of'] ?? null);
+        $periodLabel = '—';
+
+        if ($episode instanceof \App\Models\MarketSpaceGroupEpisode) {
+            $from = $episode->valid_from ? $episode->valid_from->format('d.m.Y') : '—';
+            $to = $episode->valid_to ? $episode->valid_to->format('d.m.Y') : '—';
+            $periodLabel = $from.' - '.$to;
+        }
+
+        $rowsHtml = '';
+        foreach ($children as $index => $child) {
+            if (! $child instanceof MarketSpace) {
+                continue;
+            }
+
+            $slot = trim((string) ($child->space_group_slot ?? ''));
+            $label = static::spaceOptionLabel($child->display_name, $child->number, $child->code);
+            $area = is_numeric($child->area_sqm ?? null)
+                ? number_format((float) $child->area_sqm, 2, ',', ' ').' м²'
+                : '—';
+
+            $rowsHtml .= '<tr>'
+                .'<td>'.e((string) ($index + 1)).'</td>'
+                .'<td>'.e($slot !== '' ? $slot : '—').'</td>'
+                .'<td>'.e($label).'</td>'
+                .'<td>'.e($area).'</td>'
+                .'</tr>';
+        }
+
+        if ($rowsHtml === '') {
+            $rowsHtml = '<tr><td colspan="4" class="contract-group-episode__empty">Состав группы не указан.</td></tr>';
+        }
+
+        $message = (string) ($resolution['message'] ?? '');
+
+        return new HtmlString(
+            '<style>
+                .contract-group-episode{display:grid;gap:12px}
+                .contract-group-episode__summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+                .contract-group-episode__fact{border:1px solid rgba(148,163,184,.25);border-radius:8px;padding:10px;background:#fff}
+                .dark .contract-group-episode__fact{background:rgba(255,255,255,.04);border-color:rgba(148,163,184,.2)}
+                .contract-group-episode__label{font-size:12px;color:#64748b;line-height:1.2}
+                .contract-group-episode__value{margin-top:4px;font-size:14px;font-weight:650;color:#0f172a;line-height:1.35;overflow-wrap:anywhere}
+                .dark .contract-group-episode__value{color:#e5e7eb}
+                .contract-group-episode__badge{display:inline-flex;align-items:center;border-radius:999px;border:1px solid transparent;padding:3px 8px;font-size:12px;font-weight:700}
+                .contract-group-episode__badge--success{border-color:#bbf7d0;background:#dcfce7;color:#166534}
+                .contract-group-episode__badge--warning{border-color:#fde68a;background:#fef3c7;color:#92400e}
+                .contract-group-episode__note{font-size:13px;line-height:1.45;color:#64748b}
+                .contract-group-episode__table-wrap{overflow-x:auto;border:1px solid rgba(148,163,184,.25);border-radius:8px}
+                .contract-group-episode__table{width:100%;min-width:560px;border-collapse:collapse;background:#fff}
+                .dark .contract-group-episode__table{background:rgba(255,255,255,.03)}
+                .contract-group-episode__table th{padding:9px 10px;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0;color:#64748b;background:#f8fafc;border-bottom:1px solid rgba(148,163,184,.25)}
+                .dark .contract-group-episode__table th{background:rgba(255,255,255,.05)}
+                .contract-group-episode__table td{padding:9px 10px;font-size:13px;color:#334155;border-bottom:1px solid rgba(148,163,184,.16)}
+                .dark .contract-group-episode__table td{color:#e5e7eb}
+                .contract-group-episode__table tr:last-child td{border-bottom:0}
+                .contract-group-episode__empty{text-align:center;color:#64748b}
+                @media (max-width:1100px){.contract-group-episode__summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+                @media (max-width:640px){.contract-group-episode__summary{grid-template-columns:1fr}}
+            </style>
+            <div class="contract-group-episode">
+                <div class="contract-group-episode__summary">
+                    <div class="contract-group-episode__fact">
+                        <div class="contract-group-episode__label">Группа</div>
+                        <div class="contract-group-episode__value">'.e($parentLabel).'</div>
+                    </div>
+                    <div class="contract-group-episode__fact">
+                        <div class="contract-group-episode__label">Дата проверки</div>
+                        <div class="contract-group-episode__value">'.e($asOfLabel).'</div>
+                    </div>
+                    <div class="contract-group-episode__fact">
+                        <div class="contract-group-episode__label">Источник состава</div>
+                        <div class="contract-group-episode__value"><span class="contract-group-episode__badge '.e($sourceClass).'">'.e($sourceLabel).'</span></div>
+                    </div>
+                    <div class="contract-group-episode__fact">
+                        <div class="contract-group-episode__label">Период эпизода</div>
+                        <div class="contract-group-episode__value">'.e($periodLabel).'</div>
+                    </div>
+                </div>
+                <div class="contract-group-episode__note">'.e($message).'</div>
+                <div class="contract-group-episode__table-wrap">
+                    <table class="contract-group-episode__table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Слот</th>
+                                <th>Место</th>
+                                <th>Площадь</th>
+                            </tr>
+                        </thead>
+                        <tbody>'.$rowsHtml.'</tbody>
+                    </table>
+                </div>
+            </div>'
+        );
     }
 
     private static function historyChainPreview(?TenantContract $record): HtmlString
