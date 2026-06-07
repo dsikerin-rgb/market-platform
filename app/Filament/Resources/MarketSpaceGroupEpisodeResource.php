@@ -139,6 +139,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
                             'contract' => 'По договору',
                             'accrual' => 'По начислениям',
                             'import' => 'Импорт',
+                            'backfill_current' => 'Снимок текущего состава',
                             'test' => 'Тест',
                         ])
                         ->default('manual')
@@ -272,6 +273,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
                         'contract' => 'Договор',
                         'accrual' => 'Начисления',
                         'import' => 'Импорт',
+                        'backfill_current' => 'Снимок текущего состава',
                         'test' => 'Тест',
                         default => $state ?: '—',
                     }),
