@@ -61,7 +61,7 @@ class MarketSpaceGroupEpisodeResourceTest extends TestCase
         $this->get(MarketSpaceGroupEpisodeResource::getUrl('edit', ['record' => $episode]))->assertOk();
     }
 
-    public function test_market_admin_can_open_group_episode_index(): void
+    public function test_market_admin_cannot_open_group_episode_resource(): void
     {
         [$market] = $this->makeMarketAndParentGroup();
         Role::findOrCreate('market-admin', 'web');
@@ -73,10 +73,10 @@ class MarketSpaceGroupEpisodeResourceTest extends TestCase
         $user->assignRole('market-admin');
         $this->actingAs($user);
 
-        $this->assertTrue(MarketSpaceGroupEpisodeResource::canViewAny());
-        $this->assertTrue(MarketSpaceGroupEpisodeResource::shouldRegisterNavigation());
+        $this->assertFalse(MarketSpaceGroupEpisodeResource::canViewAny());
+        $this->assertFalse(MarketSpaceGroupEpisodeResource::shouldRegisterNavigation());
 
-        $this->get(MarketSpaceGroupEpisodeResource::getUrl('index'))->assertOk();
+        $this->get(MarketSpaceGroupEpisodeResource::getUrl('index'))->assertForbidden();
     }
 
     /**
