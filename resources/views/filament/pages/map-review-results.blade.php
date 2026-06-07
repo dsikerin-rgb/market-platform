@@ -755,6 +755,11 @@
                 grid-column: 1 / -1;
             }
 
+            .mrr-needs-card--unconfirmed-layout .mrr-needs-card__body-grid {
+                grid-template-columns: minmax(18rem, 0.78fr) minmax(0, 1.22fr);
+                gap: 1rem;
+            }
+
             .mrr-conflict-brief {
                 border-radius: 1rem;
                 border: 1px solid rgba(15, 23, 42, 0.08);
@@ -3045,7 +3050,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                             }
                                         @endphp
 
-                                         <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }} {{ $isConflictCase ? 'mrr-needs-card--conflict-layout' : '' }}"
+                                         <details class="mrr-needs-card {{ $row['priority_is_high'] ? 'mrr-needs-card--priority' : '' }} {{ $isConflictCase ? 'mrr-needs-card--conflict-layout' : '' }} {{ $isUnconfirmedWorkflowTab ? 'mrr-needs-card--unconfirmed-layout' : '' }}"
                                                   data-mrr-attention-card
                                                   data-mrr-review-status="{{ $row['review_status'] ?? '' }}"
                                                  data-mrr-decision="{{ $row['decision'] ?? '' }}"
@@ -3404,11 +3409,11 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                             @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
                                                                 <div class="mrr-card-actions__group">
-                                                                    <div class="mrr-card-actions__label">Решение по финансовой связи</div>
+                                                                    <div class="mrr-card-actions__label">Показывать долг на этом месте?</div>
                                                                     <div class="mrr-card-actions__hint">
                                                                         {{ $attentionTab === 'unconfirmed_links_rejected'
-                                                                            ? 'Связь скрыта из активной проверки. Верните её, если отклонение было ошибочным.'
-                                                                            : 'Подтвердите связь, если долг арендатора можно использовать для этого места, или отклоните, если связь неверная.' }}
+                                                                            ? 'Сейчас общий долг арендатора не применяется к этому месту.'
+                                                                            : 'Решение только про общий долг арендатора на карте. Договоры и суммы в 1С не меняются.' }}
                                                                     </div>
                                                                     <div class="mrr-card-actions__row">
                                                                         @if ($attentionTab === 'unconfirmed_links_rejected')
@@ -3418,7 +3423,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-unconfirmed-link-action
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="reopen_unconfirmed_financial_link"
-                                                                                data-mrr-confirm="Вернуть связь по месту {{ $currentSpaceLabel }} в активную проверку?"
+                                                                                data-mrr-confirm="Вернуть место {{ $currentSpaceLabel }} в проверку общего долга арендатора?"
                                                                             >
                                                                                 Вернуть в проверку
                                                                             </button>
@@ -3429,10 +3434,10 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-unconfirmed-link-action
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="confirm_unconfirmed_financial_link"
-                                                                                data-mrr-reason="Оператор подтвердил, что финансовый статус арендатора применим к этому месту."
-                                                                                data-mrr-confirm="Подтвердить финансовую связь по месту {{ $currentSpaceLabel }}?"
+                                                                                data-mrr-reason="Оператор разрешил показывать общий долг арендатора на этом месте."
+                                                                                data-mrr-confirm="Показывать общий долг арендатора на месте {{ $currentSpaceLabel }}?"
                                                                             >
-                                                                                Подтвердить связь
+                                                                                Показывать долг
                                                                             </button>
                                                                             <button
                                                                                 type="button"
@@ -3441,9 +3446,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="reject_unconfirmed_financial_link"
                                                                                 data-mrr-reason-required="1"
-                                                                                data-mrr-prompt="Почему связь по месту {{ $currentSpaceLabel }} отклоняется?"
+                                                                                data-mrr-prompt="Почему общий долг арендатора нельзя показывать на месте {{ $currentSpaceLabel }}?"
                                                                             >
-                                                                                Отклонить
+                                                                                Не показывать долг
                                                                             </button>
                                                                         @endif
                                                                     </div>
@@ -3497,17 +3502,14 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                             @if ($isUnconfirmedWorkflowTab && $unconfirmedClassificationLabel !== '')
                                                                 <div class="mrr-unconfirmed-reason mrr-unconfirmed-reason--{{ $unconfirmedClassificationTone }}">
-                                                                    <div class="mrr-unconfirmed-reason__kicker">Причина по данным</div>
+                                                                    <div class="mrr-unconfirmed-reason__kicker">Вывод системы</div>
                                                                     <div class="mrr-unconfirmed-reason__title">{{ $unconfirmedClassificationLabel }}</div>
-                                                                    @if ($unconfirmedClassificationSummary !== '')
-                                                                        <div class="mrr-unconfirmed-reason__summary">{{ $unconfirmedClassificationSummary }}</div>
-                                                                    @endif
                                                                     @if ($unconfirmedClassificationAction !== '')
-                                                                        <div class="mrr-unconfirmed-reason__next"><strong>Что делать:</strong> {{ $unconfirmedClassificationAction }}</div>
+                                                                        <div class="mrr-unconfirmed-reason__next">{{ $unconfirmedClassificationAction }}</div>
                                                                     @endif
                                                                     @if ($unconfirmedClassificationEvidence !== [])
                                                                         <div class="mrr-unconfirmed-reason__evidence">
-                                                                            @foreach (array_slice($unconfirmedClassificationEvidence, 0, 5) as $evidenceItem)
+                                                                            @foreach (array_slice($unconfirmedClassificationEvidence, 0, 3) as $evidenceItem)
                                                                                 <span class="mrr-diagnostics__count">{{ $evidenceItem }}</span>
                                                                             @endforeach
                                                                         </div>
@@ -3519,7 +3521,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 <div class="mrr-diagnostics__compare">
                                                                     <div class="mrr-diagnostics__compare-title">Возможные дубли</div>
                                                                     <div class="mrr-diagnostics__compare-copy">
-                                                                        Найдено {{ count($candidateSpaces) }} {{ count($candidateSpaces) === 1 ? 'место' : 'места' }} по связанному арендатору или точному совпадению нормализованного названия. Для выбора основного места используйте действие «Разобрать дубль» в блоке исправлений.
+                                                                        Проверьте, не должен ли долг относиться к одному из этих мест.
                                                                     </div>
                                                                     <div class="mrr-diagnostics__candidates">
                                                                         @foreach ($candidateSpaces as $candidate)
@@ -3567,6 +3569,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                         </div>
                                                     </div>
 
+                                                    @if (! $isUnconfirmedWorkflowTab)
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--ai">
                                                         <div class="mrr-ai-panel">
                                                             <div class="mrr-ai-panel__title">
@@ -3664,6 +3667,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    @endif
                                                 </div>
                                             </div>
                                         </details>
