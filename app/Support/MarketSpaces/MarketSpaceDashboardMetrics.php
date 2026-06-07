@@ -10,6 +10,7 @@ use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceTenantBinding;
 use App\Models\Tenant;
 use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
+use App\Support\MarketSpaces\MarketSpaceShapePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
@@ -175,10 +176,8 @@ class MarketSpaceDashboardMetrics
 
         $directTenantIds = $spaces
             ->filter(static function (MarketSpace $space): bool {
-                return $space->isEffectivelyOccupied() || (
-                    self::normalizeStatus((string) ($space->status ?? 'vacant')) === 'occupied'
-                    && filled($space->tenant_id)
-                );
+                return self::normalizeStatus((string) ($space->status ?? 'vacant')) === 'occupied'
+                    && filled($space->effectiveTenantId() ?? $space->tenant_id);
             })
             ->map(static fn (MarketSpace $space): int => (int) ($space->effectiveTenantId() ?? $space->tenant_id ?? 0));
 
@@ -224,12 +223,9 @@ class MarketSpaceDashboardMetrics
     {
         $query = MarketSpace::query()
             ->where('market_id', $marketId)
-            ->where('is_active', true)
-            ->where(function ($query): void {
-                $query
-                    ->whereNull('space_group_role')
-                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
-            });
+            ->where('is_active', true);
+
+        MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query);
 
         if (! Schema::hasTable('market_space_map_shapes')) {
             return $query;

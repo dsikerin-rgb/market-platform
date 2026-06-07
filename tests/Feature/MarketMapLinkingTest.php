@@ -883,6 +883,40 @@ class MarketMapLinkingTest extends TestCase
             'is_active' => false,
         ]);
 
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $child->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 10],
+                ['x' => 30, 'y' => 10],
+                ['x' => 30, 'y' => 30],
+            ],
+            'bbox_x1' => 10,
+            'bbox_y1' => 10,
+            'bbox_x2' => 30,
+            'bbox_y2' => 30,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $ordinary->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 40, 'y' => 10],
+                ['x' => 60, 'y' => 10],
+                ['x' => 60, 'y' => 30],
+            ],
+            'bbox_x1' => 40,
+            'bbox_y1' => 10,
+            'bbox_x2' => 60,
+            'bbox_y2' => 30,
+            'is_active' => true,
+        ]);
+
         $response = $this->getJson(route('filament.admin.market-map.spaces', [
             'q' => 'OS7',
             'limit' => 15,
@@ -904,6 +938,8 @@ class MarketMapLinkingTest extends TestCase
         $this->assertSame('parent', $parentItem['space_group_role']);
         $this->assertSame('group', $parentItem['result_type']);
         $this->assertTrue((bool) $parentItem['is_space_group_parent']);
+        $this->assertSame('not_required', $parentItem['map_shape_requirement']['status'] ?? null);
+        $this->assertFalse((bool) ($parentItem['map_shape_requirement']['requires_own_map_shape'] ?? true));
     }
 
     public function test_market_map_without_shapes_excludes_parent_groups(): void
@@ -943,6 +979,8 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('meta.shape_policy.parent_groups_require_own_shape', false);
+        $response->assertJsonPath('meta.shape_policy.parent_group_label', 'Фигура не требуется');
 
         $items = collect($response->json('items'));
         $ids = $items->pluck('id')->all();
@@ -1489,6 +1527,9 @@ class MarketMapLinkingTest extends TestCase
 
         $this->assertContains($activeParent->id, $ids);
         $this->assertNotContains($inactiveParent->id, $ids);
+        $activeParentItem = $items->firstWhere('id', $activeParent->id);
+        $this->assertSame('not_required', $activeParentItem['map_shape_requirement']['status'] ?? null);
+        $this->assertFalse((bool) ($activeParentItem['map_shape_requirement']['requires_own_map_shape'] ?? true));
     }
 
     public function test_parent_group_edit_page_shows_group_composition_children(): void

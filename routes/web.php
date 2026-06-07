@@ -50,6 +50,7 @@ use App\Services\Debt\DebtStatusResolver;
 use App\Services\MarketMap\SpaceReviewActionService;
 use App\Services\Marketplace\MarketplaceContextService;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketSpaces\MarketSpaceShapePolicy;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -1788,10 +1789,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
             // Parent-группы не считаются "местами без фигур":
             // у группы может не быть собственной фигуры, она отображается через дочерние места.
-            $query->where(function ($qq) {
-                $qq->whereNull('space_group_role')
-                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_PARENT);
-            });
+            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query);
 
             // Исключаем места у которых ЕСТЬ usable shape для review navigation
             // (согласовано с buildReviewNavItemsFromShapes() на фронте)
@@ -1973,6 +1971,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
                     'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
                     'result_type' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT ? 'group' : 'space',
+                    'map_shape_requirement' => MarketSpaceShapePolicy::requirementFor($space),
                     'review_status' => '',
                     'review_status_label' => '',
                     'tenant' => $tenant ? [
@@ -1994,7 +1993,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ];
             })->values();
 
-            return response()->json(['ok' => true, 'items' => $items, 'meta' => ['without_shapes' => true, 'count' => count($items)]]);
+            return response()->json(['ok' => true, 'items' => $items, 'meta' => [
+                'without_shapes' => true,
+                'count' => count($items),
+                'shape_policy' => [
+                    'parent_groups_require_own_shape' => false,
+                    'parent_group_label' => 'Фигура не требуется',
+                ],
+            ]]);
         }
 
         // Обычный режим поиска
@@ -2059,6 +2065,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
                     'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
                     'result_type' => 'group',
+                    'map_shape_requirement' => MarketSpaceShapePolicy::requirementFor($space),
                     'review_status' => (string) ($space->map_review_status ?? ''),
                     'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                     'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
@@ -2090,18 +2097,22 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ])
             ->where('market_id', (int) $market->id)
             ->where('is_active', true)
-            ->whereHas('mapShapes', function ($q) use ($market) {
-                $q->where('market_id', (int) $market->id)
-                    ->where('is_active', true)
-                    ->where(function ($sub) {
-                        $sub->where(static function ($bbox) {
-                            $bbox->whereNotNull('bbox_x1')
-                                ->whereNotNull('bbox_y1')
-                                ->whereNotNull('bbox_x2')
-                                ->whereNotNull('bbox_y2')
-                                ->whereColumn('bbox_x1', '<', 'bbox_x2')
-                                ->whereColumn('bbox_y1', '<', 'bbox_y2');
-                        })->orWhereJsonLength('polygon', '>=', 3);
+            ->where(function ($shapeQuery) use ($market): void {
+                $shapeQuery
+                    ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_PARENT)
+                    ->orWhereHas('mapShapes', function ($q) use ($market): void {
+                        $q->where('market_id', (int) $market->id)
+                            ->where('is_active', true)
+                            ->where(function ($sub): void {
+                                $sub->where(static function ($bbox): void {
+                                    $bbox->whereNotNull('bbox_x1')
+                                        ->whereNotNull('bbox_y1')
+                                        ->whereNotNull('bbox_x2')
+                                        ->whereNotNull('bbox_y2')
+                                        ->whereColumn('bbox_x1', '<', 'bbox_x2')
+                                        ->whereColumn('bbox_y1', '<', 'bbox_y2');
+                                })->orWhereJsonLength('polygon', '>=', 3);
+                            });
                     });
             })
             ->where(function ($qq) use ($isNumeric, $q, $qLike) {
@@ -2153,6 +2164,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_group_parent_id' => $space->space_group_parent_id ? (int) $space->space_group_parent_id : null,
                 'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
                 'result_type' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT ? 'group' : 'space',
+                'map_shape_requirement' => MarketSpaceShapePolicy::requirementFor($space),
                 'review_status' => (string) ($space->map_review_status ?? ''),
                 'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                 'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
