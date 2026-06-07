@@ -756,7 +756,7 @@
             }
 
             .mrr-needs-card--unconfirmed-layout .mrr-needs-card__body-grid {
-                grid-template-columns: minmax(18rem, 0.78fr) minmax(0, 1.22fr);
+                grid-template-columns: minmax(22rem, 0.95fr) minmax(0, 1.05fr);
                 gap: 1rem;
             }
 
@@ -1060,6 +1060,58 @@
                 display: flex;
                 flex-wrap: wrap;
                 gap: 0.4rem;
+            }
+
+            .mrr-card-actions__decision-summary {
+                display: grid;
+                gap: 0.34rem;
+                border-radius: 0.85rem;
+                border: 1px solid rgba(100, 116, 139, 0.18);
+                background: rgba(248, 250, 252, 0.75);
+                padding: 0.65rem 0.72rem;
+                font-size: 0.82rem;
+                line-height: 1.4;
+                color: #475569;
+            }
+
+            .mrr-card-actions__decision-summary--danger {
+                border-color: rgba(239, 68, 68, 0.22);
+                background: rgba(254, 242, 242, 0.75);
+            }
+
+            .mrr-card-actions__decision-summary--warning {
+                border-color: rgba(245, 158, 11, 0.26);
+                background: rgba(255, 251, 235, 0.8);
+            }
+
+            .mrr-card-actions__decision-summary--success {
+                border-color: rgba(34, 197, 94, 0.22);
+                background: rgba(240, 253, 244, 0.78);
+            }
+
+            .dark .mrr-card-actions__decision-summary {
+                border-color: rgba(148, 163, 184, 0.2);
+                background: rgba(15, 23, 42, 0.52);
+                color: #cbd5e1;
+            }
+
+            .mrr-card-actions__decision-title {
+                font-size: 0.88rem;
+                font-weight: 850;
+                line-height: 1.25;
+                color: #0f172a;
+            }
+
+            .dark .mrr-card-actions__decision-title {
+                color: #f8fafc;
+            }
+
+            .mrr-card-actions__decision-next {
+                color: #64748b;
+            }
+
+            .dark .mrr-card-actions__decision-next {
+                color: #94a3b8;
             }
 
             .mrr-diagnostics {
@@ -3415,6 +3467,14 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                             ? 'Сейчас общий долг арендатора не применяется к этому месту.'
                                                                             : 'Решение только про общий долг арендатора на карте. Договоры и суммы в 1С не меняются.' }}
                                                                     </div>
+                                                                    @if ($unconfirmedClassificationLabel !== '')
+                                                                        <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $unconfirmedClassificationTone }}">
+                                                                            <div class="mrr-card-actions__decision-title">{{ $unconfirmedClassificationLabel }}</div>
+                                                                            @if ($unconfirmedClassificationAction !== '')
+                                                                                <div class="mrr-card-actions__decision-next">{{ $unconfirmedClassificationAction }}</div>
+                                                                            @endif
+                                                                        </div>
+                                                                    @endif
                                                                     <div class="mrr-card-actions__row">
                                                                         @if ($attentionTab === 'unconfirmed_links_rejected')
                                                                             <button
@@ -3476,8 +3536,75 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--diagnostics">
                                                         <div class="mrr-diagnostics">
-                                                                <div class="mrr-diagnostics__section">
+                                                            @if ($isUnconfirmedWorkflowTab)
+                                                                <details class="mrr-diagnostics__details">
+                                                                    <summary>Подробности проверки</summary>
+                                                                    <div class="mrr-diagnostics__details-body">
+                                                                        <div class="mrr-diagnostics__section">
+                                                                            <div class="mrr-diagnostics__section-title">Связи текущего места</div>
+                                                                            <div class="mrr-diagnostics__summary">
+                                                                                @foreach ($relationCounts as $item)
+                                                                                    <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
+                                                                                        {{ $item['label'] }}: {{ $item['count'] }}
+                                                                                    </span>
+                                                                                @endforeach
+                                                                                @foreach (array_slice($unconfirmedClassificationEvidence, 0, 3) as $evidenceItem)
+                                                                                    <span class="mrr-diagnostics__count">{{ $evidenceItem }}</span>
+                                                                                @endforeach
+                                                                            </div>
+                                                                        </div>
 
+                                                                        @if ($showRelationAssessment && $relationAssessment !== '')
+                                                                            <span class="mrr-assessment mrr-assessment--{{ $row['assessment_tone'] ?? 'neutral' }}">
+                                                                                {{ $row['assessment_label'] ?? 'Требует проверки' }}
+                                                                            </span>
+                                                                            <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
+                                                                        @endif
+
+                                                                        @if ($hasCandidates)
+                                                                            <div class="mrr-diagnostics__compare">
+                                                                                <div class="mrr-diagnostics__compare-title">Возможные места для этого долга</div>
+                                                                                <div class="mrr-diagnostics__compare-copy">
+                                                                                    Проверьте, не должен ли долг относиться к одному из этих мест.
+                                                                                </div>
+                                                                                <div class="mrr-diagnostics__candidates">
+                                                                                    @foreach ($candidateSpaces as $candidate)
+                                                                                        <div class="mrr-diagnostics__candidate">
+                                                                                            <div class="mrr-diagnostics__candidate-main">
+                                                                                                <div>{{ $candidate['label'] ?? ('#' . ($candidate['space_id'] ?? '')) }}</div>
+                                                                                                @if (filled($candidate['tenant_name'] ?? null))
+                                                                                                    <div class="mrr-diagnostics__candidate-meta">{{ $candidate['tenant_name'] }}</div>
+                                                                                                @endif
+                                                                                            </div>
+                                                                                            @if (filled($candidate['match_reason'] ?? null))
+                                                                                                <div class="mrr-diagnostics__candidate-meta">{{ $candidate['match_reason'] }}</div>
+                                                                                            @endif
+                                                                                            <div class="mrr-diagnostics__candidate-actions">
+                                                                                                @if (filled($candidate['space_url'] ?? null))
+                                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
+                                                                                                @endif
+                                                                                                @if (filled($candidate['map_url'] ?? null))
+                                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
+                                                                                                @endif
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    @endforeach
+                                                                                </div>
+                                                                            </div>
+                                                                        @elseif ($hasRelationDetails)
+                                                                            <div class="mrr-diagnostics__detail-list">
+                                                                                @foreach ($relationDetails as $item)
+                                                                                    <div class="mrr-diagnostics__detail-item">
+                                                                                        <div class="mrr-diagnostics__detail-title">{{ $item['label'] }}: {{ $item['count'] }}</div>
+                                                                                        <div class="mrr-diagnostics__detail-copy">{{ $item['description'] }}</div>
+                                                                                    </div>
+                                                                                @endforeach
+                                                                            </div>
+                                                                        @endif
+                                                                    </div>
+                                                                </details>
+                                                            @else
+                                                                <div class="mrr-diagnostics__section">
                                                                 <div class="mrr-diagnostics__section-title">Связи текущего места</div>
                                                                 <div class="mrr-diagnostics__summary">
                                                                 @foreach ($relationCounts as $item)
@@ -3565,6 +3692,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 <div class="mrr-diagnostics__intro">
                                                                     Дополнительных связей для раскрытия нет.
                                                                 </div>
+                                                            @endif
                                                             @endif
                                                         </div>
                                                     </div>
