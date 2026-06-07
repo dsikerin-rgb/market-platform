@@ -17,6 +17,7 @@ use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\User;
 use App\Services\Ai\AiReviewService;
+use App\Services\Debt\DebtStatusResolver;
 use App\Services\MarketMap\MapReviewResultsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -72,6 +73,27 @@ class SpaceReviewFlowTest extends TestCase
             'bbox_y2' => 10,
             'is_active' => true,
         ]);
+    }
+
+    private function bindTenantFallbackDebtResolver(): void
+    {
+        app()->instance(DebtStatusResolver::class, new class extends DebtStatusResolver
+        {
+            public function resolveForMarketSpace(int $marketSpaceId, int $marketId): array
+            {
+                return [
+                    'mode' => 'auto',
+                    'status' => 'red',
+                    'label' => 'Tenant fallback',
+                    'updated_at' => null,
+                    'source' => 'test',
+                    'severity' => 3,
+                    'extra' => [
+                        'scope' => 'tenant_fallback',
+                    ],
+                ];
+            }
+        });
     }
 
     private function actingAsSuperAdmin(?int $marketId = null): User
@@ -1181,6 +1203,84 @@ class SpaceReviewFlowTest extends TestCase
             ->test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Сейчас нет мест, требующих уточнения.', false)
             ->assertDontSee('Системно найдено', false);
+    }
+
+    public function test_unconfirmed_links_hide_group_child_without_direct_current_financial_activity(): void
+    {
+        $market = $this->createMarket();
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Group Child',
+            'is_active' => true,
+        ]);
+
+        $parent = $this->createSpace($market, [
+            'number' => 'G-1',
+            'display_name' => 'Group Parent',
+            'tenant_id' => $tenant->id,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'G-1',
+        ]);
+
+        $child = $this->createSpace($market, [
+            'number' => 'G-1/1',
+            'display_name' => 'Group Child',
+            'tenant_id' => $tenant->id,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_token' => 'G-1',
+        ]);
+        $this->createShape($market, (int) $child->id);
+
+        $this->bindTenantFallbackDebtResolver();
+
+        $rows = app(MapReviewResultsService::class)->unconfirmedLinks((int) $market->id, 10);
+
+        $this->assertSame([], array_column($rows, 'space_id'));
+    }
+
+    public function test_unconfirmed_links_keep_group_child_with_direct_latest_accrual(): void
+    {
+        $market = $this->createMarket();
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Group Child Accrual',
+            'is_active' => true,
+        ]);
+
+        $parent = $this->createSpace($market, [
+            'number' => 'G-2',
+            'display_name' => 'Group Parent 2',
+            'tenant_id' => $tenant->id,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'space_group_token' => 'G-2',
+        ]);
+
+        $child = $this->createSpace($market, [
+            'number' => 'G-2/1',
+            'display_name' => 'Group Child 2',
+            'tenant_id' => $tenant->id,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
+            'space_group_parent_id' => $parent->id,
+            'space_group_token' => 'G-2',
+        ]);
+        $this->createShape($market, (int) $child->id);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $child->id,
+            'period' => now()->startOfMonth()->toDateString(),
+            'source_row_hash' => sha1('direct-child-latest-accrual'),
+        ]);
+
+        $this->bindTenantFallbackDebtResolver();
+
+        $rows = app(MapReviewResultsService::class)->unconfirmedLinks((int) $market->id, 10);
+
+        $this->assertSame([(int) $child->id], array_column($rows, 'space_id'));
     }
 
     public function test_map_review_results_renders_attention_filters_with_correct_data_attributes(): void

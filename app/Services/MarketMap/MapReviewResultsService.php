@@ -385,7 +385,7 @@ class MapReviewResultsService
             ->filter(function (MarketSpace $space) use ($debtResolver, $marketId): bool {
                 $resolved = $debtResolver->resolveForMarketSpace((int) $space->id, $marketId);
 
-                return (string) data_get($resolved, 'extra.scope', 'none') === 'tenant_fallback';
+                return $this->shouldIncludeUnconfirmedLinkSpace($space, $resolved, $marketId);
             })
             ->take($limit)
             ->values();
@@ -416,6 +416,106 @@ class MapReviewResultsService
                 'unconfirmed_workflow_state' => 'open',
             ];
         })->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $resolved
+     */
+    private function shouldIncludeUnconfirmedLinkSpace(MarketSpace $space, array $resolved, int $marketId): bool
+    {
+        if ((string) data_get($resolved, 'extra.scope', 'none') !== 'tenant_fallback') {
+            return false;
+        }
+
+        $spaceGroupRole = (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
+        $spaceGroupParentId = (int) ($space->space_group_parent_id ?? 0);
+
+        if ($spaceGroupRole !== MarketSpace::SPACE_GROUP_ROLE_CHILD || $spaceGroupParentId <= 0) {
+            return true;
+        }
+
+        return $this->spaceHasDirectCurrentFinancialActivity(
+            (int) $space->id,
+            $marketId,
+            (int) ($space->tenant_id ?? 0),
+        );
+    }
+
+    private function spaceHasDirectCurrentFinancialActivity(int $spaceId, int $marketId, int $tenantId): bool
+    {
+        if ($spaceId <= 0 || $marketId <= 0) {
+            return false;
+        }
+
+        if ($this->spaceHasDirectCurrentContract($spaceId, $marketId, $tenantId)) {
+            return true;
+        }
+
+        return $this->spaceHasDirectLatestAccrual($spaceId, $marketId, $tenantId);
+    }
+
+    private function spaceHasDirectCurrentContract(int $spaceId, int $marketId, int $tenantId): bool
+    {
+        if (! Schema::hasTable('tenant_contracts') || ! Schema::hasColumn('tenant_contracts', 'market_space_id')) {
+            return false;
+        }
+
+        $query = TenantContract::query()
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId);
+
+        if ($tenantId > 0 && Schema::hasColumn('tenant_contracts', 'tenant_id')) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'status')) {
+            $query->whereNotIn('status', ['terminated', 'archived']);
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('starts_at')
+                    ->orWhere('starts_at', '<=', now());
+            });
+        }
+
+        if (Schema::hasColumn('tenant_contracts', 'ends_at')) {
+            $query->where(function ($inner): void {
+                $inner->whereNull('ends_at')
+                    ->orWhere('ends_at', '>', now());
+            });
+        }
+
+        return $query->exists();
+    }
+
+    private function spaceHasDirectLatestAccrual(int $spaceId, int $marketId, int $tenantId): bool
+    {
+        if (! Schema::hasTable('tenant_accruals')
+            || ! Schema::hasColumn('tenant_accruals', 'market_space_id')
+            || ! Schema::hasColumn('tenant_accruals', 'period')) {
+            return false;
+        }
+
+        $latestMarketAccrualPeriod = $this->latestAccrualPeriodForMarket($marketId);
+        if ($latestMarketAccrualPeriod === null) {
+            return false;
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->where('market_space_id', $spaceId)
+            ->whereDate('period', '=', $latestMarketAccrualPeriod);
+
+        if ($tenantId > 0 && Schema::hasColumn('tenant_accruals', 'tenant_id')) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        return $query->exists();
     }
 
     /**
