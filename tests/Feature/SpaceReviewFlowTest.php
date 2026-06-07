@@ -1424,7 +1424,7 @@ class SpaceReviewFlowTest extends TestCase
                 'diagnostics' => [
                     'unconfirmed_link_classification' => [
                         'code' => 'child_space_parent_contract',
-                        'label' => 'Child-место: договор должен быть у parent',
+                        'label' => 'Дочернее место: договор должен быть у основного места',
                         'tone' => 'warning',
                         'rank' => 8,
                     ],
@@ -1447,7 +1447,7 @@ class SpaceReviewFlowTest extends TestCase
         $visibleRows = $page->exposedBuildNeedsAttentionRows($needsAttention, [], 'unconfirmed_links');
 
         $this->assertSame([202, 201, 203], array_column($visibleRows, 'space_id'));
-        $this->assertSame('Child-место: договор должен быть у parent', $visibleRows[0]['assessment_label']);
+        $this->assertSame('Дочернее место: договор должен быть у основного места', $visibleRows[0]['assessment_label']);
     }
 
     public function test_ai_context_builder_uses_schema_safe_fallback_columns(): void
