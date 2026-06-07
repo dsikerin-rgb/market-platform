@@ -1406,6 +1406,50 @@ class SpaceReviewFlowTest extends TestCase
         $this->assertSame([102, 105, 103, 101, 104], array_column($selectedBatch, 'space_id'));
     }
 
+    public function test_unconfirmed_link_rows_use_backend_classification_order(): void
+    {
+        $page = new class extends MapReviewResults
+        {
+            public function exposedBuildNeedsAttentionRows(array $needsAttention, array $aiSummaries, string $attentionTab): array
+            {
+                return $this->buildNeedsAttentionRows($needsAttention, $aiSummaries, $attentionTab);
+            }
+        };
+
+        $needsAttention = [
+            ['space_id' => 201, 'review_status' => 'unconfirmed_link', 'diagnostics' => ['has_stronger_candidate' => true]],
+            [
+                'space_id' => 202,
+                'review_status' => 'unconfirmed_link',
+                'diagnostics' => [
+                    'unconfirmed_link_classification' => [
+                        'code' => 'child_space_parent_contract',
+                        'label' => 'Child-место: договор должен быть у parent',
+                        'tone' => 'warning',
+                        'rank' => 8,
+                    ],
+                ],
+            ],
+            [
+                'space_id' => 203,
+                'review_status' => 'unconfirmed_link',
+                'diagnostics' => [
+                    'unconfirmed_link_classification' => [
+                        'code' => 'financial_signal_without_contract',
+                        'label' => 'Есть начисление, но договор к месту не найден',
+                        'tone' => 'danger',
+                        'rank' => 28,
+                    ],
+                ],
+            ],
+        ];
+
+        $visibleRows = $page->exposedBuildNeedsAttentionRows($needsAttention, [], 'unconfirmed_links');
+
+        $this->assertSame([202, 201, 203], array_column($visibleRows, 'space_id'));
+        $this->assertSame('Child-место: договор должен быть у parent', $visibleRows[0]['assessment_label']);
+    }
+
     public function test_ai_context_builder_uses_schema_safe_fallback_columns(): void
     {
         $market = $this->createMarket();
