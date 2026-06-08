@@ -2924,18 +2924,50 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'episode_valid_from' => ['nullable', 'date'],
             'comment' => ['nullable', 'string', 'max:500'],
             'first' => ['required', 'array'],
-            'first.number' => ['required', 'string', 'max:255'],
+            'first.target_space_id' => ['nullable', 'integer', 'exists:market_spaces,id'],
+            'first.number' => ['nullable', 'string', 'max:255'],
             'first.tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
             'first.area_sqm' => ['nullable', 'numeric', 'min:0'],
             'first.contract_ids' => ['nullable', 'array'],
             'first.contract_ids.*' => ['integer', 'exists:tenant_contracts,id'],
             'second' => ['required', 'array'],
-            'second.number' => ['required', 'string', 'max:255'],
+            'second.target_space_id' => ['nullable', 'integer', 'exists:market_spaces,id'],
+            'second.number' => ['nullable', 'string', 'max:255'],
             'second.tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
             'second.area_sqm' => ['nullable', 'numeric', 'min:0'],
             'second.contract_ids' => ['nullable', 'array'],
             'second.contract_ids.*' => ['integer', 'exists:tenant_contracts,id'],
         ]);
+
+        $firstTargetSpaceId = isset($validated['first']['target_space_id']) && (int) $validated['first']['target_space_id'] > 0
+            ? (int) $validated['first']['target_space_id']
+            : null;
+        $secondTargetSpaceId = isset($validated['second']['target_space_id']) && (int) $validated['second']['target_space_id'] > 0
+            ? (int) $validated['second']['target_space_id']
+            : null;
+        $usesExistingTargetSpaces = $firstTargetSpaceId !== null || $secondTargetSpaceId !== null;
+
+        if ($usesExistingTargetSpaces && ($firstTargetSpaceId === null || $secondTargetSpaceId === null)) {
+            throw ValidationException::withMessages([
+                'target_space_id' => 'Specify both existing target spaces.',
+            ]);
+        }
+
+        if ($usesExistingTargetSpaces && $firstTargetSpaceId === $secondTargetSpaceId) {
+            throw ValidationException::withMessages([
+                'target_space_id' => 'Target spaces must be different.',
+            ]);
+        }
+
+        if (! $usesExistingTargetSpaces) {
+            foreach (['first', 'second'] as $side) {
+                if (trim((string) ($validated[$side]['number'] ?? '')) === '') {
+                    throw ValidationException::withMessages([
+                        $side.'.number' => 'Specify new space name.',
+                    ]);
+                }
+            }
+        }
 
         $tenantIds = collect([
             $validated['first']['tenant_id'] ?? null,
@@ -2951,6 +2983,32 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             if ($tenantCount !== $tenantIds->count()) {
                 throw ValidationException::withMessages([
                     'tenant_id' => 'One or more tenants do not belong to current market.',
+                ]);
+            }
+        }
+
+        if ($usesExistingTargetSpaces) {
+            $targetSpaceIds = [$firstTargetSpaceId, $secondTargetSpaceId];
+            $targetSpaceCount = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereIn('id', $targetSpaceIds)
+                ->count();
+
+            if ($targetSpaceCount !== 2) {
+                throw ValidationException::withMessages([
+                    'target_space_id' => 'One or more target spaces do not belong to current market.',
+                ]);
+            }
+
+            $targetShapeCount = MarketSpaceMapShape::query()
+                ->where('market_id', (int) $market->id)
+                ->whereIn('market_space_id', $targetSpaceIds)
+                ->where('is_active', true)
+                ->count();
+
+            if ($targetShapeCount > 0) {
+                throw ValidationException::withMessages([
+                    'target_space_id' => 'Target spaces already have active shapes.',
                 ]);
             }
         }
@@ -3082,7 +3140,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $episodeValidFrom,
             $episodeValidTo,
             $firstContractIds,
-            $secondContractIds
+            $secondContractIds,
+            $usesExistingTargetSpaces,
+            $firstTargetSpaceId,
+            $secondTargetSpaceId
         ): array {
             $lockedSpace = MarketSpace::query()
                 ->where('market_id', (int) $market->id)
@@ -3123,13 +3184,38 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ];
             };
 
-            $firstSpace = MarketSpace::query()->create($buildSpacePayload($validated['first'], $firstArea));
-            $secondSpace = MarketSpace::query()->create($buildSpacePayload($validated['second'], $secondArea));
+            if ($usesExistingTargetSpaces) {
+                $firstSpace = MarketSpace::query()
+                    ->where('market_id', (int) $market->id)
+                    ->whereKey((int) $firstTargetSpaceId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+                $secondSpace = MarketSpace::query()
+                    ->where('market_id', (int) $market->id)
+                    ->whereKey((int) $secondTargetSpaceId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($firstArea !== null) {
+                    $firstSpace->area_sqm = $firstArea;
+                    $firstSpace->save();
+                }
+
+                if ($secondArea !== null) {
+                    $secondSpace->area_sqm = $secondArea;
+                    $secondSpace->save();
+                }
+            } else {
+                $firstSpace = MarketSpace::query()->create($buildSpacePayload($validated['first'], $firstArea));
+                $secondSpace = MarketSpace::query()->create($buildSpacePayload($validated['second'], $secondArea));
+            }
 
             $lockedSpace->space_group_role = MarketSpace::SPACE_GROUP_ROLE_PARENT;
-            $lockedSpace->tenant_id = null;
-            $lockedSpace->is_active = false;
-            $lockedSpace->notes = trim((string) ($lockedSpace->notes ?? '')."\n".'Split on map at '.$splitDate->toDateString());
+            if (! $usesExistingTargetSpaces) {
+                $lockedSpace->tenant_id = null;
+                $lockedSpace->is_active = false;
+            }
+            $lockedSpace->notes = trim((string) ($lockedSpace->notes ?? '')."\n".($usesExistingTargetSpaces ? 'Shape split to existing spaces on ' : 'Split on map at ').$splitDate->toDateString());
             $lockedSpace->save();
 
             $lockedShape->is_active = false;
@@ -3177,6 +3263,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'notes' => $validated['comment'] ?? null,
                 'meta' => [
                     'split_date' => $splitDate->toDateString(),
+                    'mode' => $usesExistingTargetSpaces ? 'existing_target_spaces' : 'create_spaces',
                     'source_shape_id' => (int) $lockedShape->id,
                     'source_polygon' => $normalizedSourcePolygon,
                 ],
@@ -3227,8 +3314,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     });
             };
 
-            $updateContracts($firstContractIds, $firstSpace);
-            $updateContracts($secondContractIds, $secondSpace);
+            if (! $usesExistingTargetSpaces) {
+                $updateContracts($firstContractIds, $firstSpace);
+                $updateContracts($secondContractIds, $secondSpace);
+            }
             DebtStatusResolver::clearCache();
 
             return [
