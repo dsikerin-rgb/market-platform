@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Filament\Resources\MarketSpaceGroupEpisodeResource;
+use App\Filament\Pages\OpsDiagnostics;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
@@ -53,12 +54,15 @@ class MarketSpaceGroupEpisodeResourceTest extends TestCase
         ]);
 
         $this->assertTrue(MarketSpaceGroupEpisodeResource::canViewAny());
-        $this->assertTrue(MarketSpaceGroupEpisodeResource::shouldRegisterNavigation());
-        $this->assertSame('Ревизия и диагностика', MarketSpaceGroupEpisodeResource::getNavigationGroup());
+        $this->assertFalse(MarketSpaceGroupEpisodeResource::shouldRegisterNavigation());
+        $this->assertNull(MarketSpaceGroupEpisodeResource::getNavigationGroup());
 
         $this->get(MarketSpaceGroupEpisodeResource::getUrl('index'))->assertOk();
         $this->get(MarketSpaceGroupEpisodeResource::getUrl('create'))->assertOk();
         $this->get(MarketSpaceGroupEpisodeResource::getUrl('edit', ['record' => $episode]))->assertOk();
+        $this->get(OpsDiagnostics::getUrl())
+            ->assertOk()
+            ->assertSee(MarketSpaceGroupEpisodeResource::getUrl('index'), false);
     }
 
     public function test_market_admin_cannot_open_group_episode_resource(): void

@@ -36,7 +36,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canViewAny();
+        return false;
     }
 
     public static function canViewAny(): bool
@@ -63,7 +63,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
 
     public static function getNavigationGroup(): ?string
     {
-        return 'Ревизия и диагностика';
+        return null;
     }
 
     protected static function selectedMarketIdFromSession(): ?int
