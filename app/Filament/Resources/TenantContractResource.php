@@ -10,6 +10,7 @@ use App\Models\MarketSpace;
 use App\Models\TenantContract;
 use App\Services\MarketSpaces\SpaceGroupResolver;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketSpaces\MarketSpaceGroupEpisodeResolver;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\Placeholder;
@@ -2081,7 +2082,8 @@ class TenantContractResource extends BaseResource
 
         $records = TenantContract::query()
             ->where('market_id', $marketId)
-            ->get(['id', 'market_id', 'tenant_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active']);
+            ->with(['marketSpace:id,market_id,number,display_name,code,space_group_role,space_group_parent_id'])
+            ->get(['id', 'market_id', 'tenant_id', 'market_space_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active', 'space_mapping_mode']);
 
         $grouped = [];
         foreach ($records as $contract) {
@@ -2092,7 +2094,7 @@ class TenantContractResource extends BaseResource
                 continue;
             }
 
-            $chainKey = static::contractPlaceTenantChainKey($contract, $token);
+            $chainKey = static::contractHistoryChainKey($contract, $classified);
             if ($chainKey === null) {
                 continue;
             }
@@ -2506,7 +2508,7 @@ class TenantContractResource extends BaseResource
 
         $classified = static::classificationForRecord($record);
         $token = trim((string) ($classified['place_token'] ?? ''));
-        $chainKey = static::contractPlaceTenantChainKey($record, $token);
+        $chainKey = static::contractHistoryChainKey($record, $classified);
 
         if ($record->excludesFromSpaceMapping()) {
             return new HtmlString('<div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-600">Договор явно исключен из привязки к месту и не участвует в исторической цепочке по месту.</div>');
@@ -2518,8 +2520,11 @@ class TenantContractResource extends BaseResource
 
         $contracts = TenantContract::query()
             ->where('market_id', (int) $record->market_id)
-            ->with(['tenant:id,name,short_name', 'marketSpace:id,number,display_name'])
-            ->get(['id', 'market_id', 'tenant_id', 'market_space_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active', 'external_id']);
+            ->with([
+                'tenant:id,name,short_name',
+                'marketSpace:id,market_id,number,display_name,code,space_group_role,space_group_parent_id',
+            ])
+            ->get(['id', 'market_id', 'tenant_id', 'market_space_id', 'number', 'starts_at', 'ends_at', 'signed_at', 'status', 'is_active', 'external_id', 'space_mapping_mode']);
 
         $items = [];
 
@@ -2533,7 +2538,7 @@ class TenantContractResource extends BaseResource
                 continue;
             }
 
-            if (static::contractPlaceTenantChainKey($candidate, trim((string) ($candidateClassification['place_token'] ?? ''))) !== $chainKey) {
+            if (static::contractHistoryChainKey($candidate, $candidateClassification) !== $chainKey) {
                 continue;
             }
 
@@ -2639,6 +2644,24 @@ class TenantContractResource extends BaseResource
     private static function historyChainChip(string $label, string $variant = 'gray'): string
     {
         return '<span class="contract-history__chip contract-history__chip--'.e($variant).'">'.e($label).'</span>';
+    }
+
+    /**
+     * @param array<string, mixed> $classified
+     */
+    private static function contractHistoryChainKey(TenantContract $record, array $classified): ?string
+    {
+        if ($record->market_space_id) {
+            $documentDate = static::resolveRangeStart($record, is_string($classified['document_date'] ?? null) ? $classified['document_date'] : null);
+            $resolution = app(MarketSpaceGroupEpisodeResolver::class)->forContract($record, $documentDate);
+            $parent = $resolution['parent'] ?? null;
+
+            if (($resolution['applies'] ?? false) && $parent instanceof MarketSpace) {
+                return 'group-parent:'.(int) $parent->id.'|tenant:'.(int) ($record->tenant_id ?? 0);
+            }
+        }
+
+        return static::contractPlaceTenantChainKey($record, trim((string) ($classified['place_token'] ?? '')));
     }
 
     private static function contractPlaceTenantChainKey(TenantContract $record, ?string $placeToken = null): ?string
