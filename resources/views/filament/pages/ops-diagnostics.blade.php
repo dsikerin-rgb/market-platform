@@ -942,6 +942,7 @@
         $selectedMarketNameLocal = (string) ($selectedMarketName ?? '');
         $tenantDuplicateSignalsLocal = is_array($tenantDuplicateSignals ?? null) ? $tenantDuplicateSignals : [];
         $spaceDuplicateSignalsLocal = is_array($spaceDuplicateSignals ?? null) ? $spaceDuplicateSignals : [];
+        $groupEpisodesUrlLocal = $groupEpisodesUrl ?? null;
     @endphp
 
     @if ($canViewIntegrationJournal && ! $canUseOpsTools)
@@ -1046,6 +1047,33 @@
                                     icon="heroicon-m-arrow-top-right-on-square"
                                 >
                                     Открыть журнал интеграций
+                                </x-filament::button>
+                            </div>
+                        </div>
+                    </x-filament::section>
+                @endif
+
+                @if ($groupEpisodesUrlLocal)
+                    <x-filament::section
+                        heading="Служебные справочники"
+                        description="Редко используемые инструменты для проверки и сопровождения данных карты."
+                    >
+                        <div style="display: grid; gap: 1rem;">
+                            <div class="ops-muted" style="font-size: .875rem; line-height: 1.5;">
+                                Эпизоды групп мест хранят исторический состав временных групп. Это справочный слой для проверки договоров и начислений по датам, а не ежедневный рабочий раздел.
+                            </div>
+
+                            <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                                <x-filament::badge color="gray">
+                                    Только super-admin
+                                </x-filament::badge>
+
+                                <x-filament::button
+                                    tag="a"
+                                    href="{{ $groupEpisodesUrlLocal }}"
+                                    icon="heroicon-m-arrow-top-right-on-square"
+                                >
+                                    Открыть эпизоды групп мест
                                 </x-filament::button>
                             </div>
                         </div>

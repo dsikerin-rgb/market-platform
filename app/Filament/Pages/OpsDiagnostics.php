@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 
 use App\Jobs\PostgresBackupJob;
 use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\MarketSpaceGroupEpisodeResource;
 use App\Filament\Resources\TenantResource;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Models\Market;
@@ -227,12 +228,16 @@ class OpsDiagnostics extends Page
         $integrationExchangesUrl = $canViewIntegrationJournal
             ? IntegrationExchangeResource::getUrl('index')
             : null;
+        $groupEpisodesUrl = $canUseOpsTools && MarketSpaceGroupEpisodeResource::canViewAny()
+            ? MarketSpaceGroupEpisodeResource::getUrl('index')
+            : null;
 
         if (! $canUseOpsTools) {
             return [
                 'canUseOpsTools' => false,
                 'canViewIntegrationJournal' => $canViewIntegrationJournal,
                 'integrationExchangesUrl' => $integrationExchangesUrl,
+                'groupEpisodesUrl' => null,
             ];
         }
 
@@ -276,6 +281,7 @@ class OpsDiagnostics extends Page
             'canUseOpsTools' => true,
             'canViewIntegrationJournal' => $canViewIntegrationJournal,
             'integrationExchangesUrl' => $integrationExchangesUrl,
+            'groupEpisodesUrl' => $groupEpisodesUrl,
             'appEnv' => (string) config('app.env'),
             'appPath' => base_path(),
 
