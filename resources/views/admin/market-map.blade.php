@@ -1308,6 +1308,53 @@
       z-index: 50;
     }
 
+    .map-edit-rail {
+      position: absolute;
+      top: 68px;
+      left: 14px;
+      z-index: 92;
+      width: 42px;
+      padding: 6px;
+      border: 1px solid rgba(148, 163, 184, .5);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: var(--map-control-shadow);
+      backdrop-filter: blur(8px);
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: auto;
+      transform: translateX(var(--map-stage-scroll-left, 0px));
+    }
+
+    .map-edit-rail.show {
+      display: flex;
+    }
+
+    .map-edit-rail button {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid rgba(148, 163, 184, .6);
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .map-edit-rail button.is-active {
+      border-color: rgba(37, 99, 235, .75);
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .map-edit-rail button:disabled {
+      opacity: .38;
+      cursor: not-allowed;
+    }
+
     .iframe {
       width: 100%;
       height: 100%;
@@ -2436,6 +2483,16 @@
                   </div>
                   <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
                 </div>
+                @if ($canEdit)
+                  <div id="mapEditRail" class="map-edit-rail" aria-label="Инструменты редактирования карты">
+                    <button id="railToolSelect" type="button" title="Выбор" aria-label="Выбор">↖</button>
+                    <button id="railSplitVertical" type="button" title="Разделить выбранное место вертикально пополам" aria-label="Разделить выбранное место вертикально пополам">⇔</button>
+                    <button id="railSplitHorizontal" type="button" title="Разделить выбранное место горизонтально пополам" aria-label="Разделить выбранное место горизонтально пополам">⇕</button>
+                    <button id="railGroup" type="button" title="Группировка мест" aria-label="Группировка мест">⊞</button>
+                    <button id="railUngroup" type="button" title="Разгруппировка места" aria-label="Разгруппировка места">⊟</button>
+                    <button id="railCancelTool" type="button" title="Отменить текущий инструмент" aria-label="Отменить текущий инструмент">↶</button>
+                  </div>
+                @endif
               </div>
               @if ($canEdit)
                 <div class="map-review-status-anchor">
@@ -2713,6 +2770,81 @@
         </div>
       </div>
 
+      <div id="spaceSplitModal" class="group-membership-modal" hidden aria-hidden="true">
+        <div class="group-membership-modal__backdrop" data-action="close"></div>
+        <div
+          class="group-membership-modal__dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="spaceSplitTitle"
+          aria-describedby="spaceSplitDescription"
+        >
+          <button id="spaceSplitClose" class="group-membership-modal__close" type="button" data-action="close" aria-label="Закрыть">×</button>
+          <div class="group-membership-modal__eyebrow">Разделение места</div>
+          <h2 id="spaceSplitTitle" class="group-membership-modal__title">Разделить место на два</h2>
+          <p id="spaceSplitDescription" class="group-membership-modal__description">
+            Старое место станет историческим, а на карте появятся два новых места с половинами текущей фигуры.
+          </p>
+          <div id="spaceSplitTarget" class="group-membership-modal__info">—</div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitOrientation">Направление</label>
+            <select id="spaceSplitOrientation" class="group-membership-modal__select">
+              <option value="vertical">Вертикально пополам</option>
+              <option value="horizontal">Горизонтально пополам</option>
+            </select>
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitDate">Дата разделения</label>
+            <input id="spaceSplitDate" class="group-membership-modal__input" type="date">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitHistoryFrom">История группы с даты</label>
+            <input id="spaceSplitHistoryFrom" class="group-membership-modal__input" type="date">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitFirstNumber">Первое новое место</label>
+            <input id="spaceSplitFirstNumber" class="group-membership-modal__input" type="text" autocomplete="off">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitFirstArea">Площадь первого места</label>
+            <input id="spaceSplitFirstArea" class="group-membership-modal__input" type="number" step="0.01" min="0">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitFirstTenant">ID арендатора первого места</label>
+            <input id="spaceSplitFirstTenant" class="group-membership-modal__input" type="number" step="1" min="1">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitFirstContracts">ID договоров первого места</label>
+            <input id="spaceSplitFirstContracts" class="group-membership-modal__input" type="text" autocomplete="off" placeholder="1538, 1539">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitSecondNumber">Второе новое место</label>
+            <input id="spaceSplitSecondNumber" class="group-membership-modal__input" type="text" autocomplete="off">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitSecondArea">Площадь второго места</label>
+            <input id="spaceSplitSecondArea" class="group-membership-modal__input" type="number" step="0.01" min="0">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitSecondTenant">ID арендатора второго места</label>
+            <input id="spaceSplitSecondTenant" class="group-membership-modal__input" type="number" step="1" min="1">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitSecondContracts">ID договоров второго места</label>
+            <input id="spaceSplitSecondContracts" class="group-membership-modal__input" type="text" autocomplete="off">
+          </div>
+          <div class="group-membership-modal__section">
+            <label class="group-membership-modal__label" for="spaceSplitComment">Комментарий</label>
+            <input id="spaceSplitComment" class="group-membership-modal__input" type="text" autocomplete="off">
+          </div>
+          <div id="spaceSplitError" class="group-membership-modal__error" style="display:none;"></div>
+          <div class="group-membership-modal__actions">
+            <button type="button" id="spaceSplitCancel" class="group-membership-modal__cancel" data-action="close">Отмена</button>
+            <button type="button" id="spaceSplitSubmit" class="group-membership-modal__submit">Разделить</button>
+          </div>
+        </div>
+      </div>
+
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
       <script type="module">
@@ -2764,6 +2896,13 @@
         const toolSelectBtn = document.getElementById('toolSelect');
         const toolRectBtn = document.getElementById('toolRect');
         const toolPolyBtn = document.getElementById('toolPoly');
+        const mapEditRail = document.getElementById('mapEditRail');
+        const railToolSelectBtn = document.getElementById('railToolSelect');
+        const railSplitVerticalBtn = document.getElementById('railSplitVertical');
+        const railSplitHorizontalBtn = document.getElementById('railSplitHorizontal');
+        const railGroupBtn = document.getElementById('railGroup');
+        const railUngroupBtn = document.getElementById('railUngroup');
+        const railCancelToolBtn = document.getElementById('railCancelTool');
         const scenarioMapBtn = document.getElementById('scenarioMap');
         const scenarioReviewBtn = document.getElementById('scenarioReview');
         const layerGroup = layerDebtBtn?.closest('.toolbar-group') || null;
@@ -2816,6 +2955,24 @@
         const contractBindingError = document.getElementById('contractBindingError');
         const contractBindingCancel = document.getElementById('contractBindingCancel');
         const contractBindingSubmit = document.getElementById('contractBindingSubmit');
+        const spaceSplitModal = document.getElementById('spaceSplitModal');
+        const spaceSplitClose = document.getElementById('spaceSplitClose');
+        const spaceSplitTarget = document.getElementById('spaceSplitTarget');
+        const spaceSplitOrientation = document.getElementById('spaceSplitOrientation');
+        const spaceSplitDate = document.getElementById('spaceSplitDate');
+        const spaceSplitHistoryFrom = document.getElementById('spaceSplitHistoryFrom');
+        const spaceSplitFirstNumber = document.getElementById('spaceSplitFirstNumber');
+        const spaceSplitFirstArea = document.getElementById('spaceSplitFirstArea');
+        const spaceSplitFirstTenant = document.getElementById('spaceSplitFirstTenant');
+        const spaceSplitFirstContracts = document.getElementById('spaceSplitFirstContracts');
+        const spaceSplitSecondNumber = document.getElementById('spaceSplitSecondNumber');
+        const spaceSplitSecondArea = document.getElementById('spaceSplitSecondArea');
+        const spaceSplitSecondTenant = document.getElementById('spaceSplitSecondTenant');
+        const spaceSplitSecondContracts = document.getElementById('spaceSplitSecondContracts');
+        const spaceSplitComment = document.getElementById('spaceSplitComment');
+        const spaceSplitError = document.getElementById('spaceSplitError');
+        const spaceSplitCancel = document.getElementById('spaceSplitCancel');
+        const spaceSplitSubmit = document.getElementById('spaceSplitSubmit');
         const utilityGroup = document.querySelector('.toolbar-row--controls .toolbar-group--utility') || null;
 
         const editHint = document.getElementById('editHint');
@@ -2852,6 +3009,8 @@
         let contractBindingContext = null;
         let contractBindingSelectedId = null;
         let contractBindingItems = [];
+        let spaceSplitContext = null;
+        let railAction = 'select';
         let currentPopoverHit = null;
 
         function escapeHtml(s) {
@@ -2889,6 +3048,31 @@
           toggleEditBtn.title = nextActionHint;
           toggleEditBtn.setAttribute('aria-label', nextActionHint);
           toggleEditBtn.classList.toggle('is-active', !!isEditMode);
+        }
+
+        function setRailAction(action) {
+          const allowed = new Set(['select', 'split_vertical', 'split_horizontal', 'group', 'ungroup']);
+          railAction = allowed.has(action) ? action : 'select';
+
+          railToolSelectBtn?.classList.toggle('is-active', railAction === 'select');
+          railSplitVerticalBtn?.classList.toggle('is-active', railAction === 'split_vertical');
+          railSplitHorizontalBtn?.classList.toggle('is-active', railAction === 'split_horizontal');
+          railGroupBtn?.classList.toggle('is-active', railAction === 'group');
+          railUngroupBtn?.classList.toggle('is-active', railAction === 'ungroup');
+        }
+
+        function syncMapEditRail() {
+          if (!mapEditRail) {
+            return;
+          }
+
+          const shouldShow = Boolean(CAN_EDIT && isEditMode && !isReviewMode());
+          mapEditRail.classList.toggle('show', shouldShow);
+          mapEditRail.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+
+          if (!shouldShow) {
+            setRailAction('select');
+          }
         }
 
         function syncLayerButtonHelp() {
@@ -3758,6 +3942,163 @@
           }
         }
 
+        function todayIsoDate() {
+          const d = new Date();
+          return [
+            String(d.getFullYear()).padStart(4, '0'),
+            String(d.getMonth() + 1).padStart(2, '0'),
+            String(d.getDate()).padStart(2, '0'),
+          ].join('-');
+        }
+
+        function parseIdList(value) {
+          return String(value || '')
+            .split(/[,\s;]+/)
+            .map((part) => Number(part))
+            .filter((id) => Number.isFinite(id) && id > 0)
+            .map((id) => Math.trunc(id));
+        }
+
+        function closeSpaceSplitModal() {
+          if (!spaceSplitModal) return;
+
+          spaceSplitModal.classList.remove('show');
+          spaceSplitModal.hidden = true;
+          spaceSplitModal.setAttribute('aria-hidden', 'true');
+          spaceSplitContext = null;
+
+          if (spaceSplitError) {
+            spaceSplitError.style.display = 'none';
+            spaceSplitError.textContent = '';
+          }
+        }
+
+        function showSpaceSplitError(message) {
+          if (!spaceSplitError) return;
+          spaceSplitError.textContent = message;
+          spaceSplitError.style.display = 'block';
+        }
+
+        function openSpaceSplitModalFromHit(orientation = 'vertical') {
+          const hit = currentPopoverHit || null;
+          const spaceId = Number(hit?.market_space_id || hit?.space?.id || 0);
+          const shapeId = Number(hit?.shape_id || 0);
+
+          if (!CAN_EDIT || !editMode) {
+            toast('Включите режим редактирования карты.');
+            return;
+          }
+
+          if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(shapeId) || shapeId <= 0 || !hit?.space) {
+            toast('Выберите место с активной фигурой карты.');
+            return;
+          }
+
+          spaceSplitContext = { hit, spaceId, shapeId };
+          const space = hit.space;
+          const number = String(space.number || space.code || '').trim();
+          const area = space.area_sqm !== null && space.area_sqm !== undefined ? Number(space.area_sqm) : null;
+          const halfArea = Number.isFinite(area) ? (Math.round((area / 2) * 100) / 100) : '';
+
+          if (spaceSplitTarget) {
+            spaceSplitTarget.textContent = 'Исходное место: ' + (number || ('ID ' + String(spaceId))) + '. Старое место станет историческим.';
+          }
+          if (spaceSplitOrientation) spaceSplitOrientation.value = orientation === 'horizontal' ? 'horizontal' : 'vertical';
+          if (spaceSplitDate) spaceSplitDate.value = todayIsoDate();
+          if (spaceSplitHistoryFrom) spaceSplitHistoryFrom.value = '';
+          if (spaceSplitFirstNumber) spaceSplitFirstNumber.value = number ? (number + '-1') : '';
+          if (spaceSplitSecondNumber) spaceSplitSecondNumber.value = number ? (number + '-2') : '';
+          if (spaceSplitFirstArea) spaceSplitFirstArea.value = halfArea !== '' ? String(halfArea) : '';
+          if (spaceSplitSecondArea) spaceSplitSecondArea.value = halfArea !== '' ? String(halfArea) : '';
+          if (spaceSplitFirstTenant) spaceSplitFirstTenant.value = hit.space_effective_tenant_id ? String(hit.space_effective_tenant_id) : '';
+          if (spaceSplitSecondTenant) spaceSplitSecondTenant.value = '';
+          if (spaceSplitFirstContracts) spaceSplitFirstContracts.value = hit.space_effective_contract_id ? String(hit.space_effective_contract_id) : '';
+          if (spaceSplitSecondContracts) spaceSplitSecondContracts.value = '';
+          if (spaceSplitComment) spaceSplitComment.value = '';
+          if (spaceSplitError) {
+            spaceSplitError.style.display = 'none';
+            spaceSplitError.textContent = '';
+          }
+
+          if (spaceSplitModal) {
+            spaceSplitModal.hidden = false;
+            spaceSplitModal.classList.add('show');
+            spaceSplitModal.setAttribute('aria-hidden', 'false');
+          }
+        }
+
+        async function submitSpaceSplit() {
+          if (!spaceSplitContext || !spaceSplitSubmit) return;
+
+          const firstTenant = spaceSplitFirstTenant?.value ? Number(spaceSplitFirstTenant.value) : null;
+          const secondTenant = spaceSplitSecondTenant?.value ? Number(spaceSplitSecondTenant.value) : null;
+          const payload = {
+            shape_id: spaceSplitContext.shapeId,
+            orientation: spaceSplitOrientation?.value || 'vertical',
+            split_date: spaceSplitDate?.value || todayIsoDate(),
+            episode_valid_from: spaceSplitHistoryFrom?.value || null,
+            comment: spaceSplitComment?.value || null,
+            first: {
+              number: spaceSplitFirstNumber?.value || '',
+              area_sqm: spaceSplitFirstArea?.value ? Number(spaceSplitFirstArea.value) : null,
+              tenant_id: Number.isFinite(firstTenant) && firstTenant > 0 ? firstTenant : null,
+              contract_ids: parseIdList(spaceSplitFirstContracts?.value || ''),
+            },
+            second: {
+              number: spaceSplitSecondNumber?.value || '',
+              area_sqm: spaceSplitSecondArea?.value ? Number(spaceSplitSecondArea.value) : null,
+              tenant_id: Number.isFinite(secondTenant) && secondTenant > 0 ? secondTenant : null,
+              contract_ids: parseIdList(spaceSplitSecondContracts?.value || ''),
+            },
+          };
+
+          if (!payload.first.number || !payload.second.number) {
+            showSpaceSplitError('Укажите названия двух новых мест.');
+            return;
+          }
+
+          const originalText = spaceSplitSubmit.textContent;
+          spaceSplitSubmit.disabled = true;
+          spaceSplitSubmit.textContent = 'Разделяю...';
+
+          try {
+            const res = await apiFetch('/admin/market-map/spaces/' + String(spaceSplitContext.spaceId) + '/split', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+
+            const json = await res.json();
+            if (!res.ok || !json || json.ok !== true) {
+              let message = json?.message || 'Не удалось разделить место.';
+              if (json?.errors) {
+                const firstKey = Object.keys(json.errors)[0];
+                if (firstKey && Array.isArray(json.errors[firstKey]) && json.errors[firstKey][0]) {
+                  message = json.errors[firstKey][0];
+                }
+              }
+              throw new Error(message);
+            }
+
+            if (typeof loadShapesRef === 'function') {
+              await loadShapesRef();
+            }
+            if (typeof redrawShapesRef === 'function') {
+              redrawShapesRef();
+            }
+
+            closeSpaceSplitModal();
+            hidePopover();
+            toast('Место разделено.');
+          } catch (err) {
+            console.error(err);
+            showSpaceSplitError(err?.message || 'Не удалось разделить место.');
+          } finally {
+            spaceSplitSubmit.disabled = false;
+            spaceSplitSubmit.textContent = originalText;
+          }
+        }
+
         function showPopoverAt(clientX, clientY, html, isUnboundShape = false) {
           if (!popover || !popoverBody) return;
 
@@ -3887,6 +4228,26 @@
           });
         });
 
+        spaceSplitModal?.addEventListener('click', (e) => {
+          const t = e.target;
+          if (!(t instanceof HTMLElement)) return;
+
+          const action = t.getAttribute('data-action');
+          if (action === 'close') {
+            e.preventDefault();
+            closeSpaceSplitModal();
+          }
+        });
+        spaceSplitCancel?.addEventListener('click', closeSpaceSplitModal);
+        spaceSplitClose?.addEventListener('click', closeSpaceSplitModal);
+        spaceSplitSubmit?.addEventListener('click', (e) => {
+          e.preventDefault();
+          submitSpaceSplit().catch((err) => {
+            console.error(err);
+            toast(String(err?.message || err));
+          });
+        });
+
         window.addEventListener('keydown', (e) => {
           if (identityFixModal?.classList.contains('show')) {
             if (e.key === 'Escape') {
@@ -3906,6 +4267,13 @@
             if (e.key === 'Escape') {
               e.preventDefault();
               closeContractBindingModal();
+            }
+            return;
+          }
+          if (spaceSplitModal?.classList.contains('show')) {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeSpaceSplitModal();
             }
             return;
           }
@@ -4022,6 +4390,50 @@
               bindingRisk: item?.binding_risk && typeof item.binding_risk === 'object' ? item.binding_risk : null,
             };
           }
+
+        function normalizeSpaceFromHit(hit) {
+          const space = hit?.space || null;
+          const tenant = hit?.tenant || null;
+          const id = Number(hit?.market_space_id || space?.id || 0);
+
+          if (!Number.isFinite(id) || id <= 0) {
+            return null;
+          }
+
+          return normalizeChosenSpace({
+            id,
+            number: space?.number ?? hit?.space_number ?? '',
+            code: space?.code ?? hit?.space_code ?? '',
+            display_name: space?.display_name ?? '',
+            space_group_role: space?.space_group_role ?? hit?.space_group_role ?? '',
+            space_group_parent_id: space?.space_group_parent_id ?? hit?.space_group_parent_id ?? null,
+            space_group_slot: space?.space_group_slot ?? hit?.space_group_slot ?? '',
+            tenantName: hit?.space_effective_tenant_name || tenant?.name || hit?.space_tenant_name || null,
+            space_effective_tenant_id: hit?.space_effective_tenant_id ?? null,
+            space_effective_is_occupied: hit?.space_effective_is_occupied ?? null,
+            space_occupancy_source: hit?.space_occupancy_source || 'none',
+            space_occupancy_source_space_id: hit?.space_occupancy_source_space_id ?? null,
+            space_occupancy_source_space_number: hit?.space_occupancy_source_space_number ?? null,
+            space_effective_debt_status: hit?.space_effective_debt_status ?? null,
+            space_effective_debt_status_label: hit?.space_effective_debt_status_label ?? null,
+            space_effective_debt_status_mode: hit?.space_effective_debt_status_mode ?? 'auto',
+            space_effective_debt_status_source: hit?.space_effective_debt_status_source ?? null,
+            space_effective_debt_overdue_days: hit?.space_effective_debt_overdue_days ?? null,
+            space_effective_debt_amount: hit?.space_effective_debt_amount ?? null,
+            space_effective_debt_status_scope: hit?.space_effective_debt_status_scope ?? 'none',
+            space_effective_tenant_debt_amount: hit?.space_effective_tenant_debt_amount ?? null,
+            space_effective_tenant_debt_status: hit?.space_effective_tenant_debt_status ?? null,
+            space_effective_tenant_debt_updated_at: hit?.space_effective_tenant_debt_updated_at ?? null,
+            space_effective_contract_id: hit?.space_effective_contract_id ?? null,
+            space_effective_contract_number: hit?.space_effective_contract_number ?? null,
+            space_effective_contract_url: hit?.space_effective_contract_url ?? null,
+            space_financial_source: hit?.space_financial_source ?? 'none',
+            space_financial_source_space_id: hit?.space_financial_source_space_id ?? null,
+            space_financial_source_space_number: hit?.space_financial_source_space_number ?? null,
+            review_status: space?.review_status || hit?.space_review_status || '',
+            review_status_label: space?.review_status_label || hit?.space_review_status_label || '',
+          });
+        }
 
         function formatSpaceLabel(space) {
           if (!space) return '—';
@@ -6372,6 +6784,7 @@
               if (toolPolyBtn) toolPolyBtn.style.display = editMode ? 'inline-flex' : 'none';
 
               updateScenarioUi();
+              syncMapEditRail();
 
               if (editMode) {
                 setTool('select');
@@ -6382,6 +6795,7 @@
                 setSelectedShape(null);
                 clearHandles();
                 hidePopover();
+                closeSpaceSplitModal();
                 toast('Разметка выключена');
               }
             });
@@ -6389,10 +6803,24 @@
 
           syncEditToggleUi();
           updateScenarioUi();
+          syncMapEditRail();
 
           if (CAN_EDIT && toolSelectBtn) toolSelectBtn.addEventListener('click', () => { if (editMode) setTool('select'); });
           if (CAN_EDIT && toolRectBtn) toolRectBtn.addEventListener('click', () => { if (editMode) setTool('rect'); });
           if (CAN_EDIT && toolPolyBtn) toolPolyBtn.addEventListener('click', () => { if (editMode) setTool('poly'); });
+
+          if (CAN_EDIT && railToolSelectBtn) railToolSelectBtn.addEventListener('click', () => { setTool('select'); setRailAction('select'); });
+          if (CAN_EDIT && railSplitVerticalBtn) railSplitVerticalBtn.addEventListener('click', () => { setTool('select'); setRailAction('split_vertical'); });
+          if (CAN_EDIT && railSplitHorizontalBtn) railSplitHorizontalBtn.addEventListener('click', () => { setTool('select'); setRailAction('split_horizontal'); });
+          if (CAN_EDIT && railGroupBtn) railGroupBtn.addEventListener('click', () => { setTool('select'); setRailAction('group'); });
+          if (CAN_EDIT && railUngroupBtn) railUngroupBtn.addEventListener('click', () => { setTool('select'); setRailAction('ungroup'); });
+          if (CAN_EDIT && railCancelToolBtn) railCancelToolBtn.addEventListener('click', () => {
+            setTool('select');
+            setRailAction('select');
+            closeSpaceSplitModal();
+            closeGroupMembershipModal();
+            hidePopover();
+          });
 
           if (CAN_EDIT && spaceSearchInput) {
             spaceSearchInput.addEventListener('input', () => {
@@ -6779,6 +7207,7 @@
                   if (toolPolyBtn) toolPolyBtn.style.display = 'inline-flex';
 
                   updateScenarioUi();
+                  syncMapEditRail();
                   setTool('select');
                   setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить');
                   toast('Разметка включена');
@@ -7117,6 +7546,46 @@
 
               if (CAN_EDIT && editMode && tool === 'select' && hit.shape_id) {
                 setSelectedShape(hit.shape_id);
+              }
+
+              if (CAN_EDIT && editMode && tool === 'select' && railAction !== 'select') {
+                hidePopover();
+
+                if (railAction === 'split_vertical' || railAction === 'split_horizontal') {
+                  const role = String(hit?.space?.space_group_role ?? hit?.space_group_role ?? '');
+                  if (role === 'parent') {
+                    toast('Разделяйте физическое место, а не parent-группу.');
+                    return;
+                  }
+
+                  openSpaceSplitModalFromHit(railAction === 'split_horizontal' ? 'horizontal' : 'vertical');
+                  return;
+                }
+
+                const railSpace = normalizeSpaceFromHit(hit);
+                if (!railSpace) {
+                  toast('Выберите место на карте.');
+                  return;
+                }
+
+                if (railAction === 'group') {
+                  openGroupMembershipModal(railSpace);
+                  return;
+                }
+
+                if (railAction === 'ungroup') {
+                  if (String(railSpace.spaceGroupRole || '') !== 'child') {
+                    toast('Разгруппировать можно только дочернее место.');
+                    return;
+                  }
+
+                  openGroupMembershipModal(railSpace);
+                  if (groupAction) {
+                    groupAction.value = 'remove_from_group';
+                    onGroupActionChange();
+                  }
+                  return;
+                }
               }
 
               let title = 'Торговое место';
@@ -7567,7 +8036,9 @@
                 }
               }
 
-              if (CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
+              const showPopupEditActions = false;
+
+              if (showPopupEditActions && CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
                 if (hit.market_space_id) {
                   btns.push('<button type="button" data-action="set-chosen-space" data-space-id="' + String(hit.market_space_id) + '">Выбрать это место</button>');
                 }
@@ -7594,7 +8065,7 @@
                 btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" data-default-action="' + escapeHtml(groupDefaultAction) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
               }
 
-              if (CAN_EDIT && hasGroupMembershipSpace && !isSharedUse && actionStatus !== 'maintenance') {
+              if (showPopupEditActions && CAN_EDIT && hasGroupMembershipSpace && !isSharedUse && actionStatus !== 'maintenance') {
                 if (spaceGroupRole === 'parent') {
                   btns.push('<button type="button" disabled title="Состав группы меняется через обычные или дочерние места">Состав группы</button>');
                 } else if (spaceGroupRole === 'child') {
@@ -8184,19 +8655,57 @@
           }
         }
 
+        async function withMapLoadTimeout(promise, ms, label) {
+          let timer = null;
+          try {
+            return await Promise.race([
+              promise,
+              new Promise((resolve) => {
+                timer = window.setTimeout(() => {
+                  console.warn('Map PDF loader timed out:', label);
+                  resolve(null);
+                }, ms);
+              }),
+            ]);
+          } finally {
+            if (timer !== null) {
+              window.clearTimeout(timer);
+            }
+          }
+        }
+
         async function loadPdfJs() {
-          const localMjsBlob = await tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs');
+          const localMjsDirect = await withMapLoadTimeout(
+            tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs'),
+            4000,
+            'local direct pdfjs'
+          );
+          if (localMjsDirect) return localMjsDirect;
+
+          const localMjsBlob = await withMapLoadTimeout(
+            tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs'),
+            4000,
+            'local blob pdfjs'
+          );
           if (localMjsBlob) return localMjsBlob;
 
-          const cdn = await tryImportDirect(
-            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
-            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+          const cdn = await withMapLoadTimeout(
+            tryImportDirect(
+              'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
+              'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+            ),
+            4000,
+            'cdn direct pdfjs'
           );
           if (cdn) return cdn;
 
-          const cdnBlob = await tryImportBlob(
-            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
-            'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+          const cdnBlob = await withMapLoadTimeout(
+            tryImportBlob(
+              'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.min.mjs',
+              'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.530/build/pdf.worker.min.mjs'
+            ),
+            4000,
+            'cdn blob pdfjs'
           );
           if (cdnBlob) return cdnBlob;
 
