@@ -34,6 +34,8 @@ use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceGroupEpisode;
+use App\Models\MarketSpaceGroupEpisodeChild;
 use App\Models\MarketSpaceMapShape;
 use App\Models\Operation;
 use App\Models\Tenant;
@@ -2896,6 +2898,355 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Изменение группировки места (добавить/перенести/убрать из группы).
      */
+    Route::post('/admin/market-map/spaces/{marketSpace}/split', function (Request $request, MarketSpace $marketSpace) use (
+        $resolveMarketForMap,
+        $ensureCanEditShapes,
+        $normalizePolygonAndBbox,
+    ) {
+        $ensureCanEditShapes();
+        $market = $resolveMarketForMap();
+
+        abort_unless((int) $marketSpace->market_id === (int) $market->id, 403, 'Market space does not belong to current market.');
+
+        foreach (['market_space_map_shapes', 'market_space_group_episodes', 'market_space_group_episode_children'] as $requiredTable) {
+            if (! Schema::hasTable($requiredTable)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Required table is missing: '.$requiredTable.'. Run migrations before splitting spaces.',
+                ], 422);
+            }
+        }
+
+        $validated = $request->validate([
+            'shape_id' => ['required', 'integer', 'exists:market_space_map_shapes,id'],
+            'orientation' => ['required', 'string', 'in:vertical,horizontal'],
+            'split_date' => ['required', 'date'],
+            'episode_valid_from' => ['nullable', 'date'],
+            'comment' => ['nullable', 'string', 'max:500'],
+            'first' => ['required', 'array'],
+            'first.number' => ['required', 'string', 'max:255'],
+            'first.tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
+            'first.area_sqm' => ['nullable', 'numeric', 'min:0'],
+            'first.contract_ids' => ['nullable', 'array'],
+            'first.contract_ids.*' => ['integer', 'exists:tenant_contracts,id'],
+            'second' => ['required', 'array'],
+            'second.number' => ['required', 'string', 'max:255'],
+            'second.tenant_id' => ['nullable', 'integer', 'exists:tenants,id'],
+            'second.area_sqm' => ['nullable', 'numeric', 'min:0'],
+            'second.contract_ids' => ['nullable', 'array'],
+            'second.contract_ids.*' => ['integer', 'exists:tenant_contracts,id'],
+        ]);
+
+        $tenantIds = collect([
+            $validated['first']['tenant_id'] ?? null,
+            $validated['second']['tenant_id'] ?? null,
+        ])->filter()->map(static fn ($id): int => (int) $id)->unique()->values();
+
+        if ($tenantIds->isNotEmpty()) {
+            $tenantCount = Tenant::query()
+                ->where('market_id', (int) $market->id)
+                ->whereIn('id', $tenantIds->all())
+                ->count();
+
+            if ($tenantCount !== $tenantIds->count()) {
+                throw ValidationException::withMessages([
+                    'tenant_id' => 'One or more tenants do not belong to current market.',
+                ]);
+            }
+        }
+
+        $sourceShape = MarketSpaceMapShape::query()
+            ->where('market_id', (int) $market->id)
+            ->where('market_space_id', (int) $marketSpace->id)
+            ->where('is_active', true)
+            ->whereKey((int) $validated['shape_id'])
+            ->first();
+
+        if (! $sourceShape) {
+            throw ValidationException::withMessages([
+                'shape_id' => 'Active shape for this market space was not found.',
+            ]);
+        }
+
+        [$normalizedSourcePolygon, $sourceBbox] = $normalizePolygonAndBbox(is_array($sourceShape->polygon) ? $sourceShape->polygon : []);
+
+        $x1 = (float) $sourceBbox['bbox_x1'];
+        $y1 = (float) $sourceBbox['bbox_y1'];
+        $x2 = (float) $sourceBbox['bbox_x2'];
+        $y2 = (float) $sourceBbox['bbox_y2'];
+
+        if ($x1 >= $x2 || $y1 >= $y2) {
+            throw ValidationException::withMessages([
+                'shape_id' => 'Shape bbox is invalid and cannot be split.',
+            ]);
+        }
+
+        if ((string) $validated['orientation'] === 'vertical') {
+            $mid = round(($x1 + $x2) / 2, 2);
+            $firstPolygon = [
+                ['x' => $x1, 'y' => $y1],
+                ['x' => $mid, 'y' => $y1],
+                ['x' => $mid, 'y' => $y2],
+                ['x' => $x1, 'y' => $y2],
+            ];
+            $secondPolygon = [
+                ['x' => $mid, 'y' => $y1],
+                ['x' => $x2, 'y' => $y1],
+                ['x' => $x2, 'y' => $y2],
+                ['x' => $mid, 'y' => $y2],
+            ];
+        } else {
+            $mid = round(($y1 + $y2) / 2, 2);
+            $firstPolygon = [
+                ['x' => $x1, 'y' => $y1],
+                ['x' => $x2, 'y' => $y1],
+                ['x' => $x2, 'y' => $mid],
+                ['x' => $x1, 'y' => $mid],
+            ];
+            $secondPolygon = [
+                ['x' => $x1, 'y' => $mid],
+                ['x' => $x2, 'y' => $mid],
+                ['x' => $x2, 'y' => $y2],
+                ['x' => $x1, 'y' => $y2],
+            ];
+        }
+
+        [$firstPolygon, $firstBbox] = $normalizePolygonAndBbox($firstPolygon);
+        [$secondPolygon, $secondBbox] = $normalizePolygonAndBbox($secondPolygon);
+
+        $sourceArea = $marketSpace->area_sqm !== null ? (float) $marketSpace->area_sqm : null;
+        $defaultHalfArea = $sourceArea !== null ? round($sourceArea / 2, 2) : null;
+        $firstArea = array_key_exists('area_sqm', $validated['first']) && is_numeric($validated['first']['area_sqm'])
+            ? (float) $validated['first']['area_sqm']
+            : $defaultHalfArea;
+        $secondArea = array_key_exists('area_sqm', $validated['second']) && is_numeric($validated['second']['area_sqm'])
+            ? (float) $validated['second']['area_sqm']
+            : $defaultHalfArea;
+
+        if ($sourceArea !== null && $firstArea !== null && $secondArea !== null && abs(($firstArea + $secondArea) - $sourceArea) > 0.05) {
+            throw ValidationException::withMessages([
+                'area_sqm' => 'New space areas must match the source area.',
+            ]);
+        }
+
+        $firstContractIds = collect($validated['first']['contract_ids'] ?? [])
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+        $secondContractIds = collect($validated['second']['contract_ids'] ?? [])
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+        $allContractIds = $firstContractIds->merge($secondContractIds)->unique()->values();
+
+        if ($allContractIds->isNotEmpty()) {
+            if ($allContractIds->count() !== $firstContractIds->count() + $secondContractIds->count()) {
+                throw ValidationException::withMessages([
+                    'contract_ids' => 'The same contract cannot be assigned to both new spaces.',
+                ]);
+            }
+
+            $contractCount = TenantContract::query()
+                ->where('market_id', (int) $market->id)
+                ->whereIn('id', $allContractIds->all())
+                ->count();
+
+            if ($contractCount !== $allContractIds->count()) {
+                throw ValidationException::withMessages([
+                    'contract_ids' => 'One or more contracts do not belong to current market.',
+                ]);
+            }
+        }
+
+        $splitDate = \Illuminate\Support\Carbon::parse((string) $validated['split_date'])->startOfDay();
+        $episodeValidFrom = ! empty($validated['episode_valid_from'])
+            ? \Illuminate\Support\Carbon::parse((string) $validated['episode_valid_from'])->startOfDay()
+            : null;
+        $episodeValidTo = $splitDate->copy()->subDay();
+
+        $result = DB::transaction(function () use (
+            $market,
+            $marketSpace,
+            $sourceShape,
+            $normalizedSourcePolygon,
+            $validated,
+            $firstPolygon,
+            $firstBbox,
+            $secondPolygon,
+            $secondBbox,
+            $firstArea,
+            $secondArea,
+            $splitDate,
+            $episodeValidFrom,
+            $episodeValidTo,
+            $firstContractIds,
+            $secondContractIds
+        ): array {
+            $lockedSpace = MarketSpace::query()
+                ->where('market_id', (int) $market->id)
+                ->whereKey((int) $marketSpace->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $lockedShape = MarketSpaceMapShape::query()
+                ->where('market_id', (int) $market->id)
+                ->where('market_space_id', (int) $lockedSpace->id)
+                ->where('is_active', true)
+                ->whereKey((int) $sourceShape->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $buildSpacePayload = static function (array $input, ?float $area) use ($lockedSpace): array {
+                $tenantId = $input['tenant_id'] ?? null;
+
+                return [
+                    'market_id' => (int) $lockedSpace->market_id,
+                    'location_id' => $lockedSpace->location_id,
+                    'tenant_id' => $tenantId !== null ? (int) $tenantId : null,
+                    'number' => trim((string) $input['number']),
+                    'code' => null,
+                    'space_group_token' => null,
+                    'space_group_slot' => null,
+                    'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+                    'space_group_parent_id' => null,
+                    'display_name' => null,
+                    'activity_type' => $lockedSpace->activity_type,
+                    'area_sqm' => $area,
+                    'rent_rate_value' => $lockedSpace->rent_rate_value,
+                    'rent_rate_unit' => $lockedSpace->rent_rate_unit,
+                    'type' => $lockedSpace->type,
+                    'status' => $tenantId !== null ? 'occupied' : 'vacant',
+                    'is_active' => true,
+                    'notes' => null,
+                ];
+            };
+
+            $firstSpace = MarketSpace::query()->create($buildSpacePayload($validated['first'], $firstArea));
+            $secondSpace = MarketSpace::query()->create($buildSpacePayload($validated['second'], $secondArea));
+
+            $lockedSpace->space_group_role = MarketSpace::SPACE_GROUP_ROLE_PARENT;
+            $lockedSpace->tenant_id = null;
+            $lockedSpace->is_active = false;
+            $lockedSpace->notes = trim((string) ($lockedSpace->notes ?? '')."\n".'Split on map at '.$splitDate->toDateString());
+            $lockedSpace->save();
+
+            $lockedShape->is_active = false;
+            $sourceMeta = is_array($lockedShape->meta) ? $lockedShape->meta : [];
+            $sourceMeta['split_replaced_by_space_ids'] = [(int) $firstSpace->id, (int) $secondSpace->id];
+            $lockedShape->meta = $sourceMeta;
+            $lockedShape->save();
+
+            $shapePayload = static function (MarketSpace $space, array $polygon, array $bbox) use ($lockedShape): array {
+                return [
+                    'market_id' => (int) $lockedShape->market_id,
+                    'market_space_id' => (int) $space->id,
+                    'page' => (int) $lockedShape->page,
+                    'version' => (int) $lockedShape->version,
+                    'polygon' => $polygon,
+                    'bbox_x1' => $bbox['bbox_x1'],
+                    'bbox_y1' => $bbox['bbox_y1'],
+                    'bbox_x2' => $bbox['bbox_x2'],
+                    'bbox_y2' => $bbox['bbox_y2'],
+                    'fill_color' => $lockedShape->fill_color,
+                    'stroke_color' => $lockedShape->stroke_color,
+                    'fill_opacity' => $lockedShape->fill_opacity,
+                    'stroke_width' => $lockedShape->stroke_width,
+                    'sort_order' => (int) ($lockedShape->sort_order ?? 0),
+                    'is_active' => true,
+                    'created_by' => Filament::auth()->id(),
+                    'updated_by' => Filament::auth()->id(),
+                    'meta' => [
+                        'source' => 'map_split',
+                        'source_shape_id' => (int) $lockedShape->id,
+                        'source_market_space_id' => (int) $lockedShape->market_space_id,
+                    ],
+                ];
+            };
+
+            $firstShape = MarketSpaceMapShape::query()->create($shapePayload($firstSpace, $firstPolygon, $firstBbox));
+            $secondShape = MarketSpaceMapShape::query()->create($shapePayload($secondSpace, $secondPolygon, $secondBbox));
+
+            $episode = MarketSpaceGroupEpisode::query()->create([
+                'market_id' => (int) $market->id,
+                'parent_market_space_id' => (int) $lockedSpace->id,
+                'valid_from' => $episodeValidFrom?->toDateString(),
+                'valid_to' => $episodeValidTo->toDateString(),
+                'source' => 'map_split',
+                'notes' => $validated['comment'] ?? null,
+                'meta' => [
+                    'split_date' => $splitDate->toDateString(),
+                    'source_shape_id' => (int) $lockedShape->id,
+                    'source_polygon' => $normalizedSourcePolygon,
+                ],
+                'created_by_user_id' => Filament::auth()->id(),
+            ]);
+
+            MarketSpaceGroupEpisodeChild::query()->create([
+                'market_space_group_episode_id' => (int) $episode->id,
+                'child_market_space_id' => (int) $firstSpace->id,
+                'slot' => '1',
+                'sort_order' => 1,
+                'area_sqm' => $firstArea,
+                'meta' => ['source' => 'map_split'],
+            ]);
+            MarketSpaceGroupEpisodeChild::query()->create([
+                'market_space_group_episode_id' => (int) $episode->id,
+                'child_market_space_id' => (int) $secondSpace->id,
+                'slot' => '2',
+                'sort_order' => 2,
+                'area_sqm' => $secondArea,
+                'meta' => ['source' => 'map_split'],
+            ]);
+
+            $updateContracts = static function ($contractIds, MarketSpace $targetSpace): void {
+                if ($contractIds->isEmpty()) {
+                    return;
+                }
+
+                TenantContract::query()
+                    ->whereIn('id', $contractIds->all())
+                    ->get()
+                    ->each(static function (TenantContract $contract) use ($targetSpace): void {
+                        $contract->market_space_id = (int) $targetSpace->id;
+
+                        if (Schema::hasColumn('tenant_contracts', 'space_mapping_mode')) {
+                            $contract->space_mapping_mode = TenantContract::SPACE_MAPPING_MODE_MANUAL;
+                        }
+
+                        if (Schema::hasColumn('tenant_contracts', 'space_mapping_updated_at')) {
+                            $contract->space_mapping_updated_at = now();
+                        }
+
+                        if (Schema::hasColumn('tenant_contracts', 'space_mapping_updated_by_user_id')) {
+                            $contract->space_mapping_updated_by_user_id = Filament::auth()->id();
+                        }
+
+                        $contract->save();
+                    });
+            };
+
+            $updateContracts($firstContractIds, $firstSpace);
+            $updateContracts($secondContractIds, $secondSpace);
+            DebtStatusResolver::clearCache();
+
+            return [
+                'source_space_id' => (int) $lockedSpace->id,
+                'first_space_id' => (int) $firstSpace->id,
+                'second_space_id' => (int) $secondSpace->id,
+                'first_shape_id' => (int) $firstShape->id,
+                'second_shape_id' => (int) $secondShape->id,
+                'episode_id' => (int) $episode->id,
+            ];
+        });
+
+        return response()->json([
+            'ok' => true,
+            'result' => $result,
+        ]);
+    })->name('filament.admin.market-map.spaces.split');
+
     Route::post('/admin/market-map/spaces/{marketSpace}/group-membership', function (Request $request, MarketSpace $marketSpace) use (
         $resolveMarketForMap,
         $ensureCanEditShapes,
