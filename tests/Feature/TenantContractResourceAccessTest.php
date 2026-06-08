@@ -8,6 +8,8 @@ use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantContractResource\Pages\EditTenantContract;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceGroupEpisode;
+use App\Models\MarketSpaceGroupEpisodeChild;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\User;
@@ -387,6 +389,86 @@ class TenantContractResourceAccessTest extends TestCase
         $chainMethod->setAccessible(true);
 
         $this->assertSame('1 из 1', $chainMethod->invoke(null, $currentContract));
+    }
+
+    public function test_contract_history_uses_group_episode_for_historical_child_place(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Group Tenant',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'ОС1 6, 7',
+            'display_name' => 'ОС1 6, 7',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $historicalChild = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'ОС1 6',
+            'display_name' => 'ОС1 6',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $episode = MarketSpaceGroupEpisode::query()->create([
+            'market_id' => (int) $market->id,
+            'parent_market_space_id' => (int) $parent->id,
+            'valid_from' => '2026-01-01',
+            'valid_to' => '2026-01-31',
+            'source' => 'test',
+        ]);
+
+        MarketSpaceGroupEpisodeChild::query()->create([
+            'market_space_group_episode_id' => (int) $episode->id,
+            'child_market_space_id' => (int) $historicalChild->id,
+            'slot' => '6',
+            'sort_order' => 1,
+        ]);
+
+        $historicalContract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $historicalChild->id,
+            'number' => 'ОС1 6 от 01.01.2026',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $currentContract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $parent->id,
+            'number' => 'ОС1 6, 7 от 01.02.2026',
+            'status' => 'active',
+            'starts_at' => '2026-02-01',
+            'is_active' => true,
+        ]);
+
+        $chainMethod = new \ReflectionMethod(TenantContractResource::class, 'chainDisplay');
+        $chainMethod->setAccessible(true);
+
+        $this->assertSame('1 из 2', $chainMethod->invoke(null, $historicalContract));
+        $this->assertSame('2 из 2', $chainMethod->invoke(null, $currentContract));
+
+        $historyMethod = new \ReflectionMethod(TenantContractResource::class, 'historyChainPreview');
+        $historyMethod->setAccessible(true);
+
+        $html = (string) $historyMethod->invoke(null, $currentContract);
+
+        $this->assertStringContainsString('ОС1 6 от 01.01.2026', $html);
+        $this->assertStringContainsString('ОС1 6, 7 от 01.02.2026', $html);
     }
 
     public function test_market_operator_cannot_open_contracts_index(): void

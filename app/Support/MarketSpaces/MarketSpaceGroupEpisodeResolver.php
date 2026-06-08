@@ -33,12 +33,27 @@ class MarketSpaceGroupEpisodeResolver
             return $this->empty('Договор не привязан к месту.');
         }
 
+        $asOf = $this->normalizeDate($documentDate);
+
+        if ((string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+            $episode = $this->episodeContainingChildAtDate($space, $asOf);
+
+            if ($episode instanceof MarketSpaceGroupEpisode && $episode->parentMarketSpace instanceof MarketSpace) {
+                return $this->fromEpisode(
+                    $episode->parentMarketSpace,
+                    $episode,
+                    $asOf,
+                    'Показан исторический состав группы: это место входило в группу на дату договора.'
+                );
+            }
+        }
+
         $parent = $this->resolveParentSpace($space);
         if (! $parent instanceof MarketSpace) {
             return $this->empty('Договор привязан к обычному месту, не к группе.');
         }
 
-        return $this->forParentAtDate($parent, $documentDate);
+        return $this->forParentAtDate($parent, $asOf);
     }
 
     /**
@@ -64,23 +79,7 @@ class MarketSpaceGroupEpisodeResolver
             $episode = $this->episodeForParentAtDate($parent, $asOf);
 
             if ($episode instanceof MarketSpaceGroupEpisode) {
-                return [
-                    'applies' => true,
-                    'source' => 'episode',
-                    'as_of' => $asOf,
-                    'parent' => $parent,
-                    'episode' => $episode,
-                    'children' => $episode->children
-                        ->sortBy([
-                            ['sort_order', 'asc'],
-                            ['slot', 'asc'],
-                            ['id', 'asc'],
-                        ])
-                        ->map(fn ($row): ?MarketSpace => $row->childMarketSpace)
-                        ->filter(fn ($space): bool => $space instanceof MarketSpace)
-                        ->values(),
-                    'message' => 'Показан исторический состав группы на дату договора.',
-                ];
+                return $this->fromEpisode($parent, $episode, $asOf, 'Показан исторический состав группы на дату договора.');
             }
         }
 
@@ -142,6 +141,72 @@ class MarketSpaceGroupEpisodeResolver
             ->orderByDesc('valid_from')
             ->orderByDesc('id')
             ->first();
+    }
+
+    private function episodeContainingChildAtDate(MarketSpace $child, ?string $asOf): ?MarketSpaceGroupEpisode
+    {
+        if (! Schema::hasTable('market_space_group_episodes') || ! Schema::hasTable('market_space_group_episode_children')) {
+            return null;
+        }
+
+        $query = MarketSpaceGroupEpisode::query()
+            ->with(['parentMarketSpace', 'children.childMarketSpace'])
+            ->where('market_id', (int) $child->market_id)
+            ->whereHas('children', function ($children) use ($child): void {
+                $children->where('child_market_space_id', (int) $child->id);
+            });
+
+        if ($asOf !== null) {
+            $query
+                ->where(function ($periodStart) use ($asOf): void {
+                    $periodStart
+                        ->whereNull('valid_from')
+                        ->orWhere('valid_from', '<=', $asOf);
+                })
+                ->where(function ($periodEnd) use ($asOf): void {
+                    $periodEnd
+                        ->whereNull('valid_to')
+                        ->orWhere('valid_to', '>=', $asOf);
+                });
+        }
+
+        return $query
+            ->orderByRaw('valid_from IS NULL')
+            ->orderByDesc('valid_from')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * @return array{
+     *     applies:bool,
+     *     source:string,
+     *     as_of:?string,
+     *     parent:?MarketSpace,
+     *     episode:?MarketSpaceGroupEpisode,
+     *     children:Collection<int, MarketSpace>,
+     *     message:string
+     * }
+     */
+    private function fromEpisode(MarketSpace $parent, MarketSpaceGroupEpisode $episode, ?string $asOf, string $message): array
+    {
+        return [
+            'applies' => true,
+            'source' => 'episode',
+            'as_of' => $asOf,
+            'parent' => $parent,
+            'episode' => $episode,
+            'children' => $episode->children
+                ->sortBy([
+                    ['sort_order', 'asc'],
+                    ['slot', 'asc'],
+                    ['id', 'asc'],
+                ])
+                ->map(fn ($row): ?MarketSpace => $row->childMarketSpace)
+                ->filter(fn ($space): bool => $space instanceof MarketSpace)
+                ->values(),
+            'message' => $message,
+        ];
     }
 
     private function normalizeDate(?string $date): ?string

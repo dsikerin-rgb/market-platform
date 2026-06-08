@@ -77,6 +77,44 @@ class MarketSpaceGroupEpisodeResolverTest extends TestCase
         $this->assertSame([(int) $currentChild->id], $resolved['children']->pluck('id')->map(fn ($id): int => (int) $id)->all());
     }
 
+    public function test_it_resolves_parent_from_historical_child_episode(): void
+    {
+        [$market, $tenant, $parent, $historicalChild, $currentChild] = $this->makeGroupFixture();
+
+        $episode = MarketSpaceGroupEpisode::query()->create([
+            'market_id' => (int) $market->id,
+            'parent_market_space_id' => (int) $parent->id,
+            'valid_from' => '2026-01-01',
+            'valid_to' => '2026-01-31',
+            'source' => 'test',
+        ]);
+
+        MarketSpaceGroupEpisodeChild::query()->create([
+            'market_space_group_episode_id' => (int) $episode->id,
+            'child_market_space_id' => (int) $historicalChild->id,
+            'slot' => '6',
+            'sort_order' => 1,
+        ]);
+
+        $contract = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $historicalChild->id,
+            'number' => 'ОС1 6 от 01.01.2026',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        $resolved = app(MarketSpaceGroupEpisodeResolver::class)->forContract($contract, '2026-01-15');
+
+        $this->assertTrue($resolved['applies']);
+        $this->assertSame('episode', $resolved['source']);
+        $this->assertSame((int) $parent->id, (int) $resolved['parent']->id);
+        $this->assertSame([(int) $historicalChild->id], $resolved['children']->pluck('id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertNotContains((int) $currentChild->id, $resolved['children']->pluck('id')->map(fn ($id): int => (int) $id)->all());
+    }
+
     /**
      * @return array{Market,Tenant,MarketSpace,MarketSpace,MarketSpace}
      */
