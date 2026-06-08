@@ -43,10 +43,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
-            $user->isSuperAdmin()
-            || $user->hasAnyRole(['market-admin'])
-        );
+        return (bool) $user && $user->isSuperAdmin();
     }
 
     public static function canCreate(): bool
