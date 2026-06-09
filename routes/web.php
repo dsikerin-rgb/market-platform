@@ -2497,6 +2497,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'activity_type' => (string) ($space->activity_type ?? ''),
                     'area_sqm' => (string) ($space->area_sqm ?? ''),
                     'status' => (string) ($space->status ?? ''),
+                    'is_active' => (bool) $space->is_active,
                     'review_status' => (string) ($space->map_review_status ?? ''),
                     'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
                     'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
