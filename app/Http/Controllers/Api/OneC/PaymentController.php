@@ -106,9 +106,11 @@ class PaymentController extends Controller
                     'items.*.payment_external_id' => ['nullable', 'string', 'max:255'],
                     'items.*.document_number' => ['nullable', 'string', 'max:255'],
                     'items.*.payment_date' => ['required', 'date_format:Y-m-d'],
+                    'items.*.period' => ['required', 'regex:/^\d{4}-\d{2}$/'],
                     'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
                     'items.*.organization_name' => ['nullable', 'string', 'max:255'],
                     'items.*.account' => ['nullable', 'string', 'max:64'],
+                    'items.*.debit_account' => ['nullable', 'string', 'max:64'],
                     'items.*.amount' => ['required', 'numeric'],
                     'items.*.currency' => ['nullable', 'string', 'size:3'],
                     'items.*.purpose' => ['nullable', 'string'],
@@ -158,6 +160,11 @@ class PaymentController extends Controller
             $unresolvedContracts = 0;
             $tenantsCreated = 0;
             $tenantsUpdatedByInn = 0;
+            $snapshotDeleted = 0;
+            $snapshotSyncSkippedPeriods = [];
+            $receivedByPeriod = [];
+            $skippedByPeriod = [];
+            $touchedPaymentIdsByPeriod = [];
             $now = now();
 
             DB::beginTransaction();
@@ -168,12 +175,16 @@ class PaymentController extends Controller
                 $paymentExternalId = trim((string) ($item['payment_external_id'] ?? ''));
                 $documentNumber = trim((string) ($item['document_number'] ?? ''));
                 $paymentDate = trim((string) $item['payment_date']);
+                $periodYm = trim((string) $item['period']);
+                $periodDate = $periodYm . '-01';
                 $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
                 $organizationName = trim((string) ($item['organization_name'] ?? ''));
                 $account = trim((string) ($item['account'] ?? ''));
+                $debitAccount = trim((string) ($item['debit_account'] ?? ''));
                 $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
                 $purpose = trim((string) ($item['purpose'] ?? ''));
                 $amount = $this->normalizeMoney($item['amount']);
+                $receivedByPeriod[$periodDate] = ($receivedByPeriod[$periodDate] ?? 0) + 1;
 
                 if ($currency === '') {
                     $currency = 'RUB';
@@ -191,6 +202,7 @@ class PaymentController extends Controller
                 $tenant = $tenantResolution['tenant'];
 
                 if (! $tenant) {
+                    $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
                     $skipped++;
                     continue;
                 }
@@ -216,9 +228,11 @@ class PaymentController extends Controller
                     $paymentExternalId,
                     $documentNumber,
                     $paymentDate,
+                    $periodYm,
                     $organizationExternalId,
                     $organizationName,
                     $account,
+                    $debitAccount,
                     $currency,
                     $amount,
                     $purpose,
@@ -230,11 +244,13 @@ class PaymentController extends Controller
                     ->first();
 
                 if ($existing) {
+                    $touchedPaymentIdsByPeriod[$periodDate] ??= [];
+                    $touchedPaymentIdsByPeriod[$periodDate][] = (int) $existing->id;
                     $skipped++;
                     continue;
                 }
 
-                TenantPayment::query()->create([
+                $payment = TenantPayment::query()->create([
                     'market_id' => $marketId,
                     'tenant_id' => (int) $tenant->id,
                     'tenant_contract_id' => $contract?->id,
@@ -243,21 +259,53 @@ class PaymentController extends Controller
                     'payment_external_id' => $paymentExternalId !== '' ? $paymentExternalId : null,
                     'document_number' => $documentNumber !== '' ? $documentNumber : null,
                     'payment_date' => $paymentDate,
+                    'period' => $periodDate,
                     'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
                     'organization_name' => $organizationName !== '' ? $organizationName : null,
                     'account' => $account !== '' ? $account : null,
+                    'debit_account' => $debitAccount !== '' ? $debitAccount : null,
                     'amount' => $amount,
                     'currency' => $currency,
                     'purpose' => $purpose !== '' ? $purpose : null,
+                    'source' => '1c',
+                    'source_file' => '1c:payments',
                     'payload' => $item,
                     'imported_at' => $now,
                     'source_row_hash' => $sourceRowHash,
                 ]);
 
+                $touchedPaymentIdsByPeriod[$periodDate] ??= [];
+                $touchedPaymentIdsByPeriod[$periodDate][] = (int) $payment->id;
                 $inserted++;
             }
 
+            foreach ($receivedByPeriod as $periodDate => $periodReceived) {
+                if (($skippedByPeriod[$periodDate] ?? 0) > 0) {
+                    $snapshotSyncSkippedPeriods[] = $periodDate;
+                    continue;
+                }
+
+                $touchedIds = array_values(array_unique($touchedPaymentIdsByPeriod[$periodDate] ?? []));
+                if ($touchedIds === []) {
+                    $snapshotSyncSkippedPeriods[] = $periodDate;
+                    continue;
+                }
+
+                $snapshotDeleted += TenantPayment::query()
+                    ->where('market_id', $marketId)
+                    ->whereDate('period', $periodDate)
+                    ->where('source', '1c')
+                    ->where('source_file', '1c:payments')
+                    ->whereNotIn('id', $touchedIds)
+                    ->delete();
+            }
+
             DB::commit();
+
+            $warnings = [
+                'snapshot_deleted' => $snapshotDeleted,
+                'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
+            ];
 
             $payload = [
                 'status' => 'ok',
@@ -270,6 +318,7 @@ class PaymentController extends Controller
                 'unresolved_contracts' => $unresolvedContracts,
                 'tenants_created' => $tenantsCreated,
                 'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                'warnings' => $warnings,
                 'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
             ];
 
@@ -292,6 +341,8 @@ class PaymentController extends Controller
                     'unresolved_contracts' => $unresolvedContracts,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'snapshot_deleted' => $snapshotDeleted,
+                    'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
                 ],
             ]);
 
@@ -363,9 +414,11 @@ class PaymentController extends Controller
         string $paymentExternalId,
         string $documentNumber,
         string $paymentDate,
+        string $periodYm,
         string $organizationExternalId,
         string $organizationName,
         string $account,
+        string $debitAccount,
         string $currency,
         string $amount,
         string $purpose,
@@ -377,9 +430,11 @@ class PaymentController extends Controller
             $paymentExternalId,
             $documentNumber,
             $paymentDate,
+            $periodYm,
             $organizationExternalId,
             $organizationName,
             $account,
+            $debitAccount,
             $currency,
             $amount,
             $purpose,

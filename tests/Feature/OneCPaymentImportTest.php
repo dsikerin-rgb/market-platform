@@ -68,9 +68,11 @@ class OneCPaymentImportTest extends TestCase
                     'payment_external_id' => 'payment-001',
                     'document_number' => 'BP-1',
                     'payment_date' => '2026-06-08',
+                    'period' => '2026-06',
                     'organization_external_id' => 'org-001',
                     'organization_name' => 'Test organization',
                     'account' => '62.01',
+                    'debit_account' => '51',
                     'amount' => 1500.50,
                     'currency' => 'rub',
                     'purpose' => 'Rent payment',
@@ -99,9 +101,11 @@ class OneCPaymentImportTest extends TestCase
             'payment_external_id' => 'payment-001',
             'document_number' => 'BP-1',
             'payment_date' => '2026-06-08',
+            'period' => '2026-06-01',
             'organization_external_id' => 'org-001',
             'organization_name' => 'Test organization',
             'account' => '62.01',
+            'debit_account' => '51',
             'amount' => '1500.50',
             'currency' => 'RUB',
             'purpose' => 'Rent payment',
@@ -130,6 +134,7 @@ class OneCPaymentImportTest extends TestCase
                     'payment_external_id' => 'payment-002',
                     'document_number' => 'BP-2',
                     'payment_date' => '2026-06-08',
+                    'period' => '2026-06',
                     'amount' => 2500,
                     'currency' => 'RUB',
                 ],
@@ -162,6 +167,7 @@ class OneCPaymentImportTest extends TestCase
                 [
                     'tenant_external_id' => 'tenant-003',
                     'payment_date' => '2026-06-08',
+                    'period' => '2026-06',
                     'amount' => 100,
                 ],
             ],
@@ -169,5 +175,82 @@ class OneCPaymentImportTest extends TestCase
             'Authorization' => 'Bearer wrong-token',
             'Accept' => 'application/json',
         ])->assertUnauthorized();
+    }
+
+    public function test_successful_period_snapshot_deletes_missing_payments(): void
+    {
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'name' => 'Snapshot tenant',
+            'external_id' => 'tenant-snapshot',
+        ]);
+
+        TenantPayment::query()->create([
+            'market_id' => (int) $this->market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_external_id' => 'tenant-snapshot',
+            'payment_external_id' => 'old-payment',
+            'document_number' => 'OLD',
+            'payment_date' => '2026-06-01',
+            'period' => '2026-06-01',
+            'amount' => 1000,
+            'currency' => 'RUB',
+            'imported_at' => now(),
+            'source_row_hash' => hash('sha256', 'old-payment'),
+        ]);
+
+        TenantPayment::query()->create([
+            'market_id' => (int) $this->market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_external_id' => 'tenant-snapshot',
+            'payment_external_id' => 'manual-payment',
+            'document_number' => 'MANUAL',
+            'payment_date' => '2026-06-03',
+            'period' => '2026-06-01',
+            'amount' => 500,
+            'currency' => 'RUB',
+            'source' => 'manual',
+            'source_file' => 'manual',
+            'imported_at' => now(),
+            'source_row_hash' => hash('sha256', 'manual-payment'),
+        ]);
+
+        $this->postJson(route('api.1c.payments.store'), [
+            'calculated_at' => '2026-06-09 19:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-snapshot',
+                    'payment_external_id' => 'new-payment',
+                    'document_number' => 'NEW',
+                    'payment_date' => '2026-06-02',
+                    'period' => '2026-06',
+                    'account' => '62.01',
+                    'debit_account' => '51',
+                    'amount' => 2000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('inserted', 1)
+            ->assertJsonPath('warnings.snapshot_deleted', 1);
+
+        $this->assertDatabaseMissing('tenant_payments', [
+            'payment_external_id' => 'old-payment',
+        ]);
+
+        $this->assertDatabaseHas('tenant_payments', [
+            'payment_external_id' => 'new-payment',
+            'period' => '2026-06-01',
+            'debit_account' => '51',
+        ]);
+
+        $this->assertDatabaseHas('tenant_payments', [
+            'payment_external_id' => 'manual-payment',
+            'source' => 'manual',
+        ]);
     }
 }

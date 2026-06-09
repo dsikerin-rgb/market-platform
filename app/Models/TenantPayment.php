@@ -13,6 +13,7 @@ class TenantPayment extends Model
 
     protected $casts = [
         'payment_date' => 'date',
+        'period' => 'date',
         'amount' => 'float',
         'payload' => 'array',
         'imported_at' => 'datetime',
