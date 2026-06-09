@@ -3997,7 +3997,7 @@
           const spaceId = Number(hit?.market_space_id || hit?.space?.id || 0);
           const shapeId = Number(hit?.shape_id || 0);
 
-          if (!CAN_EDIT || !editMode) {
+          if (!CAN_EDIT || !isEditMode) {
             toast('Включите режим редактирования карты.');
             return;
           }
