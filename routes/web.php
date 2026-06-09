@@ -1438,7 +1438,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         try {
             $rows = MarketSpaceMapShape::query()
                 ->with(['marketSpace' => static function ($query) {
-                    $query->select('id', 'tenant_id', 'display_name', 'number', 'code', 'status', 'is_active', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id', 'space_group_token')
+                    $query->select('id', 'tenant_id', 'display_name', 'number', 'code', 'area_sqm', 'status', 'is_active', 'map_review_status', 'map_reviewed_at', 'space_group_role', 'space_group_parent_id', 'space_group_token')
                         ->with([
                             'tenant:id,name,short_name,slug',
                             'spaceGroupParent' => static function ($parentQuery): void {
@@ -1610,6 +1610,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'space_number' => $space?->number ? (string) $space->number : null,
                 'space_code' => $space?->code ? (string) $space->code : null,
                 'space_display_name' => $space?->display_name ? (string) $space->display_name : null,
+                'space_area_sqm' => $space?->area_sqm !== null ? (string) $space->area_sqm : null,
                 'space_status' => $space?->status ? (string) $space->status : null,
                 'space_group_role' => $space?->space_group_role ? (string) $space->space_group_role : null,
                 'space_group_parent_id' => $space?->space_group_parent_id ? (int) $space->space_group_parent_id : null,
