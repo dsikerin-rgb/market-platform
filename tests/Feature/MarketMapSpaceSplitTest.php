@@ -161,7 +161,7 @@ class MarketMapSpaceSplitTest extends TestCase
             'market_id' => (int) $market->id,
             'tenant_id' => (int) $tenant->id,
             'number' => 'ST 2',
-            'area_sqm' => null,
+            'area_sqm' => 12.25,
             'status' => 'occupied',
             'is_active' => true,
         ]);
@@ -170,7 +170,7 @@ class MarketMapSpaceSplitTest extends TestCase
             'market_id' => (int) $market->id,
             'tenant_id' => null,
             'number' => 'ST 3',
-            'area_sqm' => null,
+            'area_sqm' => 18.75,
             'status' => 'vacant',
             'is_active' => true,
         ]);
@@ -202,11 +202,11 @@ class MarketMapSpaceSplitTest extends TestCase
             'episode_valid_from' => '2024-06-01',
             'first' => [
                 'target_space_id' => (int) $firstSpace->id,
-                'area_sqm' => 25.10,
+                'area_sqm' => 1,
             ],
             'second' => [
                 'target_space_id' => (int) $secondSpace->id,
-                'area_sqm' => 25.10,
+                'area_sqm' => 2,
             ],
         ]);
 
@@ -221,8 +221,8 @@ class MarketMapSpaceSplitTest extends TestCase
         $this->assertFalse((bool) $sourceSpace->is_active);
         $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_PARENT, (string) $sourceSpace->space_group_role);
         $this->assertSame((int) $tenant->id, (int) $sourceSpace->tenant_id);
-        $this->assertSame('25.10', (string) $firstSpace->area_sqm);
-        $this->assertSame('25.10', (string) $secondSpace->area_sqm);
+        $this->assertSame('12.25', (string) $firstSpace->area_sqm);
+        $this->assertSame('18.75', (string) $secondSpace->area_sqm);
 
         $this->assertFalse((bool) $sourceShape->fresh()->is_active);
         $this->assertDatabaseHas('market_space_map_shapes', [

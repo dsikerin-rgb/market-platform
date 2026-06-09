@@ -4156,14 +4156,14 @@
             first: {
               target_space_id: usesExistingTargets && Number.isFinite(firstTargetSpace) && firstTargetSpace > 0 ? Math.trunc(firstTargetSpace) : null,
               number: spaceSplitFirstNumber?.value || '',
-              area_sqm: spaceSplitFirstArea?.value ? Number(spaceSplitFirstArea.value) : null,
+              area_sqm: !usesExistingTargets && spaceSplitFirstArea?.value ? Number(spaceSplitFirstArea.value) : null,
               tenant_id: null,
               contract_ids: [],
             },
             second: {
               target_space_id: usesExistingTargets && Number.isFinite(secondTargetSpace) && secondTargetSpace > 0 ? Math.trunc(secondTargetSpace) : null,
               number: spaceSplitSecondNumber?.value || '',
-              area_sqm: spaceSplitSecondArea?.value ? Number(spaceSplitSecondArea.value) : null,
+              area_sqm: !usesExistingTargets && spaceSplitSecondArea?.value ? Number(spaceSplitSecondArea.value) : null,
               tenant_id: null,
               contract_ids: [],
             },

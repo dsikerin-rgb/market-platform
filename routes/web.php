@@ -3076,12 +3076,16 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $sourceArea = $marketSpace->area_sqm !== null ? (float) $marketSpace->area_sqm : null;
         $defaultHalfArea = $sourceArea !== null ? round($sourceArea / 2, 2) : null;
-        $firstArea = array_key_exists('area_sqm', $validated['first']) && is_numeric($validated['first']['area_sqm'])
-            ? (float) $validated['first']['area_sqm']
-            : $defaultHalfArea;
-        $secondArea = array_key_exists('area_sqm', $validated['second']) && is_numeric($validated['second']['area_sqm'])
-            ? (float) $validated['second']['area_sqm']
-            : $defaultHalfArea;
+        $firstArea = $usesExistingTargetSpaces
+            ? null
+            : (array_key_exists('area_sqm', $validated['first']) && is_numeric($validated['first']['area_sqm'])
+                ? (float) $validated['first']['area_sqm']
+                : $defaultHalfArea);
+        $secondArea = $usesExistingTargetSpaces
+            ? null
+            : (array_key_exists('area_sqm', $validated['second']) && is_numeric($validated['second']['area_sqm'])
+                ? (float) $validated['second']['area_sqm']
+                : $defaultHalfArea);
 
         if ($sourceArea !== null && $firstArea !== null && $secondArea !== null && abs(($firstArea + $secondArea) - $sourceArea) > 0.05) {
             throw ValidationException::withMessages([
