@@ -8,7 +8,17 @@ The current product stage is:
 - `Revision`
 - `Revision Results`
 
-This stage is considered functionally complete after live verification on target environments.
+This stage is functionally complete on prod after live verification.
+
+Closed prod checkpoint:
+
+- debt/1C display model is explicit: place debt, tenant total debt, and shared-use neutral status are separated;
+- unconfirmed financial-link cards no longer require reading long technical text;
+- normal child places are not shown as financial-link problems when the contract must belong to the parent;
+- group episodes exist as a read model and are used in contract history;
+- current group episodes were backfilled;
+- historical parent shape split into existing spaces is supported from the map editor;
+- `СТ2-4` was split into existing spaces `СТ 2` and `СТ 3` without activating `СТ2-4`, creating wrong names, or overwriting target areas.
 
 ## Closed Product Layer
 
@@ -72,6 +82,8 @@ This is a separate improvement layer for operational updates such as:
 - observed occupancy changes
 - safe local updates that must not bypass `1C`
 
+The next thread should start from this layer, not from another map-shape refactor, unless a regression is found in the already deployed split/group functionality.
+
 ## Not A Blocker For This Stage
 
 These items do not block closing the current product stage:
@@ -79,4 +91,3 @@ These items do not block closing the current product stage:
 - testing PostgreSQL bootstrap issues
 - minor UI polish
 - cleanup of shared helper logic
-

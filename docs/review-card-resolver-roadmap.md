@@ -1,6 +1,8 @@
 # Review Card Resolver roadmap
 
-Status: planned. Do not start until the current bugfix for `ОС1 7, 8, У` is finished.
+Status: planned/deferred. The immediate next project priority after the group-episode and map-split cycle is the daily-flow for safe local operations on spaces and tenants.
+
+Do not start this refactor unless review-card priority regressions return or the daily-flow work explicitly needs the resolver. The earlier `ОС1 7, 8, У` duplicate/context issue is no longer the active blocker.
 
 ## Goal
 
