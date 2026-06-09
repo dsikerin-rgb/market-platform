@@ -133,6 +133,128 @@ class MarketMapSpaceSplitTest extends TestCase
         $this->assertSame(TenantContract::SPACE_MAPPING_MODE_MANUAL, (string) $contract->space_mapping_mode);
     }
 
+    public function test_split_parent_shape_can_use_existing_spaces_without_shapes(): void
+    {
+        $user = $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant Existing Target',
+            'is_active' => true,
+        ]);
+
+        $sourceSpace = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'ST2-4',
+            'area_sqm' => 50.20,
+            'rent_rate_value' => 1000,
+            'rent_rate_unit' => 'per_sqm',
+            'status' => 'occupied',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => false,
+        ]);
+
+        $firstSpace = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'ST 2',
+            'area_sqm' => null,
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        $secondSpace = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'number' => 'ST 3',
+            'area_sqm' => null,
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $sourceShape = MarketSpaceMapShape::query()->create([
+            'market_id' => (int) $market->id,
+            'market_space_id' => (int) $sourceSpace->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 20],
+                ['x' => 110, 'y' => 20],
+                ['x' => 110, 'y' => 80],
+                ['x' => 10, 'y' => 80],
+            ],
+            'fill_color' => '#00A3FF',
+            'stroke_color' => '#00A3FF',
+            'fill_opacity' => 0.12,
+            'stroke_width' => 1.5,
+            'is_active' => true,
+        ]);
+
+        $this->assertSame(3, MarketSpace::query()->where('market_id', (int) $market->id)->count());
+
+        $response = $this->postJson('/admin/market-map/spaces/'.$sourceSpace->id.'/split', [
+            'shape_id' => (int) $sourceShape->id,
+            'orientation' => 'vertical',
+            'split_date' => '2026-06-09',
+            'episode_valid_from' => '2024-06-01',
+            'first' => [
+                'target_space_id' => (int) $firstSpace->id,
+                'area_sqm' => 25.10,
+            ],
+            'second' => [
+                'target_space_id' => (int) $secondSpace->id,
+                'area_sqm' => 25.10,
+            ],
+        ]);
+
+        $response->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertSame(3, MarketSpace::query()->where('market_id', (int) $market->id)->count());
+
+        $sourceSpace->refresh();
+        $firstSpace->refresh();
+        $secondSpace->refresh();
+
+        $this->assertFalse((bool) $sourceSpace->is_active);
+        $this->assertSame(MarketSpace::SPACE_GROUP_ROLE_PARENT, (string) $sourceSpace->space_group_role);
+        $this->assertSame((int) $tenant->id, (int) $sourceSpace->tenant_id);
+        $this->assertSame('25.10', (string) $firstSpace->area_sqm);
+        $this->assertSame('25.10', (string) $secondSpace->area_sqm);
+
+        $this->assertFalse((bool) $sourceShape->fresh()->is_active);
+        $this->assertDatabaseHas('market_space_map_shapes', [
+            'market_space_id' => (int) $firstSpace->id,
+            'bbox_x1' => 10,
+            'bbox_x2' => 60,
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseHas('market_space_map_shapes', [
+            'market_space_id' => (int) $secondSpace->id,
+            'bbox_x1' => 60,
+            'bbox_x2' => 110,
+            'is_active' => true,
+        ]);
+
+        $episode = MarketSpaceGroupEpisode::query()->where('parent_market_space_id', (int) $sourceSpace->id)->firstOrFail();
+        $this->assertSame('2024-06-01', $episode->valid_from?->toDateString());
+        $this->assertSame('2026-06-08', $episode->valid_to?->toDateString());
+        $this->assertSame('existing_target_spaces', (string) ($episode->meta['mode'] ?? ''));
+        $this->assertSame((int) $user->id, (int) $episode->created_by_user_id);
+        $this->assertDatabaseHas('market_space_group_episode_children', [
+            'market_space_group_episode_id' => (int) $episode->id,
+            'child_market_space_id' => (int) $firstSpace->id,
+            'sort_order' => 1,
+        ]);
+        $this->assertDatabaseHas('market_space_group_episode_children', [
+            'market_space_group_episode_id' => (int) $episode->id,
+            'child_market_space_id' => (int) $secondSpace->id,
+            'sort_order' => 2,
+        ]);
+    }
+
     private function actingAsSuperAdmin(): User
     {
         Role::findOrCreate('super-admin', 'web');

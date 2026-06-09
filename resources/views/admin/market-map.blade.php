@@ -2801,6 +2801,16 @@
             <label class="group-membership-modal__label" for="spaceSplitHistoryFrom">История группы с даты</label>
             <input id="spaceSplitHistoryFrom" class="group-membership-modal__input" type="date">
           </div>
+          <div id="spaceSplitExistingTargets" style="display:none;">
+            <div class="group-membership-modal__section">
+              <label class="group-membership-modal__label" for="spaceSplitFirstTargetSpace">ID места для первой половины</label>
+              <input id="spaceSplitFirstTargetSpace" class="group-membership-modal__input" type="number" step="1" min="1" autocomplete="off">
+            </div>
+            <div class="group-membership-modal__section">
+              <label class="group-membership-modal__label" for="spaceSplitSecondTargetSpace">ID места для второй половины</label>
+              <input id="spaceSplitSecondTargetSpace" class="group-membership-modal__input" type="number" step="1" min="1" autocomplete="off">
+            </div>
+          </div>
           <div class="group-membership-modal__section">
             <label class="group-membership-modal__label" for="spaceSplitFirstNumber">Первое новое место</label>
             <input id="spaceSplitFirstNumber" class="group-membership-modal__input" type="text" autocomplete="off">
@@ -2961,6 +2971,9 @@
         const spaceSplitOrientation = document.getElementById('spaceSplitOrientation');
         const spaceSplitDate = document.getElementById('spaceSplitDate');
         const spaceSplitHistoryFrom = document.getElementById('spaceSplitHistoryFrom');
+        const spaceSplitExistingTargets = document.getElementById('spaceSplitExistingTargets');
+        const spaceSplitFirstTargetSpace = document.getElementById('spaceSplitFirstTargetSpace');
+        const spaceSplitSecondTargetSpace = document.getElementById('spaceSplitSecondTargetSpace');
         const spaceSplitFirstNumber = document.getElementById('spaceSplitFirstNumber');
         const spaceSplitFirstArea = document.getElementById('spaceSplitFirstArea');
         const spaceSplitFirstTenant = document.getElementById('spaceSplitFirstTenant');
@@ -3994,26 +4007,51 @@
             return;
           }
 
-          spaceSplitContext = { hit, spaceId, shapeId };
           const space = hit.space;
+          const role = String(space.space_group_role ?? hit.space_group_role ?? '');
+          const isExistingTargetMode = role === 'parent';
+          spaceSplitContext = { hit, spaceId, shapeId, mode: isExistingTargetMode ? 'existing_targets' : 'create_spaces' };
           const number = String(space.number || space.code || '').trim();
           const area = space.area_sqm !== null && space.area_sqm !== undefined ? Number(space.area_sqm) : null;
           const halfArea = Number.isFinite(area) ? (Math.round((area / 2) * 100) / 100) : '';
 
           if (spaceSplitTarget) {
-            spaceSplitTarget.textContent = 'Исходное место: ' + (number || ('ID ' + String(spaceId))) + '. Старое место станет историческим.';
+            spaceSplitTarget.textContent = isExistingTargetMode
+              ? 'Историческое parent-место: ' + (number || ('ID ' + String(spaceId))) + '. Новые места не создаются: укажите ID двух существующих мест без фигур.'
+              : 'Исходное место: ' + (number || ('ID ' + String(spaceId))) + '. Старое место станет историческим.';
           }
           if (spaceSplitOrientation) spaceSplitOrientation.value = orientation === 'horizontal' ? 'horizontal' : 'vertical';
           if (spaceSplitDate) spaceSplitDate.value = todayIsoDate();
           if (spaceSplitHistoryFrom) spaceSplitHistoryFrom.value = '';
-          if (spaceSplitFirstNumber) spaceSplitFirstNumber.value = number ? (number + '-1') : '';
-          if (spaceSplitSecondNumber) spaceSplitSecondNumber.value = number ? (number + '-2') : '';
+          if (spaceSplitExistingTargets) spaceSplitExistingTargets.style.display = isExistingTargetMode ? 'block' : 'none';
+          if (spaceSplitFirstTargetSpace) spaceSplitFirstTargetSpace.value = '';
+          if (spaceSplitSecondTargetSpace) spaceSplitSecondTargetSpace.value = '';
+          if (spaceSplitFirstNumber) {
+            spaceSplitFirstNumber.value = isExistingTargetMode ? '' : (number ? (number + '-1') : '');
+            spaceSplitFirstNumber.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+          }
+          if (spaceSplitSecondNumber) {
+            spaceSplitSecondNumber.value = isExistingTargetMode ? '' : (number ? (number + '-2') : '');
+            spaceSplitSecondNumber.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+          }
           if (spaceSplitFirstArea) spaceSplitFirstArea.value = halfArea !== '' ? String(halfArea) : '';
           if (spaceSplitSecondArea) spaceSplitSecondArea.value = halfArea !== '' ? String(halfArea) : '';
-          if (spaceSplitFirstTenant) spaceSplitFirstTenant.value = hit.space_effective_tenant_id ? String(hit.space_effective_tenant_id) : '';
-          if (spaceSplitSecondTenant) spaceSplitSecondTenant.value = '';
-          if (spaceSplitFirstContracts) spaceSplitFirstContracts.value = hit.space_effective_contract_id ? String(hit.space_effective_contract_id) : '';
-          if (spaceSplitSecondContracts) spaceSplitSecondContracts.value = '';
+          if (spaceSplitFirstTenant) {
+            spaceSplitFirstTenant.value = isExistingTargetMode ? '' : (hit.space_effective_tenant_id ? String(hit.space_effective_tenant_id) : '');
+            spaceSplitFirstTenant.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+          }
+          if (spaceSplitSecondTenant) {
+            spaceSplitSecondTenant.value = '';
+            spaceSplitSecondTenant.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+          }
+          if (spaceSplitFirstContracts) {
+            spaceSplitFirstContracts.value = isExistingTargetMode ? '' : (hit.space_effective_contract_id ? String(hit.space_effective_contract_id) : '');
+            spaceSplitFirstContracts.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+          }
+          if (spaceSplitSecondContracts) {
+            spaceSplitSecondContracts.value = '';
+            spaceSplitSecondContracts.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+          }
           if (spaceSplitComment) spaceSplitComment.value = '';
           if (spaceSplitError) {
             spaceSplitError.style.display = 'none';
@@ -4032,6 +4070,9 @@
 
           const firstTenant = spaceSplitFirstTenant?.value ? Number(spaceSplitFirstTenant.value) : null;
           const secondTenant = spaceSplitSecondTenant?.value ? Number(spaceSplitSecondTenant.value) : null;
+          const firstTargetSpace = spaceSplitFirstTargetSpace?.value ? Number(spaceSplitFirstTargetSpace.value) : null;
+          const secondTargetSpace = spaceSplitSecondTargetSpace?.value ? Number(spaceSplitSecondTargetSpace.value) : null;
+          const usesExistingTargets = spaceSplitContext.mode === 'existing_targets';
           const payload = {
             shape_id: spaceSplitContext.shapeId,
             orientation: spaceSplitOrientation?.value || 'vertical',
@@ -4039,20 +4080,27 @@
             episode_valid_from: spaceSplitHistoryFrom?.value || null,
             comment: spaceSplitComment?.value || null,
             first: {
+              target_space_id: usesExistingTargets && Number.isFinite(firstTargetSpace) && firstTargetSpace > 0 ? Math.trunc(firstTargetSpace) : null,
               number: spaceSplitFirstNumber?.value || '',
               area_sqm: spaceSplitFirstArea?.value ? Number(spaceSplitFirstArea.value) : null,
-              tenant_id: Number.isFinite(firstTenant) && firstTenant > 0 ? firstTenant : null,
-              contract_ids: parseIdList(spaceSplitFirstContracts?.value || ''),
+              tenant_id: !usesExistingTargets && Number.isFinite(firstTenant) && firstTenant > 0 ? firstTenant : null,
+              contract_ids: usesExistingTargets ? [] : parseIdList(spaceSplitFirstContracts?.value || ''),
             },
             second: {
+              target_space_id: usesExistingTargets && Number.isFinite(secondTargetSpace) && secondTargetSpace > 0 ? Math.trunc(secondTargetSpace) : null,
               number: spaceSplitSecondNumber?.value || '',
               area_sqm: spaceSplitSecondArea?.value ? Number(spaceSplitSecondArea.value) : null,
-              tenant_id: Number.isFinite(secondTenant) && secondTenant > 0 ? secondTenant : null,
-              contract_ids: parseIdList(spaceSplitSecondContracts?.value || ''),
+              tenant_id: !usesExistingTargets && Number.isFinite(secondTenant) && secondTenant > 0 ? secondTenant : null,
+              contract_ids: usesExistingTargets ? [] : parseIdList(spaceSplitSecondContracts?.value || ''),
             },
           };
 
-          if (!payload.first.number || !payload.second.number) {
+          if (usesExistingTargets && (!payload.first.target_space_id || !payload.second.target_space_id)) {
+            showSpaceSplitError('Укажите ID двух существующих мест без фигур.');
+            return;
+          }
+
+          if (!usesExistingTargets && (!payload.first.number || !payload.second.number)) {
             showSpaceSplitError('Укажите названия двух новых мест.');
             return;
           }
@@ -7040,6 +7088,7 @@
                   '<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">' +
                     '<div style="min-width: 0; flex: 1;">' +
                       '<div style="font-weight: 500; color: #1e293b; margin-bottom: 2px;">№' + escapeHtml(number) + '</div>' +
+                      '<div style="font-size: 12px; color: #94a3b8; margin-bottom: 2px;">ID ' + String(id) + '</div>' +
                       '<div style="font-size: 13px; color: #64748b;">' + escapeHtml(tenantName) + '</div>' +
                     '</div>' +
                     '<button type="button" data-action="toggle-without-shape-actions" data-space-id="' + String(id) + '" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" aria-controls="' + actionsId + '" style="font-size: 13px; color: #0f172a; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; cursor: pointer; font-weight: 600; white-space: nowrap;">' + (isExpanded ? 'Скрыть действия ▴' : 'Действия ▾') + '</button>' +
@@ -7552,12 +7601,6 @@
                 hidePopover();
 
                 if (railAction === 'split_vertical' || railAction === 'split_horizontal') {
-                  const role = String(hit?.space?.space_group_role ?? hit?.space_group_role ?? '');
-                  if (role === 'parent') {
-                    toast('Разделяйте физическое место, а не parent-группу.');
-                    return;
-                  }
-
                   openSpaceSplitModalFromHit(railAction === 'split_horizontal' ? 'horizontal' : 'vertical');
                   return;
                 }
