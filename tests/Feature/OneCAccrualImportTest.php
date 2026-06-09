@@ -203,6 +203,103 @@ class OneCAccrualImportTest extends TestCase
         ]);
     }
 
+    public function test_accrual_import_updates_legacy_row_when_organization_fields_are_added(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Legacy Tenant',
+            'external_id' => 'tenant-legacy-org',
+            'inn' => '666666666666',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'external_id' => 'contract-legacy-org',
+            'number' => 'Legacy contract',
+            'status' => 'active',
+            'starts_at' => '2026-02-01',
+            'signed_at' => '2026-02-01',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_accruals')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'contract_external_id' => 'contract-legacy-org',
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => null,
+            'period' => '2026-06-01',
+            'source_place_code' => null,
+            'source_place_name' => 'Legacy contract',
+            'activity_type' => 'rent',
+            'currency' => 'RUB',
+            'rent_amount' => 237510,
+            'management_fee' => 0,
+            'utilities_amount' => 0,
+            'electricity_amount' => 0,
+            'total_no_vat' => 237510,
+            'total_with_vat' => 237510,
+            'status' => 'imported',
+            'source' => '1c',
+            'source_file' => '1c:accruals',
+            'source_row_number' => 10,
+            'source_row_hash' => hash('sha256', 'legacy-without-org'),
+            'payload' => json_encode([
+                'tenant_external_id' => 'tenant-legacy-org',
+                'contract_external_id' => 'contract-legacy-org',
+            ], JSON_UNESCAPED_UNICODE),
+            'imported_at' => now()->subDay(),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-09 14:13:39',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-legacy-org',
+                    'contract_external_id' => 'contract-legacy-org',
+                    'period' => '2026-06',
+                    'source_place_name' => 'Legacy contract',
+                    'activity_type' => 'rent',
+                    'organization_external_id' => 'org-001',
+                    'organization_name' => 'IP Test',
+                    'account' => '62.01',
+                    'tenant_name' => 'Legacy Tenant',
+                    'inn' => '666666666666',
+                    'rent_amount' => 237510,
+                    'management_fee' => 0,
+                    'utilities_amount' => 0,
+                    'electricity_amount' => 0,
+                    'total_no_vat' => 237510,
+                    'total_with_vat' => 237510,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('inserted', 0)
+            ->assertJsonPath('updated', 1)
+            ->assertJsonPath('warnings.legacy_identity_matches', 1);
+
+        $this->assertSame(1, DB::table('tenant_accruals')->count());
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'contract_external_id' => 'contract-legacy-org',
+            'organization_external_id' => 'org-001',
+            'organization_name' => 'IP Test',
+            'account' => '62.01',
+            'tenant_contract_id' => $contract->id,
+            'period' => '2026-06-01',
+            'total_with_vat' => 237510,
+        ]);
+    }
+
     public function test_sequence_preflight_corrects_lag_and_import_stays_successful(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {

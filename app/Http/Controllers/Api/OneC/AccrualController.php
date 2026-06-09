@@ -193,6 +193,7 @@ class AccrualController extends Controller
             $resolvedSpaces = 0;
             $unresolvedContracts = 0;
             $unresolvedSpaces = 0;
+            $legacyIdentityMatches = 0;
             $notFoundTenants = [];
             $now = now();
             $sequencePreflight = $this->syncTenantAccrualPrimaryKeySequence();
@@ -287,58 +288,78 @@ class AccrualController extends Controller
                     $activityType,
                 );
 
-                $exists = DB::table('tenant_accruals')
+                $identity = [
+                    'market_id' => $marketId,
+                    'period' => $periodDate,
+                    'tenant_id' => (int) $tenant->id,
+                    'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
+                    'tenant_contract_id' => $tenantContractId,
+                    'market_space_id' => $marketSpaceId,
+                    'source_place_code' => $sourcePlaceCode !== '' ? $sourcePlaceCode : null,
+                    'source_place_name' => $sourcePlaceName !== '' ? $sourcePlaceName : null,
+                    'activity_type' => $activityType !== '' ? $activityType : null,
+                ];
+
+                $values = [
+                    'tenant_id' => (int) $tenant->id,
+                    'contract_external_id' => $identity['contract_external_id'],
+                    'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
+                    'organization_name' => $organizationName !== '' ? $organizationName : null,
+                    'account' => $account !== '' ? $account : null,
+                    'tenant_contract_id' => $tenantContractId,
+                    'contract_link_status' => $match->status,
+                    'contract_link_source' => $match->source,
+                    'contract_link_note' => $match->note,
+                    'market_space_id' => $marketSpaceId,
+                    'source_place_code' => $identity['source_place_code'],
+                    'source_place_name' => $identity['source_place_name'],
+                    'activity_type' => $identity['activity_type'],
+                    'days' => $item['days'] ?? null,
+                    'area_sqm' => $this->normalizeNumeric($item['area_sqm'] ?? null),
+                    'rent_rate' => $this->normalizeNumeric($item['rent_rate'] ?? null),
+                    'rent_amount' => $this->normalizeMoney($item['rent_amount'] ?? null),
+                    'management_fee' => $this->normalizeMoney($item['management_fee'] ?? null),
+                    'utilities_amount' => $this->normalizeMoney($item['utilities_amount'] ?? null),
+                    'electricity_amount' => $this->normalizeMoney($item['electricity_amount'] ?? null),
+                    'total_no_vat' => $this->normalizeMoney($item['total_no_vat'] ?? null),
+                    'vat_rate' => $this->normalizeNumeric($item['vat_rate'] ?? null),
+                    'total_with_vat' => $this->normalizeMoney($item['total_with_vat'] ?? null),
+                    'cash_amount' => $this->normalizeMoney($item['cash_amount'] ?? null),
+                    'currency' => $this->normalizeCurrency($item['currency'] ?? null),
+                    'status' => 'imported',
+                    'source' => '1c',
+                    'source_file' => '1c:accruals',
+                    'source_row_number' => $index + 1,
+                    'source_row_hash' => $hash,
+                    'payload' => $this->safeJsonEncode(array_merge($item, ['calculated_at' => $calculatedAt])),
+                    'imported_at' => $now,
+                    'updated_at' => $now,
+                ];
+
+                $existingId = DB::table('tenant_accruals')
                     ->where('market_id', $marketId)
                     ->whereDate('period', $periodDate)
                     ->where('source_row_hash', $hash)
-                    ->exists();
+                    ->value('id');
 
-                DB::table('tenant_accruals')->updateOrInsert(
-                    [
-                        'market_id' => $marketId,
-                        'period' => $periodDate,
-                        'source_row_hash' => $hash,
-                    ],
-                    [
-                        'tenant_id' => (int) $tenant->id,
-                        'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
-                        'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
-                        'organization_name' => $organizationName !== '' ? $organizationName : null,
-                        'account' => $account !== '' ? $account : null,
-                        'tenant_contract_id' => $tenantContractId,
-                        'contract_link_status' => $match->status,
-                        'contract_link_source' => $match->source,
-                        'contract_link_note' => $match->note,
-                        'market_space_id' => $marketSpaceId,
-                        'source_place_code' => $sourcePlaceCode !== '' ? $sourcePlaceCode : null,
-                        'source_place_name' => $sourcePlaceName !== '' ? $sourcePlaceName : null,
-                        'activity_type' => $activityType !== '' ? $activityType : null,
-                        'days' => $item['days'] ?? null,
-                        'area_sqm' => $this->normalizeNumeric($item['area_sqm'] ?? null),
-                        'rent_rate' => $this->normalizeNumeric($item['rent_rate'] ?? null),
-                        'rent_amount' => $this->normalizeMoney($item['rent_amount'] ?? null),
-                        'management_fee' => $this->normalizeMoney($item['management_fee'] ?? null),
-                        'utilities_amount' => $this->normalizeMoney($item['utilities_amount'] ?? null),
-                        'electricity_amount' => $this->normalizeMoney($item['electricity_amount'] ?? null),
-                        'total_no_vat' => $this->normalizeMoney($item['total_no_vat'] ?? null),
-                        'vat_rate' => $this->normalizeNumeric($item['vat_rate'] ?? null),
-                        'total_with_vat' => $this->normalizeMoney($item['total_with_vat'] ?? null),
-                        'cash_amount' => $this->normalizeMoney($item['cash_amount'] ?? null),
-                        'currency' => $this->normalizeCurrency($item['currency'] ?? null),
-                        'status' => 'imported',
-                        'source' => '1c',
-                        'source_file' => '1c:accruals',
-                        'source_row_number' => $index + 1,
-                        'payload' => $this->safeJsonEncode(array_merge($item, ['calculated_at' => $calculatedAt])),
-                        'imported_at' => $now,
-                        'updated_at' => $now,
-                        'created_at' => $exists ? DB::raw('created_at') : $now,
-                    ],
-                );
+                if (! $existingId) {
+                    $existingId = $this->findSingleLegacyAccrualIdentityId($identity);
+                    if ($existingId) {
+                        $legacyIdentityMatches++;
+                    }
+                }
 
-                if ($exists) {
+                if ($existingId) {
+                    DB::table('tenant_accruals')
+                        ->where('id', (int) $existingId)
+                        ->update($values);
+
                     $updated++;
                 } else {
+                    DB::table('tenant_accruals')->insert(array_merge($identity, $values, [
+                        'created_at' => $now,
+                    ]));
+
                     $inserted++;
                 }
             }
@@ -355,6 +376,7 @@ class AccrualController extends Controller
                 'spaces_resolved' => $resolvedSpaces,
                 'contracts_unresolved' => $unresolvedContracts,
                 'spaces_unresolved' => $unresolvedSpaces,
+                'legacy_identity_matches' => $legacyIdentityMatches,
                 'sequence_preflight' => $sequencePreflight,
             ];
 
@@ -388,6 +410,7 @@ class AccrualController extends Controller
                     'updated' => $updated,
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                    'legacy_identity_matches' => $legacyIdentityMatches,
                     'sequence_preflight' => $sequencePreflight,
                     'warnings' => $warnings,
                     'ip' => $request->ip(),
@@ -637,6 +660,37 @@ class AccrualController extends Controller
             trim($sourcePlaceName),
             trim($activityType),
         ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $identity
+     */
+    private function findSingleLegacyAccrualIdentityId(array $identity): ?int
+    {
+        $query = DB::table('tenant_accruals')
+            ->where('source', '1c')
+            ->where('source_file', '1c:accruals');
+
+        foreach ($identity as $column => $value) {
+            if ($column === 'period') {
+                $query->whereDate($column, (string) $value);
+                continue;
+            }
+
+            if ($value === null) {
+                $query->whereNull($column);
+                continue;
+            }
+
+            $query->where($column, $value);
+        }
+
+        $ids = $query
+            ->orderByDesc('id')
+            ->limit(2)
+            ->pluck('id');
+
+        return $ids->count() === 1 ? (int) $ids->first() : null;
     }
 
     private function buildSpaceIndex(int $marketId): array
