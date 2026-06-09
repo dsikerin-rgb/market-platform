@@ -2814,19 +2814,19 @@
               <select id="spaceSplitSecondTargetSpace" class="group-membership-modal__select"></select>
             </div>
           </div>
-          <div class="group-membership-modal__section">
+          <div class="group-membership-modal__section" data-space-split-create-target-field>
             <label class="group-membership-modal__label" for="spaceSplitFirstNumber">Первое новое место</label>
             <input id="spaceSplitFirstNumber" class="group-membership-modal__input" type="text" autocomplete="off">
           </div>
-          <div class="group-membership-modal__section">
+          <div class="group-membership-modal__section" data-space-split-create-target-field>
             <label class="group-membership-modal__label" for="spaceSplitFirstArea">Площадь первого места</label>
             <input id="spaceSplitFirstArea" class="group-membership-modal__input" type="number" step="0.01" min="0">
           </div>
-          <div class="group-membership-modal__section">
+          <div class="group-membership-modal__section" data-space-split-create-target-field>
             <label class="group-membership-modal__label" for="spaceSplitSecondNumber">Второе новое место</label>
             <input id="spaceSplitSecondNumber" class="group-membership-modal__input" type="text" autocomplete="off">
           </div>
-          <div class="group-membership-modal__section">
+          <div class="group-membership-modal__section" data-space-split-create-target-field>
             <label class="group-membership-modal__label" for="spaceSplitSecondArea">Площадь второго места</label>
             <input id="spaceSplitSecondArea" class="group-membership-modal__input" type="number" step="0.01" min="0">
           </div>
@@ -2963,6 +2963,7 @@
         const spaceSplitFirstTargetSpace = document.getElementById('spaceSplitFirstTargetSpace');
         const spaceSplitSecondTargetSpace = document.getElementById('spaceSplitSecondTargetSpace');
         const spaceSplitExistingTargetFields = Array.from(document.querySelectorAll('[data-space-split-existing-target-field]'));
+        const spaceSplitCreateTargetFields = Array.from(document.querySelectorAll('[data-space-split-create-target-field]'));
         const spaceSplitFirstNumber = document.getElementById('spaceSplitFirstNumber');
         const spaceSplitFirstArea = document.getElementById('spaceSplitFirstArea');
         const spaceSplitSecondNumber = document.getElementById('spaceSplitSecondNumber');
@@ -3975,11 +3976,9 @@
         }
 
         function setSpaceSplitCreateFieldsHidden(hidden) {
-          [
-            spaceSplitFirstNumber,
-            spaceSplitSecondNumber,
-          ].forEach((field) => {
-            field?.closest('.group-membership-modal__section')?.toggleAttribute('hidden', hidden);
+          spaceSplitCreateTargetFields.forEach((field) => {
+            field.hidden = hidden;
+            field.style.display = hidden ? 'none' : '';
           });
         }
 
@@ -3987,7 +3986,8 @@
           const useExistingTargets = getSpaceSplitTargetMode() === 'existing_targets';
 
           spaceSplitExistingTargetFields.forEach((field) => {
-            field.toggleAttribute('hidden', !useExistingTargets);
+            field.hidden = !useExistingTargets;
+            field.style.display = useExistingTargets ? '' : 'none';
           });
 
           setSpaceSplitCreateFieldsHidden(useExistingTargets);
