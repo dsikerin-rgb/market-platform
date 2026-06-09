@@ -3993,16 +3993,37 @@
         }
 
         function openSpaceSplitModalFromHit(orientation = 'vertical') {
-          const hit = currentPopoverHit || null;
+          const selectedShape = selectedShapeId ? findShapeById(selectedShapeId) : null;
+          let hit = currentPopoverHit || null;
+
+          if (selectedShape && (!hit || Number(hit?.shape_id || 0) !== Number(selectedShape.id || 0))) {
+            hit = {
+              shape_id: Number(selectedShape.id || 0),
+              market_space_id: Number(selectedShape.market_space_id || selectedShape.space_id || 0),
+              space: {
+                id: Number(selectedShape.market_space_id || selectedShape.space_id || 0),
+                number: selectedShape.space_number || '',
+                code: selectedShape.space_code || '',
+                display_name: selectedShape.space_display_name || '',
+                area_sqm: selectedShape.space_area_sqm ?? '',
+                status: selectedShape.space_status || '',
+                is_active: selectedShape.space_is_active !== false && selectedShape.space_is_active !== 0 && selectedShape.space_is_active !== '0',
+                space_group_role: selectedShape.space_group_role || '',
+                space_group_parent_id: selectedShape.space_group_parent_id ?? null,
+              },
+            };
+          }
+
           const spaceId = Number(hit?.market_space_id || hit?.space?.id || 0);
           const shapeId = Number(hit?.shape_id || 0);
+          const shapeIsActive = !selectedShape || selectedShape.is_active !== false && selectedShape.is_active !== 0 && selectedShape.is_active !== '0';
 
           if (!CAN_EDIT || !isEditMode) {
             toast('Включите режим редактирования карты.');
             return;
           }
 
-          if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(shapeId) || shapeId <= 0 || !hit?.space) {
+          if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(shapeId) || shapeId <= 0 || !hit?.space || !shapeIsActive) {
             toast('Выберите место с активной фигурой карты.');
             return;
           }
