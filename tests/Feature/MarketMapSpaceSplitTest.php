@@ -255,6 +255,58 @@ class MarketMapSpaceSplitTest extends TestCase
         ]);
     }
 
+    public function test_hit_test_supports_inactive_parent_space_with_active_shape(): void
+    {
+        $this->actingAsSuperAdmin();
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant Parent Shape',
+            'is_active' => true,
+        ]);
+
+        $sourceSpace = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'ST2-4',
+            'area_sqm' => 50.20,
+            'status' => 'occupied',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => false,
+        ]);
+
+        MarketSpaceMapShape::query()->create([
+            'market_id' => (int) $market->id,
+            'market_space_id' => (int) $sourceSpace->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 10, 'y' => 20],
+                ['x' => 110, 'y' => 20],
+                ['x' => 110, 'y' => 80],
+                ['x' => 10, 'y' => 80],
+            ],
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.hit', [
+            'page' => 1,
+            'version' => 1,
+            'x' => 60,
+            'y' => 50,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('hit.market_space_id', (int) $sourceSpace->id);
+        $response->assertJsonPath('hit.space.space_group_role', MarketSpace::SPACE_GROUP_ROLE_PARENT);
+        $response->assertJsonPath('hit.space.is_active', false);
+        $response->assertJsonPath('hit.space.number', 'ST2-4');
+        $response->assertJsonPath('hit.tenant.id', (int) $tenant->id);
+    }
+
     private function actingAsSuperAdmin(): User
     {
         Role::findOrCreate('super-admin', 'web');

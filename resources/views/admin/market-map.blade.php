@@ -7554,39 +7554,11 @@
               const space = hit.space || null;
               const tenant = hit.tenant || null;
 
-              const nextChosen = (space && Number(hit.market_space_id || space.id || 0) > 0)
-                ? normalizeChosenSpace({
-                    id: Number(hit.market_space_id || space.id || 0),
-                    number: space.number || hit.space_number || '',
-                    code: space.code || hit.space_code || '',
-                      space_group_role: space.space_group_role || hit.space_group_role || '',
-                      space_group_parent_id: space.space_group_parent_id ?? hit.space_group_parent_id ?? null,
-                      tenantName: hit.space_effective_tenant_name || tenant?.name || hit.space_tenant_name || null,
-                      space_effective_tenant_id: hit.space_effective_tenant_id ?? null,
-                      space_effective_is_occupied: hit.space_effective_is_occupied ?? null,
-                      space_occupancy_source: hit.space_occupancy_source || 'none',
-                      space_occupancy_source_space_id: hit.space_occupancy_source_space_id ?? null,
-                      space_occupancy_source_space_number: hit.space_occupancy_source_space_number ?? null,
-                      space_effective_debt_status: hit.space_effective_debt_status ?? null,
-                      space_effective_debt_status_label: hit.space_effective_debt_status_label ?? null,
-                      space_effective_debt_status_mode: hit.space_effective_debt_status_mode ?? 'auto',
-                      space_effective_debt_status_source: hit.space_effective_debt_status_source ?? null,
-                      space_effective_debt_overdue_days: hit.space_effective_debt_overdue_days ?? null,
-                      space_effective_debt_amount: hit.space_effective_debt_amount ?? null,
-                      space_effective_debt_status_scope: hit.space_effective_debt_status_scope ?? 'none',
-                      space_effective_tenant_debt_amount: hit.space_effective_tenant_debt_amount ?? null,
-                      space_effective_tenant_debt_status: hit.space_effective_tenant_debt_status ?? null,
-                      space_effective_tenant_debt_updated_at: hit.space_effective_tenant_debt_updated_at ?? null,
-                      space_effective_contract_id: hit.space_effective_contract_id ?? null,
-                      space_effective_contract_number: hit.space_effective_contract_number ?? null,
-                      space_effective_contract_url: hit.space_effective_contract_url ?? null,
-                      space_financial_source: hit.space_financial_source ?? 'none',
-                      space_financial_source_space_id: hit.space_financial_source_space_id ?? null,
-                      space_financial_source_space_number: hit.space_financial_source_space_number ?? null,
-                      review_status: space.review_status || hit.space_review_status || '',
-                      review_status_label: space.review_status_label || hit.space_review_status_label || '',
-                    })
-                : null;
+              const hitSpaceRole = String(space?.space_group_role ?? hit.space_group_role ?? '');
+              const hitSpaceIsActive = space?.is_active !== false && space?.is_active !== 0 && space?.is_active !== '0';
+              const nextChosen = hitSpaceRole === 'parent' && !hitSpaceIsActive
+                ? null
+                : normalizeSpaceFromHit(hit);
 
               if (nextChosen) {
                   setChosenSpace(nextChosen, { announce: false });
@@ -8148,7 +8120,8 @@
               );
             } catch (err) {
               console.error(err);
-              showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">Не удалось выполнить запрос hit-test.</div>', false);
+              const errorMessage = err?.message ? String(err.message) : 'Не удалось выполнить запрос hit-test.';
+              showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + escapeHtml(errorMessage) + '</div>', false);
             }
           }
 
