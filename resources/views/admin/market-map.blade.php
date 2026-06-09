@@ -3025,6 +3025,7 @@
         let spaceSplitContext = null;
         let railAction = 'select';
         let currentPopoverHit = null;
+        let currentSelectedShapeForSplit = null;
 
         function escapeHtml(s) {
           return String(s ?? '')
@@ -3993,7 +3994,7 @@
         }
 
         function openSpaceSplitModalFromHit(orientation = 'vertical') {
-          const selectedShape = selectedShapeId ? findShapeById(selectedShapeId) : null;
+          const selectedShape = currentSelectedShapeForSplit || null;
           let hit = currentPopoverHit || null;
 
           if (selectedShape && (!hit || Number(hit?.shape_id || 0) !== Number(selectedShape.id || 0))) {
@@ -5801,6 +5802,7 @@
           function setSelectedShape(id) {
             const n = id ? Number(id) : 0;
             selectedShapeId = (Number.isFinite(n) && n > 0) ? Math.trunc(n) : null;
+            currentSelectedShapeForSplit = selectedShapeId ? findShapeById(selectedShapeId) : null;
             activeVertexIndex = null;
             redrawShapes();
             renderHandles();
