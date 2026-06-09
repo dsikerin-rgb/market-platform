@@ -6,6 +6,7 @@ use App\Http\Controllers\TelegramWebhookController;
 use App\Http\Controllers\Api\OneC\AccrualController;
 use App\Http\Controllers\Api\OneC\ContractDebtController;
 use App\Http\Controllers\Api\OneC\ContractController;
+use App\Http\Controllers\Api\OneC\PaymentController;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,3 +34,6 @@ Route::post('1c/contracts', [ContractController::class, 'store'])
 
 Route::post('1c/accruals', [AccrualController::class, 'store'])
     ->name('api.1c.accruals.store');
+
+Route::post('1c/payments', [PaymentController::class, 'store'])
+    ->name('api.1c.payments.store');
