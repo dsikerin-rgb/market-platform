@@ -2797,10 +2797,6 @@
             <label class="group-membership-modal__label" for="spaceSplitDate">Дата разделения</label>
             <input id="spaceSplitDate" class="group-membership-modal__input" type="date">
           </div>
-          <div class="group-membership-modal__section">
-            <label class="group-membership-modal__label" for="spaceSplitHistoryFrom">История группы с даты</label>
-            <input id="spaceSplitHistoryFrom" class="group-membership-modal__input" type="date">
-          </div>
           <div id="spaceSplitExistingTargets" style="display:none;">
             <div class="group-membership-modal__section">
               <label class="group-membership-modal__label" for="spaceSplitTargetMode">Что сделать с половинами</label>
@@ -2827,28 +2823,12 @@
             <input id="spaceSplitFirstArea" class="group-membership-modal__input" type="number" step="0.01" min="0">
           </div>
           <div class="group-membership-modal__section">
-            <label class="group-membership-modal__label" for="spaceSplitFirstTenant">ID арендатора первого места</label>
-            <input id="spaceSplitFirstTenant" class="group-membership-modal__input" type="number" step="1" min="1">
-          </div>
-          <div class="group-membership-modal__section">
-            <label class="group-membership-modal__label" for="spaceSplitFirstContracts">ID договоров первого места</label>
-            <input id="spaceSplitFirstContracts" class="group-membership-modal__input" type="text" autocomplete="off" placeholder="1538, 1539">
-          </div>
-          <div class="group-membership-modal__section">
             <label class="group-membership-modal__label" for="spaceSplitSecondNumber">Второе новое место</label>
             <input id="spaceSplitSecondNumber" class="group-membership-modal__input" type="text" autocomplete="off">
           </div>
           <div class="group-membership-modal__section">
             <label class="group-membership-modal__label" for="spaceSplitSecondArea">Площадь второго места</label>
             <input id="spaceSplitSecondArea" class="group-membership-modal__input" type="number" step="0.01" min="0">
-          </div>
-          <div class="group-membership-modal__section">
-            <label class="group-membership-modal__label" for="spaceSplitSecondTenant">ID арендатора второго места</label>
-            <input id="spaceSplitSecondTenant" class="group-membership-modal__input" type="number" step="1" min="1">
-          </div>
-          <div class="group-membership-modal__section">
-            <label class="group-membership-modal__label" for="spaceSplitSecondContracts">ID договоров второго места</label>
-            <input id="spaceSplitSecondContracts" class="group-membership-modal__input" type="text" autocomplete="off">
           </div>
           <div class="group-membership-modal__section">
             <label class="group-membership-modal__label" for="spaceSplitComment">Комментарий</label>
@@ -2985,12 +2965,8 @@
         const spaceSplitExistingTargetFields = Array.from(document.querySelectorAll('[data-space-split-existing-target-field]'));
         const spaceSplitFirstNumber = document.getElementById('spaceSplitFirstNumber');
         const spaceSplitFirstArea = document.getElementById('spaceSplitFirstArea');
-        const spaceSplitFirstTenant = document.getElementById('spaceSplitFirstTenant');
-        const spaceSplitFirstContracts = document.getElementById('spaceSplitFirstContracts');
         const spaceSplitSecondNumber = document.getElementById('spaceSplitSecondNumber');
         const spaceSplitSecondArea = document.getElementById('spaceSplitSecondArea');
-        const spaceSplitSecondTenant = document.getElementById('spaceSplitSecondTenant');
-        const spaceSplitSecondContracts = document.getElementById('spaceSplitSecondContracts');
         const spaceSplitComment = document.getElementById('spaceSplitComment');
         const spaceSplitError = document.getElementById('spaceSplitError');
         const spaceSplitCancel = document.getElementById('spaceSplitCancel');
@@ -3974,14 +3950,6 @@
           ].join('-');
         }
 
-        function parseIdList(value) {
-          return String(value || '')
-            .split(/[,\s;]+/)
-            .map((part) => Number(part))
-            .filter((id) => Number.isFinite(id) && id > 0)
-            .map((id) => Math.trunc(id));
-        }
-
         function closeSpaceSplitModal() {
           if (!spaceSplitModal) return;
 
@@ -4010,10 +3978,6 @@
           [
             spaceSplitFirstNumber,
             spaceSplitSecondNumber,
-            spaceSplitFirstTenant,
-            spaceSplitSecondTenant,
-            spaceSplitFirstContracts,
-            spaceSplitSecondContracts,
           ].forEach((field) => {
             field?.closest('.group-membership-modal__section')?.toggleAttribute('hidden', hidden);
           });
@@ -4041,7 +4005,7 @@
 
           return {
             id,
-            label: (number || ('ID ' + String(id))) + ' · ' + tenantName + area + ' · ID ' + String(id),
+            label: (number || 'Без номера') + ' · ' + tenantName + area,
           };
         }
 
@@ -4157,18 +4121,6 @@
           }
           if (spaceSplitFirstArea) spaceSplitFirstArea.value = halfArea !== '' ? String(halfArea) : '';
           if (spaceSplitSecondArea) spaceSplitSecondArea.value = halfArea !== '' ? String(halfArea) : '';
-          if (spaceSplitFirstTenant) {
-            spaceSplitFirstTenant.value = isExistingTargetMode ? '' : (hit.space_effective_tenant_id ? String(hit.space_effective_tenant_id) : '');
-          }
-          if (spaceSplitSecondTenant) {
-            spaceSplitSecondTenant.value = '';
-          }
-          if (spaceSplitFirstContracts) {
-            spaceSplitFirstContracts.value = isExistingTargetMode ? '' : (hit.space_effective_contract_id ? String(hit.space_effective_contract_id) : '');
-          }
-          if (spaceSplitSecondContracts) {
-            spaceSplitSecondContracts.value = '';
-          }
           if (spaceSplitComment) spaceSplitComment.value = '';
           if (spaceSplitError) {
             spaceSplitError.style.display = 'none';
@@ -4189,8 +4141,6 @@
         async function submitSpaceSplit() {
           if (!spaceSplitContext || !spaceSplitSubmit) return;
 
-          const firstTenant = spaceSplitFirstTenant?.value ? Number(spaceSplitFirstTenant.value) : null;
-          const secondTenant = spaceSplitSecondTenant?.value ? Number(spaceSplitSecondTenant.value) : null;
           const firstTargetSpace = spaceSplitFirstTargetSpace?.value ? Number(spaceSplitFirstTargetSpace.value) : null;
           const secondTargetSpace = spaceSplitSecondTargetSpace?.value ? Number(spaceSplitSecondTargetSpace.value) : null;
           spaceSplitContext.mode = spaceSplitExistingTargets?.style.display !== 'none'
@@ -4201,21 +4151,21 @@
             shape_id: spaceSplitContext.shapeId,
             orientation: spaceSplitOrientation?.value || 'vertical',
             split_date: spaceSplitDate?.value || todayIsoDate(),
-            episode_valid_from: spaceSplitHistoryFrom?.value || null,
+            episode_valid_from: spaceSplitDate?.value || todayIsoDate(),
             comment: spaceSplitComment?.value || null,
             first: {
               target_space_id: usesExistingTargets && Number.isFinite(firstTargetSpace) && firstTargetSpace > 0 ? Math.trunc(firstTargetSpace) : null,
               number: spaceSplitFirstNumber?.value || '',
               area_sqm: spaceSplitFirstArea?.value ? Number(spaceSplitFirstArea.value) : null,
-              tenant_id: !usesExistingTargets && Number.isFinite(firstTenant) && firstTenant > 0 ? firstTenant : null,
-              contract_ids: usesExistingTargets ? [] : parseIdList(spaceSplitFirstContracts?.value || ''),
+              tenant_id: null,
+              contract_ids: [],
             },
             second: {
               target_space_id: usesExistingTargets && Number.isFinite(secondTargetSpace) && secondTargetSpace > 0 ? Math.trunc(secondTargetSpace) : null,
               number: spaceSplitSecondNumber?.value || '',
               area_sqm: spaceSplitSecondArea?.value ? Number(spaceSplitSecondArea.value) : null,
-              tenant_id: !usesExistingTargets && Number.isFinite(secondTenant) && secondTenant > 0 ? secondTenant : null,
-              contract_ids: usesExistingTargets ? [] : parseIdList(spaceSplitSecondContracts?.value || ''),
+              tenant_id: null,
+              contract_ids: [],
             },
           };
 
