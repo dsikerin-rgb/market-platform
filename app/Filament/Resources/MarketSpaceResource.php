@@ -2171,34 +2171,51 @@ class MarketSpaceResource extends BaseResource
             ->values()
             ->all();
 
+        $tenantIds = $rows
+            ->flatMap(function ($row): array {
+                $payload = is_array($row->payload) ? $row->payload : (json_decode((string) $row->payload, true) ?: []);
+
+                return [
+                    $payload['from_tenant_id'] ?? null,
+                    $payload['to_tenant_id'] ?? null,
+                ];
+            })
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
         $creators = $creatorIds === []
             ? collect()
             : DB::table('users')
                 ->whereIn('id', $creatorIds)
                 ->pluck('name', 'id');
 
-        $items = $rows->map(function ($row): array {
-            $payload = is_array($row->payload) ? $row->payload : (json_decode((string) $row->payload, true) ?: []);
-            $labels = \App\Domain\Operations\OperationType::labels();
-            $type = (string) ($row->type ?? '');
-            $isReview = $type === \App\Domain\Operations\OperationType::SPACE_REVIEW;
-            $reviewDecision = $isReview ? trim((string) ($payload['decision'] ?? '')) : '';
-            $reviewDecisionLabel = $isReview && $reviewDecision !== ''
-                ? (\App\Domain\Operations\SpaceReviewDecision::labels()[$reviewDecision] ?? $reviewDecision)
-                : null;
+        $tenantNames = $tenantIds === []
+            ? collect()
+            : DB::table('tenants')
+                ->whereIn('id', $tenantIds)
+                ->get(['id', 'name', 'short_name'])
+                ->mapWithKeys(static function ($tenant): array {
+                    $shortName = trim((string) ($tenant->short_name ?? ''));
+                    $name = trim((string) ($tenant->name ?? ''));
 
-            $summary = static::buildOperationSummary($type, $payload);
+                    return [(int) $tenant->id => $shortName !== '' ? $shortName : ($name !== '' ? $name : ('#'.(int) $tenant->id))];
+                });
+
+        $items = $rows->map(function ($row) use ($tenantNames): array {
+            $payload = is_array($row->payload) ? $row->payload : (json_decode((string) $row->payload, true) ?: []);
+            $type = (string) ($row->type ?? '');
+            $event = static::buildOperationEvent($type, $payload, $tenantNames->all());
 
             $item = [
                 'effective_at' => $row->effective_at ? (string) \Carbon\Carbon::parse($row->effective_at)->format('d.m.Y H:i') : '—',
-                'type' => $labels[$type] ?? $type,
-                'status' => (string) $row->status,
-                'is_review' => $isReview,
-                'review_decision' => $reviewDecision !== '' ? $reviewDecision : null,
-                'review_decision_label' => $reviewDecisionLabel,
-                'review_reason' => $isReview ? static::resolveReviewReason($payload, $row->comment ?? null) : null,
-                'review_observed_tenant_name' => $isReview ? static::stringOrNull($payload['observed_tenant_name'] ?? null) : null,
-                'summary' => $summary,
+                'title' => $event['title'],
+                'details' => $event['details'],
+                'comment' => static::resolveOperationComment($type, $payload, $row->comment ?? null),
+                'status_label' => static::operationStatusLabel((string) $row->status),
+                'status_color' => static::operationStatusColor((string) $row->status),
             ];
 
             return $item;
@@ -2227,6 +2244,247 @@ class MarketSpaceResource extends BaseResource
 
     /**
      * @param  array<string, mixed>  $payload
+     * @param  array<int, string>  $tenantNames
+     * @return array{title:string,details:string}
+     */
+    private static function buildOperationEvent(string $type, array $payload, array $tenantNames): array
+    {
+        if ($type === \App\Domain\Operations\OperationType::TENANT_SWITCH) {
+            $fromTenantId = (int) ($payload['from_tenant_id'] ?? 0);
+            $toTenantId = (int) ($payload['to_tenant_id'] ?? 0);
+            $fromTenant = $fromTenantId > 0 ? ($tenantNames[$fromTenantId] ?? ('#'.$fromTenantId)) : 'не было арендатора';
+            $toTenant = $toTenantId > 0 ? ($tenantNames[$toTenantId] ?? ('#'.$toTenantId)) : 'место свободно';
+
+            $details = 'Было: '.$fromTenant.'. Стало: '.$toTenant.'.';
+
+            if ((bool) ($payload['detach_from_group'] ?? false)) {
+                $details .= ' Место выведено из группы.';
+            }
+
+            return [
+                'title' => $toTenantId > 0 ? 'Арендатор изменён' : 'Место освобождено',
+                'details' => $details,
+            ];
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::RENT_RATE_CHANGE) {
+            $fromRate = static::moneyOrDash($payload['from_rent_rate'] ?? null);
+            $toRate = static::moneyOrDash($payload['rent_rate'] ?? null);
+            $unit = static::stringOrNull($payload['unit'] ?? null);
+            $unitLabel = $unit !== null ? static::rentRateUnitLabel($unit) : null;
+
+            return [
+                'title' => 'Ставка аренды изменена',
+                'details' => trim('Было: '.$fromRate.'. Стало: '.$toRate.'.'.($unitLabel ? ' Единица: '.$unitLabel.'.' : '')),
+            ];
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::SPACE_ATTRS_CHANGE) {
+            return static::buildSpaceAttrsEvent($payload);
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::SPACE_REVIEW) {
+            $decision = trim((string) ($payload['decision'] ?? ''));
+            $title = static::spaceReviewEventTitle($decision);
+            $details = static::buildReviewSummary($decision, $payload);
+
+            $observedTenant = static::stringOrNull($payload['observed_tenant_name'] ?? null);
+            if ($observedTenant !== null) {
+                $details .= ' Фактический арендатор: '.$observedTenant.'.';
+            }
+
+            return [
+                'title' => $title,
+                'details' => $details,
+            ];
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::GROUP_MEMBERSHIP) {
+            return [
+                'title' => 'Состав группы изменён',
+                'details' => static::buildGroupMembershipEventDetails($payload),
+            ];
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::ELECTRICITY_INPUT) {
+            $amount = is_numeric($payload['amount'] ?? null) ? number_format((float) $payload['amount'], 2, ',', ' ') : '—';
+            $unit = static::stringOrNull($payload['unit'] ?? null) ?? 'кВт·ч';
+
+            return [
+                'title' => 'Внесены показания электроэнергии',
+                'details' => 'Объём: '.$amount.' '.$unit.'.',
+            ];
+        }
+
+        if ($type === \App\Domain\Operations\OperationType::ACCRUAL_ADJUSTMENT) {
+            $amount = static::moneyOrDash($payload['amount_delta'] ?? null);
+
+            return [
+                'title' => 'Начисление скорректировано',
+                'details' => 'Изменение суммы: '.$amount.'.',
+            ];
+        }
+
+        return [
+            'title' => 'Изменение по месту',
+            'details' => 'Запись внутреннего журнала сохранена.',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{title:string,details:string}
+     */
+    private static function buildSpaceAttrsEvent(array $payload): array
+    {
+        $parts = [];
+
+        if (array_key_exists('status', $payload)) {
+            $parts[] = 'Статус: '.(static::statusLabel(static::stringOrNull($payload['status'] ?? null)) ?? 'не указан');
+        }
+
+        if (array_key_exists('is_active', $payload)) {
+            $parts[] = 'Активность: '.((bool) ($payload['is_active'] ?? false) ? 'активно' : 'упразднено');
+        }
+
+        if (array_key_exists('number', $payload)) {
+            $parts[] = 'Номер: '.(static::stringOrNull($payload['number'] ?? null) ?? 'не указан');
+        }
+
+        if (array_key_exists('display_name', $payload)) {
+            $parts[] = 'Название: '.(static::stringOrNull($payload['display_name'] ?? null) ?? 'не указано');
+        }
+
+        if (array_key_exists('area_sqm', $payload)) {
+            $area = is_numeric($payload['area_sqm'] ?? null)
+                ? number_format((float) $payload['area_sqm'], 2, ',', ' ')
+                : 'не указана';
+            $parts[] = 'Площадь: '.$area.' м²';
+        }
+
+        if (array_key_exists('activity_type', $payload)) {
+            $parts[] = 'Вид деятельности: '.(static::stringOrNull($payload['activity_type'] ?? null) ?? 'не указан');
+        }
+
+        $title = match ((string) ($payload['status'] ?? '')) {
+            'vacant' => 'Место отмечено свободным',
+            'maintenance' => 'Место отмечено служебным',
+            default => array_key_exists('is_active', $payload) && ! (bool) ($payload['is_active'] ?? false)
+                ? 'Место упразднено'
+                : 'Данные места изменены',
+        };
+
+        return [
+            'title' => $title,
+            'details' => $parts !== [] ? implode('; ', $parts).'.' : 'Сохранены изменения по месту.',
+        ];
+    }
+
+    private static function spaceReviewEventTitle(string $decision): string
+    {
+        return match ($decision) {
+            \App\Domain\Operations\SpaceReviewDecision::MARK_SPACE_FREE => 'Место отмечено свободным',
+            \App\Domain\Operations\SpaceReviewDecision::MARK_SPACE_SERVICE => 'Место отмечено служебным',
+            \App\Domain\Operations\SpaceReviewDecision::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
+            \App\Domain\Operations\SpaceReviewDecision::OCCUPANCY_CONFLICT => 'Зафиксировано расхождение',
+            \App\Domain\Operations\SpaceReviewDecision::BIND_SHAPE_TO_SPACE => 'Фигура привязана к месту',
+            \App\Domain\Operations\SpaceReviewDecision::UNBIND_SHAPE_FROM_SPACE => 'Фигура отвязана от места',
+            \App\Domain\Operations\SpaceReviewDecision::FIX_SPACE_IDENTITY => 'Данные места уточнены',
+            \App\Domain\Operations\SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'Разобран дубль места',
+            \App\Domain\Operations\SpaceReviewDecision::HISTORICAL_COMPOSED_SPACE_REVIEWED => 'Историческое составное место проверено',
+            \App\Domain\Operations\SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь подтверждена',
+            \App\Domain\Operations\SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь отклонена',
+            \App\Domain\Operations\SpaceReviewDecision::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь возвращена в проверку',
+            default => 'Ревизионное решение',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildGroupMembershipEventDetails(array $payload): string
+    {
+        $action = (string) ($payload['action'] ?? '');
+        $parts = [];
+
+        $parts[] = match ($action) {
+            'add_to_group' => 'Место добавлено в группу',
+            'move_to_group' => 'Место перенесено в другую группу',
+            'remove_from_group' => 'Место убрано из группы',
+            default => 'Состав группы изменён',
+        };
+
+        $newParentId = (int) ($payload['new_space_group_parent_id'] ?? $payload['target_parent_id'] ?? 0);
+        $oldParentId = (int) ($payload['old_space_group_parent_id'] ?? 0);
+        $newPosition = static::stringOrNull($payload['new_space_group_slot'] ?? $payload['target_slot'] ?? null);
+        $oldPosition = static::stringOrNull($payload['old_space_group_slot'] ?? null);
+
+        if ($oldParentId > 0) {
+            $parts[] = 'прежняя группа: #'.$oldParentId;
+        }
+
+        if ($newParentId > 0) {
+            $parts[] = 'новая группа: #'.$newParentId;
+        }
+
+        if ($oldPosition !== null) {
+            $parts[] = 'прежняя позиция: '.$oldPosition;
+        }
+
+        if ($newPosition !== null) {
+            $parts[] = 'новая позиция: '.$newPosition;
+        }
+
+        return implode('; ', $parts).'.';
+    }
+
+    private static function operationStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'applied' => 'Выполнено',
+            'observed' => 'Наблюдение',
+            'draft' => 'Черновик',
+            'canceled', 'cancelled' => 'Отменено',
+            default => $status !== '' ? $status : 'Записано',
+        };
+    }
+
+    private static function operationStatusColor(string $status): string
+    {
+        return match ($status) {
+            'applied' => 'success',
+            'observed' => 'warning',
+            'draft' => 'gray',
+            'canceled', 'cancelled' => 'danger',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function resolveOperationComment(string $type, array $payload, mixed $fallbackComment): ?string
+    {
+        if ($type === \App\Domain\Operations\OperationType::SPACE_REVIEW) {
+            return static::resolveReviewReason($payload, $fallbackComment);
+        }
+
+        return static::stringOrNull($payload['reason'] ?? null)
+            ?? static::stringOrNull($payload['user_comment'] ?? null)
+            ?? static::stringOrNull($fallbackComment);
+    }
+
+    private static function moneyOrDash(mixed $value): string
+    {
+        if (! is_numeric($value)) {
+            return '—';
+        }
+
+        return number_format((float) $value, 2, ',', ' ').' ₽';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
      */
     private static function buildReviewSummary(string $decision, array $payload): string
     {
@@ -2239,9 +2497,9 @@ class MarketSpaceResource extends BaseResource
             \App\Domain\Operations\SpaceReviewDecision::MARK_SPACE_FREE => 'Место отмечено как свободное.',
             \App\Domain\Operations\SpaceReviewDecision::MARK_SPACE_SERVICE => 'Место отмечено как служебное.',
             \App\Domain\Operations\SpaceReviewDecision::BIND_SHAPE_TO_SPACE => 'Фигура привязана к месту.'
-                .(filled($payload['shape_id'] ?? null) ? ' Shape #'.(int) $payload['shape_id'].'.' : ''),
+                .(filled($payload['shape_id'] ?? null) ? ' Фигура №'.(int) $payload['shape_id'].'.' : ''),
             \App\Domain\Operations\SpaceReviewDecision::UNBIND_SHAPE_FROM_SPACE => 'Фигура отвязана от места.'
-                .(filled($payload['shape_id'] ?? null) ? ' Shape #'.(int) $payload['shape_id'].'.' : ''),
+                .(filled($payload['shape_id'] ?? null) ? ' Фигура №'.(int) $payload['shape_id'].'.' : ''),
             \App\Domain\Operations\SpaceReviewDecision::FIX_SPACE_IDENTITY => static::buildIdentitySummary($payload),
             \App\Domain\Operations\SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => static::buildDuplicateSummary($payload),
             default => 'Ревизионное решение зафиксировано.',
@@ -2284,74 +2542,6 @@ class MarketSpaceResource extends BaseResource
         }
 
         return 'Выполнен разбор дубля: основное место #'.$candidateSpaceId.'.';
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private static function buildOperationSummary(string $type, array $payload): string
-    {
-        if ($type === \App\Domain\Operations\OperationType::SPACE_REVIEW) {
-            $decision = trim((string) ($payload['decision'] ?? ''));
-
-            return static::buildReviewSummary($decision, $payload);
-        }
-
-        if ($type === \App\Domain\Operations\OperationType::GROUP_MEMBERSHIP) {
-            return static::buildGroupMembershipSummary($payload);
-        }
-
-        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private static function buildGroupMembershipSummary(array $payload): string
-    {
-        $action = $payload['action'] ?? '';
-        $parts = [];
-
-        $label = match ($action) {
-            'add_to_group' => 'Добавлено в группу',
-            'move_to_group' => 'Перенесено в другую группу',
-            'remove_from_group' => 'Убрано из группы',
-            default => 'Изменение состава группы',
-        };
-
-        $parts[] = $label;
-
-        if ($action === 'add_to_group' || $action === 'move_to_group') {
-            $newParentId = $payload['new_space_group_parent_id'] ?? null;
-            $newSlot = $payload['new_space_group_slot'] ?? null;
-
-            if ($newParentId !== null && $newSlot !== null) {
-                $parts[] = 'в группу #'.(int) $newParentId.', слот '.(string) $newSlot;
-            } elseif ($newSlot !== null) {
-                $parts[] = 'слот '.(string) $newSlot;
-            }
-        }
-
-        if ($action === 'move_to_group') {
-            $oldParentId = $payload['old_space_group_parent_id'] ?? null;
-            if ($oldParentId !== null) {
-                $parts[] = 'из группы #'.(int) $oldParentId;
-            }
-        }
-
-        if ($action === 'remove_from_group') {
-            $oldParentId = $payload['old_space_group_parent_id'] ?? null;
-            if ($oldParentId !== null) {
-                $parts[] = 'из группы #'.(int) $oldParentId;
-            }
-        }
-
-        $userComment = $payload['user_comment'] ?? null;
-        if ($userComment !== null && $userComment !== '') {
-            $parts[] = 'Комментарий: '.(string) $userComment;
-        }
-
-        return implode('; ', $parts);
     }
 
     /**
