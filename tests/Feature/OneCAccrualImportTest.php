@@ -300,6 +300,211 @@ class OneCAccrualImportTest extends TestCase
         ]);
     }
 
+    public function test_accrual_import_deletes_one_c_rows_missing_from_successful_period_snapshot(): void
+    {
+        $tenantA = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant A',
+            'external_id' => 'tenant-snapshot-a',
+            'inn' => '777777777771',
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant B',
+            'external_id' => 'tenant-snapshot-b',
+            'inn' => '777777777772',
+        ]);
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ];
+
+        $items = [
+            [
+                'tenant_external_id' => 'tenant-snapshot-a',
+                'contract_external_id' => 'contract-snapshot-a',
+                'period' => '2026-06',
+                'source_place_name' => 'A/1',
+                'activity_type' => 'rent',
+                'tenant_name' => 'Tenant A',
+                'inn' => '777777777771',
+                'total_no_vat' => 1000,
+                'total_with_vat' => 1000,
+                'currency' => 'RUB',
+            ],
+            [
+                'tenant_external_id' => 'tenant-snapshot-b',
+                'contract_external_id' => 'contract-snapshot-b',
+                'period' => '2026-06',
+                'source_place_name' => 'B/1',
+                'activity_type' => 'rent',
+                'tenant_name' => 'Tenant B',
+                'inn' => '777777777772',
+                'total_no_vat' => 2000,
+                'total_with_vat' => 2000,
+                'currency' => 'RUB',
+            ],
+        ];
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-09 10:00:00',
+            'items' => $items,
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 2)
+            ->assertJsonPath('warnings.snapshot_deleted', 0);
+
+        $this->assertSame(2, DB::table('tenant_accruals')->count());
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-09 11:00:00',
+            'items' => [$items[0]],
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 0)
+            ->assertJsonPath('updated', 1)
+            ->assertJsonPath('warnings.snapshot_deleted', 1);
+
+        $this->assertSame(1, DB::table('tenant_accruals')->count());
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenantA->id,
+            'period' => '2026-06-01',
+            'total_with_vat' => 1000,
+        ]);
+        $this->assertDatabaseMissing('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenantB->id,
+            'period' => '2026-06-01',
+        ]);
+    }
+
+    public function test_snapshot_cleanup_does_not_touch_other_periods(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Period Tenant',
+            'external_id' => 'tenant-period-scope',
+            'inn' => '777777777773',
+        ]);
+
+        DB::table('tenant_accruals')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'contract_external_id' => 'contract-period-scope',
+            'period' => '2026-05-01',
+            'currency' => 'RUB',
+            'total_no_vat' => 5000,
+            'total_with_vat' => 5000,
+            'status' => 'imported',
+            'source' => '1c',
+            'source_file' => '1c:accruals',
+            'source_row_number' => 1,
+            'source_row_hash' => hash('sha256', 'may-snapshot-row'),
+            'payload' => '{}',
+            'imported_at' => now()->subDay(),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-09 12:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-period-scope',
+                    'contract_external_id' => 'contract-period-scope',
+                    'period' => '2026-06',
+                    'tenant_name' => 'Period Tenant',
+                    'inn' => '777777777773',
+                    'total_no_vat' => 6000,
+                    'total_with_vat' => 6000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('inserted', 1)
+            ->assertJsonPath('warnings.snapshot_deleted', 0);
+
+        $this->assertSame(2, DB::table('tenant_accruals')->count());
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'period' => '2026-05-01',
+            'total_with_vat' => 5000,
+        ]);
+    }
+
+    public function test_backfill_payload_without_organization_fields_preserves_existing_org_context(): void
+    {
+        Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Backfill Tenant',
+            'external_id' => 'tenant-backfill-org',
+            'inn' => '777777777774',
+        ]);
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ];
+
+        $currentPayload = [
+            'calculated_at' => '2026-06-09 13:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-backfill-org',
+                    'contract_external_id' => 'contract-backfill-org',
+                    'period' => '2026-06',
+                    'source_place_name' => 'Backfill place',
+                    'activity_type' => 'rent',
+                    'organization_external_id' => 'org-current',
+                    'organization_name' => 'Current Org',
+                    'account' => '62.01',
+                    'tenant_name' => 'Backfill Tenant',
+                    'inn' => '777777777774',
+                    'total_no_vat' => 7000,
+                    'total_with_vat' => 7000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ];
+
+        $this->postJson(route('api.1c.accruals.store'), $currentPayload, $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 1);
+
+        $backfillPayload = $currentPayload;
+        $backfillPayload['calculated_at'] = '2026-06-09 14:00:00';
+        unset(
+            $backfillPayload['items'][0]['organization_external_id'],
+            $backfillPayload['items'][0]['organization_name'],
+            $backfillPayload['items'][0]['account']
+        );
+        $backfillPayload['items'][0]['total_no_vat'] = 7100;
+        $backfillPayload['items'][0]['total_with_vat'] = 7100;
+
+        $this->postJson(route('api.1c.accruals.store'), $backfillPayload, $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 0)
+            ->assertJsonPath('updated', 1)
+            ->assertJsonPath('warnings.legacy_identity_matches', 1);
+
+        $this->assertSame(1, DB::table('tenant_accruals')->count());
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'organization_external_id' => 'org-current',
+            'organization_name' => 'Current Org',
+            'account' => '62.01',
+            'total_with_vat' => 7100,
+        ]);
+    }
+
     public function test_sequence_preflight_corrects_lag_and_import_stays_successful(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {
@@ -348,6 +553,7 @@ class OneCAccrualImportTest extends TestCase
 
         $payload2 = $basePayload;
         $payload2['items'][0]['contract_external_id'] = 'seq-contract-2';
+        $payload2['items'][0]['period'] = '2026-04';
         $this->postJson(route('api.1c.accruals.store'), $payload2, $headers)
             ->assertOk()
             ->assertJsonPath('inserted', 1);
@@ -358,6 +564,7 @@ class OneCAccrualImportTest extends TestCase
 
         $payload3 = $basePayload;
         $payload3['items'][0]['contract_external_id'] = 'seq-contract-3';
+        $payload3['items'][0]['period'] = '2026-05';
 
         $this->postJson(route('api.1c.accruals.store'), $payload3, $headers)
             ->assertOk()

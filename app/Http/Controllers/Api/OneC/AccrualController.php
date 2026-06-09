@@ -194,7 +194,12 @@ class AccrualController extends Controller
             $unresolvedContracts = 0;
             $unresolvedSpaces = 0;
             $legacyIdentityMatches = 0;
+            $snapshotDeleted = 0;
+            $snapshotSyncSkippedPeriods = [];
             $notFoundTenants = [];
+            $receivedByPeriod = [];
+            $skippedByPeriod = [];
+            $touchedAccrualIdsByPeriod = [];
             $now = now();
             $sequencePreflight = $this->syncTenantAccrualPrimaryKeySequence();
 
@@ -205,6 +210,9 @@ class AccrualController extends Controller
                 $contractExternalId = trim((string) ($item['contract_external_id'] ?? ''));
                 $periodYm = trim((string) $item['period']);
                 $periodDate = $periodYm . '-01';
+                $hasOrganizationExternalId = array_key_exists('organization_external_id', $item);
+                $hasOrganizationName = array_key_exists('organization_name', $item);
+                $hasAccount = array_key_exists('account', $item);
                 $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
                 $organizationName = trim((string) ($item['organization_name'] ?? ''));
                 $account = trim((string) ($item['account'] ?? ''));
@@ -212,8 +220,10 @@ class AccrualController extends Controller
                 $sourcePlaceCode = trim((string) ($item['source_place_code'] ?? $spaceKey));
                 $sourcePlaceName = trim((string) ($item['source_place_name'] ?? ''));
                 $activityType = trim((string) ($item['activity_type'] ?? ''));
+                $receivedByPeriod[$periodDate] = ($receivedByPeriod[$periodDate] ?? 0) + 1;
 
                 if ($tenantExternalId === '' || $periodYm === '') {
+                    $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
                     $skipped++;
                     continue;
                 }
@@ -235,6 +245,7 @@ class AccrualController extends Controller
 
                 if (! $tenant) {
                     $notFoundTenants[] = $tenantExternalId;
+                    $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
                     $skipped++;
                     continue;
                 }
@@ -303,9 +314,6 @@ class AccrualController extends Controller
                 $values = [
                     'tenant_id' => (int) $tenant->id,
                     'contract_external_id' => $identity['contract_external_id'],
-                    'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
-                    'organization_name' => $organizationName !== '' ? $organizationName : null,
-                    'account' => $account !== '' ? $account : null,
                     'tenant_contract_id' => $tenantContractId,
                     'contract_link_status' => $match->status,
                     'contract_link_source' => $match->source,
@@ -336,6 +344,18 @@ class AccrualController extends Controller
                     'updated_at' => $now,
                 ];
 
+                if ($hasOrganizationExternalId) {
+                    $values['organization_external_id'] = $organizationExternalId !== '' ? $organizationExternalId : null;
+                }
+
+                if ($hasOrganizationName) {
+                    $values['organization_name'] = $organizationName !== '' ? $organizationName : null;
+                }
+
+                if ($hasAccount) {
+                    $values['account'] = $account !== '' ? $account : null;
+                }
+
                 $existingId = DB::table('tenant_accruals')
                     ->where('market_id', $marketId)
                     ->whereDate('period', $periodDate)
@@ -354,14 +374,39 @@ class AccrualController extends Controller
                         ->where('id', (int) $existingId)
                         ->update($values);
 
+                    $accrualId = (int) $existingId;
                     $updated++;
                 } else {
-                    DB::table('tenant_accruals')->insert(array_merge($identity, $values, [
+                    $accrualId = (int) DB::table('tenant_accruals')->insertGetId(array_merge($identity, $values, [
                         'created_at' => $now,
                     ]));
 
                     $inserted++;
                 }
+
+                $touchedAccrualIdsByPeriod[$periodDate] ??= [];
+                $touchedAccrualIdsByPeriod[$periodDate][] = $accrualId;
+            }
+
+            foreach ($receivedByPeriod as $periodDate => $periodReceived) {
+                if (($skippedByPeriod[$periodDate] ?? 0) > 0) {
+                    $snapshotSyncSkippedPeriods[] = $periodDate;
+                    continue;
+                }
+
+                $touchedIds = array_values(array_unique($touchedAccrualIdsByPeriod[$periodDate] ?? []));
+                if ($touchedIds === []) {
+                    $snapshotSyncSkippedPeriods[] = $periodDate;
+                    continue;
+                }
+
+                $snapshotDeleted += DB::table('tenant_accruals')
+                    ->where('market_id', $marketId)
+                    ->where('period', $periodDate)
+                    ->where('source', '1c')
+                    ->where('source_file', '1c:accruals')
+                    ->whereNotIn('id', $touchedIds)
+                    ->delete();
             }
 
             DB::commit();
@@ -377,6 +422,8 @@ class AccrualController extends Controller
                 'contracts_unresolved' => $unresolvedContracts,
                 'spaces_unresolved' => $unresolvedSpaces,
                 'legacy_identity_matches' => $legacyIdentityMatches,
+                'snapshot_deleted' => $snapshotDeleted,
+                'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
                 'sequence_preflight' => $sequencePreflight,
             ];
 
@@ -411,6 +458,8 @@ class AccrualController extends Controller
                     'tenants_created' => $tenantsCreated,
                     'tenants_updated_by_inn' => $tenantsUpdatedByInn,
                     'legacy_identity_matches' => $legacyIdentityMatches,
+                    'snapshot_deleted' => $snapshotDeleted,
+                    'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
                     'sequence_preflight' => $sequencePreflight,
                     'warnings' => $warnings,
                     'ip' => $request->ip(),
