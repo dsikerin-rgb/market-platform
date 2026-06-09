@@ -2803,12 +2803,19 @@
           </div>
           <div id="spaceSplitExistingTargets" style="display:none;">
             <div class="group-membership-modal__section">
-              <label class="group-membership-modal__label" for="spaceSplitFirstTargetSpace">ID места для первой половины</label>
-              <input id="spaceSplitFirstTargetSpace" class="group-membership-modal__input" type="number" step="1" min="1" autocomplete="off">
+              <label class="group-membership-modal__label" for="spaceSplitTargetMode">Что сделать с половинами</label>
+              <select id="spaceSplitTargetMode" class="group-membership-modal__select">
+                <option value="existing">Выбрать существующие места без фигуры</option>
+                <option value="create">Создать новые места</option>
+              </select>
             </div>
-            <div class="group-membership-modal__section">
-              <label class="group-membership-modal__label" for="spaceSplitSecondTargetSpace">ID места для второй половины</label>
-              <input id="spaceSplitSecondTargetSpace" class="group-membership-modal__input" type="number" step="1" min="1" autocomplete="off">
+            <div class="group-membership-modal__section" data-space-split-existing-target-field>
+              <label class="group-membership-modal__label" for="spaceSplitFirstTargetSpace">Место для первой половины</label>
+              <select id="spaceSplitFirstTargetSpace" class="group-membership-modal__select"></select>
+            </div>
+            <div class="group-membership-modal__section" data-space-split-existing-target-field>
+              <label class="group-membership-modal__label" for="spaceSplitSecondTargetSpace">Место для второй половины</label>
+              <select id="spaceSplitSecondTargetSpace" class="group-membership-modal__select"></select>
             </div>
           </div>
           <div class="group-membership-modal__section">
@@ -2972,8 +2979,10 @@
         const spaceSplitDate = document.getElementById('spaceSplitDate');
         const spaceSplitHistoryFrom = document.getElementById('spaceSplitHistoryFrom');
         const spaceSplitExistingTargets = document.getElementById('spaceSplitExistingTargets');
+        const spaceSplitTargetMode = document.getElementById('spaceSplitTargetMode');
         const spaceSplitFirstTargetSpace = document.getElementById('spaceSplitFirstTargetSpace');
         const spaceSplitSecondTargetSpace = document.getElementById('spaceSplitSecondTargetSpace');
+        const spaceSplitExistingTargetFields = Array.from(document.querySelectorAll('[data-space-split-existing-target-field]'));
         const spaceSplitFirstNumber = document.getElementById('spaceSplitFirstNumber');
         const spaceSplitFirstArea = document.getElementById('spaceSplitFirstArea');
         const spaceSplitFirstTenant = document.getElementById('spaceSplitFirstTenant');
@@ -3993,6 +4002,97 @@
           spaceSplitError.style.display = 'block';
         }
 
+        function getSpaceSplitTargetMode() {
+          return spaceSplitTargetMode?.value === 'create' ? 'create_spaces' : 'existing_targets';
+        }
+
+        function setSpaceSplitCreateFieldsHidden(hidden) {
+          [
+            spaceSplitFirstNumber,
+            spaceSplitSecondNumber,
+            spaceSplitFirstTenant,
+            spaceSplitSecondTenant,
+            spaceSplitFirstContracts,
+            spaceSplitSecondContracts,
+          ].forEach((field) => {
+            field?.closest('.group-membership-modal__section')?.toggleAttribute('hidden', hidden);
+          });
+        }
+
+        function syncSpaceSplitTargetModeUi() {
+          const useExistingTargets = getSpaceSplitTargetMode() === 'existing_targets';
+
+          spaceSplitExistingTargetFields.forEach((field) => {
+            field.toggleAttribute('hidden', !useExistingTargets);
+          });
+
+          setSpaceSplitCreateFieldsHidden(useExistingTargets);
+        }
+
+        function buildSpaceSplitTargetOption(item) {
+          const id = Number(item?.id || 0);
+          const number = String(item?.number || item?.code || item?.display_name || '').trim();
+          const tenantName = item?.tenant?.name
+            ? String(item.tenant.name)
+            : (item?.space_effective_tenant_name ? String(item.space_effective_tenant_name) : 'не указан');
+          const area = item?.area_sqm !== null && item?.area_sqm !== undefined && String(item.area_sqm).trim() !== ''
+            ? ' · ' + String(item.area_sqm).trim() + ' м²'
+            : '';
+
+          return {
+            id,
+            label: (number || ('ID ' + String(id))) + ' · ' + tenantName + area + ' · ID ' + String(id),
+          };
+        }
+
+        async function loadSpaceSplitExistingTargets() {
+          if (!spaceSplitFirstTargetSpace || !spaceSplitSecondTargetSpace) return;
+
+          const fillLoading = () => {
+            [spaceSplitFirstTargetSpace, spaceSplitSecondTargetSpace].forEach((select) => {
+              select.innerHTML = '<option value="">Загрузка мест без фигуры...</option>';
+              select.disabled = true;
+            });
+          };
+
+          const fillOptions = (items) => {
+            const options = ['<option value="">Выберите место</option>'];
+            items.forEach((item) => {
+              const option = buildSpaceSplitTargetOption(item);
+              if (!Number.isFinite(option.id) || option.id <= 0) return;
+              options.push('<option value="' + String(option.id) + '">' + escapeHtml(option.label) + '</option>');
+            });
+
+            [spaceSplitFirstTargetSpace, spaceSplitSecondTargetSpace].forEach((select) => {
+              select.innerHTML = options.join('');
+              select.disabled = false;
+            });
+          };
+
+          fillLoading();
+
+          try {
+            const url = new URL(SPACES_URL, window.location.origin);
+            url.searchParams.set('without_shapes', '1');
+            url.searchParams.set('limit', '200');
+
+            const res = await apiFetch(url.toString(), { headers: { 'Accept': 'application/json' } });
+            const json = await res.json();
+
+            if (!res.ok || !json || json.ok !== true) {
+              throw new Error(json?.message || String(res.status));
+            }
+
+            fillOptions(Array.isArray(json.items) ? json.items : []);
+          } catch (err) {
+            [spaceSplitFirstTargetSpace, spaceSplitSecondTargetSpace].forEach((select) => {
+              select.innerHTML = '<option value="">Не удалось загрузить места без фигуры</option>';
+              select.disabled = true;
+            });
+            showSpaceSplitError(err?.message || 'Не удалось загрузить места без фигуры.');
+          }
+        }
+
         function openSpaceSplitModalFromHit(orientation = 'vertical') {
           const selectedShape = currentSelectedShapeForSplit || null;
           let hit = currentPopoverHit || null;
@@ -4039,45 +4139,44 @@
 
           if (spaceSplitTarget) {
             spaceSplitTarget.textContent = isExistingTargetMode
-              ? 'Историческое parent-место: ' + (number || ('ID ' + String(spaceId))) + '. Новые места не создаются: укажите ID двух существующих мест без фигур.'
+              ? 'Историческое parent-место: ' + (number || ('ID ' + String(spaceId))) + '. Выберите существующие места без фигуры или создайте новые.'
               : 'Исходное место: ' + (number || ('ID ' + String(spaceId))) + '. Старое место станет историческим.';
           }
           if (spaceSplitOrientation) spaceSplitOrientation.value = orientation === 'horizontal' ? 'horizontal' : 'vertical';
           if (spaceSplitDate) spaceSplitDate.value = todayIsoDate();
           if (spaceSplitHistoryFrom) spaceSplitHistoryFrom.value = '';
           if (spaceSplitExistingTargets) spaceSplitExistingTargets.style.display = isExistingTargetMode ? 'block' : 'none';
+          if (spaceSplitTargetMode) spaceSplitTargetMode.value = isExistingTargetMode ? 'existing' : 'create';
           if (spaceSplitFirstTargetSpace) spaceSplitFirstTargetSpace.value = '';
           if (spaceSplitSecondTargetSpace) spaceSplitSecondTargetSpace.value = '';
           if (spaceSplitFirstNumber) {
-            spaceSplitFirstNumber.value = isExistingTargetMode ? '' : (number ? (number + '-1') : '');
-            spaceSplitFirstNumber.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+            spaceSplitFirstNumber.value = number ? (number + '-1') : '';
           }
           if (spaceSplitSecondNumber) {
-            spaceSplitSecondNumber.value = isExistingTargetMode ? '' : (number ? (number + '-2') : '');
-            spaceSplitSecondNumber.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
+            spaceSplitSecondNumber.value = number ? (number + '-2') : '';
           }
           if (spaceSplitFirstArea) spaceSplitFirstArea.value = halfArea !== '' ? String(halfArea) : '';
           if (spaceSplitSecondArea) spaceSplitSecondArea.value = halfArea !== '' ? String(halfArea) : '';
           if (spaceSplitFirstTenant) {
             spaceSplitFirstTenant.value = isExistingTargetMode ? '' : (hit.space_effective_tenant_id ? String(hit.space_effective_tenant_id) : '');
-            spaceSplitFirstTenant.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
           }
           if (spaceSplitSecondTenant) {
             spaceSplitSecondTenant.value = '';
-            spaceSplitSecondTenant.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
           }
           if (spaceSplitFirstContracts) {
             spaceSplitFirstContracts.value = isExistingTargetMode ? '' : (hit.space_effective_contract_id ? String(hit.space_effective_contract_id) : '');
-            spaceSplitFirstContracts.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
           }
           if (spaceSplitSecondContracts) {
             spaceSplitSecondContracts.value = '';
-            spaceSplitSecondContracts.closest('.group-membership-modal__section')?.toggleAttribute('hidden', isExistingTargetMode);
           }
           if (spaceSplitComment) spaceSplitComment.value = '';
           if (spaceSplitError) {
             spaceSplitError.style.display = 'none';
             spaceSplitError.textContent = '';
+          }
+          syncSpaceSplitTargetModeUi();
+          if (isExistingTargetMode) {
+            loadSpaceSplitExistingTargets();
           }
 
           if (spaceSplitModal) {
@@ -4094,6 +4193,9 @@
           const secondTenant = spaceSplitSecondTenant?.value ? Number(spaceSplitSecondTenant.value) : null;
           const firstTargetSpace = spaceSplitFirstTargetSpace?.value ? Number(spaceSplitFirstTargetSpace.value) : null;
           const secondTargetSpace = spaceSplitSecondTargetSpace?.value ? Number(spaceSplitSecondTargetSpace.value) : null;
+          spaceSplitContext.mode = spaceSplitExistingTargets?.style.display !== 'none'
+            ? getSpaceSplitTargetMode()
+            : 'create_spaces';
           const usesExistingTargets = spaceSplitContext.mode === 'existing_targets';
           const payload = {
             shape_id: spaceSplitContext.shapeId,
@@ -4118,7 +4220,7 @@
           };
 
           if (usesExistingTargets && (!payload.first.target_space_id || !payload.second.target_space_id)) {
-            showSpaceSplitError('Укажите ID двух существующих мест без фигур.');
+            showSpaceSplitError('Выберите два существующих места без фигуры.');
             return;
           }
 
@@ -4310,6 +4412,17 @@
         });
         spaceSplitCancel?.addEventListener('click', closeSpaceSplitModal);
         spaceSplitClose?.addEventListener('click', closeSpaceSplitModal);
+        spaceSplitTargetMode?.addEventListener('change', () => {
+          if (!spaceSplitContext) return;
+          spaceSplitContext.mode = getSpaceSplitTargetMode();
+          syncSpaceSplitTargetModeUi();
+          if (spaceSplitContext.mode === 'existing_targets') {
+            loadSpaceSplitExistingTargets();
+          } else if (spaceSplitError) {
+            spaceSplitError.style.display = 'none';
+            spaceSplitError.textContent = '';
+          }
+        });
         spaceSplitSubmit?.addEventListener('click', (e) => {
           e.preventDefault();
           submitSpaceSplit().catch((err) => {

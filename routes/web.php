@@ -1843,7 +1843,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->orderBy('number')
                 ->orderBy('id')
                 ->limit($limit)
-                ->get(['id', 'number', 'code', 'display_name', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
+                ->get(['id', 'number', 'code', 'display_name', 'area_sqm', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
 
             // Фильтр shared-use participant-псевдо-мест (с pattern __t\d+ или _t\d+ в number),
             // если у основного места есть фигура на карте.
