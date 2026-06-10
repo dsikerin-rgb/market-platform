@@ -26,7 +26,7 @@ class OneCReconciliation extends Page
 
     public ?string $period = null;
 
-    public string $status = 'open';
+    public string $status = 'all';
 
     public string $search = '';
 
@@ -36,7 +36,7 @@ class OneCReconciliation extends Page
 
     protected $queryString = [
         'period' => ['except' => null],
-        'status' => ['except' => 'open'],
+        'status' => ['except' => 'all'],
         'search' => ['except' => ''],
         'perPage' => ['except' => '10'],
         'page' => ['except' => 1],
