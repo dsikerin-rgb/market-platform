@@ -134,6 +134,7 @@ class OneCReconciliation extends Page
             $this->status,
             $this->search,
         );
+        $filteredRows = $this->prepareRowsForDisplay($filteredRows);
         $perPage = $this->normalizePerPage($this->perPage);
         $total = count($filteredRows);
         $lastPage = $perPage === 'all' ? 1 : max(1, (int) ceil($total / (int) $perPage));
@@ -188,6 +189,37 @@ class OneCReconciliation extends Page
         $value = (string) $value;
 
         return in_array($value, ['10', '25', '50', '100', 'all'], true) ? $value : '10';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function prepareRowsForDisplay(array $rows): array
+    {
+        if ($this->status !== 'all') {
+            return $rows;
+        }
+
+        usort($rows, static function (array $left, array $right): int {
+            $tenant = strcmp((string) $left['tenant_name'], (string) $right['tenant_name']);
+
+            if ($tenant !== 0) {
+                return $tenant;
+            }
+
+            $leftContract = (string) $left['contract_label'];
+            $rightContract = (string) $right['contract_label'];
+            $contract = strcmp($leftContract, $rightContract);
+
+            if ($contract !== 0) {
+                return $contract;
+            }
+
+            return strcmp((string) ($left['contract_external_id'] ?? ''), (string) ($right['contract_external_id'] ?? ''));
+        });
+
+        return $rows;
     }
 
     /**

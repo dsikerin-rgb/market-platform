@@ -259,6 +259,11 @@
             max-width: 460px;
         }
 
+        .onec-tenant-repeat {
+            color: transparent;
+            user-select: none;
+        }
+
         .onec-money,
         .onec-count {
             font-variant-numeric: tabular-nums;
@@ -349,30 +354,30 @@
 
         <div class="onec-summary">
             <div class="onec-card">
-                <div class="onec-card-label">Начислено</div>
+                <div class="onec-card-label">Начислено по фильтру</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['accrued']) }}</div>
-                <div class="onec-card-note">Всего: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
+                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Оплачено</div>
+                <div class="onec-card-label">Оплачено по фильтру</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['paid']) }}</div>
-                <div class="onec-card-note">Всего: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
+                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Разница</div>
+                <div class="onec-card-label">Разница по фильтру</div>
                 <div class="onec-card-value {{ ((float) $summary['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $summary['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
                     {{ $formatMoney((float) $summary['delta']) }}
                 </div>
-                <div class="onec-card-note">Всего: {{ $formatMoney((float) $totalSummary['delta']) }}</div>
+                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['delta']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Строки</div>
+                <div class="onec-card-label">Строки по фильтру</div>
                 <div class="onec-card-value">{{ number_format((int) $summary['rows_count'], 0, ',', ' ') }}</div>
                 <div class="onec-card-note">
-                    долг: {{ $summary['debt_count'] }} · переплата: {{ $summary['overpaid_count'] }} · закрыто: {{ $summary['closed_count'] }}
+                    всего за месяц: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }} · долг: {{ $summary['debt_count'] }} · переплата: {{ $summary['overpaid_count'] }} · закрыто: {{ $summary['closed_count'] }}
                 </div>
             </div>
         </div>
@@ -400,11 +405,11 @@
                         class="onec-toolbar-control"
                         aria-label="Статус"
                     >
+                        <option value="all">Все строки</option>
                         <option value="open">Открытые расхождения</option>
                         <option value="debt">Долг</option>
                         <option value="overpaid">Переплата</option>
                         <option value="closed">Закрыто</option>
-                        <option value="all">Все строки</option>
                     </select>
                 </div>
 
@@ -443,16 +448,23 @@
                             </tr>
                         </thead>
                         <tbody>
+                            @php($previousTenantKey = null)
                             @foreach ($rows as $row)
                                 <tr>
                                     <td class="onec-col-tenant">
-                                        @if ($row['tenant_url'])
-                                            <a href="{{ $row['tenant_url'] }}">
-                                                {{ $row['tenant_name'] }}
-                                            </a>
+                                        @php($tenantKey = (string) ($row['tenant_id'] ?? 'none'))
+                                        @if ($tenantKey === $previousTenantKey)
+                                            <span class="onec-tenant-repeat">{{ $row['tenant_name'] }}</span>
                                         @else
-                                            <span>{{ $row['tenant_name'] }}</span>
+                                            @if ($row['tenant_url'])
+                                                <a href="{{ $row['tenant_url'] }}">
+                                                    {{ $row['tenant_name'] }}
+                                                </a>
+                                            @else
+                                                <span>{{ $row['tenant_name'] }}</span>
+                                            @endif
                                         @endif
+                                        @php($previousTenantKey = $tenantKey)
                                     </td>
 
                                     <td class="onec-col-contract">
