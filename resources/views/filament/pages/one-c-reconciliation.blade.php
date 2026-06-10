@@ -382,10 +382,6 @@
                 Детализация
             </x-slot>
 
-            <x-slot name="description">
-                В колонке «Строки»: начисления / оплаты
-            </x-slot>
-
             <div class="onec-toolbar">
                 <div class="onec-toolbar-filters">
                     <input
@@ -439,7 +435,6 @@
                                 <th scope="col" class="onec-money">Оплачено</th>
                                 <th scope="col" class="onec-money">Разница</th>
                                 <th scope="col">Статус</th>
-                                <th scope="col" class="onec-count">Строки</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -478,9 +473,6 @@
                                         <span class="onec-status" style="{{ $statusStyles[$row['status']] ?? $statusStyles['closed'] }}">
                                             {{ $row['status_label'] }}
                                         </span>
-                                    </td>
-                                    <td class="onec-count">
-                                        {{ $row['accrual_rows'] }} / {{ $row['payment_rows'] }}
                                     </td>
                                 </tr>
                             @endforeach
