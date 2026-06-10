@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Support\OneC\AccrualPaymentReconciliationReport;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 
 class OneCReconciliation extends Page
 {
-    protected static ?string $title = 'Контроль импорта 1С';
+    protected static ?string $title = 'Журнал документов 1С';
 
-    protected static ?string $navigationLabel = 'Контроль импорта 1С';
+    protected static ?string $navigationLabel = 'Документы 1С';
 
     protected static \UnitEnum|string|null $navigationGroup = null;
 
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-scale';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
 
     protected static ?int $navigationSort = 96;
 
@@ -24,9 +25,11 @@ class OneCReconciliation extends Page
 
     protected string $view = 'filament.pages.one-c-reconciliation';
 
-    public ?string $period = null;
+    public ?string $fromDate = null;
 
-    public string $status = 'all';
+    public ?string $toDate = null;
+
+    public string $type = 'all';
 
     public string $search = '';
 
@@ -35,8 +38,9 @@ class OneCReconciliation extends Page
     public int $page = 1;
 
     protected $queryString = [
-        'period' => ['except' => null],
-        'status' => ['except' => 'all'],
+        'fromDate' => ['except' => null, 'as' => 'from'],
+        'toDate' => ['except' => null, 'as' => 'to'],
+        'type' => ['except' => 'all'],
         'search' => ['except' => ''],
         'perPage' => ['except' => '10'],
         'page' => ['except' => 1],
@@ -57,19 +61,28 @@ class OneCReconciliation extends Page
         $marketId = $this->marketId();
         $this->perPage = $this->normalizePerPage($this->perPage);
         $this->page = max(1, $this->page);
+        $this->type = $this->normalizeType($this->type);
 
-        if ($this->period === null && $marketId !== null) {
-            $this->period = app(AccrualPaymentReconciliationReport::class)->latestDataMonth($marketId);
+        if (($this->fromDate === null || $this->toDate === null) && $marketId !== null) {
+            [$from, $to] = app(AccrualPaymentReconciliationReport::class)->defaultDateRange($marketId);
+            $this->fromDate ??= $from;
+            $this->toDate ??= $to;
         }
     }
 
-    public function updatedPeriod(): void
+    public function updatedFromDate(): void
     {
         $this->page = 1;
     }
 
-    public function updatedStatus(): void
+    public function updatedToDate(): void
     {
+        $this->page = 1;
+    }
+
+    public function updatedType(): void
+    {
+        $this->type = $this->normalizeType($this->type);
         $this->page = 1;
     }
 
@@ -96,8 +109,7 @@ class OneCReconciliation extends Page
 
     /**
      * @return array{
-     *     monthYm:string,
-     *     monthLabel:string,
+     *     periodLabel:string,
      *     rows:list<array<string, mixed>>,
      *     filteredRows:list<array<string, mixed>>,
      *     displayRows:list<array<string, mixed>>,
@@ -114,8 +126,7 @@ class OneCReconciliation extends Page
 
         if ($marketId === null) {
             return [
-                'monthYm' => '',
-                'monthLabel' => '—',
+                'periodLabel' => '—',
                 'rows' => [],
                 'filteredRows' => [],
                 'displayRows' => [],
@@ -127,14 +138,18 @@ class OneCReconciliation extends Page
             ];
         }
 
+        [$fromDate, $toDate] = $this->normalizedDateRange($this->fromDate, $this->toDate);
+        $this->fromDate = $fromDate;
+        $this->toDate = $toDate;
+
         $service = app(AccrualPaymentReconciliationReport::class);
-        $report = $service->build($marketId, $this->period);
+        $report = $service->build($marketId, $fromDate, $toDate);
         $filteredRows = $service->filterRows(
             $report['rows'],
-            $this->status,
+            $this->type,
             $this->search,
         );
-        $filteredRows = $this->prepareRowsForDisplay($filteredRows);
+
         $perPage = $this->normalizePerPage($this->perPage);
         $total = count($filteredRows);
         $lastPage = $perPage === 'all' ? 1 : max(1, (int) ceil($total / (int) $perPage));
@@ -144,8 +159,7 @@ class OneCReconciliation extends Page
             : array_slice($filteredRows, ($this->page - 1) * (int) $perPage, (int) $perPage);
 
         return [
-            'monthYm' => $report['monthYm'],
-            'monthLabel' => $report['monthLabel'],
+            'periodLabel' => $report['periodLabel'],
             'rows' => $report['rows'],
             'filteredRows' => $filteredRows,
             'displayRows' => $displayRows,
@@ -176,10 +190,9 @@ class OneCReconciliation extends Page
         return [
             'accrued' => 0.0,
             'paid' => 0.0,
-            'delta' => 0.0,
-            'debt_count' => 0,
-            'overpaid_count' => 0,
-            'closed_count' => 0,
+            'total' => 0.0,
+            'accrual_count' => 0,
+            'payment_count' => 0,
             'rows_count' => 0,
         ];
     }
@@ -191,35 +204,41 @@ class OneCReconciliation extends Page
         return in_array($value, ['10', '25', '50', '100', 'all'], true) ? $value : '10';
     }
 
-    /**
-     * @param list<array<string, mixed>> $rows
-     * @return list<array<string, mixed>>
-     */
-    private function prepareRowsForDisplay(array $rows): array
+    private function normalizeType(mixed $value): string
     {
-        if ($this->status !== 'all') {
-            return $rows;
+        $value = (string) $value;
+
+        return in_array($value, ['all', 'accrual', 'payment'], true) ? $value : 'all';
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function normalizedDateRange(?string $fromDate, ?string $toDate): array
+    {
+        $from = $this->parseDate($fromDate) ?? CarbonImmutable::now()->startOfMonth();
+        $to = $this->parseDate($toDate) ?? $from->endOfMonth();
+
+        if ($to->lt($from)) {
+            [$from, $to] = [$to, $from];
         }
 
-        usort($rows, static function (array $left, array $right): int {
-            $tenant = strcmp((string) $left['tenant_name'], (string) $right['tenant_name']);
+        return [$from->toDateString(), $to->toDateString()];
+    }
 
-            if ($tenant !== 0) {
-                return $tenant;
-            }
+    private function parseDate(?string $value): ?CarbonImmutable
+    {
+        $value = trim((string) $value);
 
-            $leftContract = (string) $left['contract_label'];
-            $rightContract = (string) $right['contract_label'];
-            $contract = strcmp($leftContract, $rightContract);
+        if ($value === '') {
+            return null;
+        }
 
-            if ($contract !== 0) {
-                return $contract;
-            }
-
-            return strcmp((string) ($left['contract_external_id'] ?? ''), (string) ($right['contract_external_id'] ?? ''));
-        });
-
-        return $rows;
+        try {
+            return CarbonImmutable::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

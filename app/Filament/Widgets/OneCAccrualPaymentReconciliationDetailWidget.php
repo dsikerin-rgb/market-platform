@@ -8,6 +8,7 @@ use App\Filament\Pages\OneCReconciliation;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Support\OneC\AccrualPaymentReconciliationReport;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\Widget;
@@ -51,22 +52,23 @@ class OneCAccrualPaymentReconciliationDetailWidget extends Widget
             return $this->emptyData('Выберите рынок');
         }
 
-        $raw = $this->resolveDashboardFilterMonthRaw();
-        $period = is_string($raw) ? $raw : null;
-        $report = app(AccrualPaymentReconciliationReport::class)->build($marketId, $period);
+        [$fromDate, $toDate] = $this->resolveDateRange();
+        $report = app(AccrualPaymentReconciliationReport::class)->build($marketId, $fromDate, $toDate);
         $rows = $report['rows'];
         $visibleRows = array_slice($rows, 0, self::ROW_LIMIT);
-        $monthYm = (string) $report['monthYm'];
 
         return [
-            'monthLabel' => $report['monthLabel'],
+            'periodLabel' => $report['periodLabel'],
             'rows' => $visibleRows,
             'summary' => $report['summary'],
             'hasMoreRows' => count($rows) > self::ROW_LIMIT,
             'hiddenRowsCount' => max(0, count($rows) - self::ROW_LIMIT),
             'rowLimit' => self::ROW_LIMIT,
             'emptyReason' => $report['emptyReason'],
-            'fullUrl' => OneCReconciliation::getUrl($monthYm !== '' ? ['period' => $monthYm] : []),
+            'fullUrl' => OneCReconciliation::getUrl([
+                'from' => $fromDate,
+                'to' => $toDate,
+            ]),
         ];
     }
 
@@ -97,20 +99,34 @@ class OneCAccrualPaymentReconciliationDetailWidget extends Widget
     }
 
     /**
+     * @return array{0:string,1:string}
+     */
+    private function resolveDateRange(): array
+    {
+        $raw = $this->resolveDashboardFilterMonthRaw();
+        $month = is_string($raw) && preg_match('/^\d{4}-\d{2}$/', $raw) === 1
+            ? $raw
+            : CarbonImmutable::now()->format('Y-m');
+
+        $start = CarbonImmutable::createFromFormat('!Y-m', $month)->startOfMonth();
+
+        return [$start->toDateString(), $start->endOfMonth()->toDateString()];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function emptyData(string $reason): array
     {
         return [
-            'monthLabel' => '—',
+            'periodLabel' => '—',
             'rows' => [],
             'summary' => [
                 'accrued' => 0.0,
                 'paid' => 0.0,
-                'delta' => 0.0,
-                'debt_count' => 0,
-                'overpaid_count' => 0,
-                'closed_count' => 0,
+                'total' => 0.0,
+                'accrual_count' => 0,
+                'payment_count' => 0,
                 'rows_count' => 0,
             ],
             'hasMoreRows' => false,
