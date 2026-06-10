@@ -129,6 +129,46 @@ class OneCIntegrationExchangeNotificationTest extends TestCase
         );
     }
 
+    public function test_one_c_telegram_notification_uses_human_russian_labels(): void
+    {
+        $market = new Market([
+            'id' => 1,
+            'name' => 'Эко Ярмарка',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+        ]);
+
+        $exchange = new IntegrationExchange();
+        $exchange->setRawAttributes([
+            'market_id' => 1,
+            'direction' => IntegrationExchange::DIRECTION_IN,
+            'entity_type' => 'accruals',
+            'status' => IntegrationExchange::STATUS_OK,
+            'payload' => json_encode([
+                'endpoint' => '/api/1c/accruals',
+                'received' => 134,
+                'inserted' => 0,
+                'updated' => 134,
+                'skipped' => 0,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'finished_at' => '2026-06-10 13:04:16',
+        ], true);
+        $exchange->setRelation('market', $market);
+
+        $text = (new OneCIntegrationExchangeNotification($exchange))->toTelegram(new \stdClass())['text'];
+
+        $this->assertStringContainsString('Сущность: Начисления', $text);
+        $this->assertStringContainsString('Напр.: Входящий', $text);
+        $this->assertStringContainsString('Статус: Успешно', $text);
+        $this->assertStringContainsString('получено: 134', $text);
+        $this->assertStringContainsString('обновлено: 134', $text);
+        $this->assertStringContainsString('пропущено: 0', $text);
+        $this->assertStringContainsString('Рынок: Эко Ярмарка', $text);
+        $this->assertStringNotContainsString('accruals', $text);
+        $this->assertStringNotContainsString('Напр.: IN', $text);
+        $this->assertStringNotContainsString('Статус: OK', $text);
+    }
+
     public function test_super_admin_can_disable_one_c_notifications_via_topics(): void
     {
         Notification::fake();
