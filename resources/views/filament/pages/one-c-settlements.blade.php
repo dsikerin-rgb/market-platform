@@ -36,12 +36,17 @@
         .onec-settlements {
             display: grid;
             gap: 20px;
+            max-width: 100%;
+            min-width: 0;
+            overflow-x: clip;
         }
 
         .onec-settlements-summary {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
             gap: 16px;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .onec-settlements-card,
@@ -50,6 +55,8 @@
             border-radius: 8px;
             background: #fff;
             box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+            max-width: 100%;
+            min-width: 0;
         }
 
         .onec-settlements-card {
@@ -73,6 +80,7 @@
             font-weight: 700;
             line-height: 1.2;
             overflow-wrap: anywhere;
+            word-break: normal;
         }
 
         .onec-settlements-note {
@@ -80,6 +88,7 @@
             color: #6b7280;
             font-size: 12px;
             line-height: 1.35;
+            overflow-wrap: anywhere;
         }
 
         .onec-settlements-panel-header {
@@ -111,6 +120,8 @@
             justify-content: space-between;
             gap: 16px;
             margin-bottom: 16px;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .onec-settlements-filters {
@@ -118,6 +129,7 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 8px;
+            min-width: 0;
         }
 
         .onec-settlements-control,
@@ -150,6 +162,7 @@
             background: #fff;
             padding: 6px;
             box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+            max-width: 100%;
         }
 
         .onec-settlements-chip {
@@ -177,6 +190,8 @@
         }
 
         .onec-settlements-search {
+            flex: 0 1 360px;
+            min-width: 220px;
             position: relative;
             width: min(360px, 100%);
         }
@@ -197,6 +212,8 @@
         }
 
         .onec-settlements-table-wrap {
+            max-width: 100%;
+            min-width: 0;
             overflow-x: auto;
             border: 1px solid #e5e7eb;
             border-radius: 8px;
@@ -204,7 +221,7 @@
 
         .onec-settlements-table {
             width: 100%;
-            min-width: 1180px;
+            min-width: 1040px;
             border-collapse: collapse;
             background: #fff;
             font-size: 13px;
@@ -212,7 +229,7 @@
         }
 
         .onec-settlements-table--compact {
-            min-width: 860px;
+            min-width: 760px;
         }
 
         .onec-settlements-table th {
@@ -257,13 +274,13 @@
         }
 
         .onec-settlements-col-tenant {
-            min-width: 220px;
-            max-width: 320px;
+            min-width: 180px;
+            max-width: 280px;
         }
 
         .onec-settlements-col-contract {
-            min-width: 260px;
-            max-width: 420px;
+            min-width: 220px;
+            max-width: 360px;
         }
 
         .onec-settlements-muted {
@@ -271,6 +288,7 @@
             font-size: 12px;
             line-height: 1.35;
             margin-top: 4px;
+            overflow-wrap: anywhere;
         }
 
         .onec-settlements-badge {
