@@ -169,6 +169,23 @@ class OneCIntegrationExchangeNotificationTest extends TestCase
         $this->assertStringNotContainsString('Статус: OK', $text);
     }
 
+    public function test_one_c_notification_labels_settlement_exchange(): void
+    {
+        $exchange = new IntegrationExchange();
+        $exchange->setRawAttributes([
+            'market_id' => 1,
+            'direction' => IntegrationExchange::DIRECTION_IN,
+            'entity_type' => 'settlements',
+            'status' => IntegrationExchange::STATUS_OK,
+            'payload' => json_encode([], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'finished_at' => '2026-06-11 08:00:00',
+        ], true);
+
+        $payload = (new OneCIntegrationExchangeNotification($exchange))->toArray(new \stdClass());
+
+        $this->assertSame('Расчеты/сальдо', $payload['entity_label']);
+    }
+
     public function test_super_admin_can_disable_one_c_notifications_via_topics(): void
     {
         Notification::fake();

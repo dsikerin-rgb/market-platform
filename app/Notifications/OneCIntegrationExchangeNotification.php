@@ -207,6 +207,7 @@ class OneCIntegrationExchangeNotification extends Notification
             'contracts' => 'Договоры',
             'accruals' => 'Начисления',
             'payments' => 'Оплаты',
+            'settlements' => 'Расчеты/сальдо',
             default => (string) $this->exchange->entity_type,
         };
     }
