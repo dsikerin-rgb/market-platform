@@ -33,6 +33,65 @@ The following work has been merged and deployed to staging and production:
 
 Production and staging were updated to commit `31e6801` after PR #897.
 
+### Update: Settlement Balances And Map Coloring, 2026-06-11
+
+Later on 2026-06-11 the following additional work was merged and deployed:
+
+- PR #905 simplified the 1C settlement balances table layout.
+- PR #906 made `tenant_settlement_balances` available as a debt-status source.
+- PR #907 fixed settlement aging to parse dates from settlement document names.
+- PR #908 stopped using settlement balances directly for market-space map
+  coloring and restored the established map coloring source.
+
+Production and staging were updated to commit `376a96d` after PR #908.
+
+Settlement balance backfill was run on production for account `62` for:
+
+- 2026-01: 2,663 rows, 106 tenants, 183 contracts, closing net debt
+  `905008.69`.
+- 2026-02: 2,821 rows, 109 tenants, 187 contracts, closing net debt
+  `930842.60`.
+- 2026-03: 2,964 rows, 109 tenants, 187 contracts, closing net debt
+  `763682.30`.
+- 2026-04: 3,118 rows, 109 tenants, 188 contracts, closing net debt
+  `162199.28`.
+- 2026-05: 3,219 rows, 109 tenants, 190 contracts, closing net debt
+  `165617.84`.
+- 2026-06: 3,273 rows, 110 tenants, 192 contracts, closing net debt
+  `4423892.78`.
+
+All checked imported months had:
+
+- `duplicate_hashes = 0`;
+- `negative_rows = 0`;
+- `unlinked_contract_rows = 2`.
+
+The repeated unlinked rows are for `Kutyakova Tatyana Mikhailovna IP`,
+contract `Reklama`, and have zero net effect: debit `5000`, credit `5000`.
+
+Important outcome:
+
+- OSV/settlement balances are useful and should be allowed to color the map in
+  the future.
+- However, directly using raw OSV rows for map coloring was too aggressive:
+  old open settlement documents can make many current spaces red even when the
+  established map rules have not confirmed that status.
+- Therefore PR #908 restored map coloring to the established `contract_debts`
+  logic while preserving settlement balances for the 1C settlement screen and
+  tenant-level diagnostics.
+
+Production smoke check after PR #908 showed active mapped space status counts:
+
+- red: 22;
+- orange: 58;
+- pending: 32;
+- green: 42;
+- gray: 2.
+
+This means the mass red coloring caused by raw OSV aging was removed, while the
+existing "space overdue from 30 days" and "tenant overdue from 30 days"
+categories remain active through the established logic.
+
 ## Current 1C Entities
 
 ### Contracts
@@ -172,6 +231,54 @@ too dense and belongs on a dedicated page.
 
 ## Next Plan
 
+### Step 0. Build A Debt Decision Draft Layer
+
+Before using OSV to color the map again, build a read-only debt decision draft
+layer. It should not change map colors by itself.
+
+The draft layer should produce one row per candidate debt decision:
+
+- market;
+- tenant;
+- contract;
+- market space when exact binding is proven;
+- account;
+- source table (`tenant_settlement_balances`, `contract_debts`, or both);
+- source row/document ids where available;
+- debt amount;
+- overdue date;
+- overdue days;
+- proposed status (`green`, `pending`, `orange`, `red`, `gray`);
+- proposed scope (`space`, `tenant_fallback`, `unmapped`);
+- confidence/reason.
+
+Rules for this draft layer:
+
+- `space` may be proposed only when the debt row is linked to the active
+  contract of the current market space.
+- `tenant_fallback` may be proposed when tenant debt exists but exact
+  per-space attribution is not proven.
+- `unmapped` must be used for tenant debt without active space or without a
+  safe binding.
+- Raw old OSV settlement documents must not automatically override the
+  established map color. They should be visible as evidence with a reason.
+- Account `62.*` is tenant settlement debt.
+- Account `76.06` is security deposit and must not be mixed into rent debt.
+- Account `76.07` remains a recognized calculation account, but its business
+  meaning must be verified against 1C data before using it for map colors.
+
+The immediate implementation target is a read-only diagnostics command or page
+that compares:
+
+- current map status;
+- `contract_debts` status and source;
+- OSV/settlement balance status and source;
+- proposed draft status;
+- reason for any mismatch.
+
+Only after this comparison is reviewed on production data should the map switch
+from the old source to the new OSV-aware decision layer.
+
 ### Step 1. Confirm 1C Account Scope
 
 In 1C, confirm the exact account(s) that must be exported:
@@ -260,12 +367,17 @@ This screen should be the accountant-facing "Расчеты с арендато�
 
 Do not use month-only accrual minus payment logic for final map colors.
 
-After settlement balances are confirmed, decide how the map should use:
+After settlement balances are confirmed and the debt decision draft layer is
+reviewed, decide how the map should use:
 
 - account `62.*` debt;
 - account `76.06` security deposit;
 - account `76.07` if applicable;
 - old/manual review debt tails.
+
+The target is not to forbid OSV from coloring the map. The target is to let OSV
+color the map only through explicit, auditable decision rows with a clear scope
+and reason.
 
 ## What Not To Do
 
@@ -274,7 +386,8 @@ After settlement balances are confirmed, decide how the map should use:
 - Do not let account 62 imports delete account 76 balances.
 - Do not use the document journal as the final debt screen.
 - Do not rely on old CSV/table data as the current financial truth.
-- Do not change map debt logic until OSV/settlement balances are confirmed.
+- Do not let raw OSV rows directly override map colors without the decision
+  draft layer and review.
 
 ## Current Open Question
 
