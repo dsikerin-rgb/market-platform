@@ -12,6 +12,7 @@ use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\AccrualCompositionWidget;
 use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
+use App\Filament\Widgets\OneCPaymentsSummaryWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Models\ContractDebt;
@@ -198,6 +199,7 @@ class Dashboard extends BaseDashboard
                 ],
                 'widgets' => $this->resolveVisibleWorkspaceWidgets([
                     \App\Filament\Widgets\RevenueYearChartWidget::class,
+                    OneCPaymentsSummaryWidget::class,
                     OneCDebtSnapshotsHistoryWidget::class,
                     AccrualCompositionWidget::class,
                 ]),
@@ -563,6 +565,17 @@ class Dashboard extends BaseDashboard
                     'onec_debt_snapshots' => [
                         'class' => OneCDebtSnapshotsHistoryWidget::class,
                         'label' => 'История 1С-снимков задолженности',
+                    ],
+                ]
+                + array_slice($widgets, 2, null, true);
+        }
+
+        if (class_exists(OneCPaymentsSummaryWidget::class)) {
+            $widgets = array_slice($widgets, 0, 2, true)
+                + [
+                    'onec_payments_summary' => [
+                        'class' => OneCPaymentsSummaryWidget::class,
+                        'label' => 'Оплаты из 1С',
                     ],
                 ]
                 + array_slice($widgets, 2, null, true);
