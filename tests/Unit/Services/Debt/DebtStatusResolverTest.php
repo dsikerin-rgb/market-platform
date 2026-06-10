@@ -686,7 +686,7 @@ class DebtStatusResolverTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_market_space_status_uses_settlement_balance_for_active_contract(): void
+    public function test_market_space_status_does_not_use_settlement_balance_for_map_coloring(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
 
@@ -747,9 +747,9 @@ class DebtStatusResolverTest extends TestCase
 
         $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
 
-        $this->assertSame('orange', $result['status']);
-        $this->assertSame('tenant_settlement_balances', $result['source']);
-        $this->assertSame('space', $result['extra']['scope'] ?? null);
+        $this->assertSame('gray', $result['status']);
+        $this->assertNotSame('tenant_settlement_balances', $result['source']);
+        $this->assertSame('none', $result['extra']['scope'] ?? null);
 
         Carbon::setTestNow();
     }

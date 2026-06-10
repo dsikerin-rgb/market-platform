@@ -158,14 +158,15 @@ class DebtStatusResolver
         if ($contractExternalIds->isEmpty()) {
             $fallbackResult = $this->makeTenantFallbackResult(
                 $tenant,
-                'tenant-fallback: no financial link to space'
+                'tenant-fallback: no financial link to space',
+                useSettlementBalances: false
             );
 
             if ($fallbackResult !== null) {
                 return $fallbackResult;
             }
 
-            $tenantResolved = $this->resolve($tenant);
+            $tenantResolved = $this->resolveTenantForMapFallback($tenant);
             $tenantStatus = $tenantResolved['status'] ?? null;
 
             // Проверяем валидность tenant-level статуса
@@ -192,17 +193,6 @@ class DebtStatusResolver
                 source: 'tenant-fallback недоступен',
                 severity: 0,
                 extra: ['scope' => 'none']
-            );
-        }
-
-        // Проверяем наличие таблицы contract_debts
-        $settlementData = $this->fetchSettlementBalanceData($tenant, $contractExternalIds);
-        if ($settlementData !== null) {
-            return $this->makeResultFromSettlementBalanceData(
-                $settlementData,
-                $labels,
-                $marketId,
-                'space'
             );
         }
 
@@ -284,7 +274,7 @@ class DebtStatusResolver
 
         if ($rows->isEmpty()) {
             // Нет записей 1С для контрактов этого места — используем tenant-fallback
-            $tenantResolved = $this->resolve($tenant);
+            $tenantResolved = $this->resolveTenantForMapFallback($tenant);
             $tenantStatus = $tenantResolved['status'] ?? null;
 
             // Проверяем валидность tenant-level статуса
@@ -321,7 +311,8 @@ class DebtStatusResolver
         if ($positiveDebtRows->isEmpty()) {
             $fallbackResult = $this->makeTenantFallbackResult(
                 $tenant,
-                'tenant-fallback: no space debt'
+                'tenant-fallback: no space debt',
+                useSettlementBalances: false
             );
 
             if ($fallbackResult !== null && $this->isTenantFallbackDebtStatus($fallbackResult['status'] ?? null)) {
@@ -351,7 +342,8 @@ class DebtStatusResolver
         if ($displayDebtAmount < $minimumDebtAmount) {
             $fallbackResult = $this->makeTenantFallbackResult(
                 $tenant,
-                'tenant-fallback: space debt below threshold'
+                'tenant-fallback: space debt below threshold',
+                useSettlementBalances: false
             );
 
             if ($fallbackResult !== null && $this->isTenantFallbackDebtStatus($fallbackResult['status'] ?? null)) {
@@ -395,7 +387,8 @@ class DebtStatusResolver
         if (! $isOverdue) {
             $fallbackResult = $this->makeTenantFallbackResult(
                 $tenant,
-                'tenant-fallback: space debt not due'
+                'tenant-fallback: space debt not due',
+                useSettlementBalances: false
             );
 
             if ($fallbackResult !== null && $this->isTenantFallbackDebtStatus($fallbackResult['status'] ?? null)) {
@@ -1015,7 +1008,7 @@ class DebtStatusResolver
      *
      * @return array{mode:string,status:?string,label:string,updated_at:?string,source:?string,severity:int}
      */
-    private function calculateAutoStatus(Tenant $tenant): array
+    private function calculateAutoStatus(Tenant $tenant, bool $useSettlementBalances = true): array
     {
         $settings = $this->getMarketSettings($tenant->market_id);
         $labels = $this->getStatusLabels((int) $tenant->market_id);
@@ -1025,14 +1018,16 @@ class DebtStatusResolver
         $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
 
         // Получаем данные из contract_debts
-        $settlementData = $this->fetchSettlementBalanceData($tenant);
-        if ($settlementData !== null) {
-            return $this->makeResultFromSettlementBalanceData(
-                $settlementData,
-                $labels,
-                (int) $tenant->market_id,
-                'tenant'
-            );
+        if ($useSettlementBalances) {
+            $settlementData = $this->fetchSettlementBalanceData($tenant);
+            if ($settlementData !== null) {
+                return $this->makeResultFromSettlementBalanceData(
+                    $settlementData,
+                    $labels,
+                    (int) $tenant->market_id,
+                    'tenant'
+                );
+            }
         }
 
         $debtsData = $this->fetchDebtsData($tenant);
@@ -1533,9 +1528,11 @@ class DebtStatusResolver
         ];
     }
 
-    private function makeTenantFallbackResult(Tenant $tenant, string $source): ?array
+    private function makeTenantFallbackResult(Tenant $tenant, string $source, bool $useSettlementBalances = true): ?array
     {
-        $tenantResolved = $this->resolve($tenant);
+        $tenantResolved = $useSettlementBalances
+            ? $this->resolve($tenant)
+            : $this->resolveTenantForMapFallback($tenant);
         $tenantStatus = $tenantResolved['status'] ?? null;
 
         if (! in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {
@@ -1554,6 +1551,16 @@ class DebtStatusResolver
             severity: $tenantResolved['severity'],
             extra: $tenantExtra
         );
+    }
+
+    private function resolveTenantForMapFallback(Tenant $tenant): array
+    {
+        $manualResult = $this->checkManualStatus($tenant);
+        if ($manualResult !== null) {
+            return $manualResult;
+        }
+
+        return $this->calculateAutoStatus($tenant, useSettlementBalances: false);
     }
 
     private function isTenantFallbackDebtStatus(?string $status): bool
