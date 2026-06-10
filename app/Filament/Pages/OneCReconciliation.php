@@ -101,7 +101,6 @@ class OneCReconciliation extends Page
      *     rows:list<array<string, mixed>>,
      *     filteredRows:list<array<string, mixed>>,
      *     displayRows:list<array<string, mixed>>,
-     *     tenantGroups:list<array<string, mixed>>,
      *     summary:array<string, float|int>,
      *     filteredSummary:array<string, float|int>,
      *     pagination:array<string, int|string|bool>,
@@ -120,7 +119,6 @@ class OneCReconciliation extends Page
                 'rows' => [],
                 'filteredRows' => [],
                 'displayRows' => [],
-                'tenantGroups' => [],
                 'summary' => $this->emptySummary(),
                 'filteredSummary' => $this->emptySummary(),
                 'pagination' => $this->paginationMeta(0, '10', 1),
@@ -151,7 +149,6 @@ class OneCReconciliation extends Page
             'rows' => $report['rows'],
             'filteredRows' => $filteredRows,
             'displayRows' => $displayRows,
-            'tenantGroups' => $this->groupRowsByTenant($displayRows),
             'summary' => $report['summary'],
             'filteredSummary' => $service->summarize($filteredRows),
             'pagination' => $this->paginationMeta($total, $perPage, $this->page),
@@ -223,46 +220,6 @@ class OneCReconciliation extends Page
         });
 
         return $rows;
-    }
-
-    /**
-     * @param list<array<string, mixed>> $rows
-     * @return list<array{
-     *     tenant_key:string,
-     *     tenant_name:string,
-     *     tenant_url:string|null,
-     *     summary:array<string, float|int>,
-     *     rows:list<array<string, mixed>>
-     * }>
-     */
-    private function groupRowsByTenant(array $rows): array
-    {
-        $groups = [];
-
-        foreach ($rows as $row) {
-            $tenantKey = (string) ($row['tenant_id'] ?? 'none');
-
-            if (! array_key_exists($tenantKey, $groups)) {
-                $groups[$tenantKey] = [
-                    'tenant_key' => $tenantKey,
-                    'tenant_name' => (string) $row['tenant_name'],
-                    'tenant_url' => $row['tenant_url'] ? (string) $row['tenant_url'] : null,
-                    'summary' => $this->emptySummary(),
-                    'rows' => [],
-                ];
-            }
-
-            $groups[$tenantKey]['rows'][] = $row;
-            $groups[$tenantKey]['summary']['accrued'] += (float) $row['accrued'];
-            $groups[$tenantKey]['summary']['paid'] += (float) $row['paid'];
-            $groups[$tenantKey]['summary']['delta'] += (float) $row['delta'];
-            $groups[$tenantKey]['summary']['rows_count']++;
-            $groups[$tenantKey]['summary']['debt_count'] += $row['status'] === 'debt' ? 1 : 0;
-            $groups[$tenantKey]['summary']['overpaid_count'] += $row['status'] === 'overpaid' ? 1 : 0;
-            $groups[$tenantKey]['summary']['closed_count'] += $row['status'] === 'closed' ? 1 : 0;
-        }
-
-        return array_values($groups);
     }
 
     /**
