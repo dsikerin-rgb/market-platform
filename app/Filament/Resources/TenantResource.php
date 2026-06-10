@@ -285,6 +285,19 @@ class TenantResource extends BaseResource
                             ]),
                     ]),
 
+                Tab::make('Оплаты из 1С')
+                    ->schema([
+                        Section::make('Оплаты из 1С')
+                            ->description('Фактические поступления арендатора по счету 62 из 1С.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('tenant_payments_registry')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderTenantPaymentsRegistry($record))
+                                    ->columnSpanFull(),
+                            ]),
+                    ]),
+
                 Tab::make('Контакты')
                     ->schema([
                         Section::make('Контактные данные')
@@ -2999,6 +3012,222 @@ class TenantResource extends BaseResource
             . '<div style="font-size:12px;opacity:.75;line-height:1.2;">' . e($title) . '</div>'
             . '<div style="margin-top:4px;font-size:24px;font-weight:700;line-height:1.15;">' . e($value) . '</div>'
             . '</div>';
+    }
+
+    private static function renderTenantPaymentsRegistry(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Данные появятся после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('tenant_payments')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет таблицы tenant_payments — оплаты из 1С недоступны.</div>');
+        }
+
+        $base = DB::table('tenant_payments')
+            ->where('market_id', (int) $record->market_id)
+            ->where('tenant_id', (int) $record->id);
+
+        $totalCount = (int) ((clone $base)->count());
+        if ($totalCount === 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет оплат, загруженных из 1С.</div>');
+        }
+
+        $latestPeriod = (clone $base)->max('period');
+        $latestBase = (clone $base)->where('period', $latestPeriod);
+
+        $sumAll = (float) ((clone $base)->sum('amount'));
+        $sumLatest = (float) ((clone $latestBase)->sum('amount'));
+        $latestCount = (int) ((clone $latestBase)->count());
+        $latestContracts = (int) ((clone $latestBase)->whereNotNull('tenant_contract_id')->distinct()->count('tenant_contract_id'));
+        $lastImportedAt = (clone $base)->max('imported_at');
+
+        $latestPeriodLabel = '—';
+        if (filled($latestPeriod)) {
+            try {
+                $latestPeriodLabel = Carbon::parse((string) $latestPeriod)->format('m.Y');
+            } catch (Throwable) {
+                $latestPeriodLabel = (string) $latestPeriod;
+            }
+        }
+
+        $lastImportedAtLabel = '—';
+        if (filled($lastImportedAt)) {
+            try {
+                $lastImportedAtLabel = Carbon::parse((string) $lastImportedAt)->format('d.m.Y H:i');
+            } catch (Throwable) {
+                $lastImportedAtLabel = (string) $lastImportedAt;
+            }
+        }
+
+        $summaryCards = [
+            ['label' => 'Последний период', 'value' => $latestPeriodLabel],
+            ['label' => 'Оплачено за последний период', 'value' => static::formatRub($sumLatest)],
+            ['label' => 'Платежей за последний период', 'value' => (string) $latestCount],
+            ['label' => 'Договоров в последнем периоде', 'value' => (string) $latestContracts],
+            ['label' => 'Оплачено за всё время', 'value' => static::formatRub($sumAll)],
+            ['label' => 'Последний импорт', 'value' => $lastImportedAtLabel],
+        ];
+
+        $summaryHtml = '';
+        foreach ($summaryCards as $card) {
+            $summaryHtml .= '<div class="tenant-payments-1c__summary-card">'
+                . '<div class="tenant-payments-1c__summary-label">' . e((string) $card['label']) . '</div>'
+                . '<div class="tenant-payments-1c__summary-value">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $rows = (clone $base)
+            ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'tenant_payments.tenant_contract_id')
+            ->leftJoin('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->select([
+                'tenant_payments.period',
+                'tenant_payments.payment_date',
+                'tenant_payments.document_number',
+                'tenant_payments.payment_external_id',
+                'tenant_payments.contract_external_id',
+                'tenant_payments.organization_name',
+                'tenant_payments.organization_external_id',
+                'tenant_payments.account',
+                'tenant_payments.debit_account',
+                'tenant_payments.amount',
+                'tenant_payments.purpose',
+                'tenant_payments.imported_at',
+                'tc.number as contract_number',
+                'ms.display_name as space_display_name',
+                'ms.number as space_number',
+                'ms.code as space_code',
+            ])
+            ->orderByDesc('tenant_payments.payment_date')
+            ->orderByDesc('tenant_payments.id')
+            ->limit(200)
+            ->get();
+
+        $tableRows = '';
+        foreach ($rows as $row) {
+            $periodLabel = '—';
+            if (filled($row->period ?? null)) {
+                try {
+                    $periodLabel = Carbon::parse((string) $row->period)->format('m.Y');
+                } catch (Throwable) {
+                    $periodLabel = (string) $row->period;
+                }
+            }
+
+            $paymentDateLabel = '—';
+            if (filled($row->payment_date ?? null)) {
+                try {
+                    $paymentDateLabel = Carbon::parse((string) $row->payment_date)->format('d.m.Y');
+                } catch (Throwable) {
+                    $paymentDateLabel = (string) $row->payment_date;
+                }
+            }
+
+            $documentLabel = trim((string) ($row->document_number ?? ''));
+            if ($documentLabel === '') {
+                $documentLabel = trim((string) ($row->payment_external_id ?? ''));
+            }
+            if ($documentLabel === '') {
+                $documentLabel = '—';
+            }
+
+            $contractLabel = trim((string) ($row->contract_number ?? ''));
+            if ($contractLabel === '') {
+                $contractLabel = trim((string) ($row->contract_external_id ?? ''));
+            }
+            if ($contractLabel === '') {
+                $contractLabel = '—';
+            }
+
+            $spaceLabel = trim((string) ($row->space_display_name ?? ''));
+            if ($spaceLabel === '') {
+                $spaceLabel = trim((string) ($row->space_number ?? ''));
+            }
+            if ($spaceLabel === '') {
+                $spaceLabel = trim((string) ($row->space_code ?? ''));
+            }
+            if ($spaceLabel === '') {
+                $spaceLabel = '—';
+            }
+
+            $organizationLabel = trim((string) ($row->organization_name ?? ''));
+            if ($organizationLabel === '') {
+                $organizationLabel = trim((string) ($row->organization_external_id ?? ''));
+            }
+            if ($organizationLabel === '') {
+                $organizationLabel = '—';
+            }
+
+            $debitAccount = trim((string) ($row->debit_account ?? ''));
+            $creditAccount = trim((string) ($row->account ?? ''));
+            $accountsLabel = ($debitAccount !== '' ? $debitAccount : '—') . ' / ' . ($creditAccount !== '' ? $creditAccount : '—');
+
+            $purposeLabel = trim((string) ($row->purpose ?? ''));
+            if ($purposeLabel === '') {
+                $purposeLabel = '—';
+            }
+
+            $tableRows .= '<tr>'
+                . '<td>' . e($periodLabel) . '</td>'
+                . '<td>' . e($paymentDateLabel) . '</td>'
+                . '<td>' . e($documentLabel) . '</td>'
+                . '<td>' . e($contractLabel) . '</td>'
+                . '<td>' . e($spaceLabel) . '</td>'
+                . '<td>' . e($organizationLabel) . '</td>'
+                . '<td>' . e($accountsLabel) . '</td>'
+                . '<td class="tenant-payments-1c__amount">' . e(static::formatRub((float) $row->amount)) . '</td>'
+                . '<td class="tenant-payments-1c__purpose">' . e($purposeLabel) . '</td>'
+                . '</tr>';
+        }
+
+        $limitNote = $totalCount > 200
+            ? '<div class="tenant-payments-1c__note">Показаны последние 200 платежей из ' . e((string) $totalCount) . '.</div>'
+            : '';
+
+        return new HtmlString(
+            '<style>
+                .tenant-payments-1c{display:flex;flex-direction:column;gap:14px}
+                .tenant-payments-1c__summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+                .tenant-payments-1c__summary-card{border:1px solid rgba(148,163,184,.35);border-radius:10px;padding:10px 12px;background:rgba(248,250,252,.75)}
+                .dark .tenant-payments-1c__summary-card{background:rgba(15,23,42,.45)}
+                .tenant-payments-1c__summary-label{font-size:12px;line-height:1.25;color:#64748b}
+                .dark .tenant-payments-1c__summary-label{color:#94a3b8}
+                .tenant-payments-1c__summary-value{margin-top:4px;font-size:20px;font-weight:700;line-height:1.2;color:#0f172a}
+                .dark .tenant-payments-1c__summary-value{color:#e2e8f0}
+                .tenant-payments-1c__table-wrap{overflow:auto;border:1px solid rgba(148,163,184,.35);border-radius:10px}
+                .tenant-payments-1c table{width:100%;min-width:1160px;border-collapse:collapse;font-size:12px;line-height:1.35}
+                .tenant-payments-1c th{position:sticky;top:0;background:#f8fafc;color:#475569;font-weight:700;text-align:left}
+                .dark .tenant-payments-1c th{background:#111827;color:#cbd5e1}
+                .tenant-payments-1c th,.tenant-payments-1c td{padding:9px 10px;border-bottom:1px solid rgba(148,163,184,.25);vertical-align:top}
+                .tenant-payments-1c tr:last-child td{border-bottom:0}
+                .tenant-payments-1c__amount{text-align:right;white-space:nowrap;font-weight:700}
+                .tenant-payments-1c__purpose{min-width:260px}
+                .tenant-payments-1c__note{font-size:12px;color:#64748b}
+                .dark .tenant-payments-1c__note{color:#94a3b8}
+            </style>
+            <div class="tenant-payments-1c">
+                <div class="tenant-payments-1c__summary">' . $summaryHtml . '</div>
+                ' . $limitNote . '
+                <div class="tenant-payments-1c__table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Период</th>
+                                <th>Дата</th>
+                                <th>Документ</th>
+                                <th>Договор</th>
+                                <th>Место</th>
+                                <th>Организация</th>
+                                <th>Дт / Кт</th>
+                                <th class="tenant-payments-1c__amount">Сумма</th>
+                                <th>Назначение платежа</th>
+                            </tr>
+                        </thead>
+                        <tbody>' . $tableRows . '</tbody>
+                    </table>
+                </div>
+            </div>'
+        );
     }
 
     private static function renderOneCSettlements(?Tenant $record): HtmlString
