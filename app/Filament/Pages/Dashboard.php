@@ -11,7 +11,6 @@ use App\Filament\Widgets\MarketAverageRentRateWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\AccrualCompositionWidget;
-use App\Filament\Widgets\OneCAccrualPaymentReconciliationDetailWidget;
 use App\Filament\Widgets\OneCAccrualPaymentReconciliationWidget;
 use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
 use App\Filament\Widgets\OneCPaymentsSummaryWidget;
@@ -203,7 +202,6 @@ class Dashboard extends BaseDashboard
                     \App\Filament\Widgets\RevenueYearChartWidget::class,
                     OneCPaymentsSummaryWidget::class,
                     OneCAccrualPaymentReconciliationWidget::class,
-                    OneCAccrualPaymentReconciliationDetailWidget::class,
                     OneCDebtSnapshotsHistoryWidget::class,
                     AccrualCompositionWidget::class,
                 ]),
@@ -596,26 +594,15 @@ class Dashboard extends BaseDashboard
                 + array_slice($widgets, 3, null, true);
         }
 
-        if (class_exists(OneCAccrualPaymentReconciliationDetailWidget::class)) {
-            $widgets = array_slice($widgets, 0, 4, true)
-                + [
-                    'onec_accrual_payment_reconciliation_detail' => [
-                        'class' => OneCAccrualPaymentReconciliationDetailWidget::class,
-                        'label' => 'Детальная сверка 1С',
-                    ],
-                ]
-                + array_slice($widgets, 4, null, true);
-        }
-
         if (class_exists(AccrualCompositionWidget::class)) {
-            $widgets = array_slice($widgets, 0, 5, true)
+            $widgets = array_slice($widgets, 0, 4, true)
                 + [
                     'accrual_composition' => [
                         'class' => AccrualCompositionWidget::class,
                         'label' => 'Структура начислений',
                     ],
                 ]
-                + array_slice($widgets, 5, null, true);
+                + array_slice($widgets, 4, null, true);
         }
 
         return $widgets;
