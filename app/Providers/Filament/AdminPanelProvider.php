@@ -12,6 +12,7 @@ use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\MarketplaceSettings;
 use App\Filament\Pages\OpsDiagnostics;
 use App\Filament\Pages\OneCReconciliation;
+use App\Filament\Pages\OneCDebtDecisionPreview;
 use App\Filament\Pages\OneCSettlements;
 use App\Filament\Pages\ReportsHub;
 use App\Filament\Pages\Requests;
@@ -148,6 +149,7 @@ class AdminPanelProvider extends PanelProvider
                 MapReviewResults::class,
                 OneCReconciliation::class,
                 OneCSettlements::class,
+                OneCDebtDecisionPreview::class,
                 ReportsHub::class,
                 Requests::class,
                 OpsDiagnostics::class,
