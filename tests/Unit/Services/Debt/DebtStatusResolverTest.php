@@ -754,6 +754,66 @@ class DebtStatusResolverTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_settlement_balance_uses_document_date_for_aging(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $market = Market::create([
+            'name' => 'Settlement aging market',
+            'slug' => 'settlement-aging-market',
+            'settings' => [
+                'debt_monitoring' => [
+                    'grace_days' => 5,
+                    'red_after_days' => 30,
+                ],
+            ],
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Old settlement tenant',
+            'external_id' => 'old-settlement-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => 'old-settlement-contract-001',
+            'contract_name' => 'Old settlement contract',
+            'settlement_document_name' => 'Реализация (акт, накладная, УПД) ЭЯ00-000001 от 01.03.2026 14:00:00',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 0,
+            'opening_credit' => 0,
+            'turnover_debit' => 1000,
+            'turnover_credit' => 0,
+            'closing_debit' => 1000,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'old-settlement-document-date'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertSame('red', $result['status']);
+        $this->assertSame('tenant_settlement_balances', $result['source']);
+        $this->assertGreaterThanOrEqual(90, $result['extra']['overdue_days'] ?? 0);
+
+        Carbon::setTestNow();
+    }
+
     public function test_resolve_for_market_space_ignores_old_inactive_contract_debt_from_previous_tenant(): void
     {
         $previousTenant = Tenant::create([
