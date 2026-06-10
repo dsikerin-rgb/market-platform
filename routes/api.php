@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\OneC\AccrualController;
 use App\Http\Controllers\Api\OneC\ContractDebtController;
 use App\Http\Controllers\Api\OneC\ContractController;
 use App\Http\Controllers\Api\OneC\PaymentController;
+use App\Http\Controllers\Api\OneC\SettlementController;
 
 /*
 |--------------------------------------------------------------------------
@@ -37,3 +38,6 @@ Route::post('1c/accruals', [AccrualController::class, 'store'])
 
 Route::post('1c/payments', [PaymentController::class, 'store'])
     ->name('api.1c.payments.store');
+
+Route::post('1c/settlements', [SettlementController::class, 'store'])
+    ->name('api.1c.settlements.store');
