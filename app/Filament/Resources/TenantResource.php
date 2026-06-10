@@ -3024,23 +3024,23 @@ class TenantResource extends BaseResource
             return new HtmlString('<div style="font-size:13px;opacity:.85;">Нет таблицы tenant_payments — оплаты из 1С недоступны.</div>');
         }
 
-        $base = DB::table('tenant_payments')
-            ->where('market_id', (int) $record->market_id)
-            ->where('tenant_id', (int) $record->id);
+        $base = DB::table('tenant_payments as tp')
+            ->where('tp.market_id', (int) $record->market_id)
+            ->where('tp.tenant_id', (int) $record->id);
 
         $totalCount = (int) ((clone $base)->count());
         if ($totalCount === 0) {
             return new HtmlString('<div style="font-size:13px;opacity:.85;">По арендатору пока нет оплат, загруженных из 1С.</div>');
         }
 
-        $latestPeriod = (clone $base)->max('period');
-        $latestBase = (clone $base)->where('period', $latestPeriod);
+        $latestPeriod = (clone $base)->max('tp.period');
+        $latestBase = (clone $base)->where('tp.period', $latestPeriod);
 
-        $sumAll = (float) ((clone $base)->sum('amount'));
-        $sumLatest = (float) ((clone $latestBase)->sum('amount'));
+        $sumAll = (float) ((clone $base)->sum('tp.amount'));
+        $sumLatest = (float) ((clone $latestBase)->sum('tp.amount'));
         $latestCount = (int) ((clone $latestBase)->count());
-        $latestContracts = (int) ((clone $latestBase)->whereNotNull('tenant_contract_id')->distinct()->count('tenant_contract_id'));
-        $lastImportedAt = (clone $base)->max('imported_at');
+        $latestContracts = (int) ((clone $latestBase)->whereNotNull('tp.tenant_contract_id')->distinct()->count('tp.tenant_contract_id'));
+        $lastImportedAt = (clone $base)->max('tp.imported_at');
 
         $latestPeriodLabel = '—';
         if (filled($latestPeriod)) {
@@ -3078,28 +3078,28 @@ class TenantResource extends BaseResource
         }
 
         $rows = (clone $base)
-            ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'tenant_payments.tenant_contract_id')
+            ->leftJoin('tenant_contracts as tc', 'tc.id', '=', 'tp.tenant_contract_id')
             ->leftJoin('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
             ->select([
-                'tenant_payments.period',
-                'tenant_payments.payment_date',
-                'tenant_payments.document_number',
-                'tenant_payments.payment_external_id',
-                'tenant_payments.contract_external_id',
-                'tenant_payments.organization_name',
-                'tenant_payments.organization_external_id',
-                'tenant_payments.account',
-                'tenant_payments.debit_account',
-                'tenant_payments.amount',
-                'tenant_payments.purpose',
-                'tenant_payments.imported_at',
+                'tp.period',
+                'tp.payment_date',
+                'tp.document_number',
+                'tp.payment_external_id',
+                'tp.contract_external_id',
+                'tp.organization_name',
+                'tp.organization_external_id',
+                'tp.account',
+                'tp.debit_account',
+                'tp.amount',
+                'tp.purpose',
+                'tp.imported_at',
                 'tc.number as contract_number',
                 'ms.display_name as space_display_name',
                 'ms.number as space_number',
                 'ms.code as space_code',
             ])
-            ->orderByDesc('tenant_payments.payment_date')
-            ->orderByDesc('tenant_payments.id')
+            ->orderByDesc('tp.payment_date')
+            ->orderByDesc('tp.id')
             ->limit(200)
             ->get();
 
