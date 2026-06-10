@@ -2,6 +2,7 @@
     @php
         $report = $this->getReport();
         $rows = $report['displayRows'];
+        $tenantGroups = $report['tenantGroups'];
         $pagination = $report['pagination'];
         $summary = $report['filteredSummary'];
         $totalSummary = $report['summary'];
@@ -238,6 +239,41 @@
             border-bottom: 0;
         }
 
+        .onec-tenant-row td {
+            background: #f8fafc;
+            border-bottom-color: #e5e7eb;
+            padding: 12px;
+        }
+
+        .onec-tenant-row + tr td {
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .onec-tenant-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .onec-tenant-title {
+            color: #0f172a;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .onec-tenant-title a {
+            color: inherit;
+        }
+
+        .onec-tenant-meta {
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: right;
+        }
+
         .onec-table a {
             color: #0369a1;
             font-weight: 600;
@@ -333,6 +369,15 @@
                 display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
+
+            .onec-tenant-head {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .onec-tenant-meta {
+                text-align: left;
+            }
         }
     </style>
 
@@ -343,36 +388,36 @@
             </x-slot>
 
             <x-slot name="description">
-                {{ $report['monthLabel'] }} · полный список по арендаторам и договорам
+                {{ $report['monthLabel'] }} · строки сгруппированы по арендаторам, детализация остаётся по договорам
             </x-slot>
         </x-filament::section>
 
         <div class="onec-summary">
             <div class="onec-card">
-                <div class="onec-card-label">Начислено</div>
+                <div class="onec-card-label">Начислено по фильтру</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['accrued']) }}</div>
-                <div class="onec-card-note">Всего: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
+                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Оплачено</div>
+                <div class="onec-card-label">Оплачено по фильтру</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['paid']) }}</div>
-                <div class="onec-card-note">Всего: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
+                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Разница</div>
+                <div class="onec-card-label">Разница по фильтру</div>
                 <div class="onec-card-value {{ ((float) $summary['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $summary['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
                     {{ $formatMoney((float) $summary['delta']) }}
                 </div>
-                <div class="onec-card-note">Всего: {{ $formatMoney((float) $totalSummary['delta']) }}</div>
+                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['delta']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Строки</div>
+                <div class="onec-card-label">Строки по фильтру</div>
                 <div class="onec-card-value">{{ number_format((int) $summary['rows_count'], 0, ',', ' ') }}</div>
                 <div class="onec-card-note">
-                    долг: {{ $summary['debt_count'] }} · переплата: {{ $summary['overpaid_count'] }} · закрыто: {{ $summary['closed_count'] }}
+                    всего за месяц: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }} · долг: {{ $summary['debt_count'] }} · переплата: {{ $summary['overpaid_count'] }} · закрыто: {{ $summary['closed_count'] }}
                 </div>
             </div>
         </div>
@@ -400,11 +445,11 @@
                         class="onec-toolbar-control"
                         aria-label="Статус"
                     >
+                        <option value="all">Все строки</option>
                         <option value="open">Открытые расхождения</option>
                         <option value="debt">Долг</option>
                         <option value="overpaid">Переплата</option>
                         <option value="closed">Закрыто</option>
-                        <option value="all">Все строки</option>
                     </select>
                 </div>
 
@@ -443,46 +488,71 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($rows as $row)
-                                <tr>
-                                    <td class="onec-col-tenant">
-                                        @if ($row['tenant_url'])
-                                            <a href="{{ $row['tenant_url'] }}">
-                                                {{ $row['tenant_name'] }}
-                                            </a>
-                                        @else
-                                            <span>{{ $row['tenant_name'] }}</span>
-                                        @endif
-                                    </td>
+                            @foreach ($tenantGroups as $group)
+                                <tr class="onec-tenant-row">
+                                    <td colspan="7">
+                                        <div class="onec-tenant-head">
+                                            <div class="onec-tenant-title">
+                                                @if ($group['tenant_url'])
+                                                    <a href="{{ $group['tenant_url'] }}">
+                                                        {{ $group['tenant_name'] }}
+                                                    </a>
+                                                @else
+                                                    <span>{{ $group['tenant_name'] }}</span>
+                                                @endif
+                                            </div>
 
-                                    <td class="onec-col-contract">
-                                        @if ($row['contract_url'])
-                                            <a href="{{ $row['contract_url'] }}">
-                                                {{ $row['contract_label'] }}
-                                            </a>
-                                        @else
-                                            <span>{{ $row['contract_label'] }}</span>
-                                        @endif
-                                    </td>
-
-                                    <td class="onec-money">
-                                        {{ $formatMoney((float) $row['accrued']) }}
-                                    </td>
-                                    <td class="onec-money">
-                                        {{ $formatMoney((float) $row['paid']) }}
-                                    </td>
-                                    <td class="onec-money {{ ((float) $row['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $row['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
-                                        {{ $formatMoney((float) $row['delta']) }}
-                                    </td>
-                                    <td>
-                                        <span class="onec-status" style="{{ $statusStyles[$row['status']] ?? $statusStyles['closed'] }}">
-                                            {{ $row['status_label'] }}
-                                        </span>
-                                    </td>
-                                    <td class="onec-count">
-                                        {{ $row['accrual_rows'] }} / {{ $row['payment_rows'] }}
+                                            <div class="onec-tenant-meta">
+                                                {{ $formatMoney((float) $group['summary']['accrued']) }}
+                                                · {{ $formatMoney((float) $group['summary']['paid']) }}
+                                                · {{ $formatMoney((float) $group['summary']['delta']) }}
+                                                · строк: {{ number_format((int) $group['summary']['rows_count'], 0, ',', ' ') }}
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
+
+                                @foreach ($group['rows'] as $row)
+                                    <tr>
+                                        <td class="onec-col-tenant">
+                                            @if ($row['tenant_url'])
+                                                <a href="{{ $row['tenant_url'] }}">
+                                                    {{ $row['tenant_name'] }}
+                                                </a>
+                                            @else
+                                                <span>{{ $row['tenant_name'] }}</span>
+                                            @endif
+                                        </td>
+
+                                        <td class="onec-col-contract">
+                                            @if ($row['contract_url'])
+                                                <a href="{{ $row['contract_url'] }}">
+                                                    {{ $row['contract_label'] }}
+                                                </a>
+                                            @else
+                                                <span>{{ $row['contract_label'] }}</span>
+                                            @endif
+                                        </td>
+
+                                        <td class="onec-money">
+                                            {{ $formatMoney((float) $row['accrued']) }}
+                                        </td>
+                                        <td class="onec-money">
+                                            {{ $formatMoney((float) $row['paid']) }}
+                                        </td>
+                                        <td class="onec-money {{ ((float) $row['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $row['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
+                                            {{ $formatMoney((float) $row['delta']) }}
+                                        </td>
+                                        <td>
+                                            <span class="onec-status" style="{{ $statusStyles[$row['status']] ?? $statusStyles['closed'] }}">
+                                                {{ $row['status_label'] }}
+                                            </span>
+                                        </td>
+                                        <td class="onec-count">
+                                            {{ $row['accrual_rows'] }} / {{ $row['payment_rows'] }}
+                                        </td>
+                                    </tr>
+                                @endforeach
                             @endforeach
                         </tbody>
                     </table>
