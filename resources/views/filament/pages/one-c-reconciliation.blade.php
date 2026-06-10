@@ -403,25 +403,25 @@
 
         <div class="onec-summary">
             <div class="onec-card">
-                <div class="onec-card-label">Начисления</div>
+                <div class="onec-card-label">Начисления по фильтру</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['accrued']) }}</div>
                 <div class="onec-card-note">Всего за период: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Оплаты</div>
+                <div class="onec-card-label">Оплаты по фильтру</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['paid']) }}</div>
                 <div class="onec-card-note">Всего за период: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Документы</div>
+                <div class="onec-card-label">Документы по фильтру</div>
                 <div class="onec-card-value">{{ number_format((int) $summary['rows_count'], 0, ',', ' ') }}</div>
                 <div class="onec-card-note">Всего за период: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Состав</div>
+                <div class="onec-card-label">Состав по фильтру</div>
                 <div class="onec-card-value">
                     {{ number_format((int) $summary['accrual_count'], 0, ',', ' ') }} / {{ number_format((int) $summary['payment_count'], 0, ',', ' ') }}
                 </div>
