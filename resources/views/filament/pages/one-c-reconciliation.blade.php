@@ -68,6 +68,42 @@
             width: auto;
         }
 
+        .onec-type-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 44px;
+            border: 1px solid #d1d5db;
+            border-radius: 14px;
+            background: #fff;
+            padding: 6px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+        }
+
+        .onec-type-filter-button {
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #4b5563;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 20px;
+            min-height: 32px;
+            padding: 6px 12px;
+            white-space: nowrap;
+        }
+
+        .onec-type-filter-button:hover {
+            background: #f9fafb;
+            color: #0369a1;
+        }
+
+        .onec-type-filter-button.is-active {
+            background: #f3f4f6;
+            color: #0369a1;
+        }
+
         .onec-search {
             position: relative;
             width: min(360px, 100%);
@@ -328,8 +364,13 @@
 
             .onec-toolbar-filters,
             .onec-toolbar-control,
+            .onec-type-filter,
             .onec-search {
                 width: 100%;
+            }
+
+            .onec-type-filter {
+                overflow-x: auto;
             }
 
             .onec-table-footer {
@@ -409,15 +450,32 @@
                         aria-label="Дата по"
                     >
 
-                    <select
-                        wire:model.live="type"
-                        class="onec-toolbar-control"
-                        aria-label="Тип документа"
-                    >
-                        <option value="all">Все документы</option>
-                        <option value="accrual">Начисления</option>
-                        <option value="payment">Оплаты</option>
-                    </select>
+                    <div class="onec-type-filter" aria-label="Тип документа">
+                        <button
+                            type="button"
+                            wire:click="$set('type', 'all')"
+                            aria-pressed="{{ $this->type === 'all' ? 'true' : 'false' }}"
+                            class="onec-type-filter-button {{ $this->type === 'all' ? 'is-active' : '' }}"
+                        >
+                            Все документы
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="$set('type', 'accrual')"
+                            aria-pressed="{{ $this->type === 'accrual' ? 'true' : 'false' }}"
+                            class="onec-type-filter-button {{ $this->type === 'accrual' ? 'is-active' : '' }}"
+                        >
+                            Начисления
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="$set('type', 'payment')"
+                            aria-pressed="{{ $this->type === 'payment' ? 'true' : 'false' }}"
+                            class="onec-type-filter-button {{ $this->type === 'payment' ? 'is-active' : '' }}"
+                        >
+                            Оплаты
+                        </button>
+                    </div>
                 </div>
 
                 <label class="onec-search">
