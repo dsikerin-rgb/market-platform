@@ -4,7 +4,7 @@
     </x-slot>
 
     <x-slot name="description">
-        {{ $monthLabel }} · по арендаторам и договорам
+        {{ $monthLabel }} · топ {{ $rowLimit }} расхождений по арендаторам и договорам
     </x-slot>
 
     @php
@@ -46,6 +46,17 @@
             </div>
         </div>
 
+        @if (filled($fullUrl))
+            <div>
+                <a
+                    href="{{ $fullUrl }}"
+                    class="inline-flex items-center rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-gray-950"
+                >
+                    Открыть полную сверку
+                </a>
+            </div>
+        @endif
+
         @if (filled($emptyReason))
             <div class="rounded-lg border border-dashed border-gray-300 p-6 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
                 {{ $emptyReason }}
@@ -65,12 +76,13 @@
                             <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Оплачено</th>
                             <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Разница</th>
                             <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Статус</th>
+                            <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Строки</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 bg-white dark:divide-gray-800 dark:bg-gray-950">
                         @foreach ($rows as $row)
                             <tr>
-                                <td class="max-w-xs px-4 py-3 align-top">
+                                <td class="max-w-sm px-4 py-3 align-top">
                                     @if ($row['tenant_url'])
                                         <a href="{{ $row['tenant_url'] }}" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
                                             {{ $row['tenant_name'] }}
@@ -78,12 +90,9 @@
                                     @else
                                         <span class="font-medium text-gray-950 dark:text-white">{{ $row['tenant_name'] }}</span>
                                     @endif
-                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        начислений: {{ $row['accrual_rows'] }} · оплат: {{ $row['payment_rows'] }}
-                                    </div>
                                 </td>
 
-                                <td class="max-w-xs px-4 py-3 align-top">
+                                <td class="max-w-sm px-4 py-3 align-top">
                                     @if ($row['contract_url'])
                                         <a href="{{ $row['contract_url'] }}" class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
                                             {{ $row['contract_label'] }}
@@ -91,24 +100,24 @@
                                     @else
                                         <span class="text-gray-700 dark:text-gray-200">{{ $row['contract_label'] }}</span>
                                     @endif
-                                    @if (filled($row['contract_external_id']))
-                                        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">1С: {{ $row['contract_external_id'] }}</div>
-                                    @endif
                                 </td>
 
-                                <td class="px-4 py-3 text-right align-top font-medium tabular-nums text-gray-950 dark:text-white">
+                                <td class="whitespace-nowrap px-4 py-3 text-right align-top font-medium tabular-nums text-gray-950 dark:text-white">
                                     {{ $formatMoney((float) $row['accrued']) }}
                                 </td>
-                                <td class="px-4 py-3 text-right align-top font-medium tabular-nums text-gray-950 dark:text-white">
+                                <td class="whitespace-nowrap px-4 py-3 text-right align-top font-medium tabular-nums text-gray-950 dark:text-white">
                                     {{ $formatMoney((float) $row['paid']) }}
                                 </td>
-                                <td class="px-4 py-3 text-right align-top font-semibold tabular-nums {{ ((float) $row['delta']) > 0.009 ? 'text-danger-600 dark:text-danger-300' : (((float) $row['delta']) < -0.009 ? 'text-warning-600 dark:text-warning-300' : 'text-success-600 dark:text-success-300') }}">
+                                <td class="whitespace-nowrap px-4 py-3 text-right align-top font-semibold tabular-nums {{ ((float) $row['delta']) > 0.009 ? 'text-danger-600 dark:text-danger-300' : (((float) $row['delta']) < -0.009 ? 'text-warning-600 dark:text-warning-300' : 'text-success-600 dark:text-success-300') }}">
                                     {{ $formatMoney((float) $row['delta']) }}
                                 </td>
                                 <td class="px-4 py-3 align-top">
                                     <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset {{ $statusClasses[$row['status']] ?? $statusClasses['closed'] }}">
                                         {{ $row['status_label'] }}
                                     </span>
+                                </td>
+                                <td class="px-4 py-3 text-right align-top text-xs tabular-nums text-gray-500 dark:text-gray-400">
+                                    {{ $row['accrual_rows'] }} / {{ $row['payment_rows'] }}
                                 </td>
                             </tr>
                         @endforeach
@@ -118,7 +127,11 @@
 
             @if ($hasMoreRows)
                 <div class="text-xs text-gray-500 dark:text-gray-400">
-                    Показаны первые {{ $rowLimit }} строк по величине расхождения, скрыто ещё {{ number_format($hiddenRowsCount, 0, ',', ' ') }}.
+                    Показаны первые {{ $rowLimit }} строк по величине расхождения, скрыто ещё {{ number_format($hiddenRowsCount, 0, ',', ' ') }}. В колонке «Строки»: начисления / оплаты.
+                </div>
+            @else
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                    В колонке «Строки»: начисления / оплаты.
                 </div>
             @endif
         @endif

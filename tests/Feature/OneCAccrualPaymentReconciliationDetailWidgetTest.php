@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\OneCReconciliation;
 use App\Filament\Widgets\OneCAccrualPaymentReconciliationDetailWidget;
 use App\Models\Market;
 use App\Models\Tenant;
@@ -12,6 +13,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class OneCAccrualPaymentReconciliationDetailWidgetTest extends TestCase
@@ -48,6 +50,8 @@ class OneCAccrualPaymentReconciliationDetailWidgetTest extends TestCase
             'market_id' => (int) $market->id,
             'email' => 'reconciliation-detail-widget@example.test',
         ]);
+        Role::findOrCreate('market-operator', 'web');
+        $user->assignRole('market-operator');
 
         DB::table('tenant_accruals')->insert([
             'market_id' => (int) $market->id,
@@ -115,5 +119,11 @@ class OneCAccrualPaymentReconciliationDetailWidgetTest extends TestCase
         $this->assertSame(400.00, $data['summary']['paid']);
         $this->assertSame(600.00, $data['summary']['delta']);
         $this->assertSame(1, $data['summary']['debt_count']);
+
+        $this->get(OneCReconciliation::getUrl(['period' => '2026-05']))
+            ->assertOk()
+            ->assertSee('Сверка начислений и оплат 1С')
+            ->assertSee('Tenant short')
+            ->assertSee('№ D-1');
     }
 }
