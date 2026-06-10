@@ -57,6 +57,9 @@ class DraftDebtDecisionsCommand extends Command
             'current_map_statuses' => [],
             'osv_candidate_statuses' => [],
             'scope_candidates' => [],
+            'mismatch_reasons' => [],
+            'severity_changes' => [],
+            'scope_changes' => [],
             'mismatches' => 0,
         ];
 
@@ -80,13 +83,23 @@ class DraftDebtDecisionsCommand extends Command
             $candidateStatus = (string) ($candidate['status'] ?? 'none');
             $candidateScope = (string) ($candidate['scope'] ?? 'none');
             $isMismatch = $candidateStatus !== 'none' && $candidateStatus !== $currentStatus;
+            $mismatchReason = $this->classifyMismatch($current, $candidate);
+            $severityChange = $this->severityChange($currentStatus, $candidateStatus);
+            $scopeChange = sprintf(
+                '%s -> %s',
+                (string) (data_get($current, 'extra.scope') ?? 'none'),
+                $candidateScope,
+            );
 
             $summary['current_map_statuses'][$currentStatus] = ($summary['current_map_statuses'][$currentStatus] ?? 0) + 1;
             $summary['osv_candidate_statuses'][$candidateStatus] = ($summary['osv_candidate_statuses'][$candidateStatus] ?? 0) + 1;
             $summary['scope_candidates'][$candidateScope] = ($summary['scope_candidates'][$candidateScope] ?? 0) + 1;
+            $summary['scope_changes'][$scopeChange] = ($summary['scope_changes'][$scopeChange] ?? 0) + 1;
 
             if ($isMismatch) {
                 $summary['mismatches']++;
+                $summary['mismatch_reasons'][$mismatchReason] = ($summary['mismatch_reasons'][$mismatchReason] ?? 0) + 1;
+                $summary['severity_changes'][$severityChange] = ($summary['severity_changes'][$severityChange] ?? 0) + 1;
             }
 
             if ($onlyMismatches && ! $isMismatch) {
@@ -110,12 +123,17 @@ class DraftDebtDecisionsCommand extends Command
                 ],
                 'osv_candidate' => $candidate,
                 'mismatch' => $isMismatch,
+                'mismatch_reason' => $isMismatch ? $mismatchReason : null,
+                'severity_change' => $isMismatch ? $severityChange : null,
             ];
         }
 
         ksort($summary['current_map_statuses']);
         ksort($summary['osv_candidate_statuses']);
         ksort($summary['scope_candidates']);
+        arsort($summary['mismatch_reasons']);
+        ksort($summary['severity_changes']);
+        ksort($summary['scope_changes']);
 
         $payload = [
             'summary' => $summary,
@@ -292,6 +310,88 @@ class DraftDebtDecisionsCommand extends Command
             'contracts' => $rows->pluck('contract_external_id')->filter()->unique()->values()->all(),
             'latest_period_to' => (string) $rows->max('period_to'),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $current
+     * @param array<string, mixed> $candidate
+     */
+    private function classifyMismatch(array $current, array $candidate): string
+    {
+        $currentStatus = (string) ($current['status'] ?? 'none');
+        $candidateStatus = (string) ($candidate['status'] ?? 'none');
+
+        if ($candidateStatus === 'none') {
+            return 'osv_no_candidate';
+        }
+
+        if ($candidateStatus === $currentStatus) {
+            return 'same_status';
+        }
+
+        $currentScope = (string) (data_get($current, 'extra.scope') ?? 'none');
+        $candidateScope = (string) ($candidate['scope'] ?? 'none');
+        $currentDebt = (float) (data_get($current, 'extra.debt_amount') ?? 0);
+        $candidateDebt = (float) ($candidate['debt_amount'] ?? 0);
+        $currentOverdueDays = data_get($current, 'extra.overdue_days');
+        $candidateOverdueDays = $candidate['overdue_days'] ?? null;
+
+        if ($candidateStatus === 'green' && $currentStatus !== 'green') {
+            return 'osv_closed_or_credit_while_current_map_has_debt';
+        }
+
+        if (in_array($currentStatus, ['green', 'gray'], true) && $candidateDebt > 0.009) {
+            return 'osv_has_debt_missing_from_current_map';
+        }
+
+        if ($currentStatus === 'red' && in_array($candidateStatus, ['pending', 'orange', 'green', 'gray'], true)) {
+            return 'current_map_more_severe_than_osv';
+        }
+
+        if (
+            in_array($currentStatus, ['pending', 'orange'], true)
+            && $candidateStatus === 'red'
+            && is_numeric($currentOverdueDays)
+            && is_numeric($candidateOverdueDays)
+            && (float) $candidateOverdueDays > ((float) $currentOverdueDays + 20)
+        ) {
+            return 'osv_document_date_makes_debt_much_older';
+        }
+
+        if ($currentScope !== $candidateScope) {
+            return 'scope_differs';
+        }
+
+        if (abs($currentDebt - $candidateDebt) > 1.0) {
+            return 'debt_amount_differs';
+        }
+
+        return 'status_bucket_differs';
+    }
+
+    private function severityChange(string $currentStatus, string $candidateStatus): string
+    {
+        $rank = [
+            'none' => 0,
+            'gray' => 1,
+            'green' => 2,
+            'pending' => 3,
+            'orange' => 4,
+            'red' => 5,
+        ];
+
+        $currentRank = $rank[$currentStatus] ?? 0;
+        $candidateRank = $rank[$candidateStatus] ?? 0;
+
+        if ($candidateRank > $currentRank) {
+            return 'more_severe';
+        }
+
+        if ($candidateRank < $currentRank) {
+            return 'less_severe';
+        }
+
+        return 'same_severity';
     }
 
     /**
