@@ -576,6 +576,184 @@ class DebtStatusResolverTest extends TestCase
         $this->assertEquals($result1['label'], $result3['label']);
     }
 
+    public function test_settlement_balance_is_preferred_over_contract_debts(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Settlement tenant',
+            'external_id' => 'settlement-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'settlement-contract-001',
+            'period' => '2026-06',
+            'account' => '62',
+            'accrued_amount' => 1000,
+            'paid_amount' => 1000,
+            'debt_amount' => 0,
+            'calculated_at' => Carbon::now(),
+            'created_at' => Carbon::now(),
+            'hash' => sha1('contract-debts-green-fallback'),
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => 'settlement-contract-001',
+            'contract_name' => 'Settlement contract',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 1000,
+            'opening_credit' => 0,
+            'turnover_debit' => 0,
+            'turnover_credit' => 0,
+            'closing_debit' => 1000,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'settlement-balance-preferred'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertSame('orange', $result['status']);
+        $this->assertSame('tenant_settlement_balances', $result['source']);
+        $this->assertSame('tenant', $result['extra']['scope'] ?? null);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_security_deposit_settlement_account_is_not_rent_debt(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Security deposit tenant',
+            'external_id' => 'security-deposit-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => 'security-deposit-contract-001',
+            'contract_name' => 'Security deposit contract',
+            'account' => '76.06',
+            'currency' => 'RUB',
+            'opening_debit' => 50000,
+            'opening_credit' => 0,
+            'turnover_debit' => 0,
+            'turnover_credit' => 0,
+            'closing_debit' => 50000,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'security-deposit-is-not-rent-debt'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolve($tenant);
+
+        $this->assertNotSame('tenant_settlement_balances', $result['source']);
+        $this->assertNotContains($result['status'], ['pending', 'orange', 'red']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_market_space_status_uses_settlement_balance_for_active_contract(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Space settlement tenant',
+            'external_id' => 'space-settlement-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'S-101',
+            'code' => 'space-settlement-101',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'space-settlement-contract-001',
+            'number' => 'SSC-001',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => Carbon::now()->subMonth(),
+            'ends_at' => null,
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => $contract->external_id,
+            'contract_name' => 'Space settlement contract',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 0,
+            'opening_credit' => 0,
+            'turnover_debit' => 1200,
+            'turnover_credit' => 0,
+            'closing_debit' => 1200,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'space-settlement-balance'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertSame('orange', $result['status']);
+        $this->assertSame('tenant_settlement_balances', $result['source']);
+        $this->assertSame('space', $result['extra']['scope'] ?? null);
+
+        Carbon::setTestNow();
+    }
+
     public function test_resolve_for_market_space_ignores_old_inactive_contract_debt_from_previous_tenant(): void
     {
         $previousTenant = Tenant::create([

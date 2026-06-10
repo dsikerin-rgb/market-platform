@@ -40,6 +40,8 @@ class DebtStatusResolver
 
     private const STATUS_GRAY = 'gray';
 
+    private const SETTLEMENT_DEBT_SOURCE = 'tenant_settlement_balances';
+
     /**
      * Метки статусов.
      */
@@ -194,6 +196,16 @@ class DebtStatusResolver
         }
 
         // Проверяем наличие таблицы contract_debts
+        $settlementData = $this->fetchSettlementBalanceData($tenant, $contractExternalIds);
+        if ($settlementData !== null) {
+            return $this->makeResultFromSettlementBalanceData(
+                $settlementData,
+                $labels,
+                $marketId,
+                'space'
+            );
+        }
+
         if (! Schema::hasTable('contract_debts')) {
             // Таблица отсутствует — нейтральный результат (scope=none)
             return $this->makeResult(
@@ -681,6 +693,228 @@ class DebtStatusResolver
             ));
     }
 
+    private function fetchSettlementBalanceData(Tenant $tenant, ?Collection $contractExternalIds = null): ?array
+    {
+        if (
+            ! Schema::hasTable('tenant_settlement_balances')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'tenant_id')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'contract_external_id')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'account')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'period_to')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'closing_debit')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'closing_credit')
+        ) {
+            return null;
+        }
+
+        $marketId = (int) $tenant->market_id;
+        if ($marketId <= 0) {
+            return null;
+        }
+
+        $latestPerAccount = DB::table('tenant_settlement_balances as latest')
+            ->select('latest.account')
+            ->selectRaw('MAX(latest.period_to) as latest_period_to')
+            ->where('latest.market_id', $marketId)
+            ->groupBy('latest.account');
+        $this->applySettlementDebtAccountFilter($latestPerAccount, 'latest.account');
+
+        $query = DB::table('tenant_settlement_balances as tsb')
+            ->joinSub($latestPerAccount, 'latest_settlements', function ($join): void {
+                $join->on('tsb.account', '=', 'latest_settlements.account')
+                    ->on('tsb.period_to', '=', 'latest_settlements.latest_period_to');
+            })
+            ->where('tsb.market_id', $marketId);
+
+        if ($contractExternalIds !== null) {
+            $ids = $contractExternalIds
+                ->map(static fn (mixed $value): string => trim((string) $value))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($ids === []) {
+                return null;
+            }
+
+            $query->whereIn('tsb.contract_external_id', $ids);
+        } else {
+            $query->where('tsb.tenant_id', (int) $tenant->id);
+        }
+
+        $rows = $query
+            ->select([
+                'tsb.account',
+                'tsb.period_from',
+                'tsb.period_to',
+                'tsb.imported_at',
+                'tsb.opening_debit',
+                'tsb.opening_credit',
+                'tsb.turnover_debit',
+                'tsb.turnover_credit',
+                'tsb.closing_debit',
+                'tsb.closing_credit',
+            ])
+            ->selectRaw('(COALESCE(tsb.closing_debit, 0) - COALESCE(tsb.closing_credit, 0)) as debt_amount')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $snapshotAt = $rows->max('imported_at');
+        $snapshotLabel = null;
+        if ($snapshotAt) {
+            try {
+                $snapshotLabel = Carbon::parse($snapshotAt)->format('d.m.Y H:i');
+            } catch (\Throwable) {
+                $snapshotLabel = (string) $snapshotAt;
+            }
+        }
+
+        return [
+            'rows' => $rows,
+            'snapshot_label' => $snapshotLabel,
+            'latest_period_to' => (string) $rows->max('period_to'),
+        ];
+    }
+
+    private function applySettlementDebtAccountFilter(\Illuminate\Database\Query\Builder $query, string $column): void
+    {
+        $query->where(function (\Illuminate\Database\Query\Builder $accounts) use ($column): void {
+            $accounts->whereIn($column, ContractDebt::CALCULATION_ACCOUNTS);
+
+            foreach (ContractDebt::CALCULATION_ACCOUNT_PREFIXES as $prefix) {
+                $accounts->orWhere($column, 'like', $prefix . '%');
+            }
+        });
+    }
+
+    private function makeResultFromSettlementBalanceData(array $data, array $labels, int $marketId, string $scope): array
+    {
+        $settings = $this->getMarketSettings($marketId);
+        $graceDays = $settings['grace_days'] ?? 5;
+        $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
+        $redAfterDays = $settings['red_after_days'] ?? 30;
+        $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
+        /** @var Collection $rows */
+        $rows = $data['rows'];
+
+        $netDebtAmount = (float) $rows->sum('debt_amount');
+        $extra = [
+            'debt_amount' => $netDebtAmount,
+            'scope' => $scope,
+            'accounts' => $rows->pluck('account')->filter()->unique()->values()->all(),
+            'latest_period_to' => $data['latest_period_to'] ?? null,
+        ];
+
+        if ($netDebtAmount <= 0.009) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: $labels[self::STATUS_GREEN],
+                updatedAt: $data['snapshot_label'] ?? null,
+                source: self::SETTLEMENT_DEBT_SOURCE,
+                severity: 0,
+                extra: $extra
+            );
+        }
+
+        if ($netDebtAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: $labels[self::STATUS_GREEN],
+                updatedAt: $data['snapshot_label'] ?? null,
+                source: self::SETTLEMENT_DEBT_SOURCE . ': debt below threshold',
+                severity: 0,
+                extra: $extra + ['minimum_debt_amount' => $minimumDebtAmount]
+            );
+        }
+
+        $dueDate = $this->calculateSettlementDueDate($rows, (int) $graceDays);
+        if ($dueDate === null) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: $labels[self::STATUS_GRAY],
+                updatedAt: $data['snapshot_label'] ?? null,
+                source: self::SETTLEMENT_DEBT_SOURCE . ': no due date',
+                severity: 0,
+                extra: $extra
+            );
+        }
+
+        $now = Carbon::now();
+        if (! $now->gt($dueDate)) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $data['snapshot_label'] ?? null,
+                source: self::SETTLEMENT_DEBT_SOURCE,
+                severity: 1,
+                extra: $extra + ['overdue_days' => 0]
+            );
+        }
+
+        $daysOverdue = $dueDate->diffInDays($now);
+        $extra += ['overdue_days' => $daysOverdue];
+
+        if ($daysOverdue >= $redAfterDays) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_RED,
+                label: $labels[self::STATUS_RED],
+                updatedAt: $data['snapshot_label'] ?? null,
+                source: self::SETTLEMENT_DEBT_SOURCE,
+                severity: 3,
+                extra: $extra
+            );
+        }
+
+        if ($daysOverdue >= $yellowAfterDays) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_ORANGE,
+                label: $labels[self::STATUS_ORANGE],
+                updatedAt: $data['snapshot_label'] ?? null,
+                source: self::SETTLEMENT_DEBT_SOURCE,
+                severity: 2,
+                extra: $extra
+            );
+        }
+
+        return $this->makeResult(
+            mode: 'auto',
+            status: self::STATUS_PENDING,
+            label: $labels[self::STATUS_PENDING],
+            updatedAt: $data['snapshot_label'] ?? null,
+            source: self::SETTLEMENT_DEBT_SOURCE,
+            severity: 1,
+            extra: $extra
+        );
+    }
+
+    private function calculateSettlementDueDate(Collection $rows, int $graceDays): ?Carbon
+    {
+        $positiveRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+
+        $periodFrom = $positiveRows->min('period_from');
+        if (! $periodFrom) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($periodFrom)->startOfDay()->addDays($graceDays);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public function getAggregateStatusForTenant(Tenant $tenant): array
     {
         $baseResult = $this->resolve($tenant);
@@ -757,6 +991,16 @@ class DebtStatusResolver
         $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
 
         // Получаем данные из contract_debts
+        $settlementData = $this->fetchSettlementBalanceData($tenant);
+        if ($settlementData !== null) {
+            return $this->makeResultFromSettlementBalanceData(
+                $settlementData,
+                $labels,
+                (int) $tenant->market_id,
+                'tenant'
+            );
+        }
+
         $debtsData = $this->fetchDebtsData($tenant);
 
         if ($debtsData === null) {
