@@ -178,23 +178,23 @@ class OneCIntegrationExchangeNotification extends Notification
         $parts = [];
 
         if ($counters['received'] !== null) {
-            $parts[] = 'R:' . $counters['received'];
+            $parts[] = 'получено: ' . $counters['received'];
         }
 
         if ($counters['inserted'] !== null) {
-            $parts[] = 'I:' . $counters['inserted'];
+            $parts[] = 'добавлено: ' . $counters['inserted'];
         }
 
         if ($counters['created'] !== null) {
-            $parts[] = 'C:' . $counters['created'];
+            $parts[] = 'создано: ' . $counters['created'];
         }
 
         if ($counters['updated'] !== null) {
-            $parts[] = 'U:' . $counters['updated'];
+            $parts[] = 'обновлено: ' . $counters['updated'];
         }
 
         if ($counters['skipped'] !== null) {
-            $parts[] = 'S:' . $counters['skipped'];
+            $parts[] = 'пропущено: ' . $counters['skipped'];
         }
 
         return $parts === [] ? '—' : implode(' · ', $parts);
@@ -205,20 +205,26 @@ class OneCIntegrationExchangeNotification extends Notification
         return match ((string) $this->exchange->entity_type) {
             'contract_debts' => 'Долги',
             'contracts' => 'Договоры',
+            'accruals' => 'Начисления',
+            'payments' => 'Оплаты',
             default => (string) $this->exchange->entity_type,
         };
     }
 
     private function directionLabel(): string
     {
-        return mb_strtoupper((string) $this->exchange->direction);
+        return match ((string) $this->exchange->direction) {
+            IntegrationExchange::DIRECTION_IN => 'Входящий',
+            IntegrationExchange::DIRECTION_OUT => 'Исходящий',
+            default => (string) $this->exchange->direction,
+        };
     }
 
     private function statusLabel(): string
     {
         return match ((string) $this->exchange->status) {
-            IntegrationExchange::STATUS_OK => 'OK',
-            IntegrationExchange::STATUS_ERROR => 'ERROR',
+            IntegrationExchange::STATUS_OK => 'Успешно',
+            IntegrationExchange::STATUS_ERROR => 'Ошибка',
             IntegrationExchange::STATUS_IN_PROGRESS => 'В работе',
             default => (string) $this->exchange->status,
         };
