@@ -6,10 +6,20 @@
         $summary = $report['filteredSummary'];
         $totalSummary = $report['summary'];
         $formatMoney = static fn (float $value): string => number_format($value, abs($value - round($value)) < 0.01 ? 0 : 2, ',', ' ') . ' ₽';
-        $statusStyles = [
-            'debt' => 'background:#fee2e2;color:#991b1b;border-color:#fecaca;',
-            'overpaid' => 'background:#fef3c7;color:#92400e;border-color:#fde68a;',
-            'closed' => 'background:#dcfce7;color:#166534;border-color:#bbf7d0;',
+        $formatDate = static function (?string $value): string {
+            if (blank($value)) {
+                return '—';
+            }
+
+            try {
+                return \Carbon\CarbonImmutable::parse($value)->format('d.m.Y');
+            } catch (\Throwable) {
+                return (string) $value;
+            }
+        };
+        $typeStyles = [
+            'accrual' => 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;',
+            'payment' => 'background:#dcfce7;color:#166534;border-color:#bbf7d0;',
         ];
     @endphp
 
@@ -60,7 +70,7 @@
 
         .onec-search {
             position: relative;
-            width: min(320px, 100%);
+            width: min(360px, 100%);
         }
 
         .onec-search-input {
@@ -207,7 +217,7 @@
 
         .onec-table {
             width: 100%;
-            min-width: 980px;
+            min-width: 1180px;
             border-collapse: collapse;
             background: #fff;
             font-size: 13px;
@@ -255,18 +265,33 @@
         }
 
         .onec-col-contract {
-            min-width: 320px;
+            min-width: 260px;
+            max-width: 380px;
+        }
+
+        .onec-col-basis {
+            min-width: 280px;
             max-width: 460px;
         }
 
+        .onec-muted {
+            color: #6b7280;
+            font-size: 12px;
+            line-height: 1.35;
+            margin-top: 4px;
+        }
+
         .onec-money,
-        .onec-count {
+        .onec-date {
             font-variant-numeric: tabular-nums;
-            text-align: right;
             white-space: nowrap;
         }
 
-        .onec-status {
+        .onec-money {
+            text-align: right;
+        }
+
+        .onec-type {
             display: inline-flex;
             border: 1px solid;
             border-radius: 999px;
@@ -283,18 +308,6 @@
             color: #4b5563;
             font-size: 14px;
             padding: 24px;
-        }
-
-        .onec-delta-positive {
-            color: #dc2626;
-        }
-
-        .onec-delta-negative {
-            color: #d97706;
-        }
-
-        .onec-delta-zero {
-            color: #16a34a;
         }
 
         @media (max-width: 1100px) {
@@ -339,68 +352,71 @@
     <div class="onec-reconciliation">
         <x-filament::section>
             <x-slot name="heading">
-                Сверка начислений и оплат 1С
+                Журнал документов 1С
             </x-slot>
 
             <x-slot name="description">
-                {{ $report['monthLabel'] }} · полный список по арендаторам и договорам
+                {{ $report['periodLabel'] }} · документы начислений и оплат, загруженные из 1С
             </x-slot>
         </x-filament::section>
 
         <div class="onec-summary">
             <div class="onec-card">
-                <div class="onec-card-label">Начислено по фильтру</div>
+                <div class="onec-card-label">Начисления</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['accrued']) }}</div>
-                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
+                <div class="onec-card-note">Всего за период: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Оплачено по фильтру</div>
+                <div class="onec-card-label">Оплаты</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['paid']) }}</div>
-                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
+                <div class="onec-card-note">Всего за период: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Разница по фильтру</div>
-                <div class="onec-card-value {{ ((float) $summary['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $summary['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
-                    {{ $formatMoney((float) $summary['delta']) }}
-                </div>
-                <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['delta']) }}</div>
-            </div>
-
-            <div class="onec-card">
-                <div class="onec-card-label">Строки по фильтру</div>
+                <div class="onec-card-label">Документы</div>
                 <div class="onec-card-value">{{ number_format((int) $summary['rows_count'], 0, ',', ' ') }}</div>
-                <div class="onec-card-note">
-                    всего за месяц: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }} · долг: {{ $summary['debt_count'] }} · переплата: {{ $summary['overpaid_count'] }} · закрыто: {{ $summary['closed_count'] }}
+                <div class="onec-card-note">Всего за период: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }}</div>
+            </div>
+
+            <div class="onec-card">
+                <div class="onec-card-label">Состав</div>
+                <div class="onec-card-value">
+                    {{ number_format((int) $summary['accrual_count'], 0, ',', ' ') }} / {{ number_format((int) $summary['payment_count'], 0, ',', ' ') }}
                 </div>
+                <div class="onec-card-note">начисления / оплаты</div>
             </div>
         </div>
 
         <x-filament::section>
             <x-slot name="heading">
-                Детализация
+                Документы за период
             </x-slot>
 
             <div class="onec-toolbar">
                 <div class="onec-toolbar-filters">
                     <input
-                        type="month"
-                        wire:model.live="period"
+                        type="date"
+                        wire:model.live="fromDate"
                         class="onec-toolbar-control"
-                        aria-label="Период"
+                        aria-label="Дата с"
+                    >
+
+                    <input
+                        type="date"
+                        wire:model.live="toDate"
+                        class="onec-toolbar-control"
+                        aria-label="Дата по"
                     >
 
                     <select
-                        wire:model.live="status"
+                        wire:model.live="type"
                         class="onec-toolbar-control"
-                        aria-label="Статус"
+                        aria-label="Тип документа"
                     >
-                        <option value="all">Все строки</option>
-                        <option value="open">Открытые расхождения</option>
-                        <option value="debt">Долг</option>
-                        <option value="overpaid">Переплата</option>
-                        <option value="closed">Закрыто</option>
+                        <option value="all">Все документы</option>
+                        <option value="accrual">Начисления</option>
+                        <option value="payment">Оплаты</option>
                     </select>
                 </div>
 
@@ -411,7 +427,7 @@
                         wire:model.live.debounce.400ms="search"
                         placeholder="Поиск"
                         class="onec-search-input"
-                        aria-label="Поиск по арендатору или договору"
+                        aria-label="Поиск по документу, арендатору или договору"
                     >
                 </label>
             </div>
@@ -422,24 +438,39 @@
                 </div>
             @elseif (count($rows) === 0)
                 <div class="onec-empty">
-                    По выбранным фильтрам строк нет.
+                    По выбранным фильтрам документов нет.
                 </div>
             @else
                 <div class="onec-table-wrap">
                     <table class="onec-table">
                         <thead>
                             <tr>
+                                <th scope="col">Дата</th>
+                                <th scope="col">Тип</th>
+                                <th scope="col">Документ</th>
                                 <th scope="col">Арендатор</th>
                                 <th scope="col">Договор</th>
-                                <th scope="col" class="onec-money">Начислено</th>
-                                <th scope="col" class="onec-money">Оплачено</th>
-                                <th scope="col" class="onec-money">Разница</th>
-                                <th scope="col">Статус</th>
+                                <th scope="col" class="onec-money">Сумма</th>
+                                <th scope="col">Основание</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach ($rows as $row)
                                 <tr>
+                                    <td class="onec-date">
+                                        {{ $formatDate($row['document_date']) }}
+                                    </td>
+                                    <td>
+                                        <span class="onec-type" style="{{ $typeStyles[$row['type']] ?? $typeStyles['accrual'] }}">
+                                            {{ $row['type_label'] }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {{ $row['document_number'] }}
+                                        @if (filled($row['source_file']))
+                                            <div class="onec-muted">{{ $row['source_file'] }}</div>
+                                        @endif
+                                    </td>
                                     <td class="onec-col-tenant">
                                         @if ($row['tenant_url'])
                                             <a href="{{ $row['tenant_url'] }}">
@@ -449,7 +480,6 @@
                                             <span>{{ $row['tenant_name'] }}</span>
                                         @endif
                                     </td>
-
                                     <td class="onec-col-contract">
                                         @if ($row['contract_url'])
                                             <a href="{{ $row['contract_url'] }}">
@@ -458,21 +488,21 @@
                                         @else
                                             <span>{{ $row['contract_label'] }}</span>
                                         @endif
-                                    </td>
 
-                                    <td class="onec-money">
-                                        {{ $formatMoney((float) $row['accrued']) }}
+                                        @if (filled($row['organization_name']) || filled($row['account']))
+                                            <div class="onec-muted">
+                                                {{ $row['organization_name'] ?? '' }}
+                                                @if (filled($row['account']))
+                                                    · сч. {{ $row['account'] }}
+                                                @endif
+                                            </div>
+                                        @endif
                                     </td>
                                     <td class="onec-money">
-                                        {{ $formatMoney((float) $row['paid']) }}
+                                        {{ $formatMoney((float) $row['amount']) }}
                                     </td>
-                                    <td class="onec-money {{ ((float) $row['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $row['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
-                                        {{ $formatMoney((float) $row['delta']) }}
-                                    </td>
-                                    <td>
-                                        <span class="onec-status" style="{{ $statusStyles[$row['status']] ?? $statusStyles['closed'] }}">
-                                            {{ $row['status_label'] }}
-                                        </span>
+                                    <td class="onec-col-basis">
+                                        {{ $row['basis'] }}
                                     </td>
                                 </tr>
                             @endforeach

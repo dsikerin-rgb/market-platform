@@ -20,7 +20,7 @@ class OneCAccrualPaymentReconciliationDetailWidgetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_widget_groups_1c_accruals_and_payments_by_tenant_contract(): void
+    public function test_widget_shows_1c_documents_for_selected_period(): void
     {
         $market = Market::query()->create([
             'name' => 'Test market',
@@ -63,6 +63,7 @@ class OneCAccrualPaymentReconciliationDetailWidgetTest extends TestCase
             'total_with_vat' => 1000.00,
             'status' => 'imported',
             'source' => '1c',
+            'source_file' => '1c:accruals',
             'source_row_hash' => hash('sha256', 'reconciliation-detail-accrual'),
             'imported_at' => '2026-05-31 12:00:00',
             'created_at' => '2026-05-31 12:00:00',
@@ -102,28 +103,23 @@ class OneCAccrualPaymentReconciliationDetailWidgetTest extends TestCase
         $method->setAccessible(true);
         $data = $method->invoke($livewire->instance());
 
-        $this->assertSame('05.2026', $data['monthLabel']);
-        $this->assertCount(1, $data['rows']);
+        $this->assertSame('01.05.2026 - 31.05.2026', $data['periodLabel']);
+        $this->assertCount(2, $data['rows']);
 
-        $row = $data['rows'][0];
-
-        $this->assertSame((int) $tenant->id, $row['tenant_id']);
-        $this->assertSame((int) $contract->id, $row['contract_id']);
-        $this->assertSame(1000.00, $row['accrued']);
-        $this->assertSame(400.00, $row['paid']);
-        $this->assertSame(600.00, $row['delta']);
-        $this->assertSame('debt', $row['status']);
-        $this->assertSame(1, $row['accrual_rows']);
-        $this->assertSame(1, $row['payment_rows']);
         $this->assertSame(1000.00, $data['summary']['accrued']);
         $this->assertSame(400.00, $data['summary']['paid']);
-        $this->assertSame(600.00, $data['summary']['delta']);
-        $this->assertSame(1, $data['summary']['debt_count']);
+        $this->assertSame(2, $data['summary']['rows_count']);
+        $this->assertSame(1, $data['summary']['accrual_count']);
+        $this->assertSame(1, $data['summary']['payment_count']);
 
-        $this->get(OneCReconciliation::getUrl(['period' => '2026-05']))
+        $this->get(OneCReconciliation::getUrl([
+            'from' => '2026-05-01',
+            'to' => '2026-05-31',
+        ]))
             ->assertOk()
-            ->assertSee('Сверка начислений и оплат 1С')
+            ->assertSee('Журнал документов 1С')
             ->assertSee('Tenant short')
-            ->assertSee('№ D-1');
+            ->assertSee('№ D-1')
+            ->assertSee('P-1');
     }
 }

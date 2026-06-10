@@ -588,7 +588,7 @@ class Dashboard extends BaseDashboard
                 + [
                     'onec_accrual_payment_reconciliation' => [
                         'class' => OneCAccrualPaymentReconciliationWidget::class,
-                        'label' => 'Сверка начислений и оплат 1С',
+                        'label' => 'Начисления и оплаты 1С',
                     ],
                 ]
                 + array_slice($widgets, 3, null, true);

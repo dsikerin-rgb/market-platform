@@ -16,51 +16,66 @@ class AccrualPaymentReconciliationReport
 {
     /**
      * @return array{
-     *     monthYm:string,
-     *     monthLabel:string,
+     *     periodLabel:string,
      *     rows:list<array<string, mixed>>,
      *     summary:array<string, float|int>,
      *     emptyReason:string|null
      * }
      */
-    public function build(int $marketId, ?string $period = null): array
+    public function build(int $marketId, string $fromDate, string $toDate): array
     {
         if (! Schema::hasTable('tenant_accruals') && ! Schema::hasTable('tenant_payments')) {
-            return $this->emptyData('Нет данных 1С');
+            return $this->emptyData('Нет данных 1С', $fromDate, $toDate);
         }
 
-        $market = Market::query()
-            ->select(['id', 'timezone'])
-            ->find($marketId);
-        $tz = $this->resolveTimezone($market?->timezone);
-        [$monthYm, $monthStart, $monthEnd] = $this->resolveMonthRange($tz, $marketId, $period);
-        $rows = $this->buildRows($marketId, $monthStart, $monthEnd);
-        $summary = $this->summarize($rows);
+        [$from, $to] = $this->normalizeDateRange($fromDate, $toDate);
+        $rows = [
+            ...$this->loadAccrualDocuments($marketId, $from, $to),
+            ...$this->loadPaymentDocuments($marketId, $from, $to),
+        ];
+
+        $this->hydrateLabels($rows);
 
         usort($rows, static function (array $left, array $right): int {
-            $leftOpen = $left['status'] === 'closed' ? 0 : 1;
-            $rightOpen = $right['status'] === 'closed' ? 0 : 1;
+            $date = strcmp((string) $right['document_date'], (string) $left['document_date']);
 
-            if ($leftOpen !== $rightOpen) {
-                return $rightOpen <=> $leftOpen;
+            if ($date !== 0) {
+                return $date;
             }
 
-            $byDelta = abs($right['delta']) <=> abs($left['delta']);
+            $type = strcmp((string) $left['type_label'], (string) $right['type_label']);
 
-            if ($byDelta !== 0) {
-                return $byDelta;
+            if ($type !== 0) {
+                return $type;
             }
 
-            return strcmp($left['tenant_name'], $right['tenant_name']);
+            return strcmp((string) $left['tenant_name'], (string) $right['tenant_name']);
         });
 
         return [
-            'monthYm' => $monthYm,
-            'monthLabel' => $this->formatMonthLabel($monthYm, $tz),
+            'periodLabel' => $this->formatPeriodLabel($from, $to),
             'rows' => $rows,
-            'summary' => $summary,
+            'summary' => $this->summarize($rows),
             'emptyReason' => null,
         ];
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    public function defaultDateRange(int $marketId): array
+    {
+        $latest = $this->latestDataDate($marketId);
+
+        if ($latest === null) {
+            $now = CarbonImmutable::now();
+
+            return [$now->startOfMonth()->toDateString(), $now->endOfMonth()->toDateString()];
+        }
+
+        $month = CarbonImmutable::parse($latest)->startOfMonth();
+
+        return [$month->toDateString(), $month->endOfMonth()->toDateString()];
     }
 
     public function resolveMarketIdForUser(mixed $user): ?int
@@ -89,48 +104,16 @@ class AccrualPaymentReconciliationReport
         return $marketId ? (int) $marketId : null;
     }
 
-    public function latestDataMonth(int $marketId): ?string
-    {
-        $latest = null;
-
-        foreach (['tenant_accruals', 'tenant_payments'] as $table) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'period')) {
-                continue;
-            }
-
-            try {
-                $value = DB::table($table)
-                    ->where('market_id', $marketId)
-                    ->orderByDesc('period')
-                    ->value('period');
-            } catch (\Throwable) {
-                continue;
-            }
-
-            $month = $this->normalizePeriodToMonth($value);
-
-            if ($month !== null && ($latest === null || $month > $latest)) {
-                $latest = $month;
-            }
-        }
-
-        return $latest;
-    }
-
     /**
      * @param list<array<string, mixed>> $rows
      * @return list<array<string, mixed>>
      */
-    public function filterRows(array $rows, string $status = 'all', string $search = ''): array
+    public function filterRows(array $rows, string $type = 'all', string $search = ''): array
     {
         $search = mb_strtolower(trim($search));
 
-        return array_values(array_filter($rows, static function (array $row) use ($status, $search): bool {
-            if ($status === 'open' && $row['status'] === 'closed') {
-                return false;
-            }
-
-            if (in_array($status, ['debt', 'overpaid', 'closed'], true) && $row['status'] !== $status) {
+        return array_values(array_filter($rows, static function (array $row) use ($type, $search): bool {
+            if (in_array($type, ['accrual', 'payment'], true) && $row['type'] !== $type) {
                 return false;
             }
 
@@ -141,7 +124,10 @@ class AccrualPaymentReconciliationReport
             $haystack = mb_strtolower(implode(' ', [
                 (string) $row['tenant_name'],
                 (string) $row['contract_label'],
-                (string) ($row['contract_external_id'] ?? ''),
+                (string) $row['document_number'],
+                (string) $row['basis'],
+                (string) $row['organization_name'],
+                (string) $row['account'],
             ]));
 
             return str_contains($haystack, $search);
@@ -157,105 +143,61 @@ class AccrualPaymentReconciliationReport
         $summary = [
             'accrued' => 0.0,
             'paid' => 0.0,
-            'delta' => 0.0,
-            'debt_count' => 0,
-            'overpaid_count' => 0,
-            'closed_count' => 0,
+            'total' => 0.0,
+            'accrual_count' => 0,
+            'payment_count' => 0,
             'rows_count' => count($rows),
         ];
 
         foreach ($rows as $row) {
-            $summary['accrued'] += (float) $row['accrued'];
-            $summary['paid'] += (float) $row['paid'];
-            $summary['delta'] += (float) $row['delta'];
+            $amount = (float) $row['amount'];
+            $summary['total'] += $amount;
 
-            if ($row['status'] === 'debt') {
-                $summary['debt_count']++;
-            } elseif ($row['status'] === 'overpaid') {
-                $summary['overpaid_count']++;
+            if ($row['type'] === 'payment') {
+                $summary['paid'] += $amount;
+                $summary['payment_count']++;
             } else {
-                $summary['closed_count']++;
+                $summary['accrued'] += $amount;
+                $summary['accrual_count']++;
             }
         }
 
         return $summary;
     }
 
-    /**
-     * @return list<array{
-     *     key:string,
-     *     tenant_id:int|null,
-     *     tenant_name:string,
-     *     tenant_url:string|null,
-     *     contract_id:int|null,
-     *     contract_label:string,
-     *     contract_url:string|null,
-     *     contract_external_id:string|null,
-     *     accrued:float,
-     *     paid:float,
-     *     delta:float,
-     *     status:string,
-     *     status_label:string,
-     *     accrual_rows:int,
-     *     payment_rows:int
-     * }>
-     */
-    private function buildRows(int $marketId, CarbonImmutable $monthStart, CarbonImmutable $monthEnd): array
+    private function latestDataDate(int $marketId): ?string
     {
-        $items = [];
+        $latest = null;
 
-        foreach ($this->loadAccrualGroups($marketId, $monthStart, $monthEnd) as $group) {
-            $key = $this->makeGroupKey($group['tenant_id'], $group['contract_id'], $group['contract_external_id']);
-            $items[$key] ??= $this->makeEmptyItem($key, $group['tenant_id'], $group['contract_id'], $group['contract_external_id']);
-            $items[$key]['accrued'] += $group['amount'];
-            $items[$key]['accrual_rows'] += $group['rows'];
+        if (Schema::hasTable('tenant_accruals') && Schema::hasColumn('tenant_accruals', 'period')) {
+            $value = DB::table('tenant_accruals')
+                ->where('market_id', $marketId)
+                ->orderByDesc('period')
+                ->value('period');
+
+            $latest = $this->normalizeDateString($value);
         }
 
-        foreach ($this->loadPaymentGroups($marketId, $monthStart, $monthEnd) as $group) {
-            $key = $this->makeGroupKey($group['tenant_id'], $group['contract_id'], $group['contract_external_id']);
-            $items[$key] ??= $this->makeEmptyItem($key, $group['tenant_id'], $group['contract_id'], $group['contract_external_id']);
-            $items[$key]['paid'] += $group['amount'];
-            $items[$key]['payment_rows'] += $group['rows'];
+        if (Schema::hasTable('tenant_payments') && Schema::hasColumn('tenant_payments', 'payment_date')) {
+            $value = DB::table('tenant_payments')
+                ->where('market_id', $marketId)
+                ->orderByDesc('payment_date')
+                ->value('payment_date');
+
+            $paymentDate = $this->normalizeDateString($value);
+
+            if ($paymentDate !== null && ($latest === null || $paymentDate > $latest)) {
+                $latest = $paymentDate;
+            }
         }
 
-        $tenantNames = $this->loadTenantNames($items);
-        $contractLabels = $this->loadContractLabels($items);
-
-        foreach ($items as &$item) {
-            $tenantId = $item['tenant_id'];
-            $contractId = $item['contract_id'];
-
-            $item['tenant_name'] = $tenantId !== null
-                ? ($tenantNames[$tenantId] ?? ('Арендатор #' . $tenantId))
-                : 'Без арендатора';
-            $item['tenant_url'] = $tenantId !== null
-                ? TenantResource::getUrl('edit', ['record' => $tenantId])
-                : null;
-
-            $fallbackContract = $item['contract_external_id'] !== null
-                ? ('1С: ' . $item['contract_external_id'])
-                : 'Без договора';
-            $item['contract_label'] = $contractId !== null
-                ? ($contractLabels[$contractId] ?? ('Договор #' . $contractId))
-                : $fallbackContract;
-            $item['contract_url'] = $contractId !== null
-                ? TenantContractResource::getUrl('edit', ['record' => $contractId])
-                : null;
-
-            $item['accrued'] = round($item['accrued'], 2);
-            $item['paid'] = round($item['paid'], 2);
-            $item['delta'] = round($item['accrued'] - $item['paid'], 2);
-            [$item['status'], $item['status_label']] = $this->resolveStatus($item['delta']);
-        }
-        unset($item);
-
-        return array_values($items);
+        return $latest;
     }
 
     /**
-     * @return list<array{tenant_id:int|null,contract_id:int|null,contract_external_id:string|null,amount:float,rows:int}>
+     * @return list<array<string, mixed>>
      */
-    private function loadAccrualGroups(int $marketId, CarbonImmutable $monthStart, CarbonImmutable $monthEnd): array
+    private function loadAccrualDocuments(int $marketId, CarbonImmutable $from, CarbonImmutable $to): array
     {
         if (! Schema::hasTable('tenant_accruals') || ! Schema::hasColumn('tenant_accruals', 'period')) {
             return [];
@@ -268,9 +210,19 @@ class AccrualPaymentReconciliationReport
             return [];
         }
 
-        $select = ['tenant_id', 'period', $amountColumn];
+        $select = ['id', 'tenant_id', 'period', $amountColumn];
 
-        foreach (['tenant_contract_id', 'contract_external_id'] as $column) {
+        foreach ([
+            'tenant_contract_id',
+            'contract_external_id',
+            'organization_name',
+            'account',
+            'notes',
+            'discount_note',
+            'source_row_number',
+            'source_file',
+            'payload',
+        ] as $column) {
             if (in_array($column, $columns, true)) {
                 $select[] = $column;
             }
@@ -278,8 +230,8 @@ class AccrualPaymentReconciliationReport
 
         $query = DB::table('tenant_accruals')
             ->where('market_id', $marketId)
-            ->where('period', '>=', $monthStart->toDateString())
-            ->where('period', '<', $monthEnd->toDateString());
+            ->where('period', '>=', $from->toDateString())
+            ->where('period', '<=', $to->toDateString());
 
         if (in_array('source', $columns, true)) {
             $query->where('source', '1c');
@@ -291,22 +243,65 @@ class AccrualPaymentReconciliationReport
             return [];
         }
 
-        return $this->groupRows($rows, $amountColumn);
+        return $rows->map(function (object $row) use ($amountColumn): array {
+            $payload = $this->decodePayload($row->payload ?? null);
+            $documentNumber = $this->firstPayloadValue($payload, [
+                'document_number',
+                'documentNumber',
+                'doc_number',
+                'number',
+                'document',
+            ]);
+            $basis = $this->firstNonEmpty([
+                $this->firstPayloadValue($payload, ['basis', 'purpose', 'description', 'comment']),
+                $row->notes ?? null,
+                $row->discount_note ?? null,
+            ]);
+
+            return [
+                'key' => 'accrual:' . (int) $row->id,
+                'type' => 'accrual',
+                'type_label' => 'Начисление',
+                'document_date' => $this->normalizeDateString($row->period ?? null) ?? '',
+                'document_number' => $documentNumber ?: ('строка ' . (int) $row->id),
+                'tenant_id' => is_numeric($row->tenant_id ?? null) ? (int) $row->tenant_id : null,
+                'tenant_name' => '',
+                'tenant_url' => null,
+                'contract_id' => is_numeric($row->tenant_contract_id ?? null) ? (int) $row->tenant_contract_id : null,
+                'contract_label' => '',
+                'contract_url' => null,
+                'contract_external_id' => $this->stringOrNull($row->contract_external_id ?? null),
+                'amount' => round((float) ($row->{$amountColumn} ?? 0.0), 2),
+                'organization_name' => $this->stringOrNull($row->organization_name ?? null),
+                'account' => $this->stringOrNull($row->account ?? null),
+                'basis' => $basis ?: '—',
+                'source_file' => $this->stringOrNull($row->source_file ?? null),
+            ];
+        })->all();
     }
 
     /**
-     * @return list<array{tenant_id:int|null,contract_id:int|null,contract_external_id:string|null,amount:float,rows:int}>
+     * @return list<array<string, mixed>>
      */
-    private function loadPaymentGroups(int $marketId, CarbonImmutable $monthStart, CarbonImmutable $monthEnd): array
+    private function loadPaymentDocuments(int $marketId, CarbonImmutable $from, CarbonImmutable $to): array
     {
-        if (! Schema::hasTable('tenant_payments') || ! Schema::hasColumn('tenant_payments', 'period')) {
+        if (! Schema::hasTable('tenant_payments') || ! Schema::hasColumn('tenant_payments', 'payment_date')) {
             return [];
         }
 
         $columns = Schema::getColumnListing('tenant_payments');
-        $select = ['tenant_id', 'period', 'amount'];
+        $select = ['id', 'tenant_id', 'payment_date', 'amount'];
 
-        foreach (['tenant_contract_id', 'contract_external_id'] as $column) {
+        foreach ([
+            'tenant_contract_id',
+            'contract_external_id',
+            'payment_external_id',
+            'document_number',
+            'organization_name',
+            'account',
+            'purpose',
+            'source_file',
+        ] as $column) {
             if (in_array($column, $columns, true)) {
                 $select[] = $column;
             }
@@ -314,8 +309,8 @@ class AccrualPaymentReconciliationReport
 
         $query = DB::table('tenant_payments')
             ->where('market_id', $marketId)
-            ->where('period', '>=', $monthStart->toDateString())
-            ->where('period', '<', $monthEnd->toDateString());
+            ->where('payment_date', '>=', $from->toDateString())
+            ->where('payment_date', '<=', $to->toDateString());
 
         try {
             $rows = $query->get($select);
@@ -323,52 +318,79 @@ class AccrualPaymentReconciliationReport
             return [];
         }
 
-        return $this->groupRows($rows, 'amount');
-    }
+        return $rows->map(function (object $row): array {
+            $documentNumber = $this->firstNonEmpty([
+                $row->document_number ?? null,
+                $row->payment_external_id ?? null,
+            ]);
 
-    /**
-     * @param \Illuminate\Support\Collection<int, object> $rows
-     * @return list<array{tenant_id:int|null,contract_id:int|null,contract_external_id:string|null,amount:float,rows:int}>
-     */
-    private function groupRows($rows, string $amountColumn): array
-    {
-        $groups = [];
-
-        foreach ($rows as $row) {
-            $tenantId = is_numeric($row->tenant_id ?? null) ? (int) $row->tenant_id : null;
-            $contractId = is_numeric($row->tenant_contract_id ?? null) ? (int) $row->tenant_contract_id : null;
-            $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
-            $contractExternalId = $contractExternalId !== '' ? $contractExternalId : null;
-            $key = $this->makeGroupKey($tenantId, $contractId, $contractExternalId);
-
-            $groups[$key] ??= [
-                'tenant_id' => $tenantId,
-                'contract_id' => $contractId,
-                'contract_external_id' => $contractExternalId,
-                'amount' => 0.0,
-                'rows' => 0,
+            return [
+                'key' => 'payment:' . (int) $row->id,
+                'type' => 'payment',
+                'type_label' => 'Оплата',
+                'document_date' => $this->normalizeDateString($row->payment_date ?? null) ?? '',
+                'document_number' => $documentNumber ?: ('строка ' . (int) $row->id),
+                'tenant_id' => is_numeric($row->tenant_id ?? null) ? (int) $row->tenant_id : null,
+                'tenant_name' => '',
+                'tenant_url' => null,
+                'contract_id' => is_numeric($row->tenant_contract_id ?? null) ? (int) $row->tenant_contract_id : null,
+                'contract_label' => '',
+                'contract_url' => null,
+                'contract_external_id' => $this->stringOrNull($row->contract_external_id ?? null),
+                'amount' => round((float) ($row->amount ?? 0.0), 2),
+                'organization_name' => $this->stringOrNull($row->organization_name ?? null),
+                'account' => $this->stringOrNull($row->account ?? null),
+                'basis' => $this->stringOrNull($row->purpose ?? null) ?? '—',
+                'source_file' => $this->stringOrNull($row->source_file ?? null),
             ];
-
-            $groups[$key]['amount'] += (float) ($row->{$amountColumn} ?? 0.0);
-            $groups[$key]['rows']++;
-        }
-
-        return array_values($groups);
+        })->all();
     }
 
     /**
-     * @param array<string, array<string, mixed>> $items
+     * @param list<array<string, mixed>> $rows
+     */
+    private function hydrateLabels(array &$rows): void
+    {
+        $tenantNames = $this->loadTenantNames($rows);
+        $contractLabels = $this->loadContractLabels($rows);
+
+        foreach ($rows as &$row) {
+            $tenantId = $row['tenant_id'];
+            $contractId = $row['contract_id'];
+
+            $row['tenant_name'] = $tenantId !== null
+                ? ($tenantNames[$tenantId] ?? ('Арендатор #' . $tenantId))
+                : 'Без арендатора';
+            $row['tenant_url'] = $tenantId !== null
+                ? TenantResource::getUrl('edit', ['record' => $tenantId])
+                : null;
+
+            $fallbackContract = $row['contract_external_id'] !== null
+                ? ('1С: ' . $row['contract_external_id'])
+                : 'Без договора';
+            $row['contract_label'] = $contractId !== null
+                ? ($contractLabels[$contractId] ?? ('Договор #' . $contractId))
+                : $fallbackContract;
+            $row['contract_url'] = $contractId !== null
+                ? TenantContractResource::getUrl('edit', ['record' => $contractId])
+                : null;
+        }
+        unset($row);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
      * @return array<int, string>
      */
-    private function loadTenantNames(array $items): array
+    private function loadTenantNames(array $rows): array
     {
         if (! Schema::hasTable('tenants')) {
             return [];
         }
 
         $ids = array_values(array_unique(array_filter(array_map(
-            static fn (array $item): ?int => $item['tenant_id'],
-            $items,
+            static fn (array $row): ?int => $row['tenant_id'],
+            $rows,
         ))));
 
         if ($ids === []) {
@@ -387,18 +409,18 @@ class AccrualPaymentReconciliationReport
     }
 
     /**
-     * @param array<string, array<string, mixed>> $items
+     * @param list<array<string, mixed>> $rows
      * @return array<int, string>
      */
-    private function loadContractLabels(array $items): array
+    private function loadContractLabels(array $rows): array
     {
         if (! Schema::hasTable('tenant_contracts')) {
             return [];
         }
 
         $ids = array_values(array_unique(array_filter(array_map(
-            static fn (array $item): ?int => $item['contract_id'],
-            $items,
+            static fn (array $row): ?int => $row['contract_id'],
+            $rows,
         ))));
 
         if ($ids === []) {
@@ -420,107 +442,32 @@ class AccrualPaymentReconciliationReport
             ->all();
     }
 
-    private function makeGroupKey(?int $tenantId, ?int $contractId, ?string $contractExternalId): string
-    {
-        if ($contractId !== null) {
-            return 'contract:' . $contractId;
-        }
-
-        if ($contractExternalId !== null && $contractExternalId !== '') {
-            return 'external:' . ($tenantId ?? 0) . ':' . $contractExternalId;
-        }
-
-        return 'tenant:' . ($tenantId ?? 0);
-    }
-
     /**
-     * @return array<string, mixed>
+     * @return array{0:CarbonImmutable,1:CarbonImmutable}
      */
-    private function makeEmptyItem(string $key, ?int $tenantId, ?int $contractId, ?string $contractExternalId): array
+    private function normalizeDateRange(string $fromDate, string $toDate): array
     {
-        return [
-            'key' => $key,
-            'tenant_id' => $tenantId,
-            'tenant_name' => '',
-            'tenant_url' => null,
-            'contract_id' => $contractId,
-            'contract_label' => '',
-            'contract_url' => null,
-            'contract_external_id' => $contractExternalId,
-            'accrued' => 0.0,
-            'paid' => 0.0,
-            'delta' => 0.0,
-            'status' => 'closed',
-            'status_label' => 'Закрыто',
-            'accrual_rows' => 0,
-            'payment_rows' => 0,
-        ];
-    }
+        $from = CarbonImmutable::parse($fromDate)->startOfDay();
+        $to = CarbonImmutable::parse($toDate)->startOfDay();
 
-    /**
-     * @return array{0:string,1:string}
-     */
-    private function resolveStatus(float $delta): array
-    {
-        if ($delta > 0.009) {
-            return ['debt', 'Долг'];
+        if ($to->lt($from)) {
+            return [$to, $from];
         }
 
-        if ($delta < -0.009) {
-            return ['overpaid', 'Переплата'];
-        }
-
-        return ['closed', 'Закрыто'];
+        return [$from, $to];
     }
 
-    /**
-     * @return array{0:string,1:CarbonImmutable,2:CarbonImmutable}
-     */
-    private function resolveMonthRange(string $tz, int $marketId, ?string $period): array
+    private function normalizeDateString(mixed $value): ?string
     {
-        $ym = $this->normalizePeriodToMonth($period)
-            ?: $this->latestDataMonth($marketId)
-            ?: CarbonImmutable::now($tz)->format('Y-m');
-
-        $start = CarbonImmutable::createFromFormat('!Y-m', $ym, $tz)->startOfMonth();
-
-        return [$ym, $start, $start->addMonth()];
-    }
-
-    private function normalizePeriodToMonth(mixed $value): ?string
-    {
-        if ($value === null) {
+        if ($value === null || trim((string) $value) === '') {
             return null;
         }
 
-        $raw = trim((string) $value);
-
-        if (preg_match('/^\d{4}-\d{2}/', $raw) === 1) {
-            return substr($raw, 0, 7);
-        }
-
         try {
-            return CarbonImmutable::parse($raw)->format('Y-m');
+            return CarbonImmutable::parse((string) $value)->toDateString();
         } catch (\Throwable) {
             return null;
         }
-    }
-
-    private function resolveTimezone(?string $marketTimezone): string
-    {
-        $tz = trim((string) $marketTimezone);
-
-        if ($tz === '') {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
-
-        try {
-            CarbonImmutable::now($tz);
-        } catch (\Throwable) {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
-
-        return $tz;
     }
 
     /**
@@ -538,31 +485,85 @@ class AccrualPaymentReconciliationReport
         return null;
     }
 
-    private function formatMonthLabel(string $ym, string $tz): string
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodePayload(mixed $payload): array
     {
-        try {
-            return CarbonImmutable::createFromFormat('!Y-m', $ym, $tz)->format('m.Y');
-        } catch (\Throwable) {
-            return $ym;
+        if (is_array($payload)) {
+            return $payload;
         }
+
+        if (! is_string($payload) || trim($payload) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($payload, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param list<string> $keys
+     */
+    private function firstPayloadValue(array $payload, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            $value = $this->stringOrNull($payload[$key] ?? null);
+
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<mixed> $values
+     */
+    private function firstNonEmpty(array $values): ?string
+    {
+        foreach ($values as $value) {
+            $string = $this->stringOrNull($value);
+
+            if ($string !== null) {
+                return $string;
+            }
+        }
+
+        return null;
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function formatPeriodLabel(CarbonImmutable $from, CarbonImmutable $to): string
+    {
+        return $from->format('d.m.Y') . ' - ' . $to->format('d.m.Y');
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function emptyData(string $reason): array
+    private function emptyData(string $reason, string $fromDate, string $toDate): array
     {
+        [$from, $to] = $this->normalizeDateRange($fromDate, $toDate);
+
         return [
-            'monthYm' => '',
-            'monthLabel' => '—',
+            'periodLabel' => $this->formatPeriodLabel($from, $to),
             'rows' => [],
             'summary' => [
                 'accrued' => 0.0,
                 'paid' => 0.0,
-                'delta' => 0.0,
-                'debt_count' => 0,
-                'overpaid_count' => 0,
-                'closed_count' => 0,
+                'total' => 0.0,
+                'accrual_count' => 0,
+                'payment_count' => 0,
                 'rows_count' => 0,
             ],
             'emptyReason' => $reason,
