@@ -221,7 +221,7 @@
 
         .onec-settlements-table {
             width: 100%;
-            min-width: 1040px;
+            min-width: 920px;
             border-collapse: collapse;
             background: #fff;
             font-size: 13px;
@@ -281,6 +281,27 @@
         .onec-settlements-col-contract {
             min-width: 220px;
             max-width: 360px;
+        }
+
+        .onec-settlements-balance-cell {
+            display: grid;
+            gap: 2px;
+            justify-items: end;
+            min-width: 108px;
+        }
+
+        .onec-settlements-balance-line {
+            color: #111827;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .onec-settlements-balance-line span {
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: 700;
+            margin-right: 4px;
+            text-transform: uppercase;
         }
 
         .onec-settlements-muted {
@@ -583,12 +604,9 @@
                                 <tr>
                                     <th scope="col">Арендатор</th>
                                     <th scope="col">Договор</th>
-                                    <th scope="col" class="onec-settlements-money">Нач. Дт</th>
-                                    <th scope="col" class="onec-settlements-money">Нач. Кт</th>
-                                    <th scope="col" class="onec-settlements-money">Оборот Дт</th>
-                                    <th scope="col" class="onec-settlements-money">Оборот Кт</th>
-                                    <th scope="col" class="onec-settlements-money">Кон. Дт</th>
-                                    <th scope="col" class="onec-settlements-money">Кон. Кт</th>
+                                    <th scope="col" class="onec-settlements-money">Начальное</th>
+                                    <th scope="col" class="onec-settlements-money">Обороты</th>
+                                    <th scope="col" class="onec-settlements-money">Конечное</th>
                                     <th scope="col" class="onec-settlements-money">Итого</th>
                                     <th scope="col">Статус</th>
                                 </tr>
@@ -617,12 +635,24 @@
                                                 @endif
                                             </div>
                                         </td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['opening_debit']) }}</td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['opening_credit']) }}</td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['turnover_debit']) }}</td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['turnover_credit']) }}</td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['closing_debit']) }}</td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['closing_credit']) }}</td>
+                                        <td class="onec-settlements-money">
+                                            <div class="onec-settlements-balance-cell">
+                                                <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['opening_debit']) }}</div>
+                                                <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['opening_credit']) }}</div>
+                                            </div>
+                                        </td>
+                                        <td class="onec-settlements-money">
+                                            <div class="onec-settlements-balance-cell">
+                                                <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['turnover_debit']) }}</div>
+                                                <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['turnover_credit']) }}</div>
+                                            </div>
+                                        </td>
+                                        <td class="onec-settlements-money">
+                                            <div class="onec-settlements-balance-cell">
+                                                <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['closing_debit']) }}</div>
+                                                <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['closing_credit']) }}</div>
+                                            </div>
+                                        </td>
                                         <td class="onec-settlements-money">{{ $formatMoney((float) $row['net']) }}</td>
                                         <td>
                                             <span class="onec-settlements-badge" style="{{ $statusStyles[$row['status']] ?? $statusStyles['zero'] }}">
