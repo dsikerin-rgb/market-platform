@@ -162,6 +162,64 @@ Next technical step:
 - Keep map coloring on the established source until this policy is reviewed on
   production data.
 
+### Update: Debt Decision Policy, 2026-06-11
+
+PR #913 added `App\Services\Debt\DebtDecisionPolicy`.
+
+The policy is still read-only for the map. It separates:
+
+- amount source: OSV `closing_debit - closing_credit`;
+- amount basis: summed closing debit and closing credit;
+- aging policy:
+  - `settlement-document`;
+  - `period-start`;
+- aging source:
+  - `settlement_document_name`;
+  - `period_from`;
+- scope/confidence:
+  - `space` => `high`;
+  - `tenant_fallback` => `medium`;
+- reason for the candidate decision.
+
+Production and staging were updated to commit `9c0d633` after PR #913.
+
+Production comparison for market `1`, account `62`:
+
+With `--aging-policy=settlement-document`:
+
+- OSV candidates:
+  - green: 44;
+  - none: 12;
+  - orange: 9;
+  - pending: 1;
+  - red: 90;
+- mismatches: 92;
+- dominant reason: `osv_document_date_makes_debt_much_older` = 72.
+
+With `--aging-policy=period-start`:
+
+- OSV candidates:
+  - green: 44;
+  - none: 12;
+  - orange: 100;
+- mismatches: 65;
+- mismatch reasons:
+  - `current_map_more_severe_than_osv`: 19;
+  - `scope_differs`: 18;
+  - `osv_closed_or_credit_while_current_map_has_debt`: 14;
+  - `status_bucket_differs`: 13;
+  - `osv_has_debt_missing_from_current_map`: 1.
+
+Interpretation:
+
+- `period-start` is safer for map severity than raw settlement document aging:
+  it removes the artificial mass-red effect.
+- It is not enough by itself: scope differences and closed-OSV/current-debt
+  mismatches still need explicit handling.
+- The next implementation step should not be "turn OSV on for the map" yet.
+  It should build a read-only preview/report using `DebtDecisionPolicy` so the
+  operator can inspect which spaces would change and why.
+
 ## Current 1C Entities
 
 ### Contracts
