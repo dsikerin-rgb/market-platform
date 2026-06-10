@@ -339,29 +339,29 @@
     <div class="onec-reconciliation">
         <x-filament::section>
             <x-slot name="heading">
-                Сверка начислений и оплат 1С
+                Контроль импорта начислений и оплат 1С
             </x-slot>
 
             <x-slot name="description">
-                {{ $report['monthLabel'] }} · полный список по арендаторам и договорам
+                {{ $report['monthLabel'] }} · начисления и оплаты, отнесенные в 1С к выбранному месяцу; не акт сверки задолженности
             </x-slot>
         </x-filament::section>
 
         <div class="onec-summary">
             <div class="onec-card">
-                <div class="onec-card-label">Начислено по фильтру</div>
+                <div class="onec-card-label">Начислено за период</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['accrued']) }}</div>
                 <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['accrued']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Оплачено по фильтру</div>
+                <div class="onec-card-label">Оплачено за период</div>
                 <div class="onec-card-value">{{ $formatMoney((float) $summary['paid']) }}</div>
                 <div class="onec-card-note">Всего за месяц: {{ $formatMoney((float) $totalSummary['paid']) }}</div>
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Разница по фильтру</div>
+                <div class="onec-card-label">Разница периода</div>
                 <div class="onec-card-value {{ ((float) $summary['delta']) > 0.009 ? 'onec-delta-positive' : (((float) $summary['delta']) < -0.009 ? 'onec-delta-negative' : 'onec-delta-zero') }}">
                     {{ $formatMoney((float) $summary['delta']) }}
                 </div>
@@ -369,17 +369,17 @@
             </div>
 
             <div class="onec-card">
-                <div class="onec-card-label">Строки по фильтру</div>
+                <div class="onec-card-label">Строки импорта</div>
                 <div class="onec-card-value">{{ number_format((int) $summary['rows_count'], 0, ',', ' ') }}</div>
                 <div class="onec-card-note">
-                    всего за месяц: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }} · долг: {{ $summary['debt_count'] }} · переплата: {{ $summary['overpaid_count'] }} · закрыто: {{ $summary['closed_count'] }}
+                    всего за месяц: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }} · начислено больше: {{ $summary['debt_count'] }} · оплачено больше: {{ $summary['overpaid_count'] }} · суммы равны: {{ $summary['closed_count'] }}
                 </div>
             </div>
         </div>
 
         <x-filament::section>
             <x-slot name="heading">
-                Детализация
+                Строки по арендаторам и договорам
             </x-slot>
 
             <div class="onec-toolbar">
@@ -398,9 +398,9 @@
                     >
                         <option value="all">Все строки</option>
                         <option value="open">Открытые расхождения</option>
-                        <option value="debt">Долг</option>
-                        <option value="overpaid">Переплата</option>
-                        <option value="closed">Закрыто</option>
+                        <option value="debt">Начислено больше</option>
+                        <option value="overpaid">Оплачено больше</option>
+                        <option value="closed">Суммы равны</option>
                     </select>
                 </div>
 

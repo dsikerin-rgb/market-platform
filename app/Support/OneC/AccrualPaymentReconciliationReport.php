@@ -451,7 +451,7 @@ class AccrualPaymentReconciliationReport
             'paid' => 0.0,
             'delta' => 0.0,
             'status' => 'closed',
-            'status_label' => 'Закрыто',
+            'status_label' => 'Суммы равны',
             'accrual_rows' => 0,
             'payment_rows' => 0,
         ];
@@ -463,14 +463,14 @@ class AccrualPaymentReconciliationReport
     private function resolveStatus(float $delta): array
     {
         if ($delta > 0.009) {
-            return ['debt', 'Долг'];
+            return ['debt', 'Начислено больше'];
         }
 
         if ($delta < -0.009) {
-            return ['overpaid', 'Переплата'];
+            return ['overpaid', 'Оплачено больше'];
         }
 
-        return ['closed', 'Закрыто'];
+        return ['closed', 'Суммы равны'];
     }
 
     /**

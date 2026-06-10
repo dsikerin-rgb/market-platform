@@ -10,9 +10,9 @@ use Filament\Pages\Page;
 
 class OneCReconciliation extends Page
 {
-    protected static ?string $title = 'Сверка 1С';
+    protected static ?string $title = 'Контроль импорта 1С';
 
-    protected static ?string $navigationLabel = 'Сверка 1С';
+    protected static ?string $navigationLabel = 'Контроль импорта 1С';
 
     protected static \UnitEnum|string|null $navigationGroup = null;
 
