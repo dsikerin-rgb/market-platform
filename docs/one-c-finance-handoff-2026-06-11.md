@@ -92,6 +92,76 @@ This means the mass red coloring caused by raw OSV aging was removed, while the
 existing "space overdue from 30 days" and "tenant overdue from 30 days"
 categories remain active through the established logic.
 
+### Update: OSV Map Diagnostics, 2026-06-11
+
+PR #910 added a read-only `debt:draft-decisions` command that compares the
+current market map color with an OSV/settlement-balance candidate. PR #911
+added mismatch classification to the same command.
+
+Production and staging were updated to commit `a70d5bf` after PR #911.
+
+Production diagnostic command:
+
+```bash
+php artisan debt:draft-decisions --market=1 --account=62 --limit=5 --mismatches --json
+```
+
+Production result for market `1`, account `62`:
+
+- active spaces with tenant: 156;
+- current map statuses:
+  - gray: 2;
+  - green: 42;
+  - orange: 58;
+  - pending: 32;
+  - red: 22;
+- OSV candidate statuses:
+  - green: 44;
+  - none: 12;
+  - orange: 9;
+  - pending: 1;
+  - red: 90;
+- OSV candidate scopes:
+  - none: 12;
+  - space: 118;
+  - tenant_fallback: 26;
+- mismatches: 92.
+
+Mismatch reasons:
+
+- `osv_document_date_makes_debt_much_older`: 72;
+- `osv_closed_or_credit_while_current_map_has_debt`: 14;
+- `current_map_more_severe_than_osv`: 2;
+- `status_bucket_differs`: 2;
+- `scope_differs`: 1;
+- `osv_has_debt_missing_from_current_map`: 1.
+
+Severity changes:
+
+- OSV candidate is more severe: 76;
+- OSV candidate is less severe: 16.
+
+Important interpretation:
+
+- The dominant mismatch is not amount disagreement. It is age disagreement.
+- OSV often uses the old settlement document date as the age anchor, making the
+  debt look much older than the current map logic.
+- Therefore the next map-color change must define an explicit aging policy for
+  OSV rows. The system must not simply color the map by raw earliest settlement
+  document date.
+- Cases where OSV says `green` while the current map shows debt are important
+  and should be treated as high-value cleanup candidates.
+
+Next technical step:
+
+- Add a debt decision policy that separates:
+  - exact amount from OSV closing balance;
+  - due/aging date used for map severity;
+  - confidence/scope (`space`, `tenant_fallback`, `unmapped`);
+  - reason shown in diagnostics/UI.
+- Keep map coloring on the established source until this policy is reviewed on
+  production data.
+
 ## Current 1C Entities
 
 ### Contracts
