@@ -748,6 +748,7 @@ class DebtStatusResolver
                 'tsb.account',
                 'tsb.period_from',
                 'tsb.period_to',
+                'tsb.settlement_document_name',
                 'tsb.imported_at',
                 'tsb.opening_debit',
                 'tsb.opening_credit',
@@ -903,6 +904,19 @@ class DebtStatusResolver
             return (float) ($row->debt_amount ?? 0) > 0.009;
         });
 
+        $documentDates = $positiveRows
+            ->map(fn ($row): ?Carbon => $this->parseSettlementDocumentDate((string) ($row->settlement_document_name ?? '')))
+            ->filter()
+            ->values();
+
+        if ($documentDates->isNotEmpty()) {
+            return $documentDates
+                ->sortBy(fn (Carbon $date): int => $date->getTimestamp())
+                ->first()
+                ?->startOfDay()
+                ->addDays($graceDays);
+        }
+
         $periodFrom = $positiveRows->min('period_from');
         if (! $periodFrom) {
             return null;
@@ -910,6 +924,26 @@ class DebtStatusResolver
 
         try {
             return Carbon::parse($periodFrom)->startOfDay()->addDays($graceDays);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function parseSettlementDocumentDate(string $value): ?Carbon
+    {
+        if (preg_match('/\b(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?\b/u', $value, $matches) !== 1) {
+            return null;
+        }
+
+        $time = sprintf(
+            '%02d:%02d:%02d',
+            isset($matches[4]) ? (int) $matches[4] : 0,
+            isset($matches[5]) ? (int) $matches[5] : 0,
+            isset($matches[6]) ? (int) $matches[6] : 0,
+        );
+
+        try {
+            return Carbon::createFromFormat('d.m.Y H:i:s', "{$matches[1]}.{$matches[2]}.{$matches[3]} {$time}");
         } catch (\Throwable) {
             return null;
         }
