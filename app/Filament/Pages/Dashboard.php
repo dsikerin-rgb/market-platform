@@ -11,6 +11,7 @@ use App\Filament\Widgets\MarketAverageRentRateWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\AccrualCompositionWidget;
+use App\Filament\Widgets\OneCAccrualPaymentReconciliationWidget;
 use App\Filament\Widgets\OneCDebtSnapshotsHistoryWidget;
 use App\Filament\Widgets\OneCPaymentsSummaryWidget;
 use App\Filament\Widgets\RecentTenantRequestsWidget;
@@ -200,6 +201,7 @@ class Dashboard extends BaseDashboard
                 'widgets' => $this->resolveVisibleWorkspaceWidgets([
                     \App\Filament\Widgets\RevenueYearChartWidget::class,
                     OneCPaymentsSummaryWidget::class,
+                    OneCAccrualPaymentReconciliationWidget::class,
                     OneCDebtSnapshotsHistoryWidget::class,
                     AccrualCompositionWidget::class,
                 ]),
@@ -581,8 +583,19 @@ class Dashboard extends BaseDashboard
                 + array_slice($widgets, 2, null, true);
         }
 
-        if (class_exists(AccrualCompositionWidget::class)) {
+        if (class_exists(OneCAccrualPaymentReconciliationWidget::class)) {
             $widgets = array_slice($widgets, 0, 3, true)
+                + [
+                    'onec_accrual_payment_reconciliation' => [
+                        'class' => OneCAccrualPaymentReconciliationWidget::class,
+                        'label' => 'Сверка начислений и оплат 1С',
+                    ],
+                ]
+                + array_slice($widgets, 3, null, true);
+        }
+
+        if (class_exists(AccrualCompositionWidget::class)) {
+            $widgets = array_slice($widgets, 0, 4, true)
                 + [
                     'accrual_composition' => [
                         'class' => AccrualCompositionWidget::class,
