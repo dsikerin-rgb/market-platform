@@ -259,11 +259,6 @@
             max-width: 460px;
         }
 
-        .onec-tenant-repeat {
-            color: transparent;
-            user-select: none;
-        }
-
         .onec-money,
         .onec-count {
             font-variant-numeric: tabular-nums;
@@ -448,23 +443,16 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @php($previousTenantKey = null)
                             @foreach ($rows as $row)
                                 <tr>
                                     <td class="onec-col-tenant">
-                                        @php($tenantKey = (string) ($row['tenant_id'] ?? 'none'))
-                                        @if ($tenantKey === $previousTenantKey)
-                                            <span class="onec-tenant-repeat">{{ $row['tenant_name'] }}</span>
+                                        @if ($row['tenant_url'])
+                                            <a href="{{ $row['tenant_url'] }}">
+                                                {{ $row['tenant_name'] }}
+                                            </a>
                                         @else
-                                            @if ($row['tenant_url'])
-                                                <a href="{{ $row['tenant_url'] }}">
-                                                    {{ $row['tenant_name'] }}
-                                                </a>
-                                            @else
-                                                <span>{{ $row['tenant_name'] }}</span>
-                                            @endif
+                                            <span>{{ $row['tenant_name'] }}</span>
                                         @endif
-                                        @php($previousTenantKey = $tenantKey)
                                     </td>
 
                                     <td class="onec-col-contract">
