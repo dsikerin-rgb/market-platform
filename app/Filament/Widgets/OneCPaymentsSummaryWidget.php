@@ -18,7 +18,7 @@ class OneCPaymentsSummaryWidget extends StatsOverviewWidget
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $heading = 'Оплаты из 1С';
+    protected ?string $heading = null;
 
     protected function getStats(): array
     {
