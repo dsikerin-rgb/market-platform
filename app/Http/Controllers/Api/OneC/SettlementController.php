@@ -101,6 +101,7 @@ class SettlementController extends Controller
                     'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
                     'period_from' => ['required', 'date_format:Y-m-d'],
                     'period_to' => ['required', 'date_format:Y-m-d', 'after_or_equal:period_from'],
+                    'account' => ['required', 'string', 'max:64'],
                     'items' => ['required', 'array', 'min:1'],
 
                     'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
@@ -162,6 +163,7 @@ class SettlementController extends Controller
 
             $periodFrom = (string) $validated['period_from'];
             $periodTo = (string) $validated['period_to'];
+            $accountScope = trim((string) $validated['account']);
             $received = count($validated['items']);
             $inserted = 0;
             $updated = 0;
@@ -185,7 +187,10 @@ class SettlementController extends Controller
                 $settlementDocumentName = trim((string) ($item['settlement_document_name'] ?? ''));
                 $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
                 $organizationName = trim((string) ($item['organization_name'] ?? ''));
-                $account = trim((string) ($item['account'] ?? '62'));
+                $account = trim((string) ($item['account'] ?? ''));
+                if ($account === '') {
+                    $account = $accountScope;
+                }
                 $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
 
                 if ($currency === '') {
@@ -264,7 +269,7 @@ class SettlementController extends Controller
                     'settlement_document_name' => $settlementDocumentName !== '' ? $settlementDocumentName : null,
                     'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
                     'organization_name' => $organizationName !== '' ? mb_substr($organizationName, 0, 255) : null,
-                    'account' => $account !== '' ? mb_substr($account, 0, 64) : null,
+                    'account' => mb_substr($account, 0, 64),
                     'currency' => $currency,
                     ...$amounts,
                     'source' => '1c',
@@ -276,6 +281,7 @@ class SettlementController extends Controller
 
                 $existing = TenantSettlementBalance::query()
                     ->where('market_id', $marketId)
+                    ->where('account', $account)
                     ->whereDate('period_from', $periodFrom)
                     ->whereDate('period_to', $periodTo)
                     ->where('source_row_hash', $sourceRowHash)
@@ -295,6 +301,7 @@ class SettlementController extends Controller
             if (! $snapshotSyncSkipped && $touchedBalanceIds !== []) {
                 $snapshotDeleted = TenantSettlementBalance::query()
                     ->where('market_id', $marketId)
+                    ->where('account', $accountScope)
                     ->whereDate('period_from', $periodFrom)
                     ->whereDate('period_to', $periodTo)
                     ->where('source', '1c')
@@ -318,6 +325,7 @@ class SettlementController extends Controller
                 'calculated_at' => (string) $validated['calculated_at'],
                 'period_from' => $periodFrom,
                 'period_to' => $periodTo,
+                'account' => $accountScope,
                 'received' => $received,
                 'inserted' => $inserted,
                 'updated' => $updated,
@@ -347,6 +355,7 @@ class SettlementController extends Controller
                 'meta' => [
                     'period_from' => $periodFrom,
                     'period_to' => $periodTo,
+                    'account' => $accountScope,
                     'updated' => $updated,
                     'linked_contracts' => $linkedContracts,
                     'unresolved_contracts' => $unresolvedContracts,

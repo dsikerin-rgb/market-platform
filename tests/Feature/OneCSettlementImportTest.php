@@ -63,6 +63,7 @@ class OneCSettlementImportTest extends TestCase
             'calculated_at' => '2026-06-11 08:00:00',
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
+            'account' => '62.01',
             'items' => [
                 [
                     'tenant_external_id' => 'tenant-001',
@@ -135,6 +136,7 @@ class OneCSettlementImportTest extends TestCase
             'calculated_at' => '2026-06-11 08:00:00',
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
+            'account' => '62.01',
             'items' => [
                 [
                     'tenant_external_id' => 'tenant-002',
@@ -175,6 +177,7 @@ class OneCSettlementImportTest extends TestCase
             'calculated_at' => '2026-06-11 08:00:00',
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
+            'account' => '62.01',
             'items' => [
                 [
                     'tenant_external_id' => 'tenant-003',
@@ -201,6 +204,7 @@ class OneCSettlementImportTest extends TestCase
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
             'tenant_external_id' => 'tenant-snapshot',
+            'account' => '62.01',
             'settlement_document_external_id' => 'old-doc',
             'closing_debit' => 1000,
             'source' => '1c',
@@ -215,6 +219,7 @@ class OneCSettlementImportTest extends TestCase
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
             'tenant_external_id' => 'tenant-snapshot',
+            'account' => '62.01',
             'settlement_document_external_id' => 'manual-doc',
             'closing_debit' => 500,
             'source' => 'manual',
@@ -227,6 +232,7 @@ class OneCSettlementImportTest extends TestCase
             'calculated_at' => '2026-06-11 08:00:00',
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
+            'account' => '62.01',
             'items' => [
                 [
                     'tenant_external_id' => 'tenant-snapshot',
@@ -257,6 +263,61 @@ class OneCSettlementImportTest extends TestCase
         $this->assertDatabaseHas('tenant_settlement_balances', [
             'settlement_document_external_id' => 'manual-doc',
             'source' => 'manual',
+        ]);
+    }
+
+    public function test_period_snapshot_is_scoped_by_account(): void
+    {
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'name' => 'Account scope tenant',
+            'external_id' => 'tenant-account-scope',
+        ]);
+
+        TenantSettlementBalance::query()->create([
+            'market_id' => (int) $this->market->id,
+            'tenant_id' => (int) $tenant->id,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => 'tenant-account-scope',
+            'account' => '76.07',
+            'settlement_document_external_id' => 'deposit-doc',
+            'closing_credit' => 3000,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => now(),
+            'source_row_hash' => hash('sha256', 'deposit-doc'),
+        ]);
+
+        $this->postJson(route('api.1c.settlements.store'), [
+            'calculated_at' => '2026-06-11 08:00:00',
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'account' => '62.01',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-account-scope',
+                    'settlement_document_external_id' => 'rent-doc',
+                    'closing_debit' => 1000,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('warnings.snapshot_deleted', 0);
+
+        $this->assertDatabaseHas('tenant_settlement_balances', [
+            'settlement_document_external_id' => 'deposit-doc',
+            'account' => '76.07',
+            'closing_credit' => '3000.00',
+        ]);
+
+        $this->assertDatabaseHas('tenant_settlement_balances', [
+            'settlement_document_external_id' => 'rent-doc',
+            'account' => '62.01',
+            'closing_debit' => '1000.00',
         ]);
     }
 }
