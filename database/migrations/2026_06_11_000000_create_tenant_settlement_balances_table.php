@@ -31,7 +31,7 @@ return new class extends Migration
 
             $table->string('organization_external_id', 255)->nullable();
             $table->string('organization_name', 255)->nullable();
-            $table->string('account', 64)->nullable();
+            $table->string('account', 64);
             $table->string('currency', 3)->default('RUB');
 
             $table->decimal('opening_debit', 14, 2)->default(0);
@@ -48,11 +48,11 @@ return new class extends Migration
             $table->char('source_row_hash', 64);
             $table->timestamps();
 
-            $table->index(['market_id', 'period_from', 'period_to'], 'tenant_settlement_balances_period_idx');
+            $table->index(['market_id', 'account', 'period_from', 'period_to'], 'tenant_settlement_balances_period_idx');
             $table->index(['market_id', 'tenant_id', 'period_to'], 'tenant_settlement_balances_tenant_idx');
             $table->index(['market_id', 'contract_external_id'], 'tenant_settlement_balances_contract_idx');
             $table->index(['market_id', 'settlement_document_external_id'], 'tenant_settlement_balances_doc_idx');
-            $table->unique(['market_id', 'period_from', 'period_to', 'source_row_hash'], 'tenant_settlement_balances_period_hash_unique');
+            $table->unique(['market_id', 'account', 'period_from', 'period_to', 'source_row_hash'], 'tenant_settlement_balances_period_hash_unique');
         });
     }
 
