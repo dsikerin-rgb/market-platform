@@ -61,13 +61,16 @@ class DebtDecisionPreviewReport
                 continue;
             }
 
-            $candidate = $this->buildSettlementCandidate(
-                marketId: $marketId,
-                tenantId: (int) $space->tenant_id,
-                marketSpaceId: (int) $space->id,
-                account: $account,
-                agingPolicy: $agingPolicy,
-            );
+            $currentScope = (string) (data_get($current, 'extra.scope') ?? 'none');
+            $candidate = $currentScope === 'shared_use'
+                ? $this->sharedUseCandidate($account)
+                : $this->buildSettlementCandidate(
+                    marketId: $marketId,
+                    tenantId: (int) $space->tenant_id,
+                    marketSpaceId: (int) $space->id,
+                    account: $account,
+                    agingPolicy: $agingPolicy,
+                );
 
             $candidateStatus = (string) ($candidate['status'] ?? 'none');
             $candidateScope = (string) ($candidate['scope'] ?? 'none');
@@ -76,7 +79,7 @@ class DebtDecisionPreviewReport
             $severityChange = $this->policy->severityChange($currentStatus, $candidateStatus);
             $scopeChange = sprintf(
                 '%s -> %s',
-                (string) (data_get($current, 'extra.scope') ?? 'none'),
+                $currentScope,
                 $candidateScope,
             );
 
@@ -125,6 +128,31 @@ class DebtDecisionPreviewReport
         return [
             'summary' => $summary,
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sharedUseCandidate(string $account): array
+    {
+        return [
+            'status' => 'gray',
+            'scope' => 'shared_use',
+            'confidence' => 'high',
+            'reason' => 'shared-use space keeps neutral map status until exact financial attribution',
+            'account' => $account,
+            'debt_amount' => 0.0,
+            'amount_source' => 'shared_use_rule',
+            'amount_basis' => 'not_applicable',
+            'aging_policy' => null,
+            'aging_source' => null,
+            'overdue_days' => null,
+            'due_date' => null,
+            'rows' => 0,
+            'contracts' => [],
+            'contract_names' => [],
+            'latest_period_to' => null,
         ];
     }
 
