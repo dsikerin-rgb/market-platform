@@ -4,8 +4,25 @@
     @php
         $section = $this->section;
         $accrualsSummary = $section === 'accruals' ? $this->getAccrualsSummary() : [];
+        $accrualsPreviewRows = $section === 'accruals' ? $this->getAccrualsPreviewRows() : [];
         $documentsSummary = $section === 'documents' ? $this->getDocumentsSummary() : [];
+        $documentsPreviewRows = $section === 'documents' ? $this->getDocumentsPreviewRows() : [];
         $settlementsSummary = $section === 'settlements' ? $this->getSettlementsSummary() : [];
+        $settlementsPreviewRows = $section === 'settlements' ? $this->getSettlementsPreviewRows() : [];
+        $documentTypeStyles = [
+            'accrual' => 'background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;',
+            'payment' => 'background:#dcfce7;color:#166534;border-color:#bbf7d0;',
+        ];
+        $settlementStatusLabels = [
+            'debt' => 'Долг',
+            'credit' => 'Переплата',
+            'zero' => 'Закрыто',
+        ];
+        $settlementStatusStyles = [
+            'debt' => 'background:#fee2e2;color:#b91c1c;border-color:#fecaca;',
+            'credit' => 'background:#fef3c7;color:#b45309;border-color:#fde68a;',
+            'zero' => 'background:#dcfce7;color:#166534;border-color:#bbf7d0;',
+        ];
     @endphp
 
     <style>
@@ -22,11 +39,100 @@
         }
 
         .reports-hub-section {
-            max-width: 64rem;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .reports-hub-section-action {
             margin-top: 1rem;
+        }
+
+        .reports-hub-preview {
+            margin-top: 1rem;
+        }
+
+        .reports-hub-preview-title {
+            color: #111827;
+            font-size: 15px;
+            font-weight: 700;
+            line-height: 1.35;
+            margin: 0 0 .75rem;
+        }
+
+        .reports-hub-preview-wrap {
+            overflow-x: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        .reports-hub-preview-table {
+            width: 100%;
+            min-width: 760px;
+            border-collapse: collapse;
+            background: #fff;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .reports-hub-preview-table th {
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+            color: #4b5563;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            padding: 10px 12px;
+            text-align: left;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .reports-hub-preview-table td {
+            border-bottom: 1px solid #f3f4f6;
+            color: #111827;
+            padding: 10px 12px;
+            vertical-align: top;
+        }
+
+        .reports-hub-preview-table tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .reports-hub-preview-table a {
+            color: #0369a1;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .reports-hub-preview-table a:hover {
+            color: #0284c7;
+            text-decoration: underline;
+        }
+
+        .reports-hub-money {
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .reports-hub-muted {
+            color: #6b7280;
+            font-size: 12px;
+            line-height: 1.35;
+            margin-top: 4px;
+        }
+
+        .reports-hub-badge {
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            padding: 5px 10px;
+            white-space: nowrap;
         }
     </style>
 
@@ -201,6 +307,48 @@
                                 </div>
                             </div>
                         </div>
+
+                        @if ($accrualsPreviewRows !== [])
+                            <div class="reports-hub-preview">
+                                <h3 class="reports-hub-preview-title">Последние строки периода</h3>
+                                <div class="reports-hub-preview-wrap">
+                                    <table class="reports-hub-preview-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Период</th>
+                                                <th>Арендатор</th>
+                                                <th>Договор</th>
+                                                <th>Импорт</th>
+                                                <th class="reports-hub-money">Сумма</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($accrualsPreviewRows as $row)
+                                                <tr>
+                                                    <td>{{ $row['period'] }}</td>
+                                                    <td>
+                                                        @if ($row['tenant_url'])
+                                                            <a href="{{ $row['tenant_url'] }}">{{ $row['tenant_name'] }}</a>
+                                                        @else
+                                                            {{ $row['tenant_name'] }}
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @if ($row['contract_url'])
+                                                            <a href="{{ $row['contract_url'] }}">{{ $row['contract_name'] }}</a>
+                                                        @else
+                                                            {{ $row['contract_name'] }}
+                                                        @endif
+                                                    </td>
+                                                    <td>{{ $row['imported_at'] ?? '—' }}</td>
+                                                    <td class="reports-hub-money">{{ $this->formatRub($row['amount']) }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
                     @endif
 
                     <div class="reports-hub-section-action">
@@ -237,6 +385,56 @@
                                 </div>
                             </div>
                         </div>
+
+                        @if ($documentsPreviewRows !== [])
+                            <div class="reports-hub-preview">
+                                <h3 class="reports-hub-preview-title">Первые документы текущего периода</h3>
+                                <div class="reports-hub-preview-wrap">
+                                    <table class="reports-hub-preview-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Дата</th>
+                                                <th>Тип</th>
+                                                <th>Документ</th>
+                                                <th>Арендатор</th>
+                                                <th>Договор</th>
+                                                <th class="reports-hub-money">Сумма</th>
+                                                <th>Основание</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($documentsPreviewRows as $row)
+                                                <tr>
+                                                    <td>{{ $row['document_date'] }}</td>
+                                                    <td>
+                                                        <span class="reports-hub-badge" style="{{ $documentTypeStyles[$row['type']] ?? $documentTypeStyles['accrual'] }}">
+                                                            {{ $row['type_label'] }}
+                                                        </span>
+                                                    </td>
+                                                    <td>{{ $row['document_number'] }}</td>
+                                                    <td>
+                                                        @if ($row['tenant_url'])
+                                                            <a href="{{ $row['tenant_url'] }}">{{ $row['tenant_name'] }}</a>
+                                                        @else
+                                                            {{ $row['tenant_name'] }}
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @if ($row['contract_url'])
+                                                            <a href="{{ $row['contract_url'] }}">{{ $row['contract_label'] }}</a>
+                                                        @else
+                                                            {{ $row['contract_label'] }}
+                                                        @endif
+                                                    </td>
+                                                    <td class="reports-hub-money">{{ $this->formatRub($row['amount']) }}</td>
+                                                    <td>{{ \Illuminate\Support\Str::limit($row['basis'], 96) }}</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
                     @endif
 
                     <div class="reports-hub-section-action">
@@ -282,6 +480,59 @@
                                 </div>
                             </div>
                         </div>
+
+                        @if ($settlementsPreviewRows !== [])
+                            <div class="reports-hub-preview">
+                                <h3 class="reports-hub-preview-title">Крупнейшие позиции по конечному сальдо</h3>
+                                <div class="reports-hub-preview-wrap">
+                                    <table class="reports-hub-preview-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Арендатор</th>
+                                                <th>Договор</th>
+                                                <th>Организация</th>
+                                                <th>Счёт</th>
+                                                <th class="reports-hub-money">Оборот Дт</th>
+                                                <th class="reports-hub-money">Оборот Кт</th>
+                                                <th class="reports-hub-money">Итог</th>
+                                                <th>Статус</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach ($settlementsPreviewRows as $row)
+                                                <tr>
+                                                    <td>
+                                                        @if ($row['tenant_url'])
+                                                            <a href="{{ $row['tenant_url'] }}">{{ $row['tenant_name'] }}</a>
+                                                        @else
+                                                            {{ $row['tenant_name'] }}
+                                                        @endif
+                                                    </td>
+                                                    <td>
+                                                        @if ($row['contract_url'])
+                                                            <a href="{{ $row['contract_url'] }}">{{ $row['contract_name'] }}</a>
+                                                        @else
+                                                            {{ $row['contract_name'] }}
+                                                        @endif
+                                                        <div class="reports-hub-muted">строк ОСВ {{ number_format($row['rows_count'], 0, ',', ' ') }}</div>
+                                                    </td>
+                                                    <td>{{ $row['organization_name'] }}</td>
+                                                    <td>{{ $row['account'] }}</td>
+                                                    <td class="reports-hub-money">{{ $this->formatRub($row['turnover_debit']) }}</td>
+                                                    <td class="reports-hub-money">{{ $this->formatRub($row['turnover_credit']) }}</td>
+                                                    <td class="reports-hub-money">{{ $this->formatRub($row['net']) }}</td>
+                                                    <td>
+                                                        <span class="reports-hub-badge" style="{{ $settlementStatusStyles[$row['status']] ?? $settlementStatusStyles['zero'] }}">
+                                                            {{ $settlementStatusLabels[$row['status']] ?? '—' }}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @endif
                     @endif
 
                     <div class="reports-hub-section-action">
