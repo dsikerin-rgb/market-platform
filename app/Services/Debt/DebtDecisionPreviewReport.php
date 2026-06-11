@@ -169,35 +169,83 @@ class DebtDecisionPreviewReport
             ];
         }
 
-        $unboundDebt = $tenantRows->filter(static function (object $row): bool {
+        $exactTenantSpaceContractIds = $this->activeContractExternalIdsForTenantSpaces($marketId, $tenantId);
+        $fallbackMode = 'tenant_total';
+        $candidateRows = $tenantRows;
+        $decisionScope = 'tenant_fallback';
+
+        if ($exactTenantSpaceContractIds->isNotEmpty()) {
+            $candidateRows = $tenantRows
+                ->filter(static function (object $row) use ($exactTenantSpaceContractIds): bool {
+                    $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
+
+                    return $contractExternalId === ''
+                        || ! $exactTenantSpaceContractIds->contains($contractExternalId);
+                })
+                ->values();
+            $fallbackMode = 'residual';
+            $decisionScope = 'tenant_fallback_residual';
+
+            if ($candidateRows->isEmpty()) {
+                return [
+                    'status' => 'green',
+                    'scope' => 'tenant_fallback',
+                    'confidence' => 'medium',
+                    'reason' => 'tenant OSV rows are already represented by exact active space contracts',
+                    'account' => $account,
+                    'debt_amount' => 0.0,
+                    'amount_source' => 'tenant_settlement_balances.residual_after_exact_space_contracts',
+                    'amount_basis' => 'net_balance',
+                    'aging_policy' => $agingPolicy,
+                    'aging_source' => null,
+                    'overdue_days' => null,
+                    'due_date' => null,
+                    'rows' => 0,
+                    'contracts' => [],
+                    'contract_names' => [],
+                    'latest_period_to' => (string) $tenantRows->max('period_to'),
+                    'fallback_mode' => 'residual',
+                    'exact_space_contracts_excluded' => $exactTenantSpaceContractIds->values()->all(),
+                    'exact_space_contracts_excluded_count' => $exactTenantSpaceContractIds->count(),
+                ];
+            }
+        }
+
+        $unboundDebt = $candidateRows->filter(static function (object $row): bool {
             return ((float) $row->debt_amount) > 0.009;
         });
 
         if ($unboundDebt->isEmpty()) {
-            return $this->candidateFromRows(
-                $tenantRows,
+            $candidate = $this->candidateFromRows(
+                $candidateRows,
                 $marketId,
-                'tenant_fallback',
+                $decisionScope,
                 'tenant OSV rows have no positive debt',
                 $account,
                 $agingPolicy,
+                'tenant_fallback',
             );
+
+            return $this->withFallbackMeta($candidate, $fallbackMode, $exactTenantSpaceContractIds);
         }
 
-        return $this->candidateFromRows(
-            $tenantRows,
+        $candidate = $this->candidateFromRows(
+            $candidateRows,
             $marketId,
-            'tenant_fallback',
+            $decisionScope,
             $contractIds->isEmpty()
                 ? 'tenant has OSV debt but no active exact contract link for this space'
                 : 'tenant has OSV debt, but no positive OSV row for active exact space contract',
             $account,
             $agingPolicy,
+            'tenant_fallback',
         );
+
+        return $this->withFallbackMeta($candidate, $fallbackMode, $exactTenantSpaceContractIds);
     }
 
     /**
-     * @param Collection<int, object> $rows
+     * @param  Collection<int, object>  $rows
      * @return array<string, mixed>
      */
     private function candidateFromRows(
@@ -207,8 +255,13 @@ class DebtDecisionPreviewReport
         string $reason,
         string $account,
         string $agingPolicy,
+        ?string $displayScope = null,
     ): array {
         $candidate = $this->policy->candidateFromSettlementRows($marketId, $rows, $scope, $reason, $account, $agingPolicy);
+        if ($displayScope !== null) {
+            $candidate['scope'] = $displayScope;
+        }
+
         $candidate['contract_names'] = $rows
             ->pluck('contract_name')
             ->filter()
@@ -271,7 +324,86 @@ class DebtDecisionPreviewReport
     }
 
     /**
-     * @param Collection<int, string>|null $contractExternalIds
+     * @return Collection<int, string>
+     */
+    private function activeContractExternalIdsForTenantSpaces(int $marketId, int $tenantId): Collection
+    {
+        if (
+            ! Schema::hasTable('tenant_contracts')
+            || ! Schema::hasTable('market_spaces')
+            || ! Schema::hasColumn('tenant_contracts', 'external_id')
+            || ! Schema::hasColumn('tenant_contracts', 'market_space_id')
+            || ! Schema::hasColumn('market_spaces', 'tenant_id')
+        ) {
+            return collect();
+        }
+
+        $contractIds = collect();
+        $now = now();
+
+        if (
+            Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')
+        ) {
+            $contractIds = $contractIds->merge(DB::table('market_space_tenant_bindings as mstb')
+                ->join('tenant_contracts as tc', 'tc.id', '=', 'mstb.tenant_contract_id')
+                ->join('market_spaces as ms', 'ms.id', '=', 'mstb.market_space_id')
+                ->where('mstb.market_id', $marketId)
+                ->where('mstb.tenant_id', $tenantId)
+                ->whereNotNull('mstb.tenant_contract_id')
+                ->whereNotNull('tc.external_id')
+                ->where('tc.market_id', $marketId)
+                ->where('tc.tenant_id', $tenantId)
+                ->where('tc.is_active', true)
+                ->whereNotIn('tc.status', ['terminated', 'archived'])
+                ->where('ms.market_id', $marketId)
+                ->where('ms.tenant_id', $tenantId)
+                ->where('ms.is_active', true)
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.started_at')
+                        ->orWhere('mstb.started_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.ended_at')
+                        ->orWhere('mstb.ended_at', '>', $now);
+                })
+                ->pluck('tc.external_id'));
+        }
+
+        $contractIds = $contractIds->merge(DB::table('tenant_contracts as tc')
+            ->join('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('tc.market_id', $marketId)
+            ->where('tc.tenant_id', $tenantId)
+            ->where('tc.is_active', true)
+            ->whereNotIn('tc.status', ['terminated', 'archived'])
+            ->whereNotNull('tc.external_id')
+            ->where('ms.market_id', $marketId)
+            ->where('ms.tenant_id', $tenantId)
+            ->where('ms.is_active', true)
+            ->pluck('tc.external_id'));
+
+        return $contractIds
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * @param  Collection<int, string>  $exactTenantSpaceContractIds
+     * @return array<string, mixed>
+     */
+    private function withFallbackMeta(array $candidate, string $fallbackMode, Collection $exactTenantSpaceContractIds): array
+    {
+        $candidate['fallback_mode'] = $fallbackMode;
+        $candidate['exact_space_contracts_excluded'] = $exactTenantSpaceContractIds->values()->all();
+        $candidate['exact_space_contracts_excluded_count'] = $exactTenantSpaceContractIds->count();
+
+        return $candidate;
+    }
+
+    /**
+     * @param  Collection<int, string>|null  $contractExternalIds
      * @return Collection<int, object>
      */
     private function latestSettlementRows(
