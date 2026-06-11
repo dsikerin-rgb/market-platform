@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\ReportRunResource;
+use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Models\Report;
 use App\Models\ReportRun;
 use Filament\Facades\Filament;
@@ -12,6 +13,14 @@ use Illuminate\Support\Str;
 
 class ReportsHub extends Page
 {
+    private const SECTIONS = [
+        'templates',
+        'runs',
+        'accruals',
+        'documents',
+        'settlements',
+    ];
+
     protected static ?string $title = 'Отчёты';
 
     protected static ?string $navigationLabel = 'Отчёты';
@@ -25,6 +34,17 @@ class ReportsHub extends Page
     protected static ?string $slug = 'reports';
 
     protected string $view = 'filament.pages.reports-hub';
+
+    public string $section = 'templates';
+
+    protected array $queryString = [
+        'section' => ['except' => 'templates'],
+    ];
+
+    public function mount(): void
+    {
+        $this->section = $this->normalizeSection($this->section);
+    }
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
     {
@@ -55,6 +75,11 @@ class ReportsHub extends Page
         return static::getUrl();
     }
 
+    public function setSection(string $section): void
+    {
+        $this->section = $this->normalizeSection($section);
+    }
+
     public function getTemplateUrl(): string
     {
         return ReportResource::getUrl('index');
@@ -63,6 +88,21 @@ class ReportsHub extends Page
     public function getRunsUrl(): string
     {
         return ReportRunResource::getUrl('index');
+    }
+
+    public function getOneCAccrualsUrl(): string
+    {
+        return TenantAccrualResource::getUrl('index');
+    }
+
+    public function getOneCDocumentsUrl(): string
+    {
+        return OneCReconciliation::getUrl();
+    }
+
+    public function getOneCSettlementsUrl(): string
+    {
+        return OneCSettlements::getUrl();
     }
 
     public function getMarketName(): string
@@ -142,5 +182,12 @@ class ReportsHub extends Page
     {
         return static::selectedMarketIdFromSession()
             ?? filament()->auth()->user()?->market_id;
+    }
+
+    private function normalizeSection(?string $section): string
+    {
+        return in_array($section, self::SECTIONS, true)
+            ? $section
+            : 'templates';
     }
 }
