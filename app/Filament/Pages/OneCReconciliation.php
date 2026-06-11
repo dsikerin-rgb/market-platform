@@ -13,7 +13,7 @@ class OneCReconciliation extends Page
 {
     protected static ?string $title = 'Журнал документов 1С';
 
-    protected static ?string $navigationLabel = 'Отчёты 1С';
+    protected static ?string $navigationLabel = 'Документы 1С';
 
     protected static \UnitEnum|string|null $navigationGroup = null;
 
@@ -58,7 +58,7 @@ class OneCReconciliation extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess();
     }
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
