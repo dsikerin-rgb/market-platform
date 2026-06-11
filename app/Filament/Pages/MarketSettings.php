@@ -9,6 +9,7 @@ use App\Filament\Resources\MarketplaceSlideResource;
 use App\Models\Market;
 use App\Models\MarketplaceSlide;
 use App\Models\User;
+use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -329,9 +330,13 @@ class MarketSettings extends Page
                 ? $settings['debt_monitoring']['tenant_aggregate_mode']
                 : 'worst',
             'debt_monitoring_use_settlement_balances_for_map' => (bool) ($settings['debt_monitoring']['use_settlement_balances_for_map'] ?? false),
-            'debt_monitoring_settlement_map_aging_policy' => in_array($settings['debt_monitoring']['settlement_map_aging_policy'] ?? null, ['period-start', 'settlement-document'], true)
+            'debt_monitoring_settlement_map_aging_policy' => in_array($settings['debt_monitoring']['settlement_map_aging_policy'] ?? null, [
+                DebtDecisionPolicy::AGING_INVOICE_DAY,
+                DebtDecisionPolicy::AGING_PERIOD_START,
+                DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
+            ], true)
                 ? $settings['debt_monitoring']['settlement_map_aging_policy']
-                : 'period-start',
+                : DebtDecisionPolicy::AGING_INVOICE_DAY,
         ]);
     }
 
@@ -841,11 +846,12 @@ class MarketSettings extends Page
                         Forms\Components\Select::make('debt_monitoring_settlement_map_aging_policy')
                             ->label('Срок для карты по ОСВ')
                             ->options([
-                                'period-start' => 'От начала периода ОСВ',
-                                'settlement-document' => 'От даты документа расчетов',
+                                DebtDecisionPolicy::AGING_INVOICE_DAY => 'До 10 числа месяца ОСВ',
+                                DebtDecisionPolicy::AGING_PERIOD_START => 'От начала периода ОСВ',
+                                DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT => 'От даты документа расчетов',
                             ])
-                            ->helperText('Для карты безопаснее "от начала периода ОСВ": старые документы расчетов не превращают весь долг в красный автоматически.')
-                            ->default('period-start')
+                            ->helperText('Сумма берется из ОСВ 1С. Для карты основной вариант: счет должен быть выставлен до 10 числа месяца, затем применяется льготный период из настроек.')
+                            ->default(DebtDecisionPolicy::AGING_INVOICE_DAY)
                             ->native(false)
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
@@ -968,9 +974,13 @@ class MarketSettings extends Page
                 ? $state['debt_monitoring_tenant_aggregate_mode']
                 : 'worst',
             'use_settlement_balances_for_map' => (bool) ($state['debt_monitoring_use_settlement_balances_for_map'] ?? false),
-            'settlement_map_aging_policy' => in_array($state['debt_monitoring_settlement_map_aging_policy'] ?? null, ['period-start', 'settlement-document'], true)
+            'settlement_map_aging_policy' => in_array($state['debt_monitoring_settlement_map_aging_policy'] ?? null, [
+                DebtDecisionPolicy::AGING_INVOICE_DAY,
+                DebtDecisionPolicy::AGING_PERIOD_START,
+                DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
+            ], true)
                 ? $state['debt_monitoring_settlement_map_aging_policy']
-                : 'period-start',
+                : DebtDecisionPolicy::AGING_INVOICE_DAY,
         ];
 
         $this->market->fill([

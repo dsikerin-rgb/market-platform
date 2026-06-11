@@ -17,7 +17,7 @@ class DraftDebtDecisionsCommand extends Command
         {--limit=50 : Maximum sample rows}
         {--status= : Filter by current map status}
         {--mismatches : Return only rows where current map status differs from the OSV candidate}
-        {--aging-policy=settlement-document : OSV aging policy: settlement-document or period-start}
+        {--aging-policy=invoice-day : OSV aging policy: invoice-day, period-start, or settlement-document}
         {--json : Output raw JSON only}';
 
     protected $description = 'Build a read-only draft comparison between current map debt colors and 1C settlement balances.';
@@ -31,10 +31,15 @@ class DraftDebtDecisionsCommand extends Command
         $onlyMismatches = (bool) $this->option('mismatches');
         $agingPolicy = trim((string) $this->option('aging-policy'));
 
-        if (! in_array($agingPolicy, [DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT, DebtDecisionPolicy::AGING_PERIOD_START], true)) {
+        if (! in_array($agingPolicy, [
+            DebtDecisionPolicy::AGING_INVOICE_DAY,
+            DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
+            DebtDecisionPolicy::AGING_PERIOD_START,
+        ], true)) {
             $this->line(json_encode([
                 'error' => 'unsupported aging policy',
                 'supported' => [
+                    DebtDecisionPolicy::AGING_INVOICE_DAY,
                     DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
                     DebtDecisionPolicy::AGING_PERIOD_START,
                 ],

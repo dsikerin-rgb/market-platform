@@ -12,7 +12,11 @@ class DebtDecisionPolicy
 {
     public const AGING_SETTLEMENT_DOCUMENT = 'settlement-document';
 
+    public const AGING_INVOICE_DAY = 'invoice-day';
+
     public const AGING_PERIOD_START = 'period-start';
+
+    private const DEFAULT_INVOICE_DAY_OF_MONTH = 10;
 
     /**
      * @param Collection<int, object> $rows
@@ -212,6 +216,28 @@ class DebtDecisionPolicy
                         ->addDays($graceDays),
                     'settlement_document_name',
                 ];
+            }
+        }
+
+        if ($agingPolicy === self::AGING_INVOICE_DAY) {
+            $periodFrom = $positiveRows->min('period_from');
+            if (! $periodFrom) {
+                return [null, null];
+            }
+
+            try {
+                $period = Carbon::parse((string) $periodFrom)->startOfMonth();
+
+                return [
+                    $period
+                        ->copy()
+                        ->day(min(self::DEFAULT_INVOICE_DAY_OF_MONTH, $period->daysInMonth))
+                        ->startOfDay()
+                        ->addDays($graceDays),
+                    'invoice_day',
+                ];
+            } catch (\Throwable) {
+                return [null, null];
             }
         }
 

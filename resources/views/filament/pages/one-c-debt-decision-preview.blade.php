@@ -382,10 +382,18 @@
         </section>
 
         <section class="onec-preview-panel">
+            @php
+                $agingPolicyLabels = [
+                    \App\Services\Debt\DebtDecisionPolicy::AGING_INVOICE_DAY => 'до 10 числа месяца ОСВ',
+                    \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START => 'от начала периода ОСВ',
+                    \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT => 'от даты документа расчетов',
+                ];
+            @endphp
+
             <div class="onec-preview-panel-header">
                 <div class="onec-preview-title">Сравнение карты и ОСВ</div>
                 <div class="onec-preview-description">
-                    Счет {{ $this->account }} · политика срока: {{ $this->agingPolicy === \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START ? 'от начала периода ОСВ' : 'от даты документа расчетов' }}
+                    Счет {{ $this->account }} · политика срока: {{ $agingPolicyLabels[$this->agingPolicy] ?? $this->agingPolicy }}
                 </div>
             </div>
 
@@ -402,6 +410,7 @@
                         </select>
 
                         <select class="onec-preview-control" wire:model.live="agingPolicy">
+                            <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_INVOICE_DAY }}">Срок до 10 числа</option>
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START }}">Срок от периода</option>
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT }}">Срок от документа</option>
                         </select>
