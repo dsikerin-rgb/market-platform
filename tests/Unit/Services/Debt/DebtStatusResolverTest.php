@@ -1304,6 +1304,241 @@ class DebtStatusResolverTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_market_space_tenant_fallback_uses_only_residual_settlement_balance_after_exact_space_contracts(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $this->market->settings = [
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+                'minimum_debt_amount' => 500,
+                'use_settlement_balances_for_map' => true,
+            ],
+        ];
+        $this->market->save();
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with exact and residual OSV debt',
+            'external_id' => 'tenant-osv-residual-001',
+            'debt_status' => null,
+        ]);
+
+        $exactSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'exact-osv-101',
+            'code' => 'exact-osv-space-101',
+            'is_active' => true,
+        ]);
+
+        $fallbackSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'fallback-osv-102',
+            'code' => 'fallback-osv-space-102',
+            'is_active' => true,
+        ]);
+
+        $exactContract = TenantContract::withoutEvents(fn (): TenantContract => TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $exactSpace->id,
+            'external_id' => 'tenant-osv-residual-exact-contract-001',
+            'number' => 'Exact OSV contract',
+            'status' => 'active',
+            'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+            'is_active' => true,
+        ]));
+
+        DB::table('tenant_settlement_balances')->insert([
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'tenant_contract_id' => $exactContract->id,
+                'period_from' => '2026-05-01',
+                'period_to' => '2026-05-31',
+                'tenant_external_id' => $tenant->external_id,
+                'tenant_name' => $tenant->name,
+                'contract_external_id' => $exactContract->external_id,
+                'contract_name' => 'Exact OSV contract',
+                'settlement_document_name' => 'Realization 01.05.2026 14:00:00',
+                'account' => '62',
+                'currency' => 'RUB',
+                'opening_debit' => 7000,
+                'opening_credit' => 0,
+                'turnover_debit' => 0,
+                'turnover_credit' => 0,
+                'closing_debit' => 7000,
+                'closing_credit' => 0,
+                'source' => '1c',
+                'source_file' => '1c:settlements',
+                'imported_at' => '2026-06-11 01:59:03',
+                'source_row_hash' => hash('sha256', 'tenant-osv-residual-exact-may'),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'tenant_contract_id' => $exactContract->id,
+                'period_from' => '2026-06-01',
+                'period_to' => '2026-06-30',
+                'tenant_external_id' => $tenant->external_id,
+                'tenant_name' => $tenant->name,
+                'contract_external_id' => $exactContract->external_id,
+                'contract_name' => 'Exact OSV contract',
+                'settlement_document_name' => 'Realization 01.06.2026 14:00:00',
+                'account' => '62',
+                'currency' => 'RUB',
+                'opening_debit' => 7000,
+                'opening_credit' => 0,
+                'turnover_debit' => 0,
+                'turnover_credit' => 0,
+                'closing_debit' => 7000,
+                'closing_credit' => 0,
+                'source' => '1c',
+                'source_file' => '1c:settlements',
+                'imported_at' => '2026-06-11 01:59:03',
+                'source_row_hash' => hash('sha256', 'tenant-osv-residual-exact-june'),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'tenant_contract_id' => null,
+                'period_from' => '2026-06-01',
+                'period_to' => '2026-06-30',
+                'tenant_external_id' => $tenant->external_id,
+                'tenant_name' => $tenant->name,
+                'contract_external_id' => 'tenant-osv-residual-unbound-contract-001',
+                'contract_name' => 'Residual OSV contract',
+                'settlement_document_name' => 'Realization 01.06.2026 14:00:00',
+                'account' => '62',
+                'currency' => 'RUB',
+                'opening_debit' => 800,
+                'opening_credit' => 0,
+                'turnover_debit' => 0,
+                'turnover_credit' => 0,
+                'closing_debit' => 800,
+                'closing_credit' => 0,
+                'source' => '1c',
+                'source_file' => '1c:settlements',
+                'imported_at' => '2026-06-11 01:59:03',
+                'source_row_hash' => hash('sha256', 'tenant-osv-residual-unbound-june'),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $fallbackSpace->id, (int) $this->market->id);
+
+        $this->assertSame('pending', $result['status']);
+        $this->assertSame('tenant_fallback', $result['extra']['scope'] ?? null);
+        $this->assertSame('residual', $result['extra']['fallback_mode'] ?? null);
+        $this->assertSame(800.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertSame('settlement_net_balance_history', $result['extra']['aging_source'] ?? null);
+        $this->assertSame('2026-06-15', $result['extra']['due_date'] ?? null);
+        $this->assertSame([$exactContract->external_id], $result['extra']['exact_space_contracts_excluded'] ?? null);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_market_space_tenant_fallback_does_not_duplicate_exact_settlement_balance_debt(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $this->market->settings = [
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+                'minimum_debt_amount' => 500,
+                'use_settlement_balances_for_map' => true,
+            ],
+        ];
+        $this->market->save();
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with exact OSV debt only',
+            'external_id' => 'tenant-osv-exact-only-001',
+            'debt_status' => null,
+        ]);
+
+        $exactSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'exact-osv-201',
+            'code' => 'exact-osv-space-201',
+            'is_active' => true,
+        ]);
+
+        $fallbackSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'fallback-osv-202',
+            'code' => 'fallback-osv-space-202',
+            'is_active' => true,
+        ]);
+
+        $exactContract = TenantContract::withoutEvents(fn (): TenantContract => TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $exactSpace->id,
+            'external_id' => 'tenant-osv-exact-only-contract-001',
+            'number' => 'Exact OSV only contract',
+            'status' => 'active',
+            'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+            'is_active' => true,
+        ]));
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $exactContract->id,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => $exactContract->external_id,
+            'contract_name' => 'Exact OSV only contract',
+            'settlement_document_name' => 'Realization 01.06.2026 14:00:00',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 7000,
+            'opening_credit' => 0,
+            'turnover_debit' => 0,
+            'turnover_credit' => 0,
+            'closing_debit' => 7000,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'tenant-osv-exact-only-june'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $fallbackSpace->id, (int) $this->market->id);
+
+        $this->assertSame('green', $result['status']);
+        $this->assertSame('tenant_fallback', $result['extra']['scope'] ?? null);
+        $this->assertSame('residual', $result['extra']['fallback_mode'] ?? null);
+        $this->assertSame(0.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertSame('tenant_settlement_balances.residual_after_exact_space_contracts', $result['extra']['amount_source'] ?? null);
+        $this->assertStringContainsString('no residual debt', (string) ($result['source'] ?? ''));
+
+        Carbon::setTestNow();
+    }
+
     public function test_resolve_for_market_space_includes_direct_space_contracts_when_binding_exists(): void
     {
         $tenant = Tenant::create([

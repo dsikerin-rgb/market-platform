@@ -24,7 +24,7 @@ class DebtDecisionPolicy
     private const DEFAULT_INVOICE_DAY_OF_MONTH = 10;
 
     /**
-     * @param Collection<int, object> $rows
+     * @param  Collection<int, object>  $rows
      * @return array<string, mixed>
      */
     public function candidateFromSettlementRows(
@@ -103,8 +103,8 @@ class DebtDecisionPolicy
     }
 
     /**
-     * @param array<string, mixed> $current
-     * @param array<string, mixed> $candidate
+     * @param  array<string, mixed>  $current
+     * @param  array<string, mixed>  $candidate
      */
     public function classifyMismatch(array $current, array $candidate): string
     {
@@ -205,7 +205,7 @@ class DebtDecisionPolicy
     }
 
     /**
-     * @param Collection<int, object> $rows
+     * @param  Collection<int, object>  $rows
      * @return array{0:?Carbon,1:?string}
      */
     private function dueDateFromRows(
@@ -216,8 +216,7 @@ class DebtDecisionPolicy
         string $account,
         string $scope,
         float $minimumDebt,
-    ): array
-    {
+    ): array {
         $positiveRows = $rows->filter(static function (object $row): bool {
             return ((float) $row->debt_amount) > 0.009;
         });
@@ -293,7 +292,7 @@ class DebtDecisionPolicy
     }
 
     /**
-     * @param Collection<int, object> $rows
+     * @param  Collection<int, object>  $rows
      * @return array{0:?Carbon,1:?string}
      */
     private function dueDateFromNetBalanceHistory(
@@ -367,7 +366,7 @@ class DebtDecisionPolicy
     }
 
     /**
-     * @param Collection<int, object> $rows
+     * @param  Collection<int, object>  $rows
      * @return Collection<int, object>
      */
     private function settlementNetBalanceHistory(int $marketId, Collection $rows, string $account, string $scope): Collection
@@ -405,7 +404,12 @@ class DebtDecisionPolicy
             return collect();
         }
 
-        if ($scope === 'space' && $contractExternalIds->isEmpty()) {
+        $hasBlankContractRows = $rows->contains(static function (object $row): bool {
+            return trim((string) ($row->contract_external_id ?? '')) === '';
+        });
+        $useContractScopedHistory = in_array($scope, ['space', 'tenant_fallback_residual'], true);
+
+        if ($useContractScopedHistory && $contractExternalIds->isEmpty() && ! $hasBlankContractRows) {
             return collect();
         }
 
@@ -418,8 +422,18 @@ class DebtDecisionPolicy
             $query->where('period_to', '<=', $latestPeriodTo);
         }
 
-        if ($scope === 'space') {
-            $query->whereIn('contract_external_id', $contractExternalIds->all());
+        if ($useContractScopedHistory) {
+            $query->where(function ($contracts) use ($contractExternalIds, $hasBlankContractRows): void {
+                if ($contractExternalIds->isNotEmpty()) {
+                    $contracts->whereIn('contract_external_id', $contractExternalIds->all());
+                }
+
+                if ($hasBlankContractRows) {
+                    $contractExternalIds->isNotEmpty()
+                        ? $contracts->orWhereNull('contract_external_id')->orWhere('contract_external_id', '')
+                        : $contracts->whereNull('contract_external_id')->orWhere('contract_external_id', '');
+                }
+            });
         }
 
         return $query
