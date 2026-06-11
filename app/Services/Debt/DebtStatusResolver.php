@@ -1614,9 +1614,22 @@ class DebtStatusResolver
 
     private function makeTenantFallbackResult(Tenant $tenant, string $source, bool $useSettlementBalances = true): ?array
     {
-        $tenantResolved = $useSettlementBalances
-            ? $this->resolve($tenant)
-            : $this->resolveTenantForMapFallback($tenant);
+        if ($useSettlementBalances) {
+            $settlementData = $this->fetchSettlementBalanceData($tenant);
+            if ($settlementData !== null) {
+                $result = $this->makeMapResultFromSettlementBalanceData(
+                    $settlementData,
+                    $this->getStatusLabels((int) $tenant->market_id),
+                    (int) $tenant->market_id,
+                    'tenant_fallback'
+                );
+                $result['source'] = $source . ': OSV map decision';
+
+                return $result;
+            }
+        }
+
+        $tenantResolved = $this->resolveTenantForMapFallback($tenant);
         $tenantStatus = $tenantResolved['status'] ?? null;
 
         if (! in_array($tenantStatus, [self::STATUS_GREEN, self::STATUS_PENDING, self::STATUS_ORANGE, self::STATUS_RED], true)) {

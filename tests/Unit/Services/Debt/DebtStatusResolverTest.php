@@ -1233,6 +1233,77 @@ class DebtStatusResolverTest extends TestCase
         $this->assertGreaterThan(0, $result['extra']['overdue_days']);
     }
 
+    public function test_market_space_tenant_fallback_uses_settlement_balance_map_aging(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $this->market->settings = [
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+                'minimum_debt_amount' => 500,
+                'use_settlement_balances_for_map' => true,
+            ],
+        ];
+        $this->market->save();
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant fallback OSV',
+            'external_id' => 'tenant-fallback-osv-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'fallback-osv-101',
+            'code' => 'fallback-osv-space-101',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => 'tenant-fallback-osv-contract-001',
+            'contract_name' => 'Tenant fallback OSV contract',
+            'settlement_document_name' => 'Realization 01.03.2026 14:00:00',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 10000,
+            'opening_credit' => 10000,
+            'turnover_debit' => 1200,
+            'turnover_credit' => 0,
+            'closing_debit' => 11200,
+            'closing_credit' => 10000,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'tenant-fallback-osv-current-period'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertSame('pending', $result['status']);
+        $this->assertSame('tenant_fallback', $result['extra']['scope'] ?? null);
+        $this->assertSame(1200.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertSame(DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE, $result['extra']['aging_policy'] ?? null);
+        $this->assertSame('settlement_net_balance_current_period', $result['extra']['aging_source'] ?? null);
+        $this->assertSame('2026-06-15', $result['extra']['due_date'] ?? null);
+
+        Carbon::setTestNow();
+    }
+
     public function test_resolve_for_market_space_includes_direct_space_contracts_when_binding_exists(): void
     {
         $tenant = Tenant::create([
