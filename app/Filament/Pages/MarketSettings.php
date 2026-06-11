@@ -111,6 +111,13 @@ class MarketSettings extends Page
         'legacy_site_merge_enabled' => true,
         'allow_public_sales_without_active_contracts' => false,
         'demo_content_enabled' => false,
+        'debt_monitoring_grace_days' => 5,
+        'debt_monitoring_yellow_after_days' => 1,
+        'debt_monitoring_red_after_days' => 30,
+        'debt_monitoring_minimum_debt_amount' => 500,
+        'debt_monitoring_tenant_aggregate_mode' => 'worst',
+        'debt_monitoring_use_settlement_balances_for_map' => false,
+        'debt_monitoring_settlement_map_aging_policy' => DebtDecisionPolicy::AGING_INVOICE_DAY,
     ];
 
     public static function shouldRegisterNavigation(): bool
