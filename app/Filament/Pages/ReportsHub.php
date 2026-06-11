@@ -13,10 +13,13 @@ use Illuminate\Support\Str;
 class ReportsHub extends Page
 {
     protected static ?string $title = 'Отчёты';
+
     protected static ?string $navigationLabel = 'Отчёты';
 
     protected static \UnitEnum|string|null $navigationGroup = null;
+
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-text';
+
     protected static ?int $navigationSort = 90;
 
     protected static ?string $slug = 'reports';
@@ -44,15 +47,12 @@ class ReportsHub extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return false;
+        return static::canAccess();
     }
 
     public static function getNavigationUrl(): string
     {
-        // не используем route(), пока роут не существует
-        $slug = static::$slug ?: 'reports';
-
-        return "/admin/{$slug}";
+        return static::getUrl();
     }
 
     public function getTemplateUrl(): string
@@ -133,7 +133,6 @@ class ReportsHub extends Page
     {
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
         $key = "filament_{$panelId}_market_id";
-
         $value = session($key);
 
         return filled($value) ? (int) $value : null;

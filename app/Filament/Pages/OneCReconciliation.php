@@ -13,7 +13,7 @@ class OneCReconciliation extends Page
 {
     protected static ?string $title = 'Журнал документов 1С';
 
-    protected static ?string $navigationLabel = 'Документы 1С';
+    protected static ?string $navigationLabel = 'Отчёты 1С';
 
     protected static \UnitEnum|string|null $navigationGroup = null;
 
@@ -54,6 +54,21 @@ class OneCReconciliation extends Page
             (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
             || (bool) ($user->market_id ?? null)
         );
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return static::canAccess();
+    }
+
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return null;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return null;
     }
 
     public function mount(): void

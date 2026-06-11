@@ -32,6 +32,8 @@
         ];
     @endphp
 
+    @include('filament.partials.admin-workspace-styles')
+
     <style>
         .onec-settlements {
             display: grid;
@@ -453,15 +455,38 @@
     </style>
 
     <div class="onec-settlements">
-        <x-filament::section>
-            <x-slot name="heading">
-                Расчеты с арендаторами 1С
-            </x-slot>
+        <section class="aw-hero aw-hero--accruals">
+            <div class="aw-hero-stack aw-hero-stack--accruals">
+                <div class="aw-hero-copy aw-hero-copy--accruals">
+                    <div class="aw-hero-title">
+                        <div class="aw-hero-icon">
+                            <x-filament::icon icon="heroicon-o-scale" class="h-6 w-6" />
+                        </div>
 
-            <x-slot name="description">
-                {{ $report['periodLabel'] }} · счет {{ $this->account }} · контрольные суммы ОСВ по данным 1С
-            </x-slot>
-        </x-filament::section>
+                        <div>
+                            <h1 class="aw-hero-heading">Расчёты 1С</h1>
+                            <p class="aw-hero-subheading">
+                                Сальдо и обороты по ОСВ 1С в разрезе счёта, арендатора, договора и организации за выбранный период.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="aw-inline-actions aw-inline-actions--accruals">
+                        <span class="aw-chip aw-chip--accruals-context">
+                            Период: {{ $report['periodLabel'] }}
+                        </span>
+                        <span class="aw-chip aw-chip--accruals-context">
+                            Счёт: {{ $this->account }}
+                        </span>
+                        <span class="aw-chip aw-chip--accruals-context">
+                            Арендаторы / договоры: {{ number_format((int) $summary['tenants'], 0, ',', ' ') }} / {{ number_format((int) $summary['contracts'], 0, ',', ' ') }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @include('filament.partials.one-c-finance-tabs', ['active' => 'settlements'])
 
         <div class="onec-settlements-summary">
             <div class="onec-settlements-card">

@@ -23,6 +23,8 @@
         ];
     @endphp
 
+    @include('filament.partials.admin-workspace-styles')
+
     <style>
         .onec-reconciliation {
             display: grid;
@@ -391,15 +393,38 @@
     </style>
 
     <div class="onec-reconciliation">
-        <x-filament::section>
-            <x-slot name="heading">
-                Журнал документов 1С
-            </x-slot>
+        <section class="aw-hero aw-hero--accruals">
+            <div class="aw-hero-stack aw-hero-stack--accruals">
+                <div class="aw-hero-copy aw-hero-copy--accruals">
+                    <div class="aw-hero-title">
+                        <div class="aw-hero-icon">
+                            <x-filament::icon icon="heroicon-o-document-text" class="h-6 w-6" />
+                        </div>
 
-            <x-slot name="description">
-                {{ $report['periodLabel'] }} · документы начислений и оплат, загруженные из 1С
-            </x-slot>
-        </x-filament::section>
+                        <div>
+                            <h1 class="aw-hero-heading">Документы 1С</h1>
+                            <p class="aw-hero-subheading">
+                                Журнал начислений и оплат, загруженных из 1С, с фильтрами по периоду, типу документа и поиску.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="aw-inline-actions aw-inline-actions--accruals">
+                        <span class="aw-chip aw-chip--accruals-context">
+                            Период: {{ $report['periodLabel'] }}
+                        </span>
+                        <span class="aw-chip aw-chip--accruals-context">
+                            Документов: {{ number_format((int) $totalSummary['rows_count'], 0, ',', ' ') }}
+                        </span>
+                        <span class="aw-chip aw-chip--accruals-context">
+                            Начисления / оплаты: {{ number_format((int) $totalSummary['accrual_count'], 0, ',', ' ') }} / {{ number_format((int) $totalSummary['payment_count'], 0, ',', ' ') }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @include('filament.partials.one-c-finance-tabs', ['active' => 'documents'])
 
         <div class="onec-summary">
             <div class="onec-card">

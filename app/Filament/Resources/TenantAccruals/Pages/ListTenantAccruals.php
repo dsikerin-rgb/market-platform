@@ -90,6 +90,7 @@ class ListTenantAccruals extends ListRecords
     {
         return $schema
             ->components([
+                Html::make(fn (): HtmlString => $this->renderOneCFinanceTabs()),
                 Html::make(fn (): HtmlString => $this->renderScopeFilterBanner()),
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
@@ -267,6 +268,14 @@ class ListTenantAccruals extends ListRecords
                 . '<a href="' . e($url) . '" style="font-weight:600;text-decoration:underline;text-underline-offset:2px;">Показать все начисления</a>'
                 . '</div>'
         );
+    }
+
+    private function renderOneCFinanceTabs(): HtmlString
+    {
+        return new HtmlString((string) view('filament.partials.one-c-finance-tabs', [
+            'active' => 'accruals',
+            'compact' => true,
+        ]));
     }
 
     private function resolveTenantFilterRecord(): ?Tenant

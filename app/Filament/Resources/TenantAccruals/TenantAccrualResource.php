@@ -35,9 +35,7 @@ class TenantAccrualResource extends BaseResource
 
     public static function shouldRegisterNavigation(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return false;
     }
 
     public static function getNavigationGroup(): ?string
