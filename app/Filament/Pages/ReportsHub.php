@@ -50,6 +50,10 @@ class ReportsHub extends Page
     public function mount(): void
     {
         $this->section = $this->normalizeSection($this->section);
+
+        if ($target = $this->redirectUrlForSection($this->section)) {
+            $this->redirect($target, navigate: true);
+        }
     }
 
     public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
@@ -73,7 +77,7 @@ class ReportsHub extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess();
+        return false;
     }
 
     public static function getNavigationUrl(): string
@@ -620,5 +624,17 @@ class ReportsHub extends Page
         return in_array($section, self::SECTIONS, true)
             ? $section
             : 'templates';
+    }
+
+    private function redirectUrlForSection(string $section): ?string
+    {
+        return match ($section) {
+            'templates' => ReportResource::getUrl('index'),
+            'runs' => ReportRunResource::getUrl('index'),
+            'accruals' => TenantAccrualResource::getUrl('index'),
+            'documents' => OneCReconciliation::getUrl(),
+            'settlements' => OneCSettlements::getUrl(),
+            default => null,
+        };
     }
 }

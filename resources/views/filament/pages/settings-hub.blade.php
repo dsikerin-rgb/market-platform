@@ -90,7 +90,7 @@
                     <div class="settings-card-footer">Открыть</div>
                 </a>
             @endif
-            @if (\App\Filament\Pages\ReportsHub::canAccess())
+            @if (\App\Filament\Resources\ReportResource::canViewAny())
                 <a href="{{ $this->getReportsUrl() }}" class="settings-card">
                     <div class="settings-card-title">Отчётность</div>
                     <div class="settings-card-text">
