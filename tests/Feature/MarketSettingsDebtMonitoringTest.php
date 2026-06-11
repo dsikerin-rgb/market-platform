@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Filament\Pages\MarketSettings;
 use App\Models\Market;
 use App\Models\User;
+use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -57,7 +58,10 @@ class MarketSettingsDebtMonitoringTest extends TestCase
             'debt_monitoring_grace_days' => 10,
             'debt_monitoring_yellow_after_days' => 5,
             'debt_monitoring_red_after_days' => 60,
+            'debt_monitoring_minimum_debt_amount' => 500,
             'debt_monitoring_tenant_aggregate_mode' => 'dominant',
+            'debt_monitoring_use_settlement_balances_for_map' => true,
+            'debt_monitoring_settlement_map_aging_policy' => DebtDecisionPolicy::AGING_INVOICE_DAY,
             'holiday_default_notify_before_days' => 7,
             'holiday_notification_recipient_user_ids' => [],
             'request_notification_recipient_user_ids' => [],
@@ -82,6 +86,8 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->assertEquals(5, $settings['debt_monitoring']['yellow_after_days']);
         $this->assertEquals(60, $settings['debt_monitoring']['red_after_days']);
         $this->assertEquals('dominant', $settings['debt_monitoring']['tenant_aggregate_mode']);
+        $this->assertTrue($settings['debt_monitoring']['use_settlement_balances_for_map']);
+        $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $settings['debt_monitoring']['settlement_map_aging_policy']);
     }
 
     /**
@@ -102,6 +108,8 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->assertEquals(1, $state['debt_monitoring_yellow_after_days']);
         $this->assertEquals(30, $state['debt_monitoring_red_after_days']);
         $this->assertEquals('worst', $state['debt_monitoring_tenant_aggregate_mode']);
+        $this->assertFalse($state['debt_monitoring_use_settlement_balances_for_map']);
+        $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $state['debt_monitoring_settlement_map_aging_policy']);
     }
 
     /**
@@ -116,6 +124,8 @@ class MarketSettingsDebtMonitoringTest extends TestCase
                 'yellow_after_days' => 3,
                 'red_after_days' => 45,
                 'tenant_aggregate_mode' => 'worst',
+                'use_settlement_balances_for_map' => true,
+                'settlement_map_aging_policy' => DebtDecisionPolicy::AGING_INVOICE_DAY,
             ],
         ];
         $this->market->save();
@@ -133,6 +143,8 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->assertEquals(3, $state['debt_monitoring_yellow_after_days']);
         $this->assertEquals(45, $state['debt_monitoring_red_after_days']);
         $this->assertEquals('worst', $state['debt_monitoring_tenant_aggregate_mode']);
+        $this->assertTrue($state['debt_monitoring_use_settlement_balances_for_map']);
+        $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $state['debt_monitoring_settlement_map_aging_policy']);
     }
 
     /**
