@@ -33,7 +33,7 @@ class OneCDebtDecisionPreview extends Page
 
     public string $account = '62';
 
-    public string $agingPolicy = DebtDecisionPolicy::AGING_INVOICE_DAY;
+    public string $agingPolicy = DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY;
 
     public string $status = 'mismatches';
 
@@ -45,7 +45,7 @@ class OneCDebtDecisionPreview extends Page
 
     protected $queryString = [
         'account' => ['except' => '62'],
-        'agingPolicy' => ['except' => DebtDecisionPolicy::AGING_INVOICE_DAY, 'as' => 'aging'],
+        'agingPolicy' => ['except' => DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY, 'as' => 'aging'],
         'status' => ['except' => 'mismatches'],
         'search' => ['except' => ''],
         'perPage' => ['except' => '25'],
@@ -181,9 +181,10 @@ class OneCDebtDecisionPreview extends Page
             DebtDecisionPolicy::AGING_INVOICE_DAY,
             DebtDecisionPolicy::AGING_PERIOD_START,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
+            DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
         ], true)
             ? $value
-            : DebtDecisionPolicy::AGING_INVOICE_DAY;
+            : DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY;
     }
 
     private function normalizeStatus(mixed $value): string

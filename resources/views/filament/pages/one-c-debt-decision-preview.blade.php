@@ -387,6 +387,7 @@
                     \App\Services\Debt\DebtDecisionPolicy::AGING_INVOICE_DAY => 'до 10 числа месяца ОСВ',
                     \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START => 'от начала периода ОСВ',
                     \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT => 'от даты документа расчетов',
+                    \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY => 'от документа расчетов, срок до 10 числа',
                 ];
             @endphp
 
@@ -413,6 +414,7 @@
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_INVOICE_DAY }}">Срок до 10 числа</option>
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START }}">Срок от периода</option>
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT }}">Срок от документа</option>
+                            <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY }}">Документ + срок до 10</option>
                         </select>
 
                         <div class="onec-preview-chipset" role="group" aria-label="Фильтр строк">

@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
+use App\Services\Debt\DebtDecisionPolicy;
 use App\Services\Debt\DebtStatusResolver;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -837,7 +838,7 @@ class DebtStatusResolverTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_market_space_settlement_balance_defaults_to_invoice_day_aging(): void
+    public function test_market_space_settlement_balance_defaults_to_document_invoice_day_aging(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
 
@@ -910,12 +911,12 @@ class DebtStatusResolverTest extends TestCase
 
         $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
 
-        $this->assertSame('pending', $result['status']);
+        $this->assertSame('red', $result['status']);
         $this->assertSame('tenant_settlement_balances: map decision', $result['source']);
         $this->assertSame('space', $result['extra']['scope'] ?? null);
-        $this->assertSame('invoice-day', $result['extra']['aging_policy'] ?? null);
-        $this->assertSame('invoice_day', $result['extra']['aging_source'] ?? null);
-        $this->assertSame('2026-06-15', $result['extra']['due_date'] ?? null);
+        $this->assertSame(DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY, $result['extra']['aging_policy'] ?? null);
+        $this->assertSame('settlement_document_invoice_day', $result['extra']['aging_source'] ?? null);
+        $this->assertSame('2026-03-15', $result['extra']['due_date'] ?? null);
 
         Carbon::setTestNow();
     }

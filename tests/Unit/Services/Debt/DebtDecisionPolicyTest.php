@@ -126,6 +126,77 @@ class DebtDecisionPolicyTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_settlement_document_invoice_day_policy_uses_document_month_invoice_day(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $oldDebt = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'settlement_document_name' => 'Realization 01.04.2026 00:00:00',
+                    'closing_debit' => 10000,
+                    'closing_credit' => 0,
+                    'debt_amount' => 10000,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+        );
+
+        $currentDebt = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'settlement_document_name' => 'Realization 01.06.2026 00:00:00',
+                    'closing_debit' => 10000,
+                    'closing_credit' => 0,
+                    'debt_amount' => 10000,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+        );
+
+        $lateMonthDocument = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'settlement_document_name' => 'Realization 31.05.2026 00:00:00',
+                    'closing_debit' => 10000,
+                    'closing_credit' => 0,
+                    'debt_amount' => 10000,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+        );
+
+        $this->assertSame('red', $oldDebt['status']);
+        $this->assertSame('2026-04-15', $oldDebt['due_date']);
+        $this->assertSame('settlement_document_invoice_day', $oldDebt['aging_source']);
+
+        $this->assertSame('pending', $currentDebt['status']);
+        $this->assertSame('2026-06-15', $currentDebt['due_date']);
+
+        $this->assertSame('pending', $lateMonthDocument['status']);
+        $this->assertSame('2026-06-15', $lateMonthDocument['due_date']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_invoice_day_policy_marks_debt_overdue_after_invoice_day_and_grace(): void
     {
         Carbon::setTestNow('2026-06-16 12:00:00');
