@@ -159,7 +159,7 @@ class DebtStatusResolver
             $fallbackResult = $this->makeTenantFallbackResult(
                 $tenant,
                 'tenant-fallback: no financial link to space',
-                useSettlementBalances: false
+                useSettlementBalances: $this->shouldUseSettlementBalancesForMap($marketId)
             );
 
             if ($fallbackResult !== null) {
@@ -194,6 +194,18 @@ class DebtStatusResolver
                 severity: 0,
                 extra: ['scope' => 'none']
             );
+        }
+
+        if ($this->shouldUseSettlementBalancesForMap($marketId)) {
+            $settlementData = $this->fetchSettlementBalanceData($tenant, $contractExternalIds);
+            if ($settlementData !== null) {
+                return $this->makeMapResultFromSettlementBalanceData(
+                    $settlementData,
+                    $labels,
+                    $marketId,
+                    'space'
+                );
+            }
         }
 
         if (! Schema::hasTable('contract_debts')) {
@@ -741,6 +753,8 @@ class DebtStatusResolver
                 'tsb.account',
                 'tsb.period_from',
                 'tsb.period_to',
+                'tsb.contract_external_id',
+                'tsb.contract_name',
                 'tsb.settlement_document_name',
                 'tsb.imported_at',
                 'tsb.opening_debit',
@@ -887,6 +901,47 @@ class DebtStatusResolver
             updatedAt: $data['snapshot_label'] ?? null,
             source: self::SETTLEMENT_DEBT_SOURCE,
             severity: 1,
+            extra: $extra
+        );
+    }
+
+    private function makeMapResultFromSettlementBalanceData(array $data, array $labels, int $marketId, string $scope): array
+    {
+        $rows = $data['rows'];
+        $candidate = app(DebtDecisionPolicy::class)->candidateFromSettlementRows(
+            marketId: $marketId,
+            rows: $rows,
+            scope: $scope,
+            reason: $scope === 'space'
+                ? 'active space contract has OSV rows'
+                : 'tenant OSV rows used as map fallback',
+            account: implode(',', $rows->pluck('account')->filter()->unique()->values()->all()),
+            agingPolicy: $this->settlementMapAgingPolicy($marketId),
+        );
+
+        $status = (string) ($candidate['status'] ?? self::STATUS_GRAY);
+        $extra = [
+            'scope' => (string) ($candidate['scope'] ?? $scope),
+            'debt_amount' => (float) ($candidate['debt_amount'] ?? 0),
+            'accounts' => $rows->pluck('account')->filter()->unique()->values()->all(),
+            'latest_period_to' => $candidate['latest_period_to'] ?? ($data['latest_period_to'] ?? null),
+            'amount_source' => $candidate['amount_source'] ?? null,
+            'amount_basis' => $candidate['amount_basis'] ?? null,
+            'aging_policy' => $candidate['aging_policy'] ?? null,
+            'aging_source' => $candidate['aging_source'] ?? null,
+            'due_date' => $candidate['due_date'] ?? null,
+            'overdue_days' => $candidate['overdue_days'] ?? null,
+            'confidence' => $candidate['confidence'] ?? null,
+            'reason' => $candidate['reason'] ?? null,
+        ];
+
+        return $this->makeResult(
+            mode: 'auto',
+            status: $status,
+            label: $labels[$status] ?? $labels[self::STATUS_GRAY],
+            updatedAt: $data['snapshot_label'] ?? null,
+            source: self::SETTLEMENT_DEBT_SOURCE . ': map decision',
+            severity: $this->getSeverity($status),
             extra: $extra
         );
     }
@@ -1526,6 +1581,27 @@ class DebtStatusResolver
             'red_after_days' => $debtMonitoring['red_after_days'] ?? 30,
             'minimum_debt_amount' => $debtMonitoring['minimum_debt_amount'] ?? 500,
         ];
+    }
+
+    private function shouldUseSettlementBalancesForMap(int $marketId): bool
+    {
+        $market = Market::find($marketId);
+        $settings = is_array($market?->settings) ? $market->settings : [];
+        $debtMonitoring = is_array($settings['debt_monitoring'] ?? null) ? $settings['debt_monitoring'] : [];
+
+        return (bool) ($debtMonitoring['use_settlement_balances_for_map'] ?? false);
+    }
+
+    private function settlementMapAgingPolicy(int $marketId): string
+    {
+        $market = Market::find($marketId);
+        $settings = is_array($market?->settings) ? $market->settings : [];
+        $debtMonitoring = is_array($settings['debt_monitoring'] ?? null) ? $settings['debt_monitoring'] : [];
+        $policy = (string) ($debtMonitoring['settlement_map_aging_policy'] ?? DebtDecisionPolicy::AGING_PERIOD_START);
+
+        return in_array($policy, [DebtDecisionPolicy::AGING_PERIOD_START, DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT], true)
+            ? $policy
+            : DebtDecisionPolicy::AGING_PERIOD_START;
     }
 
     private function makeTenantFallbackResult(Tenant $tenant, string $source, bool $useSettlementBalances = true): ?array

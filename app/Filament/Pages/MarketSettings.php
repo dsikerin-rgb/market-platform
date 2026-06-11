@@ -328,6 +328,10 @@ class MarketSettings extends Page
             'debt_monitoring_tenant_aggregate_mode' => in_array($settings['debt_monitoring']['tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $settings['debt_monitoring']['tenant_aggregate_mode']
                 : 'worst',
+            'debt_monitoring_use_settlement_balances_for_map' => (bool) ($settings['debt_monitoring']['use_settlement_balances_for_map'] ?? false),
+            'debt_monitoring_settlement_map_aging_policy' => in_array($settings['debt_monitoring']['settlement_map_aging_policy'] ?? null, ['period-start', 'settlement-document'], true)
+                ? $settings['debt_monitoring']['settlement_map_aging_policy']
+                : 'period-start',
         ]);
     }
 
@@ -823,6 +827,31 @@ class MarketSettings extends Page
                                 'default' => 12,
                                 'lg' => 3,
                             ]),
+
+                        Forms\Components\Toggle::make('debt_monitoring_use_settlement_balances_for_map')
+                            ->label('Использовать ОСВ 1С для цветов карты')
+                            ->helperText('По умолчанию выключено. Перед включением проверьте страницу "Цвета ОСВ": карта начнет брать решения из tenant_settlement_balances.')
+                            ->default(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+
+                        Forms\Components\Select::make('debt_monitoring_settlement_map_aging_policy')
+                            ->label('Срок для карты по ОСВ')
+                            ->options([
+                                'period-start' => 'От начала периода ОСВ',
+                                'settlement-document' => 'От даты документа расчетов',
+                            ])
+                            ->helperText('Для карты безопаснее "от начала периода ОСВ": старые документы расчетов не превращают весь долг в красный автоматически.')
+                            ->default('period-start')
+                            ->native(false)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
                     ])
                     ->columns(12)
                     ->collapsible()
@@ -938,6 +967,10 @@ class MarketSettings extends Page
             'tenant_aggregate_mode' => in_array($state['debt_monitoring_tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $state['debt_monitoring_tenant_aggregate_mode']
                 : 'worst',
+            'use_settlement_balances_for_map' => (bool) ($state['debt_monitoring_use_settlement_balances_for_map'] ?? false),
+            'settlement_map_aging_policy' => in_array($state['debt_monitoring_settlement_map_aging_policy'] ?? null, ['period-start', 'settlement-document'], true)
+                ? $state['debt_monitoring_settlement_map_aging_policy']
+                : 'period-start',
         ];
 
         $this->market->fill([
