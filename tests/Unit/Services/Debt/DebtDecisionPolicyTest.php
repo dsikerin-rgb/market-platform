@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\Debt;
 
 use App\Models\Market;
+use App\Models\Tenant;
 use App\Services\Debt\DebtDecisionPolicy;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,6 +18,8 @@ class DebtDecisionPolicyTest extends TestCase
     private DebtDecisionPolicy $policy;
 
     private Market $market;
+
+    private Tenant $tenant;
 
     protected function setUp(): void
     {
@@ -34,6 +37,13 @@ class DebtDecisionPolicyTest extends TestCase
                     'minimum_debt_amount' => 500,
                 ],
             ],
+        ]);
+
+        $this->tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'History tenant',
+            'external_id' => 'history-tenant-1',
+            'debt_status' => null,
         ]);
     }
 
@@ -197,6 +207,115 @@ class DebtDecisionPolicyTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_settlement_net_balance_policy_uses_current_period_when_opening_net_debt_is_closed(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $candidate = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'account' => '62',
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'settlement_document_name' => 'Realization 31.03.2026 14:00:00',
+                    'opening_debit' => 38896,
+                    'opening_credit' => 38896,
+                    'turnover_debit' => 16887.15,
+                    'turnover_credit' => 0,
+                    'closing_debit' => 55783.15,
+                    'closing_credit' => 38896,
+                    'debt_amount' => 16887.15,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
+        );
+
+        $this->assertSame('pending', $candidate['status']);
+        $this->assertSame('2026-06-15', $candidate['due_date']);
+        $this->assertSame('settlement_net_balance_current_period', $candidate['aging_source']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_settlement_net_balance_policy_uses_oldest_positive_closing_balance_streak(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $this->insertSettlementHistory('tenant-history-1', 'contract-history-1', [
+            ['2026-03-01', '2026-03-31', 0, 0, 0, 0],
+            ['2026-04-01', '2026-04-30', 0, 0, 1200, 0],
+            ['2026-05-01', '2026-05-31', 1200, 0, 1200, 0],
+            ['2026-06-01', '2026-06-30', 1200, 0, 1200, 0],
+        ]);
+
+        $candidate = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'account' => '62',
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'contract_external_id' => 'contract-history-1',
+                    'opening_debit' => 1200,
+                    'opening_credit' => 0,
+                    'closing_debit' => 1200,
+                    'closing_credit' => 0,
+                    'debt_amount' => 1200,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
+        );
+
+        $this->assertSame('red', $candidate['status']);
+        $this->assertSame('2026-04-15', $candidate['due_date']);
+        $this->assertSame('settlement_net_balance_history', $candidate['aging_source']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_settlement_net_balance_policy_does_not_skip_missing_periods(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $this->insertSettlementHistory('tenant-history-1', 'contract-history-gap', [
+            ['2026-04-01', '2026-04-30', 0, 0, 1200, 0],
+            ['2026-06-01', '2026-06-30', 1200, 0, 1200, 0],
+        ]);
+
+        $candidate = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'account' => '62',
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'contract_external_id' => 'contract-history-gap',
+                    'opening_debit' => 1200,
+                    'opening_credit' => 0,
+                    'closing_debit' => 1200,
+                    'closing_credit' => 0,
+                    'debt_amount' => 1200,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
+        );
+
+        $this->assertSame('pending', $candidate['status']);
+        $this->assertSame('2026-06-15', $candidate['due_date']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_invoice_day_policy_marks_debt_overdue_after_invoice_day_and_grace(): void
     {
         Carbon::setTestNow('2026-06-16 12:00:00');
@@ -259,11 +378,53 @@ class DebtDecisionPolicyTest extends TestCase
         return (object) array_merge([
             'period_from' => '2026-06-01',
             'period_to' => '2026-06-30',
+            'tenant_id' => (int) $this->tenant->id,
             'contract_external_id' => 'contract-1',
+            'account' => '62',
             'settlement_document_name' => null,
+            'opening_debit' => 0,
+            'opening_credit' => 0,
+            'turnover_debit' => 0,
+            'turnover_credit' => 0,
             'closing_debit' => 0,
             'closing_credit' => 0,
             'debt_amount' => 0,
         ], $overrides);
+    }
+
+    /**
+     * @param array<int, array{0:string,1:string,2:float|int,3:float|int,4:float|int,5:float|int}> $periods
+     */
+    private function insertSettlementHistory(string $tenantExternalId, string $contractExternalId, array $periods): void
+    {
+        foreach ($periods as $period) {
+            [$periodFrom, $periodTo, $openingDebit, $openingCredit, $closingDebit, $closingCredit] = $period;
+
+            \DB::table('tenant_settlement_balances')->insert([
+                'market_id' => $this->market->id,
+                'tenant_id' => (int) $this->tenant->id,
+                'tenant_contract_id' => null,
+                'period_from' => $periodFrom,
+                'period_to' => $periodTo,
+                'tenant_external_id' => $tenantExternalId,
+                'tenant_name' => 'History tenant',
+                'contract_external_id' => $contractExternalId,
+                'contract_name' => 'History contract',
+                'account' => '62',
+                'currency' => 'RUB',
+                'opening_debit' => $openingDebit,
+                'opening_credit' => $openingCredit,
+                'turnover_debit' => max(0, (float) $closingDebit - (float) $openingDebit),
+                'turnover_credit' => max(0, (float) $closingCredit - (float) $openingCredit),
+                'closing_debit' => $closingDebit,
+                'closing_credit' => $closingCredit,
+                'source' => '1c',
+                'source_file' => '1c:settlements',
+                'imported_at' => Carbon::now(),
+                'source_row_hash' => hash('sha256', implode('|', [$tenantExternalId, $contractExternalId, $periodFrom, $periodTo])),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+        }
     }
 }

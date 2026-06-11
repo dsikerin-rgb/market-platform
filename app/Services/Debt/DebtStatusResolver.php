@@ -750,6 +750,8 @@ class DebtStatusResolver
 
         $rows = $query
             ->select([
+                'tsb.tenant_id',
+                'tsb.tenant_contract_id',
                 'tsb.account',
                 'tsb.period_from',
                 'tsb.period_to',
@@ -1597,16 +1599,17 @@ class DebtStatusResolver
         $market = Market::find($marketId);
         $settings = is_array($market?->settings) ? $market->settings : [];
         $debtMonitoring = is_array($settings['debt_monitoring'] ?? null) ? $settings['debt_monitoring'] : [];
-        $policy = (string) ($debtMonitoring['settlement_map_aging_policy'] ?? DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY);
+        $policy = (string) ($debtMonitoring['settlement_map_aging_policy'] ?? DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE);
 
         return in_array($policy, [
             DebtDecisionPolicy::AGING_INVOICE_DAY,
             DebtDecisionPolicy::AGING_PERIOD_START,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+            DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
         ], true)
             ? $policy
-            : DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY;
+            : DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE;
     }
 
     private function makeTenantFallbackResult(Tenant $tenant, string $source, bool $useSettlementBalances = true): ?array

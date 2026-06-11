@@ -7,12 +7,15 @@ namespace App\Services\Debt;
 use App\Models\Market;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class DebtDecisionPolicy
 {
     public const AGING_SETTLEMENT_DOCUMENT = 'settlement-document';
 
     public const AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY = 'settlement-document-invoice-day';
+
+    public const AGING_SETTLEMENT_NET_BALANCE = 'settlement-net-balance';
 
     public const AGING_INVOICE_DAY = 'invoice-day';
 
@@ -46,7 +49,15 @@ class DebtDecisionPolicy
             $reason .= '; debt below threshold';
             $agingSource = 'not_needed_below_threshold';
         } elseif ($netDebt > 0.009) {
-            [$dueDate, $agingSource] = $this->dueDateFromRows($rows, (int) $settings['grace_days'], $agingPolicy);
+            [$dueDate, $agingSource] = $this->dueDateFromRows(
+                $marketId,
+                $rows,
+                (int) $settings['grace_days'],
+                $agingPolicy,
+                $account,
+                $scope,
+                $minimumDebt,
+            );
 
             if ($dueDate === null) {
                 $status = 'gray';
@@ -197,11 +208,23 @@ class DebtDecisionPolicy
      * @param Collection<int, object> $rows
      * @return array{0:?Carbon,1:?string}
      */
-    private function dueDateFromRows(Collection $rows, int $graceDays, string $agingPolicy): array
+    private function dueDateFromRows(
+        int $marketId,
+        Collection $rows,
+        int $graceDays,
+        string $agingPolicy,
+        string $account,
+        string $scope,
+        float $minimumDebt,
+    ): array
     {
         $positiveRows = $rows->filter(static function (object $row): bool {
             return ((float) $row->debt_amount) > 0.009;
         });
+
+        if ($agingPolicy === self::AGING_SETTLEMENT_NET_BALANCE) {
+            return $this->dueDateFromNetBalanceHistory($marketId, $rows, $graceDays, $account, $scope, $minimumDebt);
+        }
 
         if ($agingPolicy === self::AGING_SETTLEMENT_DOCUMENT) {
             $dates = $positiveRows
@@ -267,6 +290,144 @@ class DebtDecisionPolicy
         } catch (\Throwable) {
             return [null, null];
         }
+    }
+
+    /**
+     * @param Collection<int, object> $rows
+     * @return array{0:?Carbon,1:?string}
+     */
+    private function dueDateFromNetBalanceHistory(
+        int $marketId,
+        Collection $rows,
+        int $graceDays,
+        string $account,
+        string $scope,
+        float $minimumDebt,
+    ): array {
+        $periodFrom = $rows->min('period_from');
+        if (! $periodFrom) {
+            return [null, null];
+        }
+
+        try {
+            $currentPeriod = Carbon::parse((string) $periodFrom)->startOfMonth();
+        } catch (\Throwable) {
+            return [null, null];
+        }
+
+        $openingDebt = (float) $rows->sum(static function (object $row): float {
+            return (float) ($row->opening_debit ?? 0) - (float) ($row->opening_credit ?? 0);
+        });
+
+        if ($openingDebt < $minimumDebt) {
+            return [$this->invoiceDayDueDate($currentPeriod, $graceDays), 'settlement_net_balance_current_period'];
+        }
+
+        $history = $this->settlementNetBalanceHistory($marketId, $rows, $account, $scope);
+        $positiveStreak = [];
+        $expectedPeriod = $currentPeriod->copy();
+
+        foreach ($history as $period) {
+            try {
+                $periodStart = Carbon::parse((string) $period->period_from)->startOfMonth();
+            } catch (\Throwable) {
+                break;
+            }
+
+            if (! $periodStart->equalTo($expectedPeriod)) {
+                break;
+            }
+
+            if ((float) ($period->debt_amount ?? 0) < $minimumDebt) {
+                break;
+            }
+
+            $positiveStreak[] = $period;
+            $expectedPeriod->subMonthNoOverflow();
+        }
+
+        if ($positiveStreak === []) {
+            return [$this->invoiceDayDueDate($currentPeriod, $graceDays), 'settlement_net_balance_current_period'];
+        }
+
+        $oldestPositivePeriod = end($positiveStreak);
+        $oldestPeriodFrom = $oldestPositivePeriod->period_from ?? null;
+        if (! $oldestPeriodFrom) {
+            return [$this->invoiceDayDueDate($currentPeriod, $graceDays), 'settlement_net_balance_current_period'];
+        }
+
+        try {
+            return [
+                $this->invoiceDayDueDate(Carbon::parse((string) $oldestPeriodFrom)->startOfMonth(), $graceDays),
+                'settlement_net_balance_history',
+            ];
+        } catch (\Throwable) {
+            return [$this->invoiceDayDueDate($currentPeriod, $graceDays), 'settlement_net_balance_current_period'];
+        }
+    }
+
+    /**
+     * @param Collection<int, object> $rows
+     * @return Collection<int, object>
+     */
+    private function settlementNetBalanceHistory(int $marketId, Collection $rows, string $account, string $scope): Collection
+    {
+        $latestPeriodTo = $rows->max('period_to');
+        $tenantIds = $rows
+            ->pluck('tenant_id')
+            ->filter()
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->unique()
+            ->values();
+        $contractExternalIds = $rows
+            ->pluck('contract_external_id')
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+        $accounts = $rows
+            ->pluck('account')
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($accounts->isEmpty()) {
+            $accounts = collect(explode(',', $account))
+                ->map(static fn (string $value): string => trim($value))
+                ->filter()
+                ->unique()
+                ->values();
+        }
+
+        if ($accounts->isEmpty() || $tenantIds->count() !== 1) {
+            return collect();
+        }
+
+        if ($scope === 'space' && $contractExternalIds->isEmpty()) {
+            return collect();
+        }
+
+        $query = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantIds->first())
+            ->whereIn('account', $accounts->all());
+
+        if ($latestPeriodTo) {
+            $query->where('period_to', '<=', $latestPeriodTo);
+        }
+
+        if ($scope === 'space') {
+            $query->whereIn('contract_external_id', $contractExternalIds->all());
+        }
+
+        return $query
+            ->select(['period_from', 'period_to'])
+            ->selectRaw('SUM(COALESCE(closing_debit, 0) - COALESCE(closing_credit, 0)) as debt_amount')
+            ->groupBy('period_from', 'period_to')
+            ->orderByDesc('period_to')
+            ->get();
     }
 
     private function documentInvoiceDayDueDate(Carbon $documentDate, int $graceDays): Carbon
