@@ -147,6 +147,52 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $state['debt_monitoring_settlement_map_aging_policy']);
     }
 
+    public function test_can_save_osv_map_setting_from_livewire_state(): void
+    {
+        $this->actingAs($this->superAdmin, 'web');
+        session(['dashboard_market_id' => $this->market->id]);
+
+        $page = app(MarketSettings::class);
+        $page->mount();
+
+        $page->form->fill([
+            'name' => $this->market->name,
+            'address' => $this->market->address ?? 'Тестовый адрес',
+            'timezone' => $this->market->timezone ?? 'Europe/Moscow',
+            'brand_name' => 'Тестовый маркетплейс',
+            'hero_title' => 'Hero заголовок',
+            'debt_monitoring_grace_days' => 5,
+            'debt_monitoring_yellow_after_days' => 1,
+            'debt_monitoring_red_after_days' => 30,
+            'debt_monitoring_minimum_debt_amount' => 500,
+            'debt_monitoring_tenant_aggregate_mode' => 'worst',
+            'debt_monitoring_use_settlement_balances_for_map' => false,
+            'debt_monitoring_settlement_map_aging_policy' => DebtDecisionPolicy::AGING_INVOICE_DAY,
+            'holiday_default_notify_before_days' => 7,
+            'holiday_notification_recipient_user_ids' => [],
+            'request_notification_recipient_user_ids' => [],
+            'request_repair_notification_recipient_user_ids' => [],
+            'request_help_notification_recipient_user_ids' => [],
+            'notification_channels_calendar' => ['database'],
+            'notification_channels_requests' => ['database'],
+            'notification_channels_messages' => ['database'],
+            'notification_channels_tasks' => ['database'],
+            'notification_channels_reminders' => ['database'],
+        ]);
+
+        $page->data['debt_monitoring_use_settlement_balances_for_map'] = true;
+        $page->data['debt_monitoring_settlement_map_aging_policy'] = DebtDecisionPolicy::AGING_INVOICE_DAY;
+
+        $page->save();
+
+        $this->market->refresh();
+
+        $settings = $this->market->settings['debt_monitoring'] ?? [];
+
+        $this->assertTrue($settings['use_settlement_balances_for_map'] ?? false);
+        $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $settings['settlement_map_aging_policy'] ?? null);
+    }
+
     /**
      * Тест: обратная совместимость — загрузка orange_after_days как yellow_after_days
      */

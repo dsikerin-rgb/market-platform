@@ -844,6 +844,7 @@ class MarketSettings extends Page
                             ->label('Использовать ОСВ 1С для цветов карты')
                             ->helperText('По умолчанию выключено. Перед включением проверьте страницу "Цвета ОСВ": карта начнет брать решения из tenant_settlement_balances.')
                             ->default(false)
+                            ->dehydrated()
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
@@ -860,6 +861,7 @@ class MarketSettings extends Page
                             ->helperText('Сумма берется из ОСВ 1С. Для карты основной вариант: счет должен быть выставлен до 10 числа месяца, затем применяется льготный период из настроек.')
                             ->default(DebtDecisionPolicy::AGING_INVOICE_DAY)
                             ->native(false)
+                            ->dehydrated()
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
@@ -877,7 +879,7 @@ class MarketSettings extends Page
         abort_unless($this->market, 404);
         abort_unless($this->canEditMarket, 403);
 
-        $state = $this->form->getState();
+        $state = array_replace($this->form->getState(), $this->data);
 
         // Нормализуем путь (Filament отдаёт строку для single upload).
         $newMapPath = $state['map_pdf_path'] ?? null;
@@ -968,6 +970,24 @@ class MarketSettings extends Page
             $redAfterDays = $yellowAfterDays + 1;
         }
         
+        $useSettlementBalancesForMap = array_key_exists('debt_monitoring_use_settlement_balances_for_map', $state)
+            ? (bool) $state['debt_monitoring_use_settlement_balances_for_map']
+            : (bool) ($settings['debt_monitoring']['use_settlement_balances_for_map'] ?? false);
+        $settlementMapAgingPolicy = in_array($state['debt_monitoring_settlement_map_aging_policy'] ?? null, [
+            DebtDecisionPolicy::AGING_INVOICE_DAY,
+            DebtDecisionPolicy::AGING_PERIOD_START,
+            DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
+        ], true)
+            ? $state['debt_monitoring_settlement_map_aging_policy']
+            : ($settings['debt_monitoring']['settlement_map_aging_policy'] ?? DebtDecisionPolicy::AGING_INVOICE_DAY);
+        $settlementMapAgingPolicy = in_array($settlementMapAgingPolicy, [
+            DebtDecisionPolicy::AGING_INVOICE_DAY,
+            DebtDecisionPolicy::AGING_PERIOD_START,
+            DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
+        ], true)
+            ? $settlementMapAgingPolicy
+            : DebtDecisionPolicy::AGING_INVOICE_DAY;
+
         $settings['debt_monitoring'] = [
             'grace_days' => is_numeric($state['debt_monitoring_grace_days'] ?? null)
                 ? max(0, min(30, (int) $state['debt_monitoring_grace_days']))
@@ -980,14 +1000,8 @@ class MarketSettings extends Page
             'tenant_aggregate_mode' => in_array($state['debt_monitoring_tenant_aggregate_mode'] ?? null, ['worst', 'dominant'], true)
                 ? $state['debt_monitoring_tenant_aggregate_mode']
                 : 'worst',
-            'use_settlement_balances_for_map' => (bool) ($state['debt_monitoring_use_settlement_balances_for_map'] ?? false),
-            'settlement_map_aging_policy' => in_array($state['debt_monitoring_settlement_map_aging_policy'] ?? null, [
-                DebtDecisionPolicy::AGING_INVOICE_DAY,
-                DebtDecisionPolicy::AGING_PERIOD_START,
-                DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
-            ], true)
-                ? $state['debt_monitoring_settlement_map_aging_policy']
-                : DebtDecisionPolicy::AGING_INVOICE_DAY,
+            'use_settlement_balances_for_map' => $useSettlementBalancesForMap,
+            'settlement_map_aging_policy' => $settlementMapAgingPolicy,
         ];
 
         $this->market->fill([
