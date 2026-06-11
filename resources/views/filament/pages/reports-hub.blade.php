@@ -1,6 +1,32 @@
 <x-filament-panels::page>
     @include('filament.partials.admin-workspace-styles')
 
+    @php
+        $section = $this->section;
+    @endphp
+
+    <style>
+        .reports-hub-tabs .aw-view-switch__item {
+            border: 0;
+            background: transparent;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .reports-hub-tabs .aw-view-switch__item.is-active {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .reports-hub-section {
+            max-width: 64rem;
+        }
+
+        .reports-hub-section-action {
+            margin-top: 1rem;
+        }
+    </style>
+
     <div class="aw-shell">
         <section class="aw-hero">
             <div class="aw-hero-grid">
@@ -13,8 +39,8 @@
                         <div>
                             <h1 class="aw-hero-heading">Отчёты</h1>
                             <p class="aw-hero-subheading">
-                                Единая рабочая точка для шаблонов отчётов, расписаний и истории запусков.
-                                Отсюда удобно переходить к настройке регулярных отчётов и контролю последних запусков.
+                                Единая рабочая точка для регулярных отчётов и контура 1С:
+                                шаблоны, запуски, начисления, документы и расчёты с арендаторами.
                             </p>
                         </div>
                     </div>
@@ -46,90 +72,172 @@
             </div>
         </section>
 
-        <div class="aw-grid">
-            <div class="aw-column aw-column--sidebar">
-                <section class="aw-panel">
-                    <div class="aw-panel-head">
-                        <div>
-                            <h2 class="aw-panel-title">Рабочие сценарии</h2>
-                            <p class="aw-panel-copy">Быстрые переходы к настройке шаблонов и просмотру истории запусков.</p>
-                        </div>
-                    </div>
-
-                    <div class="aw-panel-body">
-                        <div class="aw-action-grid">
-                            <a href="{{ $this->getTemplateUrl() }}" class="aw-link-card">
-                                <div class="aw-link-icon">
-                                    <x-filament::icon icon="heroicon-o-document-text" class="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p class="aw-link-title">Шаблоны отчётов</p>
-                                    <p class="aw-link-copy">Типы отчётов, параметры, расписания и получатели для регулярных запусков.</p>
-                                    <p class="aw-link-meta">Открыть список шаблонов</p>
-                                </div>
-                            </a>
-
-                            <a href="{{ $this->getRunsUrl() }}" class="aw-link-card">
-                                <div class="aw-link-icon">
-                                    <x-filament::icon icon="heroicon-o-play-circle" class="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <p class="aw-link-title">История запусков</p>
-                                    <p class="aw-link-copy">Статусы, файлы, ошибки и время выполнения по уже сформированным отчётам.</p>
-                                    <p class="aw-link-meta">Открыть историю запусков</p>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                </section>
-
+        <section class="aw-panel">
+            <div class="aw-panel-head">
+                <div>
+                    <h2 class="aw-panel-title">Разделы</h2>
+                    <p class="aw-panel-copy">Переключение внутри страницы без перехода на отдельные пункты меню.</p>
+                </div>
             </div>
 
-            <div class="aw-column aw-column--content">
-                <section class="aw-panel">
-                    <div class="aw-panel-head">
-                        <div>
-                            <h2 class="aw-panel-title">Состояние отчётного контура</h2>
-                            <p class="aw-panel-copy">Ключевые сигналы по активности шаблонов и последним запускам.</p>
-                        </div>
-                    </div>
-
-                    <div class="aw-panel-body">
-                        <div class="aw-stat-grid">
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Ошибочных запусков</div>
-                                <div class="aw-stat-value">{{ number_format($this->getFailedRunCount(), 0, ',', ' ') }}</div>
-                            </div>
-
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Последний запуск</div>
-                                <div class="aw-stat-value" style="font-size:1.1rem;">
-                                    {{ $this->getLastRunLabel() ?? 'Ещё не запускались' }}
-                                </div>
-                            </div>
-
-                            <div class="aw-stat-card">
-                                <div class="aw-stat-label">Статус последнего</div>
-                                <div class="aw-stat-value" style="font-size:1.1rem;">
-                                    {{ $this->getLatestRunStatusLabel() ?? 'Нет данных' }}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="aw-inline-actions" style="margin-top: 1.25rem;">
-                            <a href="{{ $this->getTemplateUrl() }}" class="aw-chip">
-                                <x-filament::icon icon="heroicon-m-cog-6-tooth" class="h-4 w-4" />
-                                Настроить шаблоны
-                            </a>
-
-                            <a href="{{ $this->getRunsUrl() }}" class="aw-chip">
-                                <x-filament::icon icon="heroicon-m-clock" class="h-4 w-4" />
-                                Посмотреть историю
-                            </a>
-                        </div>
-                    </div>
-                </section>
+            <div class="aw-panel-body">
+                <nav class="aw-view-switch reports-hub-tabs" aria-label="Разделы отчётов">
+                    <button type="button" wire:click="setSection('templates')" class="aw-view-switch__item {{ $section === 'templates' ? 'is-active' : '' }}">Шаблоны</button>
+                    <button type="button" wire:click="setSection('runs')" class="aw-view-switch__item {{ $section === 'runs' ? 'is-active' : '' }}">Запуски</button>
+                    <button type="button" wire:click="setSection('accruals')" class="aw-view-switch__item {{ $section === 'accruals' ? 'is-active' : '' }}">Начисления 1С</button>
+                    <button type="button" wire:click="setSection('documents')" class="aw-view-switch__item {{ $section === 'documents' ? 'is-active' : '' }}">Документы 1С</button>
+                    <button type="button" wire:click="setSection('settlements')" class="aw-view-switch__item {{ $section === 'settlements' ? 'is-active' : '' }}">Расчёты 1С</button>
+                </nav>
             </div>
-        </div>
+        </section>
+
+        <section class="aw-panel reports-hub-section">
+            <div class="aw-panel-head">
+                <div>
+                    @if ($section === 'templates')
+                        <h2 class="aw-panel-title">Шаблоны отчётов</h2>
+                        <p class="aw-panel-copy">Настройки регулярных отчётов: типы, параметры, расписания и получатели.</p>
+                    @elseif ($section === 'runs')
+                        <h2 class="aw-panel-title">Запуски отчётов</h2>
+                        <p class="aw-panel-copy">История формирования файлов, статусы последних запусков и ошибки выполнения.</p>
+                    @elseif ($section === 'accruals')
+                        <h2 class="aw-panel-title">Начисления 1С</h2>
+                        <p class="aw-panel-copy">Реестр импортированных начислений, связи с договорами и строки без договора.</p>
+                    @elseif ($section === 'documents')
+                        <h2 class="aw-panel-title">Документы 1С</h2>
+                        <p class="aw-panel-copy">Журнал начислений и оплат из 1С с фильтрами по периоду, типу документа и поиску.</p>
+                    @else
+                        <h2 class="aw-panel-title">Расчёты 1С</h2>
+                        <p class="aw-panel-copy">Сальдо и обороты ОСВ по арендаторам, договорам, организациям и счетам.</p>
+                    @endif
+                </div>
+            </div>
+
+            <div class="aw-panel-body">
+                @if ($section === 'templates')
+                    <div class="aw-list">
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Шаблоны отчётов</p>
+                                <p class="aw-list-copy">{{ number_format($this->getActiveReportCount(), 0, ',', ' ') }} активных из {{ number_format($this->getReportCount(), 0, ',', ' ') }}</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Регулярность</p>
+                                <p class="aw-list-copy">Шаблоны задают расписание, параметры формирования и список получателей.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="reports-hub-section-action">
+                        <a href="{{ $this->getTemplateUrl() }}" class="aw-chip">
+                            <x-filament::icon icon="heroicon-m-cog-6-tooth" class="h-4 w-4" />
+                            Открыть шаблоны
+                        </a>
+                    </div>
+                @elseif ($section === 'runs')
+                    <div class="aw-list">
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Всего запусков</p>
+                                <p class="aw-list-copy">{{ number_format($this->getRunCount(), 0, ',', ' ') }}</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Последний запуск</p>
+                                <p class="aw-list-copy">{{ $this->getLastRunLabel() ?? 'нет данных' }}{{ $this->getLatestRunStatusLabel() ? ' · ' . $this->getLatestRunStatusLabel() : '' }}</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Ошибки</p>
+                                <p class="aw-list-copy">{{ number_format($this->getFailedRunCount(), 0, ',', ' ') }} ошибочных запусков</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="reports-hub-section-action">
+                        <a href="{{ $this->getRunsUrl() }}" class="aw-chip">
+                            <x-filament::icon icon="heroicon-m-clock" class="h-4 w-4" />
+                            Открыть запуски
+                        </a>
+                    </div>
+                @elseif ($section === 'accruals')
+                    <div class="aw-list">
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Назначение</p>
+                                <p class="aw-list-copy">Контроль начислений из 1С и исторического импорта, поиск дублей и проблемных связей.</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Основные проверки</p>
+                                <p class="aw-list-copy">Период начисления, дата расчёта 1С, арендатор, договор, место и сумма с НДС.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="reports-hub-section-action">
+                        <a href="{{ $this->getOneCAccrualsUrl() }}" class="aw-chip">
+                            <x-filament::icon icon="heroicon-m-banknotes" class="h-4 w-4" />
+                            Открыть начисления
+                        </a>
+                    </div>
+                @elseif ($section === 'documents')
+                    <div class="aw-list">
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Документы за период</p>
+                                <p class="aw-list-copy">Единый журнал начислений и оплат, загруженных из 1С.</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Фильтры</p>
+                                <p class="aw-list-copy">Период, тип документа и поиск по арендатору, договору или основанию.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="reports-hub-section-action">
+                        <a href="{{ $this->getOneCDocumentsUrl() }}" class="aw-chip">
+                            <x-filament::icon icon="heroicon-m-document-text" class="h-4 w-4" />
+                            Открыть документы
+                        </a>
+                    </div>
+                @else
+                    <div class="aw-list">
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">ОСВ 1С</p>
+                                <p class="aw-list-copy">Контрольные суммы по начальным остаткам, оборотам и конечным остаткам.</p>
+                            </div>
+                        </div>
+
+                        <div class="aw-list-item">
+                            <div>
+                                <p class="aw-list-title">Долги и переплаты</p>
+                                <p class="aw-list-copy">Агрегация по арендатору, договору, организации и счёту для сверки с 1С.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="reports-hub-section-action">
+                        <a href="{{ $this->getOneCSettlementsUrl() }}" class="aw-chip">
+                            <x-filament::icon icon="heroicon-m-scale" class="h-4 w-4" />
+                            Открыть расчёты
+                        </a>
+                    </div>
+                @endif
+            </div>
+        </section>
     </div>
 </x-filament-panels::page>
