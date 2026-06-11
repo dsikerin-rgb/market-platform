@@ -118,7 +118,8 @@ class IntegrationExchangeAccessTest extends TestCase
         self::assertTrue(IntegrationExchangeResource::canDelete($exchange));
 
         $this->get(OpsDiagnostics::getUrl())
-            ->assertOk();
+            ->assertOk()
+            ->assertSee('onec-preview', false);
     }
 
     public function test_market_admin_cannot_access_diagnostics_or_integration_journal(): void
