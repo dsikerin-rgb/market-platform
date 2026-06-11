@@ -111,7 +111,7 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->assertEquals(30, $state['debt_monitoring_red_after_days']);
         $this->assertEquals('worst', $state['debt_monitoring_tenant_aggregate_mode']);
         $this->assertFalse($state['debt_monitoring_use_settlement_balances_for_map']);
-        $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $state['debt_monitoring_settlement_map_aging_policy']);
+        $this->assertSame(DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY, $state['debt_monitoring_settlement_map_aging_policy']);
     }
 
     /**

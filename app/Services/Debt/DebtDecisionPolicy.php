@@ -12,6 +12,8 @@ class DebtDecisionPolicy
 {
     public const AGING_SETTLEMENT_DOCUMENT = 'settlement-document';
 
+    public const AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY = 'settlement-document-invoice-day';
+
     public const AGING_INVOICE_DAY = 'invoice-day';
 
     public const AGING_PERIOD_START = 'period-start';
@@ -219,6 +221,23 @@ class DebtDecisionPolicy
             }
         }
 
+        if ($agingPolicy === self::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY) {
+            $dates = $positiveRows
+                ->map(fn (object $row): ?Carbon => $this->parseDocumentDate((string) ($row->settlement_document_name ?? '')))
+                ->filter()
+                ->values();
+
+            if ($dates->isNotEmpty()) {
+                return [
+                    $dates
+                        ->map(fn (Carbon $date): Carbon => $this->documentInvoiceDayDueDate($date, $graceDays))
+                        ->sortBy(fn (Carbon $date): int => $date->getTimestamp())
+                        ->first(),
+                    'settlement_document_invoice_day',
+                ];
+            }
+        }
+
         if ($agingPolicy === self::AGING_INVOICE_DAY) {
             $periodFrom = $positiveRows->min('period_from');
             if (! $periodFrom) {
@@ -226,14 +245,8 @@ class DebtDecisionPolicy
             }
 
             try {
-                $period = Carbon::parse((string) $periodFrom)->startOfMonth();
-
                 return [
-                    $period
-                        ->copy()
-                        ->day(min(self::DEFAULT_INVOICE_DAY_OF_MONTH, $period->daysInMonth))
-                        ->startOfDay()
-                        ->addDays($graceDays),
+                    $this->invoiceDayDueDate(Carbon::parse((string) $periodFrom)->startOfMonth(), $graceDays),
                     'invoice_day',
                 ];
             } catch (\Throwable) {
@@ -254,6 +267,25 @@ class DebtDecisionPolicy
         } catch (\Throwable) {
             return [null, null];
         }
+    }
+
+    private function documentInvoiceDayDueDate(Carbon $documentDate, int $graceDays): Carbon
+    {
+        $period = $documentDate->copy()->startOfMonth();
+        if ($documentDate->day > self::DEFAULT_INVOICE_DAY_OF_MONTH) {
+            $period->addMonthNoOverflow();
+        }
+
+        return $this->invoiceDayDueDate($period, $graceDays);
+    }
+
+    private function invoiceDayDueDate(Carbon $period, int $graceDays): Carbon
+    {
+        return $period
+            ->copy()
+            ->day(min(self::DEFAULT_INVOICE_DAY_OF_MONTH, $period->daysInMonth))
+            ->startOfDay()
+            ->addDays($graceDays);
     }
 
     private function parseDocumentDate(string $value): ?Carbon
