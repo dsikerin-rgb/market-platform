@@ -301,6 +301,8 @@ class DebtDecisionPreviewReport
 
         return $query
             ->select([
+                'tenant_id',
+                'tenant_contract_id',
                 'period_from',
                 'period_to',
                 'account',

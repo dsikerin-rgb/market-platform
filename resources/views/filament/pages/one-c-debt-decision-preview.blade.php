@@ -388,6 +388,7 @@
                     \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START => 'от начала периода ОСВ',
                     \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT => 'от даты документа расчетов',
                     \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY => 'от документа расчетов, срок до 10 числа',
+                    \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE => 'по чистому сальдо ОСВ',
                 ];
             @endphp
 
@@ -415,6 +416,7 @@
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_PERIOD_START }}">Срок от периода</option>
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT }}">Срок от документа</option>
                             <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY }}">Документ + срок до 10</option>
+                            <option value="{{ \App\Services\Debt\DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE }}">Чистое сальдо ОСВ</option>
                         </select>
 
                         <div class="onec-preview-chipset" role="group" aria-label="Фильтр строк">

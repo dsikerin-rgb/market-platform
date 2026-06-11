@@ -117,7 +117,7 @@ class MarketSettings extends Page
         'debt_monitoring_minimum_debt_amount' => 500,
         'debt_monitoring_tenant_aggregate_mode' => 'worst',
         'debt_monitoring_use_settlement_balances_for_map' => false,
-        'debt_monitoring_settlement_map_aging_policy' => DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+        'debt_monitoring_settlement_map_aging_policy' => DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
     ];
 
     public static function shouldRegisterNavigation(): bool
@@ -338,9 +338,10 @@ class MarketSettings extends Page
                 DebtDecisionPolicy::AGING_PERIOD_START,
                 DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
                 DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+                DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
             ], true)
                 ? $settings['debt_monitoring']['settlement_map_aging_policy']
-                : DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+                : DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
         ]);
     }
 
@@ -856,9 +857,10 @@ class MarketSettings extends Page
                                 DebtDecisionPolicy::AGING_PERIOD_START => 'От начала периода ОСВ',
                                 DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT => 'От даты документа расчетов',
                                 DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY => 'От документа расчетов, срок до 10 числа',
+                                DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE => 'По чистому сальдо ОСВ',
                             ])
                             ->helperText('Сумма берется из ОСВ 1С. Для карты основной вариант: счет должен быть выставлен до 10 числа месяца, затем применяется льготный период из настроек.')
-                            ->default(DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY)
+                            ->default(DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE)
                             ->native(false)
                             ->dehydrated()
                             ->disabled(fn (): bool => ! $this->canEditMarket)
@@ -976,17 +978,19 @@ class MarketSettings extends Page
             DebtDecisionPolicy::AGING_PERIOD_START,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+            DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
         ], true)
             ? $state['debt_monitoring_settlement_map_aging_policy']
-            : ($settings['debt_monitoring']['settlement_map_aging_policy'] ?? DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY);
+            : ($settings['debt_monitoring']['settlement_map_aging_policy'] ?? DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE);
         $settlementMapAgingPolicy = in_array($settlementMapAgingPolicy, [
             DebtDecisionPolicy::AGING_INVOICE_DAY,
             DebtDecisionPolicy::AGING_PERIOD_START,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT,
             DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY,
+            DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE,
         ], true)
             ? $settlementMapAgingPolicy
-            : DebtDecisionPolicy::AGING_SETTLEMENT_DOCUMENT_INVOICE_DAY;
+            : DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE;
 
         $settings['debt_monitoring'] = [
             'grace_days' => is_numeric($state['debt_monitoring_grace_days'] ?? null)
