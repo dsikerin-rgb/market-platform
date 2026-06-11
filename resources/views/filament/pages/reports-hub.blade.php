@@ -3,6 +3,9 @@
 
     @php
         $section = $this->section;
+        $accrualsSummary = $section === 'accruals' ? $this->getAccrualsSummary() : [];
+        $documentsSummary = $section === 'documents' ? $this->getDocumentsSummary() : [];
+        $settlementsSummary = $section === 'settlements' ? $this->getSettlementsSummary() : [];
     @endphp
 
     <style>
@@ -168,21 +171,37 @@
                         </a>
                     </div>
                 @elseif ($section === 'accruals')
-                    <div class="aw-list">
-                        <div class="aw-list-item">
-                            <div>
-                                <p class="aw-list-title">Назначение</p>
-                                <p class="aw-list-copy">Контроль начислений из 1С и исторического импорта, поиск дублей и проблемных связей.</p>
+                    @if ($accrualsSummary['emptyReason'] ?? null)
+                        <div class="aw-empty">{{ $accrualsSummary['emptyReason'] }}</div>
+                    @else
+                        <div class="aw-list">
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Последний период</p>
+                                    <p class="aw-list-copy">{{ $accrualsSummary['period'] }} · импорт {{ $accrualsSummary['importedAt'] ?? 'не указан' }}</p>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="aw-list-item">
-                            <div>
-                                <p class="aw-list-title">Основные проверки</p>
-                                <p class="aw-list-copy">Период начисления, дата расчёта 1С, арендатор, договор, место и сумма с НДС.</p>
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Начислено</p>
+                                    <p class="aw-list-copy">{{ $this->formatRub($accrualsSummary['total']) }} · строк {{ number_format($accrualsSummary['rows'], 0, ',', ' ') }}</p>
+                                </div>
+                            </div>
+
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Связи</p>
+                                    <p class="aw-list-copy">
+                                        С договором {{ number_format($accrualsSummary['linked'], 0, ',', ' ') }} · без договора {{ number_format($accrualsSummary['unlinked'], 0, ',', ' ') }}
+                                        @if ($accrualsSummary['spaces'] !== null)
+                                            · мест {{ number_format($accrualsSummary['spaces'], 0, ',', ' ') }}
+                                        @endif
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    @endif
 
                     <div class="reports-hub-section-action">
                         <a href="{{ $this->getOneCAccrualsUrl() }}" class="aw-chip">
@@ -191,21 +210,34 @@
                         </a>
                     </div>
                 @elseif ($section === 'documents')
-                    <div class="aw-list">
-                        <div class="aw-list-item">
-                            <div>
-                                <p class="aw-list-title">Документы за период</p>
-                                <p class="aw-list-copy">Единый журнал начислений и оплат, загруженных из 1С.</p>
+                    @if ($documentsSummary['emptyReason'] ?? null)
+                        <div class="aw-empty">{{ $documentsSummary['emptyReason'] }}</div>
+                    @else
+                        <div class="aw-list">
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Период</p>
+                                    <p class="aw-list-copy">{{ $documentsSummary['period'] }}</p>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="aw-list-item">
-                            <div>
-                                <p class="aw-list-title">Фильтры</p>
-                                <p class="aw-list-copy">Период, тип документа и поиск по арендатору, договору или основанию.</p>
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Документы</p>
+                                    <p class="aw-list-copy">
+                                        Всего {{ number_format($documentsSummary['documents'], 0, ',', ' ') }} · начисления {{ number_format($documentsSummary['accruals'], 0, ',', ' ') }} · оплаты {{ number_format($documentsSummary['payments'], 0, ',', ' ') }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Суммы</p>
+                                    <p class="aw-list-copy">Начислено {{ $this->formatRub($documentsSummary['accrued']) }} · оплачено {{ $this->formatRub($documentsSummary['paid']) }}</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    @endif
 
                     <div class="reports-hub-section-action">
                         <a href="{{ $this->getOneCDocumentsUrl() }}" class="aw-chip">
@@ -214,21 +246,43 @@
                         </a>
                     </div>
                 @else
-                    <div class="aw-list">
-                        <div class="aw-list-item">
-                            <div>
-                                <p class="aw-list-title">ОСВ 1С</p>
-                                <p class="aw-list-copy">Контрольные суммы по начальным остаткам, оборотам и конечным остаткам.</p>
+                    @if ($settlementsSummary['emptyReason'] ?? null)
+                        <div class="aw-empty">{{ $settlementsSummary['emptyReason'] }}</div>
+                    @else
+                        <div class="aw-list">
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">ОСВ 1С</p>
+                                    <p class="aw-list-copy">{{ $settlementsSummary['period'] }} · счёт {{ $settlementsSummary['account'] }} · импорт {{ $settlementsSummary['importedAt'] ?? 'не указан' }}</p>
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="aw-list-item">
-                            <div>
-                                <p class="aw-list-title">Долги и переплаты</p>
-                                <p class="aw-list-copy">Агрегация по арендатору, договору, организации и счёту для сверки с 1С.</p>
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Состав</p>
+                                    <p class="aw-list-copy">
+                                        Строк {{ number_format($settlementsSummary['rows'], 0, ',', ' ') }} · арендаторов {{ number_format($settlementsSummary['tenants'], 0, ',', ' ') }} · договоров {{ number_format($settlementsSummary['contracts'], 0, ',', ' ') }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Сальдо конечное</p>
+                                    <p class="aw-list-copy">
+                                        Итог {{ $this->formatRub($settlementsSummary['closingNet']) }} · Дт {{ $this->formatRub($settlementsSummary['closingDebit']) }} · Кт {{ $this->formatRub($settlementsSummary['closingCredit']) }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="aw-list-item">
+                                <div>
+                                    <p class="aw-list-title">Обороты</p>
+                                    <p class="aw-list-copy">Дт {{ $this->formatRub($settlementsSummary['turnoverDebit']) }} · Кт {{ $this->formatRub($settlementsSummary['turnoverCredit']) }}</p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    @endif
 
                     <div class="reports-hub-section-action">
                         <a href="{{ $this->getOneCSettlementsUrl() }}" class="aw-chip">
