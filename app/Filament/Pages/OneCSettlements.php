@@ -64,6 +64,21 @@ class OneCSettlements extends Page
         );
     }
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return null;
+    }
+
+    public function getSubheading(): ?string
+    {
+        return null;
+    }
+
     public function mount(): void
     {
         $marketId = $this->marketId();
