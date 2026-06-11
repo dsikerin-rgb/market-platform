@@ -5245,6 +5245,9 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
+          let renderRunId = 0;
+          let renderQueue = Promise.resolve();
+          let activeRenderTask = null;
           let shapes = [];
           let lastHit = null;
 
@@ -6387,13 +6390,51 @@
             await centerOnBbox(bbox, { zoomFactor: 1.2 });
           }
 
+          function isPdfRenderCancelled(error) {
+            const name = String(error?.name || '');
+            const message = String(error?.message || '');
+
+            return name === 'RenderingCancelledException'
+              || message.includes('Rendering cancelled')
+              || message.includes('Rendering canceled');
+          }
+
           async function render() {
             if (!page) return;
+
+            const runId = ++renderRunId;
+
+            if (activeRenderTask && typeof activeRenderTask.cancel === 'function') {
+              try {
+                activeRenderTask.cancel();
+              } catch (error) {
+                if (!isPdfRenderCancelled(error)) {
+                  console.warn(error);
+                }
+              }
+            }
+
+            renderQueue = renderQueue
+              .catch((error) => {
+                if (!isPdfRenderCancelled(error)) {
+                  console.error(error);
+                }
+              })
+              .then(() => renderLatest(runId));
+
+            return renderQueue;
+          }
+
+          async function renderLatest(runId) {
+            if (!page) return;
+            if (runId !== renderRunId) return;
 
             if (bootstrappingMap) {
               setMapLoadProgress(92, 'Отрисовка карты…', 'rendering');
               await nextUiFrame();
             }
+
+            if (runId !== renderRunId) return;
 
             const centerX = stage.scrollLeft + stage.clientWidth / 2;
             const centerY = stage.scrollTop + stage.clientHeight / 2;
@@ -6424,7 +6465,24 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.restore();
 
-            await page.render({ canvasContext: ctx, viewport }).promise;
+            const renderTask = page.render({ canvasContext: ctx, viewport });
+            activeRenderTask = renderTask;
+
+            try {
+              await renderTask.promise;
+            } catch (error) {
+              if (!isPdfRenderCancelled(error)) {
+                throw error;
+              }
+
+              return;
+            } finally {
+              if (activeRenderTask === renderTask) {
+                activeRenderTask = null;
+              }
+            }
+
+            if (runId !== renderRunId) return;
 
             stage.scrollLeft = Math.max(0, relX * canvas.width - stage.clientWidth / 2);
             stage.scrollTop  = Math.max(0, relY * canvas.height - stage.clientHeight / 2);
