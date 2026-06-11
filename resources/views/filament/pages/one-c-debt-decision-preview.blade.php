@@ -1,4 +1,7 @@
-<x-filament-panels::page>
+<div>
+    @if (! $this->embedded)
+        <x-filament-panels::page>
+    @endif
     @php
         $report = $this->getReport();
         $summary = $report['summary'];
@@ -552,4 +555,7 @@
             </section>
         @endif
     </div>
-</x-filament-panels::page>
+    @if (! $this->embedded)
+        </x-filament-panels::page>
+    @endif
+</div>

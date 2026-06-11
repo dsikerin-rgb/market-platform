@@ -1020,6 +1020,7 @@
             <div class="ops-tablist" role="tablist" aria-label="Разделы диагностики">
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'overview'" @click="tab = 'overview'">Обзор</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'signals'" @click="tab = 'signals'">Сигналы</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'onec-debt-preview'" @click="tab = 'onec-debt-preview'">Цвета ОСВ</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'maintenance'" @click="tab = 'maintenance'">Обслуживание</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'backups'" @click="tab = 'backups'">Бэкапы</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'commands'" @click="tab = 'commands'">Команды</button>
@@ -1343,6 +1344,10 @@
                         @endif
                     </div>
                 </x-filament::section>
+            </div>
+
+            <div class="ops-tabpanel" x-show="tab === 'onec-debt-preview'">
+                @livewire(\App\Filament\Pages\OneCDebtDecisionPreview::class, ['embedded' => true], key('ops-one-c-debt-decision-preview'))
             </div>
 
             <div class="ops-tabpanel" x-show="tab === 'maintenance'">

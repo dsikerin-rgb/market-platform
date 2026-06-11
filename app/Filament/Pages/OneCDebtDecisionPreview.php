@@ -43,6 +43,8 @@ class OneCDebtDecisionPreview extends Page
 
     public int $page = 1;
 
+    public bool $embedded = false;
+
     protected $queryString = [
         'account' => ['except' => '62'],
         'agingPolicy' => ['except' => DebtDecisionPolicy::AGING_SETTLEMENT_NET_BALANCE, 'as' => 'aging'],
@@ -62,8 +64,14 @@ class OneCDebtDecisionPreview extends Page
         );
     }
 
-    public function mount(): void
+    public static function shouldRegisterNavigation(): bool
     {
+        return false;
+    }
+
+    public function mount(bool $embedded = false): void
+    {
+        $this->embedded = $embedded;
         $this->account = $this->normalizeAccount($this->account);
         $this->agingPolicy = $this->normalizeAgingPolicy($this->agingPolicy);
         $this->status = $this->normalizeStatus($this->status);
