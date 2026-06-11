@@ -97,6 +97,63 @@ class DebtDecisionPolicyTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_invoice_day_policy_uses_tenth_day_of_settlement_month_plus_grace(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $candidate = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'settlement_document_name' => 'Realization 01.05.2026 00:00:00',
+                    'closing_debit' => 10000,
+                    'closing_credit' => 0,
+                    'debt_amount' => 10000,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_INVOICE_DAY,
+        );
+
+        $this->assertSame('pending', $candidate['status']);
+        $this->assertSame('2026-06-15', $candidate['due_date']);
+        $this->assertSame('invoice_day', $candidate['aging_source']);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_invoice_day_policy_marks_debt_overdue_after_invoice_day_and_grace(): void
+    {
+        Carbon::setTestNow('2026-06-16 12:00:00');
+
+        $candidate = $this->policy->candidateFromSettlementRows(
+            marketId: (int) $this->market->id,
+            rows: collect([
+                $this->row([
+                    'period_from' => '2026-06-01',
+                    'period_to' => '2026-06-30',
+                    'closing_debit' => 10000,
+                    'closing_credit' => 0,
+                    'debt_amount' => 10000,
+                ]),
+            ]),
+            scope: 'space',
+            reason: 'test rows',
+            account: '62',
+            agingPolicy: DebtDecisionPolicy::AGING_INVOICE_DAY,
+        );
+
+        $this->assertSame('orange', $candidate['status']);
+        $this->assertSame('2026-06-15', $candidate['due_date']);
+        $this->assertGreaterThanOrEqual(1, $candidate['overdue_days']);
+
+        Carbon::setTestNow();
+    }
+
     public function test_closed_settlement_balance_keeps_amount_and_status_separate(): void
     {
         $candidate = $this->policy->candidateFromSettlementRows(

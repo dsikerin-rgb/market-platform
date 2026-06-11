@@ -837,6 +837,89 @@ class DebtStatusResolverTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_market_space_settlement_balance_defaults_to_invoice_day_aging(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $this->market->settings = [
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+                'minimum_debt_amount' => 500,
+                'use_settlement_balances_for_map' => true,
+            ],
+        ];
+        $this->market->save();
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Space settlement invoice day tenant',
+            'external_id' => 'space-settlement-invoice-day-tenant-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'S-103',
+            'code' => 'space-settlement-103',
+            'is_active' => true,
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'space-settlement-contract-invoice-day-001',
+            'number' => 'SSC-003',
+            'status' => 'active',
+            'is_active' => true,
+            'starts_at' => Carbon::now()->subMonth(),
+            'ends_at' => null,
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => $contract->external_id,
+            'contract_name' => 'Space settlement contract invoice day',
+            'settlement_document_name' => 'Realization 01.03.2026 14:00:00',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 0,
+            'opening_credit' => 0,
+            'turnover_debit' => 1200,
+            'turnover_credit' => 0,
+            'closing_debit' => 1200,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'space-settlement-balance-invoice-day'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertSame('pending', $result['status']);
+        $this->assertSame('tenant_settlement_balances: map decision', $result['source']);
+        $this->assertSame('space', $result['extra']['scope'] ?? null);
+        $this->assertSame('invoice-day', $result['extra']['aging_policy'] ?? null);
+        $this->assertSame('invoice_day', $result['extra']['aging_source'] ?? null);
+        $this->assertSame('2026-06-15', $result['extra']['due_date'] ?? null);
+
+        Carbon::setTestNow();
+    }
+
     public function test_settlement_balance_uses_document_date_for_aging(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
