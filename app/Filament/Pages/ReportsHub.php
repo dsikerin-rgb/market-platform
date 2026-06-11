@@ -5,10 +5,14 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\ReportRunResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
+use App\Models\Market;
 use App\Models\Report;
 use App\Models\ReportRun;
-use Filament\Facades\Filament;
+use App\Support\OneC\AccrualPaymentReconciliationReport;
+use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ReportsHub extends Page
@@ -107,8 +111,15 @@ class ReportsHub extends Page
 
     public function getMarketName(): string
     {
-        return filament()->getTenant()?->name
-            ?? filament()->auth()->user()?->market?->name
+        $marketId = $this->marketId();
+
+        if ($marketId === null) {
+            return 'Выберите рынок';
+        }
+
+        return Market::query()
+            ->whereKey($marketId)
+            ->value('name')
             ?? 'Выберите рынок';
     }
 
@@ -169,19 +180,230 @@ class ReportsHub extends Page
             ->toString();
     }
 
-    protected static function selectedMarketIdFromSession(): ?int
+    /**
+     * @return array<string, mixed>
+     */
+    public function getAccrualsSummary(): array
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
+        $marketId = $this->marketId();
 
-        return filled($value) ? (int) $value : null;
+        if ($marketId === null) {
+            return $this->emptySummary('Выберите рынок');
+        }
+
+        if (! Schema::hasTable('tenant_accruals') || ! Schema::hasColumn('tenant_accruals', 'period')) {
+            return $this->emptySummary('Таблица начислений ещё не создана');
+        }
+
+        $columns = Schema::getColumnListing('tenant_accruals');
+        $amountColumn = $this->pickFirstExisting($columns, ['total_with_vat', 'total_no_vat', 'amount']);
+
+        if ($amountColumn === null) {
+            return $this->emptySummary('В таблице начислений нет суммы');
+        }
+
+        $latestPeriod = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->when(in_array('source', $columns, true), fn ($query) => $query->where('source', '1c'))
+            ->max('period');
+
+        if (! filled($latestPeriod)) {
+            return $this->emptySummary('Нет загруженных начислений 1С');
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->where('period', $latestPeriod)
+            ->when(in_array('source', $columns, true), fn ($query) => $query->where('source', '1c'));
+
+        $rows = (clone $query)->count();
+        $linked = in_array('tenant_contract_id', $columns, true)
+            ? (clone $query)->whereNotNull('tenant_contract_id')->count()
+            : 0;
+        $unlinked = in_array('tenant_contract_id', $columns, true)
+            ? (clone $query)->whereNull('tenant_contract_id')->count()
+            : 0;
+        $spaces = in_array('market_space_id', $columns, true)
+            ? (clone $query)->whereNotNull('market_space_id')->distinct('market_space_id')->count('market_space_id')
+            : null;
+        $importedAt = in_array('imported_at', $columns, true)
+            ? (clone $query)->max('imported_at')
+            : (in_array('created_at', $columns, true) ? (clone $query)->max('created_at') : null);
+
+        return [
+            'emptyReason' => null,
+            'period' => $this->formatMonth((string) $latestPeriod),
+            'total' => (float) (clone $query)->sum($amountColumn),
+            'rows' => (int) $rows,
+            'linked' => (int) $linked,
+            'unlinked' => (int) $unlinked,
+            'spaces' => $spaces === null ? null : (int) $spaces,
+            'importedAt' => $this->formatDateTime($importedAt),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getDocumentsSummary(): array
+    {
+        $marketId = $this->marketId();
+
+        if ($marketId === null) {
+            return $this->emptySummary('Выберите рынок');
+        }
+
+        $service = app(AccrualPaymentReconciliationReport::class);
+        [$fromDate, $toDate] = $service->defaultDateRange($marketId);
+        $report = $service->build($marketId, $fromDate, $toDate);
+        $summary = $report['summary'];
+
+        return [
+            'emptyReason' => $report['emptyReason'],
+            'period' => $report['periodLabel'],
+            'documents' => (int) $summary['rows_count'],
+            'accruals' => (int) $summary['accrual_count'],
+            'payments' => (int) $summary['payment_count'],
+            'accrued' => (float) $summary['accrued'],
+            'paid' => (float) $summary['paid'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getSettlementsSummary(): array
+    {
+        $marketId = $this->marketId();
+
+        if ($marketId === null) {
+            return $this->emptySummary('Выберите рынок');
+        }
+
+        if (! Schema::hasTable('tenant_settlement_balances')) {
+            return $this->emptySummary('Таблица расчётов 1С ещё не создана');
+        }
+
+        $latest = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->orderByDesc('period_to')
+            ->orderByDesc('imported_at')
+            ->first(['period_from', 'period_to', 'account']);
+
+        if (! $latest) {
+            return $this->emptySummary('Нет загруженной ОСВ 1С');
+        }
+
+        $summary = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->where('period_from', (string) $latest->period_from)
+            ->where('period_to', (string) $latest->period_to)
+            ->where('account', (string) $latest->account)
+            ->selectRaw('count(*) as rows')
+            ->selectRaw('count(distinct tenant_external_id) as tenants')
+            ->selectRaw('count(distinct contract_external_id) as contracts')
+            ->selectRaw('count(distinct organization_external_id) as organizations')
+            ->selectRaw('coalesce(sum(opening_debit),0) as opening_debit')
+            ->selectRaw('coalesce(sum(opening_credit),0) as opening_credit')
+            ->selectRaw('coalesce(sum(turnover_debit),0) as turnover_debit')
+            ->selectRaw('coalesce(sum(turnover_credit),0) as turnover_credit')
+            ->selectRaw('coalesce(sum(closing_debit),0) as closing_debit')
+            ->selectRaw('coalesce(sum(closing_credit),0) as closing_credit')
+            ->selectRaw('max(imported_at) as imported_at')
+            ->first();
+
+        $closingDebit = (float) ($summary->closing_debit ?? 0);
+        $closingCredit = (float) ($summary->closing_credit ?? 0);
+
+        return [
+            'emptyReason' => null,
+            'period' => $this->formatDateRange((string) $latest->period_from, (string) $latest->period_to),
+            'account' => (string) ($latest->account ?: '62'),
+            'rows' => (int) ($summary->rows ?? 0),
+            'tenants' => (int) ($summary->tenants ?? 0),
+            'contracts' => (int) ($summary->contracts ?? 0),
+            'organizations' => (int) ($summary->organizations ?? 0),
+            'openingDebit' => (float) ($summary->opening_debit ?? 0),
+            'openingCredit' => (float) ($summary->opening_credit ?? 0),
+            'turnoverDebit' => (float) ($summary->turnover_debit ?? 0),
+            'turnoverCredit' => (float) ($summary->turnover_credit ?? 0),
+            'closingDebit' => $closingDebit,
+            'closingCredit' => $closingCredit,
+            'closingNet' => $closingDebit - $closingCredit,
+            'importedAt' => $this->formatDateTime($summary->imported_at ?? null),
+        ];
+    }
+
+    public function formatRub(mixed $value): string
+    {
+        return number_format((float) $value, 2, ',', ' ') . ' ₽';
     }
 
     protected function marketId(): ?int
     {
-        return static::selectedMarketIdFromSession()
-            ?? filament()->auth()->user()?->market_id;
+        $user = filament()->auth()->user();
+
+        if (! $user) {
+            return null;
+        }
+
+        return app(AccrualPaymentReconciliationReport::class)->resolveMarketIdForUser($user);
+    }
+
+    /**
+     * @param list<string> $columns
+     * @param list<string> $candidates
+     */
+    private function pickFirstExisting(array $columns, array $candidates): ?string
+    {
+        foreach ($candidates as $candidate) {
+            if (in_array($candidate, $columns, true)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptySummary(string $reason): array
+    {
+        return ['emptyReason' => $reason];
+    }
+
+    private function formatMonth(string $value): string
+    {
+        try {
+            return CarbonImmutable::parse($value)->format('m.Y');
+        } catch (\Throwable) {
+            return $value;
+        }
+    }
+
+    private function formatDateRange(string $fromDate, string $toDate): string
+    {
+        try {
+            return CarbonImmutable::parse($fromDate)->format('d.m.Y') . ' - ' . CarbonImmutable::parse($toDate)->format('d.m.Y');
+        } catch (\Throwable) {
+            return "{$fromDate} - {$toDate}";
+        }
+    }
+
+    private function formatDateTime(mixed $value): ?string
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse((string) $value)
+                ->timezone(config('app.timezone'))
+                ->format('d.m.Y H:i');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
     }
 
     private function normalizeSection(?string $section): string
