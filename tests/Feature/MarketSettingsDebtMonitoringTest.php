@@ -11,6 +11,7 @@ use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class MarketSettingsDebtMonitoringTest extends TestCase
@@ -27,6 +28,7 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->market = Market::create([
             'name' => 'Тестовый рынок',
             'slug' => 'test-market',
+            'address' => 'Тестовый адрес',
         ]);
 
         $this->superAdmin = User::factory()->create([
@@ -191,6 +193,76 @@ class MarketSettingsDebtMonitoringTest extends TestCase
 
         $this->assertTrue($settings['use_settlement_balances_for_map'] ?? false);
         $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $settings['settlement_map_aging_policy'] ?? null);
+    }
+
+    public function test_can_save_osv_map_setting_through_livewire_page(): void
+    {
+        $this->actingAs($this->superAdmin, 'web');
+        session(['dashboard_market_id' => $this->market->id]);
+
+        Livewire::test(MarketSettings::class)
+            ->set('data.debt_monitoring_use_settlement_balances_for_map', true)
+            ->set('data.debt_monitoring_settlement_map_aging_policy', DebtDecisionPolicy::AGING_INVOICE_DAY)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->market->refresh();
+
+        $settings = $this->market->settings['debt_monitoring'] ?? [];
+
+        $this->assertTrue($settings['use_settlement_balances_for_map'] ?? false);
+        $this->assertSame(DebtDecisionPolicy::AGING_INVOICE_DAY, $settings['settlement_map_aging_policy'] ?? null);
+    }
+
+    public function test_market_settings_save_preserves_map_and_drops_invalid_recipients(): void
+    {
+        $otherMarket = Market::create([
+            'name' => 'Другой рынок',
+            'slug' => 'other-market',
+            'address' => 'Другой адрес',
+        ]);
+        $otherUser = User::factory()->create([
+            'market_id' => $otherMarket->id,
+        ]);
+
+        $this->market->settings = [
+            'map_pdf_path' => 'market-maps/market_1/plan-2023.pdf',
+            'request_notification_recipient_user_ids' => [
+                (string) $this->superAdmin->id,
+                (string) $otherUser->id,
+                '999999',
+            ],
+            'request_repair_notification_recipient_user_ids' => [
+                (string) $this->superAdmin->id,
+                (string) $otherUser->id,
+            ],
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+                'tenant_aggregate_mode' => 'worst',
+            ],
+        ];
+        $this->market->save();
+
+        $this->actingAs($this->superAdmin, 'web');
+        session(['dashboard_market_id' => $this->market->id]);
+
+        Livewire::test(MarketSettings::class)
+            ->assertSet('data.request_notification_recipient_user_ids', [(string) $this->superAdmin->id])
+            ->assertSet('data.request_repair_notification_recipient_user_ids', [(string) $this->superAdmin->id])
+            ->set('data.debt_monitoring_use_settlement_balances_for_map', true)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->market->refresh();
+
+        $settings = $this->market->settings ?? [];
+
+        $this->assertSame('market-maps/market_1/plan-2023.pdf', $settings['map_pdf_path'] ?? null);
+        $this->assertSame([(string) $this->superAdmin->id], $settings['request_notification_recipient_user_ids'] ?? null);
+        $this->assertSame([(string) $this->superAdmin->id], $settings['request_repair_notification_recipient_user_ids'] ?? null);
+        $this->assertTrue($settings['debt_monitoring']['use_settlement_balances_for_map'] ?? false);
     }
 
     /**

@@ -266,22 +266,18 @@ class MarketSettings extends Page
             'holiday_default_notify_before_days' => is_numeric($settings['holiday_default_notify_before_days'] ?? null)
                 ? (int) $settings['holiday_default_notify_before_days']
                 : 7,
-            'holiday_notification_recipient_user_ids' => array_values(array_filter(
-                (array) ($settings['holiday_notification_recipient_user_ids'] ?? []),
-                static fn ($value): bool => is_numeric($value),
-            )),
-            'request_notification_recipient_user_ids' => array_values(array_filter(
-                (array) ($settings['request_notification_recipient_user_ids'] ?? []),
-                static fn ($value): bool => is_numeric($value),
-            )),
-            'request_repair_notification_recipient_user_ids' => array_values(array_filter(
-                (array) ($settings['request_repair_notification_recipient_user_ids'] ?? []),
-                static fn ($value): bool => is_numeric($value),
-            )),
-            'request_help_notification_recipient_user_ids' => array_values(array_filter(
-                (array) ($settings['request_help_notification_recipient_user_ids'] ?? []),
-                static fn ($value): bool => is_numeric($value),
-            )),
+            'holiday_notification_recipient_user_ids' => $this->normalizeMarketNotificationRecipientUserIds(
+                $settings['holiday_notification_recipient_user_ids'] ?? []
+            ),
+            'request_notification_recipient_user_ids' => $this->normalizeMarketNotificationRecipientUserIds(
+                $settings['request_notification_recipient_user_ids'] ?? []
+            ),
+            'request_repair_notification_recipient_user_ids' => $this->normalizeMarketNotificationRecipientUserIds(
+                $settings['request_repair_notification_recipient_user_ids'] ?? []
+            ),
+            'request_help_notification_recipient_user_ids' => $this->normalizeMarketNotificationRecipientUserIds(
+                $settings['request_help_notification_recipient_user_ids'] ?? []
+            ),
             'notification_channels_calendar' => $this->normalizeNotificationChannels(
                 $settings['notification_channels_calendar'] ?? ['database']
             ),
@@ -844,6 +840,7 @@ class MarketSettings extends Page
                             ->label('Использовать ОСВ 1С для цветов карты')
                             ->helperText('По умолчанию выключено. Перед включением проверьте страницу "Цвета ОСВ": карта начнет брать решения из tenant_settlement_balances.')
                             ->default(false)
+                            ->live()
                             ->dehydrated()
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
@@ -890,6 +887,9 @@ class MarketSettings extends Page
 
         $settings = (array) ($this->market->settings ?? []);
         $oldMapPath = isset($settings['map_pdf_path']) && is_string($settings['map_pdf_path']) ? $settings['map_pdf_path'] : null;
+        if ($newMapPath === null && $oldMapPath !== null) {
+            $newMapPath = $oldMapPath;
+        }
 
         // Если файл заменили/удалили — удаляем старый, чтобы не копить мусор.
         if ($oldMapPath && $oldMapPath !== $newMapPath) {
@@ -904,22 +904,18 @@ class MarketSettings extends Page
         $settings['holiday_default_notify_before_days'] = is_numeric($state['holiday_default_notify_before_days'] ?? null)
             ? max(0, (int) $state['holiday_default_notify_before_days'])
             : 7;
-        $settings['holiday_notification_recipient_user_ids'] = array_values(array_filter(
-            (array) ($state['holiday_notification_recipient_user_ids'] ?? []),
-            static fn ($value): bool => is_numeric($value),
-        ));
-        $settings['request_notification_recipient_user_ids'] = array_values(array_filter(
-            (array) ($state['request_notification_recipient_user_ids'] ?? []),
-            static fn ($value): bool => is_numeric($value),
-        ));
-        $settings['request_repair_notification_recipient_user_ids'] = array_values(array_filter(
-            (array) ($state['request_repair_notification_recipient_user_ids'] ?? []),
-            static fn ($value): bool => is_numeric($value),
-        ));
-        $settings['request_help_notification_recipient_user_ids'] = array_values(array_filter(
-            (array) ($state['request_help_notification_recipient_user_ids'] ?? []),
-            static fn ($value): bool => is_numeric($value),
-        ));
+        $settings['holiday_notification_recipient_user_ids'] = $this->normalizeMarketNotificationRecipientUserIds(
+            $state['holiday_notification_recipient_user_ids'] ?? []
+        );
+        $settings['request_notification_recipient_user_ids'] = $this->normalizeMarketNotificationRecipientUserIds(
+            $state['request_notification_recipient_user_ids'] ?? []
+        );
+        $settings['request_repair_notification_recipient_user_ids'] = $this->normalizeMarketNotificationRecipientUserIds(
+            $state['request_repair_notification_recipient_user_ids'] ?? []
+        );
+        $settings['request_help_notification_recipient_user_ids'] = $this->normalizeMarketNotificationRecipientUserIds(
+            $state['request_help_notification_recipient_user_ids'] ?? []
+        );
         $settings['notification_channels_calendar'] = $this->normalizeNotificationChannels(
             $state['notification_channels_calendar'] ?? ['database']
         );
@@ -1120,6 +1116,34 @@ class MarketSettings extends Page
         )));
 
         return $normalized === [] ? ['database'] : $normalized;
+    }
+
+    /**
+     * @param  mixed  $userIds
+     * @return list<string>
+     */
+    protected function normalizeMarketNotificationRecipientUserIds(mixed $userIds): array
+    {
+        if (! $this->market) {
+            return [];
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            array_map(static fn ($value): int => (int) $value, (array) $userIds),
+            static fn (int $value): bool => $value > 0,
+        )));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return User::query()
+            ->where('market_id', $this->market->id)
+            ->whereIn('id', $ids)
+            ->orderBy('name')
+            ->pluck('id')
+            ->map(static fn ($value): string => (string) $value)
+            ->all();
     }
 
     /**
