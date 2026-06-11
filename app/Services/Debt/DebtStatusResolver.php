@@ -206,6 +206,16 @@ class DebtStatusResolver
                     'space'
                 );
             }
+
+            $fallbackResult = $this->makeTenantFallbackResult(
+                $tenant,
+                'tenant-fallback: no OSV data for linked space',
+                useSettlementBalances: true
+            );
+
+            if ($fallbackResult !== null) {
+                return $fallbackResult;
+            }
         }
 
         if (! Schema::hasTable('contract_debts')) {

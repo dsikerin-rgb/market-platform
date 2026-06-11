@@ -1539,6 +1539,126 @@ class DebtStatusResolverTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_market_space_with_exact_contract_but_no_osv_rows_uses_residual_fallback_not_legacy_tenant_debt(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        $this->market->settings = [
+            'debt_monitoring' => [
+                'grace_days' => 5,
+                'yellow_after_days' => 1,
+                'red_after_days' => 30,
+                'minimum_debt_amount' => 500,
+                'use_settlement_balances_for_map' => true,
+            ],
+        ];
+        $this->market->save();
+
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Tenant with missing exact OSV row',
+            'external_id' => 'tenant-missing-exact-osv-001',
+            'debt_status' => null,
+        ]);
+
+        $missingOsvSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'missing-osv-201',
+            'code' => 'missing-osv-space-201',
+            'is_active' => true,
+        ]);
+
+        $representedSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'represented-osv-202',
+            'code' => 'represented-osv-space-202',
+            'is_active' => true,
+        ]);
+
+        [$missingOsvContract, $representedContract] = TenantContract::withoutEvents(fn (): array => [
+            TenantContract::create([
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'market_space_id' => $missingOsvSpace->id,
+                'external_id' => 'tenant-missing-exact-osv-contract-001',
+                'number' => 'Missing exact OSV contract',
+                'status' => 'active',
+                'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+                'is_active' => true,
+            ]),
+            TenantContract::create([
+                'market_id' => $this->market->id,
+                'tenant_id' => $tenant->id,
+                'market_space_id' => $representedSpace->id,
+                'external_id' => 'tenant-represented-osv-contract-001',
+                'number' => 'Represented OSV contract',
+                'status' => 'active',
+                'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+                'is_active' => true,
+            ]),
+        ]);
+
+        DB::table('tenant_settlement_balances')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $representedContract->id,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => $tenant->external_id,
+            'tenant_name' => $tenant->name,
+            'contract_external_id' => $representedContract->external_id,
+            'contract_name' => 'Represented OSV contract',
+            'settlement_document_name' => 'Realization 01.06.2026 14:00:00',
+            'account' => '62',
+            'currency' => 'RUB',
+            'opening_debit' => 7000,
+            'opening_credit' => 0,
+            'turnover_debit' => 0,
+            'turnover_credit' => 0,
+            'closing_debit' => 7000,
+            'closing_credit' => 0,
+            'source' => '1c',
+            'source_file' => '1c:settlements',
+            'imported_at' => '2026-06-11 01:59:03',
+            'source_row_hash' => hash('sha256', 'tenant-missing-exact-osv-represented-june'),
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $tenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $tenant->external_id,
+            'contract_external_id' => 'legacy-unbound-contract-001',
+            'period' => '2026-05',
+            'account' => '62',
+            'accrued_amount' => 71409.64,
+            'paid_amount' => 0,
+            'debt_amount' => 71409.64,
+            'calculated_at' => Carbon::now()->subDays(20),
+            'created_at' => Carbon::now()->subDays(20),
+            'hash' => sha1($tenant->external_id.'|legacy-unbound-contract-001|2026-05|71409.64|0|71409.64'),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $missingOsvSpace->id, (int) $this->market->id);
+
+        $this->assertSame('green', $result['status']);
+        $this->assertSame('tenant_fallback', $result['extra']['scope'] ?? null);
+        $this->assertSame('residual', $result['extra']['fallback_mode'] ?? null);
+        $this->assertSame(0.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertEqualsCanonicalizing(
+            [$missingOsvContract->external_id, $representedContract->external_id],
+            $result['extra']['exact_space_contracts_excluded'] ?? null
+        );
+        $this->assertStringContainsString('no residual debt', (string) ($result['source'] ?? ''));
+
+        Carbon::setTestNow();
+    }
+
     public function test_resolve_for_market_space_includes_direct_space_contracts_when_binding_exists(): void
     {
         $tenant = Tenant::create([
