@@ -1444,6 +1444,20 @@ class MarketSpaceResource extends BaseResource
                                     ->visible(fn (): bool => false)
                                     ->columnSpanFull(),
 
+                                Forms\Components\Select::make('shared_use_financial_mode')
+                                    ->label('Финансовый учет совместного места')
+                                    ->options([
+                                        MarketSpace::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT => 'Отдельный договор участника',
+                                        MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT => 'Включено в аренду основного места',
+                                        MarketSpace::SHARED_USE_FINANCIAL_MODE_EXCLUDED => 'Не учитывать в задолженности',
+                                    ])
+                                    ->default(MarketSpace::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT)
+                                    ->required()
+                                    ->native(false)
+                                    ->helperText('Используется только для совместного использования: карта либо ищет отдельный договор участника, либо берет задолженность по его основному месту.')
+                                    ->visible(fn (?MarketSpace $record): bool => static::hasSharedUseTenants($record))
+                                    ->columnSpanFull(),
+
                                 Section::make('Статус места')
                                     ->schema([
                                         Forms\Components\Placeholder::make('effective_occupancy')

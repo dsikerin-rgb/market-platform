@@ -803,6 +803,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     $buildSharedUseSummary = static function (?MarketSpace $space): array {
         $empty = [
             'is_shared_use' => false,
+            'financial_mode' => null,
             'active_count' => 0,
             'total_area_sqm' => null,
             'participants' => [],
@@ -877,6 +878,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         return [
             'is_shared_use' => true,
+            'financial_mode' => $space->shared_use_financial_mode ?? null,
             'active_count' => count($participants),
             'total_area_sqm' => $hasArea ? $totalArea : null,
             'participants' => $participants,
@@ -2508,6 +2510,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'debt_status_mode' => $financial['debt_status_mode'] ?? null,
                         'debt_status_source' => $financial['debt_status_source'] ?? null,
                         'debt_status_scope' => $financial['debt_status_scope'] ?? null,
+                        'financial_mode' => $financial['financial_mode'] ?? null,
                         'debt_amount' => $financial['debt_amount'] ?? null,
                         'debt_overdue_days' => $financial['debt_overdue_days'] ?? null,
                         'contract_external_id' => $financial['contract_external_id'] ?? null,

@@ -33,6 +33,18 @@ class MarketSpace extends Model
         self::SPACE_GROUP_ROLE_CHILD,
     ];
 
+    public const SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT = 'separate_contract';
+
+    public const SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT = 'included_in_primary_rent';
+
+    public const SHARED_USE_FINANCIAL_MODE_EXCLUDED = 'excluded';
+
+    public const SHARED_USE_FINANCIAL_MODES = [
+        self::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT,
+        self::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT,
+        self::SHARED_USE_FINANCIAL_MODE_EXCLUDED,
+    ];
+
     /**
      * @var list<string>
      */
@@ -54,6 +66,7 @@ class MarketSpace extends Model
         'rent_rate_updated_at',
         'type',
         'status',
+        'shared_use_financial_mode',
         'map_review_status',
         'map_reviewed_at',
         'map_reviewed_by',
@@ -69,6 +82,7 @@ class MarketSpace extends Model
         'is_active' => 'boolean',
         'space_group_role' => 'string',
         'space_group_parent_id' => 'integer',
+        'shared_use_financial_mode' => 'string',
     ];
 
     protected static function booted(): void
@@ -76,6 +90,7 @@ class MarketSpace extends Model
         static::creating(function (self $space): void {
             $space->ensureCode();
             $space->normalizeSpaceGroup();
+            $space->normalizeSharedUseFinancialMode();
         });
 
         static::updating(function (self $space): void {
@@ -85,6 +100,7 @@ class MarketSpace extends Model
             }
 
             $space->normalizeSpaceGroup();
+            $space->normalizeSharedUseFinancialMode();
         });
 
         static::updating(function (self $space): void {
@@ -179,6 +195,19 @@ class MarketSpace extends Model
         }
 
         $this->code = $code;
+    }
+
+    private function normalizeSharedUseFinancialMode(): void
+    {
+        if (! Schema::hasColumn($this->getTable(), 'shared_use_financial_mode')) {
+            return;
+        }
+
+        $mode = trim((string) ($this->shared_use_financial_mode ?? ''));
+
+        $this->shared_use_financial_mode = in_array($mode, self::SHARED_USE_FINANCIAL_MODES, true)
+            ? $mode
+            : self::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT;
     }
 
     private function normalizeSpaceGroup(): void

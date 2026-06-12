@@ -2038,6 +2038,179 @@ class DebtStatusResolverTest extends TestCase
         $this->assertContains($participants->firstWhere('tenant_id', $tenantWithDebt->id)['debt_status'] ?? null, ['orange', 'red']);
     }
 
+    public function test_resolve_for_shared_use_uses_primary_contract_only_when_enabled(): void
+    {
+        $primaryTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Shared primary contract tenant',
+            'external_id' => 'shared-primary-contract-001',
+            'debt_status' => null,
+        ]);
+
+        $otherTenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Shared secondary tenant',
+            'external_id' => 'shared-secondary-001',
+            'debt_status' => null,
+        ]);
+
+        $primarySpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $primaryTenant->id,
+            'number' => 'primary-201',
+            'code' => 'primary-space-201',
+            'is_active' => true,
+        ]);
+
+        $sharedSpace = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => null,
+            'number' => 'shared-201',
+            'code' => 'shared-space-201',
+            'is_active' => true,
+            'shared_use_financial_mode' => MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT,
+        ]);
+
+        $primaryContract = TenantContract::withoutEvents(fn (): TenantContract => TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $primaryTenant->id,
+            'market_space_id' => $primarySpace->id,
+            'external_id' => 'shared-primary-contract-linked-001',
+            'number' => 'Primary 201',
+            'status' => 'active',
+            'starts_at' => Carbon::now()->subMonths(3)->toDateString(),
+            'is_active' => true,
+        ]));
+
+        DB::table('market_space_tenant_bindings')->insert([
+            [
+                'market_id' => $this->market->id,
+                'market_space_id' => $sharedSpace->id,
+                'tenant_id' => $primaryTenant->id,
+                'tenant_contract_id' => null,
+                'area_sqm' => 4,
+                'started_at' => Carbon::now()->subMonth(),
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'high',
+                'source' => 'test',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'market_space_id' => $sharedSpace->id,
+                'tenant_id' => $otherTenant->id,
+                'tenant_contract_id' => null,
+                'area_sqm' => 2,
+                'started_at' => Carbon::now()->subMonth(),
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'high',
+                'source' => 'test',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+        ]);
+
+        DB::table('contract_debts')->insert([
+            'tenant_id' => $primaryTenant->id,
+            'market_id' => $this->market->id,
+            'tenant_external_id' => $primaryTenant->external_id,
+            'contract_external_id' => $primaryContract->external_id,
+            'period' => '2026-03',
+            'account' => '62',
+            'accrued_amount' => 15000,
+            'paid_amount' => 0,
+            'debt_amount' => 15000,
+            'calculated_at' => Carbon::now()->subDays(40),
+            'created_at' => Carbon::now()->subDays(40),
+            'hash' => sha1($primaryTenant->external_id.'|'.$primaryContract->external_id.'|2026-03|15000|0|15000'),
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $sharedSpace->id, (int) $this->market->id);
+
+        $this->assertEquals('shared_use', $result['extra']['scope'] ?? null);
+        $this->assertEquals(MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT, $result['extra']['financial_mode'] ?? null);
+        $this->assertEquals(0, $result['extra']['exact_participant_count'] ?? null);
+        $this->assertEquals(1, $result['extra']['covered_participant_count'] ?? null);
+        $this->assertEquals(1, $result['extra']['missing_financial_link_count'] ?? null);
+        $this->assertEquals(15000.0, $result['extra']['debt_amount'] ?? null);
+        $this->assertContains($result['status'], ['orange', 'red']);
+
+        $participants = collect($result['extra']['participants'] ?? []);
+        $primaryParticipant = $participants->firstWhere('tenant_id', $primaryTenant->id);
+
+        $this->assertSame('shared_use_primary_contract', $primaryParticipant['debt_status_scope'] ?? null);
+        $this->assertSame($primaryContract->external_id, $primaryParticipant['contract_external_id'] ?? null);
+    }
+
+    public function test_resolve_for_shared_use_excluded_mode_stays_gray(): void
+    {
+        $tenantA = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Excluded shared tenant A',
+            'external_id' => 'shared-excluded-a-001',
+            'debt_status' => null,
+        ]);
+
+        $tenantB = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Excluded shared tenant B',
+            'external_id' => 'shared-excluded-b-001',
+            'debt_status' => null,
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => null,
+            'number' => 'shared-202',
+            'code' => 'shared-space-202',
+            'is_active' => true,
+            'shared_use_financial_mode' => MarketSpace::SHARED_USE_FINANCIAL_MODE_EXCLUDED,
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            [
+                'market_id' => $this->market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenantA->id,
+                'tenant_contract_id' => null,
+                'started_at' => Carbon::now()->subMonth(),
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'high',
+                'source' => 'test',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+            [
+                'market_id' => $this->market->id,
+                'market_space_id' => $space->id,
+                'tenant_id' => $tenantB->id,
+                'tenant_contract_id' => null,
+                'started_at' => Carbon::now()->subMonth(),
+                'ended_at' => null,
+                'binding_type' => 'shared_use',
+                'confidence' => 'high',
+                'source' => 'test',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ],
+        ]);
+
+        DebtStatusResolver::clearCache();
+
+        $result = $this->resolver->resolveForMarketSpace((int) $space->id, (int) $this->market->id);
+
+        $this->assertEquals('gray', $result['status']);
+        $this->assertEquals(MarketSpace::SHARED_USE_FINANCIAL_MODE_EXCLUDED, $result['extra']['financial_mode'] ?? null);
+        $this->assertEquals(0, $result['extra']['covered_participant_count'] ?? null);
+        $this->assertSame('shared_use_excluded', ($result['extra']['participants'][0]['debt_status_scope'] ?? null));
+    }
+
     /**
      * Old positive-debt snapshot should not be "rejuvenated" by a newer
      * snapshot of a different contract. Both contracts have debt, but the

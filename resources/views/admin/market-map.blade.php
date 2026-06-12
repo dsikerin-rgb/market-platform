@@ -7829,11 +7829,15 @@
                         const name = p.tenant_name || '—';
                         const area = p.area_sqm !== null && p.area_sqm !== undefined ? formatAreaRu(p.area_sqm) + ' м²' : '';
                         const debtLabel = p.debt_status_label ? String(p.debt_status_label) : '';
+                        const debtScope = p.debt_status_scope ? String(p.debt_status_scope) : '';
+                        const debtScopeNote = debtScope === 'shared_use_primary_contract'
+                          ? 'по основному договору'
+                          : (debtScope === 'shared_use_excluded' ? 'не учитывается' : '');
                         const debtAmount = p.debt_amount !== null && p.debt_amount !== undefined && Number.isFinite(Number(p.debt_amount))
                           ? formatMoneyRu(Number(p.debt_amount))
                           : '';
                         const debtText = debtLabel
-                          ? (' — ' + debtLabel + (debtAmount ? ' (' + debtAmount + ')' : ''))
+                          ? (' — ' + debtLabel + (debtScopeNote ? ' (' + debtScopeNote + ')' : '') + (debtAmount ? ' (' + debtAmount + ')' : ''))
                           : '';
                         return escapeHtml(name) + (area ? ' — ' + area : '') + escapeHtml(debtText);
                       }).join('<br>'))
@@ -7841,12 +7845,15 @@
                   const sharedDebtStatus = hit.space_effective_debt_status || hit.debt_status || null;
                   const sharedDebtScope = hit.space_effective_debt_status_scope || hit.debt_status_scope || 'none';
                   const sharedDebtLabel = hit.space_effective_debt_status_label || hit.debt_status_label || '';
+                  const sharedFinancialMode = sharedUseData.financial_mode || '';
                   if (sharedDebtScope === 'shared_use') {
                     line6 = sharedDebtLabel ? ('Финансовый статус: ' + escapeHtml(sharedDebtLabel)) : 'Финансовый статус: нет точной финансовой связи 1С';
                     line6Class = ['red', 'orange'].includes(sharedDebtStatus)
                       ? 'row-debt-overdue'
                       : (sharedDebtStatus === 'green' ? 'row-debt-ok' : 'row-financial-unknown');
-                    line6HelpText = 'Место используется несколькими арендаторами. Карта считает статус по участникам с точной договорной связью 1С; участники без такой связи остаются серыми.';
+                    line6HelpText = sharedFinancialMode === 'included_in_primary_rent'
+                      ? 'Место используется несколькими арендаторами. Для участников без отдельного договора карта берет статус по их основному месту.'
+                      : 'Место используется несколькими арендаторами. Карта считает статус по участникам с точной договорной связью 1С; участники без такой связи остаются серыми.';
                   } else if (sharedDebtStatus === 'gray') {
                     line6 = sharedDebtLabel ? ('Финансовый статус: ' + escapeHtml(sharedDebtLabel)) : 'Финансовый статус: нет данных 1С';
                     line6Class = 'row-financial-unknown';

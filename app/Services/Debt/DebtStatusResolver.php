@@ -6,6 +6,7 @@ namespace App\Services\Debt;
 
 use App\Models\ContractDebt;
 use App\Models\Market;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -93,10 +94,15 @@ class DebtStatusResolver
         $labels = $this->getStatusLabels($marketId);
 
         // Получаем место и арендатора
+        $spaceColumns = ['tenant_id', 'is_active'];
+        if (Schema::hasColumn('market_spaces', 'shared_use_financial_mode')) {
+            $spaceColumns[] = 'shared_use_financial_mode';
+        }
+
         $space = DB::table('market_spaces')
             ->where('id', $marketSpaceId)
             ->where('market_id', $marketId)
-            ->first(['tenant_id', 'is_active']);
+            ->first($spaceColumns);
 
         // Место не найдено — нейтральный результат (scope=none)
         if (! $space) {
@@ -1791,6 +1797,7 @@ class DebtStatusResolver
     {
         $labels = $this->getStatusLabels($marketId);
         $participants = $this->activeSharedUseParticipants($marketSpaceId, $marketId);
+        $financialMode = $this->sharedUseFinancialModeForMarketSpace($marketSpaceId, $marketId);
 
         if ($participants->count() <= 1) {
             return $this->makeResult(
@@ -1799,7 +1806,45 @@ class DebtStatusResolver
                 label: 'Совместное использование: нет точной финансовой связи 1С',
                 source: 'shared-use: insufficient active participants',
                 severity: 0,
-                extra: ['scope' => 'shared_use', 'active_count' => $participants->count()]
+                extra: [
+                    'scope' => 'shared_use',
+                    'financial_mode' => $financialMode,
+                    'active_count' => $participants->count(),
+                ]
+            );
+        }
+
+        if ($financialMode === MarketSpace::SHARED_USE_FINANCIAL_MODE_EXCLUDED) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Совместное использование: не учитывается в задолженности',
+                source: 'shared-use: excluded from debt map',
+                severity: 0,
+                extra: [
+                    'scope' => 'shared_use',
+                    'financial_mode' => $financialMode,
+                    'active_count' => $participants->count(),
+                    'exact_participant_count' => 0,
+                    'covered_participant_count' => 0,
+                    'missing_financial_link_count' => 0,
+                    'participants' => $participants->map(static fn ($participant): array => [
+                        'binding_id' => (int) $participant->binding_id,
+                        'tenant_id' => $participant->tenant_id ? (int) $participant->tenant_id : null,
+                        'tenant_name' => trim((string) ($participant->tenant_short_name ?: $participant->tenant_name ?: '')),
+                        'tenant_contract_id' => null,
+                        'contract_external_id' => null,
+                        'contract_number' => null,
+                        'area_sqm' => $participant->area_sqm !== null ? (float) $participant->area_sqm : null,
+                        'debt_status' => self::STATUS_GRAY,
+                        'debt_status_label' => 'Не учитывается в задолженности',
+                        'debt_status_mode' => 'auto',
+                        'debt_status_source' => 'shared-use: excluded from debt map',
+                        'debt_status_scope' => 'shared_use_excluded',
+                        'debt_amount' => null,
+                        'debt_overdue_days' => null,
+                    ])->values()->all(),
+                ]
             );
         }
 
@@ -1808,27 +1853,53 @@ class DebtStatusResolver
         $aggregateRank = -1;
         $debtAmount = 0.0;
         $exactCount = 0;
+        $coveredCount = 0;
 
         foreach ($participants as $participant) {
             $tenant = $participant->tenant_id ? Tenant::find((int) $participant->tenant_id) : null;
             $contractExternalId = trim((string) ($participant->contract_external_id ?? ''));
+            $contractNumber = filled($participant->contract_number ?? null) ? (string) $participant->contract_number : null;
+            $tenantContractId = $participant->tenant_contract_id ? (int) $participant->tenant_contract_id : null;
+            $participantScope = 'shared_use_participant';
 
             if (! $tenant || $contractExternalId === '') {
-                $result = $this->makeResult(
-                    mode: 'auto',
-                    status: self::STATUS_GRAY,
-                    label: 'Нет точной финансовой связи 1С',
-                    source: 'shared-use: no active contract binding',
-                    severity: 0,
-                    extra: ['scope' => 'shared_use_participant']
-                );
+                $primaryContract = $tenant && $financialMode === MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT
+                    ? $this->resolvePrimaryContractForSharedUseParticipant($marketSpaceId, $marketId, (int) $tenant->id)
+                    : null;
+
+                if ($primaryContract && trim((string) ($primaryContract->external_id ?? '')) !== '') {
+                    $contractExternalId = trim((string) $primaryContract->external_id);
+                    $contractNumber = filled($primaryContract->number ?? null) ? (string) $primaryContract->number : null;
+                    $tenantContractId = isset($primaryContract->id) ? (int) $primaryContract->id : null;
+                    $participantScope = 'shared_use_primary_contract';
+                    $coveredCount++;
+
+                    $result = $this->resolveExactDebtForContractExternalIds(
+                        tenant: $tenant,
+                        contractExternalIds: collect([$contractExternalId]),
+                        marketId: $marketId,
+                        scope: $participantScope
+                    );
+                } else {
+                    $result = $this->makeResult(
+                        mode: 'auto',
+                        status: self::STATUS_GRAY,
+                        label: 'Нет точной финансовой связи 1С',
+                        source: $financialMode === MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT
+                            ? 'shared-use: no primary contract found'
+                            : 'shared-use: no active contract binding',
+                        severity: 0,
+                        extra: ['scope' => 'shared_use_participant']
+                    );
+                }
             } else {
                 $exactCount++;
+                $coveredCount++;
                 $result = $this->resolveExactDebtForContractExternalIds(
                     tenant: $tenant,
                     contractExternalIds: collect([$contractExternalId]),
                     marketId: $marketId,
-                    scope: 'shared_use_participant'
+                    scope: $participantScope
                 );
             }
 
@@ -1848,30 +1919,33 @@ class DebtStatusResolver
                 'binding_id' => (int) $participant->binding_id,
                 'tenant_id' => $participant->tenant_id ? (int) $participant->tenant_id : null,
                 'tenant_name' => trim((string) ($participant->tenant_short_name ?: $participant->tenant_name ?: '')),
-                'tenant_contract_id' => $participant->tenant_contract_id ? (int) $participant->tenant_contract_id : null,
+                'tenant_contract_id' => $tenantContractId,
                 'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
-                'contract_number' => filled($participant->contract_number ?? null) ? (string) $participant->contract_number : null,
+                'contract_number' => $contractNumber,
                 'area_sqm' => $participant->area_sqm !== null ? (float) $participant->area_sqm : null,
                 'debt_status' => $result['status'],
                 'debt_status_label' => $result['label'],
                 'debt_status_mode' => $result['mode'],
                 'debt_status_source' => $result['source'] ?? null,
-                'debt_status_scope' => $result['extra']['scope'] ?? 'shared_use_participant',
+                'debt_status_scope' => $result['extra']['scope'] ?? $participantScope,
+                'financial_mode' => $financialMode,
                 'debt_amount' => $participantDebtAmount,
                 'debt_overdue_days' => $result['extra']['overdue_days'] ?? null,
             ];
         }
 
         $activeCount = count($participantResults);
-        $missingCount = max(0, $activeCount - $exactCount);
+        $missingCount = max(0, $activeCount - $coveredCount);
         $label = $aggregateStatus === self::STATUS_GRAY
             ? 'Совместное использование: нет точной финансовой связи 1С'
             : ($labels[$aggregateStatus] ?? $labels[self::STATUS_GRAY]);
 
         $extra = [
             'scope' => 'shared_use',
+            'financial_mode' => $financialMode,
             'active_count' => $activeCount,
             'exact_participant_count' => $exactCount,
+            'covered_participant_count' => $coveredCount,
             'missing_financial_link_count' => $missingCount,
             'participants' => $participantResults,
         ];
@@ -1884,10 +1958,102 @@ class DebtStatusResolver
             mode: 'auto',
             status: $aggregateStatus,
             label: $label,
-            source: 'shared-use: participant contract bindings',
+            source: $financialMode === MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT
+                ? 'shared-use: participant or primary contract bindings'
+                : 'shared-use: participant contract bindings',
             severity: $this->getSeverity($aggregateStatus),
             extra: $extra
         );
+    }
+
+    private function sharedUseFinancialModeForMarketSpace(int $marketSpaceId, int $marketId): string
+    {
+        if (! Schema::hasColumn('market_spaces', 'shared_use_financial_mode')) {
+            return MarketSpace::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT;
+        }
+
+        $mode = (string) DB::table('market_spaces')
+            ->where('id', $marketSpaceId)
+            ->where('market_id', $marketId)
+            ->value('shared_use_financial_mode');
+
+        return in_array($mode, MarketSpace::SHARED_USE_FINANCIAL_MODES, true)
+            ? $mode
+            : MarketSpace::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT;
+    }
+
+    private function resolvePrimaryContractForSharedUseParticipant(int $sharedMarketSpaceId, int $marketId, int $tenantId): ?object
+    {
+        if (
+            ! Schema::hasTable('tenant_contracts')
+            || ! Schema::hasTable('market_spaces')
+            || ! Schema::hasColumn('tenant_contracts', 'external_id')
+        ) {
+            return null;
+        }
+
+        $now = now();
+
+        if (
+            Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')
+            && Schema::hasColumn('market_space_tenant_bindings', 'binding_type')
+        ) {
+            $contract = DB::table('market_space_tenant_bindings as mstb')
+                ->join('tenant_contracts as tc', 'tc.id', '=', 'mstb.tenant_contract_id')
+                ->join('market_spaces as ms', 'ms.id', '=', 'mstb.market_space_id')
+                ->where('mstb.market_id', $marketId)
+                ->where('mstb.tenant_id', $tenantId)
+                ->where('mstb.market_space_id', '<>', $sharedMarketSpaceId)
+                ->where('mstb.binding_type', '<>', 'shared_use')
+                ->whereNotNull('mstb.tenant_contract_id')
+                ->whereNotNull('tc.external_id')
+                ->where('tc.market_id', $marketId)
+                ->where('tc.tenant_id', $tenantId)
+                ->where('tc.is_active', true)
+                ->whereNotIn('tc.status', ['terminated', 'archived'])
+                ->where('ms.market_id', $marketId)
+                ->where('ms.is_active', true)
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.started_at')
+                        ->orWhere('mstb.started_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.ended_at')
+                        ->orWhere('mstb.ended_at', '>', $now);
+                })
+                ->orderByDesc('mstb.started_at')
+                ->orderByDesc('mstb.id')
+                ->first([
+                    'tc.id',
+                    'tc.external_id',
+                    'tc.number',
+                    'tc.market_space_id',
+                ]);
+
+            if ($contract) {
+                return $contract;
+            }
+        }
+
+        return DB::table('tenant_contracts as tc')
+            ->join('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('tc.market_id', $marketId)
+            ->where('tc.tenant_id', $tenantId)
+            ->where('tc.market_space_id', '<>', $sharedMarketSpaceId)
+            ->where('tc.is_active', true)
+            ->whereNotIn('tc.status', ['terminated', 'archived'])
+            ->whereNotNull('tc.external_id')
+            ->where('ms.market_id', $marketId)
+            ->where('ms.is_active', true)
+            ->orderByDesc('tc.starts_at')
+            ->orderByDesc('tc.id')
+            ->first([
+                'tc.id',
+                'tc.external_id',
+                'tc.number',
+                'tc.market_space_id',
+            ]);
     }
 
     private function activeSharedUseParticipants(int $marketSpaceId, int $marketId): Collection
