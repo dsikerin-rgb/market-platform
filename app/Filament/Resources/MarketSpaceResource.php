@@ -1919,7 +1919,7 @@ class MarketSpaceResource extends BaseResource
                     ]),
                 Tab::make('Финансы')
                     ->schema([
-                        Section::make('ОСВ 1С')
+                        Section::make('Финансы 1С')
                             ->schema([
                                 Forms\Components\Placeholder::make('space_settlement_balances')
                                     ->hiddenLabel()
@@ -2149,13 +2149,16 @@ class MarketSpaceResource extends BaseResource
         return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
             'state' => 'ready',
             'scope' => $scope,
-            'scopeLabel' => $scope === 'exact' ? 'Точная связь по договору места' : 'Подбор по арендатору',
+            'scopeLabel' => $scope === 'exact'
+                ? 'Данные найдены по договору этого места'
+                : 'Показаны данные по арендатору, связь с местом требует проверки',
             'scopeTone' => $scope === 'exact' ? 'success' : 'warning',
             'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
             'account' => (string) $snapshot->account,
             'importedAt' => $snapshot->imported_at ? (string) \Carbon\Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
             'summary' => $summary,
             'rows' => $rows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+            'currentTenantName' => (string) ($record->effectiveTenantName() ?? ''),
             'contractExternalIds' => $contractExternalIds->all(),
             'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $search),
         ])->render());

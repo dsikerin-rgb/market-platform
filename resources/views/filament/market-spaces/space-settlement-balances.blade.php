@@ -11,6 +11,7 @@
     'scopeTone' => 'neutral',
     'summary' => [],
     'rows' => [],
+    'currentTenantName' => '',
     'contractExternalIds' => [],
     'settlementsUrl' => null,
 ])
@@ -26,34 +27,92 @@
 
     $rows = is_array($rows) ? $rows : [];
     $summary = is_array($summary) ? $summary : [];
-    $contractExternalIds = is_array($contractExternalIds) ? $contractExternalIds : [];
+    $currentTenantName = trim((string) $currentTenantName);
+    $closingNet = (float) ($summary['closing_net'] ?? 0);
+    $statusTone = (string) ($summary['closing_tone'] ?? 'neutral');
+    $statusAmount = $statusTone === 'success' ? abs($closingNet) : $closingNet;
+    $statusLabel = match ($statusTone) {
+        'danger' => 'Есть задолженность',
+        'success' => 'Переплата',
+        default => 'Нет задолженности',
+    };
 @endphp
 
 @once
     <style>
-        .space-osv {
+        .space-finance {
             display: grid;
-            gap: 14px;
+            gap: 16px;
             font-size: 14px;
         }
 
-        .space-osv__meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-            color: #475569;
-            font-size: 13px;
-            line-height: 1.4;
+        .space-finance__hero {
+            display: grid;
+            grid-template-columns: minmax(220px, 1.1fr) repeat(2, minmax(160px, .7fr));
+            gap: 12px;
+            align-items: stretch;
         }
 
-        .dark .space-osv__meta {
-            color: #cbd5e1;
+        .space-finance__card {
+            border: 1px solid #dbe4f0;
+            border-radius: 10px;
+            background: #fff;
+            padding: 12px 14px;
+            min-width: 0;
         }
 
-        .space-osv__badge {
+        .dark .space-finance__card {
+            border-color: rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.35);
+        }
+
+        .space-finance__label {
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.3;
+        }
+
+        .dark .space-finance__label {
+            color: #94a3b8;
+        }
+
+        .space-finance__value {
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.25;
+            margin-top: 5px;
+            overflow-wrap: anywhere;
+        }
+
+        .space-finance__value--large {
+            font-size: 22px;
+        }
+
+        .space-finance__value--danger {
+            color: #b91c1c;
+        }
+
+        .space-finance__value--success {
+            color: #15803d;
+        }
+
+        .dark .space-finance__value {
+            color: #f8fafc;
+        }
+
+        .dark .space-finance__value--danger {
+            color: #fca5a5;
+        }
+
+        .dark .space-finance__value--success {
+            color: #86efac;
+        }
+
+        .space-finance__badge {
             display: inline-flex;
             align-items: center;
+            width: fit-content;
             border: 1px solid #cbd5e1;
             border-radius: 999px;
             background: #f8fafc;
@@ -65,120 +124,76 @@
             white-space: nowrap;
         }
 
-        .space-osv__badge--success {
+        .space-finance__badge--success {
             border-color: #86efac;
             background: #f0fdf4;
             color: #166534;
         }
 
-        .space-osv__badge--warning {
+        .space-finance__badge--warning {
             border-color: #fde68a;
             background: #fffbeb;
             color: #92400e;
         }
 
-        .space-osv__badge--danger {
+        .space-finance__badge--danger {
             border-color: #fca5a5;
             background: #fef2f2;
             color: #991b1b;
         }
 
-        .dark .space-osv__badge {
+        .dark .space-finance__badge {
             border-color: rgba(148, 163, 184, 0.35);
             background: rgba(15, 23, 42, 0.35);
             color: #e2e8f0;
         }
 
-        .space-osv__summary {
+        .space-finance__summary {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
         }
 
-        .space-osv__metric {
-            border: 1px solid #dbe4f0;
-            border-radius: 10px;
-            padding: 10px 12px;
-            background: #fff;
-            min-width: 0;
-        }
-
-        .dark .space-osv__metric {
-            border-color: rgba(148, 163, 184, 0.3);
-            background: rgba(15, 23, 42, 0.35);
-        }
-
-        .space-osv__metric-label {
-            color: #64748b;
-            font-size: 12px;
-            line-height: 1.3;
-        }
-
-        .dark .space-osv__metric-label {
-            color: #94a3b8;
-        }
-
-        .space-osv__metric-value {
-            color: #0f172a;
-            font-size: 16px;
-            font-weight: 800;
-            line-height: 1.25;
-            margin-top: 4px;
-            overflow-wrap: anywhere;
-        }
-
-        .dark .space-osv__metric-value {
-            color: #f8fafc;
-        }
-
-        .space-osv__metric-value--danger {
-            color: #b91c1c;
-        }
-
-        .space-osv__metric-value--success {
-            color: #15803d;
-        }
-
-        .space-osv__note {
+        .space-finance__note {
             color: #475569;
             font-size: 13px;
             line-height: 1.45;
         }
 
-        .dark .space-osv__note {
+        .dark .space-finance__note {
             color: #cbd5e1;
         }
 
-        .space-osv__table-wrap {
+        .space-finance__table-wrap {
             overflow-x: auto;
             border: 1px solid #dbe4f0;
             border-radius: 10px;
         }
 
-        .dark .space-osv__table-wrap {
+        .dark .space-finance__table-wrap {
             border-color: rgba(148, 163, 184, 0.3);
         }
 
-        .space-osv__table {
+        .space-finance__table {
             width: 100%;
-            min-width: 760px;
+            min-width: 680px;
             border-collapse: collapse;
         }
 
-        .space-osv__table th,
-        .space-osv__table td {
+        .space-finance__table th,
+        .space-finance__table td {
             border-bottom: 1px solid #e2e8f0;
             padding: 9px 10px;
             text-align: left;
             vertical-align: top;
         }
 
-        .dark .space-osv__table th,
-        .dark .space-osv__table td {
+        .dark .space-finance__table th,
+        .dark .space-finance__table td {
             border-bottom-color: rgba(148, 163, 184, 0.24);
         }
 
-        .space-osv__table th {
+        .space-finance__table th {
             color: #64748b;
             font-size: 12px;
             font-weight: 800;
@@ -186,33 +201,33 @@
             white-space: nowrap;
         }
 
-        .dark .space-osv__table th {
+        .dark .space-finance__table th {
             color: #cbd5e1;
             background: rgba(15, 23, 42, 0.45);
         }
 
-        .space-osv__table td {
+        .space-finance__table td {
             color: #0f172a;
             font-size: 13px;
             line-height: 1.35;
         }
 
-        .dark .space-osv__table td {
+        .dark .space-finance__table td {
             color: #f8fafc;
         }
 
-        .space-osv__muted {
+        .space-finance__muted {
             color: #64748b;
             font-size: 12px;
             line-height: 1.35;
             margin-top: 2px;
         }
 
-        .dark .space-osv__muted {
+        .dark .space-finance__muted {
             color: #94a3b8;
         }
 
-        .space-osv__footer {
+        .space-finance__footer {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
@@ -220,111 +235,101 @@
             justify-content: space-between;
         }
 
-        .space-osv__link {
+        .space-finance__link {
             color: #2563eb;
             font-size: 13px;
             font-weight: 700;
             text-decoration: none;
+            white-space: nowrap;
         }
 
-        .space-osv__link:hover {
+        .space-finance__link:hover {
             text-decoration: underline;
         }
 
-        @media (max-width: 860px) {
-            .space-osv__summary {
+        @media (max-width: 960px) {
+            .space-finance__hero,
+            .space-finance__summary {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
-        @media (max-width: 560px) {
-            .space-osv__summary {
+        @media (max-width: 620px) {
+            .space-finance__hero,
+            .space-finance__summary {
                 grid-template-columns: minmax(0, 1fr);
             }
         }
     </style>
 @endonce
 
-<div class="space-osv">
-    @if ($periodLabel || $account)
-        <div class="space-osv__meta">
-            @if ($periodLabel)
-                <span>Период: <strong>{{ $periodLabel }}</strong></span>
-            @endif
-            @if ($account)
-                <span>Счет: <strong>{{ $account }}</strong></span>
-            @endif
-            @if ($importedAt)
-                <span>Импорт: <strong>{{ $importedAt }}</strong></span>
-            @endif
-        </div>
-    @endif
-
+<div class="space-finance">
     @if ($state === 'ready')
-        <div class="space-osv__meta">
-            <span class="space-osv__badge space-osv__badge--{{ $scopeTone }}">{{ $scopeLabel }}</span>
-            @if (! empty($contractExternalIds))
-                <span>Договоры: {{ implode(', ', $contractExternalIds) }}</span>
-            @endif
-        </div>
-
-        <div class="space-osv__summary">
-            <div class="space-osv__metric">
-                <div class="space-osv__metric-label">{{ $summary['closing_label'] ?? 'Сальдо' }}</div>
-                <div class="space-osv__metric-value space-osv__metric-value--{{ $summary['closing_tone'] ?? 'neutral' }}">
-                    {{ $money($summary['closing_net'] ?? null) }}
+        <div class="space-finance__hero">
+            <div class="space-finance__card">
+                <div class="space-finance__label">Статус</div>
+                <div class="space-finance__value space-finance__value--large space-finance__value--{{ $statusTone }}">
+                    {{ $statusLabel }}
                 </div>
+                <div class="space-finance__muted">Сумма: {{ $money($statusAmount) }}</div>
             </div>
-            <div class="space-osv__metric">
-                <div class="space-osv__metric-label">Оборот Дт</div>
-                <div class="space-osv__metric-value">{{ $money($summary['turnover_debit'] ?? null) }}</div>
+            <div class="space-finance__card">
+                <div class="space-finance__label">Период</div>
+                <div class="space-finance__value">{{ $periodLabel ?: '—' }}</div>
+                @if ($account)
+                    <div class="space-finance__muted">Счет {{ $account }}</div>
+                @endif
             </div>
-            <div class="space-osv__metric">
-                <div class="space-osv__metric-label">Оборот Кт</div>
-                <div class="space-osv__metric-value">{{ $money($summary['turnover_credit'] ?? null) }}</div>
-            </div>
-            <div class="space-osv__metric">
-                <div class="space-osv__metric-label">Строки / договоры</div>
-                <div class="space-osv__metric-value">{{ $summary['rows_count'] ?? 0 }} / {{ $summary['contracts_count'] ?? 0 }}</div>
+            <div class="space-finance__card">
+                <div class="space-finance__label">Обновлено</div>
+                <div class="space-finance__value">{{ $importedAt ?: '—' }}</div>
             </div>
         </div>
 
-        @if ($scope === 'tenant_fallback')
-            <div class="space-osv__note">
-                Нет точных строк ОСВ по договорам места. Показана ОСВ текущего арендатора; это помогает проверить арендатора, но не подтверждает долг именно по этому месту.
-            </div>
-        @else
-            <div class="space-osv__note">
-                Суммы подобраны по активным договорам, привязанным к этому месту.
-            </div>
+        @if ($scopeLabel)
+            <span class="space-finance__badge space-finance__badge--{{ $scopeTone }}">{{ $scopeLabel }}</span>
         @endif
 
-        <div class="space-osv__table-wrap">
-            <table class="space-osv__table">
+        <div class="space-finance__summary">
+            <div class="space-finance__card">
+                <div class="space-finance__label">Начислено за период</div>
+                <div class="space-finance__value">{{ $money($summary['turnover_debit'] ?? null) }}</div>
+            </div>
+            <div class="space-finance__card">
+                <div class="space-finance__label">Оплачено за период</div>
+                <div class="space-finance__value">{{ $money($summary['turnover_credit'] ?? null) }}</div>
+            </div>
+            <div class="space-finance__card">
+                <div class="space-finance__label">Итог</div>
+                <div class="space-finance__value space-finance__value--{{ $statusTone }}">{{ $money($closingNet) }}</div>
+            </div>
+        </div>
+
+        <div class="space-finance__table-wrap">
+            <table class="space-finance__table">
                 <thead>
                     <tr>
                         <th>Договор</th>
                         <th>Организация</th>
-                        <th>Входящее</th>
-                        <th>Оборот Дт</th>
-                        <th>Оборот Кт</th>
-                        <th>Сальдо</th>
+                        <th>Начислено</th>
+                        <th>Оплачено</th>
+                        <th>Итог</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($rows as $row)
+                        @php
+                            $tenantName = trim((string) ($row['tenant_name'] ?? ''));
+                            $showTenant = $tenantName !== '' && ($scope === 'tenant_fallback' || $tenantName !== $currentTenantName);
+                        @endphp
                         <tr>
-                            <td>
+                            <td title="{{ $row['contract_external_id'] ?? '' }}">
                                 {{ $row['contract_name'] ?: 'Без названия договора' }}
-                                @if (! empty($row['contract_external_id']))
-                                    <div class="space-osv__muted">{{ $row['contract_external_id'] }}</div>
-                                @endif
-                                @if (! empty($row['tenant_name']))
-                                    <div class="space-osv__muted">{{ $row['tenant_name'] }}</div>
+                                @if ($showTenant)
+                                    <div class="space-finance__muted">{{ $tenantName }}</div>
                                 @endif
                             </td>
                             <td>{{ $row['organization_name'] ?: '—' }}</td>
-                            <td>{{ $money($row['opening_net'] ?? null) }}</td>
                             <td>{{ $money($row['turnover_debit'] ?? null) }}</td>
                             <td>{{ $money($row['turnover_credit'] ?? null) }}</td>
                             <td><strong>{{ $money($row['closing_net'] ?? null) }}</strong></td>
@@ -334,15 +339,27 @@
             </table>
         </div>
     @else
-        <div class="space-osv__note">{{ $emptyReason ?: 'Нет данных ОСВ 1С для отображения.' }}</div>
+        @if ($periodLabel || $account)
+            <div class="space-finance__hero">
+                <div class="space-finance__card">
+                    <div class="space-finance__label">Период</div>
+                    <div class="space-finance__value">{{ $periodLabel ?: '—' }}</div>
+                </div>
+                <div class="space-finance__card">
+                    <div class="space-finance__label">Счет</div>
+                    <div class="space-finance__value">{{ $account ?: '—' }}</div>
+                </div>
+            </div>
+        @endif
+        <div class="space-finance__note">{{ $emptyReason ?: 'Нет данных 1С для отображения.' }}</div>
     @endif
 
-    <div class="space-osv__footer">
-        <div class="space-osv__muted">
-            ОСВ показывает сальдо и обороты за период. Оплаты и начисления остаются детализацией движения, а не заменяются этим блоком.
+    <div class="space-finance__footer">
+        <div class="space-finance__muted">
+            Это сводка из 1С за выбранный период. Подробные начисления и оплаты доступны в расчетах 1С.
         </div>
         @if ($settlementsUrl)
-            <a class="space-osv__link" href="{{ $settlementsUrl }}">Открыть расчеты 1С</a>
+            <a class="space-finance__link" href="{{ $settlementsUrl }}">Подробности в 1С</a>
         @endif
     </div>
 </div>
