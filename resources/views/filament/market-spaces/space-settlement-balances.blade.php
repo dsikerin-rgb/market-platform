@@ -177,7 +177,7 @@
             flex-wrap: wrap;
             gap: 10px;
             align-items: flex-start;
-            justify-content: flex-end;
+            justify-content: flex-start;
         }
 
         .space-finance__period-form {
@@ -186,7 +186,7 @@
             flex: 0 1 auto;
             width: fit-content;
             max-width: 100%;
-            min-width: 280px;
+            min-width: 240px;
             position: relative;
         }
 
@@ -247,14 +247,14 @@
         .space-finance__month-popover {
             position: absolute;
             z-index: 40;
-            top: calc(100% + 8px);
-            right: 0;
-            width: min(360px, calc(100vw - 32px));
+            top: 68px;
+            left: 0;
+            width: min(300px, calc(100vw - 32px));
             border: 1px solid #bfdbfe;
             border-radius: 12px;
             background: #fff;
             box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
-            padding: 12px;
+            padding: 10px;
         }
 
         .dark .space-finance__month-popover {
@@ -265,21 +265,21 @@
 
         .space-finance__picker-head {
             display: grid;
-            grid-template-columns: 34px 1fr 34px;
-            gap: 8px;
+            grid-template-columns: 32px 1fr 32px;
+            gap: 7px;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .space-finance__picker-year {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 34px;
+            min-height: 32px;
             border-radius: 9px;
             background: #2563eb;
             color: #fff;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 800;
             line-height: 1;
         }
@@ -288,8 +288,8 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 34px;
-            height: 34px;
+            width: 32px;
+            height: 32px;
             border: 1px solid #dbe4f0;
             border-radius: 9px;
             background: #fff;
@@ -320,18 +320,18 @@
         .space-finance__picker-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px;
+            gap: 6px;
         }
 
         .space-finance__picker-month {
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 42px;
+            min-height: 34px;
             border: 1px solid transparent;
-            border-radius: 10px;
+            border-radius: 9px;
             color: #334155;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             line-height: 1;
             text-align: center;
@@ -636,7 +636,7 @@
                     class="space-finance__month-popover"
                     x-cloak
                     x-show="open"
-                    x-transition.origin.top.right
+                    x-transition.origin.top.left
                 >
                     <div class="space-finance__picker-head">
                         <button
