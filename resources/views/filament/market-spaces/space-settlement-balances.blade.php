@@ -245,8 +245,10 @@
         }
 
         .space-finance__month-popover {
-            position: static;
+            position: absolute;
             z-index: 40;
+            top: 68px;
+            left: 0;
             width: min(280px, 100%);
             border: 1px solid #bfdbfe;
             border-radius: 12px;
