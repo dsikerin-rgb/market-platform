@@ -38,6 +38,8 @@ delete rows from other accounts.
 - `AutoSend_prod_settlements_backfill_form_module.bsl` - form module text to
   paste into a dedicated external processing file.
 - `run_prod_settlements_backfill_2026-06_62.bat` - one-time launcher example.
+- `..\run_prod.bat` - daily production launcher that runs settlements for the
+  current and previous month after the regular exchange and payments.
 
 Build/save the external processing file on the 1C host as:
 
@@ -46,3 +48,20 @@ C:\8base\VDNH\AutoSend_prod_settlements_backfill.epf
 ```
 
 Then run the BAT after setting the real 1C password.
+
+## Daily Automation
+
+The production daily launcher runs this EPF after:
+
+1. the regular `AutoSend_prod.epf` exchange;
+2. current-month payments;
+3. previous-month payments.
+
+It exports account `62` for:
+
+- current month;
+- previous month.
+
+This mirrors the payments window and catches late accountant corrections after
+month close. Do not add `76.*` accounts to the daily launcher until their tenant
+analytics are confirmed in 1C.

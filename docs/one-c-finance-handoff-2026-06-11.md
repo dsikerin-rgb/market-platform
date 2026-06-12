@@ -272,8 +272,13 @@ Interpretation:
   - period_to.
 - This is required so importing account `62.01` cannot delete balances from
   `76.06`, `76.07`, or any other account.
-- No settlement balance data has been imported yet after deployment. The table
-  currently exists but is empty on production.
+- Manual/backfill settlement balance exports use
+  `AutoSend_prod_settlements_backfill.epf`.
+- Daily automation should run settlement balances for account `62` for:
+  - current month;
+  - previous month.
+- Do not add `76.*` accounts to the regular daily launcher until tenant
+  analytics for those accounts are confirmed in 1C.
 
 ## Important Finding About Security Deposit
 
@@ -459,20 +464,24 @@ Example payload shape:
 
 If a row has no item-level `account`, the API will use the top-level account.
 
-### Step 3. First Manual Imports
+### Step 3. Regular Settlement Balance Imports
 
-Run the settlement export manually for a controlled period, probably June 2026:
+Run the settlement export daily after the regular exchange and payment exports:
 
-- account `62.01` or the confirmed 62 scope;
-- account `76.06`;
-- account `76.07` if 1C uses it for relevant tenant settlements.
+- account `62`;
+- current month;
+- previous month.
+
+The previous month is included to catch late accountant corrections after month
+close.
 
 After each run, verify:
 
 - Telegram notification says `Расчеты/сальдо`;
 - `tenant_settlement_balances` row count increases;
 - `one_c_import_logs` contains account and period metadata;
-- importing account `62.01` does not delete `76.06` rows.
+- re-running the same account/period updates the snapshot without duplicating
+  rows.
 
 ### Step 4. Build The Accounting Screen
 
