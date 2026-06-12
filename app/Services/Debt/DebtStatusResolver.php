@@ -98,12 +98,12 @@ class DebtStatusResolver
             ->where('market_id', $marketId)
             ->first(['tenant_id', 'is_active']);
 
-        // Место не найдено или нет арендатора — нейтральный результат (scope=none)
-        if (! $space || ! $space->tenant_id) {
+        // Место не найдено — нейтральный результат (scope=none)
+        if (! $space) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: 'Нет арендатора',
+                label: 'Место не найдено',
                 severity: 0,
                 extra: ['scope' => 'none']
             );
@@ -122,16 +122,17 @@ class DebtStatusResolver
 
         $sharedUseParticipantCount = $this->activeSharedUseParticipantCount($marketSpaceId, $marketId);
         if ($sharedUseParticipantCount > 1) {
+            return $this->resolveSharedUseForMarketSpace($marketSpaceId, $marketId);
+        }
+
+        // Место без арендатора и без совместного использования — нейтральный результат (scope=none)
+        if (! $space->tenant_id) {
             return $this->makeResult(
                 mode: 'auto',
                 status: self::STATUS_GRAY,
-                label: 'Совместное использование: нет точной финансовой связи 1С',
-                source: 'shared-use: multiple active participants',
+                label: 'Нет арендатора',
                 severity: 0,
-                extra: [
-                    'scope' => 'shared_use',
-                    'active_count' => $sharedUseParticipantCount,
-                ]
+                extra: ['scope' => 'none']
             );
         }
 
@@ -1784,6 +1785,419 @@ class DebtStatusResolver
                     ->orWhere('ended_at', '>', $now);
             })
             ->count();
+    }
+
+    private function resolveSharedUseForMarketSpace(int $marketSpaceId, int $marketId): array
+    {
+        $labels = $this->getStatusLabels($marketId);
+        $participants = $this->activeSharedUseParticipants($marketSpaceId, $marketId);
+
+        if ($participants->count() <= 1) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Совместное использование: нет точной финансовой связи 1С',
+                source: 'shared-use: insufficient active participants',
+                severity: 0,
+                extra: ['scope' => 'shared_use', 'active_count' => $participants->count()]
+            );
+        }
+
+        $participantResults = [];
+        $aggregateStatus = self::STATUS_GREEN;
+        $aggregateRank = -1;
+        $debtAmount = 0.0;
+        $exactCount = 0;
+
+        foreach ($participants as $participant) {
+            $tenant = $participant->tenant_id ? Tenant::find((int) $participant->tenant_id) : null;
+            $contractExternalId = trim((string) ($participant->contract_external_id ?? ''));
+
+            if (! $tenant || $contractExternalId === '') {
+                $result = $this->makeResult(
+                    mode: 'auto',
+                    status: self::STATUS_GRAY,
+                    label: 'Нет точной финансовой связи 1С',
+                    source: 'shared-use: no active contract binding',
+                    severity: 0,
+                    extra: ['scope' => 'shared_use_participant']
+                );
+            } else {
+                $exactCount++;
+                $result = $this->resolveExactDebtForContractExternalIds(
+                    tenant: $tenant,
+                    contractExternalIds: collect([$contractExternalId]),
+                    marketId: $marketId,
+                    scope: 'shared_use_participant'
+                );
+            }
+
+            $status = (string) ($result['status'] ?? self::STATUS_GRAY);
+            $rank = $this->sharedUseAggregateRank($status);
+            if ($rank > $aggregateRank) {
+                $aggregateRank = $rank;
+                $aggregateStatus = $status;
+            }
+
+            $participantDebtAmount = $result['extra']['debt_amount'] ?? null;
+            if (is_numeric($participantDebtAmount)) {
+                $debtAmount += (float) $participantDebtAmount;
+            }
+
+            $participantResults[] = [
+                'binding_id' => (int) $participant->binding_id,
+                'tenant_id' => $participant->tenant_id ? (int) $participant->tenant_id : null,
+                'tenant_name' => trim((string) ($participant->tenant_short_name ?: $participant->tenant_name ?: '')),
+                'tenant_contract_id' => $participant->tenant_contract_id ? (int) $participant->tenant_contract_id : null,
+                'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
+                'contract_number' => filled($participant->contract_number ?? null) ? (string) $participant->contract_number : null,
+                'area_sqm' => $participant->area_sqm !== null ? (float) $participant->area_sqm : null,
+                'debt_status' => $result['status'],
+                'debt_status_label' => $result['label'],
+                'debt_status_mode' => $result['mode'],
+                'debt_status_source' => $result['source'] ?? null,
+                'debt_status_scope' => $result['extra']['scope'] ?? 'shared_use_participant',
+                'debt_amount' => $participantDebtAmount,
+                'debt_overdue_days' => $result['extra']['overdue_days'] ?? null,
+            ];
+        }
+
+        $activeCount = count($participantResults);
+        $missingCount = max(0, $activeCount - $exactCount);
+        $label = $aggregateStatus === self::STATUS_GRAY
+            ? 'Совместное использование: нет точной финансовой связи 1С'
+            : ($labels[$aggregateStatus] ?? $labels[self::STATUS_GRAY]);
+
+        $extra = [
+            'scope' => 'shared_use',
+            'active_count' => $activeCount,
+            'exact_participant_count' => $exactCount,
+            'missing_financial_link_count' => $missingCount,
+            'participants' => $participantResults,
+        ];
+
+        if ($debtAmount > 0.009) {
+            $extra['debt_amount'] = $debtAmount;
+        }
+
+        return $this->makeResult(
+            mode: 'auto',
+            status: $aggregateStatus,
+            label: $label,
+            source: 'shared-use: participant contract bindings',
+            severity: $this->getSeverity($aggregateStatus),
+            extra: $extra
+        );
+    }
+
+    private function activeSharedUseParticipants(int $marketSpaceId, int $marketId): Collection
+    {
+        if (
+            ! Schema::hasTable('market_space_tenant_bindings')
+            || ! Schema::hasColumn('market_space_tenant_bindings', 'binding_type')
+        ) {
+            return collect();
+        }
+
+        $now = now();
+        $selectColumns = [
+            'mstb.id as binding_id',
+            'mstb.tenant_id',
+            'mstb.tenant_contract_id',
+            't.name as tenant_name',
+            't.short_name as tenant_short_name',
+            'tc.external_id as contract_external_id',
+            'tc.number as contract_number',
+        ];
+
+        if (Schema::hasColumn('market_space_tenant_bindings', 'area_sqm')) {
+            $selectColumns[] = 'mstb.area_sqm';
+        } else {
+            $selectColumns[] = DB::raw('NULL as area_sqm');
+        }
+
+        return DB::table('market_space_tenant_bindings as mstb')
+            ->leftJoin('tenants as t', 't.id', '=', 'mstb.tenant_id')
+            ->leftJoin('tenant_contracts as tc', function ($join): void {
+                $join->on('tc.id', '=', 'mstb.tenant_contract_id')
+                    ->where('tc.is_active', true)
+                    ->whereNotIn('tc.status', ['terminated', 'archived']);
+            })
+            ->where('mstb.market_space_id', $marketSpaceId)
+            ->where('mstb.market_id', $marketId)
+            ->where('mstb.binding_type', 'shared_use')
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('mstb.started_at')
+                    ->orWhere('mstb.started_at', '<=', $now);
+            })
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('mstb.ended_at')
+                    ->orWhere('mstb.ended_at', '>', $now);
+            })
+            ->orderBy('t.name')
+            ->get($selectColumns);
+    }
+
+    private function sharedUseAggregateRank(?string $status): int
+    {
+        return match ($status) {
+            self::STATUS_RED => 4,
+            self::STATUS_ORANGE => 3,
+            self::STATUS_PENDING => 2,
+            self::STATUS_GRAY => 1,
+            self::STATUS_GREEN => 0,
+            default => 1,
+        };
+    }
+
+    private function resolveExactDebtForContractExternalIds(
+        Tenant $tenant,
+        Collection $contractExternalIds,
+        int $marketId,
+        string $scope
+    ): array {
+        $labels = $this->getStatusLabels($marketId);
+        $contractExternalIds = $contractExternalIds
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($contractExternalIds->isEmpty()) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Нет точной финансовой связи 1С',
+                source: 'contract binding: no external id',
+                severity: 0,
+                extra: ['scope' => $scope]
+            );
+        }
+
+        if ($this->shouldUseSettlementBalancesForMap($marketId)) {
+            $settlementData = $this->fetchSettlementBalanceData($tenant, $contractExternalIds);
+            if ($settlementData !== null) {
+                return $this->makeMapResultFromSettlementBalanceData(
+                    $settlementData,
+                    $labels,
+                    $marketId,
+                    $scope
+                );
+            }
+        }
+
+        if (! Schema::hasTable('contract_debts')) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Таблица contract_debts отсутствует',
+                severity: 0,
+                extra: ['scope' => $scope]
+            );
+        }
+
+        $hasDebt = Schema::hasColumn('contract_debts', 'debt_amount');
+        $hasCalculatedAt = Schema::hasColumn('contract_debts', 'calculated_at');
+        $hasCreatedAt = Schema::hasColumn('contract_debts', 'created_at');
+        $hasPeriod = Schema::hasColumn('contract_debts', 'period');
+
+        if (! $hasDebt) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Нет поля debt_amount',
+                severity: 0,
+                extra: ['scope' => $scope]
+            );
+        }
+
+        $query = ContractDebt::latestContractStateQuery($marketId)
+            ->whereIn('cd.contract_external_id', $contractExternalIds->all());
+
+        $snapshotLabel = null;
+        if ($hasCalculatedAt) {
+            $latest = $query->clone()->max('calculated_at');
+            if ($latest) {
+                try {
+                    $snapshotLabel = Carbon::parse($latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasCreatedAt) {
+            $latest = $query->clone()->max('created_at');
+            if ($latest) {
+                try {
+                    $snapshotLabel = Carbon::parse($latest)->format('d.m.Y H:i');
+                } catch (\Throwable) {
+                    $snapshotLabel = (string) $latest;
+                }
+            }
+        } elseif ($hasPeriod) {
+            $latest = $query->clone()->max('period');
+            if ($latest) {
+                $snapshotLabel = (string) $latest;
+            }
+        }
+
+        $fields = ['debt_amount', 'period'];
+        if (Schema::hasColumn('contract_debts', 'accrued_amount')) {
+            $fields[] = 'accrued_amount';
+        }
+        if (Schema::hasColumn('contract_debts', 'paid_amount')) {
+            $fields[] = 'paid_amount';
+        }
+        if ($hasCalculatedAt) {
+            $fields[] = 'calculated_at';
+        }
+        if ($hasCreatedAt) {
+            $fields[] = 'created_at';
+        }
+
+        $rows = $query->get($fields);
+        $dueDateRows = $this->fetchContractDebtAgingRows($marketId, $contractExternalIds->all(), $fields);
+
+        if ($rows->isEmpty()) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Нет данных 1С',
+                source: 'contract_debts: no rows for exact contract',
+                severity: 0,
+                extra: ['scope' => $scope]
+            );
+        }
+
+        $positiveDebtRows = $rows->filter(static function ($row): bool {
+            return (float) ($row->debt_amount ?? 0) > 0.009;
+        });
+
+        if ($positiveDebtRows->isEmpty()) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: $labels[self::STATUS_GREEN],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 0,
+                extra: ['scope' => $scope]
+            );
+        }
+
+        $displayDebtAmount = (float) $positiveDebtRows->sum('debt_amount');
+        $settings = $this->getMarketSettings($marketId);
+        $graceDays = $settings['grace_days'] ?? 5;
+        $yellowAfterDays = $settings['yellow_after_days'] ?? $settings['orange_after_days'] ?? 1;
+        $redAfterDays = $settings['red_after_days'] ?? 30;
+        $minimumDebtAmount = (float) ($settings['minimum_debt_amount'] ?? 500);
+
+        if ($displayDebtAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GREEN,
+                label: $labels[self::STATUS_GREEN],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: долг ниже порога',
+                severity: 0,
+                extra: ['debt_amount' => $displayDebtAmount, 'minimum_debt_amount' => $minimumDebtAmount, 'scope' => $scope]
+            );
+        }
+
+        $dueDate = $this->calculateDueDateFromRows(
+            $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
+            $graceDays,
+            $hasPeriod,
+            $hasCalculatedAt,
+            $hasCreatedAt
+        );
+
+        if ($dueDate === null) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_GRAY,
+                label: 'Не удалось определить срок оплаты',
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: нет дат',
+                severity: 0,
+                extra: ['scope' => $scope]
+            );
+        }
+
+        $now = Carbon::now();
+        if (! $now->gt($dueDate)) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 1,
+                extra: ['overdue_days' => 0, 'debt_amount' => $displayDebtAmount, 'scope' => $scope]
+            );
+        }
+
+        $daysOverdue = $dueDate->diffInDays($now);
+        $totalDebtAmount = $displayDebtAmount;
+        $overdueAmount = $this->calculateOverdueAmountFromRows(
+            $dueDateRows->isNotEmpty() ? $dueDateRows : $rows,
+            $graceDays,
+            $hasPeriod,
+            $hasCalculatedAt,
+            $hasCreatedAt,
+        );
+        $displayDebtAmount = $overdueAmount > 0.009 ? $overdueAmount : $displayDebtAmount;
+
+        if ($overdueAmount > 0.009 && $overdueAmount < $minimumDebtAmount) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_PENDING,
+                label: $labels[self::STATUS_PENDING],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts: overdue debt below threshold',
+                severity: 1,
+                extra: [
+                    'overdue_days' => max(0, $daysOverdue),
+                    'debt_amount' => $totalDebtAmount,
+                    'overdue_debt_amount' => $overdueAmount,
+                    'minimum_debt_amount' => $minimumDebtAmount,
+                    'scope' => $scope,
+                ]
+            );
+        }
+
+        if ($daysOverdue >= $redAfterDays) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_RED,
+                label: $labels[self::STATUS_RED],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 3,
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'scope' => $scope]
+            );
+        }
+
+        if ($daysOverdue >= $yellowAfterDays) {
+            return $this->makeResult(
+                mode: 'auto',
+                status: self::STATUS_ORANGE,
+                label: $labels[self::STATUS_ORANGE],
+                updatedAt: $snapshotLabel,
+                source: 'contract_debts',
+                severity: 2,
+                extra: ['overdue_days' => $daysOverdue, 'debt_amount' => $displayDebtAmount, 'scope' => $scope]
+            );
+        }
+
+        return $this->makeResult(
+            mode: 'auto',
+            status: self::STATUS_PENDING,
+            label: $labels[self::STATUS_PENDING],
+            updatedAt: $snapshotLabel,
+            source: 'contract_debts',
+            severity: 1,
+            extra: ['overdue_days' => max(0, $daysOverdue), 'debt_amount' => $displayDebtAmount, 'scope' => $scope]
+        );
     }
 
     private function resolveActiveContractExternalIdsForMarketSpace(

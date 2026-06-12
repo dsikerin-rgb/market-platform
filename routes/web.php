@@ -817,7 +817,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $hasShareNoteColumn = Schema::hasColumn('market_space_tenant_bindings', 'share_note');
 
         $selectColumns = [
+            'b.id as binding_id',
             'b.tenant_id',
+            'b.tenant_contract_id',
             't.name as tenant_name',
             't.short_name as tenant_short_name',
         ];
@@ -863,7 +865,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $tenantName = trim((string) ($row->tenant_short_name ?: $row->tenant_name ?: ''));
 
             $participants[] = [
+                'binding_id' => (int) $row->binding_id,
                 'tenant_id' => $row->tenant_id !== null ? (int) $row->tenant_id : null,
+                'tenant_contract_id' => $row->tenant_contract_id !== null ? (int) $row->tenant_contract_id : null,
                 'tenant_name' => $tenantName !== '' ? $tenantName : '-',
                 'area_sqm' => $area,
                 'rent_rate' => $hasRentRateColumn && isset($row->rent_rate) && $row->rent_rate !== null ? (float) $row->rent_rate : null,
@@ -1535,7 +1539,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $latestRentRatesBySpaceId,
             $mapReviewStatusLabel,
             $buildSpaceEffectiveOccupancy,
-            $buildSpaceEffectiveFinancialStatus
+            $buildSpaceEffectiveFinancialStatus,
+            $market
         ): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
@@ -1545,8 +1550,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
             // Для каждого shape используем статус по конкретному месту
             $resolver = app(DebtStatusResolver::class);
-            $resolvedDebt = $space && $tenant
-                ? $resolver->resolveForMarketSpace($space->id, $tenant->market_id)
+            $resolvedDebt = $space
+                ? $resolver->resolveForMarketSpace($space->id, (int) $market->id)
                 : ($tenant
                     ? $resolver->resolve($tenant)
                     : [
@@ -2366,8 +2371,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             : null;
 
         $resolver = app(DebtStatusResolver::class);
-        $resolvedDebt = $space && $tenant
-            ? $resolver->resolveForMarketSpace($space->id, $tenant->market_id)
+        $resolvedDebt = $space
+            ? $resolver->resolveForMarketSpace($space->id, (int) $market->id)
             : [
                 'mode' => 'auto',
                 'status' => 'gray',
@@ -2482,6 +2487,36 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $sharedUse = $buildSharedUseSummary($space);
+        $sharedUseFinancialParticipants = $resolvedDebt['extra']['participants'] ?? null;
+        if (($sharedUse['is_shared_use'] ?? false) && is_array($sharedUseFinancialParticipants)) {
+            $financialByBindingId = collect($sharedUseFinancialParticipants)
+                ->filter(static fn ($participant): bool => is_array($participant) && isset($participant['binding_id']))
+                ->keyBy(static fn (array $participant): int => (int) $participant['binding_id']);
+
+            $sharedUse['participants'] = collect($sharedUse['participants'] ?? [])
+                ->map(static function (array $participant) use ($financialByBindingId): array {
+                    $bindingId = (int) ($participant['binding_id'] ?? 0);
+                    $financial = $bindingId > 0 ? $financialByBindingId->get($bindingId) : null;
+
+                    if (! is_array($financial)) {
+                        return $participant;
+                    }
+
+                    return array_merge($participant, [
+                        'debt_status' => $financial['debt_status'] ?? null,
+                        'debt_status_label' => $financial['debt_status_label'] ?? null,
+                        'debt_status_mode' => $financial['debt_status_mode'] ?? null,
+                        'debt_status_source' => $financial['debt_status_source'] ?? null,
+                        'debt_status_scope' => $financial['debt_status_scope'] ?? null,
+                        'debt_amount' => $financial['debt_amount'] ?? null,
+                        'debt_overdue_days' => $financial['debt_overdue_days'] ?? null,
+                        'contract_external_id' => $financial['contract_external_id'] ?? null,
+                        'contract_number' => $financial['contract_number'] ?? null,
+                    ]);
+                })
+                ->values()
+                ->all();
+        }
 
         return response()->json([
             'ok' => true,

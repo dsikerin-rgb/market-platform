@@ -7827,8 +7827,15 @@
                   line5 = participants.length > 0
                     ? ('Участники:<br>' + participants.map(p => {
                         const name = p.tenant_name || '—';
-                        const area = p.area_sqm !== null ? formatAreaRu(p.area_sqm) + ' м²' : '';
-                        return escapeHtml(name) + (area ? ' — ' + area : '');
+                        const area = p.area_sqm !== null && p.area_sqm !== undefined ? formatAreaRu(p.area_sqm) + ' м²' : '';
+                        const debtLabel = p.debt_status_label ? String(p.debt_status_label) : '';
+                        const debtAmount = p.debt_amount !== null && p.debt_amount !== undefined && Number.isFinite(Number(p.debt_amount))
+                          ? formatMoneyRu(Number(p.debt_amount))
+                          : '';
+                        const debtText = debtLabel
+                          ? (' — ' + debtLabel + (debtAmount ? ' (' + debtAmount + ')' : ''))
+                          : '';
+                        return escapeHtml(name) + (area ? ' — ' + area : '') + escapeHtml(debtText);
                       }).join('<br>'))
                     : '';
                   const sharedDebtStatus = hit.space_effective_debt_status || hit.debt_status || null;
@@ -7836,8 +7843,10 @@
                   const sharedDebtLabel = hit.space_effective_debt_status_label || hit.debt_status_label || '';
                   if (sharedDebtScope === 'shared_use') {
                     line6 = sharedDebtLabel ? ('Финансовый статус: ' + escapeHtml(sharedDebtLabel)) : 'Финансовый статус: нет точной финансовой связи 1С';
-                    line6Class = 'row-financial-unknown';
-                    line6HelpText = 'Место используется несколькими арендаторами. Пока договоры и задолженность не связаны с конкретными участниками, карта не относит общий долг к одному арендатору и показывает серый статус.';
+                    line6Class = ['red', 'orange'].includes(sharedDebtStatus)
+                      ? 'row-debt-overdue'
+                      : (sharedDebtStatus === 'green' ? 'row-debt-ok' : 'row-financial-unknown');
+                    line6HelpText = 'Место используется несколькими арендаторами. Карта считает статус по участникам с точной договорной связью 1С; участники без такой связи остаются серыми.';
                   } else if (sharedDebtStatus === 'gray') {
                     line6 = sharedDebtLabel ? ('Финансовый статус: ' + escapeHtml(sharedDebtLabel)) : 'Финансовый статус: нет данных 1С';
                     line6Class = 'row-financial-unknown';
