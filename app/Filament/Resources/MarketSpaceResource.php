@@ -1055,11 +1055,12 @@ class MarketSpaceResource extends BaseResource
         $items[] = static::renderPrioritySummaryItem($tenantLabel, $tenantValue, $tenantMeta, $tenantTone, $tenantActionHtml);
         $items[] = static::renderPrioritySummaryItem($areaLabel, $areaValue, $areaMeta);
 
-        if (! $hasSharedUseTenants) {
+        if (! $isSharedUseSourceSpace) {
             $items[] = static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone);
-            if (! $isMaintenance) {
-                $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
-            }
+        }
+
+        if (! $hasSharedUseTenants && ! $isMaintenance) {
+            $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
         }
 
         return new HtmlString('<div class="market-space-priority-summary">'.implode('', $items).'</div>');
