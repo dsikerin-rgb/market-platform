@@ -33,18 +33,18 @@
     $periodOptions = is_array($periodOptions) ? $periodOptions : [];
     $currentTenantName = trim((string) $currentTenantName);
     $monthNames = [
-        '01' => 'Янв',
-        '02' => 'Фев',
-        '03' => 'Мар',
-        '04' => 'Апр',
+        '01' => 'Январь',
+        '02' => 'Февраль',
+        '03' => 'Март',
+        '04' => 'Апрель',
         '05' => 'Май',
-        '06' => 'Июн',
-        '07' => 'Июл',
-        '08' => 'Авг',
-        '09' => 'Сен',
-        '10' => 'Окт',
-        '11' => 'Ноя',
-        '12' => 'Дек',
+        '06' => 'Июнь',
+        '07' => 'Июль',
+        '08' => 'Август',
+        '09' => 'Сентябрь',
+        '10' => 'Октябрь',
+        '11' => 'Ноябрь',
+        '12' => 'Декабрь',
     ];
     $closingNet = (float) ($summary['closing_net'] ?? 0);
     $statusTone = (string) ($summary['closing_tone'] ?? 'neutral');
@@ -182,107 +182,47 @@
 
         .space-finance__period-form {
             display: grid;
-            gap: 8px;
+            gap: 6px;
             flex: 0 1 auto;
             width: fit-content;
             max-width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #dbe4f0;
-            border-radius: 8px;
-            background: #f8fafc;
-        }
-
-        .dark .space-finance__period-form {
-            border-color: rgba(148, 163, 184, 0.3);
-            background: rgba(15, 23, 42, 0.3);
+            min-width: 220px;
         }
 
         .space-finance__period-form > .space-finance__label {
             display: block;
             text-align: left;
-            font-weight: 700;
+            font-weight: 600;
         }
 
-        .space-finance__period-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: flex-end;
-            max-width: 452px;
-        }
-
-        .space-finance__period-tile {
-            display: grid;
-            grid-template-rows: 19px 1fr;
-            width: 58px;
-            min-height: 64px;
-            border: 1px solid #cbd5e1;
+        .space-finance__month-select {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid #d1d5db;
             border-radius: 8px;
             background: #fff;
             color: #0f172a;
-            overflow: hidden;
-            text-align: center;
-            text-decoration: none;
-            transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+            font-size: 14px;
+            line-height: 20px;
+            padding: 8px 10px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
         }
 
-        .space-finance__period-tile:hover {
-            border-color: #60a5fa;
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
-            transform: translateY(-1px);
+        .space-finance__month-select:focus {
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16);
+            outline: none;
         }
 
-        .space-finance__period-tile--active {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
-        }
-
-        .space-finance__period-tile-top {
-            display: grid;
-            place-items: center;
-            background: #dbeafe;
-            color: #1e40af;
-            font-size: 10px;
-            font-weight: 800;
-            line-height: 1;
-            text-transform: uppercase;
-        }
-
-        .space-finance__period-tile--active .space-finance__period-tile-top {
-            background: #2563eb;
-            color: #fff;
-        }
-
-        .space-finance__period-tile-body {
-            display: grid;
-            gap: 1px;
-            place-content: center;
-            padding: 6px 4px;
-        }
-
-        .space-finance__period-tile-month {
-            font-size: 15px;
-            font-weight: 800;
-            line-height: 1;
-        }
-
-        .space-finance__period-tile-year,
-        .space-finance__period-tile-account {
-            color: #64748b;
-            font-size: 10px;
-            font-weight: 700;
-            line-height: 1.15;
-        }
-
-        .dark .space-finance__period-tile {
+        .dark .space-finance__month-select {
             border-color: rgba(148, 163, 184, 0.35);
-            background: rgba(15, 23, 42, 0.35);
+            background: rgba(15, 23, 42, 0.45);
             color: #f8fafc;
         }
 
-        .dark .space-finance__period-tile-year,
-        .dark .space-finance__period-tile-account {
-            color: #94a3b8;
+        .dark .space-finance__month-select:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
         }
 
         .space-finance__note {
@@ -292,8 +232,7 @@
         }
 
         .space-finance__period-form .space-finance__note {
-            max-width: none;
-            margin-top: 8px;
+            max-width: 360px;
             font-size: 12px;
         }
 
@@ -406,11 +345,6 @@
                 width: 100%;
                 max-width: none;
             }
-
-            .space-finance__period-grid {
-                justify-content: flex-start;
-                max-width: none;
-            }
         }
     </style>
 @endonce
@@ -418,9 +352,18 @@
 <div class="space-finance">
     @if ($periodOptions !== [])
         <div class="space-finance__toolbar">
-            <div class="space-finance__period-form" aria-label="Период ОСВ">
-                <div class="space-finance__label">Период ОСВ</div>
-                <div class="space-finance__period-grid">
+            <form class="space-finance__period-form" method="GET" aria-label="Период ОСВ">
+                @if (request()->query('tab'))
+                    <input type="hidden" name="tab" value="{{ request()->query('tab') }}">
+                @endif
+
+                <label class="space-finance__label" for="space-finance-period">Период ОСВ</label>
+                <select
+                    id="space-finance-period"
+                    class="space-finance__month-select"
+                    name="settlement_period"
+                    onchange="this.form.submit()"
+                >
                     @foreach ($periodOptions as $periodKey => $periodOptionLabel)
                         @php
                             $periodParts = explode('|', (string) $periodKey);
@@ -430,32 +373,24 @@
                             $periodMonth = $periodDate ? ($monthNames[$periodDate->format('m')] ?? $periodDate->format('m')) : $periodOptionLabel;
                             $periodYear = $periodDate ? $periodDate->format('Y') : '';
                             $isSelectedPeriod = $periodKey === $selectedPeriodKey;
+                            $periodSelectLabel = trim($periodMonth . ' ' . $periodYear);
+
+                            if ($periodAccount !== '' && $periodAccount !== '62') {
+                                $periodSelectLabel .= ' · сч. ' . $periodAccount;
+                            }
                         @endphp
-                        <a
-                            class="space-finance__period-tile @if ($isSelectedPeriod) space-finance__period-tile--active @endif"
-                            href="{{ request()->fullUrlWithQuery(['settlement_period' => $periodKey]) }}"
-                            title="{{ $periodOptionLabel }}"
-                            aria-label="Показать ОСВ за {{ $periodOptionLabel }}"
-                            @if ($isSelectedPeriod) aria-current="true" @endif
-                        >
-                            <span class="space-finance__period-tile-top"></span>
-                            <span class="space-finance__period-tile-body">
-                                <span class="space-finance__period-tile-month">{{ $periodMonth }}</span>
-                                <span class="space-finance__period-tile-year">{{ $periodYear }}</span>
-                                @if ($periodAccount !== '' && $periodAccount !== '62')
-                                    <span class="space-finance__period-tile-account">сч. {{ $periodAccount }}</span>
-                                @endif
-                            </span>
-                        </a>
+                        <option value="{{ $periodKey }}" title="{{ $periodOptionLabel }}" @selected($isSelectedPeriod)>
+                            {{ $periodSelectLabel }}
+                        </option>
                     @endforeach
-                </div>
+                </select>
 
                 @if ($firstPeriodLabel)
                     <div class="space-finance__note">
                         Минимум: {{ $firstPeriodLabel }}. Это первый загруженный период ОСВ.
                     </div>
                 @endif
-            </div>
+            </form>
         </div>
     @endif
 
