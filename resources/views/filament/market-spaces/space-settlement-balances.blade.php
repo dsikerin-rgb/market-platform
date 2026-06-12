@@ -167,12 +167,10 @@
         }
 
         .space-finance__period-form {
-            display: grid;
-            grid-template-columns: auto minmax(220px, 280px);
-            gap: 6px 10px;
-            align-items: center;
-            width: fit-content;
-            max-width: 100%;
+            display: block;
+            flex: 0 1 360px;
+            width: min(100%, 360px) !important;
+            max-width: 360px !important;
             padding: 10px 12px;
             border: 1px solid #dbe4f0;
             border-radius: 8px;
@@ -184,8 +182,16 @@
             background: rgba(15, 23, 42, 0.3);
         }
 
+        .space-finance__period-form > .space-finance__label {
+            display: block;
+            margin-bottom: 6px;
+            text-align: left;
+            font-weight: 700;
+        }
+
         .space-finance__select {
             width: 100%;
+            min-height: 44px;
             border: 1px solid #cbd5e1;
             border-radius: 8px;
             background: #fff;
@@ -208,8 +214,8 @@
         }
 
         .space-finance__period-form .space-finance__note {
-            grid-column: 1 / -1;
-            max-width: 420px;
+            max-width: none;
+            margin-top: 8px;
             font-size: 12px;
         }
 
@@ -318,8 +324,9 @@
             }
 
             .space-finance__period-form {
-                grid-template-columns: minmax(0, 1fr);
-                width: 100%;
+                flex-basis: 100%;
+                width: 100% !important;
+                max-width: none !important;
             }
         }
     </style>
