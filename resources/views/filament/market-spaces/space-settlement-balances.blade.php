@@ -335,12 +335,12 @@
 <div class="space-finance">
     @if ($periodOptions !== [])
         <div class="space-finance__toolbar">
-            <form class="space-finance__period-form" method="GET">
+            <form class="space-finance__period-form" method="GET" style="width: 360px !important; max-width: 100% !important; margin-left: auto !important;">
                 @if (request()->query('tab'))
                     <input type="hidden" name="tab" value="{{ request()->query('tab') }}">
                 @endif
                 <label class="space-finance__label" for="space-finance-period">Период ОСВ</label>
-                <select id="space-finance-period" class="space-finance__select" name="settlement_period" onchange="this.form.submit()">
+                <select id="space-finance-period" class="space-finance__select" name="settlement_period" onchange="this.form.submit()" style="width: 100% !important; max-width: 100% !important;">
                     @foreach ($periodOptions as $periodKey => $periodOptionLabel)
                         <option value="{{ $periodKey }}" @selected($periodKey === $selectedPeriodKey)>
                             {{ $periodOptionLabel }}
