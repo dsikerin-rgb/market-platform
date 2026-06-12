@@ -1229,6 +1229,8 @@ class EditMarketSpace extends BaseEditRecord
             'entity_type' => 'market_space',
             'entity_id' => (int) $this->record->id,
             'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'effective_tz' => (string) config('app.timezone', 'UTC'),
             'status' => 'applied',
             'payload' => $operationPayload,
             'comment' => $reason !== '' ? $reason : null,
@@ -1317,9 +1319,12 @@ class EditMarketSpace extends BaseEditRecord
 
         $record = $this->record->fresh(['tenant', 'spaceGroupParent.tenant', 'spaceGroupChildren']);
         $effectiveTenantName = trim((string) ($record?->effectiveTenantName() ?? ''));
+        $isVacant = $effectiveTenantName === '';
         $effectiveTenantName = $effectiveTenantName !== '' ? $effectiveTenantName : '—';
-        $stateLabel = 'Прямое место';
-        $stateHint = 'Смена затронет карточку места с указанной даты.';
+        $stateLabel = $isVacant ? 'Занять свободное место' : 'Прямое место';
+        $stateHint = $isVacant
+            ? 'Арендатор будет назначен на карточку места с указанной даты.'
+            : 'Смена затронет карточку места с указанной даты.';
 
         if ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD && filled($record->space_group_parent_id)) {
             $parentLabel = trim((string) ($record->spaceGroupParent?->number ?? ''));
@@ -1898,12 +1903,23 @@ class EditMarketSpace extends BaseEditRecord
         return (float) $normalized;
     }
 
+    private function isVacantTenantSwitchAction(): bool
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return false;
+        }
+
+        return $this->record->fresh(['tenant', 'spaceGroupParent.tenant'])?->effectiveTenantId() === null;
+    }
+
     private function makeTenantSwitchAction(string $actionClass): mixed
     {
         return $actionClass::make('switch_tenant')
-            ->label('Сменить арендатора')
+            ->label(fn (): string => $this->isVacantTenantSwitchAction() ? 'Занять место' : 'Сменить арендатора')
             ->icon('heroicon-o-user-plus')
-            ->tooltip('Создать управленческую операцию смены арендатора с датой вступления в силу')
+            ->tooltip(fn (): string => $this->isVacantTenantSwitchAction()
+                ? 'Создать управленческую операцию занятия места с датой начала действия'
+                : 'Создать управленческую операцию смены арендатора с датой вступления в силу')
             ->size('lg')
             ->outlined()
             ->color('warning')
@@ -1914,8 +1930,8 @@ class EditMarketSpace extends BaseEditRecord
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--secondary',
             ])
-            ->modalHeading('Сменить арендатора')
-            ->modalSubmitActionLabel('Запланировать смену')
+            ->modalHeading(fn (): string => $this->isVacantTenantSwitchAction() ? 'Занять место' : 'Сменить арендатора')
+            ->modalSubmitActionLabel(fn (): string => $this->isVacantTenantSwitchAction() ? 'Запланировать занятие' : 'Запланировать смену')
             ->modalCancelActionLabel('Отмена')
             ->form([
                 \Filament\Forms\Components\Placeholder::make('tenant_switch_notice')
@@ -1926,7 +1942,7 @@ class EditMarketSpace extends BaseEditRecord
                     ->content(fn (): ?HtmlString => $this->buildTenantSwitchWarningsHtml())
                     ->visible(fn (): bool => $this->buildTenantSwitchWarningsHtml() instanceof HtmlString),
                 \Filament\Forms\Components\Select::make('target_tenant_id')
-                    ->label('Новый арендатор')
+                    ->label(fn (): string => $this->isVacantTenantSwitchAction() ? 'Арендатор' : 'Новый арендатор')
                     ->options(function (): array {
                         if (! $this->record instanceof MarketSpace) {
                             return [];
@@ -1949,13 +1965,16 @@ class EditMarketSpace extends BaseEditRecord
                     ->required()
                     ->default(fn (): \Illuminate\Support\Carbon => now()),
                 \Filament\Forms\Components\Textarea::make('reason')
-                    ->label('Причина')
+                    ->label(fn (): string => $this->isVacantTenantSwitchAction() ? 'Основание' : 'Причина')
                     ->rows(2)
                     ->required()
                     ->maxLength(1000)
-                    ->placeholder('Кратко укажите причину смены арендатора.'),
+                    ->placeholder(fn (): string => $this->isVacantTenantSwitchAction()
+                        ? 'Кратко укажите основание занятия места.'
+                        : 'Кратко укажите причину смены арендатора.'),
             ])
             ->action(function (array $data): void {
+                $isOccupyAction = $this->isVacantTenantSwitchAction();
                 $targetTenant = Tenant::query()->find((int) ($data['target_tenant_id'] ?? 0));
 
                 if (! $targetTenant instanceof Tenant) {
@@ -1981,11 +2000,13 @@ class EditMarketSpace extends BaseEditRecord
 
                 Notification::make()
                     ->success()
-                    ->title('Смена арендатора запланирована')
+                    ->title($isOccupyAction ? 'Занятие места запланировано' : 'Смена арендатора запланирована')
                     ->body(
                         ((bool) ($operation->payload['detach_from_group'] ?? false))
                             ? 'Место будет выведено из группы и перейдёт к новому арендатору с '.$effectiveAtLabel.'.'
-                            : 'Новый арендатор вступит в силу с '.$effectiveAtLabel.'.'
+                            : ($isOccupyAction
+                                ? 'Арендатор вступит в силу с '.$effectiveAtLabel.'.'
+                                : 'Новый арендатор вступит в силу с '.$effectiveAtLabel.'.')
                     )
                     ->send();
             });
@@ -2441,7 +2462,7 @@ class EditMarketSpace extends BaseEditRecord
             : \Filament\Pages\Actions\Action::class;
 
         return $actionClass::make('mark_space_free')
-            ->label('Отметить как свободное')
+            ->label('Освободить место')
             ->icon('heroicon-o-arrow-right-start-on-rectangle')
             ->tooltip('Проверка связей перед отметкой места как свободного')
             ->size('lg')
@@ -2450,8 +2471,8 @@ class EditMarketSpace extends BaseEditRecord
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--secondary',
             ])
-            ->modalHeading('Отметить место как свободное')
-            ->modalSubmitActionLabel('Подтвердить свободно')
+            ->modalHeading('Освободить место')
+            ->modalSubmitActionLabel('Освободить')
             ->modalCancelActionLabel('Отмена')
             ->modalWidth(Width::FiveExtraLarge)
             ->stickyModalHeader()
