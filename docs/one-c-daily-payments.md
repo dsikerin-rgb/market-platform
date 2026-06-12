@@ -57,15 +57,15 @@ their tenant analytics are confirmed in 1C.
 After the regular `AutoSend_prod.epf` call with `/C"AUTO"`, calculate:
 
 ```bat
-for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Date).ToString('yyyy-MM')"') do set "PAYMENTS_CURRENT_PERIOD=%%i"
-for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Date).AddMonths(-1).ToString('yyyy-MM')"') do set "PAYMENTS_PREVIOUS_PERIOD=%%i"
+for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Date).ToString('yyyy-MM')"') do set "CURRENT_PERIOD=%%i"
+for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-Date).AddMonths(-1).ToString('yyyy-MM')"') do set "PREVIOUS_PERIOD=%%i"
 ```
 
 Then run the payments EPF twice:
 
 ```bat
-/Execute "C:\8base\vdnh\AutoSend_prod_payments_backfill.epf" /C"AUTO;PAYMENTS;%PAYMENTS_CURRENT_PERIOD%"
-/Execute "C:\8base\vdnh\AutoSend_prod_payments_backfill.epf" /C"AUTO;PAYMENTS;%PAYMENTS_PREVIOUS_PERIOD%"
+/Execute "C:\8base\vdnh\AutoSend_prod_payments_backfill.epf" /C"AUTO;PAYMENTS;%CURRENT_PERIOD%"
+/Execute "C:\8base\vdnh\AutoSend_prod_payments_backfill.epf" /C"AUTO;PAYMENTS;%PREVIOUS_PERIOD%"
 ```
 
 Then run the settlements EPF twice:
