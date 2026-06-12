@@ -1559,7 +1559,9 @@ class MarketSpaceResource extends BaseResource
                                     ->default('none')
                                     ->required()
                                     ->live()
-                                    ->visible(fn ($get, ?MarketSpace $record): bool => (string) ($record?->status ?? $get('status') ?? 'vacant') !== 'maintenance')
+                                    ->visible(fn ($get, ?MarketSpace $record): bool => (string) ($record?->status ?? $get('status') ?? 'vacant') !== 'maintenance'
+                                        && ! static::hasSharedUseTenants($record)
+                                        && ! static::isSharedUseSourceSpace($record))
                                     ->disabled(fn ($get, ?MarketSpace $record): bool => static::hasSharedUseTenants($record)
                                         || static::isSharedUseSourceSpace($record)
                                         || (! filled($record?->id) && (string) ($get('status') ?? 'vacant') === 'maintenance'))
@@ -1625,7 +1627,10 @@ class MarketSpaceResource extends BaseResource
                                             ->content(fn (?MarketSpace $record): ?HtmlString => static::renderChildInheritanceNotice($record))
                                             ->columnSpanFull(),
                                     ])
-                                    ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance' && static::isChildWithParent($record))
+                                    ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance'
+                                        && ! static::hasSharedUseTenants($record)
+                                        && ! static::isSharedUseSourceSpace($record)
+                                        && static::isChildWithParent($record))
                                     ->columnSpanFull()
                                     ->compact(),
 
@@ -1814,12 +1819,20 @@ class MarketSpaceResource extends BaseResource
 
                                 Forms\Components\Select::make('status')
                                     ->label('Прямой статус места')
-                                    ->options([
-                                        'vacant' => 'Свободно',
-                                        'occupied' => 'Занято',
-                                        'reserved' => 'Зарезервировано',
-                                        'maintenance' => 'Служебное место',
-                                    ])
+                                    ->options(function ($get): array {
+                                        $options = [
+                                            'vacant' => 'Свободно',
+                                            'occupied' => 'Занято',
+                                            'reserved' => 'Зарезервировано',
+                                            'maintenance' => 'Служебное место',
+                                        ];
+
+                                        if ((string) ($get('space_group_role') ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
+                                            unset($options['maintenance']);
+                                        }
+
+                                        return $options;
+                                    })
                                     ->default('vacant')
                                     ->afterStateHydrated(function (Forms\Components\Select $component, $state): void {
                                         if ($state === 'free') {
