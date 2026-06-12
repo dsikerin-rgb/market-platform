@@ -2180,11 +2180,12 @@ class MarketSpaceResource extends BaseResource
             ->where('market_id', (int) $record->market_id)
             ->whereIn('entity_type', ['market_space', MarketSpace::class])
             ->where('entity_id', (int) $record->id)
-            ->orderByDesc('effective_at')
+            ->orderByRaw('COALESCE(effective_at, created_at) desc')
             ->limit(50)
             ->get([
                 'id',
                 'effective_at',
+                'created_at',
                 'type',
                 'status',
                 'payload',
@@ -2236,9 +2237,10 @@ class MarketSpaceResource extends BaseResource
             $payload = is_array($row->payload) ? $row->payload : (json_decode((string) $row->payload, true) ?: []);
             $type = (string) ($row->type ?? '');
             $event = static::buildOperationEvent($type, $payload, $tenantNames->all());
+            $date = $row->effective_at ?: $row->created_at;
 
             $item = [
-                'effective_at' => $row->effective_at ? (string) \Carbon\Carbon::parse($row->effective_at)->format('d.m.Y H:i') : '—',
+                'effective_at' => $date ? (string) \Carbon\Carbon::parse($date)->format('d.m.Y H:i') : '—',
                 'title' => $event['title'],
                 'details' => $event['details'],
                 'comment' => static::resolveOperationComment($type, $payload, $row->comment ?? null),
@@ -2289,8 +2291,14 @@ class MarketSpaceResource extends BaseResource
                 $details .= ' Место выведено из группы.';
             }
 
+            $title = match (true) {
+                $fromTenantId <= 0 && $toTenantId > 0 => 'Место занято',
+                $toTenantId > 0 => 'Арендатор изменён',
+                default => 'Место освобождено',
+            };
+
             return [
-                'title' => $toTenantId > 0 ? 'Арендатор изменён' : 'Место освобождено',
+                'title' => $title,
                 'details' => $details,
             ];
         }
