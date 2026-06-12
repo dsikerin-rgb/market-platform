@@ -1,28 +1,29 @@
 <?php
-# app/Filament/Resources/MarketSpaceResource/Pages/EditMarketSpace.php
+
+// app/Filament/Resources/MarketSpaceResource/Pages/EditMarketSpace.php
 
 namespace App\Filament\Resources\MarketSpaceResource\Pages;
 
+use App\Domain\Operations\OperationType;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceTenantBinding;
 use App\Models\Operation;
+use App\Models\Tenant;
 use App\Services\MarketSpaces\SpaceGroupManager;
 use App\Services\MarketSpaces\TenantSwitchPlanner;
-use App\Models\Tenant;
-use App\Domain\Operations\OperationType;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Checkbox;
 use Filament\Notifications\Notification;
+use Filament\Support\Enums\Width;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Support\HtmlString;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
-use Filament\Support\Enums\Width;
 
 class EditMarketSpace extends BaseEditRecord
 {
@@ -108,6 +109,7 @@ class EditMarketSpace extends BaseEditRecord
         unset($data['parent_group_map_shape_action']);
 
         $this->prepareParentGroupMapShapeResolution($data, $parentGroupMapShapeAction);
+        $this->assertServiceSharedUseGroupInvariants($data);
 
         $user = Filament::auth()->user();
 
@@ -136,6 +138,35 @@ class EditMarketSpace extends BaseEditRecord
         return $data;
     }
 
+    private function assertServiceSharedUseGroupInvariants(array $data): void
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return;
+        }
+
+        $nextStatus = (string) ($data['status'] ?? $this->record->status ?? 'vacant');
+        $nextRole = (string) ($data['space_group_role'] ?? $this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
+        $hasSharedUse = MarketSpaceResource::hasSharedUseTenants($this->record)
+            || MarketSpaceResource::isSharedUseSourceSpace($this->record);
+
+        if ($nextStatus === 'maintenance' && $nextRole !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
+            throw ValidationException::withMessages([
+                'space_group_role' => 'Служебное место не может входить в группу и не может быть parent-группой.',
+            ]);
+        }
+
+        if ($nextStatus === 'maintenance' && $hasSharedUse) {
+            throw ValidationException::withMessages([
+                'status' => 'Служебное место не может быть совместным местом.',
+            ]);
+        }
+
+        if ($hasSharedUse && $nextRole !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
+            throw ValidationException::withMessages([
+                'space_group_role' => 'Совместное место не может входить в группу и не может быть parent-группой.',
+            ]);
+        }
+    }
 
     private function prepareParentGroupMapShapeResolution(array $data, string $action): void
     {
@@ -283,9 +314,6 @@ class EditMarketSpace extends BaseEditRecord
             ->title($newState ? 'Торговое место активно' : 'Торговое место отключено')
             ->send();
     }
-
-
-
 
     public function changeNumber(array $data): void
     {
@@ -585,7 +613,7 @@ class EditMarketSpace extends BaseEditRecord
                 1,
                 'Блокирует',
                 filled($currentTenantName)
-                    ? 'Арендатор: ' . $currentTenantName
+                    ? 'Арендатор: '.$currentTenantName
                     : 'Место сейчас участвует в работе'
             );
 
@@ -600,15 +628,15 @@ class EditMarketSpace extends BaseEditRecord
 
         if ($effectiveTenantId && $effectiveOccupancySource === 'parent') {
             $parentLabel = trim((string) ($this->record->spaceGroupParent?->number ?? ''));
-            $parentLabel = $parentLabel !== '' ? $parentLabel : ('#' . (int) ($this->record->space_group_parent_id ?? 0));
+            $parentLabel = $parentLabel !== '' ? $parentLabel : ('#'.(int) ($this->record->space_group_parent_id ?? 0));
 
             $item = $makeItem(
                 'Наследуемый арендатор (через группу)',
                 1,
                 'Блокирует',
                 filled($effectiveTenantName)
-                    ? 'Арендатор группы ' . e($parentLabel) . ': ' . $effectiveTenantName
-                    : 'Место занято через родительскую группу ' . e($parentLabel)
+                    ? 'Арендатор группы '.e($parentLabel).': '.$effectiveTenantName
+                    : 'Место занято через родительскую группу '.e($parentLabel)
             );
 
             $liveRelations[] = $item;
@@ -1214,9 +1242,9 @@ class EditMarketSpace extends BaseEditRecord
             ->success()
             ->title('Место отмечено как свободное')
             ->body((($confirmContractsClose && count($precheck['contracts']) > 0)
-                ? 'Место переведено в свободные. Завершено договоров: ' . count($precheck['contracts']) . '.'
+                ? 'Место переведено в свободные. Завершено договоров: '.count($precheck['contracts']).'.'
                 : 'Место переведено в свободные.')
-                . $this->buildParentStatusChangeNotificationSuffix($affectedChildren))
+                .$this->buildParentStatusChangeNotificationSuffix($affectedChildren))
             ->send();
     }
 
@@ -1274,7 +1302,7 @@ class EditMarketSpace extends BaseEditRecord
             // Дополнительная информация доступна
         }
 
-        $message = 'Невозможно отметить место как свободное. Сначала разберите: ' . implode(', ', $parts) . '.';
+        $message = 'Невозможно отметить место как свободное. Сначала разберите: '.implode(', ', $parts).'.';
 
         throw ValidationException::withMessages([
             'mark_space_free' => $message,
@@ -1295,23 +1323,23 @@ class EditMarketSpace extends BaseEditRecord
 
         if ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD && filled($record->space_group_parent_id)) {
             $parentLabel = trim((string) ($record->spaceGroupParent?->number ?? ''));
-            $parentLabel = $parentLabel !== '' ? $parentLabel : ('#' . (int) $record->space_group_parent_id);
-            $stateLabel = 'Место в группе ' . e($parentLabel);
+            $parentLabel = $parentLabel !== '' ? $parentLabel : ('#'.(int) $record->space_group_parent_id);
+            $stateLabel = 'Место в группе '.e($parentLabel);
             $stateHint = 'В дату вступления место выйдет из группы и получит прямого арендатора.';
         } elseif ((string) ($record->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
             $childrenCount = $record->spaceGroupChildren()
                 ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
                 ->count();
             $stateLabel = 'Группа мест';
-            $stateHint = 'Child-места продолжат наследовать арендатора группы. Связанных мест: ' . $childrenCount . '.';
+            $stateHint = 'Child-места продолжат наследовать арендатора группы. Связанных мест: '.$childrenCount.'.';
         }
 
         return new HtmlString(
             '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #d7e3f4;border-radius:12px;background:#f8fbff;">'
-            . '<div style="font-size:13px;line-height:1.45;color:#334155;"><strong>Текущий арендатор:</strong> ' . e($effectiveTenantName) . '</div>'
-            . '<div style="font-size:13px;line-height:1.45;color:#334155;"><strong>Сценарий:</strong> ' . $stateLabel . '</div>'
-            . '<div style="font-size:12px;line-height:1.5;color:#475569;">' . $stateHint . ' До этой даты карточка места не меняется.</div>'
-            . '</div>'
+            .'<div style="font-size:13px;line-height:1.45;color:#334155;"><strong>Текущий арендатор:</strong> '.e($effectiveTenantName).'</div>'
+            .'<div style="font-size:13px;line-height:1.45;color:#334155;"><strong>Сценарий:</strong> '.$stateLabel.'</div>'
+            .'<div style="font-size:12px;line-height:1.5;color:#475569;">'.$stateHint.' До этой даты карточка места не меняется.</div>'
+            .'</div>'
         );
     }
 
@@ -1348,40 +1376,40 @@ class EditMarketSpace extends BaseEditRecord
         $links = [];
 
         if ($contractCount > 0) {
-            $links[] = '<a href="' . e(\App\Filament\Resources\TenantContractResource::getUrl('index', [
+            $links[] = '<a href="'.e(\App\Filament\Resources\TenantContractResource::getUrl('index', [
                 'marketSpaceId' => $recordId,
                 'tab' => 'all',
-            ])) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;">Договоры</a>';
+            ])).'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;">Договоры</a>';
         }
 
         if ($accrualCount > 0) {
-            $links[] = '<a href="' . e(\App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
+            $links[] = '<a href="'.e(\App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index', [
                 'marketSpaceId' => $recordId,
                 'tab' => 'all',
-            ])) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;">Начисления</a>';
+            ])).'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;">Начисления</a>';
         }
 
         $rows = [];
 
         if ($contractCount > 0) {
-            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Договоры: ' . $contractCount . '</span>';
+            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Договоры: '.$contractCount.'</span>';
         }
 
         if ($accrualCount > 0) {
-            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Начисления: ' . $accrualCount . '</span>';
+            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Начисления: '.$accrualCount.'</span>';
         }
 
         if ($bindingCount > 0) {
-            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Привязки: ' . $bindingCount . '</span>';
+            $rows[] = '<span style="display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;">Привязки: '.$bindingCount.'</span>';
         }
 
         return new HtmlString(
             '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">'
-            . '<div style="font-size:13px;font-weight:700;color:#92400e;">Найдены прямые связи. Их нужно проверить перед сменой арендатора.</div>'
-            . '<div style="display:flex;flex-wrap:wrap;gap:8px;">' . implode('', $rows) . '</div>'
-            . ($links !== [] ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">' . implode('', $links) . '</div>' : '')
-            . '<div style="font-size:12px;line-height:1.45;color:#92400e;">Смена арендатора не переносит договоры и начисления автоматически, а меняет только управленческий snapshot по дате вступления.</div>'
-            . '</div>'
+            .'<div style="font-size:13px;font-weight:700;color:#92400e;">Найдены прямые связи. Их нужно проверить перед сменой арендатора.</div>'
+            .'<div style="display:flex;flex-wrap:wrap;gap:8px;">'.implode('', $rows).'</div>'
+            .($links !== [] ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">'.implode('', $links).'</div>' : '')
+            .'<div style="font-size:12px;line-height:1.45;color:#92400e;">Смена арендатора не переносит договоры и начисления автоматически, а меняет только управленческий snapshot по дате вступления.</div>'
+            .'</div>'
         );
     }
 
@@ -1415,9 +1443,9 @@ class EditMarketSpace extends BaseEditRecord
                     ->hiddenLabel()
                     ->content(new HtmlString(
                         '<div style="display:grid;gap:6px;padding:12px 14px;border:1px solid #bfdbfe;border-radius:12px;background:#eff6ff;color:#1e3a8a;">'
-                        . '<div style="font-size:13px;font-weight:800;">Площадь и ставка меняются с датой вступления в силу.</div>'
-                        . '<div style="font-size:12px;line-height:1.45;color:#475569;">Для действующего участника укажите более позднюю дату в поле «С даты действия». Система закроет текущую строку и создаст новую, чтобы сохранить историю и не спорить с импортом.</div>'
-                        . '</div>'
+                        .'<div style="font-size:13px;font-weight:800;">Площадь и ставка меняются с датой вступления в силу.</div>'
+                        .'<div style="font-size:12px;line-height:1.45;color:#475569;">Для действующего участника укажите более позднюю дату в поле «С даты действия». Система закроет текущую строку и создаст новую, чтобы сохранить историю и не спорить с импортом.</div>'
+                        .'</div>'
                     )),
                 \Filament\Forms\Components\Repeater::make('participants')
                     ->label('Участники')
@@ -1513,6 +1541,20 @@ class EditMarketSpace extends BaseEditRecord
             ->modalSubmitActionLabel('Продолжить')
             ->modalCancelActionLabel('Отмена')
             ->action(function (): void {
+                if (! $this->record instanceof MarketSpace) {
+                    return;
+                }
+
+                if ($this->isMaintenanceSpace($this->record) || $this->isGroupedSpace($this->record)) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Совместное использование недоступно')
+                        ->body('Служебные и групповые места не могут быть совместными.')
+                        ->send();
+
+                    return;
+                }
+
                 $this->replaceMountedAction('manage_shared_use');
             });
     }
@@ -1530,7 +1572,14 @@ class EditMarketSpace extends BaseEditRecord
             ->size('lg')
             ->outlined()
             ->color($isMaintenance ? 'gray' : 'warning')
-            ->visible(fn (): bool => $this->record instanceof MarketSpace)
+            ->visible(fn (): bool => $this->record instanceof MarketSpace
+                && (
+                    $isMaintenance
+                    || (
+                        ! MarketSpaceResource::hasSharedUseTenants($this->record)
+                        && ! MarketSpaceResource::isSharedUseSourceSpace($this->record)
+                    )
+                ))
             ->disabled(fn (): bool => ! $isMaintenance
                 && $this->record instanceof MarketSpace
                 && $this->isGroupedSpace($this->record)
@@ -1553,6 +1602,22 @@ class EditMarketSpace extends BaseEditRecord
             ])
             ->action(function () use ($isMaintenance): void {
                 if (! $this->record instanceof MarketSpace) {
+                    return;
+                }
+
+                if (
+                    ! $isMaintenance
+                    && (
+                        MarketSpaceResource::hasSharedUseTenants($this->record)
+                        || MarketSpaceResource::isSharedUseSourceSpace($this->record)
+                    )
+                ) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Служебный статус недоступен для совместного места')
+                        ->body('Сначала завершите совместное использование, затем повторите действие.')
+                        ->send();
+
                     return;
                 }
 
@@ -1611,6 +1676,12 @@ class EditMarketSpace extends BaseEditRecord
     {
         if (! $this->record instanceof MarketSpace) {
             return;
+        }
+
+        if ($this->isMaintenanceSpace($this->record) || $this->isGroupedSpace($this->record)) {
+            throw ValidationException::withMessages([
+                'participants' => 'Служебные и групповые места не могут быть совместными.',
+            ]);
         }
 
         $activeBindings = MarketSpaceTenantBinding::query()
@@ -1836,9 +1907,12 @@ class EditMarketSpace extends BaseEditRecord
             ->size('lg')
             ->outlined()
             ->color('warning')
-            ->visible(fn (): bool => $this->record instanceof MarketSpace)
+            ->visible(fn (): bool => $this->record instanceof MarketSpace
+                && ! $this->isMaintenanceSpace($this->record)
+                && ! MarketSpaceResource::hasSharedUseTenants($this->record)
+                && ! MarketSpaceResource::isSharedUseSourceSpace($this->record))
             ->extraAttributes([
-                'class' => 'market-space-card-action market-space-card-action--secondary market-space-card-action--tenant-switch-hidden',
+                'class' => 'market-space-card-action market-space-card-action--secondary',
             ])
             ->modalHeading('Сменить арендатора')
             ->modalSubmitActionLabel('Запланировать смену')
@@ -1910,13 +1984,12 @@ class EditMarketSpace extends BaseEditRecord
                     ->title('Смена арендатора запланирована')
                     ->body(
                         ((bool) ($operation->payload['detach_from_group'] ?? false))
-                            ? 'Место будет выведено из группы и перейдёт к новому арендатору с ' . $effectiveAtLabel . '.'
-                            : 'Новый арендатор вступит в силу с ' . $effectiveAtLabel . '.'
+                            ? 'Место будет выведено из группы и перейдёт к новому арендатору с '.$effectiveAtLabel.'.'
+                            : 'Новый арендатор вступит в силу с '.$effectiveAtLabel.'.'
                     )
                     ->send();
             });
     }
-
 
     private function makeRegroupAction(string $actionClass): mixed
     {
@@ -2028,12 +2101,12 @@ class EditMarketSpace extends BaseEditRecord
 
                 $renamedParents = collect($result['renamed_parents'] ?? [])
                     ->map(function (array $item): string {
-                        return $item['old_number'] . ' → ' . $item['new_number'];
+                        return $item['old_number'].' → '.$item['new_number'];
                     })
                     ->values();
 
                 $body = $renamedParents->isNotEmpty()
-                    ? 'Переименованы группы: ' . $renamedParents->implode('; ')
+                    ? 'Переименованы группы: '.$renamedParents->implode('; ')
                     : $defaultBody;
 
                 Notification::make()
@@ -2043,6 +2116,7 @@ class EditMarketSpace extends BaseEditRecord
                     ->send();
             });
     }
+
     protected function getHeaderActions(): array
     {
         $actions = [];
@@ -2164,7 +2238,7 @@ class EditMarketSpace extends BaseEditRecord
                         'tenantUrl' => $this->record?->tenant_id
                             ? \App\Filament\Resources\TenantResource::getUrl('edit', ['record' => (int) $this->record->tenant_id])
                             : null,
-                        'historyUrl' => MarketSpaceResource::getUrl('edit', ['record' => $this->record]) . '?tab=istoria::data::tab',
+                        'historyUrl' => MarketSpaceResource::getUrl('edit', ['record' => $this->record]).'?tab=istoria::data::tab',
                     ]),
                 ));
 
@@ -2234,7 +2308,7 @@ class EditMarketSpace extends BaseEditRecord
                         'tenantUrl' => $this->record?->tenant_id
                             ? \App\Filament\Resources\TenantResource::getUrl('edit', ['record' => (int) $this->record->tenant_id])
                             : null,
-                        'historyUrl' => MarketSpaceResource::getUrl('edit', ['record' => $this->record]) . '?tab=istoria::data::tab',
+                        'historyUrl' => MarketSpaceResource::getUrl('edit', ['record' => $this->record]).'?tab=istoria::data::tab',
                     ]),
                 ));
 
@@ -2439,19 +2513,19 @@ class EditMarketSpace extends BaseEditRecord
         // Договоры
         if ($precheck['contracts'] !== []) {
             $html .= '<div style="display:grid;gap:6px;">';
-            $html .= '<div style="font-size:13px;font-weight:700;color:#0f172a;">Договоры: ' . count($precheck['contracts']) . '</div>';
+            $html .= '<div style="font-size:13px;font-weight:700;color:#0f172a;">Договоры: '.count($precheck['contracts']).'</div>';
             $html .= '<div style="display:grid;gap:4px;">';
             foreach ($precheck['contracts'] as $contract) {
                 $statusColor = $contract['is_expired'] ? '#86efac' : '#fca5a5';
                 $statusText = $contract['is_expired'] ? 'истёк' : 'активен';
                 $html .= '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">';
-                $html .= '<div style="font-size:12px;color:#334155;">' . e($contract['number']) . ' · ' . e($contract['tenant_name']) . '</div>';
-                $html .= '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:' . $statusColor . ';color:#0f172a;">' . $statusText . '</span>';
+                $html .= '<div style="font-size:12px;color:#334155;">'.e($contract['number']).' · '.e($contract['tenant_name']).'</div>';
+                $html .= '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:'.$statusColor.';color:#0f172a;">'.$statusText.'</span>';
                 $html .= '</div>';
             }
             $html .= '</div>';
             if ($precheck['contractsUrl']) {
-                $html .= '<a href="' . e($precheck['contractsUrl']) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;margin-top:4px;">Все договоры →</a>';
+                $html .= '<a href="'.e($precheck['contractsUrl']).'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;margin-top:4px;">Все договоры →</a>';
             }
             $html .= '</div>';
         }
@@ -2459,22 +2533,22 @@ class EditMarketSpace extends BaseEditRecord
         // Начисления
         if ($precheck['accruals'] !== []) {
             $html .= '<div style="display:grid;gap:6px;">';
-            $html .= '<div style="font-size:13px;font-weight:700;color:#0f172a;">Начисления: ' . count($precheck['accruals']) . '</div>';
+            $html .= '<div style="font-size:13px;font-weight:700;color:#0f172a;">Начисления: '.count($precheck['accruals']).'</div>';
             $html .= '<div style="display:grid;gap:4px;">';
             foreach (array_slice($precheck['accruals'], 0, 5) as $accrual) {
                 $statusColor = $accrual['is_current'] ? '#fde68a' : '#e5e7eb';
                 $statusText = $accrual['is_current'] ? 'текущий' : 'прошедший';
                 $html .= '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">';
-                $html .= '<div style="font-size:12px;color:#334155;">' . e($accrual['period']) . ' · ' . number_format($accrual['total'], 0, ',', ' ') . ' ₽</div>';
-                $html .= '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:' . $statusColor . ';color:#0f172a;">' . $statusText . '</span>';
+                $html .= '<div style="font-size:12px;color:#334155;">'.e($accrual['period']).' · '.number_format($accrual['total'], 0, ',', ' ').' ₽</div>';
+                $html .= '<span style="font-size:11px;padding:2px 8px;border-radius:999px;background:'.$statusColor.';color:#0f172a;">'.$statusText.'</span>';
                 $html .= '</div>';
             }
             if (count($precheck['accruals']) > 5) {
-                $html .= '<div style="font-size:11px;color:#64748b;">Ещё ' . (count($precheck['accruals']) - 5) . ' записей...</div>';
+                $html .= '<div style="font-size:11px;color:#64748b;">Ещё '.(count($precheck['accruals']) - 5).' записей...</div>';
             }
             $html .= '</div>';
             if ($precheck['accrualsUrl']) {
-                $html .= '<a href="' . e($precheck['accrualsUrl']) . '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;margin-top:4px;">Все начисления →</a>';
+                $html .= '<a href="'.e($precheck['accrualsUrl']).'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:999px;color:#1d4ed8;font-weight:600;text-decoration:none;background:#fff;margin-top:4px;">Все начисления →</a>';
             }
             $html .= '</div>';
         }
@@ -2484,7 +2558,7 @@ class EditMarketSpace extends BaseEditRecord
             $html .= '<div style="display:grid;gap:4px;padding:12px 14px;border:1px solid #fde68a;border-radius:12px;background:#fffbeb;">';
             $html .= '<div style="font-size:12px;font-weight:700;color:#92400e;">Предупреждения:</div>';
             foreach ($precheck['warnings'] as $warning) {
-                $html .= '<div style="font-size:12px;color:#92400e;">• ' . e($warning) . '</div>';
+                $html .= '<div style="font-size:12px;color:#92400e;">• '.e($warning).'</div>';
             }
             $html .= '</div>';
         }
@@ -2503,7 +2577,7 @@ class EditMarketSpace extends BaseEditRecord
 
         $number = trim((string) ($this->record?->number ?? ''));
         if ($number !== '') {
-            return 'Место ' . $number;
+            return 'Место '.$number;
         }
 
         return 'Торговое место';
@@ -2524,10 +2598,10 @@ class EditMarketSpace extends BaseEditRecord
                 $sourceLabel = trim((string) ($sourceSpace?->display_name ?? ''));
             }
             if ($sourceLabel === '') {
-                $sourceLabel = '#' . (int) ($sourceSpace?->id ?? 0);
+                $sourceLabel = '#'.(int) ($sourceSpace?->id ?? 0);
             }
 
-            return 'Входит в группу: ' . $sourceLabel;
+            return 'Входит в группу: '.$sourceLabel;
         }
 
         if (MarketSpaceResource::hasSharedUseTenants($this->record)) {
@@ -2633,7 +2707,7 @@ class EditMarketSpace extends BaseEditRecord
         Notification::make()
             ->success()
             ->title('Место отмечено как служебное')
-            ->body('Активные арендные связи закрыты.' . $this->buildParentStatusChangeNotificationSuffix($affectedChildren))
+            ->body('Активные арендные связи закрыты.'.$this->buildParentStatusChangeNotificationSuffix($affectedChildren))
             ->send();
     }
 
@@ -2657,7 +2731,7 @@ class EditMarketSpace extends BaseEditRecord
         Notification::make()
             ->success()
             ->title('Служебный статус снят')
-            ->body('Место переведено в статус «Свободно».' . $this->buildParentStatusChangeNotificationSuffix($affectedChildren))
+            ->body('Место переведено в статус «Свободно».'.$this->buildParentStatusChangeNotificationSuffix($affectedChildren))
             ->send();
     }
 
@@ -2684,10 +2758,10 @@ class EditMarketSpace extends BaseEditRecord
                 $displayName = trim((string) ($space->display_name ?? ''));
 
                 if ($number !== '' && $displayName !== '' && $displayName !== $number) {
-                    return $number . ' (' . $displayName . ')';
+                    return $number.' ('.$displayName.')';
                 }
 
-                return $number !== '' ? $number : ($displayName !== '' ? $displayName : ('#' . (int) $space->id));
+                return $number !== '' ? $number : ($displayName !== '' ? $displayName : ('#'.(int) $space->id));
             })
             ->values()
             ->all();
@@ -2701,15 +2775,15 @@ class EditMarketSpace extends BaseEditRecord
         }
 
         $items = implode('', array_map(
-            static fn (string $label): string => '<li>' . e($label) . '</li>',
+            static fn (string $label): string => '<li>'.e($label).'</li>',
             $children,
         ));
 
         return new HtmlString(
             '<div style="display:grid;gap:8px;padding:12px 14px;border:1px solid #f59e0b;border-radius:12px;background:#fff7ed;">'
-            . '<div style="font-size:13px;line-height:1.45;color:#9a3412;"><strong>Предупреждение.</strong> При смене статуса parent-группы child-места будут разгруппированы и станут обычными местами.</div>'
-            . '<div style="font-size:12px;line-height:1.5;color:#7c2d12;"><strong>Будут разгруппированы:</strong><ul style="margin:6px 0 0 18px;padding:0;">' . $items . '</ul></div>'
-            . '</div>'
+            .'<div style="font-size:13px;line-height:1.45;color:#9a3412;"><strong>Предупреждение.</strong> При смене статуса parent-группы child-места будут разгруппированы и станут обычными местами.</div>'
+            .'<div style="font-size:12px;line-height:1.5;color:#7c2d12;"><strong>Будут разгруппированы:</strong><ul style="margin:6px 0 0 18px;padding:0;">'.$items.'</ul></div>'
+            .'</div>'
         );
     }
 
@@ -2722,7 +2796,6 @@ class EditMarketSpace extends BaseEditRecord
             return '';
         }
 
-        return ' Разгруппированы child-места: ' . implode(', ', $children) . '.';
+        return ' Разгруппированы child-места: '.implode(', ', $children).'.';
     }
-
 }

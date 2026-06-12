@@ -7,12 +7,19 @@ namespace App\Domain\Operations;
 final class OperationType
 {
     public const TENANT_SWITCH = 'tenant_switch';
+
     public const RENT_RATE_CHANGE = 'rent_rate_change';
+
     public const SPACE_ATTRS_CHANGE = 'space_attrs_change';
+
     public const SPACE_REVIEW = 'space_review';
+
     public const ELECTRICITY_INPUT = 'electricity_input';
+
     public const ACCRUAL_ADJUSTMENT = 'accrual_adjustment';
+
     public const PERIOD_CLOSE = 'period_close';
+
     public const GROUP_MEMBERSHIP = 'group_membership';
 
     /**
@@ -54,6 +61,7 @@ final class OperationType
     public static function managementValues(): array
     {
         return [
+            self::TENANT_SWITCH,
             self::SPACE_ATTRS_CHANGE,
             self::ELECTRICITY_INPUT,
             self::ACCRUAL_ADJUSTMENT,
