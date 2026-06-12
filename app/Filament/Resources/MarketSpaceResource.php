@@ -2087,7 +2087,8 @@ class MarketSpaceResource extends BaseResource
         }
 
         $tenantId = $record->effectiveTenantId();
-        $snapshot = static::latestSettlementSnapshot((int) $record->market_id);
+        $settlementSnapshots = static::settlementSnapshots((int) $record->market_id);
+        $snapshot = static::selectedSettlementSnapshot($settlementSnapshots);
 
         if (! $snapshot) {
             return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
@@ -2102,6 +2103,7 @@ class MarketSpaceResource extends BaseResource
                 'emptyReason' => 'Финансовый учёт совместного места включён в основное место. Отдельную задолженность по этому месту ОСВ не показывает.',
                 'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
                 'account' => (string) $snapshot->account,
+                ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
             ])->render());
         }
 
@@ -2111,6 +2113,7 @@ class MarketSpaceResource extends BaseResource
                 'emptyReason' => 'У места нет текущего арендатора, поэтому строки ОСВ 1С не подбираются.',
                 'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
                 'account' => (string) $snapshot->account,
+                ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
             ])->render());
         }
 
@@ -2138,6 +2141,7 @@ class MarketSpaceResource extends BaseResource
                 'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
                 'account' => (string) $snapshot->account,
                 'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $record->effectiveTenantName() ?? $record->number),
+                ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
             ])->render());
         }
 
@@ -2161,21 +2165,92 @@ class MarketSpaceResource extends BaseResource
             'currentTenantName' => (string) ($record->effectiveTenantName() ?? ''),
             'contractExternalIds' => $contractExternalIds->all(),
             'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $search),
+            ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
         ])->render());
     }
 
-    private static function latestSettlementSnapshot(int $marketId): ?object
+    /**
+     * @return Collection<int, object>
+     */
+    private static function settlementSnapshots(int $marketId): Collection
     {
-        $baseQuery = DB::table('tenant_settlement_balances')
+        $snapshots = DB::table('tenant_settlement_balances')
             ->where('market_id', $marketId)
+            ->select(['period_from', 'period_to', 'account'])
+            ->selectRaw('max(imported_at) as imported_at')
+            ->groupBy(['period_from', 'period_to', 'account'])
             ->orderByDesc('period_to')
-            ->orderByDesc('imported_at');
+            ->orderByDesc('imported_at')
+            ->get();
 
-        $snapshot = (clone $baseQuery)
-            ->where('account', '62')
-            ->first(['period_from', 'period_to', 'account', 'imported_at']);
+        $account62Snapshots = $snapshots
+            ->filter(fn (object $snapshot): bool => (string) $snapshot->account === '62')
+            ->values();
 
-        return $snapshot ?: $baseQuery->first(['period_from', 'period_to', 'account', 'imported_at']);
+        return $account62Snapshots->isNotEmpty() ? $account62Snapshots : $snapshots;
+    }
+
+    /**
+     * @param  Collection<int, object>  $snapshots
+     */
+    private static function selectedSettlementSnapshot(Collection $snapshots): ?object
+    {
+        if ($snapshots->isEmpty()) {
+            return null;
+        }
+
+        $selectedPeriod = request()->query('settlement_period');
+
+        if (is_string($selectedPeriod) && $selectedPeriod !== '') {
+            $selectedSnapshot = $snapshots->first(
+                fn (object $snapshot): bool => static::spaceSettlementPeriodKey($snapshot) === $selectedPeriod
+            );
+
+            if ($selectedSnapshot) {
+                return $selectedSnapshot;
+            }
+        }
+
+        return $snapshots->first(fn (object $snapshot): bool => (string) $snapshot->account === '62')
+            ?: $snapshots->first();
+    }
+
+    private static function spaceSettlementPeriodKey(object $snapshot): string
+    {
+        return implode('|', [
+            (string) $snapshot->period_from,
+            (string) $snapshot->period_to,
+            (string) $snapshot->account,
+        ]);
+    }
+
+    /**
+     * @param  Collection<int, object>  $snapshots
+     * @return array<string, mixed>
+     */
+    private static function spaceSettlementPeriodPickerProps(Collection $snapshots, object $selectedSnapshot): array
+    {
+        $firstSnapshot = $snapshots
+            ->sortBy(fn (object $snapshot): string => (string) $snapshot->period_from)
+            ->first();
+
+        return [
+            'periodOptions' => $snapshots
+                ->mapWithKeys(function (object $snapshot): array {
+                    $label = static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to);
+
+                    if ((string) $snapshot->account !== '62') {
+                        $label .= ' · счёт '.$snapshot->account;
+                    }
+
+                    return [static::spaceSettlementPeriodKey($snapshot) => $label];
+                })
+                ->all(),
+            'selectedPeriodKey' => static::spaceSettlementPeriodKey($selectedSnapshot),
+            'firstPeriodLabel' => $firstSnapshot
+                ? \Carbon\CarbonImmutable::parse((string) $firstSnapshot->period_from)->format('d.m.Y')
+                : null,
+        ];
     }
 
     /**

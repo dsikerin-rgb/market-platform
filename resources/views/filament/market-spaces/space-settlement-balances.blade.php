@@ -14,6 +14,9 @@
     'currentTenantName' => '',
     'contractExternalIds' => [],
     'settlementsUrl' => null,
+    'periodOptions' => [],
+    'selectedPeriodKey' => null,
+    'firstPeriodLabel' => null,
 ])
 
 @php
@@ -27,6 +30,7 @@
 
     $rows = is_array($rows) ? $rows : [];
     $summary = is_array($summary) ? $summary : [];
+    $periodOptions = is_array($periodOptions) ? $periodOptions : [];
     $currentTenantName = trim((string) $currentTenantName);
     $closingNet = (float) ($summary['closing_net'] ?? 0);
     $statusTone = (string) ($summary['closing_tone'] ?? 'neutral');
@@ -154,6 +158,37 @@
             gap: 10px;
         }
 
+        .space-finance__toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 14px;
+            align-items: end;
+            justify-content: space-between;
+        }
+
+        .space-finance__period-form {
+            display: grid;
+            gap: 5px;
+            min-width: min(100%, 320px);
+        }
+
+        .space-finance__select {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #fff;
+            color: #0f172a;
+            font-size: 14px;
+            line-height: 1.25;
+            padding: 8px 10px;
+        }
+
+        .dark .space-finance__select {
+            border-color: rgba(148, 163, 184, 0.35);
+            background: rgba(15, 23, 42, 0.35);
+            color: #f8fafc;
+        }
+
         .space-finance__note {
             color: #475569;
             font-size: 13px;
@@ -264,6 +299,30 @@
 @endonce
 
 <div class="space-finance">
+    @if ($periodOptions !== [])
+        <div class="space-finance__toolbar">
+            <form class="space-finance__period-form" method="GET">
+                @if (request()->query('tab'))
+                    <input type="hidden" name="tab" value="{{ request()->query('tab') }}">
+                @endif
+                <label class="space-finance__label" for="space-finance-period">Период ОСВ</label>
+                <select id="space-finance-period" class="space-finance__select" name="settlement_period" onchange="this.form.submit()">
+                    @foreach ($periodOptions as $periodKey => $periodOptionLabel)
+                        <option value="{{ $periodKey }}" @selected($periodKey === $selectedPeriodKey)>
+                            {{ $periodOptionLabel }}
+                        </option>
+                    @endforeach
+                </select>
+            </form>
+
+            @if ($firstPeriodLabel)
+                <div class="space-finance__note">
+                    Можно выбрать период не раньше {{ $firstPeriodLabel }}. Это первый период, по которому загружена ОСВ.
+                </div>
+            @endif
+        </div>
+    @endif
+
     @if ($state === 'ready')
         <div class="space-finance__hero">
             <div class="space-finance__card">
