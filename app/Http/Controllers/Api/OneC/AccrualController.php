@@ -113,6 +113,13 @@ class AccrualController extends Controller
                     'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
                     'items.*.organization_name' => ['nullable', 'string', 'max:255'],
                     'items.*.account' => ['nullable', 'string', 'max:64'],
+                    'items.*.document_external_id' => ['nullable', 'string', 'max:255'],
+                    'items.*.document_number' => ['nullable', 'string', 'max:255'],
+                    'items.*.document_date' => ['nullable', 'date_format:Y-m-d'],
+                    'items.*.document_name' => ['nullable', 'string'],
+                    'items.*.service_name' => ['nullable', 'string', 'max:255'],
+                    'items.*.line_description' => ['nullable', 'string'],
+                    'items.*.purpose' => ['nullable', 'string'],
 
                     'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
                     'items.*.source_place_code' => ['nullable', 'string', 'max:255'],
@@ -213,9 +220,23 @@ class AccrualController extends Controller
                 $hasOrganizationExternalId = array_key_exists('organization_external_id', $item);
                 $hasOrganizationName = array_key_exists('organization_name', $item);
                 $hasAccount = array_key_exists('account', $item);
+                $hasDocumentExternalId = array_key_exists('document_external_id', $item);
+                $hasDocumentNumber = array_key_exists('document_number', $item);
+                $hasDocumentDate = array_key_exists('document_date', $item);
+                $hasDocumentName = array_key_exists('document_name', $item);
+                $hasServiceName = array_key_exists('service_name', $item);
+                $hasLineDescription = array_key_exists('line_description', $item);
+                $hasPurpose = array_key_exists('purpose', $item);
                 $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
                 $organizationName = trim((string) ($item['organization_name'] ?? ''));
                 $account = trim((string) ($item['account'] ?? ''));
+                $documentExternalId = trim((string) ($item['document_external_id'] ?? ''));
+                $documentNumber = trim((string) ($item['document_number'] ?? ''));
+                $documentDate = trim((string) ($item['document_date'] ?? ''));
+                $documentName = trim((string) ($item['document_name'] ?? ''));
+                $serviceName = trim((string) ($item['service_name'] ?? ''));
+                $lineDescription = trim((string) ($item['line_description'] ?? ''));
+                $purpose = trim((string) ($item['purpose'] ?? ''));
                 $spaceKey = trim((string) ($item['market_space_code'] ?? $item['source_place_code'] ?? ''));
                 $sourcePlaceCode = trim((string) ($item['source_place_code'] ?? $spaceKey));
                 $sourcePlaceName = trim((string) ($item['source_place_name'] ?? ''));
@@ -294,6 +315,25 @@ class AccrualController extends Controller
                     $organizationExternalId,
                     $organizationName,
                     $account,
+                    $documentExternalId,
+                    $documentNumber,
+                    $documentDate,
+                    $documentName,
+                    $serviceName,
+                    $lineDescription,
+                    $purpose,
+                    (string) ($item['days'] ?? ''),
+                    $this->normalizeHashNumber($item['area_sqm'] ?? null),
+                    $this->normalizeHashNumber($item['rent_rate'] ?? null),
+                    $this->normalizeHashNumber($item['rent_amount'] ?? null, 2),
+                    $this->normalizeHashNumber($item['management_fee'] ?? null, 2),
+                    $this->normalizeHashNumber($item['utilities_amount'] ?? null, 2),
+                    $this->normalizeHashNumber($item['electricity_amount'] ?? null, 2),
+                    $this->normalizeHashNumber($item['total_no_vat'] ?? null, 2),
+                    $this->normalizeHashNumber($item['vat_rate'] ?? null),
+                    $this->normalizeHashNumber($item['total_with_vat'] ?? null, 2),
+                    $this->normalizeHashNumber($item['cash_amount'] ?? null, 2),
+                    $this->normalizeCurrency($item['currency'] ?? null),
                     $spaceKey,
                     $sourcePlaceName,
                     $activityType,
@@ -356,6 +396,34 @@ class AccrualController extends Controller
                     $values['account'] = $account !== '' ? $account : null;
                 }
 
+                if ($hasDocumentExternalId) {
+                    $values['document_external_id'] = $documentExternalId !== '' ? $documentExternalId : null;
+                }
+
+                if ($hasDocumentNumber) {
+                    $values['document_number'] = $documentNumber !== '' ? $documentNumber : null;
+                }
+
+                if ($hasDocumentDate) {
+                    $values['document_date'] = $documentDate !== '' ? $documentDate : null;
+                }
+
+                if ($hasDocumentName) {
+                    $values['document_name'] = $documentName !== '' ? $documentName : null;
+                }
+
+                if ($hasServiceName) {
+                    $values['service_name'] = $serviceName !== '' ? $serviceName : null;
+                }
+
+                if ($hasLineDescription) {
+                    $values['line_description'] = $lineDescription !== '' ? $lineDescription : null;
+                }
+
+                if ($hasPurpose) {
+                    $values['purpose'] = $purpose !== '' ? $purpose : null;
+                }
+
                 $existingId = DB::table('tenant_accruals')
                     ->where('market_id', $marketId)
                     ->whereDate('period', $periodDate)
@@ -363,7 +431,10 @@ class AccrualController extends Controller
                     ->value('id');
 
                 if (! $existingId) {
-                    $existingId = $this->findSingleLegacyAccrualIdentityId($identity);
+                    $existingId = $this->findSingleLegacyAccrualIdentityId(
+                        $identity,
+                        $touchedAccrualIdsByPeriod[$periodDate] ?? [],
+                    );
                     if ($existingId) {
                         $legacyIdentityMatches++;
                     }
@@ -693,6 +764,25 @@ class AccrualController extends Controller
         string $organizationExternalId,
         string $organizationName,
         string $account,
+        string $documentExternalId,
+        string $documentNumber,
+        string $documentDate,
+        string $documentName,
+        string $serviceName,
+        string $lineDescription,
+        string $purpose,
+        string $days,
+        string $areaSqm,
+        string $rentRate,
+        string $rentAmount,
+        string $managementFee,
+        string $utilitiesAmount,
+        string $electricityAmount,
+        string $totalNoVat,
+        string $vatRate,
+        string $totalWithVat,
+        string $cashAmount,
+        string $currency,
         string $spaceKey,
         string $sourcePlaceName,
         string $activityType,
@@ -705,20 +795,68 @@ class AccrualController extends Controller
             trim($organizationExternalId),
             trim($organizationName),
             trim($account),
+            trim($documentExternalId),
+            trim($documentNumber),
+            trim($documentDate),
+            trim($documentName),
+            trim($serviceName),
+            trim($lineDescription),
+            trim($purpose),
+            trim($days),
+            trim($areaSqm),
+            trim($rentRate),
+            trim($rentAmount),
+            trim($managementFee),
+            trim($utilitiesAmount),
+            trim($electricityAmount),
+            trim($totalNoVat),
+            trim($vatRate),
+            trim($totalWithVat),
+            trim($cashAmount),
+            trim($currency),
             trim($spaceKey),
             trim($sourcePlaceName),
             trim($activityType),
         ]));
     }
 
+    private function normalizeHashNumber(mixed $value, int $scale = 6): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        if (is_string($value)) {
+            $value = str_replace(',', '.', $value);
+        }
+
+        if (! is_numeric($value)) {
+            return '';
+        }
+
+        $normalized = number_format((float) $value, $scale, '.', '');
+
+        return rtrim(rtrim($normalized, '0'), '.');
+    }
+
     /**
      * @param  array<string, mixed>  $identity
+     * @param  list<int>  $excludeIds
      */
-    private function findSingleLegacyAccrualIdentityId(array $identity): ?int
+    private function findSingleLegacyAccrualIdentityId(array $identity, array $excludeIds = []): ?int
     {
         $query = DB::table('tenant_accruals')
             ->where('source', '1c')
             ->where('source_file', '1c:accruals');
+
+        $excludeIds = array_values(array_unique(array_filter(
+            array_map(static fn ($id): int => (int) $id, $excludeIds),
+            static fn (int $id): bool => $id > 0,
+        )));
+
+        if ($excludeIds !== []) {
+            $query->whereNotIn('id', $excludeIds);
+        }
 
         foreach ($identity as $column => $value) {
             if ($column === 'period') {

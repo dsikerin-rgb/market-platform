@@ -79,6 +79,13 @@ class OneCAccrualImportTest extends TestCase
                     'tenant_external_id' => 'tenant-001',
                     'contract_external_id' => 'contract-001',
                     'period' => '2026-03',
+                    'document_external_id' => 'doc-accrual-001',
+                    'document_number' => 'REA-001',
+                    'document_date' => '2026-03-01',
+                    'document_name' => 'Realization REA-001 from 2026-03-01',
+                    'service_name' => 'Rent',
+                    'line_description' => 'Rent for March 2026',
+                    'purpose' => 'Rent charge for March 2026',
                     'market_space_code' => 'П/10',
                     'source_place_code' => 'П/10',
                     'source_place_name' => 'П/10',
@@ -115,6 +122,13 @@ class OneCAccrualImportTest extends TestCase
             'contract_link_source' => 'contract_external_id',
             'market_space_id' => $space->id,
             'period' => '2026-03-01',
+            'document_external_id' => 'doc-accrual-001',
+            'document_number' => 'REA-001',
+            'document_date' => '2026-03-01',
+            'document_name' => 'Realization REA-001 from 2026-03-01',
+            'service_name' => 'Rent',
+            'line_description' => 'Rent for March 2026',
+            'purpose' => 'Rent charge for March 2026',
             'source' => '1c',
             'source_place_code' => 'П/10',
         ]);
@@ -203,6 +217,90 @@ class OneCAccrualImportTest extends TestCase
         ]);
     }
 
+    public function test_accrual_import_keeps_distinct_document_lines_for_same_contract_period_and_place(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Document Lines Tenant',
+            'external_id' => 'tenant-document-lines',
+            'inn' => '333333333334',
+        ]);
+
+        TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'external_id' => 'contract-document-lines',
+            'number' => 'Document lines contract',
+            'status' => 'active',
+            'starts_at' => '2026-02-01',
+            'signed_at' => '2026-02-01',
+            'is_active' => true,
+        ]);
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ];
+
+        $baseItem = [
+            'tenant_external_id' => 'tenant-document-lines',
+            'contract_external_id' => 'contract-document-lines',
+            'period' => '2026-03',
+            'source_place_name' => 'Same place',
+            'activity_type' => 'rent',
+            'tenant_name' => 'Document Lines Tenant',
+            'inn' => '333333333334',
+            'currency' => 'RUB',
+        ];
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-03-12 10:00:00',
+            'items' => [
+                array_merge($baseItem, [
+                    'document_external_id' => 'doc-line-shared',
+                    'document_number' => 'REA-SHARED',
+                    'document_date' => '2026-03-01',
+                    'service_name' => 'Rent',
+                    'purpose' => 'Rent and service charge for March',
+                    'total_no_vat' => 10000,
+                    'total_with_vat' => 10000,
+                ]),
+                array_merge($baseItem, [
+                    'document_external_id' => 'doc-line-shared',
+                    'document_number' => 'REA-SHARED',
+                    'document_date' => '2026-03-01',
+                    'service_name' => 'Rent',
+                    'purpose' => 'Rent and service charge for March',
+                    'total_no_vat' => 1500,
+                    'total_with_vat' => 1500,
+                ]),
+            ],
+        ], $headers)
+            ->assertOk()
+            ->assertJsonPath('inserted', 2)
+            ->assertJsonPath('updated', 0);
+
+        $this->assertSame(2, DB::table('tenant_accruals')->count());
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'document_external_id' => 'doc-line-shared',
+            'document_number' => 'REA-SHARED',
+            'service_name' => 'Rent',
+            'purpose' => 'Rent and service charge for March',
+            'total_with_vat' => 10000,
+        ]);
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'document_external_id' => 'doc-line-shared',
+            'document_number' => 'REA-SHARED',
+            'service_name' => 'Rent',
+            'purpose' => 'Rent and service charge for March',
+            'total_with_vat' => 1500,
+        ]);
+    }
+
     public function test_accrual_import_updates_legacy_row_when_organization_fields_are_added(): void
     {
         $tenant = Tenant::create([
@@ -266,6 +364,12 @@ class OneCAccrualImportTest extends TestCase
                     'organization_external_id' => 'org-001',
                     'organization_name' => 'IP Test',
                     'account' => '62.01',
+                    'document_external_id' => 'legacy-doc-001',
+                    'document_number' => 'LEGACY-001',
+                    'document_date' => '2026-06-01',
+                    'document_name' => 'Legacy realization document',
+                    'service_name' => 'Rent',
+                    'purpose' => 'Legacy row purpose',
                     'tenant_name' => 'Legacy Tenant',
                     'inn' => '666666666666',
                     'rent_amount' => 237510,
@@ -294,6 +398,12 @@ class OneCAccrualImportTest extends TestCase
             'organization_external_id' => 'org-001',
             'organization_name' => 'IP Test',
             'account' => '62.01',
+            'document_external_id' => 'legacy-doc-001',
+            'document_number' => 'LEGACY-001',
+            'document_date' => '2026-06-01',
+            'document_name' => 'Legacy realization document',
+            'service_name' => 'Rent',
+            'purpose' => 'Legacy row purpose',
             'tenant_contract_id' => $contract->id,
             'period' => '2026-06-01',
             'total_with_vat' => 237510,

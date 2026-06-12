@@ -2387,6 +2387,12 @@ class TenantResource extends BaseResource
         $taHasSourcePlaceName = static::hasColumn('tenant_accruals', 'source_place_name');
         $taHasSourcePlaceCode = static::hasColumn('tenant_accruals', 'source_place_code');
         $taHasSourceContractNumber = static::hasColumn('tenant_accruals', 'source_contract_number');
+        $taHasDocumentNumber = static::hasColumn('tenant_accruals', 'document_number');
+        $taHasDocumentDate = static::hasColumn('tenant_accruals', 'document_date');
+        $taHasDocumentName = static::hasColumn('tenant_accruals', 'document_name');
+        $taHasServiceName = static::hasColumn('tenant_accruals', 'service_name');
+        $taHasLineDescription = static::hasColumn('tenant_accruals', 'line_description');
+        $taHasPurpose = static::hasColumn('tenant_accruals', 'purpose');
         $hasContractTable = DbSchema::hasTable('tenant_contracts');
 
         $msHasDisplayName = static::hasColumn('market_spaces', 'display_name');
@@ -2426,6 +2432,24 @@ class TenantResource extends BaseResource
         }
         if ($taHasSourceContractNumber) {
             $select[] = 'ta.source_contract_number';
+        }
+        if ($taHasDocumentNumber) {
+            $select[] = 'ta.document_number';
+        }
+        if ($taHasDocumentDate) {
+            $select[] = 'ta.document_date';
+        }
+        if ($taHasDocumentName) {
+            $select[] = 'ta.document_name';
+        }
+        if ($taHasServiceName) {
+            $select[] = 'ta.service_name';
+        }
+        if ($taHasLineDescription) {
+            $select[] = 'ta.line_description';
+        }
+        if ($taHasPurpose) {
+            $select[] = 'ta.purpose';
         }
 
         $select[] = 'tc.number as contract_number';
@@ -2543,6 +2567,34 @@ class TenantResource extends BaseResource
             $spaceCode = trim((string) ($row->space_code ?? ''));
             $sourcePlaceName = trim((string) ($row->source_place_name ?? ''));
             $sourcePlaceCode = trim((string) ($row->source_place_code ?? ''));
+            $documentNumber = trim((string) ($row->document_number ?? ''));
+            $documentName = trim((string) ($row->document_name ?? ''));
+            $serviceName = trim((string) ($row->service_name ?? ''));
+            $lineDescription = trim((string) ($row->line_description ?? ''));
+            $purpose = trim((string) ($row->purpose ?? ''));
+
+            $documentDateLabel = '';
+            $documentDateRaw = $row->document_date ?? null;
+            if (filled($documentDateRaw)) {
+                try {
+                    $documentDateLabel = Carbon::parse((string) $documentDateRaw)->format('d.m.Y');
+                } catch (\Throwable) {
+                    $documentDateLabel = (string) $documentDateRaw;
+                }
+            }
+
+            $documentLabel = $documentNumber !== ''
+                ? $documentNumber
+                : $documentName;
+            if ($documentLabel !== '' && $documentDateLabel !== '') {
+                $documentLabel .= ' от ' . $documentDateLabel;
+            } elseif ($documentLabel === '' && $documentDateLabel !== '') {
+                $documentLabel = $documentDateLabel;
+            }
+
+            $basisLabel = $purpose !== ''
+                ? $purpose
+                : ($lineDescription !== '' ? $lineDescription : $serviceName);
 
             $spaceLabel = $contractSpaceNumber !== ''
                 ? $contractSpaceNumber
@@ -2570,6 +2622,14 @@ class TenantResource extends BaseResource
                 $contractDetails = [
                     '<div class="tenant-accruals__contract-line">Полный документ: ' . e($contractFullDocument) . '</div>',
                 ];
+
+                if ($documentLabel !== '') {
+                    $contractDetails[] = '<div class="tenant-accruals__contract-line">Документ 1С: ' . e($documentLabel) . '</div>';
+                }
+
+                if ($basisLabel !== '') {
+                    $contractDetails[] = '<div class="tenant-accruals__contract-line">Основание: ' . e($basisLabel) . '</div>';
+                }
 
                 $contractStatus = trim((string) ($row->contract_status ?? ''));
                 if ($contractStatus !== '') {
@@ -2614,6 +2674,16 @@ class TenantResource extends BaseResource
                 $contractCell = '<span class="tenant-accruals__warn-badge">Без связи</span><div class="tenant-accruals__subtext">' . e($sourceContractNumber) . '</div>';
             } else {
                 $contractCell = '<span class="tenant-accruals__warn-badge">Без связи</span>';
+            }
+
+            if ($contractId <= 0) {
+                if ($documentLabel !== '') {
+                    $contractCell .= '<div class="tenant-accruals__subtext">Документ 1С: ' . e($documentLabel) . '</div>';
+                }
+
+                if ($basisLabel !== '') {
+                    $contractCell .= '<div class="tenant-accruals__subtext">Основание: ' . e($basisLabel) . '</div>';
+                }
             }
 
             if ($spaceId > 0) {

@@ -217,6 +217,12 @@ class AccrualPaymentReconciliationReport
             'contract_external_id',
             'organization_name',
             'account',
+            'document_number',
+            'document_date',
+            'document_name',
+            'service_name',
+            'line_description',
+            'purpose',
             'notes',
             'discount_note',
             'source_row_number',
@@ -245,24 +251,35 @@ class AccrualPaymentReconciliationReport
 
         return $rows->map(function (object $row) use ($amountColumn): array {
             $payload = $this->decodePayload($row->payload ?? null);
-            $documentNumber = $this->firstPayloadValue($payload, [
-                'document_number',
-                'documentNumber',
-                'doc_number',
-                'number',
-                'document',
+            $documentNumber = $this->firstNonEmpty([
+                $row->document_number ?? null,
+                $this->firstPayloadValue($payload, [
+                    'document_number',
+                    'documentNumber',
+                    'doc_number',
+                    'number',
+                    'document',
+                ]),
+                $row->document_name ?? null,
             ]);
             $basis = $this->firstNonEmpty([
+                $row->purpose ?? null,
+                $row->line_description ?? null,
+                $row->service_name ?? null,
                 $this->firstPayloadValue($payload, ['basis', 'purpose', 'description', 'comment']),
                 $row->notes ?? null,
                 $row->discount_note ?? null,
+            ]);
+            $documentDate = $this->firstNonEmpty([
+                $row->document_date ?? null,
+                $row->period ?? null,
             ]);
 
             return [
                 'key' => 'accrual:' . (int) $row->id,
                 'type' => 'accrual',
                 'type_label' => 'Начисление',
-                'document_date' => $this->normalizeDateString($row->period ?? null) ?? '',
+                'document_date' => $this->normalizeDateString($documentDate) ?? '',
                 'document_number' => $documentNumber ?: ('строка ' . (int) $row->id),
                 'tenant_id' => is_numeric($row->tenant_id ?? null) ? (int) $row->tenant_id : null,
                 'tenant_name' => '',

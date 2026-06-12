@@ -21,6 +21,7 @@ class TenantAccrual extends Model
 
     protected $casts = [
         'period' => 'date',
+        'document_date' => 'date',
         'area_sqm' => 'float',
         'rent_rate' => 'float',
         'days' => 'integer',
