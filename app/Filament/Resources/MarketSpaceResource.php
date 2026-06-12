@@ -4,6 +4,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Pages\OneCSettlements;
 use App\Filament\Resources\MarketSpaceResource\Pages;
 use App\Models\Market;
 use App\Models\MarketLocation;
@@ -28,6 +29,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
@@ -1324,6 +1326,17 @@ class MarketSpaceResource extends BaseResource
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
+                        Section::make('ОСВ 1С')
+                            ->schema([
+                                Forms\Components\Placeholder::make('space_settlement_balances')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderSpaceSettlementBalances($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1)
+                            ->collapsible()
+                            ->visible(fn (?MarketSpace $record): bool => filled($record?->id)),
                         Section::make('Редактируемые данные')
                             ->schema([
                                 Forms\Components\Select::make('location_id')
@@ -2060,6 +2073,290 @@ class MarketSpaceResource extends BaseResource
         }
 
         return $rentRate !== null ? (float) $rentRate : null;
+    }
+
+    private static function renderSpaceSettlementBalances(?MarketSpace $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">ОСВ появится после сохранения торгового места.</div>');
+        }
+
+        if (! SchemaFacade::hasTable('tenant_settlement_balances')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.8;">Таблица ОСВ 1С ещё не создана — выполните миграции.</div>');
+        }
+
+        $tenantId = $record->effectiveTenantId();
+        $snapshot = static::latestSettlementSnapshot((int) $record->market_id);
+
+        if (! $snapshot) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'empty',
+                'emptyReason' => 'По этому рынку ещё нет загруженной ОСВ 1С.',
+            ])->render());
+        }
+
+        if ($record->shared_use_financial_mode === MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'included',
+                'emptyReason' => 'Финансовый учёт совместного места включён в основное место. Отдельную задолженность по этому месту ОСВ не показывает.',
+                'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                'account' => (string) $snapshot->account,
+            ])->render());
+        }
+
+        if (! $tenantId) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'empty',
+                'emptyReason' => 'У места нет текущего арендатора, поэтому строки ОСВ 1С не подбираются.',
+                'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                'account' => (string) $snapshot->account,
+            ])->render());
+        }
+
+        $contractExternalIds = static::activeContractExternalIdsForSpace(
+            (int) $record->market_id,
+            (int) $tenantId,
+            (int) $record->id,
+        );
+
+        $rows = $contractExternalIds->isNotEmpty()
+            ? static::spaceSettlementRows((int) $record->market_id, (int) $tenantId, $snapshot, $contractExternalIds)
+            : collect();
+
+        $scope = 'exact';
+
+        if ($rows->isEmpty()) {
+            $rows = static::spaceSettlementRows((int) $record->market_id, (int) $tenantId, $snapshot, null);
+            $scope = 'tenant_fallback';
+        }
+
+        if ($rows->isEmpty()) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'empty',
+                'emptyReason' => 'В последней ОСВ нет строк по текущему арендатору этого места.',
+                'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                'account' => (string) $snapshot->account,
+                'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $record->effectiveTenantName() ?? $record->number),
+            ])->render());
+        }
+
+        $summary = static::summarizeSpaceSettlementRows($rows);
+        $search = $scope === 'exact' && $contractExternalIds->isNotEmpty()
+            ? (string) $contractExternalIds->first()
+            : (string) ($record->effectiveTenantName() ?? $record->number);
+
+        return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+            'state' => 'ready',
+            'scope' => $scope,
+            'scopeLabel' => $scope === 'exact' ? 'Точная связь по договору места' : 'Подбор по арендатору',
+            'scopeTone' => $scope === 'exact' ? 'success' : 'warning',
+            'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+            'account' => (string) $snapshot->account,
+            'importedAt' => $snapshot->imported_at ? (string) \Carbon\Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
+            'summary' => $summary,
+            'rows' => $rows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+            'contractExternalIds' => $contractExternalIds->all(),
+            'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $search),
+        ])->render());
+    }
+
+    private static function latestSettlementSnapshot(int $marketId): ?object
+    {
+        $baseQuery = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->orderByDesc('period_to')
+            ->orderByDesc('imported_at');
+
+        $snapshot = (clone $baseQuery)
+            ->where('account', '62')
+            ->first(['period_from', 'period_to', 'account', 'imported_at']);
+
+        return $snapshot ?: $baseQuery->first(['period_from', 'period_to', 'account', 'imported_at']);
+    }
+
+    /**
+     * @param  Collection<int, string>|null  $contractExternalIds
+     * @return Collection<int, object>
+     */
+    private static function spaceSettlementRows(int $marketId, int $tenantId, object $snapshot, ?Collection $contractExternalIds): Collection
+    {
+        $query = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->where('period_from', (string) $snapshot->period_from)
+            ->where('period_to', (string) $snapshot->period_to)
+            ->where('account', (string) $snapshot->account);
+
+        if ($contractExternalIds !== null) {
+            if ($contractExternalIds->isEmpty()) {
+                return collect();
+            }
+
+            $query->whereIn('contract_external_id', $contractExternalIds->all());
+        }
+
+        return $query
+            ->select([
+                'tenant_id',
+                'tenant_name',
+                'tenant_contract_id',
+                'contract_external_id',
+                'contract_name',
+                'organization_name',
+                'account',
+            ])
+            ->selectRaw('count(*) as rows_count')
+            ->selectRaw('coalesce(sum(opening_debit),0) as opening_debit')
+            ->selectRaw('coalesce(sum(opening_credit),0) as opening_credit')
+            ->selectRaw('coalesce(sum(turnover_debit),0) as turnover_debit')
+            ->selectRaw('coalesce(sum(turnover_credit),0) as turnover_credit')
+            ->selectRaw('coalesce(sum(closing_debit),0) as closing_debit')
+            ->selectRaw('coalesce(sum(closing_credit),0) as closing_credit')
+            ->groupBy([
+                'tenant_id',
+                'tenant_name',
+                'tenant_contract_id',
+                'contract_external_id',
+                'contract_name',
+                'organization_name',
+                'account',
+            ])
+            ->orderByRaw('(coalesce(sum(closing_debit),0) - coalesce(sum(closing_credit),0)) desc')
+            ->orderBy('contract_name')
+            ->limit(10)
+            ->get();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function summarizeSpaceSettlementRows(Collection $rows): array
+    {
+        $openingDebit = (float) $rows->sum(fn (object $row): float => (float) $row->opening_debit);
+        $openingCredit = (float) $rows->sum(fn (object $row): float => (float) $row->opening_credit);
+        $turnoverDebit = (float) $rows->sum(fn (object $row): float => (float) $row->turnover_debit);
+        $turnoverCredit = (float) $rows->sum(fn (object $row): float => (float) $row->turnover_credit);
+        $closingDebit = (float) $rows->sum(fn (object $row): float => (float) $row->closing_debit);
+        $closingCredit = (float) $rows->sum(fn (object $row): float => (float) $row->closing_credit);
+        $closingNet = $closingDebit - $closingCredit;
+
+        return [
+            'rows_count' => (int) $rows->sum(fn (object $row): int => (int) $row->rows_count),
+            'contracts_count' => $rows->pluck('contract_external_id')->filter()->unique()->count(),
+            'opening_net' => $openingDebit - $openingCredit,
+            'turnover_debit' => $turnoverDebit,
+            'turnover_credit' => $turnoverCredit,
+            'closing_net' => $closingNet,
+            'closing_label' => abs($closingNet) <= 0.009
+                ? 'Нет долга'
+                : ($closingNet > 0 ? 'Долг' : 'Переплата'),
+            'closing_tone' => abs($closingNet) <= 0.009
+                ? 'neutral'
+                : ($closingNet > 0 ? 'danger' : 'success'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function normalizeSpaceSettlementRow(object $row): array
+    {
+        $closingNet = (float) $row->closing_debit - (float) $row->closing_credit;
+
+        return [
+            'tenant_name' => (string) ($row->tenant_name ?? ''),
+            'contract_name' => (string) ($row->contract_name ?? ''),
+            'contract_external_id' => (string) ($row->contract_external_id ?? ''),
+            'organization_name' => (string) ($row->organization_name ?? ''),
+            'rows_count' => (int) $row->rows_count,
+            'opening_net' => (float) $row->opening_debit - (float) $row->opening_credit,
+            'turnover_debit' => (float) $row->turnover_debit,
+            'turnover_credit' => (float) $row->turnover_credit,
+            'closing_net' => $closingNet,
+        ];
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private static function activeContractExternalIdsForSpace(int $marketId, int $tenantId, int $marketSpaceId): Collection
+    {
+        if (
+            ! SchemaFacade::hasTable('tenant_contracts')
+            || ! SchemaFacade::hasColumn('tenant_contracts', 'external_id')
+        ) {
+            return collect();
+        }
+
+        $contractIds = collect();
+        $now = now();
+
+        if (
+            SchemaFacade::hasTable('market_space_tenant_bindings')
+            && SchemaFacade::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')
+        ) {
+            $contractIds = $contractIds->merge(DB::table('market_space_tenant_bindings as mstb')
+                ->join('tenant_contracts as tc', 'tc.id', '=', 'mstb.tenant_contract_id')
+                ->where('mstb.market_space_id', $marketSpaceId)
+                ->where('mstb.market_id', $marketId)
+                ->where('mstb.tenant_id', $tenantId)
+                ->whereNotNull('mstb.tenant_contract_id')
+                ->whereNotNull('tc.external_id')
+                ->where('tc.market_id', $marketId)
+                ->where('tc.tenant_id', $tenantId)
+                ->where('tc.is_active', true)
+                ->whereNotIn('tc.status', ['terminated', 'archived'])
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.started_at')
+                        ->orWhere('mstb.started_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.ended_at')
+                        ->orWhere('mstb.ended_at', '>', $now);
+                })
+                ->pluck('tc.external_id'));
+        }
+
+        if (SchemaFacade::hasColumn('tenant_contracts', 'market_space_id')) {
+            $contractIds = $contractIds->merge(DB::table('tenant_contracts')
+                ->where('market_id', $marketId)
+                ->where('tenant_id', $tenantId)
+                ->where('market_space_id', $marketSpaceId)
+                ->where('is_active', true)
+                ->whereNotIn('status', ['terminated', 'archived'])
+                ->whereNotNull('external_id')
+                ->pluck('external_id'));
+        }
+
+        return $contractIds
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private static function formatSpaceSettlementPeriod(string $fromDate, string $toDate): string
+    {
+        return \Carbon\CarbonImmutable::parse($fromDate)->format('d.m.Y')
+            .' — '
+            .\Carbon\CarbonImmutable::parse($toDate)->format('d.m.Y');
+    }
+
+    private static function spaceSettlementsUrl(object $snapshot, ?string $search): string
+    {
+        $query = [
+            'from' => (string) $snapshot->period_from,
+            'to' => (string) $snapshot->period_to,
+            'account' => (string) $snapshot->account,
+        ];
+
+        $search = trim((string) $search);
+
+        if ($search !== '') {
+            $query['search'] = $search;
+        }
+
+        return OneCSettlements::getUrl().'?'.http_build_query($query);
     }
 
     private static function renderTenantHistory(?MarketSpace $record): HtmlString
