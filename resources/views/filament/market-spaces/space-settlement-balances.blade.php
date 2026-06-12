@@ -161,15 +161,27 @@
         .space-finance__toolbar {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px 14px;
-            align-items: end;
-            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+            justify-content: flex-end;
         }
 
         .space-finance__period-form {
             display: grid;
-            gap: 5px;
-            min-width: min(100%, 320px);
+            grid-template-columns: auto minmax(220px, 280px);
+            gap: 6px 10px;
+            align-items: center;
+            width: fit-content;
+            max-width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #dbe4f0;
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+
+        .dark .space-finance__period-form {
+            border-color: rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.3);
         }
 
         .space-finance__select {
@@ -193,6 +205,12 @@
             color: #475569;
             font-size: 13px;
             line-height: 1.45;
+        }
+
+        .space-finance__period-form .space-finance__note {
+            grid-column: 1 / -1;
+            max-width: 420px;
+            font-size: 12px;
         }
 
         .dark .space-finance__note {
@@ -294,6 +312,15 @@
             .space-finance__summary {
                 grid-template-columns: minmax(0, 1fr);
             }
+
+            .space-finance__toolbar {
+                justify-content: stretch;
+            }
+
+            .space-finance__period-form {
+                grid-template-columns: minmax(0, 1fr);
+                width: 100%;
+            }
         }
     </style>
 @endonce
@@ -313,13 +340,13 @@
                         </option>
                     @endforeach
                 </select>
-            </form>
 
-            @if ($firstPeriodLabel)
-                <div class="space-finance__note">
-                    Можно выбрать период не раньше {{ $firstPeriodLabel }}. Это первый период, по которому загружена ОСВ.
-                </div>
-            @endif
+                @if ($firstPeriodLabel)
+                    <div class="space-finance__note">
+                        Минимум: {{ $firstPeriodLabel }}. Это первый загруженный период ОСВ.
+                    </div>
+                @endif
+            </form>
         </div>
     @endif
 
