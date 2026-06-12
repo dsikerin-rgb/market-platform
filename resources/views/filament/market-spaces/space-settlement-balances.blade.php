@@ -186,7 +186,8 @@
             flex: 0 1 auto;
             width: fit-content;
             max-width: 100%;
-            min-width: 220px;
+            min-width: 280px;
+            position: relative;
         }
 
         .space-finance__period-form > .space-finance__label {
@@ -195,7 +196,11 @@
             font-weight: 600;
         }
 
-        .space-finance__month-select {
+        .space-finance__month-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
             width: 100%;
             min-height: 40px;
             border: 1px solid #d1d5db;
@@ -203,26 +208,189 @@
             background: #fff;
             color: #0f172a;
             font-size: 14px;
+            font-weight: 600;
             line-height: 20px;
-            padding: 8px 10px;
+            padding: 8px 10px 8px 12px;
             box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            text-align: left;
+            transition: border-color .15s ease, box-shadow .15s ease;
         }
 
-        .space-finance__month-select:focus {
+        .space-finance__month-trigger:hover {
+            border-color: #93c5fd;
+        }
+
+        .space-finance__month-trigger:focus {
             border-color: #0ea5e9;
             box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16);
             outline: none;
         }
 
-        .dark .space-finance__month-select {
+        .space-finance__month-trigger-icon {
+            width: 18px;
+            height: 18px;
+            color: #2563eb;
+            flex: 0 0 auto;
+        }
+
+        .dark .space-finance__month-trigger {
             border-color: rgba(148, 163, 184, 0.35);
             background: rgba(15, 23, 42, 0.45);
             color: #f8fafc;
         }
 
-        .dark .space-finance__month-select:focus {
+        .dark .space-finance__month-trigger:focus {
             border-color: #38bdf8;
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+        }
+
+        .space-finance__month-popover {
+            position: absolute;
+            z-index: 40;
+            top: calc(100% + 8px);
+            right: 0;
+            width: min(360px, calc(100vw - 32px));
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+            padding: 12px;
+        }
+
+        .dark .space-finance__month-popover {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: #0f172a;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+        }
+
+        .space-finance__picker-head {
+            display: grid;
+            grid-template-columns: 34px 1fr 34px;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .space-finance__picker-year {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            border-radius: 9px;
+            background: #2563eb;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .space-finance__picker-nav {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border: 1px solid #dbe4f0;
+            border-radius: 9px;
+            background: #fff;
+            color: #2563eb;
+            transition: background .15s ease, border-color .15s ease, color .15s ease;
+        }
+
+        .space-finance__picker-nav:hover:not(:disabled) {
+            border-color: #93c5fd;
+            background: #eff6ff;
+        }
+
+        .space-finance__picker-nav:disabled {
+            cursor: not-allowed;
+            color: #cbd5e1;
+        }
+
+        .dark .space-finance__picker-nav {
+            border-color: rgba(148, 163, 184, 0.28);
+            background: rgba(15, 23, 42, 0.55);
+            color: #93c5fd;
+        }
+
+        .dark .space-finance__picker-nav:disabled {
+            color: #475569;
+        }
+
+        .space-finance__picker-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .space-finance__picker-month {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            color: #334155;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            text-decoration: none;
+            transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+        }
+
+        .space-finance__picker-month:hover {
+            border-color: #93c5fd;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .space-finance__picker-month--active {
+            background: #2563eb;
+            color: #fff;
+            box-shadow: 0 8px 18px rgba(37, 99, 235, 0.22);
+        }
+
+        .space-finance__picker-month--active:hover {
+            background: #1d4ed8;
+            color: #fff;
+        }
+
+        .space-finance__picker-month--disabled {
+            color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        .space-finance__picker-month--disabled:hover {
+            border-color: transparent;
+            background: transparent;
+            color: #cbd5e1;
+        }
+
+        .dark .space-finance__picker-month {
+            color: #cbd5e1;
+        }
+
+        .dark .space-finance__picker-month:hover {
+            border-color: rgba(147, 197, 253, 0.45);
+            background: rgba(37, 99, 235, 0.18);
+            color: #bfdbfe;
+        }
+
+        .dark .space-finance__picker-month--active {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .dark .space-finance__picker-month--disabled,
+        .dark .space-finance__picker-month--disabled:hover {
+            color: #475569;
+            background: transparent;
+            border-color: transparent;
+        }
+
+        .space-finance [x-cloak] {
+            display: none !important;
         }
 
         .space-finance__note {
@@ -351,46 +519,179 @@
 
 <div class="space-finance">
     @if ($periodOptions !== [])
+        @php
+            $periodPickerMonths = [
+                ['number' => '01', 'short' => 'Янв'],
+                ['number' => '02', 'short' => 'Фев'],
+                ['number' => '03', 'short' => 'Мар'],
+                ['number' => '04', 'short' => 'Апр'],
+                ['number' => '05', 'short' => 'Май'],
+                ['number' => '06', 'short' => 'Июн'],
+                ['number' => '07', 'short' => 'Июл'],
+                ['number' => '08', 'short' => 'Авг'],
+                ['number' => '09', 'short' => 'Сен'],
+                ['number' => '10', 'short' => 'Окт'],
+                ['number' => '11', 'short' => 'Ноя'],
+                ['number' => '12', 'short' => 'Дек'],
+            ];
+            $periodPickerOptions = [];
+            $periodPickerByYearMonth = [];
+            $selectedPickerLabel = null;
+            $selectedPickerYear = null;
+
+            foreach ($periodOptions as $periodKey => $periodOptionLabel) {
+                $periodParts = explode('|', (string) $periodKey);
+                $periodFrom = (string) ($periodParts[0] ?? '');
+                $periodAccount = (string) ($periodParts[2] ?? '');
+
+                if ($periodFrom === '') {
+                    continue;
+                }
+
+                $periodDate = \Carbon\CarbonImmutable::parse($periodFrom);
+                $periodYear = (int) $periodDate->format('Y');
+                $periodMonthNumber = $periodDate->format('m');
+                $periodMonth = $monthNames[$periodMonthNumber] ?? $periodMonthNumber;
+                $periodSelectLabel = trim($periodMonth . ' ' . $periodYear);
+
+                if ($periodAccount !== '' && $periodAccount !== '62') {
+                    $periodSelectLabel .= ' · сч. ' . $periodAccount;
+                }
+
+                $periodOption = [
+                    'key' => (string) $periodKey,
+                    'label' => $periodSelectLabel,
+                    'full_label' => (string) $periodOptionLabel,
+                    'year' => $periodYear,
+                    'month' => $periodMonthNumber,
+                    'url' => request()->fullUrlWithQuery(['settlement_period' => $periodKey]),
+                    'selected' => $periodKey === $selectedPeriodKey,
+                ];
+
+                $periodPickerOptions[] = $periodOption;
+                $periodPickerByYearMonth[$periodYear][$periodMonthNumber] = $periodOption;
+
+                if ($periodOption['selected']) {
+                    $selectedPickerLabel = $periodSelectLabel;
+                    $selectedPickerYear = $periodYear;
+                }
+            }
+
+            $periodPickerYears = array_values(array_unique(array_map(
+                static fn (array $periodOption): int => $periodOption['year'],
+                $periodPickerOptions,
+            )));
+            sort($periodPickerYears);
+
+            if ($selectedPickerLabel === null && $periodPickerOptions !== []) {
+                $selectedPickerLabel = $periodPickerOptions[array_key_last($periodPickerOptions)]['label'];
+            }
+
+            if ($selectedPickerYear === null) {
+                $selectedPickerYear = $periodPickerYears[array_key_last($periodPickerYears)] ?? (int) now()->format('Y');
+            }
+        @endphp
+
         <div class="space-finance__toolbar">
-            <form class="space-finance__period-form" method="GET" aria-label="Период ОСВ">
-                @if (request()->query('tab'))
-                    <input type="hidden" name="tab" value="{{ request()->query('tab') }}">
-                @endif
+            <div
+                class="space-finance__period-form"
+                x-data="{
+                    open: false,
+                    year: @js($selectedPickerYear),
+                    years: @js($periodPickerYears),
+                    previousYear() {
+                        const index = this.years.indexOf(this.year);
 
+                        if (index > 0) {
+                            this.year = this.years[index - 1];
+                        }
+                    },
+                    nextYear() {
+                        const index = this.years.indexOf(this.year);
+
+                        if (index >= 0 && index < this.years.length - 1) {
+                            this.year = this.years[index + 1];
+                        }
+                    },
+                }"
+                x-on:keydown.escape.window="open = false"
+                x-on:click.outside="open = false"
+                aria-label="Период ОСВ"
+            >
                 <label class="space-finance__label" for="space-finance-period">Период ОСВ</label>
-                <select
+                <button
                     id="space-finance-period"
-                    class="space-finance__month-select"
-                    name="settlement_period"
-                    onchange="this.form.submit()"
+                    type="button"
+                    class="space-finance__month-trigger"
+                    x-on:click="open = ! open"
+                    x-bind:aria-expanded="open.toString()"
+                    aria-controls="space-finance-period-picker"
                 >
-                    @foreach ($periodOptions as $periodKey => $periodOptionLabel)
-                        @php
-                            $periodParts = explode('|', (string) $periodKey);
-                            $periodFrom = (string) ($periodParts[0] ?? '');
-                            $periodAccount = (string) ($periodParts[2] ?? '');
-                            $periodDate = $periodFrom !== '' ? \Carbon\CarbonImmutable::parse($periodFrom) : null;
-                            $periodMonth = $periodDate ? ($monthNames[$periodDate->format('m')] ?? $periodDate->format('m')) : $periodOptionLabel;
-                            $periodYear = $periodDate ? $periodDate->format('Y') : '';
-                            $isSelectedPeriod = $periodKey === $selectedPeriodKey;
-                            $periodSelectLabel = trim($periodMonth . ' ' . $periodYear);
+                    <span>{{ $selectedPickerLabel ?: 'Выберите месяц' }}</span>
+                    <x-filament::icon icon="heroicon-o-calendar-days" class="space-finance__month-trigger-icon" />
+                </button>
 
-                            if ($periodAccount !== '' && $periodAccount !== '62') {
-                                $periodSelectLabel .= ' · сч. ' . $periodAccount;
-                            }
-                        @endphp
-                        <option value="{{ $periodKey }}" title="{{ $periodOptionLabel }}" @selected($isSelectedPeriod)>
-                            {{ $periodSelectLabel }}
-                        </option>
+                <div
+                    id="space-finance-period-picker"
+                    class="space-finance__month-popover"
+                    x-cloak
+                    x-show="open"
+                    x-transition.origin.top.right
+                >
+                    <div class="space-finance__picker-head">
+                        <button
+                            type="button"
+                            class="space-finance__picker-nav"
+                            x-on:click="previousYear()"
+                            x-bind:disabled="years.indexOf(year) <= 0"
+                            aria-label="Предыдущий год"
+                        >
+                            <x-filament::icon icon="heroicon-o-chevron-left" class="h-4 w-4" />
+                        </button>
+                        <div class="space-finance__picker-year" x-text="year"></div>
+                        <button
+                            type="button"
+                            class="space-finance__picker-nav"
+                            x-on:click="nextYear()"
+                            x-bind:disabled="years.indexOf(year) >= years.length - 1"
+                            aria-label="Следующий год"
+                        >
+                            <x-filament::icon icon="heroicon-o-chevron-right" class="h-4 w-4" />
+                        </button>
+                    </div>
+
+                    @foreach ($periodPickerYears as $periodPickerYear)
+                        <div class="space-finance__picker-grid" x-show="year === @js($periodPickerYear)">
+                            @foreach ($periodPickerMonths as $periodPickerMonth)
+                                @php
+                                    $periodPickerOption = $periodPickerByYearMonth[$periodPickerYear][$periodPickerMonth['number']] ?? null;
+                                @endphp
+
+                                @if ($periodPickerOption)
+                                    <a
+                                        class="space-finance__picker-month @if ($periodPickerOption['selected']) space-finance__picker-month--active @endif"
+                                        href="{{ $periodPickerOption['url'] }}"
+                                        title="{{ $periodPickerOption['full_label'] }}"
+                                        @if ($periodPickerOption['selected']) aria-current="date" @endif
+                                    >
+                                        {{ $periodPickerMonth['short'] }}
+                                    </a>
+                                @else
+                                    <span class="space-finance__picker-month space-finance__picker-month--disabled">
+                                        {{ $periodPickerMonth['short'] }}
+                                    </span>
+                                @endif
+                            @endforeach
+                        </div>
                     @endforeach
-                </select>
+                </div>
 
                 @if ($firstPeriodLabel)
                     <div class="space-finance__note">
                         Минимум: {{ $firstPeriodLabel }}. Это первый загруженный период ОСВ.
                     </div>
                 @endif
-            </form>
+            </div>
         </div>
     @endif
 
