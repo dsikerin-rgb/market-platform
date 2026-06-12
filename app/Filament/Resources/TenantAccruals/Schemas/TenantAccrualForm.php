@@ -33,6 +33,22 @@ class TenantAccrualForm
                     static::display('summary_source', 'source', 'Источник'),
                 ]),
 
+            Section::make('Документ 1С')
+                ->description('Реквизиты документа начисления и основание строки из 1С.')
+                ->columns(3)
+                ->columnSpanFull()
+                ->schema([
+                    static::display('document_number_display', 'document_number', 'Номер документа'),
+                    static::display('document_date_display', 'document_date', 'Дата документа', fn ($value): string => $value?->format('d.m.Y') ?: '—'),
+                    static::display('service_name_display', 'service_name', 'Услуга'),
+                    static::display('document_name_display', 'document_name', 'Документ / представление')
+                        ->columnSpanFull(),
+                    static::display('purpose_display', 'purpose', 'Основание')
+                        ->columnSpanFull(),
+                    static::display('line_description_display', 'line_description', 'Строка начисления')
+                        ->columnSpanFull(),
+                ]),
+
             Section::make('Начисление')
                 ->description('Основные финансовые показатели и расчетная база.')
                 ->columns(4)

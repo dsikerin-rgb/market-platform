@@ -65,6 +65,11 @@ class TenantAccrualResource extends BaseResource
             'marketSpace.number',
             'market.name',
             'period',
+            'document_number',
+            'document_name',
+            'service_name',
+            'line_description',
+            'purpose',
             'source_file',
         ];
     }
