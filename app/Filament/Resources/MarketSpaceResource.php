@@ -1326,17 +1326,6 @@ class MarketSpaceResource extends BaseResource
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
-                        Section::make('ОСВ 1С')
-                            ->schema([
-                                Forms\Components\Placeholder::make('space_settlement_balances')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderSpaceSettlementBalances($record))
-                                    ->columnSpanFull(),
-                            ])
-                            ->columns(1)
-                            ->collapsible()
-                            ->visible(fn (?MarketSpace $record): bool => filled($record?->id)),
                         Section::make('Редактируемые данные')
                             ->schema([
                                 Forms\Components\Select::make('location_id')
@@ -1928,6 +1917,19 @@ class MarketSpaceResource extends BaseResource
                             ])
                             ->collapsible(),
                     ]),
+                Tab::make('Финансы')
+                    ->schema([
+                        Section::make('ОСВ 1С')
+                            ->schema([
+                                Forms\Components\Placeholder::make('space_settlement_balances')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?MarketSpace $record): HtmlString => static::renderSpaceSettlementBalances($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1),
+                    ])
+                    ->visible(fn (?MarketSpace $record): bool => filled($record?->id)),
                 Tab::make('История')
                     ->schema([
                         Section::make('Арендаторы')
