@@ -1928,8 +1928,7 @@ class MarketSpaceResource extends BaseResource
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
-                    ])
-                    ->visible(fn (?MarketSpace $record): bool => filled($record?->id)),
+                    ]),
                 Tab::make('История')
                     ->schema([
                         Section::make('Арендаторы')
