@@ -2270,12 +2270,21 @@ class MarketMapLinkingTest extends TestCase
         ]);
     }
 
-    public function test_market_space_mark_service_action_is_disabled_for_grouped_space(): void
+    public function test_market_space_mark_service_action_is_hidden_for_grouped_space(): void
     {
         $user = $this->actingAsSuperAdmin();
 
         $market = $this->createMarketWithMap();
         $this->selectMarketInSession($market);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'Service-Parent',
+            'display_name' => 'Service parent group',
+            'status' => 'occupied',
+            'is_active' => true,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+        ]);
 
         $space = MarketSpace::create([
             'market_id' => $market->id,
@@ -2284,7 +2293,7 @@ class MarketMapLinkingTest extends TestCase
             'status' => 'occupied',
             'is_active' => true,
             'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_CHILD,
-            'space_group_parent_id' => 999,
+            'space_group_parent_id' => $parent->id,
         ]);
 
         Livewire::withQueryParams([
@@ -2294,7 +2303,7 @@ class MarketMapLinkingTest extends TestCase
             ->test(EditMarketSpace::class, [
                 'record' => (string) $space->getRouteKey(),
             ])
-            ->assertActionDisabled('mark_service_status');
+            ->assertActionHidden('mark_service_status');
     }
 
     public function test_market_space_shared_use_action_requires_later_date_for_area_change(): void

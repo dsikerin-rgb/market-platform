@@ -1541,17 +1541,7 @@ class EditMarketSpace extends BaseEditRecord
             ->outlined()
             ->color($isMaintenance ? 'gray' : 'warning')
             ->visible(fn (): bool => $this->record instanceof MarketSpace
-                && (
-                    $isMaintenance
-                    || (
-                        ! MarketSpaceResource::hasSharedUseTenants($this->record)
-                        && ! MarketSpaceResource::isSharedUseSourceSpace($this->record)
-                    )
-                ))
-            ->disabled(fn (): bool => ! $isMaintenance
-                && $this->record instanceof MarketSpace
-                && $this->isGroupedSpace($this->record)
-                && (string) ($this->record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT)
+                && $this->shouldShowServiceStatusAction())
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--secondary',
             ])
@@ -2408,6 +2398,7 @@ class EditMarketSpace extends BaseEditRecord
             ->size('lg')
             ->outlined()
             ->color('warning')
+            ->visible(fn (): bool => $this->shouldShowMarkSpaceFreeAction())
             ->extraAttributes([
                 'class' => 'market-space-card-action market-space-card-action--secondary',
             ])
@@ -2628,6 +2619,51 @@ class EditMarketSpace extends BaseEditRecord
 
         return (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_NONE
             || filled($space->space_group_parent_id);
+    }
+
+    private function isChildGroupSpace(?MarketSpace $space): bool
+    {
+        return $space instanceof MarketSpace
+            && (string) ($space->space_group_role ?? '') === MarketSpace::SPACE_GROUP_ROLE_CHILD;
+    }
+
+    private function isSharedUseSpace(?MarketSpace $space): bool
+    {
+        return $space instanceof MarketSpace
+            && (
+                MarketSpaceResource::hasSharedUseTenants($space)
+                || MarketSpaceResource::isSharedUseSourceSpace($space)
+            );
+    }
+
+    private function shouldShowMarkSpaceFreeAction(): bool
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return false;
+        }
+
+        if ($this->isMaintenanceSpace($this->record) || $this->isSharedUseSpace($this->record)) {
+            return false;
+        }
+
+        $status = (string) ($this->record->status ?? '');
+
+        return $this->record->isEffectivelyOccupied()
+            || in_array($status === 'free' ? 'vacant' : $status, ['occupied', 'reserved'], true);
+    }
+
+    private function shouldShowServiceStatusAction(): bool
+    {
+        if (! $this->record instanceof MarketSpace) {
+            return false;
+        }
+
+        if ($this->isMaintenanceSpace($this->record)) {
+            return true;
+        }
+
+        return ! $this->isSharedUseSpace($this->record)
+            && ! $this->isChildGroupSpace($this->record);
     }
 
     private function markRecordAsService(): void
