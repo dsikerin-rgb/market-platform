@@ -6,15 +6,23 @@ declare(strict_types=1);
 namespace App\Observers;
 
 use App\Models\MarketSpace;
+use App\Services\MarketSpaces\MarketSpaceStateGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 final class MarketSpaceGroupSharedUseObserver
 {
+    public function __construct(
+        private readonly MarketSpaceStateGuard $stateGuard,
+    ) {
+    }
+
     public function saving(MarketSpace $space): void
     {
         $role = (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
+
+        $this->stateGuard->assertCanPersist($space, []);
 
         if (
             $role === MarketSpace::SPACE_GROUP_ROLE_CHILD

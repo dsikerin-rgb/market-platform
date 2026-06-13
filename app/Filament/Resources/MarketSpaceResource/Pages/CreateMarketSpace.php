@@ -9,6 +9,7 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\Pages\BaseCreateRecord;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
+use App\Services\MarketSpaces\MarketSpaceStateGuard;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
@@ -57,7 +58,7 @@ class CreateMarketSpace extends BaseCreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $this->assertUniqueNumberWithinMarket($data);
-        $this->assertMaintenanceSpaceIsNotGrouped($data);
+        app(MarketSpaceStateGuard::class)->assertCanCreate($data);
 
         if ($this->pendingShapeId !== null) {
             $this->resolvePendingShapeForMarket(isset($data['market_id']) ? (int) $data['market_id'] : null);
@@ -275,19 +276,4 @@ class CreateMarketSpace extends BaseCreateRecord
         ]);
     }
 
-    private function assertMaintenanceSpaceIsNotGrouped(array $data): void
-    {
-        $status = trim((string) ($data['status'] ?? 'vacant'));
-        $role = trim((string) ($data['space_group_role'] ?? MarketSpace::SPACE_GROUP_ROLE_NONE));
-
-        if ($status !== 'maintenance') {
-            return;
-        }
-
-        if ($role !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
-            throw ValidationException::withMessages([
-                'space_group_role' => 'Служебное место не может входить в группу и не может быть parent-группой.',
-            ]);
-        }
-    }
 }

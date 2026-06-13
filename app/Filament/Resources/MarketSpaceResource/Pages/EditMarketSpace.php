@@ -12,6 +12,7 @@ use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceTenantBinding;
 use App\Models\Operation;
 use App\Models\Tenant;
+use App\Services\MarketSpaces\MarketSpaceStateGuard;
 use App\Services\MarketSpaces\SpaceGroupManager;
 use App\Services\MarketSpaces\TenantSwitchPlanner;
 use Filament\Facades\Filament;
@@ -109,7 +110,7 @@ class EditMarketSpace extends BaseEditRecord
         unset($data['parent_group_map_shape_action']);
 
         $this->prepareParentGroupMapShapeResolution($data, $parentGroupMapShapeAction);
-        $this->assertServiceSharedUseGroupInvariants($data);
+        app(MarketSpaceStateGuard::class)->assertCanPersist($this->record, $data);
 
         $user = Filament::auth()->user();
 
@@ -136,36 +137,6 @@ class EditMarketSpace extends BaseEditRecord
         }
 
         return $data;
-    }
-
-    private function assertServiceSharedUseGroupInvariants(array $data): void
-    {
-        if (! $this->record instanceof MarketSpace) {
-            return;
-        }
-
-        $nextStatus = (string) ($data['status'] ?? $this->record->status ?? 'vacant');
-        $nextRole = (string) ($data['space_group_role'] ?? $this->record->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE);
-        $hasSharedUse = MarketSpaceResource::hasSharedUseTenants($this->record)
-            || MarketSpaceResource::isSharedUseSourceSpace($this->record);
-
-        if ($nextStatus === 'maintenance' && $nextRole !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
-            throw ValidationException::withMessages([
-                'space_group_role' => 'Служебное место не может входить в группу и не может быть parent-группой.',
-            ]);
-        }
-
-        if ($nextStatus === 'maintenance' && $hasSharedUse) {
-            throw ValidationException::withMessages([
-                'status' => 'Служебное место не может быть совместным местом.',
-            ]);
-        }
-
-        if ($hasSharedUse && $nextRole !== MarketSpace::SPACE_GROUP_ROLE_NONE) {
-            throw ValidationException::withMessages([
-                'space_group_role' => 'Совместное место не может входить в группу и не может быть parent-группой.',
-            ]);
-        }
     }
 
     private function prepareParentGroupMapShapeResolution(array $data, string $action): void
@@ -1550,15 +1521,7 @@ class EditMarketSpace extends BaseEditRecord
                     return;
                 }
 
-                if ($this->isMaintenanceSpace($this->record) || $this->isGroupedSpace($this->record)) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Совместное использование недоступно')
-                        ->body('Служебные и групповые места не могут быть совместными.')
-                        ->send();
-
-                    return;
-                }
+                app(MarketSpaceStateGuard::class)->assertCanStartSharedUse($this->record);
 
                 $this->replaceMountedAction('manage_shared_use');
             });
@@ -1610,34 +1573,11 @@ class EditMarketSpace extends BaseEditRecord
                     return;
                 }
 
-                if (
-                    ! $isMaintenance
-                    && (
-                        MarketSpaceResource::hasSharedUseTenants($this->record)
-                        || MarketSpaceResource::isSharedUseSourceSpace($this->record)
-                    )
-                ) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Служебный статус недоступен для совместного места')
-                        ->body('Сначала завершите совместное использование, затем повторите действие.')
-                        ->send();
-
-                    return;
-                }
-
-                if (
-                    ! $isMaintenance
-                    && $this->isGroupedSpace($this->record)
-                    && (string) ($this->record->space_group_role ?? '') !== MarketSpace::SPACE_GROUP_ROLE_PARENT
-                ) {
-                    Notification::make()
-                        ->danger()
-                        ->title('Служебное место не может состоять в группе')
-                        ->body('Сначала уберите место из группы, затем повторите действие.')
-                        ->send();
-
-                    return;
+                if (! $isMaintenance) {
+                    app(MarketSpaceStateGuard::class)->assertCanMarkAsService(
+                        $this->record,
+                        allowParentGroupDissolve: true,
+                    );
                 }
 
                 $isMaintenance
@@ -2696,6 +2636,11 @@ class EditMarketSpace extends BaseEditRecord
             return;
         }
 
+        app(MarketSpaceStateGuard::class)->assertCanMarkAsService(
+            $this->record,
+            allowParentGroupDissolve: true,
+        );
+
         $affectedChildren = $this->parentStatusChangeAffectedChildren();
         $spaceId = (int) $this->record->id;
         $marketId = (int) $this->record->market_id;
@@ -2717,6 +2662,10 @@ class EditMarketSpace extends BaseEditRecord
                 $space->forceFill([
                     'status' => 'maintenance',
                     'tenant_id' => null,
+                    'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+                    'space_group_parent_id' => null,
+                    'space_group_slot' => null,
+                    'space_group_token' => null,
                     'updated_at' => $now,
                 ])->save();
             }
