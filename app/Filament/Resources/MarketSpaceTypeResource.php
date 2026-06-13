@@ -113,11 +113,6 @@ class MarketSpaceTypeResource extends BaseResource
                 ->numeric()
                 ->inputMode('decimal'),
 
-            Forms\Components\TextInput::make('currency')
-                ->label('Валюта')
-                ->maxLength(10)
-                ->placeholder('RUB'),
-
             Forms\Components\Toggle::make('is_active')
                 ->label('Активен')
                 ->default(true),
@@ -171,10 +166,6 @@ class MarketSpaceTypeResource extends BaseResource
                 TextColumn::make('price')
                     ->label('Базовая ставка')
                     ->numeric(decimalPlaces: 2),
-
-                TextColumn::make('currency')
-                    ->label('Валюта')
-                    ->sortable(),
 
                 IconColumn::make('is_active')
                     ->label('Активен')
