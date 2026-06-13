@@ -198,6 +198,7 @@ class AccrualController extends Controller
             $resolvedContractLinks = 0;
             $ambiguousContracts = 0;
             $resolvedSpaces = 0;
+            $spacesResolvedFromContract = 0;
             $unresolvedContracts = 0;
             $unresolvedSpaces = 0;
             $legacyIdentityMatches = 0;
@@ -238,6 +239,7 @@ class AccrualController extends Controller
                 $lineDescription = trim((string) ($item['line_description'] ?? ''));
                 $purpose = trim((string) ($item['purpose'] ?? ''));
                 $spaceKey = trim((string) ($item['market_space_code'] ?? $item['source_place_code'] ?? ''));
+                $hasDirectSpaceKey = $spaceKey !== '';
                 $sourcePlaceCode = trim((string) ($item['source_place_code'] ?? $spaceKey));
                 $sourcePlaceName = trim((string) ($item['source_place_name'] ?? ''));
                 $activityType = trim((string) ($item['activity_type'] ?? ''));
@@ -291,6 +293,7 @@ class AccrualController extends Controller
                 );
 
                 $tenantContractId = $match->tenantContractId;
+                $legacyMarketSpaceId = $marketSpaceId;
 
                 if ($match->isLinked()) {
                     $linkedContracts++;
@@ -305,6 +308,19 @@ class AccrualController extends Controller
                     $unresolvedContracts++;
                 } elseif ($contractExternalId !== '' || $marketSpaceId) {
                     $unresolvedContracts++;
+                }
+
+                if (! $hasDirectSpaceKey && $marketSpaceId === null && $tenantContractId !== null) {
+                    $contractMarketSpaceId = $this->resolveContractMarketSpaceId(
+                        $marketId,
+                        (int) $tenant->id,
+                        $tenantContractId,
+                    );
+
+                    if ($contractMarketSpaceId !== null) {
+                        $marketSpaceId = $contractMarketSpaceId;
+                        $spacesResolvedFromContract++;
+                    }
                 }
 
                 $hash = $this->makeAccrualHash(
@@ -440,6 +456,19 @@ class AccrualController extends Controller
                     }
                 }
 
+                if (! $existingId && $legacyMarketSpaceId === null && $marketSpaceId !== null) {
+                    $legacyIdentity = $identity;
+                    $legacyIdentity['market_space_id'] = null;
+
+                    $existingId = $this->findSingleLegacyAccrualIdentityId(
+                        $legacyIdentity,
+                        $touchedAccrualIdsByPeriod[$periodDate] ?? [],
+                    );
+                    if ($existingId) {
+                        $legacyIdentityMatches++;
+                    }
+                }
+
                 if ($existingId) {
                     DB::table('tenant_accruals')
                         ->where('id', (int) $existingId)
@@ -490,6 +519,7 @@ class AccrualController extends Controller
                 'contracts_linked_resolved' => $resolvedContractLinks,
                 'contracts_ambiguous' => $ambiguousContracts,
                 'spaces_resolved' => $resolvedSpaces,
+                'spaces_resolved_from_contract' => $spacesResolvedFromContract,
                 'contracts_unresolved' => $unresolvedContracts,
                 'spaces_unresolved' => $unresolvedSpaces,
                 'legacy_identity_matches' => $legacyIdentityMatches,
@@ -878,6 +908,19 @@ class AccrualController extends Controller
             ->pluck('id');
 
         return $ids->count() === 1 ? (int) $ids->first() : null;
+    }
+
+    private function resolveContractMarketSpaceId(int $marketId, int $tenantId, int $tenantContractId): ?int
+    {
+        $marketSpaceId = TenantContract::query()
+            ->where('id', $tenantContractId)
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->value('market_space_id');
+
+        return is_numeric($marketSpaceId) && (int) $marketSpaceId > 0
+            ? (int) $marketSpaceId
+            : null;
     }
 
     private function buildSpaceIndex(int $marketId): array
