@@ -1791,6 +1791,18 @@ class MarketSpaceResource extends BaseResource
                                             ]);
                                         }
 
+                                        $duplicate = MarketSpaceTypeResource::findDuplicateByName((int) $marketId, $name);
+
+                                        if ($duplicate !== null) {
+                                            if (! $duplicate->is_active) {
+                                                throw \Illuminate\Validation\ValidationException::withMessages([
+                                                    'name_ru' => 'Такой тип места уже есть, но он выключен. Включите его в настройках типов мест.',
+                                                ]);
+                                            }
+
+                                            return $duplicate->code;
+                                        }
+
                                         $spaceType = MarketSpaceType::query()->create([
                                             'market_id' => (int) $marketId,
                                             'name_ru' => $name,

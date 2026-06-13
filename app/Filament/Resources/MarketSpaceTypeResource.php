@@ -74,6 +74,34 @@ class MarketSpaceTypeResource extends BaseResource
         return $code;
     }
 
+    public static function normalizeNameForLookup(string $name): string
+    {
+        $normalized = preg_replace('/\s+/u', ' ', trim($name));
+
+        return mb_strtolower($normalized ?? trim($name), 'UTF-8');
+    }
+
+    public static function findDuplicateByName(int $marketId, string $name, ?int $ignoreId = null): ?MarketSpaceType
+    {
+        $needle = static::normalizeNameForLookup($name);
+
+        if ($needle === '') {
+            return null;
+        }
+
+        $query = MarketSpaceType::query()
+            ->where('market_id', $marketId)
+            ->select(['id', 'market_id', 'name_ru', 'code', 'is_active']);
+
+        if ($ignoreId !== null) {
+            $query->whereKeyNot($ignoreId);
+        }
+
+        return $query
+            ->get()
+            ->first(fn (MarketSpaceType $type): bool => static::normalizeNameForLookup((string) $type->name_ru) === $needle);
+    }
+
     
     public static function getGloballySearchableAttributes(): array
     {
