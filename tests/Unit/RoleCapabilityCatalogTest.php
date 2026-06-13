@@ -14,6 +14,7 @@ class RoleCapabilityCatalogTest extends TestCase
         self::assertSame([
             'Места и арендаторы: управление',
             'Финансы 1С',
+            'Договоры: просмотр',
         ], RoleCapabilityCatalog::summaryForRole('market-manager'));
 
         self::assertContains('Не меняет настройки рынка', RoleCapabilityCatalog::limitationsForRole('market-manager'));
@@ -24,6 +25,7 @@ class RoleCapabilityCatalogTest extends TestCase
         self::assertSame([
             'Места и арендаторы: просмотр',
             'Финансы 1С',
+            'Договоры: просмотр',
         ], RoleCapabilityCatalog::summaryForRole('market-accountant'));
 
         self::assertContains(
@@ -52,6 +54,37 @@ class RoleCapabilityCatalogTest extends TestCase
             'finance.1c.view',
             'market-settings.update',
         ]));
+    }
+
+    public function test_owner_and_legal_admin_profiles_have_distinct_capabilities(): void
+    {
+        self::assertSame([
+            'Места и арендаторы: просмотр',
+            'Финансы 1С',
+            'Договоры: просмотр',
+        ], RoleCapabilityCatalog::summaryForRole('market-owner'));
+
+        self::assertFalse(RoleCapabilityCatalog::canManageMarketDirectory('market-owner'));
+        self::assertFalse(RoleCapabilityCatalog::canUpdateMarketSettings('market-owner'));
+        self::assertFalse(RoleCapabilityCatalog::canManageTenantContracts('market-owner'));
+
+        self::assertSame([
+            'Места и арендаторы: управление',
+            'Финансы 1С',
+            'Договоры: управление',
+        ], RoleCapabilityCatalog::summaryForRole('market-legal-admin'));
+
+        self::assertTrue(RoleCapabilityCatalog::canManageMarketDirectory('market-legal-admin'));
+        self::assertFalse(RoleCapabilityCatalog::canUpdateMarketSettings('market-legal-admin'));
+        self::assertTrue(RoleCapabilityCatalog::canManageTenantContracts('market-legal-admin'));
+    }
+
+    public function test_owner_director_profile_can_manage_market_without_super_admin(): void
+    {
+        self::assertTrue(RoleCapabilityCatalog::canManageMarketDirectory('market-owner-director'));
+        self::assertTrue(RoleCapabilityCatalog::canViewFinance('market-owner-director'));
+        self::assertTrue(RoleCapabilityCatalog::canUpdateMarketSettings('market-owner-director'));
+        self::assertTrue(RoleCapabilityCatalog::canManageTenantContracts('market-owner-director'));
     }
 
     public function test_permission_names_are_resolved_from_form_state(): void

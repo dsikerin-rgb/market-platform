@@ -10,6 +10,7 @@ use App\Models\MarketSpace;
 use App\Models\TenantContract;
 use App\Services\MarketSpaces\SpaceGroupResolver;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceGroupEpisodeResolver;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -95,8 +96,7 @@ class TenantContractResource extends BaseResource
             return true;
         }
 
-        return $user->hasAnyRole(['market-admin', 'market-manager'])
-            && (bool) $user->market_id;
+        return AdminCapabilities::canViewTenantContracts($user);
     }
 
     public static function getNavigationGroup(): ?string
@@ -1322,7 +1322,7 @@ class TenantContractResource extends BaseResource
                 : $query;
         }
 
-        if ($user->hasAnyRole(['market-admin', 'market-manager']) && $user->market_id) {
+        if (AdminCapabilities::canViewTenantContracts($user)) {
             $query->where('market_id', (int) $user->market_id);
 
             return $marketSpaceId
@@ -1345,8 +1345,7 @@ class TenantContractResource extends BaseResource
             return true;
         }
 
-        return $user->hasAnyRole(['market-admin', 'market-manager'])
-            && (bool) $user->market_id;
+        return AdminCapabilities::canViewTenantContracts($user);
     }
 
     public static function canCreate(): bool
@@ -1366,9 +1365,7 @@ class TenantContractResource extends BaseResource
             return true;
         }
 
-        return $user->hasAnyRole(['market-admin', 'market-manager'])
-            && $user->market_id
-            && (int) $record->market_id === (int) $user->market_id;
+        return AdminCapabilities::canViewTenantContracts($user, (int) $record->market_id);
     }
 
     public static function canDelete($record): bool

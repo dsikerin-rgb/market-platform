@@ -140,9 +140,16 @@ class Login extends BaseLogin
         }
 
         $hasMerchantRole = $user->hasAnyRole(['merchant', 'merchant-user']);
-        $hasAdminRole = $user->hasAnyRole(['super-admin', 'market-admin', 'market-manager', 'market-operator']);
+        $hasAdminRole = $user->hasAnyRole([
+            'super-admin',
+            'market-owner',
+            'market-owner-director',
+            'market-admin',
+            'market-manager',
+            'market-operator',
+            'market-legal-admin',
+        ]);
 
         return $hasMerchantRole && ! $hasAdminRole;
     }
 }
-

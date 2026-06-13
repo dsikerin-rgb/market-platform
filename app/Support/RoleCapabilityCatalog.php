@@ -7,15 +7,41 @@ namespace App\Support;
 class RoleCapabilityCatalog
 {
     private const DIRECTORY_MANAGER_ROLES = [
+        'market-owner-director',
         'market-admin',
         'market-manager',
+        'market-legal-admin',
     ];
 
     private const FINANCE_VIEWER_ROLES = [
+        'market-owner',
+        'market-owner-director',
         'market-admin',
         'market-manager',
+        'market-legal-admin',
         'market-accountant',
         'market-finance',
+    ];
+
+    private const MARKET_SETTINGS_MANAGER_ROLES = [
+        'market-owner-director',
+        'market-admin',
+    ];
+
+    private const TENANT_CONTRACT_VIEWER_ROLES = [
+        'market-owner',
+        'market-owner-director',
+        'market-admin',
+        'market-manager',
+        'market-legal-admin',
+        'market-accountant',
+        'market-finance',
+    ];
+
+    private const TENANT_CONTRACT_MANAGER_ROLES = [
+        'market-owner-director',
+        'market-admin',
+        'market-legal-admin',
     ];
 
     /**
@@ -56,8 +82,10 @@ class RoleCapabilityCatalog
             $summary[] = 'Сотрудники';
         }
 
-        if (in_array('contracts.update', $permissions, true)) {
-            $summary[] = 'Привязки договоров';
+        if (self::canViewTenantContracts($role, $permissions)) {
+            $summary[] = self::canManageTenantContracts($role, $permissions)
+                ? 'Договоры: управление'
+                : 'Договоры: просмотр';
         }
 
         return $summary === [] ? ['Без специальных административных доступов'] : $summary;
@@ -146,7 +174,7 @@ class RoleCapabilityCatalog
         $permissions = self::normalizePermissions($permissions);
 
         return $role === 'super-admin'
-            || $role === 'market-admin'
+            || in_array($role, self::MARKET_SETTINGS_MANAGER_ROLES, true)
             || in_array('market-settings.view', $permissions, true)
             || in_array('market-settings.update', $permissions, true)
             || in_array('markets.update', $permissions, true);
@@ -157,9 +185,27 @@ class RoleCapabilityCatalog
         $permissions = self::normalizePermissions($permissions);
 
         return $role === 'super-admin'
-            || $role === 'market-admin'
+            || in_array($role, self::MARKET_SETTINGS_MANAGER_ROLES, true)
             || in_array('market-settings.update', $permissions, true)
             || in_array('markets.update', $permissions, true);
+    }
+
+    public static function canViewTenantContracts(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::TENANT_CONTRACT_VIEWER_ROLES, true)
+            || in_array('contracts.update', $permissions, true);
+    }
+
+    public static function canManageTenantContracts(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::TENANT_CONTRACT_MANAGER_ROLES, true)
+            || in_array('contracts.update', $permissions, true);
     }
 
     private static function canViewMarketDirectory(string $role, iterable $permissions = []): bool

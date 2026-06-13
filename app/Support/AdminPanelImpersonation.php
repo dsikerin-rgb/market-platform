@@ -51,10 +51,12 @@ final class AdminPanelImpersonation
                 'super-admin',
                 // Управление рынком
                 'market-owner',
+                'market-owner-director',
                 'market-admin',
                 'market-manager',
                 'market-operator',
                 // Внутренние роли рынка
+                'market-legal-admin',
                 'market-maintenance',
                 'market-engineer',
                 'market-it',

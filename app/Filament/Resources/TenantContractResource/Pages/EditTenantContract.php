@@ -8,6 +8,7 @@ use App\Filament\Resources\Pages\BaseEditRecord;
 use App\Filament\Resources\TenantContractResource;
 use App\Models\TenantContract;
 use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
+use App\Support\AdminCapabilities;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Schema;
@@ -35,7 +36,7 @@ class EditTenantContract extends BaseEditRecord
             return false;
         }
 
-        return ! $user->hasRole('market-admin');
+        return ! AdminCapabilities::canManageTenantContracts($user, (int) $this->record->market_id);
     }
 
     protected function mutateFormDataBeforeSave(array $data): array

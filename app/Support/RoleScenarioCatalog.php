@@ -18,17 +18,22 @@ class RoleScenarioCatalog
                 'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
             'market-owner' => [
-                'label' => 'Собственник рынка',
-                'description' => 'Контроль ключевых показателей и критических событий рынка.',
+                'label' => 'Собственник',
+                'description' => 'Контроль ключевых показателей, арендаторов, договоров и финансов без операционного редактирования.',
                 'topics' => ['calendar', 'tasks', 'reminders'],
             ],
+            'market-owner-director' => [
+                'label' => 'Собственник-директор',
+                'description' => 'Полное управление своим рынком: арендаторы, места, договоры, финансы, сотрудники и настройки.',
+                'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
+            ],
             'market-admin' => [
-                'label' => 'Администратор рынка',
-                'description' => 'Операционное управление рынком, сотрудниками и настройками.',
+                'label' => 'Наёмный директор',
+                'description' => 'Операционное управление рынком, сотрудниками, арендаторами, договорами, финансами и настройками.',
                 'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
             'market-manager' => [
-                'label' => 'Управляющий рынком',
+                'label' => 'Операционный управляющий',
                 'description' => 'Координация работы подразделений и контроль исполнения задач.',
                 'topics' => ['calendar', 'requests', 'tasks', 'reminders'],
             ],
@@ -58,9 +63,14 @@ class RoleScenarioCatalog
                 'topics' => ['tasks', 'reminders'],
             ],
             'market-finance' => [
-                'label' => 'Финансовый отдел',
+                'label' => 'Финансы',
                 'description' => 'Контроль финансовых процессов и платежной дисциплины.',
                 'topics' => ['tasks', 'reminders'],
+            ],
+            'market-legal-admin' => [
+                'label' => 'Юридическое и административное сопровождение',
+                'description' => 'Работа с арендаторами, местами и договорами без доступа к сотрудникам и системным настройкам рынка.',
+                'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
             'market-marketing' => [
                 'label' => 'Маркетинг',
@@ -186,4 +196,3 @@ class RoleScenarioCatalog
         return $labels === [] ? '—' : implode(', ', $labels);
     }
 }
-
