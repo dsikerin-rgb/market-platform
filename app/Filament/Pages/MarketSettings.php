@@ -10,6 +10,7 @@ use App\Models\Market;
 use App\Models\MarketplaceSlide;
 use App\Models\User;
 use App\Services\Debt\DebtDecisionPolicy;
+use App\Support\AdminCapabilities;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -127,24 +128,7 @@ class MarketSettings extends Page
 
     public static function canAccess(): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        // Super-admin имеет доступ всегда
-        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            return true;
-        }
-
-        // Market-admin имеет доступ к настройкам своего рынка
-        if (method_exists($user, 'hasRole') && $user->hasRole('market-admin')) {
-            return true;
-        }
-
-        // Проверка по permission
-        return $user->can('market-settings.view') || $user->can('market-settings.edit');
+        return AdminCapabilities::canAccessMarketSettings(Filament::auth()->user());
     }
 
     public static function getNavigationItems(): array
@@ -1029,27 +1013,11 @@ class MarketSettings extends Page
 
     protected function resolveCanEditMarket(): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user || ! $this->market) {
+        if (! $this->market) {
             return false;
         }
 
-        if ($this->isSuperAdmin) {
-            return true;
-        }
-
-        $sameMarket = (int) ($user->market_id ?? 0) > 0
-            && (int) $user->market_id === (int) $this->market->id;
-
-        if (! $sameMarket) {
-            return false;
-        }
-
-        // Редактировать — market-admin (и/или permission markets.update).
-        $canEditByRole = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
-
-        return $canEditByRole || $user->can('markets.update');
+        return AdminCapabilities::canUpdateMarketSettings(Filament::auth()->user());
     }
 
     protected function resolveMarketForUser(): ?Market

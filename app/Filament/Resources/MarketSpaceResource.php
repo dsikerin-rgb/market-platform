@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
+use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -53,7 +54,7 @@ class MarketSpaceResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewMarketDirectory($user);
     }
 
     public static function getNavigationGroup(): ?string
@@ -3588,14 +3589,14 @@ class MarketSpaceResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewMarketDirectory($user);
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canManageMarketDirectory($user);
     }
 
     public static function canEdit($record): bool
@@ -3606,11 +3607,7 @@ class MarketSpaceResource extends BaseResource
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return AdminCapabilities::canManageMarketDirectory($user, (int) ($record->market_id ?? 0));
     }
 
     public static function canDelete($record): bool

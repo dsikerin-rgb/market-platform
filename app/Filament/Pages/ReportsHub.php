@@ -11,7 +11,9 @@ use App\Models\Market;
 use App\Models\Report;
 use App\Models\ReportRun;
 use App\Support\OneC\AccrualPaymentReconciliationReport;
+use App\Support\AdminCapabilities;
 use Carbon\CarbonImmutable;
+use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -63,9 +65,9 @@ class ReportsHub extends Page
 
     public static function canAccess(): bool
     {
-        $user = filament()->auth()->user();
+        $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewFinance($user);
     }
 
     protected static function getPageRouteName(): string

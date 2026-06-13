@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Services\Cabinet\TenantCabinetUserService;
 use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
+use App\Support\AdminCapabilities;
 use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -4184,14 +4185,14 @@ class TenantResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewMarketDirectory($user);
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canManageMarketDirectory($user);
     }
 
     public static function canEdit($record): bool
@@ -4202,11 +4203,7 @@ class TenantResource extends BaseResource
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return AdminCapabilities::canManageMarketDirectory($user, (int) ($record->market_id ?? 0));
     }
 
     public static function canDelete($record): bool

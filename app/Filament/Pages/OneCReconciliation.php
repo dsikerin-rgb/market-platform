@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Support\OneC\AccrualPaymentReconciliationReport;
+use App\Support\AdminCapabilities;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -50,10 +51,7 @@ class OneCReconciliation extends Page
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) ($user->market_id ?? null)
-        );
+        return AdminCapabilities::canViewFinance($user);
     }
 
     public static function shouldRegisterNavigation(): bool
