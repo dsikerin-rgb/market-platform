@@ -33,6 +33,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as SchemaFacade;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class MarketSpaceResource extends BaseResource
 {
@@ -114,6 +115,29 @@ class MarketSpaceResource extends BaseResource
         }
 
         return $options;
+    }
+
+    protected static function makeUniqueSpaceTypeCode(int $marketId, string $name): string
+    {
+        $base = Str::slug($name);
+
+        if ($base === '') {
+            $base = 'type';
+        }
+
+        $base = Str::limit($base, 220, '');
+        $code = $base;
+        $index = 2;
+
+        while (MarketSpaceType::query()
+            ->where('market_id', $marketId)
+            ->where('code', $code)
+            ->exists()) {
+            $code = Str::limit($base, 210, '').'-'.$index;
+            $index++;
+        }
+
+        return $code;
     }
 
     /**
@@ -1715,7 +1739,7 @@ class MarketSpaceResource extends BaseResource
                                     ->nullable(),
 
                                 Forms\Components\Select::make('type')
-                                    ->label('Тарифная категория места')
+                                    ->label('Тип места')
                                     ->options(function ($get, ?MarketSpace $record) use ($user) {
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
@@ -1733,6 +1757,52 @@ class MarketSpaceResource extends BaseResource
                                     ->reactive()
                                     ->nullable()
                                     ->placeholder('Не выбрана')
+                                    ->createOptionModalHeading('Добавить тип места')
+                                    ->createOptionAction(fn ($action) => $action
+                                        ->label('Добавить тип места')
+                                        ->tooltip('Добавить тип места')
+                                        ->modalSubmitActionLabel('Добавить'))
+                                    ->createOptionForm([
+                                        Forms\Components\TextInput::make('name_ru')
+                                            ->label('Название типа')
+                                            ->required()
+                                            ->maxLength(255)
+                                            ->placeholder('Например: Витрина, охлаждаемый стол или холодильная камера')
+                                            ->helperText('Тип описывает, что сдаётся. Если одно и то же слово подходит и для локации, и для объекта, выбирайте по смыслу: "где находится" — локация, "что сдаётся" — тип.'),
+                                    ])
+                                    ->createOptionUsing(function (array $data, $get, ?MarketSpace $record) use ($user): string {
+                                        $marketId = $get('market_id') ?? $record?->market_id;
+
+                                        if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
+                                            $marketId = $user->market_id;
+                                        }
+
+                                        if (blank($marketId)) {
+                                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                                'type' => 'Сначала выберите рынок, чтобы добавить тип места.',
+                                            ]);
+                                        }
+
+                                        $name = trim((string) ($data['name_ru'] ?? ''));
+
+                                        if ($name === '') {
+                                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                                'name_ru' => 'Укажите название типа места.',
+                                            ]);
+                                        }
+
+                                        $spaceType = MarketSpaceType::query()->create([
+                                            'market_id' => (int) $marketId,
+                                            'name_ru' => $name,
+                                            'code' => static::makeUniqueSpaceTypeCode((int) $marketId, $name),
+                                            'unit' => 'sqm',
+                                            'price' => null,
+                                            'currency' => null,
+                                            'is_active' => true,
+                                        ]);
+
+                                        return $spaceType->code;
+                                    })
                                     ->helperText(function ($get, ?MarketSpace $record) use ($user): ?string {
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
@@ -1741,7 +1811,7 @@ class MarketSpaceResource extends BaseResource
                                         }
 
                                         if (blank($marketId)) {
-                                            return 'Категория не меняет занятость, служебность, группу или совместное использование.';
+                                            return 'Тип отвечает на вопрос "что сдаётся": витрина, охлаждаемый стол, холодильная камера, киоск, кабинет. Локация отвечает на вопрос "где находится".';
                                         }
 
                                         $currentType = trim((string) ($get('type') ?? $record?->type ?? ''));
@@ -1752,11 +1822,11 @@ class MarketSpaceResource extends BaseResource
                                             ->count();
 
                                         if ($activeTypeCount === 0) {
-                                            return 'Справочник тарифных категорий для этого рынка пуст. Категория не меняет занятость, служебность, группу или совместное использование.';
+                                            return 'Справочник типов мест для этого рынка пуст. Заполните его в настройках рынка. Если название совпадает с локацией, выбирайте по смыслу: "где" — локация, "что сдаётся" — тип.';
                                         }
 
                                         if ($currentType === '') {
-                                            return 'Категория нужна для тарифов и отчётности. Она не меняет занятость, служебность, группу или совместное использование.';
+                                            return 'Тип описывает, что сдаётся, а не где находится место. Он не меняет занятость, служебность, группу или совместное использование.';
                                         }
 
                                         $hasCurrentActiveType = MarketSpaceType::query()
@@ -1766,14 +1836,14 @@ class MarketSpaceResource extends BaseResource
                                             ->exists();
 
                                         if ($hasCurrentActiveType) {
-                                            return 'Категория нужна для тарифов и отчётности. Она не меняет занятость, служебность, группу или совместное использование.';
+                                            return 'Тип описывает, что сдаётся, а не где находится место. Он не меняет занятость, служебность, группу или совместное использование.';
                                         }
 
                                         return 'Сейчас сохранено старое значение с кодом '.$currentType.'. Его нет в текущем справочнике типов мест.';
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip(function ($get, ?MarketSpace $record) use ($user): string {
-                                        $parts = ['Тарифная категория места для ставок и отчётности. Это не статус занятости и не признак служебного, группового или совместного места.'];
+                                        $parts = ['Тип места отвечает на вопрос "что сдаётся": витрина, охлаждаемый стол, развал, холодильная камера, киоск, кабинет и т.п. Локация отвечает на вопрос "где находится": Склады, павильон, сектор, ряд. Это не статус занятости и не признак служебного, группового или совместного места.'];
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
                                         if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
@@ -1794,9 +1864,9 @@ class MarketSpaceResource extends BaseResource
                                                     ->exists();
 
                                             if ($activeTypeCount === 0) {
-                                                $parts[] = 'Для этого рынка справочник категорий пока пуст. Сначала заполните "Тарифные категории мест".';
+                                                $parts[] = 'Для этого рынка справочник типов пока пуст. Сначала заполните "Типы мест" в настройках рынка.';
                                             } elseif ($currentType !== '' && ! $hasCurrentActiveType) {
-                                                $parts[] = 'Текущая категория больше не найдена среди активных категорий.';
+                                                $parts[] = 'Текущий тип больше не найден среди активных типов мест.';
                                             }
                                         }
 
@@ -3171,14 +3241,14 @@ class MarketSpaceResource extends BaseResource
                     ->searchable()
                     ->tooltip(fn (MarketSpace $record) => $record->number ?: null),
 
-                // Тарифная категория — отдельная сущность от статуса занятости, группы и локации.
+                // Тип места описывает физический формат и не смешивается со статусом, группой или локацией.
                 TextColumn::make('type')
-                    ->label('Тарифная категория')
+                    ->label('Тип места')
                     ->formatStateUsing(fn (?string $state, MarketSpace $record) => static::resolveSpaceTypeLabel($record->market_id, $state))
                     ->sortable()
                     ->placeholder('—')
                     ->toggleable()
-                    ->tooltip('Категория для тарифов и отчётности. Не влияет на занятость, служебность, группу или совместное использование.'),
+                    ->tooltip('Что сдаётся: витрина, охлаждаемый стол, холодильная камера, киоск, кабинет. Где находится место, задаётся локацией.'),
 
                 TextColumn::make('activity_type')
                     ->label('Вид деятельности')
@@ -3309,7 +3379,7 @@ class MarketSpaceResource extends BaseResource
                     ]),
 
                 SelectFilter::make('type')
-                    ->label('Тарифная категория')
+                    ->label('Тип места')
                     ->options(function () {
                         $user = Filament::auth()->user();
 
