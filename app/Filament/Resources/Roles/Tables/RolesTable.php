@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Roles\Tables;
 
 use App\Support\PermissionDisplayCatalog;
+use App\Support\RoleCapabilityCatalog;
 use App\Support\RoleScenarioCatalog;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -40,6 +41,7 @@ class RolesTable
         }
 
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->with('permissions'))
             ->columns([
                 Tables\Columns\TextColumn::make('label_ru')
                     ->label('Роль')
@@ -57,6 +59,17 @@ class RolesTable
                     ->limit(50)
                     ->size('sm')
                     ->color('gray-600'),
+
+                Tables\Columns\TextColumn::make('effective_capabilities')
+                    ->label('Фактический доступ')
+                    ->getStateUsing(fn ($record): string => RoleCapabilityCatalog::tableSummaryForRole(
+                        (string) $record->name,
+                        $record->permissions->pluck('name')->all(),
+                    ))
+                    ->wrap()
+                    ->limit(90)
+                    ->size('sm')
+                    ->color('gray-700'),
 
                 Tables\Columns\TextColumn::make('notification_topics')
                     ->label('Уведомления')
