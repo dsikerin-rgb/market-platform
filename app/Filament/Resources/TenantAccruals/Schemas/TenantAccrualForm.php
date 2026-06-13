@@ -40,13 +40,13 @@ class TenantAccrualForm
                 ->schema([
                     static::display('document_number_display', 'document_number', 'Номер документа'),
                     static::display('document_date_display', 'document_date', 'Дата документа', fn ($value): string => $value?->format('d.m.Y') ?: '—'),
-                    static::display('service_name_display', 'service_name', 'Услуга'),
+                    static::display('service_name_display', 'service_name', 'Состав услуг'),
                     static::display('document_name_display', 'document_name', 'Документ / представление')
                         ->columnSpanFull(),
-                    static::display('purpose_display', 'purpose', 'Основание')
-                        ->columnSpanFull(),
-                    static::display('line_description_display', 'line_description', 'Строка начисления')
-                        ->columnSpanFull(),
+                    Placeholder::make('accrual_basis_display')
+                        ->label('За что начислено')
+                        ->columnSpanFull()
+                        ->content(fn (?TenantAccrual $record): string => static::accrualBasis($record)),
                 ]),
 
             Section::make('Начисление')
@@ -181,6 +181,9 @@ class TenantAccrualForm
 
                             return $state;
                         }),
+
+                    static::display('purpose_display', 'purpose', 'Основание API')
+                        ->columnSpanFull(),
                 ]),
         ]);
     }
@@ -219,6 +222,27 @@ class TenantAccrualForm
         $text = trim((string) $value);
 
         return $text !== '' ? $text : '—';
+    }
+
+    private static function accrualBasis(?TenantAccrual $record): string
+    {
+        if (! $record) {
+            return '—';
+        }
+
+        foreach ([
+            $record->line_description ?? null,
+            $record->service_name ?? null,
+            $record->purpose ?? null,
+        ] as $value) {
+            $text = trim((string) ($value ?? ''));
+
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '—';
     }
 
     private static function formatNumber(mixed $value, int $decimals): string
