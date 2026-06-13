@@ -49,6 +49,7 @@ class PermissionDisplayCatalog
         'markets.viewAny' => [
             'label' => 'Просмотр списка рынков',
             'group' => 'Рынок',
+            'description' => 'Открывает список всех рынков. Для обычных сотрудников используйте просмотр своего рынка.',
         ],
         'markets.view' => [
             'label' => 'Просмотр рынка',
@@ -66,6 +67,7 @@ class PermissionDisplayCatalog
         'markets.delete' => [
             'label' => 'Удаление рынка',
             'group' => 'Рынок',
+            'description' => 'Опасное право. Может удалять рынок.',
         ],
         'contracts.update' => [
             'label' => 'Изменение привязок договоров',
@@ -98,6 +100,7 @@ class PermissionDisplayCatalog
         'staff.delete' => [
             'label' => 'Удаление сотрудника',
             'group' => 'Сотрудники',
+            'description' => 'Опасное право. Может удалять сотрудников.',
         ],
     ];
 
@@ -189,6 +192,16 @@ class PermissionDisplayCatalog
         return self::MAP[$permission]['description'] ?? null;
     }
 
+    public static function isRisky(string $permission): bool
+    {
+        return in_array($permission, [
+            'markets.viewAny',
+            'markets.update',
+            'markets.delete',
+            'staff.delete',
+        ], true);
+    }
+
     /**
      * @param array<int, string> $permissionsById
      * @return array<int, string>
@@ -216,12 +229,18 @@ class PermissionDisplayCatalog
 
         $options = [];
         foreach ($rows as $row) {
+            $riskBadge = self::isRisky($row['permission'])
+                ? '<span style="display:inline-flex; border-radius:999px; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; padding:.1rem .45rem; font-size:.6875rem; font-weight:700;">Осторожно</span>'
+                : '';
+
             $options[$row['id']] = sprintf(
                 '<span style="display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;">'
                 . '<span style="display:inline-flex; border-radius:999px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; padding:.1rem .45rem; font-size:.6875rem; font-weight:600;">%s</span>'
+                . '%s'
                 . '<span>%s</span>'
                 . '</span>',
                 self::escape($row['group']),
+                $riskBadge,
                 self::escape($row['label']),
             );
         }
