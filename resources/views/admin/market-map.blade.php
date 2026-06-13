@@ -39,8 +39,9 @@
       background: #f8fafc;
     }
     .wrap {
-      padding: 16px;
-      max-width: 1400px;
+      padding: clamp(8px, 1vw, 16px);
+      width: 100%;
+      max-width: none;
       margin: 0 auto;
       min-height: 100vh;
       box-sizing: border-box;
@@ -48,11 +49,11 @@
       flex-direction: column;
     }
     .map-layout {
-      margin-top: 14px;
+      margin-top: clamp(8px, 0.8vw, 14px);
       flex: 1 1 auto;
       min-height: 0;
-      height: calc(100vh - 46px);
-      max-height: calc(100vh - 46px);
+      height: calc(100dvh - clamp(24px, 2vw, 46px));
+      max-height: calc(100dvh - clamp(24px, 2vw, 46px));
       display: flex;
       flex-direction: column;
       gap: 8px;

@@ -2698,6 +2698,96 @@ html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-input-wrp:
 }
 
 /* ====================================================================== */
+/* === Responsive workspace width for operational pages                  === */
+/* ====================================================================== */
+@media (min-width: 1024px){
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-market-spaces-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-market-spaces-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tenants-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tenants-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-contracts-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-contracts-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-accruals-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-accruals-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tasks-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tasks-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tasks.fi-resource-edit-record-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-staff-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-staff-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-roles-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-roles-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-page-calendar){
+    width: 100% !important;
+    max-width: none !important;
+    padding-inline: clamp(1rem, 1.2vw, 1.75rem) !important;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-page:where(
+    .fi-resource-market-spaces-list-page,
+    .fi-resource-market-spaces-edit-page,
+    .fi-resource-tenants-list-page,
+    .fi-resource-tenants-edit-page,
+    .fi-resource-contracts-list-page,
+    .fi-resource-contracts-edit-page,
+    .fi-resource-accruals-list-page,
+    .fi-resource-accruals-edit-page,
+    .fi-resource-tasks-list-page,
+    .fi-resource-tasks-edit-page,
+    .fi-resource-tasks.fi-resource-edit-record-page,
+    .fi-resource-staff-list-page,
+    .fi-resource-staff-edit-page,
+    .fi-resource-roles-list-page,
+    .fi-resource-roles-edit-page,
+    .fi-page-calendar
+  ){
+    width: 100%;
+    min-width: 0;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-page:where(
+    .fi-resource-market-spaces-list-page,
+    .fi-resource-tenants-list-page,
+    .fi-resource-contracts-list-page,
+    .fi-resource-accruals-list-page,
+    .fi-resource-tasks-list-page,
+    .fi-resource-staff-list-page,
+    .fi-resource-roles-list-page
+  ) .fi-ta{
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1023px){
+  html:not([data-admin-overrides="0"]) .fi-main{
+    padding-inline: .75rem !important;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-page,
+  html:not([data-admin-overrides="0"]) .fi-page-main,
+  html:not([data-admin-overrides="0"]) .fi-page-content,
+  html:not([data-admin-overrides="0"]) .fi-section,
+  html:not([data-admin-overrides="0"]) .fi-sc,
+  html:not([data-admin-overrides="0"]) .fi-ta{
+    min-width: 0;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-ta{
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 640px){
+  html:not([data-admin-overrides="0"]) .fi-main{
+    padding-inline: .5rem !important;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-page-content{
+    row-gap: .75rem !important;
+  }
+}
+
+/* ====================================================================== */
 /* === Market spaces: shared-use slide-over must scroll inside body       === */
 /* ====================================================================== */
 html:not([data-admin-overrides="0"]) .fi-modal-slide-over .fi-modal-window,

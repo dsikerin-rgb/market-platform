@@ -1330,7 +1330,6 @@
         html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
             grid-template-columns: repeat(2, 1fr);
         }
-    }
 
         html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-priority-summary{
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1339,6 +1338,13 @@
         html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions{
             width: 100%;
             min-width: 0;
+        }
+    }
+
+    @media (max-width: 479px) {
+        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-edit-hero__actions,
+        html:not([data-admin-overrides="0"]) .fi-resource-market-spaces-edit-page .market-space-priority-summary{
+            grid-template-columns: 1fr;
         }
     }
 
