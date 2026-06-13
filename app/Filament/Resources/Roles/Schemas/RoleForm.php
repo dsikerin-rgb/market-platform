@@ -76,7 +76,7 @@ class RoleForm
             ->dehydrated(true);
 
         $roleProfilePreview = Forms\Components\Placeholder::make('role_profile_preview')
-            ->label('Что означает профиль')
+            ->label('Карточка роли')
             ->content(function ($get): HtmlString {
                 $slug = self::selectedRoleSlug($get);
 
@@ -89,21 +89,36 @@ class RoleForm
                 $topics = e(RoleScenarioCatalog::topicSummaryForSlug($slug));
 
                 return new HtmlString(
-                    '<div style="font-size:.8125rem; line-height:1.5; color:#0f172a;">'
-                    . '<strong style="color:#0f172a;">' . $label . '</strong>'
-                    . '<div style="margin-top:.25rem; color:#475569;">' . $description . '</div>'
-                    . '<div style="margin-top:.25rem; color:#6b7280; font-size:.75rem;">Уведомления: ' . $topics . '</div>'
+                    '<div style="border:1px solid #dbeafe; background:linear-gradient(135deg,#eff6ff,#ffffff); border-radius:.75rem; padding:1rem; min-height:8rem;">'
+                    . '<div style="font-size:.75rem; color:#2563eb; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">Назначение роли</div>'
+                    . '<div style="margin-top:.35rem; font-size:1rem; font-weight:700; color:#0f172a;">' . $label . '</div>'
+                    . '<div style="margin-top:.4rem; font-size:.875rem; line-height:1.5; color:#475569;">' . $description . '</div>'
+                    . '<div style="margin-top:.75rem; font-size:.75rem; color:#64748b;">Уведомления: ' . $topics . '</div>'
                     . '</div>'
                 );
             })
             ->columnSpan(['default' => 12, 'md' => 6]);
 
-        $permissionPresetField = Forms\Components\Select::make('permission_preset')
-            ->label('Быстро заполнить права')
-            ->placeholder('Выберите набор прав')
+        $permissionPresetField = Forms\Components\ToggleButtons::make('permission_preset')
+            ->label('Готовые наборы прав')
             ->options(RolePermissionPresetCatalog::options())
-            ->searchable()
-            ->preload()
+            ->icons([
+                'market_admin' => 'heroicon-o-shield-check',
+                'marketplace_content' => 'heroicon-o-building-storefront',
+                'staff_management' => 'heroicon-o-users',
+                'finance_view' => 'heroicon-o-banknotes',
+                'market_readonly' => 'heroicon-o-eye',
+                'clear' => 'heroicon-o-x-mark',
+            ])
+            ->colors([
+                'market_admin' => 'success',
+                'marketplace_content' => 'info',
+                'staff_management' => 'info',
+                'finance_view' => 'warning',
+                'market_readonly' => 'gray',
+                'clear' => 'danger',
+            ])
+            ->columns(['default' => 1, 'md' => 3])
             ->dehydrated(false)
             ->reactive()
             ->afterStateUpdated(function ($state, callable $set) use ($permissionIdsByName): void {
@@ -116,20 +131,24 @@ class RoleForm
                     RolePermissionPresetCatalog::permissionIdsForPreset($state, $permissionIdsByName),
                 ));
             })
-            ->helperText('Заменяет список прав ниже. Встроенный доступ профиля роли при этом сохраняется.')
-            ->columnSpan(['default' => 12, 'md' => 6]);
+            ->helperText('Кнопка заменяет выбранные подробные права. Встроенный доступ профиля роли сохраняется.')
+            ->columnSpan(12);
 
         $permissionPresetPreview = Forms\Components\Placeholder::make('permission_preset_preview')
-            ->label('Подсказка по набору')
+            ->label('Что изменит выбранный набор')
             ->content(function ($get): HtmlString {
                 $preset = (string) ($get('permission_preset') ?? '');
                 $description = $preset !== ''
                     ? RolePermissionPresetCatalog::description($preset)
                     : 'Можно оставить пустым и настроить права вручную.';
 
-                return new HtmlString('<span style="font-size:.8125rem; color:#475569;">' . e($description ?? '') . '</span>');
+                return new HtmlString(
+                    '<div style="border:1px solid #e2e8f0; background:#f8fafc; border-radius:.625rem; padding:.85rem 1rem; font-size:.875rem; line-height:1.5; color:#475569;">'
+                    . e($description ?? '')
+                    . '</div>'
+                );
             })
-            ->columnSpan(['default' => 12, 'md' => 6]);
+            ->columnSpan(12);
 
         $effectiveCapabilitiesField = Forms\Components\Placeholder::make('effective_capabilities_preview')
             ->label('Фактический доступ')
@@ -159,18 +178,19 @@ class RoleForm
                     : '<div style="display:flex; flex-wrap:wrap; gap:.375rem; margin-top:.5rem;">' . implode('', $limitationChips) . '</div>';
 
                 return new HtmlString(
-                    '<div style="font-size:.8125rem; line-height:1.5;">'
-                    . '<div style="display:flex; flex-wrap:wrap; gap:.375rem;">' . implode('', $summaryChips) . '</div>'
+                    '<div style="border:1px solid #bbf7d0; background:linear-gradient(135deg,#f0fdf4,#ffffff); border-radius:.75rem; padding:1rem; min-height:8rem; font-size:.8125rem; line-height:1.5;">'
+                    . '<div style="font-size:.75rem; color:#047857; font-weight:700; text-transform:uppercase; letter-spacing:.04em;">Что получит пользователь</div>'
+                    . '<div style="display:flex; flex-wrap:wrap; gap:.375rem; margin-top:.55rem;">' . implode('', $summaryChips) . '</div>'
                     . $limitationsHtml
-                    . '<div style="margin-top:.5rem; color:#64748b;">Это итоговая проверка: она учитывает выбранный профиль роли, дополнительные права и привязку пользователя к рынку. Исключение только для супер-администратора.</div>'
+                    . '<div style="margin-top:.75rem; color:#64748b;">Итог учитывает профиль роли, дополнительные права и привязку пользователя к рынку. Исключение только для супер-администратора.</div>'
                     . '</div>'
                 );
             })
-            ->columnSpan(12);
+            ->columnSpan(['default' => 12, 'md' => 6]);
 
         $permissionsField = Forms\Components\CheckboxList::make('permissions')
             ->label('Права доступа')
-            ->helperText('Подробная настройка для нестандартных ролей. Для типовых ролей обычно достаточно выбрать профиль выше.')
+            ->helperText('Тонкая настройка для нестандартных ролей. Для типовых ролей обычно достаточно профиля и готового набора.')
             ->columns(['default' => 1, 'md' => 2])
             ->bulkToggleable()
             ->searchable()
@@ -184,8 +204,8 @@ class RoleForm
             ->columnSpan(12);
 
         return $schema->components([
-            Section::make('Основные параметры')
-                ->description('Профиль, название и краткое назначение роли')
+            Section::make('Роль и фактический доступ')
+                ->description('Сначала выберите, какую работу выполняет сотрудник, затем проверьте итоговый доступ.')
                 ->schema([
                     Grid::make(12)->schema([
                         $profileField,
@@ -194,10 +214,15 @@ class RoleForm
                     ]),
                     Grid::make(12)->schema([
                         $roleProfilePreview,
-                        $permissionPresetField,
-                        $permissionPresetPreview,
                         $effectiveCapabilitiesField,
                     ]),
+                ]),
+
+            Section::make('Быстрое заполнение прав')
+                ->description('Готовые наборы помогают заполнить дополнительные права без чтения технического списка.')
+                ->schema([
+                    $permissionPresetField,
+                    $permissionPresetPreview,
                 ]),
 
             Section::make('Подробные права')

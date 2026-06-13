@@ -33,6 +33,16 @@ class PermissionDisplayCatalogTest extends TestCase
         self::assertStringNotContainsString('finance.1c.view', $options[7]);
     }
 
+    public function test_risky_permissions_are_marked_in_options(): void
+    {
+        $options = PermissionDisplayCatalog::options([
+            3 => 'markets.viewAny',
+        ]);
+
+        self::assertTrue(PermissionDisplayCatalog::isRisky('markets.viewAny'));
+        self::assertStringContainsString('Осторожно', $options[3]);
+    }
+
     public function test_role_permission_preset_resolves_only_existing_permissions(): void
     {
         self::assertSame([1], RolePermissionPresetCatalog::permissionIdsForPreset('finance_view', [
