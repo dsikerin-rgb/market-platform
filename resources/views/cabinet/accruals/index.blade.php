@@ -38,11 +38,17 @@
 
     <section class="space-y-3">
         @forelse($accruals as $accrual)
+            @php
+                $basis = trim((string) ($accrual->line_description ?: ($accrual->service_name ?: ($accrual->purpose ?: ''))));
+            @endphp
             <article class="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <p class="text-sm font-semibold text-slate-900">{{ $accrual->source_place_name ?: ($accrual->source_place_code ?: 'Торговое место') }}</p>
                         <p class="text-xs text-slate-500">Период: {{ $accrual->period?->format('m.Y') }}</p>
+                        @if($basis !== '')
+                            <p class="mt-1 text-xs text-slate-600">{{ $basis }}</p>
+                        @endif
                     </div>
                     <div class="text-right">
                         <p class="text-base font-semibold text-slate-900">{{ number_format((float) $accrual->total_with_vat, 0, '.', ' ') }} ₽</p>
