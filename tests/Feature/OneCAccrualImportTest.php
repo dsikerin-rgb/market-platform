@@ -134,6 +134,135 @@ class OneCAccrualImportTest extends TestCase
         ]);
     }
 
+    public function test_accrual_import_uses_exact_contract_space_when_payload_has_no_space_code(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Contract Space Tenant',
+            'external_id' => 'tenant-contract-space',
+            'inn' => '222300420263',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'CS/1',
+            'code' => 'cs1',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-space-001',
+            'number' => 'CS/1 from 2026-02-01',
+            'status' => 'active',
+            'starts_at' => '2026-02-01',
+            'signed_at' => '2026-02-01',
+            'is_active' => true,
+        ]);
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-13 10:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-contract-space',
+                    'contract_external_id' => 'contract-space-001',
+                    'period' => '2026-06',
+                    'tenant_name' => 'Contract Space Tenant',
+                    'inn' => '222300420263',
+                    'service_name' => 'Rent',
+                    'line_description' => 'Rent for June 2026',
+                    'total_no_vat' => 1000,
+                    'total_with_vat' => 1000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('inserted', 1)
+            ->assertJsonPath('warnings.spaces_resolved_from_contract', 1);
+
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'contract_external_id' => 'contract-space-001',
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+            'market_space_id' => $space->id,
+            'period' => '2026-06-01',
+            'line_description' => 'Rent for June 2026',
+        ]);
+    }
+
+    public function test_accrual_import_does_not_override_failed_direct_space_with_contract_space(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Invalid Space Tenant',
+            'external_id' => 'tenant-invalid-space',
+            'inn' => '222300420264',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'IS/1',
+            'code' => 'is1',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-invalid-space',
+            'number' => 'IS/1 from 2026-02-01',
+            'status' => 'active',
+            'starts_at' => '2026-02-01',
+            'signed_at' => '2026-02-01',
+            'is_active' => true,
+        ]);
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-13 10:30:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-invalid-space',
+                    'contract_external_id' => 'contract-invalid-space',
+                    'period' => '2026-06',
+                    'market_space_code' => 'UNKNOWN/SPACE',
+                    'source_place_code' => 'UNKNOWN/SPACE',
+                    'tenant_name' => 'Invalid Space Tenant',
+                    'inn' => '222300420264',
+                    'service_name' => 'Rent',
+                    'line_description' => 'Rent for June 2026',
+                    'total_no_vat' => 1000,
+                    'total_with_vat' => 1000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('inserted', 1)
+            ->assertJsonPath('warnings.spaces_resolved_from_contract', 0)
+            ->assertJsonPath('warnings.spaces_unresolved', 1);
+
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'contract_external_id' => 'contract-invalid-space',
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+            'market_space_id' => null,
+            'period' => '2026-06-01',
+            'source_place_code' => 'UNKNOWN/SPACE',
+        ]);
+    }
+
     public function test_repeated_accrual_import_updates_same_row_instead_of_creating_duplicate(): void
     {
         $tenant = Tenant::create([
@@ -214,6 +343,101 @@ class OneCAccrualImportTest extends TestCase
             'rent_amount' => 11900,
             'total_no_vat' => 12300,
             'total_with_vat' => 12300,
+        ]);
+    }
+
+    public function test_accrual_import_backfills_contract_space_on_legacy_row_without_duplicate(): void
+    {
+        $tenant = Tenant::create([
+            'market_id' => $this->market->id,
+            'name' => 'Legacy Space Tenant',
+            'external_id' => 'tenant-legacy-space',
+            'inn' => '666666666667',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $this->market->id,
+            'number' => 'LS/1',
+            'code' => 'ls1',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-legacy-space',
+            'number' => 'Legacy space contract',
+            'status' => 'active',
+            'starts_at' => '2026-02-01',
+            'signed_at' => '2026-02-01',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_accruals')->insert([
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'contract_external_id' => 'contract-legacy-space',
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => null,
+            'period' => '2026-06-01',
+            'source_place_code' => null,
+            'source_place_name' => 'Legacy space contract',
+            'activity_type' => 'rent',
+            'currency' => 'RUB',
+            'rent_amount' => 12345,
+            'total_no_vat' => 12345,
+            'total_with_vat' => 12345,
+            'status' => 'imported',
+            'source' => '1c',
+            'source_file' => '1c:accruals',
+            'source_row_number' => 7,
+            'source_row_hash' => hash('sha256', 'legacy-without-contract-space'),
+            'payload' => json_encode([
+                'tenant_external_id' => 'tenant-legacy-space',
+                'contract_external_id' => 'contract-legacy-space',
+            ], JSON_UNESCAPED_UNICODE),
+            'imported_at' => now()->subDay(),
+            'created_at' => now()->subDay(),
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-13 11:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-legacy-space',
+                    'contract_external_id' => 'contract-legacy-space',
+                    'period' => '2026-06',
+                    'source_place_name' => 'Legacy space contract',
+                    'activity_type' => 'rent',
+                    'tenant_name' => 'Legacy Space Tenant',
+                    'inn' => '666666666667',
+                    'service_name' => 'Rent',
+                    'line_description' => 'Rent for June 2026',
+                    'rent_amount' => 12345,
+                    'total_no_vat' => 12345,
+                    'total_with_vat' => 12345,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer ' . $this->token,
+            'Accept' => 'application/json',
+        ])
+            ->assertOk()
+            ->assertJsonPath('inserted', 0)
+            ->assertJsonPath('updated', 1)
+            ->assertJsonPath('warnings.legacy_identity_matches', 1)
+            ->assertJsonPath('warnings.spaces_resolved_from_contract', 1);
+
+        $this->assertSame(1, DB::table('tenant_accruals')->count());
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $this->market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $space->id,
+            'period' => '2026-06-01',
+            'line_description' => 'Rent for June 2026',
         ]);
     }
 

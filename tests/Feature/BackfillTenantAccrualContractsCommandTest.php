@@ -82,6 +82,70 @@ class BackfillTenantAccrualContractsCommandTest extends TestCase
         ]);
     }
 
+    public function test_command_backfills_market_space_from_existing_contract_link(): void
+    {
+        $market = Market::create([
+            'name' => 'Test Market',
+            'slug' => 'test-market-space-backfill',
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Space Backfill Tenant',
+            'external_id' => 'tenant-space-backfill',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'SB/1',
+            'code' => 'sb1',
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'external_id' => 'contract-space-backfill',
+            'number' => 'SB/1 from 2026-02-01',
+            'status' => 'active',
+            'starts_at' => '2026-03-01',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_accruals')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => null,
+            'period' => '2026-06-01',
+            'currency' => 'RUB',
+            'rent_amount' => 1000,
+            'status' => 'imported',
+            'source' => '1c',
+            'source_file' => '1c:accruals',
+            'source_row_number' => 1,
+            'source_row_hash' => hash('sha256', 'accrual-space-backfill'),
+            'payload' => json_encode(['x' => 1], JSON_UNESCAPED_UNICODE),
+            'imported_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->artisan('accruals:link-contracts', [
+            '--market' => $market->id,
+            '--period' => '2026-06',
+            '--execute' => true,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseHas('tenant_accruals', [
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'market_space_id' => $space->id,
+        ]);
+    }
+
     public function test_command_skips_when_multiple_primary_contracts_fit_same_period(): void
     {
         $market = Market::create([

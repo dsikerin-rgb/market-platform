@@ -16,9 +16,9 @@ class BackfillTenantAccrualContractsCommand extends Command
         {--market=1 : Market ID}
         {--period= : Only one period in YYYY-MM}
         {--limit=0 : Limit rows for testing}
-        {--execute : Persist tenant_contract_id}';
+        {--execute : Persist tenant_contract_id and market_space_id}';
 
-    protected $description = 'Link tenant_accruals to tenant_contracts using tenant + place + period when a safe primary contract match exists.';
+    protected $description = 'Link tenant_accruals to tenant_contracts and backfill accrual space from linked contracts when safe.';
 
     public function handle(TenantAccrualContractResolver $resolver): int
     {
@@ -29,9 +29,20 @@ class BackfillTenantAccrualContractsCommand extends Command
 
         $query = DB::table('tenant_accruals')
             ->where('market_id', $marketId)
-            ->whereNull('tenant_contract_id')
             ->whereNotNull('tenant_id')
-            ->whereNotNull('market_space_id')
+            ->where(function ($query): void {
+                $query
+                    ->where(function ($query): void {
+                        $query
+                            ->whereNull('tenant_contract_id')
+                            ->whereNotNull('market_space_id');
+                    })
+                    ->orWhere(function ($query): void {
+                        $query
+                            ->whereNotNull('tenant_contract_id')
+                            ->whereNull('market_space_id');
+                    });
+            })
             ->orderBy('period')
             ->orderBy('id');
 
@@ -43,7 +54,7 @@ class BackfillTenantAccrualContractsCommand extends Command
             $query->limit($limit);
         }
 
-        $rows = $query->get(['id', 'tenant_id', 'market_space_id', 'period']);
+        $rows = $query->get(['id', 'tenant_id', 'tenant_contract_id', 'market_space_id', 'period']);
 
         $stats = [
             'market_id' => $marketId,
@@ -55,11 +66,49 @@ class BackfillTenantAccrualContractsCommand extends Command
             'ambiguous' => 0,
             'updated' => 0,
             'unresolved' => 0,
+            'space_backfilled' => 0,
         ];
 
         $samples = [];
 
         foreach ($rows as $row) {
+            if ($row->tenant_contract_id !== null) {
+                $contractSpaceId = DB::table('tenant_contracts')
+                    ->where('id', (int) $row->tenant_contract_id)
+                    ->where('market_id', $marketId)
+                    ->where('tenant_id', (int) $row->tenant_id)
+                    ->value('market_space_id');
+
+                if (! is_numeric($contractSpaceId) || (int) $contractSpaceId <= 0) {
+                    $stats['unresolved']++;
+                    continue;
+                }
+
+                $samples[] = [
+                    'tenant_accrual_id' => (int) $row->id,
+                    'tenant_contract_id' => (int) $row->tenant_contract_id,
+                    'market_space_id' => (int) $contractSpaceId,
+                    'period' => (string) $row->period,
+                    'action' => 'backfill_market_space_from_contract',
+                ];
+
+                if (! $execute) {
+                    continue;
+                }
+
+                DB::table('tenant_accruals')
+                    ->where('id', (int) $row->id)
+                    ->update([
+                        'market_space_id' => (int) $contractSpaceId,
+                        'updated_at' => now(),
+                    ]);
+
+                $stats['space_backfilled']++;
+                $stats['updated']++;
+
+                continue;
+            }
+
             $period = CarbonImmutable::parse((string) $row->period);
             $match = $resolver->resolveMatch(
                 $marketId,
