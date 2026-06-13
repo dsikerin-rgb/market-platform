@@ -12,6 +12,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class MarketSpaceTypeResource extends BaseResource
 {
@@ -50,12 +51,34 @@ class MarketSpaceTypeResource extends BaseResource
         return filled($value) ? (int) $value : null;
     }
 
+    public static function makeUniqueCode(int $marketId, string $name): string
+    {
+        $base = Str::slug($name);
+
+        if ($base === '') {
+            $base = 'type';
+        }
+
+        $base = Str::limit($base, 220, '');
+        $code = $base;
+        $index = 2;
+
+        while (MarketSpaceType::query()
+            ->where('market_id', $marketId)
+            ->where('code', $code)
+            ->exists()) {
+            $code = Str::limit($base, 210, '').'-'.$index;
+            $index++;
+        }
+
+        return $code;
+    }
+
     
     public static function getGloballySearchableAttributes(): array
     {
         return [
             'name_ru',
-            'code',
             'market.name',
         ];
     }
@@ -94,11 +117,6 @@ class MarketSpaceTypeResource extends BaseResource
                 ->required()
                 ->maxLength(255)
                 ->helperText('Тип отвечает на вопрос "что сдаётся". Локация отвечает на вопрос "где находится". Совпадение названий допустимо, если смысл разный.'),
-
-            Forms\Components\TextInput::make('code')
-                ->label('Код типа')
-                ->required()
-                ->maxLength(255),
 
             Forms\Components\Select::make('unit')
                 ->label('Единица расчёта по умолчанию')
@@ -147,11 +165,6 @@ class MarketSpaceTypeResource extends BaseResource
 
                 TextColumn::make('name_ru')
                     ->label('Название типа')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('code')
-                    ->label('Код типа')
                     ->sortable()
                     ->searchable(),
 
