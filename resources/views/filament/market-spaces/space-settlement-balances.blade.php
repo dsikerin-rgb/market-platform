@@ -17,6 +17,10 @@
     'periodOptions' => [],
     'selectedPeriodKey' => null,
     'firstPeriodLabel' => null,
+    'isSharedUse' => false,
+    'sharedUseMode' => null,
+    'sharedUseModeLabel' => null,
+    'sharedUseParticipants' => [],
 ])
 
 @php
@@ -31,7 +35,9 @@
     $rows = is_array($rows) ? $rows : [];
     $summary = is_array($summary) ? $summary : [];
     $periodOptions = is_array($periodOptions) ? $periodOptions : [];
+    $sharedUseParticipants = is_array($sharedUseParticipants) ? $sharedUseParticipants : [];
     $currentTenantName = trim((string) $currentTenantName);
+    $isSharedUse = (bool) $isSharedUse;
     $monthNames = [
         '01' => 'Январь',
         '02' => 'Февраль',
@@ -53,6 +59,16 @@
         'danger' => 'Есть задолженность',
         'success' => 'Переплата',
         default => 'Нет задолженности',
+    };
+    $sharedUseModeTone = match ((string) $sharedUseMode) {
+        'included_in_primary_rent' => 'warning',
+        'excluded' => 'neutral',
+        default => 'success',
+    };
+    $sharedUseModeText = match ((string) $sharedUseMode) {
+        'included_in_primary_rent' => 'Задолженность смотрим по основным местам участников. Здесь не формируется отдельный долг совместного места.',
+        'excluded' => 'Место исключено из расчёта задолженности. Участники показаны справочно.',
+        default => 'ОСВ подбирается по каждому активному участнику совместного использования.',
     };
 @endphp
 
@@ -170,6 +186,58 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
+        }
+
+        .space-finance__shared {
+            display: grid;
+            gap: 12px;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            background: #f8fbff;
+            padding: 12px 14px;
+        }
+
+        .dark .space-finance__shared {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: rgba(15, 23, 42, 0.35);
+        }
+
+        .space-finance__shared-head {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .space-finance__shared-title {
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .dark .space-finance__shared-title {
+            color: #f8fafc;
+        }
+
+        .space-finance__participants {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 8px;
+        }
+
+        .space-finance__participant {
+            border: 1px solid #dbe4f0;
+            border-radius: 10px;
+            background: #fff;
+            padding: 10px 12px;
+            min-width: 0;
+        }
+
+        .dark .space-finance__participant {
+            border-color: rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.4);
         }
 
         .space-finance__toolbar {
@@ -696,6 +764,35 @@
         </div>
     @endif
 
+    @if ($isSharedUse)
+        <div class="space-finance__shared">
+            <div class="space-finance__shared-head">
+                <div>
+                    <div class="space-finance__shared-title">Финансовый учёт совместного места</div>
+                    <div class="space-finance__note">{{ $sharedUseModeText }}</div>
+                </div>
+                <span class="space-finance__badge space-finance__badge--{{ $sharedUseModeTone }}">
+                    {{ $sharedUseModeLabel ?: 'Отдельный договор участника' }}
+                </span>
+            </div>
+
+            @if ($sharedUseParticipants !== [])
+                <div class="space-finance__participants">
+                    @foreach ($sharedUseParticipants as $participant)
+                        <div class="space-finance__participant">
+                            <div class="space-finance__value">{{ $participant['tenant_name'] ?? 'Арендатор' }}</div>
+                            <div class="space-finance__muted">
+                                {{ $participant['area_label'] ?? 'Площадь не указана' }} · {{ $participant['rent_rate_label'] ?? 'Ставка не указана' }}
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="space-finance__note">Активные участники совместного использования не указаны.</div>
+            @endif
+        </div>
+    @endif
+
     @if ($state === 'ready')
         <div class="space-finance__hero">
             <div class="space-finance__card">
@@ -752,7 +849,7 @@
                     @foreach ($rows as $row)
                         @php
                             $tenantName = trim((string) ($row['tenant_name'] ?? ''));
-                            $showTenant = $tenantName !== '' && ($scope === 'tenant_fallback' || $tenantName !== $currentTenantName);
+                            $showTenant = $tenantName !== '' && ($isSharedUse || $scope === 'tenant_fallback' || $tenantName !== $currentTenantName);
                         @endphp
                         <tr>
                             <td title="{{ $row['contract_external_id'] ?? '' }}">
