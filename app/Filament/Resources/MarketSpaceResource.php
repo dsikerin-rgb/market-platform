@@ -1918,6 +1918,7 @@ class MarketSpaceResource extends BaseResource
                             ->collapsible(),
                     ]),
                 Tab::make('Финансы')
+                    ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance')
                     ->schema([
                         Section::make('Финансы 1С')
                             ->schema([
@@ -2089,20 +2090,107 @@ class MarketSpaceResource extends BaseResource
         $tenantId = $record->effectiveTenantId();
         $settlementSnapshots = static::settlementSnapshots((int) $record->market_id);
         $snapshot = static::selectedSettlementSnapshot($settlementSnapshots);
+        $isSharedUse = static::hasSharedUseTenants($record);
+        $sharedUseParticipants = static::sharedUseFinanceParticipants($record);
+        $sharedUseMode = (string) ($record->shared_use_financial_mode ?? MarketSpace::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT);
+        $sharedUseModeLabel = static::sharedUseFinancialModeLabel($sharedUseMode);
 
         if (! $snapshot) {
             return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
                 'state' => 'empty',
                 'emptyReason' => 'По этому рынку ещё нет загруженной ОСВ 1С.',
+                'isSharedUse' => $isSharedUse,
+                'sharedUseMode' => $sharedUseMode,
+                'sharedUseModeLabel' => $sharedUseModeLabel,
+                'sharedUseParticipants' => $sharedUseParticipants,
             ])->render());
         }
 
-        if ($record->shared_use_financial_mode === MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT) {
+        if ($isSharedUse && $sharedUseMode === MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT) {
             return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
-                'state' => 'included',
-                'emptyReason' => 'Финансовый учёт совместного места включён в основное место. Отдельную задолженность по этому месту ОСВ не показывает.',
+                'state' => 'shared_included',
+                'emptyReason' => 'Задолженность по участникам учитывается по их основным местам. Отдельный долг по этому совместному месту не показывается.',
                 'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
                 'account' => (string) $snapshot->account,
+                'isSharedUse' => true,
+                'sharedUseMode' => $sharedUseMode,
+                'sharedUseModeLabel' => $sharedUseModeLabel,
+                'sharedUseParticipants' => $sharedUseParticipants,
+                ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
+            ])->render());
+        }
+
+        if ($isSharedUse && $sharedUseMode === MarketSpace::SHARED_USE_FINANCIAL_MODE_EXCLUDED) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'shared_excluded',
+                'emptyReason' => 'Это совместное место исключено из расчёта задолженности. ОСВ доступна только как справочная информация по участникам.',
+                'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                'account' => (string) $snapshot->account,
+                'isSharedUse' => true,
+                'sharedUseMode' => $sharedUseMode,
+                'sharedUseModeLabel' => $sharedUseModeLabel,
+                'sharedUseParticipants' => $sharedUseParticipants,
+                ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
+            ])->render());
+        }
+
+        if ($isSharedUse) {
+            $participantRows = collect();
+
+            foreach ($sharedUseParticipants as $participant) {
+                $participantTenantId = (int) ($participant['tenant_id'] ?? 0);
+                if ($participantTenantId <= 0) {
+                    continue;
+                }
+
+                $contractExternalIds = static::activeContractExternalIdsForSpace(
+                    (int) $record->market_id,
+                    $participantTenantId,
+                    (int) $record->id,
+                );
+
+                $rows = $contractExternalIds->isNotEmpty()
+                    ? static::spaceSettlementRows((int) $record->market_id, $participantTenantId, $snapshot, $contractExternalIds)
+                    : collect();
+
+                if ($rows->isEmpty()) {
+                    $rows = static::spaceSettlementRows((int) $record->market_id, $participantTenantId, $snapshot, null);
+                }
+
+                $participantRows = $participantRows->merge($rows);
+            }
+
+            if ($participantRows->isEmpty()) {
+                return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                    'state' => 'empty',
+                    'emptyReason' => 'В выбранной ОСВ нет строк по активным участникам совместного места.',
+                    'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                    'account' => (string) $snapshot->account,
+                    'isSharedUse' => true,
+                    'sharedUseMode' => $sharedUseMode,
+                    'sharedUseModeLabel' => $sharedUseModeLabel,
+                    'sharedUseParticipants' => $sharedUseParticipants,
+                    'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $record->number),
+                    ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
+                ])->render());
+            }
+
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'ready',
+                'scope' => 'shared_use',
+                'scopeLabel' => 'Данные подобраны по участникам совместного места',
+                'scopeTone' => 'success',
+                'periodLabel' => static::formatSpaceSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                'account' => (string) $snapshot->account,
+                'importedAt' => $snapshot->imported_at ? (string) \Carbon\Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
+                'summary' => static::summarizeSpaceSettlementRows($participantRows),
+                'rows' => $participantRows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+                'currentTenantName' => '',
+                'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $record->number),
+                'isSharedUse' => true,
+                'sharedUseMode' => $sharedUseMode,
+                'sharedUseModeLabel' => $sharedUseModeLabel,
+                'sharedUseParticipants' => $sharedUseParticipants,
                 ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
             ])->render());
         }
@@ -2167,6 +2255,40 @@ class MarketSpaceResource extends BaseResource
             'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $search),
             ...static::spaceSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
         ])->render());
+    }
+
+    private static function sharedUseFinancialModeLabel(string $mode): string
+    {
+        return match ($mode) {
+            MarketSpace::SHARED_USE_FINANCIAL_MODE_INCLUDED_IN_PRIMARY_RENT => 'Включено в аренду основного места',
+            MarketSpace::SHARED_USE_FINANCIAL_MODE_EXCLUDED => 'Не учитывать в задолженности',
+            default => 'Отдельный договор участника',
+        };
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function sharedUseFinanceParticipants(MarketSpace $record): array
+    {
+        return collect(static::sharedUseTenantRows($record))
+            ->map(static function (array $row): array {
+                $area = $row['area_sqm'];
+                $rate = $row['rent_rate'];
+
+                return [
+                    'tenant_id' => $row['tenant_id'],
+                    'tenant_name' => $row['tenant_name'],
+                    'area_label' => $area !== null
+                        ? rtrim(rtrim(number_format((float) $area, 2, ',', ' '), '0'), ',').' м²'
+                        : 'Площадь не указана',
+                    'rent_rate_label' => $rate !== null
+                        ? rtrim(rtrim(number_format((float) $rate, 2, ',', ' '), '0'), ',').' ₽'
+                        : 'Ставка не указана',
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
