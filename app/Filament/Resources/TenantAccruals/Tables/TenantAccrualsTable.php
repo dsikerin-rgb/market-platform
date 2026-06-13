@@ -109,24 +109,6 @@ class TenantAccrualsTable
                     ->toggleable()
                     ->visible(fn (): bool => ! $hideTenantColumn),
 
-                TextColumn::make('tenantContract.number')
-                    ->label('Договор')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->url(fn (TenantAccrual $record): ?string => $record->tenantContract && TenantContractResource::canEdit($record->tenantContract)
-                        ? TenantContractResource::getUrl('edit', ['record' => $record->tenantContract])
-                        : null)
-                    ->toggleable(),
-
-                TextColumn::make('document_number')
-                    ->label('Документ 1С')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->description(fn (TenantAccrual $record): ?string => $record->document_date?->format('d.m.Y'))
-                    ->tooltip(fn (TenantAccrual $record): ?string => filled($record->document_name) ? (string) $record->document_name : null)
-                    ->toggleable()
-                    ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('document_number')),
-
                 TextColumn::make('accrual_basis')
                     ->label('За что начислено')
                     ->getStateUsing(fn (TenantAccrual $record): ?string => static::accrualBasis($record))
@@ -148,6 +130,24 @@ class TenantAccrualsTable
                     ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('line_description')
                         || TenantAccrualResource::hasTenantAccrualColumn('service_name')
                         || TenantAccrualResource::hasTenantAccrualColumn('purpose')),
+
+                TextColumn::make('tenantContract.number')
+                    ->label('Договор')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->url(fn (TenantAccrual $record): ?string => $record->tenantContract && TenantContractResource::canEdit($record->tenantContract)
+                        ? TenantContractResource::getUrl('edit', ['record' => $record->tenantContract])
+                        : null)
+                    ->toggleable(),
+
+                TextColumn::make('document_number')
+                    ->label('Документ 1С')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->description(fn (TenantAccrual $record): ?string => $record->document_date?->format('d.m.Y'))
+                    ->tooltip(fn (TenantAccrual $record): ?string => filled($record->document_name) ? (string) $record->document_name : null)
+                    ->toggleable()
+                    ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('document_number')),
 
                 TextColumn::make('contract_external_id')
                     ->label('ID договора 1С')
