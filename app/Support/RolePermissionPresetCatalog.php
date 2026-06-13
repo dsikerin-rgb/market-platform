@@ -13,7 +13,7 @@ class RolePermissionPresetCatalog
     {
         return [
             'market_admin' => [
-                'label' => 'Администратор рынка',
+                'label' => 'Директор',
                 'description' => 'Настройки рынка, сотрудники, маркетплейс и договорные привязки.',
                 'permissions' => [
                     'market-settings.view',
