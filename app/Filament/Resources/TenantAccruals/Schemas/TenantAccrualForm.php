@@ -19,39 +19,20 @@ class TenantAccrualForm
         $readOnly = fn (): bool => true;
 
         return $schema->components([
-            Section::make('Сводка')
-                ->description('Ключевой контекст начисления без технического шума.')
-                ->columns(6)
-                ->columnSpanFull()
-                ->extraAttributes(['class' => 'accrual-summary-section'])
-                ->schema([
-                    static::display('summary_period', 'period', 'Период начисления', fn ($value): string => $value?->format('m.Y') ?: '—'),
-                    static::display('summary_tenant', 'tenant.name', 'Арендатор'),
-                    static::display('summary_space', 'marketSpace.number', 'Место'),
-                    static::display('summary_contract', 'tenantContract.number', 'Договор'),
-                    static::displayMoney('summary_total_with_vat', 'total_with_vat', 'Итого к оплате'),
-                    static::display('summary_source', 'source', 'Источник'),
-                ]),
-
-            Section::make('Документ 1С')
-                ->description('Реквизиты документа начисления и основание строки из 1С.')
-                ->columns(3)
-                ->columnSpanFull()
-                ->schema([
-                    static::display('document_number_display', 'document_number', 'Номер документа'),
-                    static::display('document_date_display', 'document_date', 'Дата документа', fn ($value): string => $value?->format('d.m.Y') ?: '—'),
-                    static::display('service_name_display', 'service_name', 'Услуга'),
-                    static::display('document_name_display', 'document_name', 'Документ / представление')
-                        ->columnSpanFull(),
-                    static::display('purpose_display', 'purpose', 'Основание')
-                        ->columnSpanFull(),
-                    static::display('line_description_display', 'line_description', 'Строка начисления')
-                        ->columnSpanFull(),
-                ]),
-
             Section::make('Начисление')
+                ->description('Основной смысл начисления, документ 1С и связь с арендатором.')
+                ->columnSpanFull()
+                ->extraAttributes(['class' => 'accrual-overview-section'])
+                ->schema([
+                    Placeholder::make('accrual_overview')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->content(fn (?TenantAccrual $record): HtmlString => static::renderOverview($record)),
+                ]),
+
+            Section::make('Суммы')
                 ->description('Основные финансовые показатели и расчетная база.')
-                ->columns(4)
+                ->columns(5)
                 ->columnSpanFull()
                 ->extraAttributes(['class' => 'accrual-finance-section'])
                 ->schema([
@@ -72,6 +53,7 @@ class TenantAccrualForm
                 ->description('Источник строки и диагностическая связка с договором.')
                 ->columns(3)
                 ->columnSpanFull()
+                ->collapsed()
                 ->extraAttributes(['class' => 'accrual-context-section'])
                 ->schema([
                     static::display('context_location', 'marketSpace.location.name', 'Локация'),
@@ -181,8 +163,71 @@ class TenantAccrualForm
 
                             return $state;
                         }),
+
+                    static::display('purpose_display', 'purpose', 'Основание API')
+                        ->columnSpanFull(),
                 ]),
         ]);
+    }
+
+    private static function renderOverview(?TenantAccrual $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div class="accrual-overview accrual-overview--empty">Начисление появится после сохранения.</div>');
+        }
+
+        $basis = static::accrualBasis($record);
+        $serviceName = static::formatText($record->service_name ?? null);
+        $documentNumber = static::formatText($record->document_number ?? null);
+        $documentDate = $record->document_date?->format('d.m.Y') ?: '—';
+        $documentName = static::formatText($record->document_name ?? null);
+        $period = $record->period?->format('m.Y') ?: '—';
+        $tenant = static::formatText($record->tenant?->name ?? null);
+        $contract = static::formatText($record->tenantContract?->number ?? null);
+        $space = static::formatText($record->marketSpace?->number ?? null);
+        $source = static::formatSource($record->source ?? null);
+        $total = static::formatRub($record->total_with_vat ?? $record->total_no_vat ?? null);
+
+        return new HtmlString('
+            <div class="accrual-overview">
+                <div class="accrual-overview__primary">
+                    <div class="accrual-overview__eyebrow">За что начислено</div>
+                    <div class="accrual-overview__basis">' . e($basis) . '</div>
+                    <div class="accrual-overview__document">
+                        <span>' . e($documentName) . '</span>
+                    </div>
+                    <div class="accrual-overview__chips">
+                        <span>Документ ' . e($documentNumber) . '</span>
+                        <span>Дата ' . e($documentDate) . '</span>
+                        <span>Состав: ' . e($serviceName) . '</span>
+                    </div>
+                </div>
+
+                <div class="accrual-overview__side">
+                    <div class="accrual-overview__amount">
+                        <span>Итого к оплате</span>
+                        <strong>' . e($total) . '</strong>
+                    </div>
+                    <div class="accrual-overview__grid">
+                        ' . static::overviewItem('Период', $period) . '
+                        ' . static::overviewItem('Источник', $source) . '
+                        ' . static::overviewItem('Арендатор', $tenant) . '
+                        ' . static::overviewItem('Место', $space) . '
+                        ' . static::overviewItem('Договор', $contract, true) . '
+                    </div>
+                </div>
+            </div>
+        ');
+    }
+
+    private static function overviewItem(string $label, string $value, bool $wide = false): string
+    {
+        $class = $wide ? ' accrual-overview__item--wide' : '';
+
+        return '<div class="accrual-overview__item' . $class . '">'
+            . '<span>' . e($label) . '</span>'
+            . '<strong>' . e($value) . '</strong>'
+            . '</div>';
     }
 
     private static function display(string $key, string $path, string $label, ?callable $formatter = null): Placeholder
@@ -221,6 +266,37 @@ class TenantAccrualForm
         return $text !== '' ? $text : '—';
     }
 
+    private static function formatSource(?string $source): string
+    {
+        return match ($source) {
+            '1c' => '1С',
+            'excel', 'csv' => 'Исторический импорт',
+            'manual' => 'Вручную',
+            default => filled($source) ? (string) $source : '—',
+        };
+    }
+
+    private static function accrualBasis(?TenantAccrual $record): string
+    {
+        if (! $record) {
+            return '—';
+        }
+
+        foreach ([
+            $record->line_description ?? null,
+            $record->service_name ?? null,
+            $record->purpose ?? null,
+        ] as $value) {
+            $text = trim((string) ($value ?? ''));
+
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return '—';
+    }
+
     private static function formatNumber(mixed $value, int $decimals): string
     {
         if ($value === null || $value === '') {
@@ -228,5 +304,14 @@ class TenantAccrualForm
         }
 
         return number_format((float) $value, $decimals, ',', ' ');
+    }
+
+    private static function formatRub(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '—';
+        }
+
+        return number_format((float) $value, 2, ',', ' ') . ' ₽';
     }
 }

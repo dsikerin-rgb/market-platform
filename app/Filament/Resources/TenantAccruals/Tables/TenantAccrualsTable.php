@@ -109,6 +109,28 @@ class TenantAccrualsTable
                     ->toggleable()
                     ->visible(fn (): bool => ! $hideTenantColumn),
 
+                TextColumn::make('accrual_basis')
+                    ->label('За что начислено')
+                    ->getStateUsing(fn (TenantAccrual $record): ?string => static::accrualBasis($record))
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $query) use ($search): void {
+                            $query
+                                ->where('line_description', 'like', "%{$search}%")
+                                ->orWhere('service_name', 'like', "%{$search}%")
+                                ->orWhere('purpose', 'like', "%{$search}%")
+                                ->orWhere('document_name', 'like', "%{$search}%")
+                                ->orWhere('document_number', 'like', "%{$search}%");
+                        });
+                    })
+                    ->limit(80)
+                    ->wrap()
+                    ->placeholder('—')
+                    ->tooltip(fn (TenantAccrual $record): ?string => static::accrualBasis($record))
+                    ->toggleable()
+                    ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('line_description')
+                        || TenantAccrualResource::hasTenantAccrualColumn('service_name')
+                        || TenantAccrualResource::hasTenantAccrualColumn('purpose')),
+
                 TextColumn::make('tenantContract.number')
                     ->label('Договор')
                     ->searchable()
@@ -126,34 +148,6 @@ class TenantAccrualsTable
                     ->tooltip(fn (TenantAccrual $record): ?string => filled($record->document_name) ? (string) $record->document_name : null)
                     ->toggleable()
                     ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('document_number')),
-
-                TextColumn::make('accrual_basis')
-                    ->label('Основание')
-                    ->getStateUsing(fn (TenantAccrual $record): ?string => static::firstFilled([
-                        $record->purpose ?? null,
-                        $record->line_description ?? null,
-                        $record->service_name ?? null,
-                    ]))
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->where(function (Builder $query) use ($search): void {
-                            $query
-                                ->where('purpose', 'like', "%{$search}%")
-                                ->orWhere('line_description', 'like', "%{$search}%")
-                                ->orWhere('service_name', 'like', "%{$search}%")
-                                ->orWhere('document_name', 'like', "%{$search}%")
-                                ->orWhere('document_number', 'like', "%{$search}%");
-                        });
-                    })
-                    ->limit(80)
-                    ->wrap()
-                    ->placeholder('—')
-                    ->tooltip(fn (TenantAccrual $record): ?string => static::firstFilled([
-                        $record->purpose ?? null,
-                        $record->line_description ?? null,
-                        $record->service_name ?? null,
-                    ]))
-                    ->toggleable()
-                    ->visible(fn (): bool => TenantAccrualResource::hasTenantAccrualColumn('purpose')),
 
                 TextColumn::make('contract_external_id')
                     ->label('ID договора 1С')
@@ -508,6 +502,15 @@ class TenantAccrualsTable
         }
 
         return number_format($value, 2, ',', ' ') . $suffix;
+    }
+
+    private static function accrualBasis(TenantAccrual $record): ?string
+    {
+        return static::firstFilled([
+            $record->line_description ?? null,
+            $record->service_name ?? null,
+            $record->purpose ?? null,
+        ]);
     }
 
     /**

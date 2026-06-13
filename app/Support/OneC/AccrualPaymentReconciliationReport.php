@@ -263,9 +263,9 @@ class AccrualPaymentReconciliationReport
                 $row->document_name ?? null,
             ]);
             $basis = $this->firstNonEmpty([
-                $row->purpose ?? null,
                 $row->line_description ?? null,
                 $row->service_name ?? null,
+                $row->purpose ?? null,
                 $this->firstPayloadValue($payload, ['basis', 'purpose', 'description', 'comment']),
                 $row->notes ?? null,
                 $row->discount_note ?? null,

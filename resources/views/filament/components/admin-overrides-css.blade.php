@@ -1319,7 +1319,7 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-section-content{
-  background: var(--accrual-surface-muted);
+  background: var(--accrual-surface);
 }
 
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-fo-field-wrp-label{
@@ -1429,6 +1429,145 @@ html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-acti
 html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .fi-sc-actions.fi-sticky .fi-ac{
   border-radius: .95rem;
   border-color: rgba(15, 23, 42, 0.12);
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview-section .fi-section-content{
+  padding: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview{
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, .85fr);
+  gap: 0;
+  overflow: hidden;
+  border-radius: .9rem;
+  border: 1px solid #dce6f4;
+  background: #fff;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview--empty{
+  display: block;
+  padding: 1rem;
+  color: #64748b;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__primary{
+  min-width: 0;
+  padding: 1.1rem 1.25rem;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
+  border-right: 1px solid #dce6f4;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__eyebrow{
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #577094;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__basis{
+  margin-top: .35rem;
+  color: #0f172a;
+  font-size: 1.35rem;
+  font-weight: 760;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__document{
+  margin-top: .65rem;
+  color: #334155;
+  font-size: .95rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .9rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__chips span{
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #cbdcf3;
+  background: rgba(255,255,255,.78);
+  padding: .32rem .58rem;
+  color: #1e3a66;
+  font-size: .8rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__side{
+  min-width: 0;
+  padding: 1.05rem 1.1rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__amount{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .85rem;
+  padding-bottom: .85rem;
+  border-bottom: 1px solid #e5edf7;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__amount span,
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__item span{
+  color: #64748b;
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__amount strong{
+  color: #0f172a;
+  font-size: 1.28rem;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem .9rem;
+  margin-top: .9rem;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__item{
+  min-width: 0;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__item--wide{
+  grid-column: 1 / -1;
+}
+
+html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__item strong{
+  display: block;
+  margin-top: .18rem;
+  color: #0f172a;
+  font-size: .92rem;
+  font-weight: 680;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px){
+  html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview{
+    grid-template-columns: 1fr;
+  }
+
+  html:not([data-admin-overrides="0"]) .fi-resource-accruals-edit-page .accrual-overview__primary{
+    border-right: 0;
+    border-bottom: 1px solid #dce6f4;
+  }
 }
 
 /* ====================================================================== */

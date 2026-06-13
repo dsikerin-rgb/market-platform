@@ -201,4 +201,3 @@ Seeder создает `market-settings.update`, но `MarketSettings::canAccess(
 - `market-accountant` и `market-finance` могут видеть финансы 1C, но не могут редактировать места и арендаторов, если это не задано отдельно.
 - `market-operator` может видеть журнал интеграций, но не получает широкие права на справочники.
 - permission `market-settings.update` реально разрешает редактирование настроек рынка.
-

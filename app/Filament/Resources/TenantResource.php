@@ -2586,9 +2586,9 @@ class TenantResource extends BaseResource
                 $documentLabel = $documentDateLabel;
             }
 
-            $basisLabel = $purpose !== ''
-                ? $purpose
-                : ($lineDescription !== '' ? $lineDescription : $serviceName);
+            $basisLabel = $lineDescription !== ''
+                ? $lineDescription
+                : ($serviceName !== '' ? $serviceName : $purpose);
 
             $spaceLabel = $contractSpaceNumber !== ''
                 ? $contractSpaceNumber
@@ -2622,7 +2622,7 @@ class TenantResource extends BaseResource
                 }
 
                 if ($basisLabel !== '') {
-                    $contractDetails[] = '<div class="tenant-accruals__contract-line">Основание: ' . e($basisLabel) . '</div>';
+                    $contractDetails[] = '<div class="tenant-accruals__contract-line">За что: ' . e($basisLabel) . '</div>';
                 }
 
                 $contractStatus = trim((string) ($row->contract_status ?? ''));
@@ -2676,7 +2676,7 @@ class TenantResource extends BaseResource
                 }
 
                 if ($basisLabel !== '') {
-                    $contractCell .= '<div class="tenant-accruals__subtext">Основание: ' . e($basisLabel) . '</div>';
+                    $contractCell .= '<div class="tenant-accruals__subtext">За что: ' . e($basisLabel) . '</div>';
                 }
             }
 
