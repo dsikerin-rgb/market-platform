@@ -73,18 +73,57 @@ class RolesAndPermissionsSeeder extends Seeder
                 'staff.delete',
 
                 'contracts.update',
+                'finance.1c.view',
+                'finance.accruals.view',
             ],
 
-            // Остальные пока пустые/минимальные — чтобы не выдать лишнего автоматически
-            'market-manager' => [],
+            // Остальные роли получают только профильные права, а широкий доступ остается у директоров.
+            'market-owner-director' => [
+                'market-settings.view',
+                'market-settings.update',
+                'marketplace.settings.view',
+                'marketplace.settings.update',
+                'marketplace.slides.viewAny',
+                'marketplace.slides.view',
+                'marketplace.slides.create',
+                'marketplace.slides.update',
+                'marketplace.slides.delete',
+
+                'staff.viewAny',
+                'staff.view',
+                'staff.create',
+                'staff.update',
+                'staff.delete',
+
+                'contracts.update',
+                'finance.1c.view',
+                'finance.accruals.view',
+            ],
+            'market-manager' => [
+                'finance.1c.view',
+                'finance.accruals.view',
+            ],
             'market-operator' => [],
             'market-owner' => [
                 'marketplace.settings.view',
                 'marketplace.slides.viewAny',
                 'marketplace.slides.view',
+                'finance.1c.view',
+                'finance.accruals.view',
             ],
-            'market-accountant' => [],
-            'market-finance' => [],
+            'market-legal-admin' => [
+                'contracts.update',
+                'finance.1c.view',
+                'finance.accruals.view',
+            ],
+            'market-accountant' => [
+                'finance.1c.view',
+                'finance.accruals.view',
+            ],
+            'market-finance' => [
+                'finance.1c.view',
+                'finance.accruals.view',
+            ],
             'market-maintenance' => [],
             'market-engineer' => [],
             'market-it' => [],

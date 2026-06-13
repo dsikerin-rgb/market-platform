@@ -31,6 +31,17 @@ class RolePermissionPresetCatalog
                     'staff.update',
                     'staff.delete',
                     'contracts.update',
+                    'finance.1c.view',
+                    'finance.accruals.view',
+                ],
+            ],
+            'legal_admin' => [
+                'label' => 'Юридическое и административное сопровождение',
+                'description' => 'Работа с арендаторами, местами, договорами и финансовыми сводками без сотрудников и настроек рынка.',
+                'permissions' => [
+                    'contracts.update',
+                    'finance.1c.view',
+                    'finance.accruals.view',
                 ],
             ],
             'marketplace_content' => [

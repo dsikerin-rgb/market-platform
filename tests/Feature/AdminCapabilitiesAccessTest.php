@@ -12,12 +12,14 @@ use App\Filament\Pages\ReportsHub;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\MarketSpaceTypeResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
+use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
+use App\Models\TenantContract;
 use App\Models\User;
 use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
@@ -99,6 +101,50 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertTrue(TenantAccrualResource::canEdit($accrual));
     }
 
+    public function test_owner_can_view_directory_finance_and_contracts_without_operational_management(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, 'market-owner');
+        $space = $this->createMarketSpace($market);
+        $tenant = $this->createTenant($market);
+        $spaceType = $this->createMarketSpaceType($market);
+        $contract = $this->createTenantContract($market);
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertTrue(MarketSpaceResource::canViewAny());
+        self::assertTrue(TenantResource::canViewAny());
+        self::assertTrue(MarketSpaceTypeResource::canViewAny());
+        self::assertTrue(AdminCapabilities::canViewFinance($user));
+        self::assertTrue(TenantContractResource::canViewAny());
+        self::assertTrue(TenantContractResource::canEdit($contract));
+
+        self::assertFalse(MarketSpaceResource::canCreate());
+        self::assertFalse(MarketSpaceResource::canEdit($space));
+        self::assertFalse(TenantResource::canCreate());
+        self::assertFalse(TenantResource::canEdit($tenant));
+        self::assertFalse(MarketSpaceTypeResource::canCreate());
+        self::assertFalse(MarketSpaceTypeResource::canEdit($spaceType));
+        self::assertFalse(AdminCapabilities::canManageTenantContracts($user));
+        self::assertFalse(AdminCapabilities::canUpdateMarketSettings($user));
+    }
+
+    /**
+     * @dataProvider tenantContractManagerRoles
+     */
+    public function test_contract_manager_roles_can_open_and_manage_contract_cards(string $roleName): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, $roleName);
+        $contract = $this->createTenantContract($market);
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertTrue(TenantContractResource::canViewAny());
+        self::assertTrue(TenantContractResource::canEdit($contract));
+        self::assertTrue(AdminCapabilities::canManageTenantContracts($user, (int) $market->id));
+    }
+
     /**
      * @dataProvider restrictedOperationalRoles
      */
@@ -140,18 +186,32 @@ class AdminCapabilitiesAccessTest extends TestCase
     public static function marketDirectoryManagerRoles(): array
     {
         return [
+            'market-owner-director' => ['market-owner-director'],
             'market-admin' => ['market-admin'],
             'market-manager' => ['market-manager'],
+            'market-legal-admin' => ['market-legal-admin'],
         ];
     }
 
     public static function financeViewerRoles(): array
     {
         return [
+            'market-owner' => ['market-owner'],
+            'market-owner-director' => ['market-owner-director'],
             'market-admin' => ['market-admin'],
             'market-manager' => ['market-manager'],
+            'market-legal-admin' => ['market-legal-admin'],
             'market-accountant' => ['market-accountant'],
             'market-finance' => ['market-finance'],
+        ];
+    }
+
+    public static function tenantContractManagerRoles(): array
+    {
+        return [
+            'market-owner-director' => ['market-owner-director'],
+            'market-admin' => ['market-admin'],
+            'market-legal-admin' => ['market-legal-admin'],
         ];
     }
 
@@ -235,6 +295,18 @@ class AdminCapabilitiesAccessTest extends TestCase
             'source' => '1c',
             'source_file' => '1c:accruals',
             'total_with_vat' => 1000,
+        ]);
+    }
+
+    private function createTenantContract(Market $market): TenantContract
+    {
+        return TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $this->createTenant($market)->id,
+            'number' => 'Contract 1',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'is_active' => true,
         ]);
     }
 }

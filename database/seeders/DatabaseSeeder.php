@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
         $roles = [
             'super-admin',
             'market-owner',
+            'market-owner-director',
             'market-admin',
             'market-manager',
             'market-operator',
@@ -30,6 +31,7 @@ class DatabaseSeeder extends Seeder
             'merchant-user',
             'market-accountant',
             'market-finance',
+            'market-legal-admin',
             'market-hr',
             'market-maintenance',
             'market-engineer',
