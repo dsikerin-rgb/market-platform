@@ -203,7 +203,8 @@ class TenantResource extends BaseResource
 
                 Tab::make('Финансы')
                     ->schema([
-                        Section::make('Финансы 1С')
+                        Section::make('Сводка 1С')
+                            ->description('Главный финансовый статус арендатора по ОСВ за выбранный период.')
                             ->schema([
                                 Forms\Components\Placeholder::make('tenant_settlement_balances')
                                     ->hiddenLabel()
@@ -212,6 +213,34 @@ class TenantResource extends BaseResource
                                     ->columnSpanFull(),
                             ])
                             ->columns(1),
+
+                        Section::make('Начисления из 1С')
+                            ->description('Детализация начислений по договорам за периоды. Используйте её для расшифровки движения, а не как главный статус.')
+                            ->collapsed()
+                            ->schema([
+                                Forms\Components\Placeholder::make('accruals_report_link')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsReportLink($record))
+                                    ->columnSpanFull(),
+
+                                Forms\Components\Placeholder::make('accruals_registry')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsRegistry($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Оплаты из 1С')
+                            ->description('Детализация фактических поступлений. Итоговый статус смотрите в сводке выше.')
+                            ->collapsed()
+                            ->schema([
+                                Forms\Components\Placeholder::make('tenant_payments_registry')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderTenantPaymentsRegistry($record))
+                                    ->columnSpanFull(),
+                            ]),
                     ]),
 
                 Tab::make('Торговые места')
@@ -277,38 +306,6 @@ class TenantResource extends BaseResource
                                 )
                                     ->visible(fn (?Tenant $record): bool => $record !== null)
                                     ->key('tenant-contracts'),
-                            ]),
-                    ]),
-
-                Tab::make('Начисления')
-                    ->schema([
-                        Section::make('Начисления из 1С')
-                            ->description('Каждая строка соответствует начислению по договору за период. По одному периоду может быть несколько договоров.')
-                            ->schema([
-                                Forms\Components\Placeholder::make('accruals_report_link')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsReportLink($record))
-                                    ->columnSpanFull(),
-
-                                Forms\Components\Placeholder::make('accruals_registry')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsRegistry($record))
-                                    ->columnSpanFull(),
-                            ]),
-                    ]),
-
-                Tab::make('Оплаты из 1С')
-                    ->schema([
-                        Section::make('Оплаты из 1С')
-                            ->description('Фактические поступления арендатора по счету 62 из 1С.')
-                            ->schema([
-                                Forms\Components\Placeholder::make('tenant_payments_registry')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderTenantPaymentsRegistry($record))
-                                    ->columnSpanFull(),
                             ]),
                     ]),
 
