@@ -129,6 +129,85 @@ class MarketSpaceQuickActionsTest extends TestCase
         $response->assertDontSee('Следующие шаги');
     }
 
+    public function test_edit_page_hides_irrelevant_quick_actions_for_vacant_and_shared_spaces(): void
+    {
+        $market = Market::create([
+            'name' => 'Тестовый рынок',
+            'timezone' => 'Europe/Moscow',
+        ]);
+
+        $vacantSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'V-1',
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $sharedSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'S-1',
+            'status' => 'occupied',
+            'is_active' => true,
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'ООО Совместный участник',
+        ]);
+
+        DB::table('market_space_tenant_bindings')->insert([
+            'market_id' => $market->id,
+            'market_space_id' => $sharedSpace->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => null,
+            'started_at' => '2026-01-01 00:00:00',
+            'ended_at' => null,
+            'area_sqm' => 2,
+            'rent_rate' => 250,
+            'share_note' => null,
+            'binding_type' => 'shared_use',
+            'confidence' => 'medium',
+            'source' => 'test_shared_use',
+            'created_by_user_id' => null,
+            'resolution_reason' => 'test_shared_space_use',
+            'meta' => json_encode([], JSON_UNESCAPED_UNICODE),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create();
+        $user->assignRole('super-admin');
+
+        $this->withSession(['filament.admin.selected_market_id' => $market->id]);
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(\App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace::class, [
+                'record' => (string) $vacantSpace->getRouteKey(),
+            ])
+            ->assertActionHidden('mark_space_free')
+            ->assertActionVisible('switch_tenant')
+            ->assertActionVisible('start_shared_use')
+            ->assertActionVisible('mark_service_status');
+
+        Livewire::withQueryParams([
+            'tab' => 'osnovnoe::data::tab',
+        ])
+            ->actingAs($user)
+            ->test(\App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace::class, [
+                'record' => (string) $sharedSpace->getRouteKey(),
+            ])
+            ->assertActionVisible('manage_shared_use')
+            ->assertActionHidden('mark_space_free')
+            ->assertActionHidden('mark_service_status')
+            ->assertActionHidden('regroup_child');
+    }
+
     public function test_edit_page_allows_inline_display_name_edit(): void
     {
         $market = Market::create([
