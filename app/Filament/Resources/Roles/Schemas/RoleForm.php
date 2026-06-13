@@ -9,6 +9,8 @@ use App\Support\RoleScenarioCatalog;
 use Filament\Forms;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Permission;
@@ -203,35 +205,48 @@ class RoleForm
             })
             ->columnSpan(12);
 
+        $tabs = Tabs::make('role_access_tabs')
+            ->columnSpanFull();
+
+        if (method_exists($tabs, 'persistTabInQueryString')) {
+            $tabs->persistTabInQueryString();
+        }
+
         return $schema->components([
-            Section::make('Роль и фактический доступ')
-                ->description('Сначала выберите, какую работу выполняет сотрудник, затем проверьте итоговый доступ.')
-                ->schema([
-                    Grid::make(12)->schema([
-                        $profileField,
-                        $customProfileField,
-                        $labelField,
-                    ]),
-                    Grid::make(12)->schema([
-                        $roleProfilePreview,
-                        $effectiveCapabilitiesField,
-                    ]),
-                ]),
+            $tabs->tabs([
+                Tab::make('Основное')
+                    ->schema([
+                        Section::make('Роль и фактический доступ')
+                            ->description('Сначала выберите, какую работу выполняет сотрудник, затем проверьте итоговый доступ.')
+                            ->schema([
+                                Grid::make(12)->schema([
+                                    $profileField,
+                                    $customProfileField,
+                                    $labelField,
+                                ]),
+                                Grid::make(12)->schema([
+                                    $roleProfilePreview,
+                                    $effectiveCapabilitiesField,
+                                ]),
+                            ]),
 
-            Section::make('Быстрое заполнение прав')
-                ->description('Готовые наборы помогают заполнить дополнительные права без чтения технического списка.')
-                ->schema([
-                    $permissionPresetField,
-                    $permissionPresetPreview,
-                ]),
+                        Section::make('Быстрое заполнение прав')
+                            ->description('Готовые наборы помогают заполнить дополнительные права без чтения технического списка.')
+                            ->schema([
+                                $permissionPresetField,
+                                $permissionPresetPreview,
+                            ]),
+                    ]),
 
-            Section::make('Подробные права')
-                ->description('Дополнительные разрешения сгруппированы по смыслу. Технические коды скрыты из основного интерфейса.')
-                ->collapsible()
-                ->collapsed()
-                ->schema([
-                    $permissionsField,
-                ]),
+                Tab::make('Подробные права')
+                    ->schema([
+                        Section::make('Подробные права')
+                            ->description('Дополнительные разрешения сгруппированы по смыслу. Технические коды скрыты из основного интерфейса.')
+                            ->schema([
+                                $permissionsField,
+                            ]),
+                    ]),
+            ]),
 
             $guardField,
         ]);
