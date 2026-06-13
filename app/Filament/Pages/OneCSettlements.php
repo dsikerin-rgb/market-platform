@@ -40,6 +40,8 @@ class OneCSettlements extends Page
 
     public string $search = '';
 
+    public ?int $tenantId = null;
+
     public string $perPage = '10';
 
     public int $page = 1;
@@ -50,6 +52,7 @@ class OneCSettlements extends Page
         'account' => ['except' => '62'],
         'status' => ['except' => 'all'],
         'search' => ['except' => ''],
+        'tenantId' => ['except' => null],
         'perPage' => ['except' => '10'],
         'page' => ['except' => 1],
     ];
@@ -86,6 +89,7 @@ class OneCSettlements extends Page
         $this->page = max(1, $this->page);
         $this->status = $this->normalizeStatus($this->status);
         $this->account = $this->normalizeAccount($this->account);
+        $this->tenantId = $this->normalizeTenantId($this->tenantId);
 
         if (($this->fromDate === null || $this->toDate === null) && $marketId !== null) {
             [$from, $to, $account] = $this->defaultSnapshot($marketId);
@@ -165,6 +169,7 @@ class OneCSettlements extends Page
         $unresolvedRows = $this->unresolvedRows($marketId, $fromDate, $toDate, $account);
 
         $filteredQuery = $this->groupedRowsQuery($marketId, $fromDate, $toDate, $account);
+        $this->applyTenantScope($filteredQuery, $this->tenantId);
         $this->applySearch($filteredQuery, $this->search);
         $this->applyStatus($filteredQuery, $this->status);
 
@@ -183,6 +188,7 @@ class OneCSettlements extends Page
             'periodLabel' => $this->formatPeriodLabel($fromDate, $toDate),
             'summary' => $this->normalizeSummary($summary),
             'filteredSummary' => $this->summarizeGroupedRows($filteredRows),
+            'tenantContext' => $this->tenantContext($this->tenantId, $marketId),
             'accounts' => $accounts,
             'organizationRows' => $organizationRows,
             'unresolvedRows' => $unresolvedRows,
@@ -284,6 +290,17 @@ class OneCSettlements extends Page
         return $value !== '' ? mb_substr($value, 0, 32) : '62';
     }
 
+    private function normalizeTenantId(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $id = (int) $value;
+
+        return $id > 0 ? $id : null;
+    }
+
     private function baseQuery(int $marketId, string $fromDate, string $toDate, string $account): Builder
     {
         return DB::table('tenant_settlement_balances')
@@ -361,6 +378,15 @@ class OneCSettlements extends Page
                 ->orWhereRaw('lower(coalesce(organization_name, ?)) like ?', ['', $like])
                 ->orWhereRaw('lower(coalesce(settlement_document_name, ?)) like ?', ['', $like]);
         });
+    }
+
+    private function applyTenantScope(Builder $query, ?int $tenantId): void
+    {
+        if ($tenantId === null) {
+            return;
+        }
+
+        $query->where('tenant_id', $tenantId);
     }
 
     private function applyStatus(Builder $query, string $status): void
@@ -543,7 +569,34 @@ class OneCSettlements extends Page
             'unresolvedRows' => [],
             'rows' => [],
             'pagination' => $this->paginationMeta(0, '10', 1),
+            'tenantContext' => null,
             'emptyReason' => $reason,
+        ];
+    }
+
+    /**
+     * @return array{name:string,url:string}|null
+     */
+    private function tenantContext(?int $tenantId, int $marketId): ?array
+    {
+        if ($tenantId === null) {
+            return null;
+        }
+
+        $tenant = DB::table('tenants')
+            ->where('id', $tenantId)
+            ->where('market_id', $marketId)
+            ->first(['id', 'name', 'short_name']);
+
+        if (! $tenant) {
+            return null;
+        }
+
+        $name = trim((string) ($tenant->short_name ?: $tenant->name));
+
+        return [
+            'name' => $name !== '' ? $name : ('Арендатор #' . $tenantId),
+            'url' => TenantResource::getUrl('edit', ['record' => $tenantId]),
         ];
     }
 
