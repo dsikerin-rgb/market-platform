@@ -9,6 +9,7 @@ use App\Filament\Resources\TenantResource;
 use App\Services\Debt\DebtDecisionPolicy;
 use App\Services\Debt\DebtDecisionPreviewReport;
 use App\Support\OneC\AccrualPaymentReconciliationReport;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
@@ -58,10 +59,7 @@ class OneCDebtDecisionPreview extends Page
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) ($user->market_id ?? null)
-        );
+        return AdminCapabilities::canViewFinance($user);
     }
 
     public static function shouldRegisterNavigation(): bool

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketSpaceTypeResource\Pages;
 use App\Models\MarketSpaceType;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -279,20 +280,14 @@ class MarketSpaceTypeResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) $user->market_id
-        );
+        return AdminCapabilities::canViewMarketDirectory($user);
     }
 
     public static function canCreate(): bool
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) $user->market_id
-        );
+        return AdminCapabilities::canManageMarketDirectory($user);
     }
 
     public static function canEdit($record): bool
@@ -303,11 +298,7 @@ class MarketSpaceTypeResource extends BaseResource
             return false;
         }
 
-        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return AdminCapabilities::canManageMarketDirectory($user, (int) ($record->market_id ?? 0));
     }
 
     public static function canDelete($record): bool
@@ -318,10 +309,6 @@ class MarketSpaceTypeResource extends BaseResource
             return false;
         }
 
-        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return AdminCapabilities::canManageMarketDirectory($user, (int) ($record->market_id ?? 0));
     }
 }

@@ -8,6 +8,7 @@ use App\Filament\Resources\TenantAccruals\Pages\ListTenantAccruals;
 use App\Filament\Resources\TenantAccruals\Schemas\TenantAccrualForm;
 use App\Filament\Resources\TenantAccruals\Tables\TenantAccrualsTable;
 use App\Models\TenantAccrual;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -139,7 +140,7 @@ class TenantAccrualResource extends BaseResource
         $tenantId = static::selectedTenantIdFromQuery();
         $marketSpaceId = static::selectedMarketSpaceIdFromQuery();
 
-        if (! $user) {
+        if (! AdminCapabilities::canViewFinance($user)) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -170,7 +171,7 @@ class TenantAccrualResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewFinance($user);
     }
 
     public static function canCreate(): bool
@@ -186,11 +187,7 @@ class TenantAccrualResource extends BaseResource
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return (bool) $user->market_id && (int) $record->market_id === (int) $user->market_id;
+        return AdminCapabilities::canViewFinance($user, (int) ($record->market_id ?? 0));
     }
 
     public static function canDelete($record): bool
