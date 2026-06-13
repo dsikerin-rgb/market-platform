@@ -21,8 +21,8 @@ class MarketSpaceTypeResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'name_ru';
 
-    protected static ?string $modelLabel = 'Тарифная категория места';
-    protected static ?string $pluralModelLabel = 'Тарифные категории мест';
+    protected static ?string $modelLabel = 'Тип места';
+    protected static ?string $pluralModelLabel = 'Типы мест';
 
     /**
      * ВАЖНО: убираем из левого меню.
@@ -31,9 +31,9 @@ class MarketSpaceTypeResource extends BaseResource
     protected static bool $shouldRegisterNavigation = false;
 
     // Метаданные оставляем (на меню не влияют при shouldRegisterNavigation=false)
-    protected static ?string $navigationLabel = 'Тарифные категории мест';
+    protected static ?string $navigationLabel = 'Типы мест';
     protected static \UnitEnum|string|null $navigationGroup = null;
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-squares-2x2';
 
     public static function shouldRegisterNavigation(): bool
     {
@@ -90,17 +90,18 @@ class MarketSpaceTypeResource extends BaseResource
 
         $formFields = [
             Forms\Components\TextInput::make('name_ru')
-                ->label('Название категории')
+                ->label('Название типа')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                ->helperText('Тип отвечает на вопрос "что сдаётся". Локация отвечает на вопрос "где находится". Совпадение названий допустимо, если смысл разный.'),
 
             Forms\Components\TextInput::make('code')
-                ->label('Код категории')
+                ->label('Код типа')
                 ->required()
                 ->maxLength(255),
 
             Forms\Components\Select::make('unit')
-                ->label('Расчёт тарифа')
+                ->label('Единица расчёта по умолчанию')
                 ->options([
                     'sqm' => 'За м²',
                     'fixed' => 'Фиксированная ставка',
@@ -108,7 +109,7 @@ class MarketSpaceTypeResource extends BaseResource
                 ->required(),
 
             Forms\Components\TextInput::make('price')
-                ->label('Базовый тариф')
+                ->label('Базовая ставка по умолчанию')
                 ->numeric()
                 ->inputMode('decimal'),
 
@@ -150,17 +151,17 @@ class MarketSpaceTypeResource extends BaseResource
                     ->visible(fn () => (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
 
                 TextColumn::make('name_ru')
-                    ->label('Название категории')
+                    ->label('Название типа')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('code')
-                    ->label('Код категории')
+                    ->label('Код типа')
                     ->sortable()
                     ->searchable(),
 
                 TextColumn::make('unit')
-                    ->label('Расчёт тарифа')
+                    ->label('Единица расчёта')
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'sqm' => 'За м²',
                         'fixed' => 'Фиксированная ставка',
@@ -168,7 +169,7 @@ class MarketSpaceTypeResource extends BaseResource
                     }),
 
                 TextColumn::make('price')
-                    ->label('Базовый тариф')
+                    ->label('Базовая ставка')
                     ->numeric(decimalPlaces: 2),
 
                 TextColumn::make('currency')

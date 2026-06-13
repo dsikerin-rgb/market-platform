@@ -155,10 +155,10 @@
 
                                 @if (! empty($spaceTypesUrl))
                                     <a href="{{ $spaceTypesUrl }}" class="aw-link-card">
-                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-banknotes" class="h-5 w-5" /></div>
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-squares-2x2" class="h-5 w-5" /></div>
                                         <div>
-                                            <p class="aw-link-title">Тарифные категории мест</p>
-                                            <p class="aw-link-copy">Категории для ставок и отчётности. Не управляют занятостью, служебностью или группами.</p>
+                                            <p class="aw-link-title">Типы мест</p>
+                                            <p class="aw-link-copy">Что сдаётся: витрины, холодильные камеры, киоски, кабинеты. Локация отдельно отвечает, где это находится.</p>
                                         </div>
                                     </a>
                                 @endif
