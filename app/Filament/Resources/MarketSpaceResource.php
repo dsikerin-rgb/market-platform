@@ -1715,7 +1715,7 @@ class MarketSpaceResource extends BaseResource
                                     ->nullable(),
 
                                 Forms\Components\Select::make('type')
-                                    ->label('Тип места')
+                                    ->label('Тарифная категория места')
                                     ->options(function ($get, ?MarketSpace $record) use ($user) {
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
@@ -1732,7 +1732,7 @@ class MarketSpaceResource extends BaseResource
                                     ->preload()
                                     ->reactive()
                                     ->nullable()
-                                    ->placeholder('—')
+                                    ->placeholder('Не выбрана')
                                     ->helperText(function ($get, ?MarketSpace $record) use ($user): ?string {
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
@@ -1741,12 +1741,22 @@ class MarketSpaceResource extends BaseResource
                                         }
 
                                         if (blank($marketId)) {
-                                            return null;
+                                            return 'Категория не меняет занятость, служебность, группу или совместное использование.';
                                         }
 
                                         $currentType = trim((string) ($get('type') ?? $record?->type ?? ''));
+
+                                        $activeTypeCount = MarketSpaceType::query()
+                                            ->where('market_id', (int) $marketId)
+                                            ->where('is_active', true)
+                                            ->count();
+
+                                        if ($activeTypeCount === 0) {
+                                            return 'Справочник тарифных категорий для этого рынка пуст. Категория не меняет занятость, служебность, группу или совместное использование.';
+                                        }
+
                                         if ($currentType === '') {
-                                            return null;
+                                            return 'Категория нужна для тарифов и отчётности. Она не меняет занятость, служебность, группу или совместное использование.';
                                         }
 
                                         $hasCurrentActiveType = MarketSpaceType::query()
@@ -1756,14 +1766,14 @@ class MarketSpaceResource extends BaseResource
                                             ->exists();
 
                                         if ($hasCurrentActiveType) {
-                                            return null;
+                                            return 'Категория нужна для тарифов и отчётности. Она не меняет занятость, служебность, группу или совместное использование.';
                                         }
 
                                         return 'Сейчас сохранено старое значение с кодом '.$currentType.'. Его нет в текущем справочнике типов мест.';
                                     })
                                     ->hintIcon('heroicon-m-question-mark-circle')
                                     ->hintIconTooltip(function ($get, ?MarketSpace $record) use ($user): string {
-                                        $parts = ['Категория места для отчётности. Берётся из справочника “Типы мест”.'];
+                                        $parts = ['Тарифная категория места для ставок и отчётности. Это не статус занятости и не признак служебного, группового или совместного места.'];
                                         $marketId = $get('market_id') ?? $record?->market_id;
 
                                         if (blank($marketId) && (bool) $user && ! $user->isSuperAdmin()) {
@@ -1784,9 +1794,9 @@ class MarketSpaceResource extends BaseResource
                                                     ->exists();
 
                                             if ($activeTypeCount === 0) {
-                                                $parts[] = 'Для этого рынка справочник типов мест пока пуст. Сначала заполните "Типы мест".';
+                                                $parts[] = 'Для этого рынка справочник категорий пока пуст. Сначала заполните "Тарифные категории мест".';
                                             } elseif ($currentType !== '' && ! $hasCurrentActiveType) {
-                                                $parts[] = 'Текущий тип больше не найден среди активных типов мест.';
+                                                $parts[] = 'Текущая категория больше не найдена среди активных категорий.';
                                             }
                                         }
 
@@ -3161,13 +3171,14 @@ class MarketSpaceResource extends BaseResource
                     ->searchable()
                     ->tooltip(fn (MarketSpace $record) => $record->number ?: null),
 
-                // "Тип места" — отдельная сущность от локации, по умолчанию прячем
+                // Тарифная категория — отдельная сущность от статуса занятости, группы и локации.
                 TextColumn::make('type')
-                    ->label('Тип места')
+                    ->label('Тарифная категория')
                     ->formatStateUsing(fn (?string $state, MarketSpace $record) => static::resolveSpaceTypeLabel($record->market_id, $state))
                     ->sortable()
                     ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable()
+                    ->tooltip('Категория для тарифов и отчётности. Не влияет на занятость, служебность, группу или совместное использование.'),
 
                 TextColumn::make('activity_type')
                     ->label('Вид деятельности')
@@ -3298,7 +3309,7 @@ class MarketSpaceResource extends BaseResource
                     ]),
 
                 SelectFilter::make('type')
-                    ->label('Тип места')
+                    ->label('Тарифная категория')
                     ->options(function () {
                         $user = Filament::auth()->user();
 

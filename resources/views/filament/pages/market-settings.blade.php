@@ -153,6 +153,16 @@
                                     </a>
                                 @endif
 
+                                @if (! empty($spaceTypesUrl))
+                                    <a href="{{ $spaceTypesUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-banknotes" class="h-5 w-5" /></div>
+                                        <div>
+                                            <p class="aw-link-title">Тарифные категории мест</p>
+                                            <p class="aw-link-copy">Категории для ставок и отчётности. Не управляют занятостью, служебностью или группами.</p>
+                                        </div>
+                                    </a>
+                                @endif
+
                                 @if (! empty($tenantUrl))
                                     <a href="{{ $tenantUrl }}" class="aw-link-card">
                                         <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-user-group" class="h-5 w-5" /></div>
