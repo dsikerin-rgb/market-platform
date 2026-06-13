@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Roles\Schemas;
 
 use App\Support\PermissionDisplayCatalog;
+use App\Support\RoleCapabilityCatalog;
 use App\Support\RoleScenarioCatalog;
 use Filament\Forms;
 use Filament\Schemas\Schema;
@@ -141,6 +142,46 @@ class RoleForm
             })
             ->columnSpan(['default' => 12, 'md' => 6]);
 
+        $effectiveCapabilitiesField = Forms\Components\Placeholder::make('effective_capabilities_preview')
+            ->label('Фактический доступ')
+            ->content(function ($get) use ($permissionsById): HtmlString {
+                $selected = (string) ($get('name') ?? '');
+                $slug = $selected === '__custom'
+                    ? trim((string) ($get('name_custom') ?? ''))
+                    : $selected;
+
+                if ($slug === '') {
+                    return new HtmlString('<span style="font-size:.8125rem; color:#6b7280;">Выберите роль, чтобы увидеть фактический доступ.</span>');
+                }
+
+                $permissionNames = RoleCapabilityCatalog::permissionNamesFromState($get('permissions') ?? [], $permissionsById);
+                $summary = RoleCapabilityCatalog::summaryForRole($slug, $permissionNames);
+                $limitations = RoleCapabilityCatalog::limitationsForRole($slug, $permissionNames);
+
+                $summaryChips = array_map(
+                    static fn (string $label): string => '<span style="display:inline-flex; align-items:center; border-radius:999px; background:#ecfdf5; color:#047857; border:1px solid #bbf7d0; padding:.25rem .55rem; font-size:.75rem; font-weight:600;">' . e($label) . '</span>',
+                    $summary,
+                );
+
+                $limitationChips = array_map(
+                    static fn (string $label): string => '<span style="display:inline-flex; align-items:center; border-radius:999px; background:#f8fafc; color:#64748b; border:1px solid #e2e8f0; padding:.25rem .55rem; font-size:.75rem;">' . e($label) . '</span>',
+                    $limitations,
+                );
+
+                $limitationsHtml = $limitationChips === []
+                    ? ''
+                    : '<div style="display:flex; flex-wrap:wrap; gap:.375rem; margin-top:.5rem;">' . implode('', $limitationChips) . '</div>';
+
+                return new HtmlString(
+                    '<div style="font-size:.8125rem; line-height:1.5;">'
+                    . '<div style="display:flex; flex-wrap:wrap; gap:.375rem;">' . implode('', $summaryChips) . '</div>'
+                    . $limitationsHtml
+                    . '<div style="margin-top:.5rem; color:#64748b;">Сводка учитывает кодовые правила доступа и выбранные permissions. Пользователь всё равно должен быть привязан к своему рынку, кроме super-admin.</div>'
+                    . '</div>'
+                );
+            })
+            ->columnSpan(12);
+
         $permissionsField = Forms\Components\CheckboxList::make('permissions')
             ->label('Доступы и разрешения')
             ->helperText('Выберите права, которые должна предоставлять роль.')
@@ -165,6 +206,7 @@ class RoleForm
                     Grid::make(12)->schema([
                         $profileField,
                         $marketplacePermissionsField,
+                        $effectiveCapabilitiesField,
                     ]),
                 ]),
 
