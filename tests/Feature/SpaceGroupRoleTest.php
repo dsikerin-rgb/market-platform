@@ -5,6 +5,7 @@ namespace Tests\Feature;
 
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceTenantBinding;
 use App\Models\Tenant;
 use App\Services\MarketSpaces\SpaceGroupManager;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -509,5 +510,104 @@ class SpaceGroupRoleTest extends TestCase
         $this->expectException(ValidationException::class);
 
         app(SpaceGroupManager::class)->regroupChild($child, $parent, '8');
+    }
+
+    public function test_maintenance_space_cannot_be_saved_as_grouped(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $this->expectException(ValidationException::class);
+
+        MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'S-1',
+            'status' => 'maintenance',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_shared_space_cannot_be_added_to_group(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Shared Tenant',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'G-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $shared = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'SH-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::create([
+            'market_id' => $market->id,
+            'market_space_id' => $shared->id,
+            'tenant_id' => $tenant->id,
+            'started_at' => now(),
+            'binding_type' => 'shared_use',
+            'confidence' => 'manual',
+            'source' => 'test',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(SpaceGroupManager::class)->addToGroup($shared, $parent, '1');
+    }
+
+    public function test_shared_use_source_space_cannot_be_added_to_group(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Shared Tenant',
+            'is_active' => true,
+        ]);
+
+        $parent = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'G-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        $source = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'SRC-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $canonical = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'SH-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::create([
+            'market_id' => $market->id,
+            'market_space_id' => $canonical->id,
+            'tenant_id' => $tenant->id,
+            'started_at' => now(),
+            'binding_type' => 'shared_use',
+            'confidence' => 'manual',
+            'source' => 'test',
+            'meta' => ['source_space_ids' => [$source->id]],
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(SpaceGroupManager::class)->addToGroup($source, $parent, '1');
     }
 }

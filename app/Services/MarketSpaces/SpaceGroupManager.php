@@ -13,6 +13,7 @@ final class SpaceGroupManager
 {
     public function __construct(
         private readonly SpaceGroupResolver $resolver,
+        private readonly MarketSpaceStateGuard $stateGuard,
     ) {
     }
 
@@ -200,6 +201,8 @@ final class SpaceGroupManager
 
     private function assertCanRegroup(MarketSpace $child, MarketSpace $targetParent, string $slot): void
     {
+        $this->stateGuard->assertCanAddToGroup($child, $targetParent);
+
         if (! (bool) $child->is_active) {
             throw ValidationException::withMessages([
                 'market_space_id' => 'Нельзя переносить неактивное место.',
@@ -333,6 +336,8 @@ final class SpaceGroupManager
 
     private function assertCanAddToGroup(MarketSpace $space, MarketSpace $targetParent, string $slot): void
     {
+        $this->stateGuard->assertCanAddToGroup($space, $targetParent);
+
         if (! (bool) $space->is_active) {
             throw ValidationException::withMessages([
                 'market_space_id' => 'Нельзя добавить в группу неактивное место.',

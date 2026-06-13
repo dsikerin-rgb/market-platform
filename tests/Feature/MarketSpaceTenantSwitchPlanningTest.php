@@ -8,6 +8,7 @@ namespace Tests\Feature;
 use App\Domain\Operations\OperationType;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceTenantBinding;
 use App\Models\Operation;
 use App\Models\Tenant;
 use App\Services\MarketSpaces\TenantSwitchPlanner;
@@ -158,6 +159,55 @@ class MarketSpaceTenantSwitchPlanningTest extends TestCase
         $this->assertNull($child->space_group_slot);
         $this->assertSame('OS7 6, 8', $parent->number);
         $this->assertSame('OS7 6', $parent->display_name);
+    }
+
+    public function test_tenant_switch_rejects_shared_use_space(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $currentTenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Current Tenant',
+            'is_active' => true,
+        ]);
+
+        $targetTenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Target Tenant',
+            'is_active' => true,
+        ]);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'SH-1',
+            'display_name' => 'SH-1',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::query()->create([
+            'market_id' => (int) $market->id,
+            'market_space_id' => (int) $space->id,
+            'tenant_id' => (int) $currentTenant->id,
+            'started_at' => now(),
+            'binding_type' => 'shared_use',
+            'confidence' => 'manual',
+            'source' => 'test',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(TenantSwitchPlanner::class)->plan(
+            $space,
+            $targetTenant,
+            now()->addDay(),
+            'Shared space switch',
+            null,
+        );
     }
 
     public function test_planner_rejects_second_future_tenant_switch_for_same_place(): void

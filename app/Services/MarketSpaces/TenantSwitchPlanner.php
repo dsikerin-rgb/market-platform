@@ -14,6 +14,11 @@ use Illuminate\Validation\ValidationException;
 
 final class TenantSwitchPlanner
 {
+    public function __construct(
+        private readonly MarketSpaceStateGuard $stateGuard,
+    ) {
+    }
+
     public function plan(
         MarketSpace $space,
         Tenant $targetTenant,
@@ -31,6 +36,7 @@ final class TenantSwitchPlanner
             ]);
         }
 
+        $this->stateGuard->assertCanSwitchTenant($space);
         $this->assertTargetTenant($space, $targetTenant, $allowInactiveTargetTenant);
 
         $effectiveTenantId = $space->effectiveTenantId();
