@@ -4,6 +4,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TenantResource\Pages;
+use App\Filament\Pages\OneCSettlements;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantResource\RelationManagers\ContractsRelationManager;
 use App\Filament\Resources\TenantResource\RelationManagers\RequestsRelationManager;
@@ -198,6 +199,19 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(2),
 
+                    ]),
+
+                Tab::make('Финансы')
+                    ->schema([
+                        Section::make('Финансы 1С')
+                            ->schema([
+                                Forms\Components\Placeholder::make('tenant_settlement_balances')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderTenantSettlementBalances($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1),
                     ]),
 
                 Tab::make('Торговые места')
@@ -2949,6 +2963,277 @@ class TenantResource extends BaseResource
         return new HtmlString(view('filament.tenants.space-history', [
             'items' => $items,
         ])->render());
+    }
+
+    private static function renderTenantSettlementBalances(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">ОСВ появится после сохранения арендатора.</div>');
+        }
+
+        if (! DbSchema::hasTable('tenant_settlement_balances')) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Таблица ОСВ 1С ещё не создана — выполните миграции.</div>');
+        }
+
+        $marketId = (int) $record->market_id;
+        $tenantId = (int) $record->id;
+
+        if ($marketId <= 0 || $tenantId <= 0) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Для сводки ОСВ нужен сохранённый арендатор с рынком.</div>');
+        }
+
+        $settlementSnapshots = static::tenantSettlementSnapshots($marketId);
+        $snapshot = static::selectedTenantSettlementSnapshot($settlementSnapshots);
+
+        if (! $snapshot) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'empty',
+                'emptyReason' => 'По этому рынку ещё нет загруженной ОСВ 1С.',
+            ])->render());
+        }
+
+        $summaryRows = static::tenantSettlementRows($marketId, $tenantId, $snapshot);
+        $tenantName = trim((string) ($record->name ?? ''));
+        $search = $tenantName !== '' ? $tenantName : ('tenant_id:' . $tenantId);
+
+        if ($summaryRows->isEmpty()) {
+            return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+                'state' => 'empty',
+                'emptyReason' => 'В выбранной ОСВ нет строк по этому арендатору.',
+                'periodLabel' => static::formatTenantSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+                'account' => (string) $snapshot->account,
+                'settlementsUrl' => static::tenantSettlementsUrl($snapshot, $search),
+                ...static::tenantSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
+            ])->render());
+        }
+
+        $displayRows = $summaryRows
+            ->sort(function (object $left, object $right): int {
+                $leftNet = (float) $left->closing_debit - (float) $left->closing_credit;
+                $rightNet = (float) $right->closing_debit - (float) $right->closing_credit;
+                $netCompare = $rightNet <=> $leftNet;
+
+                return $netCompare !== 0
+                    ? $netCompare
+                    : strcmp((string) ($left->contract_name ?? ''), (string) ($right->contract_name ?? ''));
+            })
+            ->take(20)
+            ->values();
+
+        $summary = static::summarizeTenantSettlementRows($summaryRows);
+
+        return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
+            'state' => 'ready',
+            'scope' => 'tenant',
+            'scopeLabel' => 'Данные найдены по арендатору',
+            'scopeTone' => 'success',
+            'periodLabel' => static::formatTenantSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
+            'account' => (string) $snapshot->account,
+            'importedAt' => $snapshot->imported_at ? (string) Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
+            'summary' => $summary,
+            'rows' => $displayRows->map(fn (object $row): array => static::normalizeTenantSettlementRow($row))->values()->all(),
+            'currentTenantName' => $tenantName,
+            'settlementsUrl' => static::tenantSettlementsUrl($snapshot, $search),
+            ...static::tenantSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
+        ])->render());
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private static function tenantSettlementSnapshots(int $marketId): \Illuminate\Support\Collection
+    {
+        $snapshots = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->select(['period_from', 'period_to', 'account'])
+            ->selectRaw('max(imported_at) as imported_at')
+            ->groupBy(['period_from', 'period_to', 'account'])
+            ->orderByDesc('period_to')
+            ->orderByDesc('imported_at')
+            ->get();
+
+        $account62Snapshots = $snapshots
+            ->filter(fn (object $snapshot): bool => (string) $snapshot->account === '62')
+            ->values();
+
+        return $account62Snapshots->isNotEmpty() ? $account62Snapshots : $snapshots;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $snapshots
+     */
+    private static function selectedTenantSettlementSnapshot(\Illuminate\Support\Collection $snapshots): ?object
+    {
+        if ($snapshots->isEmpty()) {
+            return null;
+        }
+
+        $selectedPeriod = request()->query('settlement_period');
+
+        if (is_string($selectedPeriod) && $selectedPeriod !== '') {
+            $selectedSnapshot = $snapshots->first(
+                fn (object $snapshot): bool => static::tenantSettlementPeriodKey($snapshot) === $selectedPeriod
+            );
+
+            if ($selectedSnapshot) {
+                return $selectedSnapshot;
+            }
+        }
+
+        return $snapshots->first(fn (object $snapshot): bool => (string) $snapshot->account === '62')
+            ?: $snapshots->first();
+    }
+
+    private static function tenantSettlementPeriodKey(object $snapshot): string
+    {
+        return implode('|', [
+            (string) $snapshot->period_from,
+            (string) $snapshot->period_to,
+            (string) $snapshot->account,
+        ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $snapshots
+     * @return array<string, mixed>
+     */
+    private static function tenantSettlementPeriodPickerProps(\Illuminate\Support\Collection $snapshots, object $selectedSnapshot): array
+    {
+        $firstSnapshot = $snapshots
+            ->sortBy(fn (object $snapshot): string => (string) $snapshot->period_from)
+            ->first();
+
+        return [
+            'periodOptions' => $snapshots
+                ->mapWithKeys(function (object $snapshot): array {
+                    $label = static::formatTenantSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to);
+
+                    if ((string) $snapshot->account !== '62') {
+                        $label .= ' · счёт ' . $snapshot->account;
+                    }
+
+                    return [static::tenantSettlementPeriodKey($snapshot) => $label];
+                })
+                ->all(),
+            'selectedPeriodKey' => static::tenantSettlementPeriodKey($selectedSnapshot),
+            'firstPeriodLabel' => $firstSnapshot
+                ? Carbon::parse((string) $firstSnapshot->period_from)->format('d.m.Y')
+                : null,
+        ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private static function tenantSettlementRows(int $marketId, int $tenantId, object $snapshot): \Illuminate\Support\Collection
+    {
+        return DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->where('period_from', (string) $snapshot->period_from)
+            ->where('period_to', (string) $snapshot->period_to)
+            ->where('account', (string) $snapshot->account)
+            ->select([
+                'tenant_id',
+                'tenant_name',
+                'tenant_contract_id',
+                'contract_external_id',
+                'contract_name',
+                'organization_name',
+                'account',
+            ])
+            ->selectRaw('count(*) as rows_count')
+            ->selectRaw('coalesce(sum(opening_debit),0) as opening_debit')
+            ->selectRaw('coalesce(sum(opening_credit),0) as opening_credit')
+            ->selectRaw('coalesce(sum(turnover_debit),0) as turnover_debit')
+            ->selectRaw('coalesce(sum(turnover_credit),0) as turnover_credit')
+            ->selectRaw('coalesce(sum(closing_debit),0) as closing_debit')
+            ->selectRaw('coalesce(sum(closing_credit),0) as closing_credit')
+            ->groupBy([
+                'tenant_id',
+                'tenant_name',
+                'tenant_contract_id',
+                'contract_external_id',
+                'contract_name',
+                'organization_name',
+                'account',
+            ])
+            ->orderByRaw('(coalesce(sum(closing_debit),0) - coalesce(sum(closing_credit),0)) desc')
+            ->orderBy('contract_name')
+            ->get();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function summarizeTenantSettlementRows(\Illuminate\Support\Collection $rows): array
+    {
+        $openingDebit = (float) $rows->sum(fn (object $row): float => (float) $row->opening_debit);
+        $openingCredit = (float) $rows->sum(fn (object $row): float => (float) $row->opening_credit);
+        $turnoverDebit = (float) $rows->sum(fn (object $row): float => (float) $row->turnover_debit);
+        $turnoverCredit = (float) $rows->sum(fn (object $row): float => (float) $row->turnover_credit);
+        $closingDebit = (float) $rows->sum(fn (object $row): float => (float) $row->closing_debit);
+        $closingCredit = (float) $rows->sum(fn (object $row): float => (float) $row->closing_credit);
+        $closingNet = $closingDebit - $closingCredit;
+
+        return [
+            'rows_count' => (int) $rows->sum(fn (object $row): int => (int) $row->rows_count),
+            'contracts_count' => $rows->pluck('contract_external_id')->filter()->unique()->count(),
+            'opening_net' => $openingDebit - $openingCredit,
+            'turnover_debit' => $turnoverDebit,
+            'turnover_credit' => $turnoverCredit,
+            'closing_net' => $closingNet,
+            'closing_label' => abs($closingNet) <= 0.009
+                ? 'Нет долга'
+                : ($closingNet > 0 ? 'Долг' : 'Переплата'),
+            'closing_tone' => abs($closingNet) <= 0.009
+                ? 'neutral'
+                : ($closingNet > 0 ? 'danger' : 'success'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function normalizeTenantSettlementRow(object $row): array
+    {
+        $closingNet = (float) $row->closing_debit - (float) $row->closing_credit;
+
+        return [
+            'tenant_name' => (string) ($row->tenant_name ?? ''),
+            'contract_name' => (string) ($row->contract_name ?? ''),
+            'contract_external_id' => (string) ($row->contract_external_id ?? ''),
+            'organization_name' => (string) ($row->organization_name ?? ''),
+            'rows_count' => (int) $row->rows_count,
+            'opening_net' => (float) $row->opening_debit - (float) $row->opening_credit,
+            'turnover_debit' => (float) $row->turnover_debit,
+            'turnover_credit' => (float) $row->turnover_credit,
+            'closing_net' => $closingNet,
+        ];
+    }
+
+    private static function formatTenantSettlementPeriod(string $fromDate, string $toDate): string
+    {
+        return Carbon::parse($fromDate)->format('d.m.Y')
+            . ' — '
+            . Carbon::parse($toDate)->format('d.m.Y');
+    }
+
+    private static function tenantSettlementsUrl(object $snapshot, ?string $search): string
+    {
+        $query = [
+            'from' => (string) $snapshot->period_from,
+            'to' => (string) $snapshot->period_to,
+            'account' => (string) $snapshot->account,
+        ];
+
+        $search = trim((string) $search);
+
+        if ($search !== '') {
+            $query['search'] = $search;
+        }
+
+        return OneCSettlements::getUrl() . '?' . http_build_query($query);
     }
 
     public static function debtStatusColor(?string $state): string
