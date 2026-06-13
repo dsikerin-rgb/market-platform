@@ -19,7 +19,7 @@ class TenantResourceAccrualsTabTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_accruals_tab_shows_contract_details_and_missing_space_warning_for_one_c_only(): void
+    public function test_finance_tab_links_to_accrual_details_without_embedded_accrual_registry(): void
     {
         $fixture = $this->createFixture(includeMissingOneC: true, includeExcelMissing: true);
 
@@ -29,24 +29,18 @@ class TenantResourceAccrualsTabTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertSeeText('Открыть полный отчёт по начислениям')
+            ->assertSeeText('Финансы 1С')
+            ->assertSeeText('Детализация движения')
+            ->assertSeeText('Открыть начисления')
+            ->assertSeeText('Подробности в 1С')
             ->assertSee('tenantId=' . $fixture['tenant']->id, false)
-            ->assertDontSeeText('Всего начислений')
-            ->assertSeeText('Последний период')
-            ->assertSeeText('Сумма по загруженным периодам')
-            ->assertSeeText('Сумма за последний период')
-            ->assertSeeText('АД/ДДА/БНЛ/2380 от 29.04.2025')
-            ->assertSeeText('Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025')
-            ->assertSeeText('Статус: active')
-            ->assertSeeText('Дата начала: 29.04.2025')
-            ->assertSeeText('Дата окончания: 29.04.2026')
-            ->assertSeeText('Старый базар')
-            ->assertSeeText('Вывеска: Самокат')
+            ->assertDontSee('tenant-accruals__table-wrap', false)
+            ->assertDontSeeText('Открыть полный отчёт по начислениям')
+            ->assertDontSeeText('Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025')
+            ->assertDontSeeText('Дата начала: 29.04.2025')
             ->assertDontSeeText('Excel/CSV не участвуют')
             ->assertDontSeeText('excel-missing-space.csv')
-            ->assertSeeText('Без места по договору')
-            ->assertDontSeeText('Без места по договору: 2');
-        $this->assertContractCellUsesDetails($response->getContent(), 'Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025');
+            ->assertDontSeeText('Без места по договору');
 
         self::assertSame(2, $this->countTenantAccrualRows($fixture['tenant'], '1c'));
         self::assertSame(1, $this->countTenantAccrualRows($fixture['tenant'], 'excel'));
@@ -62,7 +56,7 @@ class TenantResourceAccrualsTabTest extends TestCase
         );
     }
 
-    public function test_accruals_tab_hides_missing_space_card_when_contract_has_space(): void
+    public function test_finance_tab_keeps_accrual_details_out_of_tenant_card_when_contract_has_space(): void
     {
         $fixture = $this->createFixture(includeMissingOneC: false, includeExcelMissing: false);
 
@@ -72,14 +66,13 @@ class TenantResourceAccrualsTabTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertSeeText('АД/ДДА/БНЛ/2380')
-            ->assertSeeText('Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025')
-            ->assertSeeText('Старый базар')
-            ->assertSeeText('Вывеска: Самокат')
+            ->assertSeeText('Открыть начисления')
+            ->assertSeeText('Подробности в 1С')
+            ->assertDontSee('tenant-accruals__table-wrap', false)
+            ->assertDontSeeText('Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025')
             ->assertDontSeeText('Excel/CSV не участвуют')
             ->assertDontSeeText('Без места по договору')
             ->assertDontSeeText('Без места по договору (последний период)');
-        $this->assertContractCellUsesDetails($response->getContent(), 'Полный документ: АД/ДДА/БНЛ/2380 от 29.04.2025');
 
         self::assertSame(1, $this->countTenantAccrualRows($fixture['tenant'], '1c'));
         self::assertSame(0, $this->countMissingSpaceRows($fixture['tenant'], '1c'));
@@ -208,17 +201,4 @@ class TenantResourceAccrualsTabTest extends TestCase
         return $query->count();
     }
 
-    private function assertContractCellUsesDetails(string $html, string $marker): void
-    {
-        $position = strpos($html, $marker);
-        self::assertIsInt($position);
-
-        $snippet = substr($html, max(0, $position - 250), 800);
-
-        self::assertStringContainsString('<details class="tenant-accruals__contract-details">', $html);
-        self::assertStringContainsString('tenant-accruals__contract-summary', $html);
-        self::assertStringContainsString('tenant-accruals__contract-summary--wrap', $html);
-        self::assertStringContainsString('АД/ДДА/БНЛ/2380 от 29.04.2025', $snippet);
-        self::assertStringNotContainsString('#tenant-contract-', $snippet);
-    }
 }
