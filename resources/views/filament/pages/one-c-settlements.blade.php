@@ -5,6 +5,11 @@
         $filteredSummary = $report['filteredSummary'];
         $pagination = $report['pagination'];
         $rows = $report['rows'];
+        $tenantContext = $report['tenantContext'] ?? null;
+        $isTenantScoped = is_array($tenantContext);
+        $emptyRowsText = $isTenantScoped
+            ? 'По этому арендатору в выбранном периоде строк ОСВ не найдено.'
+            : 'По выбранным фильтрам строк нет.';
         $formatMoney = static fn (float $value): string => number_format($value, abs($value - round($value)) < 0.01 ? 0 : 2, ',', ' ') . ' ₽';
         $formatNumber = static fn (int $value): string => number_format($value, 0, ',', ' ');
         $formatDateTime = static function (mixed $value): string {
@@ -18,8 +23,9 @@
                 return (string) $value;
             }
         };
-        $netClosing = (float) $summary['closing_debit'] - (float) $summary['closing_credit'];
         $filteredNetClosing = (float) $filteredSummary['closing_debit'] - (float) $filteredSummary['closing_credit'];
+        $displaySummary = $isTenantScoped ? $filteredSummary : $summary;
+        $displayNetClosing = (float) $displaySummary['closing_debit'] - (float) $displaySummary['closing_credit'];
         $statusLabels = [
             'debt' => 'Долг',
             'credit' => 'Переплата',
@@ -464,9 +470,13 @@
                         </div>
 
                         <div>
-                            <h1 class="aw-hero-heading">Расчёты 1С</h1>
+                            <h1 class="aw-hero-heading">{{ $isTenantScoped ? 'Расчёты 1С по арендатору' : 'Расчёты 1С' }}</h1>
                             <p class="aw-hero-subheading">
-                                Сальдо и обороты по ОСВ 1С в разрезе счёта, арендатора, договора и организации за выбранный период.
+                                @if ($isTenantScoped)
+                                    Итоги ОСВ 1С по выбранному арендатору: договор, организация, начислено, оплачено и итог за период.
+                                @else
+                                    Сальдо и обороты по ОСВ 1С в разрезе счёта, арендатора, договора и организации за выбранный период.
+                                @endif
                             </p>
                         </div>
                     </div>
@@ -479,7 +489,11 @@
                             Счёт: {{ $this->account }}
                         </span>
                         <span class="aw-chip aw-chip--accruals-context">
-                            Арендаторы / договоры: {{ number_format((int) $summary['tenants'], 0, ',', ' ') }} / {{ number_format((int) $summary['contracts'], 0, ',', ' ') }}
+                            @if ($isTenantScoped)
+                                Арендатор: {{ $tenantContext['name'] }}
+                            @else
+                                Арендаторы / договоры: {{ number_format((int) $summary['tenants'], 0, ',', ' ') }} / {{ number_format((int) $summary['contracts'], 0, ',', ' ') }}
+                            @endif
                         </span>
                     </div>
                 </div>
@@ -490,32 +504,57 @@
 
         <div class="onec-settlements-summary">
             <div class="onec-settlements-card">
-                <div class="onec-settlements-label">Сальдо начальное</div>
-                <div class="onec-settlements-value">{{ $formatMoney((float) $summary['opening_debit'] - (float) $summary['opening_credit']) }}</div>
-                <div class="onec-settlements-note">Дт {{ $formatMoney((float) $summary['opening_debit']) }} · Кт {{ $formatMoney((float) $summary['opening_credit']) }}</div>
-            </div>
-
-            <div class="onec-settlements-card">
-                <div class="onec-settlements-label">Обороты за период</div>
-                <div class="onec-settlements-value">{{ $formatMoney((float) $summary['turnover_debit'] - (float) $summary['turnover_credit']) }}</div>
-                <div class="onec-settlements-note">Дт {{ $formatMoney((float) $summary['turnover_debit']) }} · Кт {{ $formatMoney((float) $summary['turnover_credit']) }}</div>
-            </div>
-
-            <div class="onec-settlements-card">
-                <div class="onec-settlements-label">Сальдо конечное</div>
-                <div class="onec-settlements-value">{{ $formatMoney($netClosing) }}</div>
-                <div class="onec-settlements-note">Дт {{ $formatMoney((float) $summary['closing_debit']) }} · Кт {{ $formatMoney((float) $summary['closing_credit']) }}</div>
-            </div>
-
-            <div class="onec-settlements-card">
-                <div class="onec-settlements-label">Состав</div>
-                <div class="onec-settlements-value">{{ $formatNumber((int) $summary['tenants']) }} / {{ $formatNumber((int) $summary['contracts']) }}</div>
+                <div class="onec-settlements-label">{{ $isTenantScoped ? 'На начало периода' : 'Сальдо начальное' }}</div>
+                <div class="onec-settlements-value">{{ $formatMoney((float) $displaySummary['opening_debit'] - (float) $displaySummary['opening_credit']) }}</div>
                 <div class="onec-settlements-note">
-                    арендаторы / договоры · строк {{ $formatNumber((int) $summary['rows']) }} · импорт {{ $formatDateTime($summary['imported_at']) }}
+                    @if ($isTenantScoped)
+                        Долг минус переплата на начало
+                    @else
+                        Дт {{ $formatMoney((float) $displaySummary['opening_debit']) }} · Кт {{ $formatMoney((float) $displaySummary['opening_credit']) }}
+                    @endif
+                </div>
+            </div>
+
+            <div class="onec-settlements-card">
+                <div class="onec-settlements-label">{{ $isTenantScoped ? 'Начислено минус оплачено' : 'Обороты за период' }}</div>
+                <div class="onec-settlements-value">{{ $formatMoney((float) $displaySummary['turnover_debit'] - (float) $displaySummary['turnover_credit']) }}</div>
+                <div class="onec-settlements-note">
+                    @if ($isTenantScoped)
+                        Начислено {{ $formatMoney((float) $displaySummary['turnover_debit']) }} · оплачено {{ $formatMoney((float) $displaySummary['turnover_credit']) }}
+                    @else
+                        Дт {{ $formatMoney((float) $displaySummary['turnover_debit']) }} · Кт {{ $formatMoney((float) $displaySummary['turnover_credit']) }}
+                    @endif
+                </div>
+            </div>
+
+            <div class="onec-settlements-card">
+                <div class="onec-settlements-label">{{ $isTenantScoped ? 'Итог на конец периода' : 'Сальдо конечное' }}</div>
+                <div class="onec-settlements-value">{{ $formatMoney($displayNetClosing) }}</div>
+                <div class="onec-settlements-note">
+                    @if ($isTenantScoped)
+                        Долг минус переплата на конец
+                    @else
+                        Дт {{ $formatMoney((float) $displaySummary['closing_debit']) }} · Кт {{ $formatMoney((float) $displaySummary['closing_credit']) }}
+                    @endif
+                </div>
+            </div>
+
+            <div class="onec-settlements-card">
+                <div class="onec-settlements-label">{{ $isTenantScoped ? 'Договоры / строки' : 'Состав' }}</div>
+                <div class="onec-settlements-value">
+                    @if ($isTenantScoped)
+                        {{ $formatNumber((int) $displaySummary['contracts']) }} / {{ $formatNumber((int) $displaySummary['rows']) }}
+                    @else
+                        {{ $formatNumber((int) $displaySummary['tenants']) }} / {{ $formatNumber((int) $displaySummary['contracts']) }}
+                    @endif
+                </div>
+                <div class="onec-settlements-note">
+                    {{ $isTenantScoped ? 'договоры / строки ОСВ' : 'арендаторы / договоры' }} · импорт {{ $formatDateTime($summary['imported_at']) }}
                 </div>
             </div>
         </div>
 
+        @unless ($isTenantScoped)
         <div class="onec-settlements-panel">
             <div class="onec-settlements-panel-header">
                 <div class="onec-settlements-panel-title">Контроль по организациям</div>
@@ -561,11 +600,14 @@
                 @endif
             </div>
         </div>
+        @endunless
 
         <div class="onec-settlements-panel">
             <div class="onec-settlements-panel-header">
-                <div class="onec-settlements-panel-title">Договоры и сальдо</div>
-                <div class="onec-settlements-panel-description">Агрегация по арендатору, договору, организации и счету</div>
+                <div class="onec-settlements-panel-title">{{ $isTenantScoped ? 'Договоры арендатора' : 'Договоры и сальдо' }}</div>
+                <div class="onec-settlements-panel-description">
+                    {{ $isTenantScoped ? 'Сводка по договорам выбранного арендатора за период' : 'Агрегация по арендатору, договору, организации и счету' }}
+                </div>
             </div>
 
             <div class="onec-settlements-panel-body">
@@ -617,7 +659,7 @@
                 @if (filled($report['emptyReason']))
                     <div class="onec-settlements-empty">{{ $report['emptyReason'] }}</div>
                 @elseif (count($rows) === 0)
-                    <div class="onec-settlements-empty">По выбранным фильтрам строк нет.</div>
+                    <div class="onec-settlements-empty">{{ $emptyRowsText }}</div>
                 @else
                     <div class="onec-settlements-note" style="margin-bottom: 12px;">
                         По фильтру: {{ $formatNumber((int) $filteredSummary['rows']) }} строк · конечное сальдо {{ $formatMoney($filteredNetClosing) }}
@@ -627,63 +669,94 @@
                         <table class="onec-settlements-table">
                             <thead>
                                 <tr>
-                                    <th scope="col">Арендатор</th>
-                                    <th scope="col">Договор</th>
-                                    <th scope="col" class="onec-settlements-money">Начальное</th>
-                                    <th scope="col" class="onec-settlements-money">Обороты</th>
-                                    <th scope="col" class="onec-settlements-money">Конечное</th>
-                                    <th scope="col" class="onec-settlements-money">Итого</th>
-                                    <th scope="col">Статус</th>
+                                    @if ($isTenantScoped)
+                                        <th scope="col">Договор</th>
+                                        <th scope="col">Организация</th>
+                                        <th scope="col" class="onec-settlements-money">Начислено</th>
+                                        <th scope="col" class="onec-settlements-money">Оплачено</th>
+                                        <th scope="col" class="onec-settlements-money">Итог</th>
+                                        <th scope="col">Статус</th>
+                                    @else
+                                        <th scope="col">Арендатор</th>
+                                        <th scope="col">Договор</th>
+                                        <th scope="col" class="onec-settlements-money">Начальное</th>
+                                        <th scope="col" class="onec-settlements-money">Обороты</th>
+                                        <th scope="col" class="onec-settlements-money">Конечное</th>
+                                        <th scope="col" class="onec-settlements-money">Итого</th>
+                                        <th scope="col">Статус</th>
+                                    @endif
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($rows as $row)
                                     <tr>
-                                        <td class="onec-settlements-col-tenant">
-                                            @if ($row['tenant_url'])
-                                                <a href="{{ $row['tenant_url'] }}">{{ $row['tenant_name'] }}</a>
-                                            @else
-                                                {{ $row['tenant_name'] }}
-                                            @endif
-                                            <div class="onec-settlements-muted">{{ $row['organization_name'] }}</div>
-                                        </td>
-                                        <td class="onec-settlements-col-contract">
-                                            @if ($row['contract_url'])
-                                                <a href="{{ $row['contract_url'] }}">{{ $row['contract_name'] }}</a>
-                                            @else
-                                                {{ $row['contract_name'] }}
-                                            @endif
-                                            <div class="onec-settlements-muted">
-                                                сч. {{ $row['account'] }} · строк ОСВ {{ $formatNumber((int) $row['rows_count']) }}
-                                                @if (! $row['linked'])
-                                                    · договор не привязан
+                                        @if ($isTenantScoped)
+                                            <td class="onec-settlements-col-contract">
+                                                @if ($row['contract_url'])
+                                                    <a href="{{ $row['contract_url'] }}">{{ $row['contract_name'] }}</a>
+                                                @else
+                                                    {{ $row['contract_name'] }}
                                                 @endif
-                                            </div>
-                                        </td>
-                                        <td class="onec-settlements-money">
-                                            <div class="onec-settlements-balance-cell">
-                                                <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['opening_debit']) }}</div>
-                                                <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['opening_credit']) }}</div>
-                                            </div>
-                                        </td>
-                                        <td class="onec-settlements-money">
-                                            <div class="onec-settlements-balance-cell">
-                                                <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['turnover_debit']) }}</div>
-                                                <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['turnover_credit']) }}</div>
-                                            </div>
-                                        </td>
-                                        <td class="onec-settlements-money">
-                                            <div class="onec-settlements-balance-cell">
-                                                <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['closing_debit']) }}</div>
-                                                <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['closing_credit']) }}</div>
-                                            </div>
-                                        </td>
-                                        <td class="onec-settlements-money">{{ $formatMoney((float) $row['net']) }}</td>
-                                        <td>
-                                            <span class="onec-settlements-badge" style="{{ $statusStyles[$row['status']] ?? $statusStyles['zero'] }}">
-                                                {{ $statusLabels[$row['status']] ?? 'Закрыто' }}
-                                            </span>
-                                        </td>
+                                                @if (! $row['linked'])
+                                                    <div class="onec-settlements-muted">Договор требует проверки связи в системе.</div>
+                                                @endif
+                                            </td>
+                                            <td>{{ $row['organization_name'] }}</td>
+                                            <td class="onec-settlements-money">{{ $formatMoney((float) $row['turnover_debit']) }}</td>
+                                            <td class="onec-settlements-money">{{ $formatMoney((float) $row['turnover_credit']) }}</td>
+                                            <td class="onec-settlements-money">{{ $formatMoney((float) $row['net']) }}</td>
+                                            <td>
+                                                <span class="onec-settlements-badge" style="{{ $statusStyles[$row['status']] ?? $statusStyles['zero'] }}">
+                                                    {{ $statusLabels[$row['status']] ?? 'Закрыто' }}
+                                                </span>
+                                            </td>
+                                        @else
+                                            <td class="onec-settlements-col-tenant">
+                                                @if ($row['tenant_url'])
+                                                    <a href="{{ $row['tenant_url'] }}">{{ $row['tenant_name'] }}</a>
+                                                @else
+                                                    {{ $row['tenant_name'] }}
+                                                @endif
+                                                <div class="onec-settlements-muted">{{ $row['organization_name'] }}</div>
+                                            </td>
+                                            <td class="onec-settlements-col-contract">
+                                                @if ($row['contract_url'])
+                                                    <a href="{{ $row['contract_url'] }}">{{ $row['contract_name'] }}</a>
+                                                @else
+                                                    {{ $row['contract_name'] }}
+                                                @endif
+                                                <div class="onec-settlements-muted">
+                                                    сч. {{ $row['account'] }} · строк ОСВ {{ $formatNumber((int) $row['rows_count']) }}
+                                                    @if (! $row['linked'])
+                                                        · договор не привязан
+                                                    @endif
+                                                </div>
+                                            </td>
+                                            <td class="onec-settlements-money">
+                                                <div class="onec-settlements-balance-cell">
+                                                    <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['opening_debit']) }}</div>
+                                                    <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['opening_credit']) }}</div>
+                                                </div>
+                                            </td>
+                                            <td class="onec-settlements-money">
+                                                <div class="onec-settlements-balance-cell">
+                                                    <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['turnover_debit']) }}</div>
+                                                    <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['turnover_credit']) }}</div>
+                                                </div>
+                                            </td>
+                                            <td class="onec-settlements-money">
+                                                <div class="onec-settlements-balance-cell">
+                                                    <div class="onec-settlements-balance-line"><span>Дт</span>{{ $formatMoney((float) $row['closing_debit']) }}</div>
+                                                    <div class="onec-settlements-balance-line"><span>Кт</span>{{ $formatMoney((float) $row['closing_credit']) }}</div>
+                                                </div>
+                                            </td>
+                                            <td class="onec-settlements-money">{{ $formatMoney((float) $row['net']) }}</td>
+                                            <td>
+                                                <span class="onec-settlements-badge" style="{{ $statusStyles[$row['status']] ?? $statusStyles['zero'] }}">
+                                                    {{ $statusLabels[$row['status']] ?? 'Закрыто' }}
+                                                </span>
+                                            </td>
+                                        @endif
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -720,7 +793,7 @@
             </div>
         </div>
 
-        @if (count($report['unresolvedRows']) > 0)
+        @if (! $isTenantScoped && count($report['unresolvedRows']) > 0)
             <div class="onec-settlements-panel">
                 <div class="onec-settlements-panel-header">
                     <div class="onec-settlements-panel-title">Непривязанные строки</div>

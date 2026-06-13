@@ -2801,8 +2801,7 @@ class TenantResource extends BaseResource
             );
 
             if ($snapshot !== null) {
-                $search = trim((string) ($record->inn ?: $record->name));
-                $settlementsUrl = static::tenantSettlementsUrl($snapshot, $search !== '' ? $search : null);
+                $settlementsUrl = static::tenantSettlementsUrl($snapshot, null, (int) $record->id);
             }
         }
 
@@ -3015,7 +3014,6 @@ class TenantResource extends BaseResource
 
         $summaryRows = static::tenantSettlementRows($marketId, $tenantId, $snapshot);
         $tenantName = trim((string) ($record->name ?? ''));
-        $search = $tenantName !== '' ? $tenantName : ('tenant_id:' . $tenantId);
 
         if ($summaryRows->isEmpty()) {
             return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
@@ -3023,7 +3021,7 @@ class TenantResource extends BaseResource
                 'emptyReason' => 'В выбранной ОСВ нет строк по этому арендатору.',
                 'periodLabel' => static::formatTenantSettlementPeriod((string) $snapshot->period_from, (string) $snapshot->period_to),
                 'account' => (string) $snapshot->account,
-                'settlementsUrl' => static::tenantSettlementsUrl($snapshot, $search),
+                'settlementsUrl' => static::tenantSettlementsUrl($snapshot, null, $tenantId),
                 ...static::tenantSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
             ])->render());
         }
@@ -3054,7 +3052,7 @@ class TenantResource extends BaseResource
             'summary' => $summary,
             'rows' => $displayRows->map(fn (object $row): array => static::normalizeTenantSettlementRow($row))->values()->all(),
             'currentTenantName' => $tenantName,
-            'settlementsUrl' => static::tenantSettlementsUrl($snapshot, $search),
+            'settlementsUrl' => static::tenantSettlementsUrl($snapshot, null, $tenantId),
             ...static::tenantSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
         ])->render());
     }
@@ -3240,7 +3238,7 @@ class TenantResource extends BaseResource
             . Carbon::parse($toDate)->format('d.m.Y');
     }
 
-    private static function tenantSettlementsUrl(object $snapshot, ?string $search): string
+    private static function tenantSettlementsUrl(object $snapshot, ?string $search, ?int $tenantId = null): string
     {
         $query = [
             'from' => (string) $snapshot->period_from,
@@ -3252,6 +3250,10 @@ class TenantResource extends BaseResource
 
         if ($search !== '') {
             $query['search'] = $search;
+        }
+
+        if ($tenantId !== null && $tenantId > 0) {
+            $query['tenantId'] = $tenantId;
         }
 
         return OneCSettlements::getUrl() . '?' . http_build_query($query);
