@@ -28,7 +28,7 @@ class RoleScenarioCatalog
                 'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
             'market-admin' => [
-                'label' => 'Наёмный директор',
+                'label' => 'Директор',
                 'description' => 'Операционное управление рынком, сотрудниками, арендаторами, договорами, финансами и настройками.',
                 'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
