@@ -67,9 +67,8 @@ class RolePermissionPresetCatalog
             ],
             'market_readonly' => [
                 'label' => 'Просмотр рынка',
-                'description' => 'Безопасный доступ только для просмотра рынка и его настроек.',
+                'description' => 'Безопасный доступ только для просмотра своего рынка и его настроек.',
                 'permissions' => [
-                    'markets.viewAny',
                     'markets.view',
                     'market-settings.view',
                 ],

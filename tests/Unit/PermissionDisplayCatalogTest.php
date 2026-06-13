@@ -39,4 +39,14 @@ class PermissionDisplayCatalogTest extends TestCase
             'finance.1c.view' => 1,
         ]));
     }
+
+    public function test_market_readonly_preset_does_not_include_global_market_list_access(): void
+    {
+        $definitions = RolePermissionPresetCatalog::definitions();
+
+        self::assertSame([
+            'markets.view',
+            'market-settings.view',
+        ], $definitions['market_readonly']['permissions']);
+    }
 }

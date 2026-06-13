@@ -35,6 +35,9 @@ class RolesAndPermissionsSeeder extends Seeder
 
             'contracts.update',
 
+            'finance.1c.view',
+            'finance.accruals.view',
+
             'staff.viewAny',
             'staff.view',
             'staff.create',
