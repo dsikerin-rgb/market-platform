@@ -203,7 +203,7 @@ class TenantResource extends BaseResource
 
                 Tab::make('Финансы')
                     ->schema([
-                        Section::make('Сводка 1С')
+                        Section::make('Финансы 1С')
                             ->description('Главный финансовый статус арендатора по ОСВ за выбранный период.')
                             ->schema([
                                 Forms\Components\Placeholder::make('tenant_settlement_balances')
@@ -214,31 +214,13 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(1),
 
-                        Section::make('Начисления из 1С')
-                            ->description('Детализация начислений по договорам за периоды. Используйте её для расшифровки движения, а не как главный статус.')
-                            ->collapsed()
+                        Section::make('Детализация движения')
+                            ->description('Начисления и оплаты остаются расшифровкой движения. Итоговый ответ по долгу смотрите в сводке выше.')
                             ->schema([
-                                Forms\Components\Placeholder::make('accruals_report_link')
+                                Forms\Components\Placeholder::make('finance_detail_links')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsReportLink($record))
-                                    ->columnSpanFull(),
-
-                                Forms\Components\Placeholder::make('accruals_registry')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsRegistry($record))
-                                    ->columnSpanFull(),
-                            ]),
-
-                        Section::make('Оплаты из 1С')
-                            ->description('Детализация фактических поступлений. Итоговый статус смотрите в сводке выше.')
-                            ->collapsed()
-                            ->schema([
-                                Forms\Components\Placeholder::make('tenant_payments_registry')
-                                    ->hiddenLabel()
-                                    ->dehydrated(false)
-                                    ->content(fn (?Tenant $record): HtmlString => static::renderTenantPaymentsRegistry($record))
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderFinanceDetailLinks($record))
                                     ->columnSpanFull(),
                             ]),
                     ]),
@@ -2801,6 +2783,48 @@ class TenantResource extends BaseResource
                 . 'Открыть полный отчёт по начислениям'
                 . '</a>'
                 . '</div>'
+        );
+    }
+
+    private static function renderFinanceDetailLinks(?Tenant $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div style="font-size:13px;opacity:.85;">Детализация появится после сохранения арендатора.</div>');
+        }
+
+        $accrualsUrl = TenantAccrualResource::getUrl('index', ['tenantId' => (int) $record->id]);
+        $settlementsUrl = OneCSettlements::getUrl();
+
+        if (DbSchema::hasTable('tenant_settlement_balances')) {
+            $snapshot = static::selectedTenantSettlementSnapshot(
+                static::tenantSettlementSnapshots((int) $record->market_id)
+            );
+
+            if ($snapshot !== null) {
+                $search = trim((string) ($record->inn ?: $record->name));
+                $settlementsUrl = static::tenantSettlementsUrl($snapshot, $search !== '' ? $search : null);
+            }
+        }
+
+        return new HtmlString(
+            '<style>
+.tenant-finance-details{display:flex;flex-direction:column;gap:12px}
+.tenant-finance-details__text{max-width:760px;font-size:13px;line-height:1.45;color:#475569}
+.dark .tenant-finance-details__text{color:#cbd5e1}
+.tenant-finance-details__actions{display:flex;flex-wrap:wrap;gap:10px}
+.tenant-finance-details__button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:650;line-height:1.2;text-decoration:none}
+.tenant-finance-details__button--primary{background:#2563eb;color:#fff}
+.tenant-finance-details__button--secondary{border:1px solid rgba(148,163,184,.45);background:#fff;color:#1e293b}
+.dark .tenant-finance-details__button--secondary{background:rgba(15,23,42,.45);color:#e2e8f0}
+@media (max-width:640px){.tenant-finance-details__actions{flex-direction:column}.tenant-finance-details__button{width:100%}}
+</style>
+<div class="tenant-finance-details">
+    <div class="tenant-finance-details__text">ОСВ показывает итог по долгу за выбранный период. Начисления и оплаты нужны для расшифровки движения и проверки строк 1С.</div>
+    <div class="tenant-finance-details__actions">
+        <a class="tenant-finance-details__button tenant-finance-details__button--primary" href="' . e($accrualsUrl) . '">Открыть начисления</a>
+        <a class="tenant-finance-details__button tenant-finance-details__button--secondary" href="' . e($settlementsUrl) . '">Подробности в 1С</a>
+    </div>
+</div>'
         );
     }
 
