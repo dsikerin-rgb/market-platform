@@ -154,6 +154,67 @@
             color: #cbd5e1;
         }
 
+        .mrr-quality-signal__summary {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.42rem;
+            margin-top: 0.65rem;
+        }
+
+        .mrr-quality-signal__summary-item {
+            border-radius: 0.72rem;
+            border: 1px solid rgba(15, 23, 42, 0.07);
+            background: rgba(248, 250, 252, 0.86);
+            padding: 0.48rem 0.55rem;
+            min-width: 0;
+        }
+
+        .dark .mrr-quality-signal__summary-item {
+            border-color: rgba(148, 163, 184, 0.14);
+            background: rgba(30, 41, 59, 0.58);
+        }
+
+        .mrr-quality-signal__summary-label {
+            display: block;
+            color: #64748b;
+            font-size: 0.66rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+
+        .dark .mrr-quality-signal__summary-label {
+            color: #94a3b8;
+        }
+
+        .mrr-quality-signal__summary-value {
+            display: block;
+            margin-top: 0.16rem;
+            color: #0f172a;
+            font-size: 0.82rem;
+            font-weight: 850;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .dark .mrr-quality-signal__summary-value {
+            color: #f8fafc;
+        }
+
+        .mrr-quality-signal__summary-note {
+            display: block;
+            margin-top: 0.12rem;
+            color: #64748b;
+            font-size: 0.7rem;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+        }
+
+        .dark .mrr-quality-signal__summary-note {
+            color: #cbd5e1;
+        }
+
         .mrr-quality-signal__reasons {
             margin: 0.8rem 0 0;
             padding-left: 1.1rem;
@@ -418,6 +479,14 @@
                                     <div class="mrr-quality-signal__grid">
                                         @foreach ([['label' => 'Карточка 1', 'tenant' => $candidateA], ['label' => 'Карточка 2', 'tenant' => $candidateB]] as $item)
                                             @php($tenant = $item['tenant'])
+                                            @php($summary = is_array($tenant['summary'] ?? null) ? $tenant['summary'] : [])
+                                            @php($contracts = is_array($summary['contracts'] ?? null) ? $summary['contracts'] : [])
+                                            @php($accruals = is_array($summary['accruals'] ?? null) ? $summary['accruals'] : [])
+                                            @php($spaces = is_array($summary['spaces'] ?? null) ? $summary['spaces'] : [])
+                                            @php($users = is_array($summary['users'] ?? null) ? $summary['users'] : [])
+                                            @php($contractSample = array_values(array_filter((array) ($contracts['sample'] ?? []))))
+                                            @php($spaceSample = array_values(array_filter((array) ($spaces['sample'] ?? []))))
+                                            @php($accrualTotal = (float) ($accruals['total_with_vat'] ?? 0))
                                             <div class="mrr-quality-signal__tenant">
                                                 <div class="mrr-quality-signal__tenant-label">{{ $item['label'] }}</div>
                                                 <div class="mrr-quality-signal__tenant-name">
@@ -442,6 +511,43 @@
                                                         </div>
                                                     </details>
                                                 @endif
+
+                                                <div class="mrr-quality-signal__summary" aria-label="Сводка по карточке арендатора">
+                                                    <div class="mrr-quality-signal__summary-item">
+                                                        <span class="mrr-quality-signal__summary-label">Договоры</span>
+                                                        <span class="mrr-quality-signal__summary-value">
+                                                            {{ (int) ($contracts['total'] ?? 0) }} · активных {{ (int) ($contracts['active'] ?? 0) }}
+                                                        </span>
+                                                        @if ($contractSample !== [])
+                                                            <span class="mrr-quality-signal__summary-note">{{ implode(', ', array_slice($contractSample, 0, 2)) }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="mrr-quality-signal__summary-item">
+                                                        <span class="mrr-quality-signal__summary-label">Начисления</span>
+                                                        <span class="mrr-quality-signal__summary-value">{{ (int) ($accruals['rows'] ?? 0) }} строк</span>
+                                                        @if (filled($accruals['latest_period'] ?? null) || abs($accrualTotal) > 0.0001)
+                                                            <span class="mrr-quality-signal__summary-note">
+                                                                @if (filled($accruals['latest_period'] ?? null))
+                                                                    {{ \Illuminate\Support\Carbon::parse($accruals['latest_period'])->format('m.Y') }}
+                                                                @endif
+                                                                @if (abs($accrualTotal) > 0.0001)
+                                                                    · {{ number_format($accrualTotal, 2, ',', ' ') }} ₽
+                                                                @endif
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="mrr-quality-signal__summary-item">
+                                                        <span class="mrr-quality-signal__summary-label">Места</span>
+                                                        <span class="mrr-quality-signal__summary-value">{{ (int) ($spaces['total'] ?? 0) }}</span>
+                                                        @if ($spaceSample !== [])
+                                                            <span class="mrr-quality-signal__summary-note">{{ implode(', ', array_slice($spaceSample, 0, 3)) }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="mrr-quality-signal__summary-item">
+                                                        <span class="mrr-quality-signal__summary-label">Пользователи</span>
+                                                        <span class="mrr-quality-signal__summary-value">{{ (int) ($users['total'] ?? 0) }}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         @endforeach
                                     </div>

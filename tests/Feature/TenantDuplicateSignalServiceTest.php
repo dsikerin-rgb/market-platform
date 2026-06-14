@@ -4,7 +4,9 @@
 namespace Tests\Feature;
 
 use App\Models\Market;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Tenants\TenantDuplicateSignalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -106,6 +108,91 @@ class TenantDuplicateSignalServiceTest extends TestCase
         $signals = app(TenantDuplicateSignalService::class)->signalsForMarket((int) $market->id);
 
         $this->assertSame([], $signals);
+    }
+
+    public function test_it_adds_business_summary_to_duplicate_candidates(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test market',
+        ]);
+
+        [$tenantA, $tenantB] = $this->createMdnDuplicatePair((int) $market->id);
+
+        $space = MarketSpace::query()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'number' => '1/A',
+            'status' => 'occupied',
+            'is_active' => true,
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'market_space_id' => $space->id,
+            'number' => 'Д-1',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_contracts')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'market_space_id' => null,
+            'number' => 'Д-0',
+            'status' => 'closed',
+            'starts_at' => '2025-01-01',
+            'ends_at' => '2025-12-31',
+            'is_active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('tenant_accruals')->insert([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+            'market_space_id' => $space->id,
+            'period' => '2026-06-01',
+            'currency' => 'RUB',
+            'total_with_vat' => 1200.50,
+            'source' => '1c',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        User::factory()->create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenantA->id,
+        ]);
+
+        $expectedTenantAUsers = (int) DB::table('users')->where('tenant_id', $tenantA->id)->count();
+        $expectedTenantBUsers = (int) DB::table('users')->where('tenant_id', $tenantB->id)->count();
+
+        $signals = app(TenantDuplicateSignalService::class)->signalsForMarket((int) $market->id);
+
+        $this->assertCount(1, $signals);
+
+        $candidateA = $signals[0]['candidate_a'];
+        $this->assertSame($tenantA->id, $candidateA['id']);
+        $this->assertSame(2, $candidateA['summary']['contracts']['total']);
+        $this->assertSame(1, $candidateA['summary']['contracts']['active']);
+        $this->assertContains('Д-1', $candidateA['summary']['contracts']['sample']);
+        $this->assertSame(1, $candidateA['summary']['accruals']['rows']);
+        $this->assertSame('2026-06-01', $candidateA['summary']['accruals']['latest_period']);
+        $this->assertSame(1200.50, $candidateA['summary']['accruals']['total_with_vat']);
+        $this->assertSame(1, $candidateA['summary']['spaces']['total']);
+        $this->assertSame(['1/A'], $candidateA['summary']['spaces']['sample']);
+        $this->assertSame($expectedTenantAUsers, $candidateA['summary']['users']['total']);
+
+        $candidateB = $signals[0]['candidate_b'];
+        $this->assertSame($tenantB->id, $candidateB['id']);
+        $this->assertSame(0, $candidateB['summary']['contracts']['total']);
+        $this->assertSame(0, $candidateB['summary']['accruals']['rows']);
+        $this->assertSame(0, $candidateB['summary']['spaces']['total']);
+        $this->assertSame($expectedTenantBUsers, $candidateB['summary']['users']['total']);
     }
 
     public function test_it_shows_restored_duplicate_pair_again(): void

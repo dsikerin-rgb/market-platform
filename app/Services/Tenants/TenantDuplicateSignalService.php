@@ -60,7 +60,10 @@ class TenantDuplicateSignalService
                 ?: ((int) data_get($left, 'candidate_b.id', 0) <=> (int) data_get($right, 'candidate_b.id', 0));
         });
 
-        return array_slice($signals, 0, $limit);
+        return array_map(
+            fn (array $signal): array => $this->withCandidateBusinessSummaries($signal, $marketId),
+            array_slice($signals, 0, $limit),
+        );
     }
 
     /**
@@ -381,6 +384,217 @@ class TenantDuplicateSignalService
             'one_c_uid' => (string) ($tenant['one_c_uid'] ?? ''),
             'inn' => (string) ($tenant['inn'] ?? ''),
             'kpp' => (string) ($tenant['kpp'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $signal
+     * @return array<string, mixed>
+     */
+    private function withCandidateBusinessSummaries(array $signal, int $marketId): array
+    {
+        foreach (['candidate_a', 'candidate_b'] as $key) {
+            $candidate = is_array($signal[$key] ?? null) ? $signal[$key] : [];
+            $tenantId = (int) ($candidate['id'] ?? 0);
+            $candidate['summary'] = $this->tenantBusinessSummary($marketId, $tenantId);
+            $signal[$key] = $candidate;
+        }
+
+        return $signal;
+    }
+
+    /**
+     * @return array{
+     *     contracts: array{total:int,active:int,sample:list<string>},
+     *     accruals: array{rows:int,latest_period:?string,total_with_vat:float},
+     *     spaces: array{total:int,sample:list<string>},
+     *     users: array{total:int}
+     * }
+     */
+    private function tenantBusinessSummary(int $marketId, int $tenantId): array
+    {
+        return [
+            'contracts' => $this->tenantContractsSummary($marketId, $tenantId),
+            'accruals' => $this->tenantAccrualsSummary($marketId, $tenantId),
+            'spaces' => $this->tenantSpacesSummary($marketId, $tenantId),
+            'users' => $this->tenantUsersSummary($tenantId),
+        ];
+    }
+
+    /**
+     * @return array{total:int,active:int,sample:list<string>}
+     */
+    private function tenantContractsSummary(int $marketId, int $tenantId): array
+    {
+        if ($marketId <= 0 || $tenantId <= 0 || ! Schema::hasTable('tenant_contracts')) {
+            return ['total' => 0, 'active' => 0, 'sample' => []];
+        }
+
+        $query = DB::table('tenant_contracts')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId);
+
+        return [
+            'total' => (int) (clone $query)->count(),
+            'active' => (int) (clone $query)->where('is_active', true)->count(),
+            'sample' => (clone $query)
+                ->orderByDesc('is_active')
+                ->orderByDesc('starts_at')
+                ->orderByDesc('id')
+                ->limit(2)
+                ->pluck('number')
+                ->map(fn (mixed $number): string => trim((string) $number))
+                ->filter()
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * @return array{rows:int,latest_period:?string,total_with_vat:float}
+     */
+    private function tenantAccrualsSummary(int $marketId, int $tenantId): array
+    {
+        if ($marketId <= 0 || $tenantId <= 0 || ! Schema::hasTable('tenant_accruals')) {
+            return ['rows' => 0, 'latest_period' => null, 'total_with_vat' => 0.0];
+        }
+
+        $query = DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId);
+
+        return [
+            'rows' => (int) (clone $query)->count(),
+            'latest_period' => (clone $query)->max('period'),
+            'total_with_vat' => (float) (clone $query)->sum('total_with_vat'),
+        ];
+    }
+
+    /**
+     * @return array{total:int,sample:list<string>}
+     */
+    private function tenantSpacesSummary(int $marketId, int $tenantId): array
+    {
+        if ($marketId <= 0 || $tenantId <= 0 || ! Schema::hasTable('market_spaces')) {
+            return ['total' => 0, 'sample' => []];
+        }
+
+        $spaceIds = [];
+
+        foreach ($this->tenantSpaceIdsFromMarketSpaces($marketId, $tenantId) as $spaceId) {
+            $spaceIds[$spaceId] = true;
+        }
+
+        foreach ($this->tenantSpaceIdsFromContracts($marketId, $tenantId) as $spaceId) {
+            $spaceIds[$spaceId] = true;
+        }
+
+        foreach ($this->tenantSpaceIdsFromAccruals($marketId, $tenantId) as $spaceId) {
+            $spaceIds[$spaceId] = true;
+        }
+
+        $ids = array_keys($spaceIds);
+
+        if ($ids === []) {
+            return ['total' => 0, 'sample' => []];
+        }
+
+        $sample = DB::table('market_spaces')
+            ->where('market_id', $marketId)
+            ->whereIn('id', $ids)
+            ->orderBy('number')
+            ->orderBy('code')
+            ->orderBy('id')
+            ->limit(3)
+            ->get(['number', 'code', 'id'])
+            ->map(function (object $row): string {
+                $label = trim((string) ($row->number ?? ''));
+
+                if ($label === '') {
+                    $label = trim((string) ($row->code ?? ''));
+                }
+
+                return $label !== '' ? $label : '#' . (int) $row->id;
+            })
+            ->values()
+            ->all();
+
+        return [
+            'total' => count($ids),
+            'sample' => $sample,
+        ];
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function tenantSpaceIdsFromMarketSpaces(int $marketId, int $tenantId): array
+    {
+        if (! Schema::hasColumn('market_spaces', 'tenant_id')) {
+            return [];
+        }
+
+        return DB::table('market_spaces')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function tenantSpaceIdsFromContracts(int $marketId, int $tenantId): array
+    {
+        if (! Schema::hasTable('tenant_contracts') || ! Schema::hasColumn('tenant_contracts', 'market_space_id')) {
+            return [];
+        }
+
+        return DB::table('tenant_contracts')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('market_space_id')
+            ->pluck('market_space_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function tenantSpaceIdsFromAccruals(int $marketId, int $tenantId): array
+    {
+        if (! Schema::hasTable('tenant_accruals') || ! Schema::hasColumn('tenant_accruals', 'market_space_id')) {
+            return [];
+        }
+
+        return DB::table('tenant_accruals')
+            ->where('market_id', $marketId)
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('market_space_id')
+            ->pluck('market_space_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{total:int}
+     */
+    private function tenantUsersSummary(int $tenantId): array
+    {
+        if ($tenantId <= 0 || ! Schema::hasTable('users') || ! Schema::hasColumn('users', 'tenant_id')) {
+            return ['total' => 0];
+        }
+
+        return [
+            'total' => (int) DB::table('users')->where('tenant_id', $tenantId)->count(),
         ];
     }
 }
