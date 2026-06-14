@@ -434,6 +434,115 @@
                 box-shadow: 0 16px 30px rgba(220, 38, 38, 0.30);
             }
 
+            .dashboard-workspace__onec-modal {
+                position: fixed;
+                inset: 0;
+                z-index: 80;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 1.25rem;
+                background: rgba(15, 23, 42, 0.50);
+                backdrop-filter: blur(7px);
+            }
+
+            .dashboard-workspace__onec-modal.is-open {
+                display: flex;
+            }
+
+            .dashboard-workspace__onec-modal-card {
+                width: min(100%, 34rem);
+                border-radius: 1.35rem;
+                border: 2px solid rgba(220, 38, 38, 0.52);
+                background:
+                    radial-gradient(circle at top left, rgba(239, 68, 68, 0.18), transparent 30%),
+                    linear-gradient(135deg, #fff7ed, #fff 56%, #fee2e2);
+                box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+                padding: 1.35rem;
+            }
+
+            .dark .dashboard-workspace__onec-modal-card {
+                background:
+                    radial-gradient(circle at top left, rgba(248, 113, 113, 0.16), transparent 30%),
+                    linear-gradient(135deg, rgba(69, 26, 3, 0.98), rgba(127, 29, 29, 0.76) 60%, rgba(15, 23, 42, 0.98));
+            }
+
+            .dashboard-workspace__onec-modal-head {
+                display: flex;
+                gap: 0.9rem;
+                align-items: flex-start;
+            }
+
+            .dashboard-workspace__onec-modal-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 3rem;
+                height: 3rem;
+                border-radius: 1rem;
+                background: #dc2626;
+                color: #fff;
+                flex-shrink: 0;
+                box-shadow: 0 12px 26px rgba(220, 38, 38, 0.28);
+            }
+
+            .dashboard-workspace__onec-modal-title {
+                margin: 0;
+                color: #7f1d1d;
+                font-size: 1.25rem;
+                line-height: 1.25;
+                font-weight: 800;
+            }
+
+            .dark .dashboard-workspace__onec-modal-title {
+                color: #fee2e2;
+            }
+
+            .dashboard-workspace__onec-modal-copy {
+                margin: 0.45rem 0 0;
+                color: #78350f;
+                font-size: 0.92rem;
+                line-height: 1.6;
+            }
+
+            .dark .dashboard-workspace__onec-modal-copy {
+                color: #fed7aa;
+            }
+
+            .dashboard-workspace__onec-modal-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.65rem;
+                justify-content: flex-end;
+                margin-top: 1.2rem;
+            }
+
+            .dashboard-workspace__onec-modal-button,
+            .dashboard-workspace__onec-modal-link {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.45rem;
+                border-radius: 999px;
+                padding: 0.65rem 0.95rem;
+                font-size: 0.86rem;
+                font-weight: 800;
+                text-decoration: none;
+            }
+
+            .dashboard-workspace__onec-modal-button {
+                border: 1px solid rgba(120, 53, 15, 0.24);
+                background: rgba(255, 255, 255, 0.74);
+                color: #78350f;
+            }
+
+            .dashboard-workspace__onec-modal-link {
+                border: 1px solid #dc2626;
+                background: #dc2626;
+                color: #fff;
+                box-shadow: 0 12px 24px rgba(220, 38, 38, 0.22);
+            }
+
             .dashboard-workspace__panel-head {
                 display: flex;
                 align-items: flex-start;
@@ -768,6 +877,83 @@
                         Журнал обменов
                     </a>
                 </section>
+
+                <div
+                    id="dashboardOneCWarningModal"
+                    class="dashboard-workspace__onec-modal"
+                    data-storage-key="{{ $oneCExchangeWarning['modal_key'] }}:dashboard"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="dashboardOneCWarningModalTitle"
+                >
+                    <div class="dashboard-workspace__onec-modal-card">
+                        <div class="dashboard-workspace__onec-modal-head">
+                            <div class="dashboard-workspace__onec-modal-icon">
+                                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-6 w-6" />
+                            </div>
+
+                            <div>
+                                <h2 id="dashboardOneCWarningModalTitle" class="dashboard-workspace__onec-modal-title">
+                                    Данные 1С могут быть устаревшими
+                                </h2>
+                                <p class="dashboard-workspace__onec-modal-copy">
+                                    {{ $oneCExchangeWarning['description'] }}
+                                    Проверено: {{ $oneCExchangeWarning['checked_at'] }} · окно: {{ $oneCExchangeWarning['window_label'] }}.
+                                </p>
+                                <p class="dashboard-workspace__onec-modal-copy">
+                                    {{ $oneCExchangeWarning['instruction'] }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-workspace__onec-modal-actions">
+                            <button type="button" class="dashboard-workspace__onec-modal-button" data-onec-warning-close>
+                                Понятно
+                            </button>
+                            <a href="{{ $oneCExchangeWarning['action_url'] }}" class="dashboard-workspace__onec-modal-link">
+                                <x-filament::icon icon="heroicon-o-arrow-up-right" class="h-4 w-4" />
+                                Открыть журнал
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        const modal = document.getElementById('dashboardOneCWarningModal');
+
+                        if (! modal) {
+                            return;
+                        }
+
+                        const storageKey = modal.dataset.storageKey || '';
+                        let dismissed = false;
+
+                        try {
+                            dismissed = storageKey !== '' && window.localStorage.getItem(storageKey) === 'dismissed';
+                        } catch (e) {
+                            dismissed = false;
+                        }
+
+                        if (! dismissed) {
+                            modal.classList.add('is-open');
+                        }
+
+                        modal.querySelectorAll('[data-onec-warning-close]').forEach(function (button) {
+                            button.addEventListener('click', function () {
+                                modal.classList.remove('is-open');
+
+                                try {
+                                    if (storageKey !== '') {
+                                        window.localStorage.setItem(storageKey, 'dismissed');
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                            });
+                        });
+                    });
+                </script>
             @endif
 
             @if ($workspaceHeaderWidgets !== [])

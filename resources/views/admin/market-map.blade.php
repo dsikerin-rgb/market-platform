@@ -22,6 +22,7 @@
     $shapesUrl = $shapesUrl ?? '';
     $spaceUrl  = $spaceUrl ?? '';
     $spacesUrl = $spacesUrl ?? '';
+    $oneCExchangeWarning = is_array($oneCExchangeWarning ?? null) ? $oneCExchangeWarning : null;
   @endphp
 
   <meta charset="utf-8">
@@ -286,6 +287,184 @@
       flex-direction: column;
       flex: 1 1 auto;
       min-height: 0;
+    }
+    .map-onec-warning {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      flex: 0 0 auto;
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 2px solid rgba(220, 38, 38, 0.55);
+      background:
+        radial-gradient(circle at top left, rgba(239, 68, 68, 0.20), transparent 28%),
+        radial-gradient(circle at top right, rgba(245, 158, 11, 0.28), transparent 32%),
+        linear-gradient(135deg, #fff7ed, #fef3c7 62%, #fee2e2);
+      padding: 12px 14px 12px 16px;
+      box-shadow: 0 18px 38px rgba(220, 38, 38, 0.16);
+    }
+    .map-onec-warning::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 5px;
+      background: linear-gradient(180deg, #dc2626, #f59e0b);
+    }
+    .map-onec-warning__main {
+      display: flex;
+      gap: 10px;
+      min-width: 0;
+      position: relative;
+      z-index: 1;
+    }
+    .map-onec-warning__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 13px;
+      background: #dc2626;
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(220, 38, 38, 0.28);
+      flex-shrink: 0;
+    }
+    .map-onec-warning__icon svg {
+      width: 22px;
+      height: 22px;
+    }
+    .map-onec-warning h2 {
+      margin: 0;
+      color: #7f1d1d;
+      font-size: 15px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+    .map-onec-warning p {
+      margin: 3px 0 0;
+      color: #78350f;
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 600;
+    }
+    .map-onec-warning__chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .map-onec-warning__chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      border-radius: 999px;
+      border: 1px solid rgba(220, 38, 38, 0.25);
+      background: rgba(255, 255, 255, 0.78);
+      padding: 4px 8px;
+      color: #7f1d1d;
+      font-size: 11px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+    .map-onec-warning__action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      position: relative;
+      z-index: 1;
+      white-space: nowrap;
+      border-radius: 999px;
+      background: #dc2626;
+      padding: 8px 12px;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: none;
+      box-shadow: 0 12px 24px rgba(220, 38, 38, 0.22);
+    }
+    .map-onec-warning__action:hover {
+      background: #b91c1c;
+    }
+    .map-onec-warning-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, 0.50);
+      -webkit-backdrop-filter: blur(7px);
+      backdrop-filter: blur(7px);
+    }
+    .map-onec-warning-modal.show {
+      display: flex;
+    }
+    .map-onec-warning-modal__dialog {
+      width: min(100%, 520px);
+      border-radius: 18px;
+      border: 2px solid rgba(220, 38, 38, 0.52);
+      background:
+        radial-gradient(circle at top left, rgba(239, 68, 68, 0.18), transparent 30%),
+        linear-gradient(135deg, #fff7ed, #fff 56%, #fee2e2);
+      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.30);
+      padding: 20px;
+    }
+    .map-onec-warning-modal__head {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .map-onec-warning-modal__title {
+      margin: 0;
+      color: #7f1d1d;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 800;
+    }
+    .map-onec-warning-modal__copy {
+      margin: 7px 0 0;
+      color: #78350f;
+      font-size: 14px;
+      line-height: 1.55;
+      font-weight: 600;
+    }
+    .map-onec-warning-modal__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
+    .map-onec-warning-modal__button,
+    .map-onec-warning-modal__link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .map-onec-warning-modal__button {
+      border: 1px solid rgba(120, 53, 15, 0.24);
+      background: rgba(255, 255, 255, 0.74);
+      color: #78350f;
+      -webkit-text-fill-color: #78350f;
+    }
+    .map-onec-warning-modal__link {
+      border: 1px solid #dc2626;
+      background: #dc2626;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+      box-shadow: 0 12px 24px rgba(220, 38, 38, 0.22);
     }
     .toolbar {
       padding: 9px 14px 7px;
@@ -1224,6 +1403,12 @@
       }
     }
     @media (max-width: 900px) {
+      .map-onec-warning {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .map-onec-warning__action {
+        width: fit-content;
+      }
       .toolbar {
         padding: 12px 12px 10px;
       }
@@ -2234,6 +2419,40 @@
         const returnUrl = @json($returnUrl ?? '');
         const settingsUrl = @json($settingsUrl ?? '');
         const fallbackUrl = returnUrl || settingsUrl || '';
+        const oneCWarningModal = document.getElementById('mapOneCWarningModal');
+
+        if (oneCWarningModal) {
+          const storageKey = oneCWarningModal.dataset.storageKey || '';
+          let dismissed = false;
+
+          try {
+            dismissed = storageKey !== '' && window.localStorage.getItem(storageKey) === 'dismissed';
+          } catch (e) {
+            dismissed = false;
+          }
+
+          if (!dismissed) {
+            oneCWarningModal.classList.add('show');
+            oneCWarningModal.hidden = false;
+            oneCWarningModal.setAttribute('aria-hidden', 'false');
+          }
+
+          oneCWarningModal.querySelectorAll('[data-onec-warning-close]').forEach(function (button) {
+            button.addEventListener('click', function () {
+              oneCWarningModal.classList.remove('show');
+              oneCWarningModal.hidden = true;
+              oneCWarningModal.setAttribute('aria-hidden', 'true');
+
+              try {
+                if (storageKey !== '') {
+                  window.localStorage.setItem(storageKey, 'dismissed');
+                }
+              } catch (e) {
+                // ignore
+              }
+            });
+          });
+        }
 
         function isStandaloneApp() {
           try {
@@ -2284,6 +2503,40 @@
       </div>
     @else
       <div class="map-layout">
+        @if ($oneCExchangeWarning)
+          <section class="map-onec-warning" aria-live="polite">
+            <div class="map-onec-warning__main">
+              <div class="map-onec-warning__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"></path>
+                  <path d="M12 9v4"></path>
+                  <path d="M12 17h.01"></path>
+                </svg>
+              </div>
+
+              <div>
+                <h2>{{ $oneCExchangeWarning['title'] }}</h2>
+                <p>
+                  {{ $oneCExchangeWarning['description'] }}
+                  Проверено: {{ $oneCExchangeWarning['checked_at'] }} · окно: {{ $oneCExchangeWarning['window_label'] }}.
+                </p>
+                <div class="map-onec-warning__chips">
+                  @foreach ($oneCExchangeWarning['issues'] as $issue)
+                    <span class="map-onec-warning__chip" title="{{ $issue['message'] }}">
+                      {{ $issue['label'] }}:
+                      {{ $issue['recent_success_count'] }}/{{ $issue['required_success_count'] }}
+                    </span>
+                  @endforeach
+                </div>
+              </div>
+            </div>
+
+            <a href="{{ $oneCExchangeWarning['action_url'] }}" class="map-onec-warning__action">
+              Журнал обменов
+            </a>
+          </section>
+        @endif
+
         <div class="viewer">
         <div class="toolbar">
           <div class="toolbar-row toolbar-row--hero">
@@ -2464,6 +2717,53 @@
           hidden
           aria-hidden="true"
         ></div>
+
+        @if ($oneCExchangeWarning)
+          <div
+            id="mapOneCWarningModal"
+            class="map-onec-warning-modal"
+            data-storage-key="{{ $oneCExchangeWarning['modal_key'] }}:map"
+            hidden
+            aria-hidden="true"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mapOneCWarningModalTitle"
+          >
+            <div class="map-onec-warning-modal__dialog">
+              <div class="map-onec-warning-modal__head">
+                <div class="map-onec-warning__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10.3 3.7 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.7a2 2 0 0 0-3.4 0Z"></path>
+                    <path d="M12 9v4"></path>
+                    <path d="M12 17h.01"></path>
+                  </svg>
+                </div>
+
+                <div>
+                  <h2 id="mapOneCWarningModalTitle" class="map-onec-warning-modal__title">
+                    Карта может показывать устаревшую задолженность
+                  </h2>
+                  <p class="map-onec-warning-modal__copy">
+                    {{ $oneCExchangeWarning['description'] }}
+                    Проверено: {{ $oneCExchangeWarning['checked_at'] }} · окно: {{ $oneCExchangeWarning['window_label'] }}.
+                  </p>
+                  <p class="map-onec-warning-modal__copy">
+                    {{ $oneCExchangeWarning['instruction'] }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="map-onec-warning-modal__actions">
+                <button type="button" class="map-onec-warning-modal__button" data-onec-warning-close>
+                  Понятно
+                </button>
+                <a href="{{ $oneCExchangeWarning['action_url'] }}" class="map-onec-warning-modal__link">
+                  Открыть журнал
+                </a>
+              </div>
+            </div>
+          </div>
+        @endif
 
           <div class="map-load-progress" id="mapLoadProgress" aria-live="polite">
           <div class="map-load-progress__meta">
