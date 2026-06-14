@@ -156,7 +156,7 @@
         <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
             <div>
                 <h3 class="text-base font-semibold text-slate-900">По договорам</h3>
-                <p class="text-xs text-slate-500">Сводка ОСВ по договорам и документам расчётов.</p>
+                <p class="text-xs text-slate-500">Сверка по договорам и документам расчетов.</p>
             </div>
             <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                 {{ (int) $summary['settlementRowsCount'] }}
@@ -169,43 +169,52 @@
                     $rowNet = (float) $row->closing_debit - (float) $row->closing_credit;
                     $rowStatus = $rowNet > 0.009 ? 'Долг' : ($rowNet < -0.009 ? 'Переплата' : 'Закрыто');
                     $rowStatusClass = $rowNet > 0.009
-                        ? 'bg-rose-50 text-rose-700'
-                        : ($rowNet < -0.009 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600');
+                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : ($rowNet < -0.009 ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-600');
+                    $rowNetClass = $rowNet > 0.009
+                        ? 'text-rose-700'
+                        : ($rowNet < -0.009 ? 'text-emerald-700' : 'text-slate-900');
                     $contract = $row->tenantContract;
                 @endphp
 
-                <article class="p-4">
-                    <div class="flex items-start justify-between gap-3">
+                <article class="px-4 py-3 hover:bg-slate-50/70">
+                    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start lg:grid-cols-[minmax(0,1fr)_8rem_minmax(18rem,24rem)] lg:items-center">
                         <div class="min-w-0">
-                            <p class="text-sm font-semibold text-slate-900">
-                                {{ $contractLabel($contract, $row->contract_name) }}
-                            </p>
-                            <p class="mt-1 text-xs text-slate-500">
-                                {{ $spaceLabel($contract?->marketSpace) }}
+                            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <p class="text-sm font-semibold text-slate-950">
+                                    {{ $contractLabel($contract, $row->contract_name) }}
+                                </p>
                                 @if($row->organization_name)
-                                    · {{ $row->organization_name }}
+                                    <span class="text-xs text-slate-400">·</span>
+                                    <span class="text-xs font-medium text-slate-600">{{ $row->organization_name }}</span>
                                 @endif
-                            </p>
-                            @if($row->settlement_document_name)
-                                <p class="mt-1 text-xs text-slate-600 line-clamp-2">{{ $row->settlement_document_name }}</p>
-                            @endif
+                            </div>
+                            <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                                <span>{{ $spaceLabel($contract?->marketSpace) }}</span>
+                                @if($row->settlement_document_name)
+                                    <span class="text-slate-300">/</span>
+                                    <span class="min-w-0 truncate text-slate-600">{{ $row->settlement_document_name }}</span>
+                                @endif
+                            </div>
                         </div>
 
-                        <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold {{ $rowStatusClass }}">{{ $rowStatus }}</span>
-                    </div>
+                        <div class="flex md:justify-end lg:justify-center">
+                            <span class="inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold {{ $rowStatusClass }}">{{ $rowStatus }}</span>
+                        </div>
 
-                    <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
-                        <div>
-                            <p class="text-xs text-slate-500">Начислено</p>
-                            <p class="font-semibold text-slate-900">{{ $formatMoney((float) $row->turnover_debit) }}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500">Оплачено</p>
-                            <p class="font-semibold text-slate-900">{{ $formatMoney((float) $row->turnover_credit) }}</p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-slate-500">Итог</p>
-                            <p class="font-semibold text-slate-900">{{ $formatMoney($rowNet) }}</p>
+                        <div class="grid grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white text-sm shadow-sm sm:grid-cols-3 md:col-span-2 lg:col-span-1">
+                            <div class="px-3 py-2">
+                                <p class="text-[11px] font-medium text-slate-500">Начислено</p>
+                                <p class="mt-0.5 font-semibold text-slate-900">{{ $formatMoney((float) $row->turnover_debit) }}</p>
+                            </div>
+                            <div class="border-t border-slate-200 px-3 py-2 sm:border-l sm:border-t-0">
+                                <p class="text-[11px] font-medium text-slate-500">Оплачено</p>
+                                <p class="mt-0.5 font-semibold text-slate-900">{{ $formatMoney((float) $row->turnover_credit) }}</p>
+                            </div>
+                            <div class="border-t border-slate-200 bg-slate-50 px-3 py-2 sm:border-l sm:border-t-0">
+                                <p class="text-[11px] font-medium text-slate-500">Итог</p>
+                                <p class="mt-0.5 font-semibold {{ $rowNetClass }}">{{ $formatMoney($rowNet) }}</p>
+                            </div>
                         </div>
                     </div>
                 </article>
