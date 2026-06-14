@@ -193,8 +193,8 @@ class TenantContractResource extends BaseResource
 
                 Tab::make('1С')
                     ->schema([
-                        Section::make('Финансы по договору')
-                            ->description('ОСВ, начисления и оплаты, которые 1С передала по этому договору.')
+                        Section::make('Финансы и движение')
+                            ->description('Сводка, начисления и оплаты, которые 1С передала по этому договору.')
                             ->schema([
                                 Placeholder::make('contract_finance_1c')
                                     ->hiddenLabel()
@@ -204,7 +204,7 @@ class TenantContractResource extends BaseResource
                             ->columns(1)
                             ->columnSpanFull(),
 
-                        Section::make('Документ из 1С')
+                        Section::make('Реквизиты из 1С')
                             ->description('Поля ниже приходят из 1С и доступны только для просмотра.')
                             ->schema([
                                 Forms\Components\TextInput::make('tenant_display')
@@ -305,7 +305,9 @@ class TenantContractResource extends BaseResource
                                     ->disabled()
                                     ->dehydrated(false),
                             ])
-                            ->columns(2),
+                            ->columns(2)
+                            ->collapsible()
+                            ->collapsed(),
 
                     ]),
 
@@ -829,12 +831,8 @@ class TenantContractResource extends BaseResource
         $summaryCards = [
             ['label' => 'Статус ОСВ', 'value' => $statusLabel, 'class' => $statusClass],
             ['label' => 'Итог по ОСВ', 'value' => $balance !== null ? static::formatRubForContractCard(abs($balance)) : '—', 'class' => $balance !== null && $balance > 0.009 ? 'contract-finance-1c__value--danger' : ''],
-            ['label' => 'Начислено за период ОСВ', 'value' => $settlement['accrued'] !== null ? static::formatRubForContractCard($settlement['accrued']) : '—', 'class' => ''],
-            ['label' => 'Оплачено за период ОСВ', 'value' => $settlement['paid'] !== null ? static::formatRubForContractCard($settlement['paid']) : '—', 'class' => ''],
             ['label' => 'Период ОСВ', 'value' => $settlement['period_label'] ?: '—', 'class' => ''],
             ['label' => 'Обновлено', 'value' => $settlement['imported_label'] ?: '—', 'class' => ''],
-            ['label' => 'Начислений в журнале', 'value' => (string) $accruals['count'], 'class' => ''],
-            ['label' => 'Оплат в журнале', 'value' => (string) $payments['count'], 'class' => ''],
         ];
 
         $summaryHtml = '';
@@ -873,6 +871,12 @@ class TenantContractResource extends BaseResource
                 .dark .contract-finance-1c__section-title{color:#f8fafc}
                 .contract-finance-1c__section-meta{font-size:12px;color:#64748b}
                 .dark .contract-finance-1c__section-meta{color:#94a3b8}
+                .contract-finance-1c__details{border:1px solid rgba(148,163,184,.3);border-radius:10px;background:rgba(248,250,252,.55);overflow:hidden}
+                .dark .contract-finance-1c__details{background:rgba(15,23,42,.28);border-color:rgba(148,163,184,.22)}
+                .contract-finance-1c__details summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;cursor:pointer;font-size:14px;font-weight:760;color:#334155;list-style:none}
+                .contract-finance-1c__details summary::-webkit-details-marker{display:none}
+                .dark .contract-finance-1c__details summary{color:#e2e8f0}
+                .contract-finance-1c__details-body{display:grid;gap:9px;padding:0 12px 12px}
                 .contract-finance-1c__table-wrap{overflow:auto;border:1px solid rgba(148,163,184,.32);border-radius:10px;background:#fff}
                 .dark .contract-finance-1c__table-wrap{background:rgba(15,23,42,.4);border-color:rgba(148,163,184,.24)}
                 .contract-finance-1c table{width:100%;min-width:860px;border-collapse:collapse;font-size:12px;line-height:1.35}
@@ -890,18 +894,6 @@ class TenantContractResource extends BaseResource
             <div class="contract-finance-1c">
                 ' . $emptyHint . '
                 <div class="contract-finance-1c__summary">' . $summaryHtml . '</div>
-                <div class="contract-finance-1c__section">
-                    <div class="contract-finance-1c__section-head">
-                        <div class="contract-finance-1c__section-title">ОСВ по договору</div>
-                        <div class="contract-finance-1c__section-meta">' . e($settlement['count'] > 0 ? (string) $settlement['count'] . ' строк' : 'строк нет') . '</div>
-                    </div>
-                    <div class="contract-finance-1c__table-wrap">
-                        <table>
-                            <thead><tr><th>Период</th><th>Организация</th><th>Счет</th><th class="contract-finance-1c__amount">Начислено</th><th class="contract-finance-1c__amount">Оплачено</th><th class="contract-finance-1c__amount">Итог</th></tr></thead>
-                            <tbody>' . $settlementRowsHtml . '</tbody>
-                        </table>
-                    </div>
-                </div>
                 <div class="contract-finance-1c__section">
                     <div class="contract-finance-1c__section-head">
                         <div class="contract-finance-1c__section-title">Начисления</div>
@@ -926,6 +918,20 @@ class TenantContractResource extends BaseResource
                         </table>
                     </div>
                 </div>
+                <details class="contract-finance-1c__details">
+                    <summary>
+                        <span>Бухгалтерская сводка ОСВ</span>
+                        <span class="contract-finance-1c__section-meta">' . e($settlement['count'] > 0 ? (string) $settlement['count'] . ' строк' : 'строк нет') . '</span>
+                    </summary>
+                    <div class="contract-finance-1c__details-body">
+                        <div class="contract-finance-1c__table-wrap">
+                            <table>
+                                <thead><tr><th>Период</th><th>Организация</th><th>Счет</th><th class="contract-finance-1c__amount">Начислено</th><th class="contract-finance-1c__amount">Оплачено</th><th class="contract-finance-1c__amount">Итог</th></tr></thead>
+                                <tbody>' . $settlementRowsHtml . '</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
             </div>'
         );
     }
