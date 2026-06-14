@@ -3032,7 +3032,7 @@ class MarketSpaceResource extends BaseResource
             \App\Domain\Operations\SpaceReviewDecision::FIX_SPACE_IDENTITY => 'Данные места уточнены',
             \App\Domain\Operations\SpaceReviewDecision::DUPLICATE_SPACE_NEEDS_RESOLUTION => 'Разобран дубль места',
             \App\Domain\Operations\SpaceReviewDecision::HISTORICAL_COMPOSED_SPACE_REVIEWED => 'Историческое составное место проверено',
-            \App\Domain\Operations\SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Долг отнесён к этому месту',
+            \App\Domain\Operations\SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь с местом подтверждена',
             \App\Domain\Operations\SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Оставлено как общий долг арендатора',
             \App\Domain\Operations\SpaceReviewDecision::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь возвращена в проверку',
             default => 'Ревизионное решение',

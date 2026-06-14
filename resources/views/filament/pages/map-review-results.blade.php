@@ -918,6 +918,146 @@
                 color: #cbd5e1;
             }
 
+            .mrr-debt-review {
+                display: grid;
+                gap: 0.72rem;
+                border-radius: 1rem;
+                border: 1px solid rgba(59, 130, 246, 0.2);
+                background: linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(248, 250, 252, 0.92));
+                padding: 0.9rem;
+            }
+
+            .dark .mrr-debt-review {
+                border-color: rgba(96, 165, 250, 0.22);
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.76));
+            }
+
+            .mrr-debt-review__eyebrow {
+                font-size: 0.68rem;
+                font-weight: 850;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: #2563eb;
+            }
+
+            .dark .mrr-debt-review__eyebrow {
+                color: #bfdbfe;
+            }
+
+            .mrr-debt-review__title {
+                margin-top: 0.12rem;
+                color: #0f172a;
+                font-size: 1.04rem;
+                font-weight: 850;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-debt-review__title {
+                color: #f8fafc;
+            }
+
+            .mrr-debt-review__copy {
+                color: #475569;
+                font-size: 0.84rem;
+                line-height: 1.48;
+            }
+
+            .dark .mrr-debt-review__copy {
+                color: #cbd5e1;
+            }
+
+            .mrr-debt-review__metrics {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.45rem;
+            }
+
+            .mrr-debt-review__metric {
+                min-width: 0;
+                border-radius: 0.82rem;
+                border: 1px solid rgba(148, 163, 184, 0.2);
+                background: rgba(255, 255, 255, 0.78);
+                padding: 0.56rem 0.62rem;
+            }
+
+            .dark .mrr-debt-review__metric {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.66);
+            }
+
+            .mrr-debt-review__metric-label {
+                color: #64748b;
+                font-size: 0.68rem;
+                font-weight: 760;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-debt-review__metric-label {
+                color: #94a3b8;
+            }
+
+            .mrr-debt-review__metric-value {
+                margin-top: 0.18rem;
+                color: #0f172a;
+                font-size: 0.9rem;
+                font-weight: 820;
+                line-height: 1.25;
+                overflow-wrap: anywhere;
+            }
+
+            .dark .mrr-debt-review__metric-value {
+                color: #f8fafc;
+            }
+
+            .mrr-debt-review__candidate {
+                display: grid;
+                gap: 0.35rem;
+                border-radius: 0.9rem;
+                border: 1px solid rgba(239, 68, 68, 0.22);
+                background: rgba(254, 242, 242, 0.78);
+                padding: 0.66rem 0.72rem;
+            }
+
+            .dark .mrr-debt-review__candidate {
+                border-color: rgba(248, 113, 113, 0.26);
+                background: rgba(127, 29, 29, 0.2);
+            }
+
+            .mrr-debt-review__candidate-label {
+                color: #991b1b;
+                font-size: 0.78rem;
+                font-weight: 850;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+            }
+
+            .dark .mrr-debt-review__candidate-label {
+                color: #fecaca;
+            }
+
+            .mrr-debt-review__candidate-title {
+                color: #0f172a;
+                font-size: 0.92rem;
+                font-weight: 850;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-debt-review__candidate-title {
+                color: #f8fafc;
+            }
+
+            .mrr-debt-review__actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.42rem;
+            }
+
+            @media (max-width: 720px) {
+                .mrr-debt-review__metrics {
+                    grid-template-columns: 1fr;
+                }
+            }
+
             @media (max-width: 1140px) {
                 .mrr-needs-card__body-grid {
                     grid-template-columns: 1fr;
@@ -3015,6 +3155,37 @@
                                             $financialResolutionAction = trim((string) ($financialSignal['resolution_action'] ?? ''));
                                             $financialExistingTenantCandidateId = (int) ($financialSignal['existing_tenant_candidate_id'] ?? 0);
                                             $financialExistingTenantCandidateName = trim((string) ($financialSignal['existing_tenant_candidate_name'] ?? ''));
+                                            $debtSummary = is_array($diagnostics['debt_summary'] ?? null) ? $diagnostics['debt_summary'] : [];
+                                            $debtSummaryLabel = trim((string) ($debtSummary['label'] ?? ''));
+                                            $debtSummaryAmountLabel = trim((string) ($debtSummary['amount_label'] ?? ''));
+                                            $debtSummaryOverdueAmountLabel = trim((string) ($debtSummary['overdue_amount_label'] ?? ''));
+                                            $debtSummaryPeriodLabel = trim((string) ($debtSummary['latest_period_to_label'] ?? ''));
+                                            $debtSummaryUpdatedAt = trim((string) ($debtSummary['updated_at'] ?? ''));
+                                            $debtSummaryScope = trim((string) ($debtSummary['scope'] ?? ''));
+                                            $debtSummarySource = trim((string) ($debtSummary['source'] ?? ''));
+                                            $debtReviewTenantName = $currentTenantName !== ''
+                                                ? $currentTenantName
+                                                : ($financialTenantName !== '' ? $financialTenantName : 'Арендатор не указан');
+                                            $debtReviewAmountLabel = $debtSummaryAmountLabel !== ''
+                                                ? $debtSummaryAmountLabel
+                                                : 'Сумма не определена';
+                                            $debtReviewPeriodLabel = $debtSummaryPeriodLabel !== ''
+                                                ? $debtSummaryPeriodLabel
+                                                : ($debtSummaryUpdatedAt !== '' ? $debtSummaryUpdatedAt : 'Период не определён');
+                                            $debtReviewStatusLabel = $debtSummaryLabel !== ''
+                                                ? $debtSummaryLabel
+                                                : 'Статус арендатора';
+                                            $debtReviewSourceLabel = str_contains($debtSummarySource, 'tenant_settlement_balances')
+                                                ? 'ОСВ 1С'
+                                                : ($debtSummarySource !== '' ? 'Данные задолженности' : 'Источник не определён');
+                                            $debtReviewMapStatusText = match ($debtSummaryScope) {
+                                                'tenant_fallback' => 'На карте показан общий статус арендатора.',
+                                                'space' => 'На карте показана подтверждённая финансовая связь места.',
+                                                default => 'На карте показана текущая финансовая оценка.',
+                                            };
+                                            $debtReviewDetailsId = 'mrrFinanceDetails-' . (int) $row['space_id'];
+                                            $primaryCandidateLabel = is_array($primaryCandidate) ? trim((string) ($primaryCandidate['label'] ?? '')) : '';
+                                            $primaryCandidateIsStronger = is_array($primaryCandidate) && (bool) ($primaryCandidate['is_stronger_than_current'] ?? false);
                                             $financialResolveButtonLabel = $financialResolutionAction === 'activate_existing_tenant'
                                                 ? 'Активировать арендатора'
                                                 : 'Создать/сопоставить арендатора';
@@ -3335,6 +3506,66 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 @endif
                                                             </div>
                                                         @endif
+                                                        @if ($isUnconfirmedWorkflowTab)
+                                                            <div class="mrr-debt-review">
+                                                                <div>
+                                                                    <div class="mrr-debt-review__eyebrow">Разбираем долг арендатора</div>
+                                                                    <div class="mrr-debt-review__title">{{ $debtReviewTenantName }}</div>
+                                                                </div>
+
+                                                                <div class="mrr-debt-review__metrics">
+                                                                    <div class="mrr-debt-review__metric">
+                                                                        <div class="mrr-debt-review__metric-label">Сумма</div>
+                                                                        <div class="mrr-debt-review__metric-value">{{ $debtReviewAmountLabel }}</div>
+                                                                    </div>
+                                                                    <div class="mrr-debt-review__metric">
+                                                                        <div class="mrr-debt-review__metric-label">Статус</div>
+                                                                        <div class="mrr-debt-review__metric-value">{{ $debtReviewStatusLabel }}</div>
+                                                                    </div>
+                                                                    <div class="mrr-debt-review__metric">
+                                                                        <div class="mrr-debt-review__metric-label">{{ $debtSummaryPeriodLabel !== '' ? 'Период ОСВ' : 'Обновлено' }}</div>
+                                                                        <div class="mrr-debt-review__metric-value">{{ $debtReviewPeriodLabel }}</div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="mrr-debt-review__copy">
+                                                                    {{ $debtReviewMapStatusText }} Здесь проверяется не вся сумма долга арендатора, а возможная финансовая связь с местом {{ $currentSpaceLabel }}.
+                                                                    Договоры, начисления, оплаты и данные 1С этим действием не меняются.
+                                                                </div>
+
+                                                                @if ($primaryCandidateIsStronger && $primaryCandidateLabel !== '')
+                                                                    <div class="mrr-debt-review__candidate">
+                                                                        <div class="mrr-debt-review__candidate-label">Есть более сильный кандидат</div>
+                                                                        <div class="mrr-debt-review__candidate-title">{{ $primaryCandidateLabel }}</div>
+                                                                        <div class="mrr-debt-review__copy">
+                                                                            Сначала проверьте кандидата. Текущее место подтверждайте только если кандидат не подходит.
+                                                                        </div>
+                                                                        <div class="mrr-debt-review__actions">
+                                                                            @if (filled($primaryCandidate['space_url'] ?? null))
+                                                                                <a class="mrr-link" href="{{ $primaryCandidate['space_url'] }}" target="_blank" rel="noopener">Открыть кандидата</a>
+                                                                            @endif
+                                                                            @if (filled($primaryCandidate['map_url'] ?? null))
+                                                                                <a class="mrr-link" href="{{ $primaryCandidate['map_url'] }}" target="_blank" rel="noopener">Показать на карте</a>
+                                                                            @endif
+                                                                        </div>
+                                                                    </div>
+                                                                @endif
+
+                                                                <div class="mrr-debt-review__actions">
+                                                                    <button
+                                                                        type="button"
+                                                                        class="mrr-link mrr-link--button"
+                                                                        data-mrr-open-diagnostics="{{ $debtReviewDetailsId }}"
+                                                                    >
+                                                                        Расшифровка и проверка
+                                                                    </button>
+                                                                    <span class="mrr-conflict-brief__fact">{{ $debtReviewSourceLabel }}</span>
+                                                                    @if ($debtSummaryOverdueAmountLabel !== '')
+                                                                        <span class="mrr-conflict-brief__fact">Просрочено: {{ $debtSummaryOverdueAmountLabel }}</span>
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+                                                        @endif
                                                         <div class="mrr-card-actions">
                                                             @if ($hasPrimaryResolutionAction)
                                                                 <div class="mrr-card-actions__group mrr-card-actions__group--primary">
@@ -3486,7 +3717,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                     <div class="mrr-card-actions__hint">
                                                                         {{ $attentionTab === 'unconfirmed_links_rejected'
                                                                             ? 'Долг оставлен как общий долг арендатора без точной привязки к этому месту. Он остаётся видимым на карте как статус арендатора. Если решение ошибочное, верните карточку в проверку.'
-                                                                            : 'Долг арендатора уже виден на карте. Здесь уточняется только точная связь с местом: это долг этого места или общий долг арендатора. Договоры, суммы и данные 1С не меняются.' }}
+                                                                            : 'Долг арендатора уже виден на карте. Здесь уточняется только возможная финансовая связь с местом: связать это место с долгом или оставить долг общим по арендатору.' }}
                                                                     </div>
                                                                     @if ($unconfirmedClassificationLabel !== '')
                                                                         <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $unconfirmedClassificationTone }}">
@@ -3515,10 +3746,10 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-unconfirmed-link-action
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="confirm_unconfirmed_financial_link"
-                                                                                data-mrr-reason="Оператор подтвердил, что долг арендатора относится к этому месту."
-                                                                                data-mrr-confirm="Подтвердить, что долг арендатора относится к месту {{ $currentSpaceLabel }}?"
+                                                                                data-mrr-reason="Оператор подтвердил финансовую связь этого места с долгом арендатора."
+                                                                                data-mrr-confirm="Связать место {{ $currentSpaceLabel }} с финансовым долгом арендатора? Суммы и данные 1С не изменятся."
                                                                             >
-                                                                                Это долг этого места
+                                                                                Связать с этим местом
                                                                             </button>
                                                                             <button
                                                                                 type="button"
@@ -3558,8 +3789,8 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                     <div class="mrr-needs-card__column mrr-needs-card__column--diagnostics">
                                                         <div class="mrr-diagnostics">
                                                             @if ($isUnconfirmedWorkflowTab)
-                                                                <details class="mrr-diagnostics__details">
-                                                                    <summary>Подробности проверки</summary>
+                                                                <details id="{{ $debtReviewDetailsId }}" class="mrr-diagnostics__details">
+                                                                    <summary>Расшифровка и проверка</summary>
                                                                     <div class="mrr-diagnostics__details-body">
                                                                         <div class="mrr-diagnostics__section">
                                                                             <div class="mrr-diagnostics__section-title">Связи текущего места</div>
@@ -6647,6 +6878,24 @@ const markSpaceFreeState = {
 
                 document.addEventListener('click', (event) => {
                     if (event.defaultPrevented) {
+                        return;
+                    }
+
+                    const diagnosticsButton = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-open-diagnostics]')
+                        : null;
+
+                    if (diagnosticsButton instanceof HTMLElement) {
+                        event.preventDefault();
+
+                        const targetId = diagnosticsButton.dataset.mrrOpenDiagnostics || '';
+                        const details = targetId !== '' ? document.getElementById(targetId) : null;
+
+                        if (details instanceof HTMLDetailsElement) {
+                            details.open = true;
+                            details.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        }
+
                         return;
                     }
 

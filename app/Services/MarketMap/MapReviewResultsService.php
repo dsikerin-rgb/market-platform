@@ -628,6 +628,7 @@ class MapReviewResultsService
         $currentCounts = $this->relationCountsForSpaces($spaceIds);
         $contractOverrides = $this->activeContractOverrideForSpaces($spaceIds, $marketId);
         $financialSignals = $this->financialTenantSignals($marketId, max(count($spaceIds), 50));
+        $debtResolver = app(DebtStatusResolver::class);
 
         $observedTenantIdsBySpace = $this->observedTenantIdsBySpace($marketId, $spaces, $latestOperations);
 
@@ -672,7 +673,7 @@ class MapReviewResultsService
         $contractDetails = $this->contractDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
         $accrualDetails = $this->accrualDetailsForSpaces($allDiagnosticSpaceIds, $marketId);
 
-        return $spaces->mapWithKeys(function (MarketSpace $space) use ($currentCounts, $candidateCounts, $candidatesByTenant, $nameCandidateSpaces, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $observedTenantIdsBySpace, $latestOperations): array {
+        return $spaces->mapWithKeys(function (MarketSpace $space) use ($marketId, $currentCounts, $candidateCounts, $candidatesByTenant, $nameCandidateSpaces, $contractOverrides, $contractDetails, $accrualDetails, $financialSignals, $debtResolver, $observedTenantIdsBySpace, $latestOperations): array {
             $spaceId = (int) $space->id;
             $counts = $currentCounts[$spaceId] ?? [];
             $tenantId = (int) ($space->tenant_id ?? 0);
@@ -915,6 +916,9 @@ class MapReviewResultsService
                 ->contains(fn (array $candidate): bool => (bool) ($candidate['is_stronger_than_current'] ?? false));
 
             $resolvedFinancialSignal = $financialSignals[$spaceId] ?? null;
+            $debtSummary = $this->debtSummaryFromResolved(
+                $debtResolver->resolveForMarketSpace($spaceId, $marketId)
+            );
             $unconfirmedLinkClassification = $this->unconfirmedLinkClassification(
                 $space,
                 $counts,
@@ -950,11 +954,62 @@ class MapReviewResultsService
                     'contract_details' => $contractDetails[$spaceId] ?? [],
                     'accrual_details' => $accrualDetails[$spaceId] ?? [],
                     'financial_signal' => $resolvedFinancialSignal,
+                    'debt_summary' => $debtSummary,
                     'unconfirmed_link_classification' => $unconfirmedLinkClassification,
                     'review_case' => $reviewCase->toArray(),
                 ],
             ];
         })->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $resolved
+     * @return array<string, mixed>
+     */
+    private function debtSummaryFromResolved(array $resolved): array
+    {
+        $extra = is_array($resolved['extra'] ?? null) ? $resolved['extra'] : [];
+        $amount = isset($extra['debt_amount']) && is_numeric($extra['debt_amount'])
+            ? (float) $extra['debt_amount']
+            : null;
+        $overdueAmount = isset($extra['overdue_debt_amount']) && is_numeric($extra['overdue_debt_amount'])
+            ? (float) $extra['overdue_debt_amount']
+            : null;
+
+        $latestPeriodTo = trim((string) ($extra['latest_period_to'] ?? ''));
+
+        return [
+            'status' => $resolved['status'] ?? null,
+            'label' => $resolved['label'] ?? null,
+            'scope' => $extra['scope'] ?? null,
+            'amount' => $amount,
+            'amount_label' => $amount !== null ? $this->moneyLabel($amount) : null,
+            'overdue_amount' => $overdueAmount,
+            'overdue_amount_label' => $overdueAmount !== null ? $this->moneyLabel($overdueAmount) : null,
+            'overdue_days' => isset($extra['overdue_days']) && is_numeric($extra['overdue_days'])
+                ? (int) $extra['overdue_days']
+                : null,
+            'updated_at' => $resolved['updated_at'] ?? null,
+            'source' => $resolved['source'] ?? null,
+            'latest_period_to' => $latestPeriodTo !== '' ? $latestPeriodTo : null,
+            'latest_period_to_label' => $latestPeriodTo !== '' ? $this->dateLabel($latestPeriodTo) : null,
+            'fallback_mode' => $extra['fallback_mode'] ?? null,
+            'amount_source' => $extra['amount_source'] ?? null,
+        ];
+    }
+
+    private function moneyLabel(float $amount): string
+    {
+        return number_format($amount, 2, ',', ' ').' ₽';
+    }
+
+    private function dateLabel(string $value): string
+    {
+        try {
+            return (new \DateTimeImmutable($value))->format('d.m.Y');
+        } catch (\Throwable) {
+            return $value;
+        }
     }
 
     /**
@@ -1586,6 +1641,7 @@ class MapReviewResultsService
             'contract_details' => [],
             'accrual_details' => [],
             'financial_signal' => null,
+            'debt_summary' => [],
             'unconfirmed_link_classification' => [
                 'code' => 'unknown',
                 'label' => 'Причина не определена',
